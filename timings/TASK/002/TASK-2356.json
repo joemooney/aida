@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2356",
+  "publishes": [
+    {
+      "at": "2026-10-26T00:30:09.720395554Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T23:09:17.224585923Z",
+      "spec": "TASK-2356",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}

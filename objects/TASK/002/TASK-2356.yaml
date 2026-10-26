@@ -6,12 +6,12 @@ description: |
   PR-2931 (TASK-2350) fixed the review auto-queue only. `git_ops::has_remote` still returns false when host git refuses to run in a seat clone (BUG-2169). Callers that can run from a seat clone may still take a "local-only" path by mistake. Examples: aida-cli-lib/src/status_prs.rs:636, which hides the "open a PR" hint when origin is missing, and aida-cli-lib/src/session_start.rs:1857 (CloneLaunch.has_origin). Check each `has_remote(.., "origin")` caller that can run with a seat-clone cwd, and move the ones that can to `review_gates::origin_remote_presence` / `git_ops::probe_remote`.
 
   Raised in review of PR-2931: https://github.com/joemooney/aida/pull/2931
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:29:57.091353456Z
-modified_at: 2026-10-25T23:09:11.952347138Z
+modified_at: 2026-10-26T00:30:07.240399246Z
 req_type: Task
 tags:
 - from-review:PR-2931
@@ -39,6 +39,15 @@ history:
   session_id: 01a17552e835
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a1759d-5412-7a62-abc1-f37d14f3f103
+  author: joe
+  timestamp: 2026-10-26T00:30:07.378228262Z
+  session_id: 01a17552e835
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
   branch: main
@@ -48,3 +57,7 @@ filed_at:
   vendor: claude
   session: 01a174b6c563
   harness_version: 2.1.310 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-26T00:30:07.240399246Z
+  implemented_by: joe
