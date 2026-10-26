@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T07:36:16.329534370Z
+modified_at: 2026-10-26T08:09:27.834009695Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -324,6 +324,13 @@ comments:
   created_at: 2026-10-26T07:35:08.669664315Z
   modified_at: 2026-10-26T07:35:08.669664315Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17741-de1a-7972-813c-d3d614a1ad0c
+  author: joe
+  content: 'Round 2 (PR #2945, ad05fa662f): findings 1-7 at 5f777c654a re-verified as resolved on main by 98e6823c07: (Refs) trailers; advisor ruling 16:15 applied; a positive or cold key takes no snapshot; BUG-1993 deadline back at 1.2s; no-follow, owned namespace dirs and a uid check on eviction; warm reads touch mtime (LRU); file symlinks outside the root are refused; (dev, ino) cycle fence. Advisor 00:58 blocker fixed: both linkage_branch.rs git builders now use host_git_command, the ratchet ALWAYS_SCANNED covers linkage_branch.rs at 0, and trace.rs is down 13 to 12 (no laundering). Ran locally: all 9 bug_2221 branch fast-path tests and 4 task_2143 ratchet tests pass, and make check-ci-fast passed (35 gates). 6 show_negative isolated tests fail in this sandbox only (hermetic HOME on a read-only fs); that code is unchanged. Known effect: in a seat clone the branch search is now refused, so show prints no in-flight branch there. P1 is still waiting on a ruling about the P1'' amendment. AC4 is still open.'
+  created_at: 2026-10-26T08:09:27.834009695Z
+  modified_at: 2026-10-26T08:09:27.834009695Z
+  session_id: 01a1772375c0
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
