@@ -77730,5 +77730,31 @@ operations:
   timestamp: 2026-10-26T16:10:52.831825774Z
   kind: !SetStatus
     status: In Progress
-clock: 6026
+- id: 01a17910-d095-7711-a4ff-f155fbf283de
+  target_id: 01a17910-c97d-7b32-bc7e-cdd188dc04ed
+  author: aida
+  node_id: '1'
+  lamport: 6027
+  timestamp: 2026-10-26T16:35:07.541464062Z
+  kind: !Create
+    title: 'Review PR-2953: [AI:claude] refactor(gate): move dispatch authority into gate/ (STORY-1889)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a178b2`) for branch `story-1889-dispatch`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2953>
+      - Branch: `story-1889-dispatch` → `main`
+
+      ## Covers
+
+      - STORY-1889
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2953` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6027
 node_id: '1'
