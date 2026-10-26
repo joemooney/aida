@@ -10,12 +10,12 @@ description: |-
   No path re-launches a worker in the existing orphaned worktree. Workaround: trust the worktree and run `claude --bg` inside it.
   Also: with the advisor seat left at a codex default, every headless launch failed with the containment-vendor error ('codex vendor cannot run a contained session'); consider defaulting contained headless launches to a vendor that supports containment or naming AIDA_HEADLESS_VENDOR in the first line.
   Acceptance: when the lease is orphaned and no claude session is recorded, the hint offers a working in-place relaunch (e.g. --resume falls back to a cold launch in the orphaned worktree on its existing branch), and the two error messages never point at each other.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T17:38:11.351372157Z
-modified_at: 2026-10-26T07:17:19.314891123Z
+modified_at: 2026-10-26T07:40:32.516702490Z
 req_type: Bug
 tags:
 - from-advisor
@@ -113,6 +113,15 @@ history:
   timestamp: 2026-10-26T07:17:21.202452982Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
   changes: []
+- id: 01a17727-6384-7ec3-aea9-2b07621263f0
+  author: aida-orchestrator
+  timestamp: 2026-10-26T07:40:32.516723364Z
+  session_id: 01a177130f98
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
@@ -125,7 +134,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'CI (lib-1) red at head; the PR''s own multiplicity test fails: session start adopts an orphan even while a live lease holds the scope (binding 1). Remaining acceptance met at session-start level; three minor hint/gate gaps plus missing end-to-end coverage.'
+  detail: 'Round-2 findings addressed and the PR''s own 57 targeted tests pass, but CI lib-0/lib-1 are red: the TASK-2143 raw-git ratchet fails on the new git call in leases.rs, and a second shard failure is unidentified'
   recovery_hint: address the review findings, move BUG-2223 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-26T03:50:27.712067668Z
+  shelved_at: 2026-10-26T07:40:32.516702490Z
