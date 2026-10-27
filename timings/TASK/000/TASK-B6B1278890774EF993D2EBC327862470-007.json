@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-007",
+  "publishes": [
+    {
+      "at": "2026-10-27T07:54:16.934611956Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-27T07:49:40.261988956Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-007",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2970
+      }
+    },
+    {
+      "ts": "2026-10-27T07:54:16.815252975Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-007",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-27T07:54:16.815303831Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-007",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
