@@ -238,6 +238,8 @@ mod shift;
 mod shipped_linkage;
 // trace:BUG-2221 | ai:claude — `aida show` negative-linkage ancestry proof.
 mod show_negative;
+// trace:BUG-2221 | ai:claude — `aida show` incremental spec-id -> commit index.
+mod linkage_index;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
@@ -357,6 +359,8 @@ mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
 mod findings;
+#[cfg(unix)]
+mod forwarded_signals;
 pub mod graded_review;
 mod identity_gate;
 mod implementer_preflight;
