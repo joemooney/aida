@@ -78846,5 +78846,23 @@ operations:
   timestamp: 2026-10-27T15:07:38.679742660Z
   kind: !SetStatus
     status: Completed
-clock: 6131
+- id: 01a17de7-2c0e-7733-98b3-bf0e89de4285
+  target_id: 01a17de7-24e5-7ac1-b785-cd3e3db7a11d
+  author: aida
+  node_id: '1'
+  lamport: 6132
+  timestamp: 2026-10-27T15:07:44.526958011Z
+  kind: !Create
+    title: (minor, non-blocking, out of this task's scope) The ratchet still cannot see so…
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-009, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (minor, non-blocking, out of this task's scope) The ratchet still cannot see source-inclusion or laundering routes into gate/dispatch_*: include!("../dispatch.rs") / #[path = "...dispatch.rs"] mod x; compile unprotected dispatch.rs code into the gate module, and a crate::dispatch item re-exported through some other unprotected module (pub use crate::dispatch::sha256_hex in e.g. crate::util, then use crate::util::sha256_hex) passes. Consider extending gate_dispatch_imports_nothing_authority_bearing_from_dispatch with path_attr_targets/include! checks, or an allowlist of modules gate/dispatch_* may import from.
+
+      PR: #2966
+      Reviewed sha: 31a3ef47afc79c9eaaa0c6b3e0792650a8b86a37
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6132
 node_id: '1'
