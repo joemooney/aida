@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-009",
+  "publishes": [
+    {
+      "at": "2026-10-27T16:03:10.243026385Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-27T16:03:10.077323168Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-009",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8ae30fc168597cccf1d714558403f69ffb0e3c0b",
+        "pr": 2949,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
