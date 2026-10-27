@@ -261,14 +261,6 @@ std::thread_local! {
 }
 
 fn invoke_pr_ship_with_ctx(pr: u64, ctx: &DispatchExecutionContext) -> Result<()> {
-    #[cfg(test)]
-    {
-        let maybe_res =
-            TEST_FLOW_SHIP_HOOK.with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(pr, ctx)));
-        if let Some(res) = maybe_res {
-            return res;
-        }
-    }
     crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
         Some(pr),
         false,
@@ -289,14 +281,6 @@ fn invoke_pr_ship_with_ctx(pr: u64, ctx: &DispatchExecutionContext) -> Result<()
 }
 
 fn invoke_pr_train_with_ctx(prs: &[u64], ctx: &DispatchExecutionContext) -> Result<()> {
-    #[cfg(test)]
-    {
-        let maybe_res =
-            TEST_FLOW_TRAIN_HOOK.with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(prs, ctx)));
-        if let Some(res) = maybe_res {
-            return res;
-        }
-    }
     let opts = crate::pr_train::TrainOptions {
         prs,
         all_ready: false,

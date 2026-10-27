@@ -2096,6 +2096,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
     dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::Entry)?;
+    // Flow tests stand in for the rest of the ship here, after the real
+    // entry check, so a context dropped on the way in still fails them.
+    #[cfg(test)]
+    if let (Some(ctx), Some(pr)) = (dispatch_ctx, n) {
+        let maybe_res = crate::dispatch::dispatch_flow::TEST_FLOW_SHIP_HOOK
+            .with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(pr, ctx)));
+        if let Some(res) = maybe_res {
+            return res;
+        }
+    }
     // The one merge path behind `aida pr ship` and `aida ship`: a standalone
     // implementer stops at an open PR. trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("pr ship")?;
@@ -5904,15 +5914,16 @@ std::thread_local! {
         std::cell::RefCell::new(None);
 }
 
-/// Re-check a dispatch-originated ship's authority at `at`; a no-op without
-/// a dispatch context. The error is a typed
+/// Re-check a dispatch-originated ship's authority at `at`; a no-op for an
+/// ordinary ship, and a refusal when a dispatch request executing on this
+/// thread reached `pr ship` without its context. The error is a typed
 /// [`crate::gate::dispatch_auth::DispatchAuthorityAbortedError`].
 // trace:STORY-1917 trace:TASK-2344 | ai:claude
 pub(crate) fn dispatch_ship_checkpoint(
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
     at: ShipCheckpoint,
 ) -> Result<()> {
-    let Some(ctx) = dispatch_ctx else {
+    let Some(ctx) = crate::gate::dispatch_auth::carried(dispatch_ctx, "pr ship")? else {
         return Ok(());
     };
     #[cfg(test)]

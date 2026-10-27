@@ -1465,10 +1465,7 @@ impl LiveTrainForge<'_> {
     /// train), remembering the first failure for [`TrainForge::dispatch_abort`].
     // trace:STORY-1917 trace:TASK-2344 | ai:claude
     pub(crate) fn dispatch_check(&mut self) -> Result<()> {
-        let Some(ctx) = self.dispatch_ctx else {
-            return Ok(());
-        };
-        ctx.reverify_now(true).inspect_err(|e| {
+        crate::gate::dispatch_auth::checkpoint(self.dispatch_ctx, "pr train").inspect_err(|e| {
             if self.dispatch_abort.is_none() {
                 self.dispatch_abort = Some(format!("{e:#}"));
             }
@@ -2225,8 +2222,16 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     opts: &TrainOptions<'_>,
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
 ) -> Result<()> {
+    crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
+    // Flow tests stand in for the rest of the train here, after the real
+    // entry check, so a context dropped on the way in still fails them.
+    #[cfg(test)]
     if let Some(ctx) = dispatch_ctx {
-        ctx.reverify_now(true)?;
+        let maybe_res = crate::dispatch::dispatch_flow::TEST_FLOW_TRAIN_HOOK
+            .with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(opts.prs, ctx)));
+        if let Some(res) = maybe_res {
+            return res;
+        }
     }
     // STORY-1662: a standalone implementer stops at an open PR; the train is
     // a merge path like any other. trace:STORY-1690 | ai:claude
@@ -2278,9 +2283,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let mut refused = Vec::new();
     let mut waiting = Vec::new();
     for pr in candidates {
-        if let Some(ctx) = dispatch_ctx {
-            ctx.reverify_now(true)?;
-        }
+        crate::gate::dispatch_auth::checkpoint(dispatch_ctx, "pr train")?;
         if members.len() >= opts.max.max(1) {
             waiting.push(pr);
             continue;

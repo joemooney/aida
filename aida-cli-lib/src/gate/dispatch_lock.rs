@@ -95,17 +95,29 @@ pub(crate) fn unreadable_fd_dir_guidance(
     if err.kind() != std::io::ErrorKind::PermissionDenied {
         return String::new();
     }
-    let name = std::fs::read_to_string(proc_path.join("comm"))
+    let comm = std::fs::read_to_string(proc_path.join("comm"))
         .ok()
         .map(|c| c.trim().to_string())
-        .filter(|c| !c.is_empty())
+        .filter(|c| !c.is_empty());
+    let name = comm
+        .as_deref()
         .map(|c| format!(" (`{c}`)"))
         .unwrap_or_default();
+    // `(sd-pam)` lives as long as the systemd user manager, which a new
+    // login starts again, so "stop it" alone is no way forward.
+    let way_forward = if comm.as_deref() == Some("(sd-pam)") {
+        "It is the systemd user manager's PAM helper and lasts as long as the user manager \
+         does, so it cannot be stopped from this desktop session. From a text console or an \
+         SSH login, run `sudo systemctl stop user@$(id -u).service`, confirm no dispatch \
+         process runs, run `aida dispatch activate-lock` again, then \
+         `sudo systemctl start user@$(id -u).service` (or log out and back in)"
+    } else {
+        "Stop it for the moment, confirm no dispatch process runs, then run \
+         `aida dispatch activate-lock` again"
+    };
     format!(
         ". Process {pid}{name} is non-dumpable or sandboxed, so its open files cannot be checked. \
-         Stop it for the moment, confirm no dispatch process runs, then run \
-         `aida dispatch activate-lock` again. Only a repo that still has the legacy \
-         lock file needs this step"
+         {way_forward}. Only a repo that still has the legacy lock file needs this step"
     )
 }
 

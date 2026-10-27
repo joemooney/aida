@@ -2108,32 +2108,127 @@ fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
     assert!(!body.contains("reverify_now("));
 }
 
-/// Q2: the dispatch context cannot be dropped silently on the way into, or
-/// inside, the native train and ship. The call sites live in unprotected
-/// files (`dispatch_flow.rs`, `pr_train.rs`, `pr_cmd.rs`); this pin, under
-/// `gate/`, is what makes removing one a protected change.
+/// Q2: the dispatch context cannot be dropped silently on the way into the
+/// native ship and train. While a dispatch request's context is alive on
+/// the worker thread, `pr ship` and `pr train` reached without it (the
+/// ordinary entry points, which pass `None`) are refused by the gate before
+/// anything runs, and the same calls carrying the context go on. Every flow
+/// test also runs `dispatch_flow`'s real calls into `pr ship` and `pr train`
+/// (their stand-in hooks sit behind the real entry check), so dropping the
+/// context at one of those call sites fails them too.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[test]
+fn story_1917_dispatch_context_dropped_on_the_way_into_ship_or_train_is_refused() {
+    use crate::gate::dispatch_auth::{carried, is_dispatch_authority_aborted};
+    let f = native_fixture(false);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let _hooks = FlowHookGuard;
+    let ctx = establish_train_ctx(&f, vec![9710]);
+    let shipped = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let trained = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let (s, t) = (shipped.clone(), trained.clone());
+    TEST_FLOW_SHIP_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(move |pr, ctx| {
+            s.borrow_mut().push((pr, ctx.request_id().to_string()));
+            Ok(())
+        }));
+    });
+    TEST_FLOW_TRAIN_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(move |prs, ctx| {
+            t.borrow_mut()
+                .push((prs.to_vec(), ctx.request_id().to_string()));
+            Ok(())
+        }));
+    });
+    let ship = |dispatch_ctx: Option<&DispatchExecutionContext>| {
+        crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
+            Some(9710),
+            false,
+            false,
+            false,
+            false,
+            None,
+            None,
+            false,
+            false,
+            false,
+            Some(1),
+            false,
+            crate::forge::MergeMethod::Squash,
+            false,
+            dispatch_ctx,
+        )
+    };
+    let opts = crate::pr_train::TrainOptions {
+        prs: &[9710],
+        all_ready: false,
+        dry_run: false,
+        local_ci: None,
+        max: 1,
+        no_pull: false,
+    };
+
+    // Dropped: the ordinary entry points, with the request still executing.
+    let err = crate::pr_cmd::pr_ship_with_method(
+        Some(9710),
+        false,
+        false,
+        false,
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        Some(1),
+        false,
+        crate::forge::MergeMethod::Squash,
+        false,
+    )
+    .unwrap_err();
+    assert!(is_dispatch_authority_aborted(&err), "{err:#}");
+    assert!(format!("{err:#}").contains("`pr ship` was reached without its dispatch context"));
+    let err = ship(None).unwrap_err();
+    assert!(is_dispatch_authority_aborted(&err), "{err:#}");
+    let err = crate::pr_train::pr_train_handler(&opts).unwrap_err();
+    assert!(is_dispatch_authority_aborted(&err), "{err:#}");
+    assert!(format!("{err:#}").contains("`pr train` was reached without its dispatch context"));
+    // A clone is the same request still executing.
+    let clone = ctx.clone();
+    assert!(crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, None).is_err());
+    assert!(shipped.borrow().is_empty() && trained.borrow().is_empty());
+
+    // Carried: past the real entry check to the stand-in.
+    ship(Some(&clone)).unwrap();
+    crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, Some(&ctx)).unwrap();
+    let id = ctx.request_id().to_string();
+    assert_eq!(*shipped.borrow(), vec![(9710, id.clone())]);
+    assert_eq!(*trained.borrow(), vec![(vec![9710], id)]);
+
+    // Once no request is executing, `None` is an ordinary run again.
+    drop(clone);
+    assert!(
+        carried(None, "pr ship").is_err(),
+        "the original is still alive"
+    );
+    drop(ctx);
+    assert!(carried(None, "pr ship").unwrap().is_none());
+}
+
+/// Q2: every native train step re-checks the dispatch context.
 // trace:STORY-1917 | ai:claude
 #[test]
-fn story_1917_dispatch_context_is_carried_into_native_ship_and_train() {
+fn story_1917_native_train_steps_recheck_the_dispatch_context() {
     fn fn_body<'a>(src: &'a str, head: &str) -> &'a str {
         let start = src.find(head).unwrap_or_else(|| panic!("{head} exists"));
         let body = &src[start..];
-        let end = body[1..].find("\n    fn ").map_or(body.len(), |i| i + 1);
+        let end = [body[1..].find("\n    fn "), body.find("\n}\n")]
+            .into_iter()
+            .flatten()
+            .min()
+            .map_or(body.len(), |i| i + 1);
         &body[..end]
     }
-    let flow = include_str!("../../dispatch_flow.rs");
-    let ship = fn_body(flow, "fn invoke_pr_ship_with_ctx(");
-    assert!(ship.contains("pr_ship_with_method_and_dispatch_ctx(") && ship.contains("Some(ctx)"));
-    let train = fn_body(flow, "fn invoke_pr_train_with_ctx(");
-    assert!(train.contains("pr_train_handler_with_dispatch_ctx(") && train.contains("Some(ctx)"));
-    let runtime = flow.split("#[cfg(test)]\nmod ").next().unwrap();
-    for bare in ["pr_ship_with_method(", "pr_train_handler("] {
-        assert!(
-            !runtime.contains(&format!("::{bare}")),
-            "dispatch_flow.rs calls `{bare}` without the dispatch context"
-        );
-    }
-
     let train_src = include_str!("../../pr_train.rs");
     let live = train_src
         .split("impl TrainForge for LiveTrainForge<'_> {")

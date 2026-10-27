@@ -397,7 +397,9 @@ pub(crate) fn command_output_with_timeout_capped(
 /// runs are forwarded to the child's whole tree, and at the bound, the cap or
 /// a forwarded signal's grace the tree is SIGKILLed, descendants in other
 /// groups included. Returns the forwarded signal, if any, for the caller to
-/// re-raise once it has recorded the outcome. A spawn failure comes back as
+/// re-raise. `run_review_verb` re-raises it right after one log line, before
+/// any outcome is recorded, so the dying worker's request is closed later by
+/// the dead-worker reap, not with a forwarded-signal summary. A spawn failure comes back as
 /// `Err` with its cause; `Ok` never holds [`BoundedCommandOutput::SpawnFailed`].
 // trace:STORY-1917 | ai:claude
 pub(crate) fn command_output_with_timeout_forwarding(

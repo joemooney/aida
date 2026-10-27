@@ -3246,23 +3246,31 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
         }
         Err(e) => e,
     };
-    assert!(
-        nd_err.to_string().contains("unknown FD coverage; fail-closed")
-            || nd_err
-                .to_string()
-                .contains("open-before-flock or waiter race detected"),
-        "expected fail-closed unknown FD coverage refusal for non-dumpable same-UID process, got: {nd_err:#}"
-    );
-    // The refusal names the cause and the way forward, not only the pid.
+    // Which refusal fires depends on whether this process may read the
+    // child's descriptors (a privileged runner can); assert that one.
     // trace:STORY-1917 | ai:claude
-    if nd_err.to_string().contains("unknown FD coverage") {
+    #[cfg(target_os = "linux")]
+    {
         let text = nd_err.to_string();
-        assert!(
-            text.contains(&format!("Process {nd_pid}"))
-                && text.contains("non-dumpable or sandboxed")
-                && text.contains("then run `aida dispatch activate-lock` again"),
-            "{text}"
-        );
+        let fd_dir = std::fs::read_dir(format!("/proc/{nd_pid}/fd"));
+        match fd_dir {
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                // The refusal names the cause and the way forward, not only the pid.
+                assert!(
+                    text.contains("unknown FD coverage; fail-closed")
+                        && text.contains(&format!("Process {nd_pid}"))
+                        && text.contains("non-dumpable or sandboxed")
+                        && text.contains("then run `aida dispatch activate-lock` again"),
+                    "expected the unknown-FD-coverage refusal with guidance, got: {nd_err:#}"
+                );
+            }
+            readable => assert!(
+                text.contains("open-before-flock or waiter race detected"),
+                "the child's fd directory is readable ({:?}), so the open legacy lock \
+                 must be found, got: {nd_err:#}",
+                readable.map(|_| ())
+            ),
+        }
     }
     std::fs::write(&nd_release_marker, b"1").unwrap();
     let _ = nd_child.wait();
@@ -3790,6 +3798,20 @@ fn unreadable_fd_dir_guidance_names_process_cause_and_way_forward() {
             && text.contains("then run `aida dispatch activate-lock` again"),
         "{text}"
     );
+
+    // The systemd user manager's helper cannot just be stopped: the
+    // guidance names a path that ends the user manager instead.
+    std::fs::write(proc_dir.join("comm"), "(sd-pam)\n").unwrap();
+    let sd_pam = unreadable_fd_dir_guidance(&denied, 4242, &proc_dir);
+    assert!(sd_pam.contains("Process 4242 (`(sd-pam)`)"), "{sd_pam}");
+    assert!(!sd_pam.contains("Stop it for the moment"), "{sd_pam}");
+    assert!(
+        sd_pam.contains("sudo systemctl stop user@$(id -u).service")
+            && sd_pam.contains("then `sudo systemctl start user@$(id -u).service`")
+            && sd_pam.contains("run `aida dispatch activate-lock` again"),
+        "{sd_pam}"
+    );
+    std::fs::write(proc_dir.join("comm"), "ssh-agent\n").unwrap();
 
     let no_comm = unreadable_fd_dir_guidance(&denied, 7, &tmp.path().join("missing"));
     assert!(no_comm.contains("Process 7 is non-dumpable"), "{no_comm}");
