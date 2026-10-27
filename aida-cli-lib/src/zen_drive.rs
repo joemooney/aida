@@ -614,31 +614,20 @@ pub(crate) fn resolve_scope_route(
 const MAX_DRAFT_TITLE_LEN: usize = 200;
 
 /// Whether `arg` looks like a spec id (`TASK-123`, `STORY-45`, `BUG-9`,
-/// `ADR-7`, and multi-segment agreed ids like `FR-1-042`) rather than a
-/// free-text thought. The rule: a single whitespace-free token of an
-/// all-alphabetic prefix followed by one or more `-<digits>` groups. Anything
-/// else — multiple words, a bare word, an empty string — is treated as a
-/// thought. A spec id keeps the existing resolve-or-refuse behavior; a thought
-/// routes to the draft-and-drive front door. Case-insensitive (`task-7`).
+/// `ADR-7`, multi-segment agreed ids like `FR-1-042`, and node-local ids such
+/// as `TASK-b6b1278890774ef993d2ebc327862470-003`) rather than a free-text
+/// thought. The rule is the shared free-text one,
+/// [`crate::looks_like_spec_id_in_text`]: after trimming, a single token of the
+/// shared spec-id shape whose prefix is either upper-case or a built-in type
+/// prefix in any case (`task-7`). So a hyphenated thought ending in digits
+/// (`follow-up-2`), a one-letter prefix (`X-1`), multiple words, a bare word
+/// or an empty string all stay thoughts. A spec id keeps the existing
+/// resolve-or-refuse behavior; a thought routes to the draft-and-drive front
+/// door.
 // trace:STORY-725 | ai:claude
 pub(crate) fn looks_like_spec_id(arg: &str) -> bool {
-    let s = arg.trim();
-    if s.is_empty() || s.chars().any(char::is_whitespace) {
-        return false;
-    }
-    let mut segments = s.split('-');
-    match segments.next() {
-        Some(prefix) if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic()) => {}
-        _ => return false,
-    }
-    let mut saw_numeric_segment = false;
-    for seg in segments {
-        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
-            return false;
-        }
-        saw_numeric_segment = true;
-    }
-    saw_numeric_segment
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    crate::looks_like_spec_id_in_text(arg)
 }
 
 /// Which path produced a drafted spec's body — for the operator-facing report
@@ -753,6 +742,20 @@ mod tests {
         }
     }
 
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    #[test]
+    fn node_local_ids_and_padded_ids_are_recognized() {
+        for id in [
+            "TASK-b6b1278890774ef993d2ebc327862470-003",
+            "BUG-B6B1278890774EF993D2EBC327862470-006",
+            "task-b6b1278890774ef993d2ebc327862470-003",
+            "  TASK-7  ",
+            "\tstory-45\n",
+        ] {
+            assert!(looks_like_spec_id(id), "{id:?} should look like a spec id");
+        }
+    }
+
     #[test]
     fn free_text_is_not_a_spec_id() {
         for thought in [
@@ -766,6 +769,11 @@ mod tests {
             "-123",
             "task-12a",
             "123",
+            // TASK-b6b1278890774ef993d2ebc327862470-008: hyphenated prose
+            // ending in digits and a one-letter prefix stay thoughts.
+            "follow-up-2",
+            "phase-2",
+            "X-1",
         ] {
             assert!(
                 !looks_like_spec_id(thought),

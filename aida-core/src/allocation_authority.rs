@@ -13,6 +13,32 @@ pub struct AllocationMode {
     pub authoritative: bool,
 }
 
+// The legacy model API is infallible and signals a refused allocation with
+// an empty display ID. Keep the refusal's cause for the save boundary so the
+// caller sees the real reason rather than a generic one.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+thread_local! {
+    static LAST_FAILURE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Record why an allocation was refused (latest refusal wins).
+pub fn record_failure(error: &anyhow::Error) {
+    LAST_FAILURE.with(|f| *f.borrow_mut() = Some(format!("{error:#}")));
+}
+
+/// Take the recorded refusal cause, clearing it.
+pub fn take_failure() -> Option<String> {
+    LAST_FAILURE.with(|f| f.borrow_mut().take())
+}
+
+/// `"<what>: <cause>; <outcome>"`, or `"<what>; <outcome>"` with no recorded cause.
+pub fn failure_message(what: &str, outcome: &str) -> String {
+    match take_failure() {
+        Some(cause) => format!("{what}: {cause}; {outcome}"),
+        None => format!("{what}; {outcome}"),
+    }
+}
+
 /// Resolve aliases before policy discovery, including a not-yet-created leaf.
 fn destination(path: &Path) -> Result<PathBuf> {
     let mut existing = std::path::absolute(path)?;
@@ -188,6 +214,25 @@ pub fn admit(
     if resolve(root)?.authoritative {
         return Ok(());
     }
+    admit_with_binding(incoming, existing, || node(root))
+}
+
+// Exactly the same ownership and local-ID admission for an unspent candidate.
+// trace:STORY-1742 | ai:codex
+// trace:BUG-2017 | ai:codex
+pub(crate) fn admit_candidate(
+    node: &str,
+    incoming: &[crate::Requirement],
+    existing: &[crate::Requirement],
+) -> Result<()> {
+    admit_with_binding(incoming, existing, || Ok(node.to_owned()))
+}
+
+fn admit_with_binding(
+    incoming: &[crate::Requirement],
+    existing: &[crate::Requirement],
+    mut resolve_node: impl FnMut() -> Result<String>,
+) -> Result<()> {
     // trace:BUG-2017 | ai:codex — reserve the complete candidate namespace
     // before any row can be persisted. Spec and agreed IDs share ownership;
     // aliases of the same UUID are valid, including canonical case variants.
@@ -239,7 +284,7 @@ pub fn admit(
             if let Some(id) = id {
                 let binding = match &binding {
                     Some(b) => b,
-                    None => binding.insert(node(root)?),
+                    None => binding.insert(resolve_node()?),
                 };
                 if !crate::object_store::valid_spec_id_format(id) || !local_id(id, binding) {
                     bail!("new or changed global display IDs refuse on a non-authoritative clone; nothing was written")
@@ -261,6 +306,22 @@ pub fn admit_meta_ids(
     if resolve(root)?.authoritative {
         return Ok(());
     }
+    admit_meta_with_binding(incoming, existing, || node(root))
+}
+
+pub(crate) fn admit_candidate_meta(
+    node: &str,
+    incoming: &[(uuid::Uuid, Option<String>)],
+    existing: &[(uuid::Uuid, Option<String>)],
+) -> Result<()> {
+    admit_meta_with_binding(incoming, existing, || Ok(node.to_owned()))
+}
+
+fn admit_meta_with_binding(
+    incoming: &[(uuid::Uuid, Option<String>)],
+    existing: &[(uuid::Uuid, Option<String>)],
+    mut resolve_node: impl FnMut() -> Result<String>,
+) -> Result<()> {
     for (uuid, id) in incoming {
         if let Some(id) = id {
             if existing
@@ -269,7 +330,7 @@ pub fn admit_meta_ids(
             {
                 continue;
             }
-            if !local_id(id, &node(root)?) {
+            if !local_id(id, &resolve_node()?) {
                 bail!("new global metadata IDs refuse on a non-authoritative clone")
             }
         }
@@ -279,6 +340,8 @@ pub fn admit_meta_ids(
 
 /// Registry serializers cannot mint claims through alternate paths or aliases.
 pub fn admit_registry_write(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(path)?;
     let resolved = destination(path)?;
     let parent = resolved.parent().context("invalid registry destination")?;
     if in_git_clone(parent)? {
@@ -307,6 +370,8 @@ pub fn admit_object_file(objects: &Path, req: &crate::Requirement) -> Result<()>
 
 /// Direct file dispensers under a clone cannot spend centralized counters.
 pub fn admit_file_dispenser(path: &Path, mode: &crate::dispenser::IdMode) -> Result<()> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(path)?;
     // trace:BUG-2017 | ai:codex — inspect the original bound path before resolving aliases.
     crate::work_binding::bound_counter_state(path)?;
     let resolved = destination(path)?;
@@ -351,6 +416,8 @@ struct CloneDispenser {
 }
 impl CloneDispenser {
     fn inner(&self) -> Result<crate::models::DispenserHandle> {
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(&self.root)?;
         let mode = resolve(&self.root)?;
         if mode.authoritative {
             return self
@@ -394,8 +461,17 @@ impl CloneDispenser {
         let state = inner.state()?;
         // A supplied lifecycle provider may have performed one-time migration.
         let binding = node(&self.root)?;
-        if state.mode != (crate::dispenser::IdMode::Distributed { node_id: binding }) {
-            bail!("dispenser does not match this clone's node binding")
+        if state.mode
+            != (crate::dispenser::IdMode::Distributed {
+                node_id: binding.clone(),
+            })
+        {
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+            bail!(
+                "dispenser does not match this clone's node binding (clone is node {binding}, dispenser records {}); run `{}` for the repair",
+                crate::work_binding::mode_label(&state.mode),
+                crate::work_binding::DOCTOR_ALLOCATION_COMMAND
+            )
         }
         Ok(inner)
     }
@@ -1130,6 +1206,82 @@ mod tests {
                 assert_eq!(std::fs::read(dir.path().join("oplog.yaml")).ok(), oplog);
             }
         }
+    }
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    #[test]
+    fn refused_allocation_reports_the_dispenser_cause() {
+        struct Failed;
+        impl crate::dispenser::Dispenser for Failed {
+            fn next(&self, _: &str) -> Result<u32> {
+                bail!("fixture failure")
+            }
+            fn peek(&self, _: &str) -> Result<u32> {
+                bail!("fixture failure")
+            }
+            fn state(&self) -> Result<crate::dispenser::DispenserState> {
+                Ok(crate::dispenser::DispenserState::new(
+                    crate::dispenser::IdMode::Centralized,
+                ))
+            }
+        }
+        let (_dir, backend) = fixture(true);
+        let backend =
+            backend.with_dispenser(crate::models::DispenserHandle(std::sync::Arc::new(Failed)));
+        let err = backend
+            .add_requirement(Requirement::new("failure".into(), "fixture".into()))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            err,
+            "requirement ID allocation failed: fixture failure; no metadata or object was written"
+        );
+        assert!(take_failure().is_none(), "the cause is consumed");
+    }
+    #[cfg(unix)]
+    #[test]
+    fn group_writable_node_toml_refusal_names_the_file_and_chmod() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, backend) = fixture(false);
+        let node = dir.path().join(".aida/node.toml");
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o664)).unwrap();
+        let err = backend
+            .with_dispenser(lifecycle_dispenser(dir.path()))
+            .add_requirement(Requirement::new("unsafe".into(), "fixture".into()))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.starts_with("requirement ID allocation failed: "),
+            "{err}"
+        );
+        assert!(err.contains("(mode 0664)"), "{err}");
+        assert!(err.contains("run `chmod go-w "), "{err}");
+        assert!(err.contains("node.toml"), "{err}");
+    }
+    #[cfg(unix)]
+    #[test]
+    fn legacy_dispenser_on_another_node_refusal_names_both_nodes() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, backend) = fixture(false);
+        let node = dir.path().join(".aida/node.toml");
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let legacy = dir.path().join(".aida/dispenser.toml");
+        std::fs::write(
+            &legacy,
+            "[mode.Distributed]\nnode_id = \"2\"\n\n[sequences]\nGLOBAL = 9\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&legacy, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let err = backend
+            .with_dispenser(lifecycle_dispenser(dir.path()))
+            .add_requirement(Requirement::new("mismatch".into(), "fixture".into()))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("legacy node/provider binding mismatch"),
+            "{err}"
+        );
+        assert!(err.contains("bound to node 7"), "{err}");
+        assert!(err.contains("records node 2"), "{err}");
     }
     #[test]
     fn bug_2017_two_level_work_refuses_before_counters_home_retains_format() {

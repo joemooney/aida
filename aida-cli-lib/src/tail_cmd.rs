@@ -455,19 +455,8 @@ fn entry_matches_spec(entry: &LogEntry, spec: &str) -> bool {
     {
         return true;
     }
-    looks_like_spec_id(spec) && entry.filename.to_uppercase().contains(&spec.to_uppercase())
-}
-
-/// `TASK-1167`, `BUG-89`, `FR-1-042` — a letter-prefixed, hyphenated id with a
-/// digit after the first hyphen.
-fn looks_like_spec_id(s: &str) -> bool {
-    let Some((head, tail)) = s.split_once('-') else {
-        return false;
-    };
-    !head.is_empty()
-        && head.chars().all(|c| c.is_ascii_alphabetic())
-        && tail.chars().next().is_some_and(|c| c.is_ascii_digit())
-        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    crate::looks_like_spec_id(spec) && entry.filename.to_uppercase().contains(&spec.to_uppercase())
 }
 
 fn log_label(entry: &LogEntry) -> String {

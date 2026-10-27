@@ -205,6 +205,9 @@ mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+// trace:STORY-1742 | ai:claude
+#[cfg(unix)]
+mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_watch;
 mod role;
@@ -536,6 +539,8 @@ mod rules_sync;
 mod sandbox_cmd;
 // trace:BUG-2211 trace:TASK-2270 | ai:claude — sandbox-left config.lock doctor check.
 mod sandbox_config_lock;
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+mod allocation_health;
 // trace:TASK-2324 | ai:codex
 mod rustc_cache;
 mod scaffold_cmd;

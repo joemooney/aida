@@ -1558,9 +1558,21 @@ pub(crate) fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
     out.extend(collected);
 }
 
+/// Longest token [`looks_like_spec_id`] accepts. Node-local ids carry a
+/// 32-hex node segment (`STORY-b6b1278890774ef993d2ebc327862470-005` is 42
+/// chars), so the old 40-char cap silently dropped every one of them from
+/// commit trailers. 64 leaves room for a long prefix and sequence while still
+/// rejecting arbitrary hyphenated prose. trace:BUG-b6b1278890774ef993d2ebc327862470-006 | ai:claude
+const MAX_SPEC_ID_LEN: usize = 64;
+
+/// The one spec-id shape rule the trailer parsers share: an alphabetic prefix
+/// (2+ letters), optional alphanumeric node segments (`1`, `7`, or a hex node
+/// id), and a numeric sequence — `FR-42`, `BUG-1-038`,
+/// `TASK-b6b1278890774ef993d2ebc327862470-003`. Case-insensitive.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-006 | ai:claude
 pub(crate) fn looks_like_spec_id(s: &str) -> bool {
     let s = s.trim();
-    if s.len() < 3 || s.len() > 40 {
+    if s.len() < 3 || s.len() > MAX_SPEC_ID_LEN {
         return false;
     }
     let mut parts = s.split('-');
@@ -1582,6 +1594,67 @@ pub(crate) fn looks_like_spec_id(s: &str) -> bool {
     }
     tail.last()
         .is_some_and(|part| part.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// [`looks_like_spec_id`] with an upper-case prefix — the canonical written
+/// form (`TASK-498`, `FR-1-042`, `TASK-b6b1278890774ef993d2ebc327862470-003`;
+/// the node segment keeps any case). For surfaces that tell a spec id apart
+/// from a lower-case branch or session name (`story-431`).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) fn looks_like_canonical_spec_id(s: &str) -> bool {
+    let s = s.trim();
+    looks_like_spec_id(s)
+        && s.split('-')
+            .next()
+            .is_some_and(|prefix| prefix.chars().all(|c| c.is_ascii_uppercase()))
+}
+
+/// [`looks_like_spec_id`] tightened for free text, where a hyphenated word
+/// ending in digits (`follow-up-2`) must not pass: the token must be
+/// canonical ([`looks_like_canonical_spec_id`]) or carry a built-in type
+/// prefix in any case (`task-7`, `fr-1-042`). Surrounding whitespace is
+/// trimmed; inner whitespace rejects.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+pub(crate) fn looks_like_spec_id_in_text(s: &str) -> bool {
+    let s = s.trim();
+    if s.chars().any(char::is_whitespace) || !looks_like_spec_id(s) {
+        return false;
+    }
+    if looks_like_canonical_spec_id(s) {
+        return true;
+    }
+    let prefix = s.split('-').next().unwrap_or_default();
+    aida_core::RequirementType::ALL
+        .iter()
+        .any(|t| t.default_prefix().eq_ignore_ascii_case(prefix))
+}
+
+/// [`looks_like_canonical_spec_id`] as a regex fragment (no anchors, no
+/// capture groups), for embedding in larger patterns such as trace markers
+/// and `(ID)` trailers. Length is not bounded here; callers that need the
+/// cap re-check with the function.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) const CANONICAL_SPEC_ID_PATTERN: &str = r"[A-Z]{2,}(?:-[A-Za-z0-9]+)*-[0-9]+";
+
+/// [`looks_like_spec_id`] (any-case prefix) as a regex fragment.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) const SPEC_ID_PATTERN: &str = r"[A-Za-z]{2,}(?:-[A-Za-z0-9]+)*-[0-9]+";
+
+/// [`SPEC_ID_PATTERN`] in POSIX ERE, for `git grep -E` (which has no
+/// non-capturing groups).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) const SPEC_ID_ERE: &str = r"[A-Za-z]{2,}(-[A-Za-z0-9]+)*-[0-9]+";
+
+/// The one trace-marker regex: capture 1 is the id in canonical shape, so a
+/// marker naming a node-local id (`TASK-<hex node>-NNN`) yields the whole id,
+/// and a node-aware `FR-1-042` never buckets under a bogus `FR-1`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) fn trace_marker_re() -> &'static regex::Regex {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(&format!(r"\btrace:({CANONICAL_SPEC_ID_PATTERN})"))
+            .expect("valid trace marker regex")
+    })
 }
 
 pub fn parse_pr_arg(arg: &str) -> Option<u32> {
@@ -2019,3 +2092,7 @@ pub fn resolve_pr_to_spec(
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_node_local_trailer_tests.rs"]
+mod bug_node_local_trailer_tests;
