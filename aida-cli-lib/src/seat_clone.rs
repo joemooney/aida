@@ -2105,3 +2105,7 @@ mod s4b_seat_trees_tests;
 #[cfg(test)]
 #[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
 mod orphan_reentry_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
+mod retention_tests;

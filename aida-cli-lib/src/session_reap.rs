@@ -1121,7 +1121,7 @@ fn commits_outside_origin(project_root: &std::path::Path, tip: &str) -> Option<u
 /// removal itself goes through the shared teardown (pre-destroy cargo-clean hook
 /// + worktree-pool deregistration) that the worktree-GC heal uses.
 // trace:TASK-1177 | ai:claude
-fn reap_one(
+pub(crate) fn reap_one(
     project_root: &std::path::Path,
     lease: &SessionLease,
     checked_tip: Option<&str>,

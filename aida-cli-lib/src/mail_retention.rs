@@ -223,3 +223,7 @@ mod tests {
         assert!(!refusal_lines(&refusal(false)).join("\n").contains(command));
     }
 }
+
+#[cfg(test)]
+#[path = "tests/story_1843_c2_refusal_tests.rs"]
+mod story_1843_c2_refusal_tests;
