@@ -79192,5 +79192,32 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6161
+- id: 01a17f09-4d24-7de3-a125-f47ede7711cf
+  target_id: 01a17f09-4439-7e12-b95d-b05ac2aa5854
+  author: aida
+  node_id: '1'
+  lamport: 6162
+  timestamp: 2026-10-27T20:24:38.436603593Z
+  kind: !Create
+    title: 'Review PR-2990: [AI:claude] fix(transport): review follow-ups (TASK-b6b1278890774ef993d2ebc327862470-011, TASK-b6b1278890774ef993d2ebc327862470-012)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/transport-followups`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2990>
+      - Branch: `fix/transport-followups` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-011
+      - TASK-b6b1278890774ef993d2ebc327862470-012
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2990` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6162
 node_id: '1'
