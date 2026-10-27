@@ -152,16 +152,22 @@ def check(binary):
             # comes from a third fixture identity through the real send CLI.
             checked([binary, 'mailbox', 'send', '--to', sender, '--from', 'fixture-operator',
                      '--subject', 'private-parent-control', 'parent-private-only'], root, env)
-            parent_read = root / '.aida/mailbox/.read' / (sender + '.txt')
-            assert not parent_read.exists(), 'fixture parent already acknowledged mail'
+            # Inbox acknowledgement is per-ID read receipts only; the legacy
+            # .read/<handle>.txt watermark is never written.
+            parent_receipts = root / '.aida/mailbox/.read-receipts' / sender
+            def parent_receipt_names():
+                return sorted(p.name for p in parent_receipts.glob('*.txt')) if parent_receipts.is_dir() else []
+            def parent_read_exists():
+                return bool(parent_receipt_names())
+            assert not parent_read_exists(), 'fixture parent already acknowledged mail'
             assert 'unread mailbox' not in notice_text(ask(agy, op='notice')), 'Agy inherited parent private inbox'
             child_inbox = ask(agy, op='inbox')
             assert 'parent-private-only' not in child_inbox, child_inbox
-            assert not parent_read.exists(), 'child acknowledged parent private mail'
+            assert not parent_read_exists(), 'child acknowledged parent private mail'
             assert '1 mail' in ask(claude, op='notice'), 'parent mail stopped being unread'
             parent_inbox = ask(claude, op='inbox')
             assert 'parent-private-only' in parent_inbox, parent_inbox
-            assert parent_read.exists(), 'parent inbox did not acknowledge its own mail'
+            assert parent_read_exists(), 'parent inbox did not acknowledge its own mail'
             assert '1 mail' not in ask(claude, op='notice')
             sent = ask(claude, op='send', handle=recipient)
             assert 'sent' in sent, sent
@@ -201,7 +207,7 @@ def check(binary):
             ask(claude, op='send', handle=recipient, body='resume-private-body')
             checked([binary, 'mailbox', 'send', '--to', sender, '--from', 'fixture-operator',
                      '--subject', 'parent-after-resume', 'parent-resume-private'], root, env)
-            parent_watermark = parent_read.read_text()
+            parent_receipts_before = parent_receipt_names()
             agy.stdin.close()
             agy.wait(timeout=5)
             resumed = subprocess.Popen([sys.executable, str(script), binary, str(hook), json.dumps(wiring), 'agy'],
@@ -215,7 +221,7 @@ def check(binary):
             resumed_inbox = ask(resumed, op='inbox')
             assert 'resume-private-body' in resumed_inbox, resumed_inbox
             assert 'parent-resume-private' not in resumed_inbox, resumed_inbox
-            assert parent_read.read_text() == parent_watermark, 'resumed child acknowledged parent mail'
+            assert parent_receipt_names() == parent_receipts_before, 'resumed child acknowledged parent mail'
             # With only parent-private mail pending, a second startup must
             # emit neither a private-mail count nor a shared-mail count.
             resumed.stdin.close()
@@ -226,7 +232,7 @@ def check(binary):
             workers.append(resumed_again)
             parent_only_startup = notice_text(response(resumed_again))
             assert 'mail' not in parent_only_startup.lower(), parent_only_startup
-            assert parent_read.read_text() == parent_watermark
+            assert parent_receipt_names() == parent_receipts_before
             # The aged-mail warning is another startup notice path. Without
             # an explicit role it must not fall back to the parent's user.
             config = root / '.aida/config.toml'
@@ -236,7 +242,7 @@ def check(binary):
             ask(resumed_again, op='clear-role')
             no_role_startup = notice_text(ask(resumed_again, op='startup'))
             assert 'mail' not in no_role_startup.lower(), no_role_startup
-            assert parent_read.read_text() == parent_watermark
+            assert parent_receipt_names() == parent_receipts_before
             assert '1 mail' in ask(claude, op='notice')
             assert 'parent-resume-private' in ask(claude, op='inbox')
             assert 'unread mailbox' not in notice_text(ask(resumed_again, op='notice'))

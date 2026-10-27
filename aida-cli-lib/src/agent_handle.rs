@@ -38,7 +38,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// Longest handle accepted, so a handle fits a statusline and a DNS label.
-pub(crate) const HANDLE_MAX_LEN: usize = 63;
+pub(crate) const HANDLE_MAX_LEN: usize = aida_core::mailbox_identity::HANDLE_MAX_LEN;
 
 /// How long a launcher's reservation holds its name before the launched
 /// process registers under it.
@@ -124,22 +124,7 @@ pub(crate) struct HandleRequest<'a> {
 
 /// Why `name` is not a valid handle spelling, or `None` when it is.
 pub(crate) fn handle_spelling_rejection(name: &str) -> Option<String> {
-    if name.is_empty() {
-        return Some("is empty".to_string());
-    }
-    if name.len() > HANDLE_MAX_LEN {
-        return Some(format!("is longer than {HANDLE_MAX_LEN} characters"));
-    }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-    {
-        return Some("may contain only lowercase letters, digits and '-'".to_string());
-    }
-    if !name.starts_with(|c: char| c.is_ascii_alphanumeric()) {
-        return Some("must start with a letter or digit".to_string());
-    }
-    None
+    aida_core::mailbox_identity::handle_spelling_rejection(name)
 }
 
 /// A valid spelling close to `name`, offered when `name` is refused; never
@@ -1072,16 +1057,7 @@ fn native_session_env_keys(vendor: &str) -> &'static [&'static str] {
 /// A client payload's session id: Claude/Codex `session_id`, Agy
 /// `conversationId`.
 pub(crate) fn session_id_from_payload(raw: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
-    [
-        "session_id",
-        "sessionId",
-        "conversationId",
-        "conversation_id",
-    ]
-    .iter()
-    .find_map(|k| v.get(*k).and_then(|s| s.as_str()).map(str::to_string))
-    .filter(|s| !s.trim().is_empty())
+    aida_core::mailbox_identity::session_id_from_payload(raw)
 }
 
 /// Unended session rows whose process may still be live, so a stale row
@@ -1210,11 +1186,27 @@ pub(crate) fn current_session_handle_for_cwd() -> Option<String> {
     current_session_entry_for_cwd().and_then(|e| valid_handle(&e))
 }
 
+/// The registry row file of [`current_session_entry_for_cwd`], for the
+/// mailbox identity policy to verify in core.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn current_session_row_in(project_root: &Path) -> Option<PathBuf> {
+    let root = crate::main_worktree_root_from(project_root);
+    let entry = current_session_entry_in(&root)?;
+    Some(agent_registry::registry_path(&root, &entry.id))
+}
+
 /// The same persisted session used for private mail, including its vendor.
 // trace:STORY-1843 | ai:codex
 pub(crate) fn current_session_entry_for_cwd() -> Option<AgentRegistryEntry> {
     let cwd = std::env::current_dir().ok()?;
     let root = crate::main_worktree_root_from(&crate::find_aida_project_root_from(&cwd).ok()?);
+    current_session_entry_in(&root)
+}
+
+/// [`current_session_entry_for_cwd`] for the registry of the main checkout
+/// `root`, using this process's own session evidence.
+// trace:STORY-1843 | ai:claude
+fn current_session_entry_in(root: &Path) -> Option<AgentRegistryEntry> {
     // A raw client may inherit its parent's vendor/session environment.
     // Prefer the nearest actual vendor process (even an unregistered one)
     // before considering those variables. A new child cannot borrow a more
@@ -1230,14 +1222,14 @@ pub(crate) fn current_session_entry_for_cwd() -> Option<AgentRegistryEntry> {
         })
         .min_by_key(|(depth, _, _)| *depth);
     if let Some((_, pid, vendor)) = nearest {
-        return live_session_entries(&root, |e| e.pid == pid && e.agent_type == vendor)
+        return live_session_entries(root, |e| e.pid == pid && e.agent_type == vendor)
             .into_iter()
             .max_by_key(|e| e.last_active_at);
     }
     // Inside a PID namespace the host client may be invisible; its native
     // session evidence remains the supported lookup in that case.
     current_session_entry_for(
-        &root,
+        root,
         current_native_session_id().as_deref(),
         &agent_registry::detect_agent_type(),
     )

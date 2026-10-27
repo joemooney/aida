@@ -8,6 +8,9 @@ use super::*;
 mod pull;
 pub(super) use pull::pull;
 
+/// Command-scoped remote that only defeats push tracking-ref inference.
+const UNTRACKED_REMOTE: &str = "aida-transport-untracked";
+
 fn attached_store(root: &Path, common: &Path) -> Result<PathBuf> {
     let output = git(root, &["worktree", "list", "--porcelain", "-z"])?;
     if !output.status.success() {
@@ -201,12 +204,38 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
     // Removing HTTP userinfo must not expose a different rewrite rule. The
     // scheme/host/path still belong to the enrolled endpoint, never an alias.
     refuse_endpoint_rewrites(&store, &destination)?;
+    // Git 2.56 (upstream merge 24e4e2ef8b, hn/url-push-tracking) added
+    // repo_remote_for_push_tracking(): when the push destination is an
+    // unconfigured URL with exactly one push URL, git scans the configured
+    // remotes, and if exactly one lists that string verbatim among its push
+    // URLs (remote.<name>.pushurl, else remote.<name>.url), transport_push
+    // updates tracking refs through that remote's fetch refspecs. Two or more
+    // matches fall back to the URL itself, which has no fetch refspec. Our
+    // destination is origin's URL, so a store-only push would otherwise write
+    // refs/remotes/origin/aida-store. A command-scoped remote whose url is the
+    // same string makes the match ambiguous. Pre-existing config under the
+    // reserved name (e.g. a pushurl, which replaces url in the match) could
+    // restore a unique match, so any such key refuses the push.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let untracked = git(
+        &store,
+        &[
+            "config",
+            "--get-regexp",
+            &format!("^remote\\.{UNTRACKED_REMOTE}\\."),
+        ],
+    )?;
+    if untracked.status.code() != Some(1) {
+        bail!("Reserved transport remote configuration is present; push refused.");
+    }
     // Exactly one attempt. Explicit SHA/refspec, endpoint, tag/submodule flags
     // defeat implicit code refs, remote refspecs and follow-tag configuration.
     // host_git_command preserves the verified store-only identity hook profile.
     let mut push = aida_core::git_ops::host_git_command(&store);
     push.args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
         .args(["-c", "push.negotiate=false"])
+        .arg("-c")
+        .arg(format!("remote.{UNTRACKED_REMOTE}.url={destination}"))
         .env("GIT_NO_LAZY_FETCH", "1")
         .args([
             "push",

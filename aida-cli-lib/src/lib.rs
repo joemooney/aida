@@ -359,6 +359,8 @@ mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
 mod findings;
+#[cfg(unix)]
+mod forwarded_signals;
 pub mod graded_review;
 mod identity_gate;
 mod implementer_preflight;
@@ -444,6 +446,8 @@ mod internal_cmd;
 mod mail_retention;
 mod mailbox_cmd;
 mod mailbox_store;
+// trace:STORY-1843 | ai:claude
+mod mailbox_view;
 // trace:TASK-2347 | ai:codex
 mod mailbox_wake;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.

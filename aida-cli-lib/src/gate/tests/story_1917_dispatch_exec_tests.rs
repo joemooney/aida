@@ -38,8 +38,9 @@ use crate::gate::dispatch_ledger::{
 };
 use crate::gate::dispatch_lock::{
     acquire_dispatch_lock, activate_dispatch_v2_lock_quiescent, proc_mount_options,
-    proc_view_refusal, verify_sole_open_fd_for_inode, TEST_FAIL_ROLLBACK_EXCHANGE,
-    TEST_POST_EXCHANGE_HOOK, TEST_PRE_FLOCK_V2_HOOK, TEST_PROC_PID_ALLOWLIST, TEST_PROC_VIEW,
+    proc_view_refusal, unreadable_fd_dir_guidance, verify_sole_open_fd_for_inode,
+    TEST_FAIL_ROLLBACK_EXCHANGE, TEST_POST_EXCHANGE_HOOK, TEST_PRE_FLOCK_V2_HOOK,
+    TEST_PROC_PID_ALLOWLIST, TEST_PROC_VIEW,
 };
 use crate::gate::mandate::{self, Mandate, Scope};
 use chrono::Duration;
@@ -348,6 +349,176 @@ fn tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
             .unwrap_or("")
             .contains("can only run under `aida dispatch serve`"),
         "expected Boundary B serve refusal, got: {refused_rev:?}"
+    );
+}
+
+/// R6: the headless review launch is bounded. A `queue work` that hangs is
+/// killed when the bound runs out together with the vendor it started in a
+/// process group of its own, and the request fails, so neither can hold the
+/// claim, the review lease or a cap slot past the bound.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn review_runner_kills_a_hung_launch_at_its_bound() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let pid_file = f._tmp.path().join("hung-review.pid");
+    let vendor_pid_file = f._tmp.path().join("hung-vendor.pid");
+    let fake_aida = f.write_executable_script(
+        "hung-aida.sh",
+        &format!(
+            "#!/bin/sh\necho $$ > '{}'\nsetsid sh -c 'echo $$ > {}; exec sleep 60'\n",
+            pid_file.display(),
+            vendor_pid_file.display()
+        ),
+    );
+    let _bins = install_test_bins(Some(fake_aida), None);
+    struct ResetTimeout;
+    impl Drop for ResetTimeout {
+        fn drop(&mut self) {
+            TEST_REVIEW_TIMEOUT.with(|c| c.set(None));
+        }
+    }
+    let _reset = ResetTimeout;
+    TEST_REVIEW_TIMEOUT.with(|c| c.set(Some(std::time::Duration::from_millis(500))));
+
+    let rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 205,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &rev.request.id, true, now).unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
+    assert!(
+        res.summary.contains("did not finish within") && res.summary.contains("was killed"),
+        "{}",
+        res.summary
+    );
+    for (file, what) in [
+        (&pid_file, "the hung review child"),
+        (&vendor_pid_file, "the vendor it started in its own group"),
+    ] {
+        let pid: u32 = std::fs::read_to_string(file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while crate::process_probe::process_identity_is_alive(pid, None)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            !crate::process_probe::process_identity_is_alive(pid, None),
+            "{what} is killed"
+        );
+    }
+}
+
+/// The bounded review's stdin is not a terminal (it reads as empty,
+/// `/dev/null`), and the child leads a process group of its own so the bound
+/// can kill its tree; terminal signals reach it by forwarding (see
+/// `forwarded_signals`).
+// trace:STORY-1917 | ai:claude
+#[test]
+fn review_runner_child_has_null_stdin_and_its_own_process_group() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let probe = f._tmp.path().join("review-probe.txt");
+    let fake_aida = f.write_executable_script(
+        "probe-aida.sh",
+        &format!(
+            "#!/bin/sh\n{{ if [ -t 0 ]; then echo tty; else echo notty; fi; \
+             readlink /proc/self/fd/0; cut -d' ' -f5 /proc/$$/stat; echo $$; }} > '{}'\n",
+            probe.display()
+        ),
+    );
+    let _bins = install_test_bins(Some(fake_aida), None);
+
+    let rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 206,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &rev.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+
+    let text = std::fs::read_to_string(&probe).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.first(), Some(&"notty"), "{text}");
+    assert_eq!(lines.get(1), Some(&"/dev/null"), "{text}");
+    // SAFETY: `getpgrp` takes no arguments and cannot fail.
+    let own_pgid = unsafe { libc::getpgrp() };
+    let child_pgid = lines.get(2).and_then(|l| l.parse::<i32>().ok());
+    assert_ne!(child_pgid, Some(own_pgid), "{text}");
+    assert_eq!(
+        child_pgid,
+        lines.get(3).and_then(|l| l.parse::<i32>().ok()),
+        "the review child leads its own process group: {text}"
+    );
+}
+
+/// A review that cannot start reports why, with the binary it tried.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn review_runner_spawn_failure_names_the_binary_and_cause() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let missing = f._tmp.path().join("no-such-aida");
+    let _bins = install_test_bins(Some(missing.clone()), None);
+    let rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 207,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &rev.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
+    assert!(
+        res.summary.contains(&missing.display().to_string())
+            && res.summary.contains("No such file or directory"),
+        "{}",
+        res.summary
+    );
+}
+
+/// A runner's finish is stamped at its end, not at the start passed down.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn runner_finish_time_adds_the_elapsed_run_to_the_start() {
+    let start = Utc::now();
+    let two_hours = std::time::Duration::from_secs(2 * 60 * 60);
+    assert_eq!(
+        runner_finished_at(start, two_hours),
+        start + Duration::hours(2)
+    );
+    assert_eq!(runner_finished_at(start, std::time::Duration::ZERO), start);
+    assert_eq!(
+        runner_finished_at(start, std::time::Duration::MAX),
+        start,
+        "an unrepresentable span keeps the start"
     );
 }
 
@@ -3077,13 +3248,32 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
         }
         Err(e) => e,
     };
-    assert!(
-        nd_err.to_string().contains("unknown FD coverage; fail-closed")
-            || nd_err
-                .to_string()
-                .contains("open-before-flock or waiter race detected"),
-        "expected fail-closed unknown FD coverage refusal for non-dumpable same-UID process, got: {nd_err:#}"
-    );
+    // Which refusal fires depends on whether this process may read the
+    // child's descriptors (a privileged runner can); assert that one.
+    // trace:STORY-1917 | ai:claude
+    #[cfg(target_os = "linux")]
+    {
+        let text = nd_err.to_string();
+        let fd_dir = std::fs::read_dir(format!("/proc/{nd_pid}/fd"));
+        match fd_dir {
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                // The refusal names the cause and the way forward, not only the pid.
+                assert!(
+                    text.contains("unknown FD coverage; fail-closed")
+                        && text.contains(&format!("Process {nd_pid}"))
+                        && text.contains("non-dumpable or sandboxed")
+                        && text.contains("then run `aida dispatch activate-lock` again"),
+                    "expected the unknown-FD-coverage refusal with guidance, got: {nd_err:#}"
+                );
+            }
+            readable => assert!(
+                text.contains("open-before-flock or waiter race detected"),
+                "the child's fd directory is readable ({:?}), so the open legacy lock \
+                 must be found, got: {nd_err:#}",
+                readable.map(|_| ())
+            ),
+        }
+    }
     std::fs::write(&nd_release_marker, b"1").unwrap();
     let _ = nd_child.wait();
 
@@ -3588,6 +3778,98 @@ fn story_1917_proc_view_refusal_covers_namespaces_and_hidepid() {
         proc_mount_options("22 1 0:21 / /sys rw - sysfs sysfs rw\n"),
         None
     );
+}
+
+/// The unreadable-descriptor refusal names the process, why its files cannot
+/// be checked and the way forward; any other error adds nothing.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn unreadable_fd_dir_guidance_names_process_cause_and_way_forward() {
+    let tmp = tempfile::tempdir().unwrap();
+    let proc_dir = tmp.path().join("4242");
+    std::fs::create_dir_all(&proc_dir).unwrap();
+    std::fs::write(proc_dir.join("comm"), "ssh-agent\n").unwrap();
+
+    let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+    let text = unreadable_fd_dir_guidance(&denied, 4242, &proc_dir);
+    assert!(text.contains("Process 4242 (`ssh-agent`)"), "{text}");
+    assert!(text.contains("non-dumpable or sandboxed"), "{text}");
+    assert!(text.contains("open files cannot be checked"), "{text}");
+    assert!(
+        text.contains("Stop it for the moment")
+            && text.contains("then run `aida dispatch activate-lock` again"),
+        "{text}"
+    );
+
+    // The systemd user manager's helper cannot just be stopped: the
+    // guidance names a path that ends the user manager instead.
+    std::fs::write(proc_dir.join("comm"), "(sd-pam)\n").unwrap();
+    let sd_pam = unreadable_fd_dir_guidance(&denied, 4242, &proc_dir);
+    assert!(sd_pam.contains("Process 4242 (`(sd-pam)`)"), "{sd_pam}");
+    assert!(!sd_pam.contains("Stop it for the moment"), "{sd_pam}");
+    assert!(
+        sd_pam.contains("sudo systemctl stop user@$(id -u).service")
+            && sd_pam.contains("then `sudo systemctl start user@$(id -u).service`")
+            && sd_pam.contains("run `aida dispatch activate-lock` again"),
+        "{sd_pam}"
+    );
+    std::fs::write(proc_dir.join("comm"), "ssh-agent\n").unwrap();
+
+    let no_comm = unreadable_fd_dir_guidance(&denied, 7, &tmp.path().join("missing"));
+    assert!(no_comm.contains("Process 7 is non-dumpable"), "{no_comm}");
+
+    for kind in [std::io::ErrorKind::NotFound, std::io::ErrorKind::Other] {
+        let err = std::io::Error::from(kind);
+        assert_eq!(unreadable_fd_dir_guidance(&err, 4242, &proc_dir), "");
+    }
+}
+
+/// `aida dispatch activate-lock` is a direct-human act: an AIDA-managed agent
+/// session, or a session without an interactive terminal, is refused before
+/// any lock is touched, and the legacy lock stays a regular file.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_activate_lock_refuses_without_a_direct_human_at_a_tty() {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let mut f = ExecFixture::new(&["reviewer", "implementer"]);
+    let _ = open_pinned_dispatch_subdir(&f.root, None).unwrap();
+    let lock_path = dispatch_root(&f.root).join("tick.lock");
+    let legacy = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(&lock_path)
+        .unwrap();
+    let orig_ino = legacy.metadata().unwrap().ino();
+    drop(legacy);
+
+    for (agent, tty) in [(Some("drain-worker"), true), (None, false)] {
+        f.ambient.unset_key("AIDA_AGENT_TYPE");
+        match agent {
+            Some(name) => f.ambient.set_key("AIDA_AGENT_NAME", name),
+            None => f.ambient.unset_key("AIDA_AGENT_NAME"),
+        }
+        let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: f.root.clone(),
+            stdin_is_terminal: tty,
+            stdout_is_terminal: tty,
+            stderr_is_terminal: tty,
+        }));
+        let err = crate::gate::dispatch_lock::activate_lock_as_human(&f.root)
+            .err()
+            .expect("must refuse");
+        crate::test_ambient::replace(prev);
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("needs a direct human session at an interactive TTY"),
+            "agent={agent:?} tty={tty}: {text}"
+        );
+        let meta = std::fs::symlink_metadata(&lock_path).unwrap();
+        assert!(meta.is_file(), "the legacy lock stays a regular file");
+        assert_eq!(meta.ino(), orig_ino);
+    }
 }
 
 /// The activation path consults the view: in a PID namespace of its own, or
