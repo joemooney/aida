@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-27T17:12:33.682933142Z
+modified_at: 2026-10-27T17:12:37.500260718Z
 req_type: Story
 relationships:
 - rel_type:
@@ -670,6 +670,86 @@ comments:
       The R6 signoff also forbids agent-side live activation and production config install. This repo's .aida/config.toml does not yet register dispatch-tick; it predates the scaffold, and that file is protected. The operator runbook follows in the next comment. Completion (the bare STORY-1917 trailer) should follow the operator's run of that runbook.
   created_at: 2026-10-27T17:11:53.389228971Z
   modified_at: 2026-10-27T17:12:33.682932864Z
+  session_id: b3592ff1-9a9a-42b2-bada-31c38955f1d9
+- id: 01a17e59-817c-71c0-972d-0ccfcb019d8c
+  author: joe
+  content: |
+    OPERATOR RUNBOOK: STORY-1917 live-activation demo (closes the last acceptance item)
+
+    Who runs what: steps marked OPERATOR need you at a real terminal (TTY). Steps marked ADVISOR are typed by the sandboxed advisor Claude session; you do not run them. Primary checkout: ~/ai/aida.
+
+    0. OPERATOR, preflight (clean main):
+       cd ~/ai/aida && git switch main && git pull --ff-only && aida dev build
+       aida dev status            # expect: live SHA at or after 1b5806bce2 (slice 4). Today's live binary is 8ae30fc168, which lacks #2968.
+       ls .aida/dispatch 2>/dev/null || echo none   # expect: none, so activate-lock is NOT needed. If a plain file .aida/dispatch/tick.lock exists, stop every dispatch process and run: aida dispatch activate-lock
+       git check-ignore .aida/dispatch/x && echo ignored   # expect: ignored
+
+    1. OPERATOR, register the scheduler job once. .aida/config.toml is protected, so this goes in a tiny PR that you merge. Append the block that `aida init` scaffolds for new repos:
+       [[schedule.jobs]]
+       name = "dispatch-tick"
+       command = "dispatch tick"
+       every = "2m"
+       while = "mandate.dispatch_active == true && dispatch.pending > 0"
+       enabled = true
+       After the merge, run: aida schedule status | grep dispatch-tick    # expect: one substrate row, schedule "every 2m"
+       Confirm a driver exists: crontab -l | grep 'aida schedule tick' || systemctl --user list-timers | grep aida
+       If neither shows a driver, run: aida schedule install-cron
+       Note: the driver fires every 15 min, so a take/impl request can wait up to about 15 min for execution.
+
+    2. OPERATOR, negative check with no dispatch scope. The current mandate f63f94fc covers ship-held only. Ask the advisor to run:
+       ADVISOR: aida dispatch request impl --name demo-noscope --branch demo/noscope --spec <ANY-APPROVED-SPEC> --brief <brief.md>
+       expect: refused, "active mandate f63f94fc-... does not cover `dispatch`; stop it and start one with `aida mandate start --ship-held --scope dispatch` (or `--drive`)"
+       expect: aida dispatch list shows nothing new; aida history --kind MandateDriveAction --since 1h shows a dispatch:impl row with outcome refused under f63f94fc (TASK-2340).
+
+    3. OPERATOR, mint the dispatch mandate (mandates cannot be extended, so stop and start):
+       aida mandate stop
+       aida mandate start --ship-held --scope dispatch --include-supervised --ttl 8h --reason "STORY-1917 live demo"
+       aida mandate status        # expect: ACTIVE, and covers lists both ship-held and dispatch. Note the new <MANDATE-ID>.
+       Then give the new grant to any lanes that rely on AIDA_SESSION_GRANT, as usual.
+
+    4. OPERATOR, start the advisor and serve, each from a terminal that has entered the role. The key must be inherited into bwrap.
+       Terminal A (advisor):  eval "$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)" && claude
+       Terminal B (serve):    eval "$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)" && aida dispatch serve
+       Optional negative check first: in a plain shell, run `aida dispatch serve --once`
+         expect: refused, "`aida dispatch serve` requires a bound `advisor` seat grant (no session grant is set); enter the role ..."
+       This is the one command you start by hand, per the signoff Boundary B ruling. Everything after this comes from the advisor.
+
+    5. ADVISOR, malformed input is refused at request time (no operator action):
+       aida dispatch request flow 0                           # expect: clap error, value outside 1..=999999
+       aida dispatch request bogus 1                          # expect: unrecognized subcommand 'bogus'
+       aida dispatch request impl --name ../x --branch main --spec NOPE-1 --brief /etc/hostname   # expect: refused (name/branch/spec); nothing queued
+       The execution-time refusal of a tampered record is proven by the gate test tampered_request_json_or_frozen_brief_is_refused_before_spawn. Do not tamper with live records.
+
+    6. ADVISOR, READY PR to shipped. Pick a READY PR (CI green) that (i) touches no protected path (gate/, .aida/config.toml, protected tests) and (ii) was not authored by the advisor session; otherwise ship refuses by design.
+       aida dispatch request flow <N>
+       expect: "queued flow PR #<N> (waiting for serve)"
+       aida dispatch list        # expect: the row moves from pending (waiting for serve) to running to done within the review and CI time.
+       aida dispatch show <id>   # expect: status done, with an outcome naming the ship or train merge.
+       gh pr view <N> --json state -q .state   # expect: MERGED
+
+    7. ADVISOR, takeover fixer and new lane (executed by the scheduler tick, not by serve):
+       aida dispatch request take <M> --branch <M's head branch> --spec <M's spec> --brief <takeover-brief.md>
+       aida dispatch request impl --name demo-lane --branch demo/lane --spec <APPROVED-SPEC> --brief <lane-brief.md>
+       expect: "queued take PR #<M> ..." and "queued impl demo-lane (<SPEC>)", with no "waiting for serve".
+       For this check only, stop serve in terminal B (Ctrl-C) first, so the tick (not serve) provably runs them. Within one driver interval (up to about 15 min):
+       aida dispatch list        # expect: both done
+       aida schedule status | grep dispatch-tick   # expect: Last run updated
+       aida agent list (or ls ../aida-worktrees/)  # expect: a takeover session on <M>'s branch and a demo-lane worktree with a running implementer
+       The advisor receives mail-back for each request (aida mail).
+
+    8. OPERATOR, ledger evidence (one command):
+       aida history --kind MandateDriveAction --since 3h | grep <MANDATE-ID>
+       expect: dispatch:flow, dispatch:take and dispatch:impl rows (queued, then succeeded), plus a pr:<N> ship row with outcome succeeded, all under <MANDATE-ID>; and the step-2 refused row under f63f94fc.
+
+    9. OPERATOR, refusal after the mandate ends:
+       aida mandate stop
+       ADVISOR: aida dispatch request review <N2>
+       expect: refused, "mandate <MANDATE-ID> was stopped; start a new one with `aida mandate start --ship-held --scope dispatch`"
+       Restart your normal ship-held mandate afterwards.
+
+    Pass criteria: steps 6 to 9 all match. Post the step-8 ledger rows and the dispatch list output as a comment here. The advisor then closes STORY-1917 (bare trailer or status edit). Clean up the demo-lane worktree and branch afterwards.
+  created_at: 2026-10-27T17:12:37.500260718Z
+  modified_at: 2026-10-27T17:12:37.500260718Z
   session_id: b3592ff1-9a9a-42b2-bada-31c38955f1d9
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
