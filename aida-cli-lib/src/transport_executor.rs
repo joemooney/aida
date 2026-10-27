@@ -204,10 +204,18 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
     // Removing HTTP userinfo must not expose a different rewrite rule. The
     // scheme/host/path still belong to the enrolled endpoint, never an alias.
     refuse_endpoint_rewrites(&store, &destination)?;
-    // Git 2.56 updates the remote-tracking ref of the one configured remote
-    // whose push URL equals a URL destination, so a store-only push would
-    // write refs/remotes/origin/aida-store. A command-scoped remote with the
-    // same URL and no fetch refspec leaves no remote with a tracking mapping.
+    // Git 2.56 (upstream merge 24e4e2ef8b, hn/url-push-tracking) added
+    // repo_remote_for_push_tracking(): when the push destination is an
+    // unconfigured URL with exactly one push URL, git scans the configured
+    // remotes, and if exactly one lists that string verbatim among its push
+    // URLs (remote.<name>.pushurl, else remote.<name>.url), transport_push
+    // updates tracking refs through that remote's fetch refspecs. Two or more
+    // matches fall back to the URL itself, which has no fetch refspec. Our
+    // destination is origin's URL, so a store-only push would otherwise write
+    // refs/remotes/origin/aida-store. A command-scoped remote whose url is the
+    // same string makes the match ambiguous. Pre-existing config under the
+    // reserved name (e.g. a pushurl, which replaces url in the match) could
+    // restore a unique match, so any such key refuses the push.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-007 | ai:claude
     let untracked = git(
         &store,
