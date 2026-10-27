@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-27T20:47:03.650988664Z
+modified_at: 2026-10-27T21:36:10.507934011Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1504,6 +1504,12 @@ history:
   session_id: 01a17f1742b5
   harness_version: 2.1.311 (Claude Code)
   changes: []
+- id: 01a17f4a-cf58-77a3-99a8-a5201f4e888a
+  author: joe
+  timestamp: 2026-10-27T21:36:11.608818055Z
+  session_id: 01a17f47d1fb
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
@@ -1517,7 +1523,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'C2 round 3: R2 F1 (CI now green on cli/lib/rest/contracts; gates pending), F3 tokens, F4 pr rebase guard, F5 non-TTY test, F6 clone writer permits + build-bound activation, F7 docs all land. But the new pre-removal quiet check refuses only after session_end/force_cleanup_lease have already deleted the lease, claim and manifest, and their hints then tell the operator to run raw git worktree remove --force on the reopened mail; and pr rebase''s fallback still deletes an unfenced tree because its mailbox looks empty.'
+  detail: 'C2 round 4: R3-F1 lands for guarded removal, clone destroy and force_cleanup, and R3-F2/F3/F4 land with tests. But the default session-end pool return still ends the session on late mail (untyped complete_reuse error, reset before any quiet re-check), the rebase leftover now blocks aida pr rebase with no recovery, and CI is still queued at this head.'
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-27T20:47:03.650988664Z
+  shelved_at: 2026-10-27T21:36:10.507934011Z
