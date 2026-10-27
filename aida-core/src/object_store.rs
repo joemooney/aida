@@ -154,6 +154,8 @@ fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
 /// Creates parent directories as needed. Overwrites if the file already exists.
 #[cfg(feature = "native")]
 pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(objects_root)?;
     // trace:BUG-2017 | ai:codex
     #[cfg(all(unix, feature = "native"))]
     crate::allocation_authority::admit_object_file(objects_root, req)?;
@@ -194,6 +196,8 @@ pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
 /// trace:BUG-1-040 | ai:claude
 #[cfg(feature = "native")]
 pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result<bool> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(objects_root)?;
     // trace:BUG-2017 | ai:codex
     #[cfg(all(unix, feature = "native"))]
     crate::allocation_authority::admit_object_file(objects_root, req)?;
@@ -264,6 +268,8 @@ pub fn read_object_from_path(path: &Path) -> Result<Requirement> {
 /// Returns true if the file existed and was removed.
 #[cfg(feature = "native")]
 pub fn delete_object(objects_root: &Path, spec_id: &str) -> Result<bool> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(objects_root)?;
     let path = object_path(objects_root, spec_id)?;
     if path.exists() {
         std::fs::remove_file(&path)

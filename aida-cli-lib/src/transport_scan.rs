@@ -1,11 +1,11 @@
 //! Bounded, local-only scan of immutable Git objects, through every parent.
 // trace:STORY-1742 | ai:codex
 use super::*;
-use aida_core::transport_sanitization::{Policy, MAX_BYTES, SCANNER_VERSION};
+use aida_core::transport_sanitization::{Policy, MAX_BYTES, MAX_OPLOG_BYTES, SCANNER_VERSION};
 use std::collections::HashSet;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
@@ -42,9 +42,13 @@ fn scan_deadline() -> Instant {
 }
 
 pub(super) struct Scan {
-    pub policy: Policy,
-    bytes: Vec<u8>,
-    pub hash: String,
+    snapshot: aida_core::transport_policy::Snapshot,
+}
+impl std::ops::Deref for Scan {
+    type Target = aida_core::transport_policy::Snapshot;
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -61,27 +65,13 @@ struct Receipt {
 
 impl Scan {
     pub(super) fn load(private: &private::Private) -> Result<Self> {
-        let bytes = private
-            .read(POLICY_FILE)?
-            .context("Reviewed private transport policy is missing; push refused")?;
-        let policy: Policy = serde_json::from_slice(&bytes)
-            .map_err(|_| anyhow::anyhow!("Invalid transport policy"))?;
-        policy
-            .validate()
-            .map_err(|_| anyhow::anyhow!("Invalid or unreviewed transport policy"))?;
-        let hash = format!("{:x}", Sha256::digest(&bytes));
         Ok(Self {
-            policy,
-            bytes,
-            hash,
+            snapshot: aida_core::transport_policy::Snapshot::load(private)?,
         })
     }
 
     pub(super) fn revalidate(&self, private: &private::Private) -> Result<()> {
-        if private.read(POLICY_FILE)?.as_deref() != Some(self.bytes.as_slice()) {
-            bail!("Transport policy changed; refused");
-        }
-        Ok(())
+        self.snapshot.revalidate(private)
     }
 
     pub(super) fn history(&self, store: &Path, profile: &Profile, tip: &str) -> Result<()> {
@@ -154,7 +144,7 @@ impl Scan {
         let mut walked = HashSet::new();
         let mut scanned = HashSet::new();
         for (ordinal, oid) in commits.iter().enumerate() {
-            let tree = self.commit(&mut batch, ordinal, oid)?;
+            let (tree, parent) = self.commit(&mut batch, ordinal, oid)?;
             // Inspect paths on EVERY new commit, even where a whole subtree
             // or blob is reused from the trusted root. Memoizing an exact
             // (directory path, tree) pair repeats no distinct path verdict.
@@ -185,16 +175,31 @@ impl Scan {
                             if (mode == "120000") != (format == "symlink") {
                                 bail!("Unsupported tree mode; transport refused");
                             }
-                            if fresh.contains(child.as_str())
-                                && scanned.insert((child.clone(), format))
-                            {
+                            if !fresh.contains(child.as_str()) {
+                                continue;
+                            }
+                            // Intake's own rule: delta-scanned files read
+                            // their first-parent version. trace:STORY-1742 | ai:claude
+                            let before = match &parent {
+                                Some(parent) if Policy::scans_delta(&path) => {
+                                    parent_blob(&mut batch, parent, &path)?
+                                }
+                                _ => None,
+                            };
+                            if scanned.insert((child.clone(), format, before.clone())) {
                                 let bytes = batch.get(&child, "blob")?;
-                                self.policy.document(format, &bytes).map_err(|category| {
-                                    anyhow::anyhow!(
-                                        "Transport scan refused: object {}, {category}",
-                                        scanned.len()
-                                    )
-                                })?;
+                                let before = match &before {
+                                    Some(oid) => Some(batch.get(oid, "blob")?),
+                                    None => None,
+                                };
+                                self.policy
+                                    .change(&path, before.as_deref(), &bytes)
+                                    .map_err(|category| {
+                                        anyhow::anyhow!(
+                                            "Transport scan refused: object {}, {category}",
+                                            scanned.len()
+                                        )
+                                    })?;
                             }
                         }
                         _ => bail!("Unsupported tree mode; transport refused"),
@@ -207,7 +212,12 @@ impl Scan {
 
     /// Commit metadata is safe only as the explicitly enrolled pseudonym;
     /// the shipped identity hook still runs at push time.
-    fn commit(&self, batch: &mut Batch, ordinal: usize, oid: &str) -> Result<String> {
+    fn commit(
+        &self,
+        batch: &mut Batch,
+        ordinal: usize,
+        oid: &str,
+    ) -> Result<(String, Option<String>)> {
         let bytes = batch.get(oid, "commit")?;
         let text = std::str::from_utf8(&bytes)
             .map_err(|_| anyhow::anyhow!("Transport scan refused: commit encoding"))?;
@@ -221,12 +231,15 @@ impl Scan {
             .split_once("\n\n")
             .context("Unsupported commit structure")?;
         let mut tree = None;
+        let mut parent = None;
         let mut identities = 0;
         for line in headers.lines() {
             let (key, value) = line.split_once(' ').context("Unsupported commit header")?;
             match key {
                 "tree" if tree.is_none() && is_hex_id(value, &[oid.len()]) => tree = Some(value),
-                "parent" if is_hex_id(value, &[oid.len()]) => {}
+                "parent" if is_hex_id(value, &[oid.len()]) => {
+                    parent.get_or_insert(value);
+                }
                 "author" | "committer" => {
                     let prefix =
                         format!("{} <{}> ", self.policy.git_name, self.policy.git_identity);
@@ -256,7 +269,10 @@ impl Scan {
         if identities != 3 {
             bail!("Incomplete commit identities");
         }
-        Ok(tree.context("Missing commit tree")?.to_owned())
+        Ok((
+            tree.context("Missing commit tree")?.to_owned(),
+            parent.map(str::to_owned),
+        ))
     }
 
     pub(super) fn receipt(
@@ -277,6 +293,27 @@ impl Scan {
         };
         private.write(RECEIPT_FILE, &serde_json::to_vec(&receipt)?)
     }
+}
+
+/// The blob a root-level `name` had in `parent`'s tree, if any. The parent's
+/// own metadata was vetted when it was scanned or is trusted history.
+// trace:STORY-1742 | ai:claude
+fn parent_blob(batch: &mut Batch, parent: &str, name: &str) -> Result<Option<String>> {
+    let bytes = batch.get(parent, "commit")?;
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| anyhow::anyhow!("Transport scan refused: commit encoding"))?;
+    let tree = text
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("tree "))
+        .filter(|tree| is_hex_id(tree, &[parent.len()]))
+        .context("Missing commit tree")?
+        .to_owned();
+    let bytes = batch.get(&tree, "tree")?;
+    Ok(tree_entries(&bytes, tree.len() / 2)?
+        .into_iter()
+        .find(|(mode, entry, _)| *mode == "100644" && *entry == name)
+        .map(|(_, _, child)| child))
 }
 
 /// Raw tree object entries: `<mode> <name>\0<binary id>`.
@@ -313,140 +350,7 @@ fn tree_entries(bytes: &[u8], id_len: usize) -> Result<Vec<(&str, &str, String)>
     Ok(entries)
 }
 
-/// A spawned process group. The leader stays unreaped (a zombie still holds
-/// its PID and group ID) until `reap`, so signalling the group can never
-/// reach an unrelated, recycled process.
-struct Group {
-    child: Child,
-    reaped: bool,
-}
-
-impl Group {
-    fn spawn(mut cmd: Command) -> Result<Self> {
-        let child = cmd
-            .spawn()
-            .map_err(|_| anyhow::anyhow!("Transport Git process unavailable"))?;
-        Ok(Self {
-            child,
-            reaped: false,
-        })
-    }
-
-    /// Exit observed without reaping, so the group stays addressable.
-    fn exited(&self) -> bool {
-        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-        let rc = unsafe {
-            libc::waitid(
-                libc::P_PID,
-                self.child.id() as libc::id_t,
-                &mut info,
-                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-            )
-        };
-        if rc != 0 {
-            return std::io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD);
-        }
-        info.si_signo == libc::SIGCHLD
-    }
-
-    fn signal(&self, signal: i32) {
-        if !self.reaped {
-            unsafe {
-                libc::kill(-(self.child.id() as i32), signal);
-            }
-        }
-    }
-
-    fn reap(&mut self) -> Result<ExitStatus> {
-        let status = self
-            .child
-            .wait()
-            .map_err(|_| anyhow::anyhow!("Transport Git process status unavailable"))?;
-        self.reaped = true;
-        Ok(status)
-    }
-}
-
-impl Drop for Group {
-    fn drop(&mut self) {
-        // Cover every early return, including a leader that exited while one
-        // of its helpers retained a pipe: never leave a helper running.
-        if !self.reaped {
-            self.signal(libc::SIGKILL);
-            let _ = self.reap();
-        }
-    }
-}
-
-fn drain(
-    source: impl Read + Send + 'static,
-    cap: usize,
-) -> mpsc::Receiver<std::io::Result<Vec<u8>>> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let result = source
-            .take(cap as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map(|_| bytes);
-        let _ = tx.send(result);
-    });
-    rx
-}
-
-/// Run a local reader to completion under a cap and deadline. On exit, the
-/// whole group is killed before reaping so no helper outlives the read.
-pub(super) fn bounded(
-    mut cmd: Command,
-    input: &[u8],
-    cap: usize,
-    deadline: Instant,
-) -> Result<(ExitStatus, Vec<u8>)> {
-    cmd.stdin(if input.is_empty() {
-        Stdio::null()
-    } else {
-        Stdio::piped()
-    })
-    .stdout(Stdio::piped())
-    .stderr(Stdio::null())
-    .process_group(0);
-    let mut group = Group::spawn(cmd)?;
-    let rx = drain(group.child.stdout.take().unwrap(), cap);
-    if let Some(mut stdin) = group.child.stdin.take() {
-        // Feed requests concurrently: a large object-ID list must not
-        // deadlock against output the reader is still producing.
-        let input = input.to_vec();
-        std::thread::spawn(move || {
-            let _ = stdin.write_all(&input);
-        });
-    }
-    let mut output = None;
-    loop {
-        if let Ok(result) = rx.try_recv() {
-            output = Some(result);
-        }
-        if output
-            .as_ref()
-            .is_some_and(|r| r.as_ref().map_or(true, |b| b.len() > cap))
-            || Instant::now() >= deadline
-        {
-            bail!("Transport graph read limit or deadline exceeded");
-        }
-        if group.exited() {
-            let bytes = output
-                .or_else(|| rx.recv_timeout(Duration::from_millis(100)).ok())
-                .context("Transport graph output incomplete")?
-                .map_err(|_| anyhow::anyhow!("Transport graph output unreadable"))?;
-            group.signal(libc::SIGKILL);
-            let status = group.reap()?;
-            if bytes.len() > cap {
-                bail!("Transport graph output limit exceeded");
-            }
-            return Ok((status, bytes));
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    }
-}
+pub(super) use aida_core::transport_policy::{bounded, drain, Group};
 
 /// Run the network push. Unlike the local readers it has no wall-clock kill
 /// (a large first push must not be cut mid-transfer). It runs in its own
@@ -571,7 +475,8 @@ impl Reader<'_> {
             .lines()
         {
             let size: u64 = line.parse().context("Transport graph object is missing")?;
-            if size > MAX_BYTES as u64 {
+            // The largest per-format bound; `document` applies the exact one.
+            if size > MAX_OPLOG_BYTES as u64 {
                 bail!("Transport object exceeds size limit");
             }
             total += size;
@@ -698,7 +603,7 @@ impl Batch {
                     bail!("Transport graph object is missing");
                 };
                 let size: usize = size.parse().map_err(|_| incomplete())?;
-                if size > MAX_BYTES {
+                if size > MAX_OPLOG_BYTES {
                     bail!("Transport object exceeds size limit");
                 }
                 let mut bytes = vec![0; size + 1];
