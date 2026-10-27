@@ -79335,5 +79335,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6171
+- id: 01a17f5e-b862-7e82-b671-aba0fa425d92
+  target_id: 01a17f5e-ade5-78a1-9c4c-9b7a6b9fdd00
+  author: aida
+  node_id: '1'
+  lamport: 6172
+  timestamp: 2026-10-27T21:57:56.450448846Z
+  kind: !Create
+    title: '(minor, non-blocking) Textual macro scope is not covered: a #[macro_use] mod ut…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-010, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (minor, non-blocking) Textual macro scope is not covered: a #[macro_use] mod util; (or a macro_rules! defined in an unscanned module ahead of mod gate) can shadow format!/matches!, which gate/dispatch_* call bare, and expand to crate::dispatch code. Bare macro names are dropped by Reach::note, and root files are scanned only for crate::dispatch references, not for #[macro_use]. Consider rejecting #[macro_use] on root mod items and macro_rules! named like the prelude macros the gate uses.
+
+      PR: #2989
+      Reviewed sha: c3492bbb7f08dab133af82f680887c061b0d59a1
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6172
 node_id: '1'
