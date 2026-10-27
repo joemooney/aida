@@ -12,12 +12,12 @@ description: |-
   4. Behaviour is unchanged. Show it with the existing story_1698/story_1700 mandate tests plus a before/after list of every refusal reason string.
 
   Sequencing: one human-merged refactor PR. Land it after the open PRs touching these files (#2798, #2792, #2789) merge, to avoid conflicts. Architecture change, so it needs a sketch with advisor signoff first.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-26T19:55:31.246125866Z
+modified_at: 2026-10-27T05:12:26.369063790Z
 req_type: Story
 tags:
 - architecture
@@ -518,6 +518,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a17bc6-27f0-7883-88dc-809398bb6673
+  author: aida-auto-bump
+  timestamp: 2026-10-27T05:12:26.352791820Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a17bc6-2801-71f0-aeda-acca5e93c518
+  timestamp: 2026-10-27T05:12:26.369053117Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/agy1/STORY-1889-2026-10-25T053737Z.md.acked
+  commit_sha: e3fd91e83fe3ffef5e9b26365de8e302a92c6904
+  summary: 'Round 4: round-3 findings all addressed. Gate-trusted dispatch I/O primitives moved verbatim into gate/dispatch_io.rs (only the log opener and freeze_brief stay outside), with an import ratchet. Inventory at head declares the 4 new unreachable transition guards (0 removed). Mount ratchets now see same-line, raw-string, multi-line and cfg_attr forms. AC1-AC4 verified; CI green at head (merge-hold-gate is the expected hold). Operator merges.'
+  punted:
+  - 'punted: Independent advisor review: relocation mostly preserves behavior, but record_label_state still writes legacy hold markers from merge_hold.rs after that file leaves the protected floor, violating signed marker-writer boundary. Refs STORY-1889.'
+  - 'punted: Focused advisor round2: F1 label-state marker writer resolved with protected typed/legacy tests; F2 admitted hold record still crosses to unprotected routing by mutable reference after protected checks, at both persistence paths. Preserve routing behavior but restrict returned mutations to routing fields.'
+  review_verdict: approved
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -526,3 +544,7 @@ filed_at:
   aida_build_sha: 7be4321436
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-27T05:12:26.352785810Z
+  completion_sha: e3fd91e83fe3ffef5e9b26365de8e302a92c6904
