@@ -78413,5 +78413,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6095
+- id: 01a17bca-a8a9-7190-a6a9-ad6d527ec4ef
+  target_id: 01a17bca-a1bb-7501-8db0-8ae8fc98f2ac
+  author: aida
+  node_id: '1'
+  lamport: 6096
+  timestamp: 2026-10-27T05:17:21.449072229Z
+  kind: !Create
+    title: 'Review PR-2965: [AI:claude] chore(ci): budget the story_1843_pr3 claude-to-agy blackbox test (Refs STORY-1843)'
+    description: Hand-filed review story (Refs-only PR, BUG-2208).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6096
 node_id: '1'
