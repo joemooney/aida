@@ -519,12 +519,24 @@ fn queue_work(
     path: Option<&str>,
     resume: Option<&str>,
 ) -> anyhow::Result<()> {
+    queue_work_as(storage, scope, branch, path, resume, false)
+}
+
+/// [`queue_work`], with or without `--sandbox` (a contained launch).
+fn queue_work_as(
+    storage: &crate::Storage,
+    scope: &str,
+    branch: Option<&str>,
+    path: Option<&str>,
+    resume: Option<&str>,
+    sandbox: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         crate::test_env::HERMETIC_TEST_USER,
         Some(scope),
         None,
-        false,
+        sandbox,
         /* no_launch */ true,
         crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         /* no_pull */ true,
@@ -559,23 +571,13 @@ fn queue_work(
     )
 }
 
-/// Finding 5, end to end through `handle_queue_work --resume`: a `--path` or
-/// `--branch` naming another tree refuses, the conflict sweep skips the
-/// adopted orphan (without `--resume` it refuses the dirty orphan), and the
-/// pickup lands in the orphan's tree with its work intact. The status gate
-/// lets the orphan's In Progress through, but not NeedsAttention.
-// trace:BUG-2223 | ai:claude
-#[test]
-fn queue_work_resume_adopts_the_orphan_end_to_end() {
-    let fx = fixture();
-    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
-        &fx.main,
-        "implementer",
-        &["implementer"],
-        &[],
-    );
-    let scope = "TASK-922706";
-    let store_root = fx.main.join(".aida-store");
+/// An Approved requirement for `scope`, queued for the hermetic test user,
+/// in `main`'s store; returns the storage and a setter for its status.
+fn queued_scope(
+    main: &Path,
+    scope: &str,
+) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {
+    let store_root = main.join(".aida-store");
     let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = crate::Storage::new(&store_root);
     std::fs::create_dir_all(store_root.join("registry")).unwrap();
@@ -592,16 +594,6 @@ fn queue_work_resume_adopts_the_orphan_end_to_end() {
     req.spec_id = Some(scope.to_string());
     req.status = aida_core::RequirementStatus::Approved;
     let req = backend.add_requirement(req).unwrap();
-    let set_status = |status: aida_core::RequirementStatus| {
-        let mut store = backend.load().unwrap();
-        let r = store
-            .requirements
-            .iter_mut()
-            .find(|r| r.id == req.id)
-            .unwrap();
-        r.status = status;
-        backend.save(&store).unwrap();
-    };
     storage
         .queue_add(aida_core::QueueEntry {
             user_id: crate::test_env::HERMETIC_TEST_USER.to_string(),
@@ -616,6 +608,36 @@ fn queue_work_resume_adopts_the_orphan_end_to_end() {
             added_by_machine: None,
         })
         .unwrap();
+    let set_status = move |status: aida_core::RequirementStatus| {
+        let mut store = backend.load().unwrap();
+        let r = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == req.id)
+            .unwrap();
+        r.status = status;
+        backend.save(&store).unwrap();
+    };
+    (storage, set_status)
+}
+
+/// Finding 5, end to end through `handle_queue_work --resume`: a `--path` or
+/// `--branch` naming another tree refuses, the conflict sweep skips the
+/// adopted orphan (without `--resume` it refuses the dirty orphan), and the
+/// pickup lands in the orphan's tree with its work intact. The status gate
+/// lets the orphan's In Progress through, but not NeedsAttention.
+// trace:BUG-2223 | ai:claude
+#[test]
+fn queue_work_resume_adopts_the_orphan_end_to_end() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &["implementer"],
+        &[],
+    );
+    let scope = "TASK-922706";
+    let (storage, set_status) = queued_scope(&fx.main, scope);
     let orphan = orphaned_worktree(&fx.main, scope);
     set_status(aida_core::RequirementStatus::InProgress);
     let tree = orphan.worktree_path.clone();
@@ -675,4 +697,89 @@ fn the_branch_preflight_lets_the_adopted_clone_hold_its_branch() {
         Some(&orphan.worktree_path),
     )
     .unwrap();
+}
+
+/// The clone counterpart of [`queue_work_resume_adopts_the_orphan_end_to_end`]:
+/// a contained `queue work --resume` re-enters an orphaned seat clone in
+/// place, its commit and uncommitted work intact.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-005 | ai:claude
+#[test]
+fn queue_work_resume_adopts_an_orphaned_seat_clone_end_to_end() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &["implementer"],
+        // A contained pickup exports AIDA_CONTAINED; restore it on drop.
+        &[("AIDA_CONTAINED", None)],
+    );
+    let scope = "TASK-922708";
+    let (storage, set_status) = queued_scope(&fx.main, scope);
+    let orphan = orphaned_clone(&fx.main, scope);
+    set_status(aida_core::RequirementStatus::InProgress);
+    let clone = orphan.worktree_path.clone();
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+
+    queue_work_as(&storage, scope, None, None, Some(""), true).unwrap();
+    let lease = lease_for(&fx.main, scope);
+    assert_ne!(lease.id, orphan.id);
+    assert_eq!(lease.tree_kind, TreeKind::Clone);
+    assert_eq!(lease.worktree_path, clone);
+    assert_eq!(lease.branch, orphan.branch);
+    assert!(!crate::lease_path(&fx.main, &orphan.id).exists());
+    assert_work_intact(&clone, &orphan.branch, &head);
+}
+
+/// Adoption refuses past another lease on the scope whose owner cannot be
+/// proven gone (it records no pid), the same rule the queue-work conflict
+/// sweep applies, so a direct `session start --path --force-claim` adoption
+/// does not slip past it either.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-004 | ai:claude
+#[test]
+fn adopting_an_orphan_refuses_a_lease_of_unknown_liveness_on_the_scope() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-922709";
+    let orphan = orphaned_clone(&fx.main, scope);
+    let clone = orphan.worktree_path.clone();
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+
+    // An older lease on the same scope that records no owner pid.
+    let mut unknown = orphan.clone();
+    unknown.id = uuid::Uuid::now_v7().to_string();
+    unknown.started_at = orphan.started_at - chrono::Duration::hours(1);
+    unknown.worktree_path = fx.root.join("unknown-tree");
+    unknown.tree_kind = TreeKind::Worktree;
+    unknown.active_pid = None;
+    unknown.active_pid_start_time = None;
+    unknown.creator_pid = None;
+    unknown.creator_pid_start_time = None;
+    std::fs::create_dir_all(&unknown.worktree_path).unwrap();
+    write_lease(&fx.main, &unknown);
+    assert_eq!(
+        crate::leases::stale_lease_recovery_for_lease(&unknown).base_verdict,
+        crate::StaleLeaseRecovery::UnknownLiveness
+    );
+
+    let errs = [
+        start(scope, Some(&orphan.branch), Some(&clone), true, true).unwrap_err(),
+        adopt(scope, &orphan.branch, &clone).unwrap_err(),
+    ];
+    for err in errs {
+        let err = format!("{err:#}");
+        assert!(err.contains(&unknown.id[..8]), "{err}");
+        assert!(err.contains("cannot be proven gone"), "{err}");
+    }
+    let mut ids: Vec<_> = crate::list_leases(&fx.main)
+        .into_iter()
+        .filter(|l| l.scope == scope)
+        .map(|l| l.id)
+        .collect();
+    ids.sort();
+    let mut want = vec![orphan.id.clone(), unknown.id.clone()];
+    want.sort();
+    assert_eq!(ids, want, "both leases are left as they were");
+    assert_work_intact(&clone, &orphan.branch, &head);
 }

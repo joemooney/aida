@@ -759,18 +759,21 @@ fn ownership_and_ci_share_one_wait_deadline() {
     let mkfifo = Command::new("mkfifo").arg(&path).status().unwrap();
     assert!(mkfifo.success(), "mkfifo {}", path.display());
     let (release, released) = std::sync::mpsc::channel::<()>();
+    let (served_tx, served) = std::sync::mpsc::channel::<bool>();
+    let fifo = path.clone();
     let server = std::thread::spawn(move || {
         let open = || std::fs::OpenOptions::new().write(true).open(&path);
         open().unwrap().write_all(&owning).unwrap();
         if released.recv().is_err() {
-            return false;
+            let _ = served_tx.send(false);
+            return;
         }
         let writer = open().unwrap();
         // Unlink while the reader holds the FIFO open: any later read sees
         // a missing file instead of blocking on an unserved FIFO.
         std::fs::remove_file(&path).unwrap();
         drop(writer);
-        true
+        let _ = served_tx.send(true);
     });
     std::fs::write(
         fixture.state.join("rows"),
@@ -825,7 +828,21 @@ fn ownership_and_ci_share_one_wait_deadline() {
     // ownership wait, refused — naming the real pending check.
     assert!(!text.contains("Drive ownership wait timed out"), "{text}");
     // Release happened, so the server already handed probe 2 its writer.
-    assert!(server.join().unwrap(), "release was never served");
+    // The child has exited, so a server still blocked opening the FIFO for
+    // write never will be served: bound the wait, then open the read end on
+    // a detached thread so the server finishes, and fail rather than hang.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-006 | ai:claude
+    let was_served = served
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .unwrap_or(false);
+    if !was_served {
+        std::thread::spawn(move || std::fs::File::open(&fifo));
+    }
+    assert!(
+        was_served,
+        "release was never served: `pr ship` exited without a second drive probe\n{text}"
+    );
+    server.join().unwrap();
     assert!(text.contains("still pending: Build"), "{text}");
     // TASK-2348: the ownership wait spent the whole two seconds, so CI got
     // a ZERO remainder: exactly one row observation and no re-poll. A
