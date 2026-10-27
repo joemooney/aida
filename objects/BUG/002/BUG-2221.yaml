@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-27T18:10:00.300491217Z
+modified_at: 2026-10-27T19:36:54.842356725Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -463,6 +463,12 @@ comments:
   content: 'ADVISOR 10:45 MST: execution mode drain so the advisor can train the approved drift slice (#2982); completion still needs the AC4 re-measurement on a promoted build.'
   created_at: 2026-10-27T18:10:00.300491217Z
   modified_at: 2026-10-27T18:10:00.300491217Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17edd-9b3a-7fe0-8d6f-b4b9ccdb6718
+  author: joe
+  content: 'ADVISOR COMPLETION 2026-10-27 11:25 MST. All four acceptance items met. AC1/AC2/AC3: SKETCH v1-v3 diagnoses and fixes (#2928 negative proof + streaming trace walk; #2950 append-only spec-id->commit index with O2 order; #2982 concurrent filing-drift walk); budgets, tolerance and ceiling unchanged (1000 ms / 10% / 5000 ms); hermetic tests in each PR. AC4 on the promoted build 160235072d, primary checkout, load ~4, 5 warm runs ms: STORY-1889 (the slowest shape) 969 976 973 971 971; TASK-2347 (negative) 356 352 351 353 353; BUG-2224 478 392 465 479 394; STORY-1843 683 594 594 595 595. Fresh lineage-scoped guard telemetry (aida doctor --category performance), per binary: new build 160235072d 4.5% of 22 calls over budget (within the 10% tolerance); the 24h window still reads 18.5% of 135 because of older builds (0c374c424f 26.9% of 67, before the drift slice and including one-time index rebuilds). The old window was not relabelled or pruned; it ages out on its own. P2 (#2945) and P1-prime (#2947) were dropped on measured evidence.'
+  created_at: 2026-10-27T19:36:54.842356725Z
+  modified_at: 2026-10-27T19:36:54.842356725Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
