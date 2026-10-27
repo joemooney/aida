@@ -1162,8 +1162,11 @@ pub(crate) struct BlameOrigin {
 /// boundary is unit-testable.
 // trace:STORY-785 | ai:claude
 pub(crate) fn spec_ids_from_commit_message(msg: &str) -> Vec<String> {
-    let re_trailer = regex::Regex::new(r"\(([A-Z]{2,}-[0-9][0-9-]*)\)").expect("valid regex");
-    let re_trace = regex::Regex::new(r"trace:([A-Za-z]{2,}-[0-9][0-9-]*)").expect("valid regex");
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let re_trailer = regex::Regex::new(&format!(r"\(({})\)", crate::CANONICAL_SPEC_ID_PATTERN))
+        .expect("valid regex");
+    let re_trace =
+        regex::Regex::new(&format!("trace:({})", crate::SPEC_ID_PATTERN)).expect("valid regex");
     let mut ids: Vec<String> = Vec::new();
     for c in re_trailer.captures_iter(msg) {
         let id = c[1].to_ascii_uppercase();
@@ -1250,7 +1253,9 @@ pub(crate) fn handle_why_code(arg: &str, json: bool) -> Result<()> {
     let lines: Vec<&str> = content.lines().collect();
 
     // Find trace ids: the NEAREST at/above the line, else every id in the file.
-    let re = regex::Regex::new(r"trace:([A-Za-z]{2,}-[0-9][0-9-]*)").expect("valid regex");
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let re =
+        regex::Regex::new(&format!("trace:({})", crate::SPEC_ID_PATTERN)).expect("valid regex");
     let mut ids: Vec<String> = Vec::new();
     let mut anchor: Option<usize> = line_no;
     if let Some(ln) = line_no {

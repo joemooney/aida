@@ -376,9 +376,12 @@ fn trace_scan(
     // Regex pattern for trace comments (supports both old and new formats):
     // Old: // trace:REQ-ID | ai:tool:confidence
     // New: // trace:REQ-ID - Title | ai:tool:confidence | impl:date | by:user
-    let trace_pattern = regex::Regex::new(
-        r"//\s*trace:([A-Z]+-\d+)(?:\s*-\s*([^|]+))?(?:\s*\|\s*ai:(\w+):(\w+))?(?:\s*\|\s*impl:(\S+))?(?:\s*\|\s*by:(\S+))?"
-    ).unwrap();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let trace_pattern = regex::Regex::new(&format!(
+        r"//\s*trace:({})(?:\s*-\s*([^|]+))?(?:\s*\|\s*ai:(\w+):(\w+))?(?:\s*\|\s*impl:(\S+))?(?:\s*\|\s*by:(\S+))?",
+        crate::CANONICAL_SPEC_ID_PATTERN
+    ))
+    .unwrap();
 
     // (req_id, file_path, line_content, line_num, tool, confidence, title, impl_date, by_user)
     let mut found_traces: Vec<TraceScanHit> = Vec::new();

@@ -1300,7 +1300,14 @@ impl GitBackend {
                     .iter()
                     .any(|(old_uuid, old_id)| old_uuid == uuid && old_id == id)
         }) {
-            anyhow::bail!("metadata ID allocation failed; nothing was written")
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+            anyhow::bail!(
+                "{}",
+                crate::allocation_authority::failure_message(
+                    "metadata ID allocation failed",
+                    "nothing was written"
+                )
+            )
         }
         if mode.authoritative {
             return Ok(());
@@ -1324,7 +1331,14 @@ impl GitBackend {
         // empty ID. Refuse before metadata/oplog even on explicit HOME.
         // trace:BUG-2017 | ai:codex
         if incoming.iter().any(|r| r.spec_id.as_deref() == Some("")) {
-            anyhow::bail!("requirement ID allocation failed; no metadata or object was written")
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+            anyhow::bail!(
+                "{}",
+                crate::allocation_authority::failure_message(
+                    "requirement ID allocation failed",
+                    "no metadata or object was written"
+                )
+            )
         }
         if crate::allocation_authority::resolve(&self.root)?.authoritative {
             return Ok(());

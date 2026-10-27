@@ -2213,26 +2213,13 @@ fn targeted_spec_id_from_subject(subject: &str) -> Option<String> {
                 .chars()
                 .take_while(|c| !c.is_whitespace() && *c != '—')
                 .collect();
-            if !token.is_empty() && looks_like_spec_id(&token) {
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+            if crate::looks_like_spec_id(&token) {
                 return Some(token);
             }
         }
     }
     None
-}
-
-fn looks_like_spec_id(s: &str) -> bool {
-    // SPEC-IDs are letters then dash-and-digits, optionally with a node
-    // segment (`FR-1-037`). Reject pure numbers and chore-style words.
-    let mut chars = s.chars();
-    if !chars
-        .next()
-        .map(|c| c.is_ascii_alphabetic())
-        .unwrap_or(false)
-    {
-        return false;
-    }
-    s.contains('-') && s.chars().any(|c| c.is_ascii_digit())
 }
 
 fn pick_author_email(email: &str) -> String {
