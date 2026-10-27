@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-27T18:09:52.863665233Z
+modified_at: 2026-10-27T18:10:00.300491217Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -457,6 +457,12 @@ comments:
   content: 'ADVISOR AC4 measurement 2026-10-27 08:50 MST on the PROMOTED live build 0c374c424f (index #2950 + parser v2), primary checkout, load avg ~8 on 6 cores, aida show <spec> --format json, 5 warm runs, ms (the first shows after promotion paid a one-time index rebuild for the PARSER_VERSION bump, about 3.4 s, then never again): TASK-2347 (negative) 929 742 700 628 493; BUG-2224 (shipped positive) 577 648 557 634 619; STORY-1843 (unshipped positive) 731 824 774 772 846; BUG-2221 768 660 601 594 479; STORY-1917 892 745 879 644 802; STORY-1889 (large trace footprint) 1317 1249 1333 1294 1315. Every shape is under the unchanged 1000 ms budget except the STORY-1889 shape, whose remaining cost is the serial filing-drift walk (~450 ms) that SKETCH v3 section 3 flagged. NEXT: the signed filing-drift concurrency slice (05:40 signoff item 3). BUG-2221 completes when that lands and the STORY-1889 shape measures under 1000 ms on a promoted build.'
   created_at: 2026-10-27T15:42:57.600379818Z
   modified_at: 2026-10-27T15:42:57.600379818Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17e8e-09ec-7b80-ad6d-53005256890b
+  author: joe
+  content: 'ADVISOR 10:45 MST: execution mode drain so the advisor can train the approved drift slice (#2982); completion still needs the AC4 re-measurement on a promoted build.'
+  created_at: 2026-10-27T18:10:00.300491217Z
+  modified_at: 2026-10-27T18:10:00.300491217Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
