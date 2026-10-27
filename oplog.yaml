@@ -79219,5 +79219,33 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6162
+- id: 01a17f28-491c-7ef3-9559-6d6efdcfc206
+  target_id: 01a17f28-3fee-72f3-9e9d-30bd3ace4727
+  author: aida
+  node_id: '1'
+  lamport: 6163
+  timestamp: 2026-10-27T20:58:29.021004424Z
+  kind: !Create
+    title: 'Review PR-2992: [AI:claude] feat(adoption): project the shared plane into ignored local state for readers and launches (Refs STORY-1741)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1741-s2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2992>
+      - Branch: `story-1741-s2` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-1741
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2992` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6163
 node_id: '1'
