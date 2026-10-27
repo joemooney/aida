@@ -667,15 +667,27 @@ fn reexport_detection_sees_aliases() {
     assert!(gate_reexports("pub(crate) use crate::gateway as g;\n").is_empty());
 }
 
+/// Every `#[path = "..."]` target in `text`, wherever the attribute sits on
+/// its line (`#[cfg(test)] #[path = "..."] mod t;` is one valid line), in raw
+/// string form (`r"..."`, `r#"..."#`), split across lines, or as
+/// `#[cfg_attr(..., path = "...")]`.
+// trace:TASK-2335 trace:STORY-1889 | ai:claude
+fn path_attr_targets(text: &str) -> Vec<String> {
+    let path_attr =
+        regex::Regex::new(r#"#\s*\[\s*(?:cfg_attr\s*\([^\]]*?,\s*)?path\s*=\s*(?:r#*)?"([^"]*)""#)
+            .unwrap();
+    path_attr
+        .captures_iter(text)
+        .map(|c| c[1].to_string())
+        .collect()
+}
+
 /// The `#[path = "..."]` targets in `text` that point into `gate/`.
 // trace:TASK-2335 | ai:agy
 fn gate_path_mounts(text: &str) -> Vec<String> {
-    let path_attr = regex::Regex::new(r#"^\s*#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).unwrap();
-    text.lines()
-        .filter_map(|l| {
-            let p = path_attr.captures(l)?.get(1)?.as_str();
-            (p.starts_with("gate/") || p.contains("/gate/")).then(|| p.to_string())
-        })
+    path_attr_targets(text)
+        .into_iter()
+        .filter(|p| p.starts_with("gate/") || p.contains("/gate/"))
         .collect()
 }
 
@@ -693,6 +705,33 @@ fn gate_path_mount_detection() {
         vec!["../gate/tests/x.rs".to_string()]
     );
     assert!(gate_path_mounts("#[path = \"tests/review_marker_tests.rs\"]\nmod t;\n").is_empty());
+}
+
+/// The mount ratchets see a `#[path]` that does not start its line, raw
+/// strings, multi-line attributes and `cfg_attr` forms.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn gate_path_mount_detection_sees_inline_and_raw_forms() {
+    let want = vec!["gate/tests/story_1917_dispatch_exec_tests.rs".to_string()];
+    for text in [
+        "#[cfg(test)] #[path = \"gate/tests/story_1917_dispatch_exec_tests.rs\"] mod t;\n",
+        "#[cfg(test)] #[path = r\"gate/tests/story_1917_dispatch_exec_tests.rs\"] mod t;\n",
+        "#[cfg(test)] #[path = r#\"gate/tests/story_1917_dispatch_exec_tests.rs\"#] mod t;\n",
+        "#[cfg(test)]\n#[path =\n    \"gate/tests/story_1917_dispatch_exec_tests.rs\"]\nmod t;\n",
+        "#[cfg_attr(test, path = \"gate/tests/story_1917_dispatch_exec_tests.rs\")] mod t;\n",
+    ] {
+        assert_eq!(gate_path_mounts(text), want, "{text}");
+        assert!(
+            mounts_dispatch_suite(text),
+            "the stray dispatch-suite check misses: {text}"
+        );
+    }
+    assert!(!mounts_dispatch_suite(
+        "#[cfg(test)] #[path = \"tests/other_tests.rs\"] mod t;\n"
+    ));
+    assert!(!mounts_dispatch_suite(
+        "let path = \"gate/tests/story_1917_dispatch_exec_tests.rs\";\n"
+    ));
 }
 
 // trace:TASK-2335 | ai:agy
@@ -798,6 +837,8 @@ const GATE_ONLY_NAMES: &[&str] = &[
     "collect_held_prs_with",
     "verify_fresh_restart_plan",
     "append_restart",
+    // trace:STORY-1889 | ai:claude
+    "activate_dispatch_v2_lock_quiescent",
 ];
 
 // trace:STORY-1889 | ai:claude
@@ -823,7 +864,7 @@ fn no_unprotected_file_names_a_gate_only_authority_input() {
         "unprotected files name gate-only authority inputs:\n{}\n\
          Call the gate entry that binds them instead (`start_as_human`, \
          `stop_as_human`, `mandate_ship_cover_for_ship`, `with_live_tick_inputs`, \
-         `record_fresh_restart`).",
+         `record_fresh_restart`, `activate_lock_as_human`).",
         bad.join("\n")
     );
 }
@@ -932,4 +973,636 @@ fn the_ship_cover_decision_is_bound_in_the_gate() {
     );
     let ship = fn_body(&src, "mandate_ship_cover_for_ship");
     assert!(ship.contains("crate::gate::mandate::ship_decision,\n        true,"));
+}
+
+// ── dispatch authority on the floor (STORY-1889 final slice) ───────────────
+
+/// The floor is the gate prefix plus `.aida/config.toml` and protected test
+/// files (STORY-1889 acceptance 3); no other production file is listed.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn the_floor_is_the_gate_prefix_config_and_protected_tests() {
+    assert!(GATE_PROTECTED_PATHS.contains(&"aida-cli-lib/src/gate/"));
+    for entry in GATE_PROTECTED_PATHS {
+        assert!(
+            *entry == ".aida/config.toml"
+                || entry.starts_with("aida-cli-lib/src/gate/")
+                || entry.ends_with("_tests.rs"),
+            "{entry} is a production path outside aida-cli-lib/src/gate/; move its \
+             authority into the gate instead of listing the file"
+        );
+    }
+}
+
+/// Dispatch decisions (request records and admission, claims and caps, the
+/// `tick.lock`, the recovery ledger, the flow ship selectors) defined only
+/// under `gate/`.
+const DISPATCH_AUTHORITY_FNS: &[&str] = &[
+    "check_request_authority",
+    "revalidate_request",
+    "validate_spec_in_store",
+    "verify_frozen_brief",
+    "check_serve_grant",
+    "verify_claim_locked",
+    "probe_worker_identity",
+    "pass_admission",
+    "run_admission",
+    "verify_running_claim",
+    "admit_execution",
+    "submission_collision",
+    "verdict_at_head",
+    "ci_state_is_green",
+    "flow_ship_decision",
+    "dead_claims",
+    "pending_result",
+    "activate_lock_as_human",
+    "activate_dispatch_v2_lock_quiescent",
+    "acquire_dispatch_lock",
+    "reconcile_inventory_locked",
+    "inspect_dispatch_inventory_readonly",
+    "check_recovery_index_bounds",
+    "remove_reviewer_worktree_preserving_hold",
+    "preserve_reviewer_worktree_hold",
+];
+
+const DISPATCH_AUTHORITY_TYPES: &[&str] = &[
+    "DispatchRequest",
+    "DispatchVerb",
+    "DispatchStatus",
+    "DispatchResult",
+    "WorkerClaim",
+    "AuthorizedDispatchCaller",
+    "ClaimCaps",
+    "RecoveryFenceEntry",
+    "RecoveryIndex",
+    "DispatchInventory",
+    "DispatchLock",
+    "FlowVerdict",
+    "ClaimAdmission",
+    "ExecutionAdmission",
+    "ExecutionEntry",
+    "SubmissionCollision",
+];
+
+fn defined_types(text: &str) -> Vec<String> {
+    let ty = regex::Regex::new(r"^\s*(pub(\([^)]*\))?\s+)?(struct|enum)\s+(?P<name>\w+)").unwrap();
+    non_test_lines(text)
+        .iter()
+        .filter_map(|l| Some(ty.captures(l)?.name("name")?.as_str().to_string()))
+        .collect()
+}
+
+/// Matches any definition of a dispatch authority name in raw text, so the
+/// ratchets parse test items only in the few files that can define one.
+fn dispatch_authority_definition() -> regex::Regex {
+    let names = DISPATCH_AUTHORITY_FNS
+        .iter()
+        .chain(DISPATCH_AUTHORITY_TYPES)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("|");
+    regex::Regex::new(&format!(r"\b(fn|struct|enum)\s+({names})\b")).unwrap()
+}
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_authority_is_defined_only_in_the_gate() {
+    let mut in_gate: Vec<String> = Vec::new();
+    let mut outside: Vec<String> = Vec::new();
+    let candidate = dispatch_authority_definition();
+    for (path, text) in sources() {
+        if !candidate.is_match(&text) {
+            continue;
+        }
+        let fns = defined_fns(&text);
+        let types = defined_types(&text);
+        let names = fns.iter().chain(types.iter()).filter(|n| {
+            DISPATCH_AUTHORITY_FNS.contains(&n.as_str())
+                || DISPATCH_AUTHORITY_TYPES.contains(&n.as_str())
+        });
+        for name in names {
+            if path.starts_with("aida-cli-lib/src/gate/dispatch_") {
+                in_gate.push(name.clone());
+            } else {
+                outside.push(format!("  {path}: {name}"));
+            }
+        }
+    }
+    assert!(
+        outside.is_empty(),
+        "dispatch authority defined outside aida-cli-lib/src/gate/dispatch_*.rs:\n{}",
+        outside.join("\n")
+    );
+    for name in DISPATCH_AUTHORITY_FNS
+        .iter()
+        .chain(DISPATCH_AUTHORITY_TYPES)
+    {
+        assert!(
+            in_gate.iter().any(|n| n == name),
+            "{name} is not defined in aida-cli-lib/src/gate/dispatch_*.rs"
+        );
+    }
+}
+
+// The activate-lock human floor and the admitted record's authority fields
+// are bound in the gate.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_authority_inputs_are_bound_in_the_gate() {
+    let lock = gate_source("dispatch_lock.rs");
+    let activate = fn_body(&lock, "activate_lock_as_human");
+    let human = activate.find("require_direct_human(").expect("human check");
+    let quiescent = activate
+        .find("activate_dispatch_v2_lock_quiescent(")
+        .expect("activation");
+    assert!(human < quiescent, "the human check runs before activation");
+
+    let auth = gate_source("dispatch_authority.rs");
+    let unprotected: Vec<(String, String)> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .collect();
+    // No file outside the floor writes a gate-built record as a literal.
+    let constructs_outside = |ty: &str| {
+        let literal = format!("{ty} {{");
+        unprotected
+            .iter()
+            .filter(|(_, text)| text.contains(&literal))
+            .filter(|(_, text)| non_test_lines(text).join("\n").contains(&literal))
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>()
+    };
+    for ty in [
+        "AuthorizedDispatchCaller",
+        "ClaimCaps",
+        "ClaimAdmission",
+        "ExecutionAdmission",
+    ] {
+        let body = auth
+            .split(&format!("pub(crate) struct {ty} {{"))
+            .nth(1)
+            .and_then(|s| s.split("\n}").next())
+            .unwrap_or_else(|| panic!("{ty} is defined in gate/dispatch_authority.rs"));
+        for field in body.lines().map(str::trim).filter(|l| l.contains(':')) {
+            assert!(
+                !field.starts_with("pub"),
+                "{ty} field must be private: {field}"
+            );
+        }
+        let bad = constructs_outside(ty);
+        assert!(bad.is_empty(), "{bad:?} construct {ty} outside the gate");
+    }
+    // The request and result records: the request's fields and the result's
+    // identity, mandate, grant, claim and status fields are gate-private, and
+    // no file outside the floor writes either record as a literal.
+    for (ty, fields) in [
+        (
+            "DispatchRequest",
+            &[
+                "schema_version",
+                "id",
+                "requested_at",
+                "principal",
+                "requester_seat",
+                "requester_grant_id",
+                "matched_binding",
+                "mandate_id",
+                "dedupe_key",
+                "target_key",
+                "action",
+            ][..],
+        ),
+        (
+            "DispatchResult",
+            &[
+                "id",
+                "requested_at",
+                "requester_grant_prefix",
+                "mandate_id",
+                "worker_pid",
+                "worker_start",
+                "claim_token",
+                "status",
+                "started_at",
+                "finished_at",
+                "summary",
+            ][..],
+        ),
+    ] {
+        let body = auth
+            .split(&format!("pub(crate) struct {ty} {{"))
+            .nth(1)
+            .and_then(|s| s.split("\n}").next())
+            .unwrap_or_else(|| panic!("{ty} is defined in gate/dispatch_authority.rs"));
+        for field in fields {
+            let decl = body
+                .lines()
+                .map(str::trim)
+                .find(|l| l.contains(&format!(" {field}:")) || l.starts_with(&format!("{field}:")))
+                .unwrap_or_else(|| panic!("{ty}::{field} is declared"));
+            assert!(
+                decl.starts_with("pub(in crate::gate) ") || !decl.starts_with("pub"),
+                "{ty}::{field} must be private to the gate: {decl}"
+            );
+        }
+        let bad = constructs_outside(ty);
+        assert!(bad.is_empty(), "{bad:?} construct {ty} outside the gate");
+    }
+    let pending = fn_body(&auth, "pending_result");
+    for bound in [
+        "id: req.id.clone(),",
+        "requested_at: req.requested_at,",
+        "requester_grant_prefix: self.grant_id.chars().take(8).collect(),",
+        "mandate_id: self.mandate.id.clone(),",
+        "worker_pid: None,",
+        "claim_token: None,",
+    ] {
+        assert!(pending.contains(bound), "pending_result must set `{bound}`");
+    }
+
+    let record = fn_body(&auth, "admitted_request");
+    for bound in [
+        "schema_version: DISPATCH_SCHEMA_VERSION,",
+        "requester_seat: crate::gate::mandate::MANDATE_SEAT.to_string(),",
+        "requester_grant_id: self.grant_id.clone(),",
+        "matched_binding: self.matched_binding.clone(),",
+        "mandate_id: self.mandate.id.clone(),",
+    ] {
+        assert!(
+            record.contains(bound),
+            "admitted_request must set `{bound}`"
+        );
+    }
+}
+
+// The dispatch orchestration reaches every admission point through the gate.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
+    let text =
+        std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/dispatch.rs")).unwrap();
+    let src = non_test_lines(&text).join("\n");
+    for (f, calls) in [
+        (
+            "submit_request",
+            &[
+                "check_request_authority(",
+                "check_submission_fence(",
+                "submission_collision(",
+                "caller.admitted_request(",
+                "revalidate_request(",
+            ][..],
+        ),
+        (
+            "claim_and_dispatch_pass",
+            &[
+                "acquire_dispatch_lock(",
+                "ClaimCaps::from_inventory(",
+                "pass_admission(",
+                "PassAdmission::Claim(admission)",
+                "res.begin_running(",
+                "res.publish_worker(",
+                "res.fail_running(",
+            ][..],
+        ),
+        (
+            "execute_one_request_with_token",
+            &[
+                "acquire_dispatch_lock(",
+                "res.execution_entry(",
+                "verify_running_claim(",
+                "let admission = run_admission(",
+                "res.begin_running(",
+                "admit_execution(",
+            ][..],
+        ),
+        (
+            "reap_dead_workers_locked",
+            &["dead_claims(", "res.fail_running("][..],
+        ),
+        (
+            "finalize_request",
+            &["verify_claim_locked(", "res.finish("][..],
+        ),
+        (
+            "record_tampered_refusal",
+            &["verify_claim_locked(", "res.finish("][..],
+        ),
+        ("cancel_request", &["res.cancel("][..]),
+        ("run_dispatch_serve", &["check_serve_grant("][..]),
+        (
+            "run_dispatch_serve_once_sync",
+            &["check_serve_grant(", "res.revert_unstarted_claim("][..],
+        ),
+        (
+            "cleanup_dead_reviewer_worktree",
+            &["remove_reviewer_worktree_preserving_hold("][..],
+        ),
+        ("handle_dispatch", &["activate_lock_as_human("][..]),
+    ] {
+        let body = fn_body(&src, f);
+        for call in calls {
+            assert!(body.contains(call), "dispatch.rs `{f}` must call `{call}`");
+        }
+    }
+    // Every verb runner takes the gate's `ExecutionAdmission`, which only
+    // `admit_execution` builds, so a runner cannot run on a discarded or
+    // skipped admission.
+    let flow_text =
+        std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/dispatch_flow.rs"))
+            .unwrap();
+    let flow_src = non_test_lines(&flow_text).join("\n");
+    for (text, runner) in [
+        (&src, "run_review_verb"),
+        (&src, "run_take_verb"),
+        (&src, "run_impl_verb"),
+        (&flow_src, "run_flow_verb"),
+        (&flow_src, "run_train_verb"),
+    ] {
+        let body = fn_body(text, runner);
+        let signature = &body[..body.find('{').unwrap()];
+        assert!(
+            signature.contains("&ExecutionAdmission"),
+            "`{runner}` must take the gate's `&ExecutionAdmission`"
+        );
+    }
+    // No record-status write outside the gate's transition methods.
+    for write in [".status =", ".started_at =", ".finished_at =", ".summary ="] {
+        assert!(
+            !src.contains(write) && !flow_src.contains(write),
+            "dispatch orchestration writes a record field (`{write}`) outside the gate"
+        );
+    }
+    // A reviewer worktree is removed only by the gate, after its merge-hold
+    // marker is preserved.
+    for (name, text) in [("dispatch.rs", &src), ("dispatch_flow.rs", &flow_src)] {
+        assert!(
+            !text.contains("\"worktree\", \"remove\""),
+            "{name} removes a worktree itself; call \
+             `crate::gate::dispatch_reviewer_hold::remove_reviewer_worktree_preserving_hold`"
+        );
+        assert!(
+            !text.contains("fn preserve_reviewer_worktree_hold"),
+            "{name} defines the merge-hold preservation outside the gate"
+        );
+    }
+    let hold = gate_source("dispatch_reviewer_hold.rs");
+    let remove = fn_body(&hold, "remove_reviewer_worktree_preserving_hold");
+    let preserve = remove
+        .find("preserve_reviewer_worktree_hold(main_worktree, rev_wt, pr_scope)?;")
+        .expect("the removal preserves the hold and stops on failure");
+    let git_remove = remove
+        .find("\"worktree\", \"remove\"")
+        .expect("the removal runs git worktree remove");
+    assert!(
+        preserve < git_remove,
+        "the merge-hold is preserved before `git worktree remove`"
+    );
+    assert_eq!(
+        hold.matches("\"worktree\", \"remove\"").count(),
+        1,
+        "gate/dispatch_reviewer_hold.rs removes a worktree only in \
+         `remove_reviewer_worktree_preserving_hold`"
+    );
+
+    // The reaper only writes what the gate's `dead_claims` released; it never
+    // probes a worker or reads the probe's tri-state itself.
+    let reap = fn_body(&src, "reap_dead_workers_locked");
+    for decision in ["probe_worker_identity(", "Probe::"] {
+        assert!(
+            !reap.contains(decision),
+            "dispatch.rs `reap_dead_workers_locked` decides the reap itself (`{decision}`); \
+             call `crate::gate::dispatch_authority::dead_claims` instead"
+        );
+    }
+
+    // `flow` ships or stops on a verdict through the gate's decision only.
+    let text = std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/dispatch_flow.rs"))
+        .unwrap();
+    let flow = non_test_lines(&text).join("\n");
+    let run = fn_body(&flow, "run_flow_verb");
+    assert_eq!(
+        run.matches("flow_ship_decision(").count(),
+        2,
+        "run_flow_verb decides the fast path and the post-review ship through \
+         `flow_ship_decision`"
+    );
+    assert!(
+        !flow.contains("VerdictKind"),
+        "dispatch_flow.rs reads a review verdict kind outside the gate"
+    );
+}
+
+/// The STORY-1917 / STORY-1889 behavioural suites of the dispatch gate.
+const DISPATCH_POLICY_SUITES: &[&str] = &[
+    "story_1917_dispatch_request_tests",
+    "story_1917_dispatch_exec_tests",
+    "story_1917_dispatch_flow_schedule_tests",
+    "story_1889_dispatch_authority_tests",
+];
+
+/// The dispatch gate's behavioural tests live under `gate/tests/` and are
+/// compiled from a protected `gate/dispatch_*.rs` mount, so a mandate-shipped
+/// diff can neither drop the mount nor repoint it at a weaker copy.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_policy_suites_are_mounted_on_the_floor() {
+    let root = workspace_root();
+    let gate_dir = root.join("aida-cli-lib/src/gate");
+    let mut mounted: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(&gate_dir).unwrap().flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !(name.starts_with("dispatch_") && name.ends_with(".rs")) {
+            continue;
+        }
+        let text = std::fs::read_to_string(entry.path()).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            for target in path_attr_targets(line) {
+                let next = lines.get(i + 1).map(|l| l.trim()).unwrap_or("");
+                let prev = i.checked_sub(1).map(|j| lines[j].trim()).unwrap_or("");
+                let same_line = line.contains("#[cfg(test)]") && line.contains(" mod ");
+                if same_line || (prev == "#[cfg(test)]" && next.starts_with("mod ")) {
+                    mounted.push(target);
+                }
+            }
+        }
+    }
+    for suite in DISPATCH_POLICY_SUITES {
+        let rel = format!("tests/{suite}.rs");
+        assert!(
+            gate_dir.join(&rel).is_file(),
+            "aida-cli-lib/src/gate/{rel} is missing"
+        );
+        assert!(
+            mounted.contains(&rel),
+            "aida-cli-lib/src/gate/{rel} is not mounted by a gate/dispatch_*.rs `#[cfg(test)] #[path]` module"
+        );
+    }
+    // No copy of a dispatch suite outside the floor, and no unprotected file
+    // mounts one.
+    let mut stray: Vec<String> = Vec::new();
+    let mut all = Vec::new();
+    for r in SCANNED_ROOTS {
+        all_rust_files(&root.join(r), &mut all);
+    }
+    for f in all {
+        let rel = f
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        let stem = f.file_stem().unwrap().to_string_lossy().to_string();
+        if DISPATCH_POLICY_SUITES.contains(&stem.as_str()) && !on_floor(&rel) {
+            stray.push(format!("  {rel} (a dispatch suite outside the floor)"));
+        }
+    }
+    for (path, text) in sources() {
+        if on_floor(&path) || !mounts_dispatch_suite(&text) {
+            continue;
+        }
+        stray.push(format!("  {path} mounts a dispatch suite via `#[path]`"));
+    }
+    assert!(
+        stray.is_empty(),
+        "dispatch gate tests outside the protected floor:\n{}",
+        stray.join("\n")
+    );
+}
+
+/// Items `gate/dispatch_*` may take from `crate::dispatch`: the clap value
+/// enums of `dispatch_args.rs`. They are argument shapes the gate maps itself;
+/// none of them reads, hashes, locates or writes a record the gate trusts.
+const GATE_DISPATCH_IMPORT_ALLOWLIST: &[&str] = &[
+    "DispatchRequestVerb",
+    "DispatchStatusFilter",
+    "DispatchVendor",
+];
+
+/// The `crate::dispatch` items `text` names, each as written after the
+/// module path (`{a, b}` groups are split; a glob is reported as `*`).
+// trace:STORY-1889 | ai:claude
+fn dispatch_items_named(text: &str) -> Vec<String> {
+    let flat: String = text.split_whitespace().collect();
+    let path = regex::Regex::new(
+        r"(?:crate|super::super|super)::(?:\{)?dispatch(?:::dispatch_args)?::(\{[^}]*\}|\*|\w+)",
+    )
+    .unwrap();
+    let mut out = Vec::new();
+    for c in path.captures_iter(&flat) {
+        let body = c[1].trim_start_matches('{').trim_end_matches('}');
+        for item in body.split(',').filter(|i| !i.is_empty()) {
+            let name = item.split("::").next().unwrap_or(item);
+            out.push(name.split("as").next().unwrap_or(name).to_string());
+        }
+    }
+    // `use crate::{dispatch, ...}` / `crate::dispatch as d` hand over the
+    // whole module.
+    let whole =
+        regex::Regex::new(r"(?:crate|super)::(?:\{[^}]*\bdispatch\b[,}]|dispatch(?:as\w+)?;)")
+            .unwrap();
+    if whole.is_match(&flat) {
+        out.push("dispatch".to_string());
+    }
+    out
+}
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_item_detection() {
+    assert_eq!(
+        dispatch_items_named("use crate::dispatch::{sha256_hex, DispatchVendor as V};\n"),
+        vec!["sha256_hex", "DispatchVendor"]
+    );
+    assert_eq!(
+        dispatch_items_named("let x = crate::dispatch::result_path(a, b);\n"),
+        vec!["result_path"]
+    );
+    assert_eq!(dispatch_items_named("use crate::dispatch::*;\n"), vec!["*"]);
+    assert_eq!(
+        dispatch_items_named("use crate::dispatch::dispatch_args::DispatchVendor;\n"),
+        vec!["DispatchVendor"]
+    );
+    assert_eq!(
+        dispatch_items_named("use crate::dispatch;\n"),
+        vec!["dispatch"]
+    );
+    assert_eq!(
+        dispatch_items_named("use crate::{dispatch, gate};\n"),
+        vec!["dispatch"]
+    );
+    assert!(dispatch_items_named("use crate::gate::dispatch_io::sha256_hex;\n").is_empty());
+    assert!(dispatch_items_named("use crate::dispatch_flow::x;\n").is_empty());
+}
+
+/// `gate/dispatch_*` reads, hashes, locates and pins dispatch records only
+/// through primitives on the floor (`gate/dispatch_io.rs`). Importing them
+/// from the unprotected `crate::dispatch` would let a mandate-shipped edit
+/// there disable brief-tamper detection, claim verification or hold
+/// preservation without touching `gate/`.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn gate_dispatch_imports_nothing_authority_bearing_from_dispatch() {
+    let gate_dir = workspace_root().join("aida-cli-lib/src/gate");
+    let mut bad = Vec::new();
+    for entry in std::fs::read_dir(&gate_dir).unwrap().flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !(name.starts_with("dispatch_") && name.ends_with(".rs")) {
+            continue;
+        }
+        let text = std::fs::read_to_string(entry.path()).unwrap();
+        for item in dispatch_items_named(&text) {
+            if !GATE_DISPATCH_IMPORT_ALLOWLIST.contains(&item.as_str()) {
+                bad.push(format!("  gate/{name}: crate::dispatch::{item}"));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "gate/dispatch_* takes authority-bearing items from the unprotected \
+         `crate::dispatch`:\n{}\nMove the primitive into `gate/dispatch_io.rs` \
+         (or another gate module) and have `dispatch.rs` call it from there.",
+        bad.join("\n")
+    );
+    for primitive in [
+        "fn sha256_hex",
+        "fn read_bounded_regular_file",
+        "fn write_private_atomic",
+        "fn open_pinned_dispatch_subdir",
+        "fn dispatch_root",
+        "fn request_path",
+        "fn result_path",
+        "fn brief_path",
+        "fn recovery_path",
+    ] {
+        let io = std::fs::read_to_string(gate_dir.join("dispatch_io.rs")).unwrap();
+        assert!(
+            io.contains(primitive),
+            "gate/dispatch_io.rs lost `{primitive}`"
+        );
+    }
+}
+
+/// Whether `text` mounts one of the [`DISPATCH_POLICY_SUITES`] through any
+/// `#[path]` form [`path_attr_targets`] recognises.
+// trace:STORY-1889 | ai:claude
+fn mounts_dispatch_suite(text: &str) -> bool {
+    path_attr_targets(text)
+        .iter()
+        .any(|t| DISPATCH_POLICY_SUITES.iter().any(|s| t.contains(s)))
+}
+
+/// Every `.rs` file under `dir`, test files included.
+fn all_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            all_rust_files(&path, out);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            out.push(path);
+        }
+    }
 }
