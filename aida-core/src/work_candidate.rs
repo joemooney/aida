@@ -306,13 +306,8 @@ pub(crate) fn with_unspent<T>(
             if let Some(binding) = binding {
                 let state: DispenserState =
                     read(&counter)?.context("WORK counter missing; explicit recovery required")?;
-                anyhow::ensure!(
-                    state.mode
-                        == IdMode::Distributed {
-                            node_id: binding.node_id.clone()
-                        },
-                    "WORK counter binding mismatch"
-                );
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+                super::ensure_bound(&state, &binding.node_id, &counter)?;
                 let candidate = Candidate {
                     root,
                     binding,

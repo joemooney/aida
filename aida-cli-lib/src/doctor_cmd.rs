@@ -670,6 +670,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // A clone whose node-local allocation would refuse: unsafe allocation
+    // state or a dispenser on another node. A few stats + two TOML reads.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), crate::allocation_health::CATEGORY)? {
+        findings.extend(crate::allocation_health::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // Report only: general --heal never removes compiler caches.
     // trace:TASK-2324 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), crate::rustc_cache::CATEGORY)? {
