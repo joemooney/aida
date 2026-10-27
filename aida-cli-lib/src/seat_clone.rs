@@ -424,6 +424,23 @@ pub(crate) fn create(
     })
 }
 
+/// Retire the mail of a clone this process is still creating, before it is
+/// removed. No lease exists yet, so there is no host-recorded binding to
+/// look up; the binding is this process's own: it cloned `dest` from `main`
+/// moments ago, and no seat has run in it. The clone is fenced under main's
+/// anchor like any bound clone, so a refusal (or a `main` that cannot be
+/// resolved) keeps it; it is never removed unfenced because it looks empty
+/// (C SKETCH section 5).
+// trace:STORY-1843 | ai:claude
+fn retire_unfinished_clone(
+    main: &Path,
+    dest: &Path,
+    reason: &str,
+) -> aida_core::mailbox_lifecycle::guard::Gate {
+    let main = main.canonicalize().ok();
+    aida_core::mailbox_lifecycle::guard::retire_clone_checkout(main.as_deref(), dest, reason)
+}
+
 /// Preserve origin-failure eligibility only after removing both allocations.
 // trace:TASK-2300 | ai:codex
 fn cleanup_failed_clone(
@@ -433,11 +450,9 @@ fn cleanup_failed_clone(
     error: anyhow::Error,
 ) -> anyhow::Error {
     if dest.exists() {
-        // No lease yet, so no verified binding: an unfinished clone that
-        // already has a `.aida/` cannot be fenced and is kept (C SKETCH
-        // section 5). trace:STORY-1843 | ai:claude
-        let retirement = match crate::mail_retention::retire_tree(main, dest, true, "failed clone")
-        {
+        // Fenced under main's anchor through the creator's own binding (see
+        // `retire_unfinished_clone`). trace:STORY-1843 | ai:claude
+        let retirement = match retire_unfinished_clone(main, dest, "failed clone") {
             Ok(retirement) => retirement,
             Err(kept) => return refusal(dest, anyhow::anyhow!("{error:#}; {kept}")),
         };
@@ -647,12 +662,8 @@ impl Drop for CloneCleanupGuard {
             return;
         }
         // trace:STORY-1843 | ai:claude
-        let retirement = match crate::mail_retention::retire_tree(
-            &self.main,
-            &self.clone,
-            true,
-            "unfinished clone",
-        ) {
+        let retirement = match retire_unfinished_clone(&self.main, &self.clone, "unfinished clone")
+        {
             Ok(retirement) => retirement,
             Err(kept) => {
                 eprintln!(

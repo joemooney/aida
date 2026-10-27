@@ -1072,7 +1072,6 @@ pub(crate) fn derive_session_branch_suffix(scope: &str, branch: &str) -> String 
     format!("@{}", branch)
 }
 
-// trace:TASK-60 | ai:claude
 /// STORY-1843 C2: the statusline segment for a session whose end was refused
 /// to keep its mail; `None` for every other lease.
 // trace:STORY-1843 | ai:claude
@@ -1080,6 +1079,7 @@ pub(crate) fn ending_retained_segment(lease: &SessionLease) -> Option<String> {
     crate::leases::is_ending_retained(lease).then(|| "end-refused:mail-kept".to_string())
 }
 
+// trace:TASK-60 | ai:claude
 /// TASK-60: assemble the `sess:` label, fitting scope + suffix into
 /// `max_total` characters. Scope is truncated first if the combined
 /// length overflows.
