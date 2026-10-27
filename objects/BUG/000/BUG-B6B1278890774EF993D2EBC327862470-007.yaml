@@ -7,8 +7,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T14:51:41.459608617Z
-modified_at: 2026-10-27T14:51:51.273552337Z
+modified_at: 2026-10-27T16:21:36.780236114Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a17e2a-8ae8-7822-9113-f4f96f612371
+  created_at: 2026-10-27T16:21:36.780232722Z
+  created_by: joe
 history:
 - id: 01a17dd8-a069-7703-ad16-a35e35c8a5ce
   author: joe
@@ -18,6 +24,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a17e2a-d6b6-7dc1-822a-19d271291b65
+  author: joe
+  timestamp: 2026-10-27T16:21:39.126757551Z
+  session_id: a427fb36-a2fa-4ae5-961b-ea622ddd14a1
+  changes: []
 filed_at:
   code_sha: 195b5ccc05525017258e668eaff62e78ad8284d6
   branch: main
