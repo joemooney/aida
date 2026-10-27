@@ -234,14 +234,21 @@ pub(crate) fn scan_trace_graph_streaming(
 ) -> (std::collections::HashMap<String, Vec<TraceHit>>, bool) {
     use regex::Regex;
     use std::sync::OnceLock;
-    // Capture the full spec id — including the optional third segment of a
-    // node-aware id (`FR-1-042`), or `trace:FR-1-042` would bucket under a
-    // bogus `FR-1`.
-    static TRACE_RE: OnceLock<Regex> = OnceLock::new();
+    // The shared marker regex captures the full id, node-local
+    // (`TASK-<hex node>-NNN`) and node-aware (`FR-1-042`) alike. The node
+    // segment may be written in either case, so markers match `wanted`
+    // case-insensitively and bucket under the caller's spelling.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let trace_re = crate::trace_marker_re();
     static SYM_RE: OnceLock<Regex> = OnceLock::new();
-    let trace_re = TRACE_RE.get_or_init(|| {
-        Regex::new(r"\btrace:([A-Z]+-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+|[A-Z]+-[0-9]+)").unwrap()
-    });
+    let wanted_by_upper: std::collections::HashMap<String, &String> = wanted
+        .iter()
+        .map(|id| (id.to_ascii_uppercase(), id))
+        .collect();
+    let needles: Vec<String> = wanted
+        .iter()
+        .flat_map(|id| [id.clone(), id.to_ascii_uppercase(), id.to_ascii_lowercase()])
+        .collect();
     let sym_re = SYM_RE.get_or_init(|| {
         Regex::new(
             r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
@@ -395,7 +402,7 @@ pub(crate) fn scan_trace_graph_streaming(
             continue;
         };
         // BUG-1594: cheap prefilter before the per-line regex pass.
-        if !content.contains("trace:") || !wanted.iter().any(|id| content.contains(id.as_str())) {
+        if !content.contains("trace:") || !needles.iter().any(|id| content.contains(id.as_str())) {
             content_spent += content_started.elapsed();
             continue;
         }
@@ -407,10 +414,10 @@ pub(crate) fn scan_trace_graph_streaming(
                 break;
             }
             for cap in trace_re.captures_iter(line) {
-                let id = cap[1].to_string();
-                if !wanted.contains(&id) {
+                let Some(id) = wanted_by_upper.get(&cap[1].to_ascii_uppercase()) else {
                     continue;
-                }
+                };
+                let id = (*id).clone();
                 // Symbol: first definition on this line or the next two,
                 // skipping pure comment lines.
                 let mut symbol = None;
@@ -2107,7 +2114,8 @@ pub(crate) fn handle_trace_check(path: Option<&str>, json: bool, block: bool) ->
     }
 
     // Same marker grammar + scanner the doctor trace check uses.
-    let trace_re = regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let trace_re = crate::trace_marker_re().clone();
     let mut by_spec: std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>> =
         std::collections::HashMap::new();
     walk_source_for_traces(&scan_root, &trace_re, &mut by_spec);
@@ -3024,7 +3032,8 @@ pub(crate) fn classify_coverage_hunk(
 /// matches `trace:<SPEC-ID>` regardless of comment leader. PURE compile.
 /// trace:STORY-499 | ai:claude
 pub(crate) fn coverage_anchor_re() -> regex::Regex {
-    regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap()
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    crate::trace_marker_re().clone()
 }
 
 /// True when `line` carries a `// trace:<id>` whose id resolves Live via

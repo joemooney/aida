@@ -1596,6 +1596,67 @@ pub(crate) fn looks_like_spec_id(s: &str) -> bool {
         .is_some_and(|part| part.chars().all(|c| c.is_ascii_digit()))
 }
 
+/// [`looks_like_spec_id`] with an upper-case prefix — the canonical written
+/// form (`TASK-498`, `FR-1-042`, `TASK-b6b1278890774ef993d2ebc327862470-003`;
+/// the node segment keeps any case). For surfaces that tell a spec id apart
+/// from a lower-case branch or session name (`story-431`).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) fn looks_like_canonical_spec_id(s: &str) -> bool {
+    let s = s.trim();
+    looks_like_spec_id(s)
+        && s.split('-')
+            .next()
+            .is_some_and(|prefix| prefix.chars().all(|c| c.is_ascii_uppercase()))
+}
+
+/// [`looks_like_spec_id`] tightened for free text, where a hyphenated word
+/// ending in digits (`follow-up-2`) must not pass: the token must be
+/// canonical ([`looks_like_canonical_spec_id`]) or carry a built-in type
+/// prefix in any case (`task-7`, `fr-1-042`). Surrounding whitespace is
+/// trimmed; inner whitespace rejects.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+pub(crate) fn looks_like_spec_id_in_text(s: &str) -> bool {
+    let s = s.trim();
+    if s.chars().any(char::is_whitespace) || !looks_like_spec_id(s) {
+        return false;
+    }
+    if looks_like_canonical_spec_id(s) {
+        return true;
+    }
+    let prefix = s.split('-').next().unwrap_or_default();
+    aida_core::RequirementType::ALL
+        .iter()
+        .any(|t| t.default_prefix().eq_ignore_ascii_case(prefix))
+}
+
+/// [`looks_like_canonical_spec_id`] as a regex fragment (no anchors, no
+/// capture groups), for embedding in larger patterns such as trace markers
+/// and `(ID)` trailers. Length is not bounded here; callers that need the
+/// cap re-check with the function.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) const CANONICAL_SPEC_ID_PATTERN: &str = r"[A-Z]{2,}(?:-[A-Za-z0-9]+)*-[0-9]+";
+
+/// [`looks_like_spec_id`] (any-case prefix) as a regex fragment.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) const SPEC_ID_PATTERN: &str = r"[A-Za-z]{2,}(?:-[A-Za-z0-9]+)*-[0-9]+";
+
+/// [`SPEC_ID_PATTERN`] in POSIX ERE, for `git grep -E` (which has no
+/// non-capturing groups).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) const SPEC_ID_ERE: &str = r"[A-Za-z]{2,}(-[A-Za-z0-9]+)*-[0-9]+";
+
+/// The one trace-marker regex: capture 1 is the id in canonical shape, so a
+/// marker naming a node-local id (`TASK-<hex node>-NNN`) yields the whole id,
+/// and a node-aware `FR-1-042` never buckets under a bogus `FR-1`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+pub(crate) fn trace_marker_re() -> &'static regex::Regex {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(&format!(r"\btrace:({CANONICAL_SPEC_ID_PATTERN})"))
+            .expect("valid trace marker regex")
+    })
+}
+
 pub fn parse_pr_arg(arg: &str) -> Option<u32> {
     let s = arg.trim();
     if s.is_empty() {
