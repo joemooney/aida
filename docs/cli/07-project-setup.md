@@ -93,7 +93,7 @@ contain the fingerprint rather than URLs or credentials. An optional
 the local store history for the later outbound scanner. Enrollment records the
 operator's decision; it does not scan or certify that history.
 
-**Current boundary: ref-only push; pull is plan-only.** While enabled, `aida push --dry-run`
+**Boundary: ref-only push; fast-forward-only store pull.** While enabled, `aida push --dry-run`
 and `aida pull --dry-run` inspect local metadata without fetching, opening a
 store cache, or running lifecycle actions. `--json` also selects planning;
 JSON plans explicitly report `executed: false` and never execute a push.
@@ -102,7 +102,7 @@ execution could move, flag dispositions, and missing prerequisites. Code legs
 are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
 `aida pull --store-only` are redundant. Executing pushes also print flag dispositions.
 `aida push --message <text>` and
-`aida pull --auto` refuse. Actual pull execution remains disabled. Ordinary clones with no
+`aida pull --auto` refuse. Ordinary clones with no
 profile retain their existing behavior, including pull dry-run fetching.
 Explicit store overrides such as `aida --file <path> push` refuse when either
 clone has an enabled profile; run from the intended clone without the override.
@@ -123,6 +123,26 @@ use the shared environment-backed routing helper; HTTP secrets stay out of push
 arguments. Cleaning authentication userinfo must not select a new URL rewrite.
 Concurrent later store commits remain local for a future push. Remote refusal
 or network errors require operator inspection; acceptance can be uncertain.
+
+Actual `aida pull` has the same attached-store, cleanliness, partial-clone,
+policy and trust-root prerequisites, checked before any network contact. It
+fetches only origin's `refs/heads/aida-store` from the pinned endpoint into the
+private staging ref `refs/aida-transport/incoming`, with no tags, submodules,
+`FETCH_HEAD`, configured refmap or maintenance; fetched objects can remain in
+the local object database after a refusal, but no accepted ref moves. Under the
+store writer lock it rechecks the local tip and cleanliness, requires a
+fast-forward (divergence refuses; nothing is rebased or merged), and scans the
+incoming history from the enrolled trust root exactly as a push of that tip
+would be scanned. Incoming commits by any identity other than the reviewed
+pseudonym, or containing policy matches, therefore refuse. Only then does it
+advance `refs/remotes/origin/aida-store`, update the attached store's
+index/worktree and advance `refs/heads/aida-store`, each with an old-value
+check. A local store already ahead of origin moves only the remote-tracking
+ref. A pull does not commit, publish mail, allocate IDs, reconcile, refresh the
+cache, record a push receipt or fan out. An interrupted transition leaves a
+private recovery journal: push refuses until `aida pull` finds the store
+cleanly at one of the two journaled commits; any other state refuses and names
+both commits so the operator can restore one.
 Raw hook/remote diagnostics are suppressed to avoid exposing identifiers.
 The profile baseline and local remote-tracking refs are not advanced by this
 slice. Local hook-profile installation/verification is the existing store Git

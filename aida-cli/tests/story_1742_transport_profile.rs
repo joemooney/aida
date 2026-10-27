@@ -227,7 +227,7 @@ fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     assert_eq!(enabled["profile"]["name"], "work");
     assert_eq!(enabled["origin_matches"], true);
     assert_eq!(enabled["execution_available"], true);
-    assert_eq!(enabled["pull_execution_available"], false);
+    assert_eq!(enabled["pull_execution_available"], true);
     assert_eq!(enabled["sanitization_available"], true);
     assert!(enabled["limitations"]
         .as_array()
@@ -260,7 +260,7 @@ fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     assert!(fixture.common.join("aida-transport.lock").is_file());
     // With the profile disabled this store-less clone takes ordinary discovery.
     let ordinary = fixture.aida(&["push", "--dry-run"]);
-    assert!(!diagnostics(&ordinary).contains("not available in this slice"));
+    assert!(!diagnostics(&ordinary).contains("Code leg: forbidden"));
 }
 
 #[test]
@@ -277,12 +277,12 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
         assert_eq!(plan["profile"], "work");
         assert_eq!(plan["code_leg"], "forbidden");
         assert_eq!(plan["flags"]["--store-only"], "redundant");
-        assert_eq!(plan["execution_available"], operation == "push");
+        assert_eq!(plan["execution_available"], true);
         assert_eq!(plan["executed"], false);
         assert_eq!(plan["remote"], "origin");
         assert_eq!(
             plan["refs_that_may_move"].as_array().unwrap().len(),
-            if operation == "push" { 1 } else { 2 }
+            if operation == "push" { 1 } else { 3 }
         );
         if operation == "push" {
             assert_eq!(plan["source_sha"], fixture.store_sha);
@@ -300,11 +300,7 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
         let refused = fixture.aida(&[operation]);
         assert!(!refused.status.success());
         assert!(
-            diagnostics(&refused).contains(if operation == "push" {
-                "attached aida-store worktree"
-            } else {
-                "not available in this slice"
-            }),
+            diagnostics(&refused).contains("attached aida-store worktree"),
             "{}",
             diagnostics(&refused)
         );
@@ -2028,4 +2024,231 @@ fn work_intake_and_push_scan_agree_on_what_a_write_adds() {
     fixture.store_commit(&store, "oplog.yaml", appended.as_bytes());
     fixture.assert_scan_refusal_with(&remote, &[]);
     assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+}
+
+// trace:STORY-1742 | ai:claude
+impl Fixture {
+    /// Publish `tip` to the hub with raw Git, then put the local store back
+    /// on `local`, so the next `aida pull` has something to fetch.
+    fn seed_hub(&self, store: &Path, remote: &Path, tip: &str, local: &str) {
+        self.git_at(
+            store,
+            &[
+                "push",
+                "-q",
+                remote.to_str().unwrap(),
+                &format!("{tip}:refs/heads/aida-store"),
+            ],
+        );
+        self.git_at(store, &["reset", "-q", "--hard", local]);
+    }
+
+    fn rev(&self, reference: &str) -> Option<String> {
+        let output = self
+            .command(
+                "git",
+                &self.root,
+                &["rev-parse", "--verify", "-q", reference],
+            )
+            .output()
+            .unwrap();
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8(output.stdout).unwrap().trim().to_owned())
+    }
+
+    /// A refused pull moves no accepted ref and leaves no staging ref.
+    fn assert_pull_refused(&self, store: &Path, needle: &str) -> String {
+        let before = self.snapshot();
+        let head = self.git_at(store, &["rev-parse", "HEAD"]);
+        let output = self.aida(&["pull"]);
+        assert!(!output.status.success(), "{}", diagnostics(&output));
+        let text = diagnostics(&output);
+        assert!(text.contains(needle), "{text}");
+        assert!(!text.contains("private-marker"), "{text}");
+        assert_eq!(before, self.snapshot());
+        assert_eq!(head, self.git_at(store, &["rev-parse", "HEAD"]));
+        assert_eq!(self.rev("refs/aida-transport/incoming"), None);
+        assert!(!self.common.join("FETCH_HEAD").exists());
+        text
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn pull_fast_forwards_only_the_store_after_scanning_and_names_moved_refs() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let tip = fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        b"title: Generic failure\ndescription: Synthetic reproduction\n",
+    );
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    let main = fixture.rev("refs/heads/main");
+    let plan = fixture.json(&["pull", "--json"]);
+    assert_eq!(plan["executed"], false);
+    assert_eq!(
+        plan["refs_that_may_move"],
+        serde_json::json!([
+            "refs/aida-transport/incoming",
+            "refs/remotes/origin/aida-store",
+            "refs/heads/aida-store"
+        ])
+    );
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+
+    let output = fixture.aida(&["pull", "--store-only"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let text = diagnostics(&output);
+    assert!(text.contains("--store-only: redundant"), "{text}");
+    assert!(
+        text.contains("refs/remotes/origin/aida-store, refs/heads/aida-store"),
+        "{text}"
+    );
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), tip);
+    assert_eq!(
+        fixture.rev("refs/remotes/origin/aida-store").as_deref(),
+        Some(tip.as_str())
+    );
+    assert_eq!(fixture.git_at(&store, &["status", "--porcelain=v1"]), "");
+    assert!(store.join("objects/BUG/000/BUG-1.yaml").is_file());
+    // Nothing else moves: no product ref, staging ref, FETCH_HEAD, cache or
+    // receipt (a pull is not evidence of a successful push).
+    assert_eq!(fixture.rev("refs/heads/main"), main);
+    assert_eq!(fixture.rev("refs/aida-transport/incoming"), None);
+    assert!(!fixture.common.join("FETCH_HEAD").exists());
+    assert!(!fixture.common.join("aida-transport-pull.json").exists());
+    assert!(!fixture.common.join("aida-transport-receipt.json").exists());
+    assert!(!store.join(".aida/cache.db").exists());
+    assert!(!fixture.root.join(".aida/cache.db").exists());
+
+    let again = fixture.aida(&["pull"]);
+    assert!(again.status.success(), "{}", diagnostics(&again));
+    assert!(diagnostics(&again).contains("already up to date"));
+}
+
+#[test]
+#[cfg(unix)]
+fn pull_tracks_origin_without_moving_a_store_that_is_already_ahead() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.seed_hub(&store, &remote, &fixture.store_sha, &fixture.store_sha);
+    let ahead = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    let output = fixture.aida(&["pull"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    assert!(diagnostics(&output).contains("only the remote-tracking ref moved"));
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), ahead);
+    assert_eq!(
+        fixture.rev("refs/remotes/origin/aida-store").as_deref(),
+        Some(fixture.store_sha.as_str())
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn unsafe_foreign_or_divergent_incoming_history_moves_no_accepted_ref() {
+    // Unsafe content, even when deleted again before the tip.
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        b"title: private-marker\n",
+    );
+    fs::remove_file(store.join("objects/BUG/000/BUG-1.yaml")).unwrap();
+    fixture.git_at(&store, &["add", "--all"]);
+    fixture.git_at(&store, &["commit", "-qm", "Generic change"]);
+    let tip = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    fixture.assert_pull_refused(&store, "Transport scan refused");
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+
+    // A commit by any identity other than the reviewed pseudonym.
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fs::create_dir_all(store.join("objects")).unwrap();
+    fs::write(store.join("objects/.gitkeep"), "").unwrap();
+    fixture.git_at(&store, &["add", "--all"]);
+    let output = fixture
+        .command("git", &store, &["commit", "-qm", "Generic change"])
+        .env("GIT_AUTHOR_NAME", "Someone Else")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let tip = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    fixture.assert_pull_refused(&store, "reviewed transport identity");
+
+    // Divergence is refused, never rebased or merged.
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let theirs = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Theirs\n");
+    fixture.seed_hub(&store, &remote, &theirs, &fixture.store_sha);
+    fixture.store_commit(&store, "objects/BUG/000/BUG-2.yaml", b"title: Ours\n");
+    fixture.assert_pull_refused(&store, "diverged");
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+}
+
+#[test]
+#[cfg(unix)]
+fn dirty_store_or_missing_policy_refuses_before_fetching() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let tip = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    let objects = fixture.git_at(&store, &["count-objects", "-v"]);
+    fs::write(store.join("untracked"), "dirty").unwrap();
+    fixture.assert_pull_refused(&store, "Store is dirty");
+    fs::remove_file(store.join("untracked")).unwrap();
+    fs::remove_file(fixture.common.join("aida-transport-policy.json")).unwrap();
+    let output = fixture.aida(&["pull"]);
+    assert!(!output.status.success(), "{}", diagnostics(&output));
+    // Neither refusal fetched: the hub's objects never arrived locally.
+    assert_eq!(objects, fixture.git_at(&store, &["count-objects", "-v"]));
+    assert_eq!(
+        fixture.git_at(&store, &["rev-parse", "HEAD"]),
+        fixture.store_sha
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn interrupted_pull_journal_blocks_push_and_recovers_only_a_clean_known_state() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let tip = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    let journal = fixture.common.join("aida-transport-pull.json");
+    fs::write(
+        &journal,
+        format!(
+            r#"{{"version":1,"from":"{}","to":"{tip}"}}"#,
+            fixture.store_sha
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&journal, fs::Permissions::from_mode(0o600)).unwrap();
+    let push = fixture.aida(&["push"]);
+    assert!(!push.status.success());
+    assert!(
+        diagnostics(&push).contains("did not finish"),
+        "{}",
+        diagnostics(&push)
+    );
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+
+    // Unknown state (index half-moved): refuse and keep the journal.
+    fixture.git_at(&store, &["read-tree", "-m", "-u", &fixture.store_sha, &tip]);
+    fixture.assert_pull_refused(&store, "matches neither");
+    assert!(journal.exists());
+
+    // Restored cleanly to a journaled commit: recover and finish the pull.
+    fixture.git_at(&store, &["reset", "-q", "--hard", &fixture.store_sha]);
+    let output = fixture.aida(&["pull"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    assert!(!journal.exists());
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), tip);
 }
