@@ -471,7 +471,8 @@ fn refs(graphs: &[Vec<Requirement>]) -> Vec<&[Requirement]> {
 }
 
 /// Pin `target` and the local HEAD, read them and all their merge bases, and
-/// refuse incompatible evidence while the branch and index are unchanged.
+/// refuse incompatible evidence or conflicting allocation claims
+/// ([`crate::allocation_conflicts`]) while the branch and index are unchanged.
 /// None for a repository that is not an AIDA store.
 pub(super) fn preflight(repo: &Path, target: &str) -> Result<Option<EvidenceGate>> {
     if !is_store_tree(repo) {
@@ -531,6 +532,13 @@ pub(super) fn preflight(repo: &Path, target: &str) -> Result<Option<EvidenceGate
             gate.target
         )));
     }
+    // trace:BUG-2017 | ai:claude — conflicting or unreadable allocation claims
+    // refuse here too, before every rebase, union merge or fast-forward.
+    crate::allocation_conflicts::refuse_conflicts(
+        repo,
+        gate.local.as_deref(),
+        std::slice::from_ref(&gate.target),
+    )?;
     Ok(Some(gate))
 }
 

@@ -1585,6 +1585,7 @@ mod config_lock;
 mod evidence;
 // trace:BUG-2181 | ai:claude
 mod remote_credentials;
+pub use crate::allocation_conflicts::{is_sync_refusal, AllocationRefusal};
 pub use crate::hypothesis::{is_evidence_refusal, EvidenceRefusal};
 pub use config_lock::{
     clear_sandbox_config_lock, config_lock_path, is_sandbox_placeholder,
@@ -5083,7 +5084,13 @@ pub fn suggest_free_node_id(aida_repo: &Path, requested: &str) -> Result<NodeIdP
 
     crate::db::with_store_write_lock(aida_repo, || {
         if let Ok(branch) = current_branch(aida_repo) {
-            let _ = pull_rebase(aida_repo, "origin", &branch);
+            // Offline stays best-effort; a refused sync stops the probe.
+            // trace:BUG-2017 | ai:claude
+            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                if is_sync_refusal(&e) {
+                    return Err(e);
+                }
+            }
         }
 
         let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
