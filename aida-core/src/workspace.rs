@@ -304,6 +304,7 @@ mod tests {
             "schedule/watchdog.tmp.4242.4",
             "mailbox/0f3a-4b1c.tmp.4242.5",
             "oplog.tmp.4242.6",
+            "metadata.tmp.4242.0f3a4b1c",
         ] {
             assert!(ignored(staged), "staging file must be ignored: {staged}");
         }

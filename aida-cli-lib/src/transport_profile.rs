@@ -1,5 +1,6 @@
 //! Clone-local transport policy, read-only plans, and ref-only store pushes.
-//! Pull execution and intake sanitization remain separate work.
+//! Pull execution remains separate work. Store writes are prepared and
+//! checked in aida-core before persistence.
 // trace:STORY-1742 | ai:codex
 
 use anyhow::{bail, Context, Result};
@@ -29,7 +30,8 @@ const BYPASS_LIMIT: &str =
     "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
 const PENDING: &str =
     "Transport pull execution is not available in this slice; use --dry-run to inspect the plan.";
-const SANITIZATION_PENDING: &str = "Intake sanitization is not available in this slice. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
+// trace:STORY-1742 | ai:claude
+const SANITIZATION_LIMIT: &str = "Store writes are checked against the reviewed private policy before anything is persisted; use `aida add --sanitized` for generic intake. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
 const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
 
 #[derive(Subcommand, Debug)]
@@ -74,32 +76,7 @@ pub enum ProfileName {
     Work,
 }
 
-/// Hash the effective single origin endpoint rather than saving credentials or
-/// endpoint text. Fixed refspecs are code-owned, not an extensible local language.
-// trace:STORY-1742 | ai:codex
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Profile {
-    version: u32,
-    name: ProfileName,
-    origin_sha256: String,
-    baseline: Option<String>,
-}
-
-impl Profile {
-    fn validate(&self) -> Result<()> {
-        if self.version != 1
-            || !is_hex_id(&self.origin_sha256, &[64])
-            || self
-                .baseline
-                .as_ref()
-                .is_some_and(|sha| !is_hex_id(sha, &[40, 64]))
-        {
-            bail!("Invalid or unsupported clone-local transport profile; push/pull refused.");
-        }
-        Ok(())
-    }
-}
+use aida_core::transport_policy::Profile;
 
 fn is_hex_id(value: &str, lengths: &[usize]) -> bool {
     lengths.contains(&value.len()) && value.bytes().all(|c| c.is_ascii_hexdigit())
@@ -165,23 +142,7 @@ fn common_dir(root: &Path) -> Result<Option<PathBuf>> {
 }
 
 fn load(common: &Path) -> Result<Option<Profile>> {
-    // Ordinary shared/group-writable clones retain their existing behavior
-    // until explicit enrollment. Presence requires the full private trust
-    // checks; disappearance after this probe must never disable enforcement.
-    match fs::symlink_metadata(common.join(PROFILE_FILE)) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => bail!("Cannot determine clone-local transport policy; refused"),
-        Ok(_) => {}
-    }
-    let bytes = private::Private::open(common)?
-        .read(PROFILE_FILE)?
-        .context("Transport profile changed during discovery; refused")?;
-    // serde errors can quote values; do not echo a corrupt profile's content.
-    let profile: Profile = serde_json::from_slice(&bytes).map_err(|_| {
-        anyhow::anyhow!("Invalid clone-local transport profile; push/pull refused.")
-    })?;
-    profile.validate()?;
-    Ok(Some(profile))
+    Profile::load(common)
 }
 
 fn origin_endpoint(root: &Path) -> Result<String> {
@@ -340,6 +301,9 @@ struct ProfileStatus<'a> {
 }
 
 fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
+    let scan_policy_ready = common_dir(root)?
+        .and_then(|dir| private::Private::open(&dir).ok())
+        .is_some_and(|dir| scan::Scan::load(&dir).is_ok());
     let status = ProfileStatus {
         enabled: profile.is_some(),
         profile,
@@ -363,14 +327,13 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
             "host-bearing URL",
             "reviewed deny token",
         ],
-        scan_policy_ready: common_dir(root)?
-            .and_then(|dir| private::Private::open(&dir).ok())
-            .is_some_and(|dir| scan::Scan::load(&dir).is_ok()),
-        sanitized_intake_available: false,
+        scan_policy_ready,
+        // trace:STORY-1742 | ai:claude
+        sanitized_intake_available: profile.is_some() && scan_policy_ready,
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
-        limitations: vec![PENDING, SANITIZATION_PENDING, BYPASS_LIMIT],
+        limitations: vec![PENDING, SANITIZATION_LIMIT, BYPASS_LIMIT],
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
@@ -455,7 +418,9 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
             }
             let profile = Profile {
                 version: 1,
-                name: *name,
+                name: match name {
+                    ProfileName::Work => "work".into(),
+                },
                 origin_sha256: fingerprint,
                 baseline,
             };
@@ -535,7 +500,7 @@ fn plan(
         });
     }
     Ok(TransportPlan {
-        profile: profile.name,
+        profile: ProfileName::Work,
         operation: if push { "push" } else { "pull" },
         remote: "origin",
         source_ref: STORE_REF,
@@ -548,7 +513,7 @@ fn plan(
         execution_available: push,
         executed: false,
         blockers,
-        limitations: vec![BYPASS_LIMIT, SANITIZATION_PENDING, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
+        limitations: vec![BYPASS_LIMIT, SANITIZATION_LIMIT, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
     })
 }
 
