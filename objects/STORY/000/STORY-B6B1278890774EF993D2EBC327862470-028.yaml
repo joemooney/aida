@@ -1,0 +1,33 @@
+id: 01a17f08-4648-7570-9a7e-6ae67c003203
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-028
+title: 'Review PR-2989: [AI:claude] test(gate): close the remaining import-ratchet gap (TASK-b6b1278890774ef993d2ebc327862470-010)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-ratchet-followup`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2989>
+  - Branch: `fix/gate-ratchet-followup` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-010
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2989` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-27T20:23:31.144189388Z
+modified_at: 2026-10-27T20:23:31.144189388Z
+req_type: Story
+filed_at:
+  code_sha: d79e40e0dd1e32cdba9c4c2397a1dc30255956a3
+  branch: fix/gate-ratchet-followup
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 160235072d
+  vendor: claude
+  session: 3bb2d2b0-fb06-4435-a33f-340a36c1e69b
