@@ -16,12 +16,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2981` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T16:21:19.720824045Z
-modified_at: 2026-10-27T16:21:31.894344095Z
+modified_at: 2026-10-27T19:24:10.064491125Z
 req_type: Story
 relationships:
 - rel_type:
@@ -29,12 +29,27 @@ relationships:
   target_id: 01a17dd8-7a13-7a30-854a-bb1355ae316f
   created_at: 2026-10-27T16:21:31.894340102Z
   created_by: joe
+comments:
+- id: 01a17ed1-efd0-7923-b3c9-b72a222625fa
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2981 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-27T19:24:10.064489238Z
+  modified_at: 2026-10-27T19:24:10.064489238Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17e2a-c40b-7e41-bb3e-7af49af9e808
   author: joe
   timestamp: 2026-10-27T16:21:34.347761188Z
   session_id: a427fb36-a2fa-4ae5-961b-ea622ddd14a1
   changes: []
+- id: 01a17ed1-efd0-7923-b3c9-b71e9230fe3f
+  author: aida-auto-bump
+  timestamp: 2026-10-27T19:24:10.064473868Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: b5b1c4c1ad0c6f67e2b3bdee977ea7f329a4f5b9
   branch: fix/transport-test-flake
@@ -43,3 +58,7 @@ filed_at:
   aida_build_sha: 0c374c424f
   vendor: claude
   session: a427fb36-a2fa-4ae5-961b-ea622ddd14a1
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-27T19:24:10.064467423Z
+  completion_sha: 82f54ad039d4b9dd59fb4b604b64bf2e27f9c2cc
