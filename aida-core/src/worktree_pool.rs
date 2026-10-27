@@ -414,7 +414,15 @@ pub fn with_state_lock<T>(
 /// clear `owner_*` when the owner pid is dead. A durable `leased` entry with no
 /// live pid stays reserved (the reservation survives process death by design).
 pub fn heal_state(pool: &mut Pool) {
-    pool.entries.retain(|e| e.path.exists());
+    // A live reservation for a tree still being created has no directory
+    // yet; it is kept until its creator finishes or dies.
+    // trace:STORY-1843 | ai:claude
+    pool.entries.retain(|e| {
+        e.path.exists()
+            || e.retiring
+                .as_ref()
+                .is_some_and(|r| owner_pid_is_alive(r.pid as i32, r.pid_start.as_deref()))
+    });
     for e in &mut pool.entries {
         // A staging process that died mid-retirement leaves the source to
         // its own recovery (the next admission or retirement); the tree is
@@ -566,89 +574,66 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
     let lease_ttl = opts.lease_ttl_secs.unwrap_or(DEFAULT_LEASE_TTL_SECS);
     let now = now_ts();
 
-    // Trees whose mail retirement refused; passed over on the next pass.
+    // Reserve, quiesce, release, revalidate (signoff 63 #1): the pool lock is
+    // held only to read and write the registry. Every Git command, salvage,
+    // reset, submodule update, hook and mail retirement runs outside it, on
+    // a tree this process reserved (`retiring`), which every other pool
+    // operation skips. Trees found unsafe to reuse are passed over on the
+    // next pass, and why is kept for the pool-full message.
     // trace:STORY-1843 | ai:claude
     let mut passed_over: Vec<PathBuf> = Vec::new();
+    let mut skipped = ReclaimSkips::default();
     loop {
-        match acquire_pass(
+        match reserve(
             project_root,
             opts,
-            &base_ref,
             max_trees,
             lease_ttl,
             now,
             &passed_over,
+            &skipped,
         )? {
-            Pass::Done(path) => return Ok(path),
-            Pass::Staged(path) => {
-                // Retire the old occupant's mail outside the pool lock, then
-                // re-take it to revalidate and reset. trace:STORY-1843 | ai:claude
-                match crate::mailbox_lifecycle::guard::retire_checkout(&path, "pool reuse") {
-                    Ok(retirement) => {
-                        return finish_staged_reuse(
-                            project_root,
-                            opts,
-                            &base_ref,
-                            &path,
-                            retirement,
-                        )
+            Reserved::Reuse { path, expired } => {
+                match prepare_reuse(project_root, &path, expired, &mut skipped) {
+                    Some(retirement) => {
+                        return finish_reuse(project_root, opts, &base_ref, &path, retirement)
                     }
-                    Err(refusal) => {
-                        eprintln!("  keeping pooled worktree {}: {refusal}", path.display());
+                    None => {
                         unstage(project_root, &path);
                         passed_over.push(path);
                     }
                 }
             }
+            Reserved::Create(path) => return create_reserved(project_root, opts, &base_ref, &path),
         }
     }
 }
 
-/// One pass of [`acquire`] under the pool lock.
+/// What one locked pass of [`acquire`] reserved.
 // trace:STORY-1843 | ai:claude
-enum Pass {
-    /// A freshly created tree, ready.
-    Done(PathBuf),
-    /// A reclaimable tree, staged `retiring` for its mail retirement.
-    Staged(PathBuf),
+enum Reserved {
+    /// A reclaimable tree, marked `retiring` for this process.
+    Reuse { path: PathBuf, expired: bool },
+    /// A new entry, marked `retiring`, whose directory is not created yet.
+    Create(PathBuf),
 }
 
-#[allow(clippy::too_many_arguments)]
-fn acquire_pass(
+/// The locked half of an [`acquire`] pass: registry state only. Prefer a
+/// reclaimable entry: a plain idle tree, OR a stale lease whose TTL has
+/// elapsed with no live owner (the reservation-leak backstop, TASK-1008).
+/// Otherwise reserve a new entry if under the cap.
+// trace:STORY-1843 | ai:claude
+fn reserve(
     project_root: &Path,
     opts: &AcquireOptions,
-    base_ref: &str,
     max_trees: usize,
     lease_ttl: i64,
     now: i64,
     passed_over: &[PathBuf],
-) -> Result<Pass> {
-    let mut allocated = None::<(PathBuf, String)>;
-    let result = with_state_lock(project_root, |pool| {
-        // 1. Prefer a reclaimable entry → reset + hand out. "Reclaimable" is a
-        //    plain idle tree, OR a stale lease whose TTL has elapsed with no
-        //    live owner (the reservation-leak backstop, TASK-1008). An idle
-        //    tree must be clean; a stale-expired lease with tracked changes
-        //    is salvaged to `.aida/salvage/` and then reset, so a leaked dirty
-        //    reservation can't pin the tree forever.
-        //
-        //    An expired lease's `owner_pid` is the short-lived `session start`,
-        //    so "owner dead" does not mean the session is gone: its agent or
-        //    build may still be running in the tree. A tree a live process is
-        //    using (or one the process scan could not verify) is never
-        //    reclaimed or reset here, idle or expired. trace:BUG-1947 | ai:claude
-        //
-        //    The cheap state checks run first; the /proc holder scan runs only
-        //    for a tree that would otherwise be reclaimed. A tree that is not
-        //    known safe to reset (a git error probing it, untracked files that
-        //    `clean -fd` would delete, a failed salvage) is skipped, and a
-        //    fresh tree is created instead. trace:BUG-1947 | ai:claude
-        let mut skipped = ReclaimSkips {
-            retention_refused: passed_over.len(),
-            ..ReclaimSkips::default()
-        };
-        let mut idle_idx = None;
-        for (idx, e) in pool.entries.iter().enumerate() {
+    skipped: &ReclaimSkips,
+) -> Result<Reserved> {
+    with_state_lock(project_root, |pool| {
+        for e in pool.entries.iter_mut() {
             if e.destroying || e.retiring.is_some() || !e.path.exists() {
                 continue;
             }
@@ -659,159 +644,141 @@ fn acquire_pass(
             if !expired && !e.is_idle() {
                 continue;
             }
-            let status = match git_ops::worktree_status_porcelain(&e.path) {
-                Ok(status) => status,
-                Err(err) => {
-                    eprintln!(
-                        "  warning: not reusing pooled worktree {}: {err:#}",
-                        e.path.display()
-                    );
-                    skipped.unsafe_to_reset += 1;
-                    continue;
-                }
-            };
-            let dirty = !status.is_empty();
-            if dirty && !expired {
-                continue; // An idle tree must be clean to be reused.
-            }
-            match crate::worktree_holders::check_worktree_removal(&e.path) {
-                Ok(()) => {}
-                Err(in_use) => {
-                    if let Some(why) = in_use.unverified {
-                        skipped.unverified.get_or_insert(why);
-                        skipped.unverified_count += 1;
-                        // trace:BUG-1947 | ai:claude
-                        skipped.pid_namespace |= in_use.pid_namespace;
-                    }
-                    continue;
-                }
-            }
-            if dirty {
-                if status.lines().any(|l| l.starts_with("??")) {
-                    eprintln!(
-                        "  keeping pooled worktree {}: it has untracked files that a reset \
-                         would delete; salvage or destroy it by hand",
-                        e.path.display()
-                    );
-                    skipped.unsafe_to_reset += 1;
-                    continue;
-                }
-                // An expired reservation may still hold the dead session's
-                // uncommitted work; save it before the reset, exactly as a
-                // return does. No reset without a saved copy.
-                if let Err(err) = salvage_dirty_before_reset(project_root, &e.path) {
-                    eprintln!(
-                        "  keeping pooled worktree {}: could not salvage its uncommitted \
-                         work before a reset: {err:#}",
-                        e.path.display()
-                    );
-                    skipped.unsafe_to_reset += 1;
-                    continue;
-                }
-            }
-            idle_idx = Some(idx);
-            break;
+            e.retiring = Some(PoolRetiring::mine());
+            return Ok(Reserved::Reuse {
+                path: e.path.clone(),
+                expired,
+            });
         }
 
-        if let Some(idx) = idle_idx {
-            // Staged: the reset happens after the mail retirement, which runs
-            // outside this lock. trace:STORY-1843 | ai:claude
-            pool.entries[idx].retiring = Some(PoolRetiring::mine());
-            return Ok(Pass::Staged(pool.entries[idx].path.clone()));
-        }
-
-        // 2. None idle — create a new one if under the cap.
+        // None reclaimable — reserve a new one if under the cap.
         if pool.entries.len() >= max_trees {
             anyhow::bail!(
                 "{}",
-                pool_full_message(pool.entries.len(), max_trees, &skipped)
+                pool_full_message(pool.entries.len(), max_trees, skipped)
             );
         }
-
         let (name, _) = next_pool_name(pool, project_root);
         let path = worktree_placement_path(project_root, &name, opts.parent_dir.as_deref());
-        // A configured worktree_parent may not exist yet; `git worktree add`
-        // will not create intermediate directories for us.
-        // trace:BUG-1700 | ai:claude
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
-                format!("create worktree parent directory {}", parent.display())
-            })?;
-        }
-        git_ops::add_detached_worktree(project_root, &path, &base_ref)
-            .with_context(|| format!("create pool worktree {}", path.display()))?;
-        // Keep the exact marker across later setup/state-write failures.
-        // trace:BUG-2188 | ai:codex
-        allocated = Some((path.clone(), std::fs::read_to_string(path.join(".git"))?));
-        git_ops::ensure_aida_runtime_excluded(&path)
-            .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
-        git_ops::init_submodules_or_warn(&path, opts.init_submodules)
-            .with_context(|| format!("prepare submodules in pool worktree {}", path.display()))?;
-
-        // Best-effort post_create hooks (warm the cache, etc.); never fatal.
-        crate::worktree_hooks::run_hooks(&opts.post_create_hooks, &path, "post_create");
-
-        let mut entry = PoolEntry {
+        pool.entries.push(PoolEntry {
             name,
             path: path.clone(),
             created_at: Some(now_ts()),
+            retiring: Some(PoolRetiring::mine()),
             ..Default::default()
-        };
-        stamp_acquired(&mut entry, opts);
-        pool.entries.push(entry);
-        // Warm-cache MISS: a fresh worktree had to be minted (cold `target/`).
-        // trace:TASK-1012 | ai:claude
-        pool.create_count = pool.create_count.saturating_add(1);
-        Ok(Pass::Done(path))
-    });
-    if result.is_err() {
-        if let Some((path, marker)) = allocated {
-            let same = std::fs::symlink_metadata(path.join(".git"))
-                .is_ok_and(|m| m.file_type().is_file())
-                && std::fs::read_to_string(path.join(".git")).ok().as_deref()
-                    == Some(marker.as_str());
-            if same && crate::worktree_holders::check_worktree_removal(&path).is_ok() {
-                if let Err(error) = git_ops::remove_worktree_at(project_root, &path, true) {
-                    eprintln!("pool setup cleanup failed for {}: {error:#}; inspect `git worktree list --porcelain`", path.display());
-                }
-            } else {
-                eprintln!("pool setup cleanup kept changed or occupied worktree {}; inspect `git worktree list --porcelain`", path.display());
-            }
-        }
-    }
-    result
+        });
+        Ok(Reserved::Create(path))
+    })
 }
 
-/// Finish a staged reuse under the pool lock: revalidate the staged entry,
-/// reset it, and settle the retirement (`complete_reuse` on success, reopen
-/// on failure). The staged mark is cleared either way.
+/// Check a reserved tree outside the pool lock and quiesce it for reuse:
+/// `Some(retirement)` when it may be reset, `None` (counted in `skipped`)
+/// when it must be passed over.
+///
+/// An expired lease's `owner_pid` is the short-lived `session start`, so
+/// "owner dead" does not mean the session is gone: its agent or build may
+/// still be running in the tree. A tree a live process is using (or one the
+/// process scan could not verify) is never reclaimed or reset, idle or
+/// expired. An idle tree must be clean; an expired one with tracked changes
+/// is salvaged to `.aida/salvage/` first, so a leaked dirty reservation can't
+/// pin the tree forever. A tree not known safe to reset (a git error probing
+/// it, untracked files `clean -fd` would delete, a failed salvage) is kept.
+/// Then the old occupant's mail is retired.
+// trace:BUG-1947 | ai:claude
 // trace:STORY-1843 | ai:claude
-fn finish_staged_reuse(
+fn prepare_reuse(
+    project_root: &Path,
+    path: &Path,
+    expired: bool,
+    skipped: &mut ReclaimSkips,
+) -> Option<Option<crate::mailbox_lifecycle::guard::Retirement>> {
+    let status = match git_ops::worktree_status_porcelain(path) {
+        Ok(status) => status,
+        Err(err) => {
+            eprintln!(
+                "  warning: not reusing pooled worktree {}: {err:#}",
+                path.display()
+            );
+            skipped.unsafe_to_reset += 1;
+            return None;
+        }
+    };
+    let dirty = !status.is_empty();
+    if dirty && !expired {
+        return None; // An idle tree must be clean to be reused.
+    }
+    if let Err(in_use) = crate::worktree_holders::check_worktree_removal(path) {
+        if let Some(why) = in_use.unverified {
+            skipped.unverified.get_or_insert(why);
+            skipped.unverified_count += 1;
+            // trace:BUG-1947 | ai:claude
+            skipped.pid_namespace |= in_use.pid_namespace;
+        }
+        return None;
+    }
+    if dirty {
+        if status.lines().any(|l| l.starts_with("??")) {
+            eprintln!(
+                "  keeping pooled worktree {}: it has untracked files that a reset \
+                 would delete; salvage or destroy it by hand",
+                path.display()
+            );
+            skipped.unsafe_to_reset += 1;
+            return None;
+        }
+        // No reset without a saved copy, exactly as a return does.
+        if let Err(err) = salvage_dirty_before_reset(project_root, path) {
+            eprintln!(
+                "  keeping pooled worktree {}: could not salvage its uncommitted \
+                 work before a reset: {err:#}",
+                path.display()
+            );
+            skipped.unsafe_to_reset += 1;
+            return None;
+        }
+    }
+    match crate::mailbox_lifecycle::guard::retire_checkout(path, "pool reuse") {
+        Ok(retirement) => Some(retirement),
+        Err(refusal) => {
+            eprintln!("  keeping pooled worktree {}: {refusal}", path.display());
+            skipped.retention_refused += 1;
+            None
+        }
+    }
+}
+
+/// Is `path` still reserved by this process? A short locked read.
+fn still_reserved(project_root: &Path, path: &Path) -> Result<bool> {
+    with_state_lock(project_root, |pool| {
+        Ok(pool
+            .entries
+            .iter()
+            .any(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine)))
+    })
+}
+
+/// Finish a reserved reuse: revalidate the reservation, reset the tree and
+/// settle the retirement (`complete_reuse` on success, reopen on failure)
+/// outside the lock, then hand the entry out under it. The reservation is
+/// released on every failure.
+// trace:STORY-1843 | ai:claude
+fn finish_reuse(
     project_root: &Path,
     opts: &AcquireOptions,
     base_ref: &str,
     path: &Path,
     retirement: Option<crate::mailbox_lifecycle::guard::Retirement>,
 ) -> Result<PathBuf> {
-    // A failed pass writes nothing back, so the staged mark is cleared after.
-    let finished = with_state_lock(project_root, |pool| {
-        let Some(idx) = pool
-            .entries
-            .iter()
-            .position(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
-        else {
-            return crate::mailbox_lifecycle::guard::settle(
-                Err(anyhow::anyhow!(
-                    "pooled worktree {} changed while its mail was being retired",
-                    path.display()
-                )),
-                retirement,
-                crate::mailbox_lifecycle::guard::Retirement::complete_reuse,
-            );
+    let finished = (|| {
+        let reset = match still_reserved(project_root, path) {
+            Ok(true) => git_ops::reset_worktree_to(path, base_ref)
+                .with_context(|| format!("reset pooled worktree {}", path.display())),
+            Ok(false) => Err(anyhow::anyhow!(
+                "pooled worktree {} changed while its mail was being retired",
+                path.display()
+            )),
+            Err(e) => Err(e),
         };
-        let reset = git_ops::reset_worktree_to(path, base_ref)
-            .with_context(|| format!("reset pooled worktree {}", path.display()));
-        pool.entries[idx].retiring = None;
         crate::mailbox_lifecycle::guard::settle(
             reset,
             retirement,
@@ -821,32 +788,126 @@ fn finish_staged_reuse(
             .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
         git_ops::init_submodules_or_warn(path, opts.init_submodules)
             .with_context(|| format!("prepare submodules in pooled worktree {}", path.display()))?;
-        stamp_acquired(&mut pool.entries[idx], opts);
-        // Warm-cache HIT: an already-built worktree was reused. Counts only,
-        // no paths/content — the hit-rate telemetry (TASK-1012).
-        // trace:TASK-1012 | ai:claude
-        pool.reuse_count = pool.reuse_count.saturating_add(1);
-        Ok(path.to_path_buf())
-    });
+        with_state_lock(project_root, |pool| {
+            let Some(e) = pool
+                .entries
+                .iter_mut()
+                .find(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
+            else {
+                anyhow::bail!(
+                    "pooled worktree {} left the pool while it was being reset",
+                    path.display()
+                );
+            };
+            e.retiring = None;
+            stamp_acquired(e, opts);
+            // Warm-cache HIT: an already-built worktree was reused. Counts
+            // only, no paths/content — the hit-rate telemetry (TASK-1012).
+            // trace:TASK-1012 | ai:claude
+            pool.reuse_count = pool.reuse_count.saturating_add(1);
+            Ok(path.to_path_buf())
+        })
+    })();
     if finished.is_err() {
         unstage(project_root, path);
     }
     finished
 }
 
-/// Clear this process's staged mark on `path` after a refused retirement.
-/// Best-effort: heal clears it once this process is gone.
+/// Create the tree for a reserved new entry outside the pool lock, then hand
+/// it out under the lock. On failure the half-made tree is removed when it
+/// is still exactly what this call made and nothing uses it, and the
+/// reservation is dropped.
+// trace:STORY-1843 | ai:claude
+fn create_reserved(
+    project_root: &Path,
+    opts: &AcquireOptions,
+    base_ref: &str,
+    path: &Path,
+) -> Result<PathBuf> {
+    let mut allocated = None::<String>;
+    let created = (|| {
+        // A configured worktree_parent may not exist yet; `git worktree add`
+        // will not create intermediate directories for us.
+        // trace:BUG-1700 | ai:claude
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("create worktree parent directory {}", parent.display())
+            })?;
+        }
+        git_ops::add_detached_worktree(project_root, path, base_ref)
+            .with_context(|| format!("create pool worktree {}", path.display()))?;
+        // Keep the exact marker across later setup/state-write failures.
+        // trace:BUG-2188 | ai:codex
+        allocated = Some(std::fs::read_to_string(path.join(".git"))?);
+        git_ops::ensure_aida_runtime_excluded(path)
+            .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
+        git_ops::init_submodules_or_warn(path, opts.init_submodules)
+            .with_context(|| format!("prepare submodules in pool worktree {}", path.display()))?;
+        // Best-effort post_create hooks (warm the cache, etc.); never fatal.
+        crate::worktree_hooks::run_hooks(&opts.post_create_hooks, path, "post_create");
+        with_state_lock(project_root, |pool| {
+            let Some(e) = pool
+                .entries
+                .iter_mut()
+                .find(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
+            else {
+                anyhow::bail!(
+                    "the pool reservation for {} was lost while it was created",
+                    path.display()
+                );
+            };
+            e.retiring = None;
+            stamp_acquired(e, opts);
+            // Warm-cache MISS: a fresh worktree had to be minted (cold
+            // `target/`). trace:TASK-1012 | ai:claude
+            pool.create_count = pool.create_count.saturating_add(1);
+            Ok(path.to_path_buf())
+        })
+    })();
+    if created.is_err() {
+        if let Some(marker) = allocated {
+            let same = std::fs::symlink_metadata(path.join(".git"))
+                .is_ok_and(|m| m.file_type().is_file())
+                && std::fs::read_to_string(path.join(".git")).ok().as_deref()
+                    == Some(marker.as_str());
+            if same && crate::worktree_holders::check_worktree_removal(path).is_ok() {
+                if let Err(error) = git_ops::remove_worktree_at(project_root, path, true) {
+                    eprintln!("pool setup cleanup failed for {}: {error:#}; inspect `git worktree list --porcelain`", path.display());
+                }
+            } else {
+                eprintln!("pool setup cleanup kept changed or occupied worktree {}; inspect `git worktree list --porcelain`", path.display());
+            }
+        }
+        // The entry was never handed out: drop the reservation, as a failed
+        // create never registered one before.
+        let _ = with_state_lock(project_root, |pool| {
+            pool.entries.retain(|e| {
+                !(e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
+            });
+            Ok(())
+        });
+    }
+    created
+}
+
+/// Clear this process's reservation on `path` after a refused retirement or
+/// a failed step. Best-effort: heal clears it once this process is gone.
 // trace:STORY-1843 | ai:claude
 fn unstage(project_root: &Path, path: &Path) {
     let _ = with_state_lock(project_root, |pool| {
-        for e in &mut pool.entries {
-            if e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine) {
-                e.retiring = None;
-                e.destroying = false;
-            }
-        }
+        unreserve_in(pool, path);
         Ok(())
     });
+}
+
+fn unreserve_in(pool: &mut Pool, path: &Path) {
+    for e in &mut pool.entries {
+        if e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine) {
+            e.retiring = None;
+            e.destroying = false;
+        }
+    }
 }
 
 /// Save a dirty pooled tree's uncommitted diff to `.aida/salvage/` before it
@@ -1018,59 +1079,68 @@ pub fn return_to_pool_with(
         },
     };
 
-    // A failed pass writes nothing back, so the staged mark is cleared after.
-    let finished = with_state_lock(project_root, |pool| {
-        let staged = find(pool).ok().filter(|&idx| {
-            pool.entries[idx]
-                .retiring
-                .as_ref()
-                .is_some_and(PoolRetiring::is_mine)
-        });
-        let Some(idx) = staged else {
-            return crate::mailbox_lifecycle::guard::settle(
-                Err(anyhow::anyhow!(
-                    "{} changed while its mail was being retired",
-                    worktree_path.display()
-                )),
-                retirement,
-                crate::mailbox_lifecycle::guard::Retirement::complete_reuse,
-            );
+    // Revalidate the reservation, then salvage and reset outside the pool
+    // lock; the lock is re-taken only to mark the entry idle.
+    // trace:STORY-1843 | ai:claude
+    let finished = (|| {
+        let reset = match still_reserved(project_root, &path) {
+            // BUG-660: never SILENTLY discard uncommitted work on the reset
+            // below — if a returning tree is dirty (e.g. a drive shelved a
+            // spec mid-edit, or a commit failed), salvage its diff to
+            // `.aida/salvage/` first so it can be inspected/replayed.
+            // trace:BUG-660 | ai:claude
+            // BUG-1986: no reset without a saved copy. A failed salvage keeps
+            // the tree as it is (still leased, work intact) and fails the
+            // return, exactly as acquire skips such a tree.
+            // trace:BUG-1986 | ai:claude
+            Ok(true) => salvage_dirty_before_reset(project_root, &path)
+                .with_context(|| {
+                    format!(
+                        "could not salvage uncommitted work from {} before the reset; the \
+                         worktree was kept as it is",
+                        path.display()
+                    )
+                })
+                .and_then(|()| {
+                    git_ops::reset_worktree_to(&path, &base_ref)
+                        .with_context(|| format!("reset returned worktree {}", path.display()))
+                }),
+            Ok(false) => Err(anyhow::anyhow!(
+                "{} changed while its mail was being retired",
+                worktree_path.display()
+            )),
+            Err(e) => Err(e),
         };
-        pool.entries[idx].retiring = None;
-        // BUG-660: never SILENTLY discard uncommitted work on the reset below —
-        // if a returning tree is dirty (e.g. a drive shelved a spec mid-edit, or
-        // a commit failed), salvage its diff to `.aida/salvage/` first so it can
-        // be inspected/replayed. trace:BUG-660 | ai:claude
-        // BUG-1986: no reset without a saved copy. A failed salvage keeps the
-        // tree as it is (still leased, work intact) and fails the return,
-        // exactly as acquire skips such a tree. trace:BUG-1986 | ai:claude
-        let reset = salvage_dirty_before_reset(project_root, &path)
-            .with_context(|| {
-                format!(
-                    "could not salvage uncommitted work from {} before the reset; the \
-                     worktree was kept as it is",
-                    path.display()
-                )
-            })
-            .and_then(|()| {
-                git_ops::reset_worktree_to(&path, &base_ref)
-                    .with_context(|| format!("reset returned worktree {}", path.display()))
-            });
         crate::mailbox_lifecycle::guard::settle(
             reset,
             retirement,
             crate::mailbox_lifecycle::guard::Retirement::complete_reuse,
         )?;
-        let e = &mut pool.entries[idx];
-        e.owner_pid = None;
-        e.owner_pid_start = None;
-        e.owner_started_at = None;
-        e.leased = false;
-        e.lease_holder = None;
-        e.leased_at = None;
-        e.destroying = false;
-        Ok(())
-    });
+        with_state_lock(project_root, |pool| {
+            let staged = find(pool).ok().filter(|&idx| {
+                pool.entries[idx]
+                    .retiring
+                    .as_ref()
+                    .is_some_and(PoolRetiring::is_mine)
+            });
+            let Some(idx) = staged else {
+                anyhow::bail!(
+                    "{} left the pool while it was being reset",
+                    worktree_path.display()
+                );
+            };
+            let e = &mut pool.entries[idx];
+            e.retiring = None;
+            e.owner_pid = None;
+            e.owner_pid_start = None;
+            e.owner_started_at = None;
+            e.leased = false;
+            e.lease_holder = None;
+            e.leased_at = None;
+            e.destroying = false;
+            Ok(())
+        })
+    })();
     if finished.is_err() {
         unstage(project_root, &path);
     }

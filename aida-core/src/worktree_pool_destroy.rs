@@ -196,80 +196,97 @@ pub fn destroy(
     let mut targets: Vec<DestroyTarget> = Vec::new();
     // (index into `targets`, class) of each tree staged for removal.
     let mut staged: Vec<(usize, DestroyClass)> = Vec::new();
+    // Phase 1, under the pool lock: registry state only. Select the trees
+    // and, unless this is a dry run, reserve them; a tree another pool
+    // operation reserved is skipped. Classification runs Git, so it happens
+    // below, outside the lock (signoff 63 #1). trace:STORY-1843 | ai:claude
+    let mut selected: Vec<PoolEntry> = Vec::new();
     worktree_pool::with_state_lock(project_root, |pool| {
-        for idx in 0..pool.entries.len() {
-            let entry = pool.entries[idx].clone();
+        for e in pool.entries.iter_mut() {
             // Skip entries outside a named selection.
             if let Some(sel) = &selected_canon {
-                if !sel.iter().any(|p| *p == canonical(&entry.path)) {
+                if !sel.iter().any(|p| *p == canonical(&e.path)) {
                     continue;
                 }
             }
-
-            let class = classify_for_destroy(&entry, &default_ref);
-            let missing = missing_flag(class, opts, leased_named);
-
-            // A live process using the tree (a cwd, open file, or running
-            // program under it) blocks removal unless `--include-in-use` was
-            // passed. This is checked before salvage and the pre_destroy hook,
-            // so a running build is never cleaned out from under it.
-            // trace:BUG-1947 | ai:claude
-            if missing.is_none() && !opts.include_in_use {
-                if let Err(in_use) = crate::worktree_holders::check_worktree_removal(&entry.path) {
-                    targets.push(DestroyTarget {
-                        entry: entry.clone(),
-                        class,
-                        action: DestroyAction::Skipped,
-                        reason: format!(
-                            "{} — skipped, {}; needs --include-in-use",
-                            class.label(),
-                            in_use.summary()
-                        ),
-                    });
-                    continue;
-                }
+            if e.destroying || e.retiring.is_some() {
+                targets.push(DestroyTarget {
+                    entry: e.clone(),
+                    class: DestroyClass::InUse,
+                    action: DestroyAction::Skipped,
+                    reason: "busy — skipped, another pool operation is resetting or removing it"
+                        .to_string(),
+                });
+                continue;
             }
-
-            match (opts.dry_run, missing) {
-                (true, None) => targets.push(DestroyTarget {
-                    entry: entry.clone(),
-                    class,
-                    action: DestroyAction::WouldRemove,
-                    reason: format!("{} — would remove (dry-run)", class.label()),
-                }),
-                (true, Some(flag)) => targets.push(DestroyTarget {
-                    entry: entry.clone(),
-                    class,
-                    action: DestroyAction::Skipped,
-                    reason: format!("{} — needs {} (dry-run)", class.label(), flag),
-                }),
-                (false, Some(flag)) => targets.push(DestroyTarget {
-                    entry: entry.clone(),
-                    class,
-                    action: DestroyAction::Skipped,
-                    reason: format!("{} — skipped, needs {}", class.label(), flag),
-                }),
-                (false, None) => {
-                    // Staged: the mail retirement, salvage, hooks and removal
-                    // run below, outside this lock. trace:STORY-1843 | ai:claude
-                    pool.entries[idx].destroying = true;
-                    pool.entries[idx].retiring = Some(worktree_pool::PoolRetiring {
-                        pid: std::process::id(),
-                        pid_start: crate::liveness::process_start_identity(std::process::id()),
-                        ..Default::default()
-                    });
-                    staged.push((targets.len(), class));
-                    targets.push(DestroyTarget {
-                        entry: entry.clone(),
-                        class,
-                        action: DestroyAction::Skipped,
-                        reason: String::new(),
-                    });
-                }
+            selected.push(e.clone());
+            if !opts.dry_run {
+                e.retiring = Some(worktree_pool::PoolRetiring {
+                    pid: std::process::id(),
+                    pid_start: crate::liveness::process_start_identity(std::process::id()),
+                    ..Default::default()
+                });
             }
         }
         Ok(())
     })?;
+
+    // Phase 2, outside the lock: classify each reserved tree.
+    for entry in selected {
+        let class = classify_for_destroy(&entry, &default_ref);
+        let missing = missing_flag(class, opts, leased_named);
+
+        // A live process using the tree (a cwd, open file, or running
+        // program under it) blocks removal unless `--include-in-use` was
+        // passed. This is checked before salvage and the pre_destroy hook,
+        // so a running build is never cleaned out from under it.
+        // trace:BUG-1947 | ai:claude
+        if missing.is_none() && !opts.include_in_use {
+            if let Err(in_use) = crate::worktree_holders::check_worktree_removal(&entry.path) {
+                targets.push(DestroyTarget {
+                    entry: entry.clone(),
+                    class,
+                    action: DestroyAction::Skipped,
+                    reason: format!(
+                        "{} — skipped, {}; needs --include-in-use",
+                        class.label(),
+                        in_use.summary()
+                    ),
+                });
+                continue;
+            }
+        }
+
+        match (opts.dry_run, missing) {
+            (true, None) => targets.push(DestroyTarget {
+                entry: entry.clone(),
+                class,
+                action: DestroyAction::WouldRemove,
+                reason: format!("{} — would remove (dry-run)", class.label()),
+            }),
+            (true, Some(flag)) => targets.push(DestroyTarget {
+                entry: entry.clone(),
+                class,
+                action: DestroyAction::Skipped,
+                reason: format!("{} — needs {} (dry-run)", class.label(), flag),
+            }),
+            (false, Some(flag)) => targets.push(DestroyTarget {
+                entry: entry.clone(),
+                class,
+                action: DestroyAction::Skipped,
+                reason: format!("{} — skipped, needs {}", class.label(), flag),
+            }),
+            (false, None) => {
+                staged.push((targets.len(), class));
+                targets.push(DestroyTarget {
+                    entry: entry.clone(),
+                    class,
+                    action: DestroyAction::Skipped,
+                    reason: String::new(),
+                });
+            }
+        }
+    }
 
     // Outside the pool lock: retire each staged tree's mail, salvage, run the
     // pre_destroy hooks and remove. A refused retirement keeps the tree.
