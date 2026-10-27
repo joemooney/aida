@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T05:31:04.537923448Z
+modified_at: 2026-10-27T05:31:08.033086636Z
 req_type: Bug
 tags:
 - id-allocation
@@ -725,6 +725,31 @@ comments:
     - Ruling 12:31 item 6 requires a short implementation note BEFORE source changes. It follows as a separate comment (IMPLEMENTATION NOTE S3). Not started in code; awaiting advisor signoff on that note.
   created_at: 2026-10-27T05:31:04.537923448Z
   modified_at: 2026-10-27T05:31:04.537923448Z
+  session_id: 2f5cf167-c213-47c3-b02b-ed93cf93eced
+- id: 01a17bd7-4581-73a0-b98a-6b18ec8f89c5
+  author: joe
+  content: |
+    IMPLEMENTATION NOTE S3 (BUG-2017), requested by advisor S3 readiness ruling 2026-10-25 12:31 item 6. Proposal only; no source changes until signed. Within signed v2; no new authority, signatures or services.
+
+    1. Additive claim schema (how WORK claims are represented and compared)
+    - No new store-side row. A finalized WORK claim is the requirement object itself: UUID filename objects/<uuid>.yaml plus its display ID <TYPE>-<hex32>-<n>, where hex32 is the WorkBinding node UUID (already the token S2 writes). The local common-Git binding and counter are never shared or treated as remote proof.
+    - Identity tuples the collector compares, per pinned tree: (a) global ranges from registry/blocks.yaml (type or '*', start..end, owning node id); (b) node bindings from registry/nodes.toml (id -> opaque payload digest of the legacy row, never the raw fields); (c) display ID -> object UUID from objects/*.yaml (spec_id plus the alias list) and registry/agreed_counters.toml high-water.
+    - A conflict is: two different object UUIDs claiming one display ID or alias; a '*' range overlapping any per-type range or two ranges of one type overlapping with different owners; one node id whose payload digest differs between trees unless one side equals the merge-base (baseline repetition is not a conflict, independently introduced equal keys are); a global-form display ID above every recorded range (unissued). Equal payload, timestamp or hostname is never treated as proof of issuance.
+
+    2. Collector, bounds and refusal
+    - New aida-core module allocation_conflicts.rs: a strict pinned-tree loader over immutable commits via git cat-file --batch (no working tree, no git_show_stage None-on-error, replace/grafts off, no lazy fetch) plus a pure collector over (local tip, incoming tips, ALL merge bases). Output is a deterministic report: sorted category, opaque refs (object UUID, commit id, fixed path class, ordinal). No legacy names, filenames, host, email or parse snippets.
+    - Bounds (from the 3c56f64 sizing: 6153 blobs, 28.3 MB, largest 718 KB): per blob 4 MiB, per tip 20000 allocation blobs and 128 MiB, aggregate 512 MiB over all candidates and merge bases. Exceeding a bound, a malformed or duplicate row, or missing ancestry gives status Incomplete, which refuses; the known conflicts are still reported.
+    - Typed AllocationRefusal error, matched like hypothesis::is_evidence_refusal through one shared is_sync_refusal() used by the evidence and allocation paths. remote_create routes it to the evidence_stop (no rollback_to_preimage reset). db_block::pull_unless_refused, coordination::refresh_store/pull_claim_refresh, store_sync allocation retry and init publish_initial_store_snapshot propagate it, and no later write or push runs.
+    - Placement: inside evidence::with_sync_lock right after the existing preflight and before rebase_onto / rebase_auto_merge_onto / merge_union_onto / merge --ff-only (covers FF, clean and no-op exits). handle_remote_reconcile runs the collector once over the complete pinned local+hub candidate set before the 'nothing to reconcile' return and before the merge_and_validate loop. Lock order is unchanged: store writer only, with no dispenser, counter or new outer lock.
+
+    3. Audit CLI routing
+    - `aida db audit-ids [--json] [--against <ref>...]`, registered in its own module (db_audit_ids.rs + _args.rs, command_registry), read-only. It inspects already-local commits only (HEAD of aida-store plus the given local refs or remote-tracking refs) and never fetches. Output is classification counts, the conflict report and a manual repair plan (fresh disjoint block from HOME, keep UUID, reviewed alias mapping, re-audit). No automatic repair or renumbering. It does not construct Storage/GitBackend, so no load-time migration runs.
+
+    4. Tests: every wrapper including clean/FF/no-op; last-candidate conflict refuses before the first merge; multi-category conflicts reported together; baseline-repetition negative vs independent equal-key positive; same-UUID alias is not a conflict; malformed/oversize gives Incomplete; sanitized output; BUG-2162 composition; refusal leaves counters, oplog, refs and HEAD unchanged with no push or reset. Plus a STORY-1742 scanner negative per node/registry field. Existing S1/S2 tests stay unchanged.
+
+    Slicing: S3-i collector, wrappers, typed refusal and propagation (Refs BUG-2017); S3-ii audit CLI, scanner fixtures and docs (BUG-2017). Requesting advisor signoff.
+  created_at: 2026-10-27T05:31:08.033086636Z
+  modified_at: 2026-10-27T05:31:08.033086636Z
   session_id: 2f5cf167-c213-47c3-b02b-ed93cf93eced
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
