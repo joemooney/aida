@@ -25,12 +25,26 @@ const PROFILE_FILE: &str = "aida-transport.json";
 const STORE_REF: &str = "refs/heads/aida-store";
 const TRACKING_REF: &str = "refs/remotes/origin/aida-store";
 const PUSH_REFSPEC: &str = "refs/heads/aida-store:refs/heads/aida-store";
-const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store";
 /// Private staging for fetched store history until it has been scanned.
 // trace:STORY-1742 | ai:claude
 const INCOMING_REF: &str = "refs/aida-transport/incoming";
-const BYPASS_LIMIT: &str =
-    "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
+/// The refspec a pull actually fetches; the tracking and store refs move
+/// only after the staged history is scanned (`PULL_AFTER_SCAN`).
+// trace:STORY-1742 | ai:claude
+const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/aida-transport/incoming";
+/// The net remote-to-tracking mapping `config transport show --json` has
+/// always reported as `pull_refspec`; kept stable for existing consumers.
+/// The executed refspec is reported separately as `pull_fetch_refspec`.
+// trace:STORY-1742 | ai:claude
+const PULL_NET_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store";
+const PULL_AFTER_SCAN: [&str; 2] = [
+    "refs/aida-transport/incoming -> refs/remotes/origin/aida-store",
+    "refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)",
+];
+// trace:STORY-1742 | ai:claude
+const BYPASS_LIMIT: &str = "The profile governs aida push/pull in this clone only; raw Git and other clients bypass it. No server-side enforcement: a hub can accept unscanned history from elsewhere and forward it to a public remote.";
+// trace:STORY-1742 | ai:claude
+const TRUST_LIMIT: &str = "Enrolling a trust root trusts its entire reachable history without scanning it; enroll only a reviewed public-safe commit, never an unsafe tip to silence a refusal.";
 // trace:STORY-1742 | ai:claude
 const PULL_LIMIT: &str = "Pull is fast-forward only: fetched history is scanned from the enrolled trust root before any accepted ref moves, so incoming commits that fail the reviewed policy (including other identities) refuse.";
 // trace:STORY-1742 | ai:claude
@@ -291,6 +305,8 @@ struct ProfileStatus<'a> {
     remote: &'static str,
     push_refspec: &'static str,
     pull_refspec: &'static str,
+    pull_fetch_refspec: &'static str,
+    pull_after_scan: [&'static str; 2],
     code_leg: &'static str,
     execution_available: bool,
     pull_execution_available: bool,
@@ -312,7 +328,10 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         profile,
         remote: "origin",
         push_refspec: PUSH_REFSPEC,
-        pull_refspec: PULL_REFSPEC,
+        pull_refspec: PULL_NET_REFSPEC,
+        // trace:STORY-1742 | ai:claude
+        pull_fetch_refspec: PULL_REFSPEC,
+        pull_after_scan: PULL_AFTER_SCAN,
         code_leg: if profile.is_some() {
             "forbidden"
         } else {
@@ -336,7 +355,7 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
-        limitations: vec![PULL_LIMIT, SANITIZATION_LIMIT, BYPASS_LIMIT],
+        limitations: vec![PULL_LIMIT, SANITIZATION_LIMIT, TRUST_LIMIT, BYPASS_LIMIT],
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
@@ -363,6 +382,7 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
             println!("Push: origin {PUSH_REFSPEC}");
             println!("Push execution: available (clean attached store required)");
             println!("Pull: origin {PULL_REFSPEC} (fast-forward only)");
+            println!("Pull after scan: {}", PULL_AFTER_SCAN.join("; "));
             println!("Pull execution: available (clean attached store required)");
         }
         for limitation in status.limitations {
@@ -475,6 +495,7 @@ struct TransportPlan {
     source_sha: Option<String>,
     destination_ref: &'static str,
     refspec: &'static str,
+    after_scan: Vec<&'static str>,
     refs_that_may_move: Vec<&'static str>,
     code_leg: &'static str,
     flags: BTreeMap<&'static str, &'static str>,
@@ -509,6 +530,7 @@ fn plan(
         source_sha,
         destination_ref: if push { STORE_REF } else { TRACKING_REF },
         refspec: if push { PUSH_REFSPEC } else { PULL_REFSPEC },
+        after_scan: if push { vec![] } else { PULL_AFTER_SCAN.to_vec() },
         refs_that_may_move: if push {
             vec![STORE_REF]
         } else {
@@ -529,6 +551,9 @@ fn render_plan(plan: &TransportPlan, json: bool) -> Result<()> {
     } else {
         println!("Transport profile: work (clone-local)");
         println!("{}: {} {}", plan.operation, plan.remote, plan.refspec);
+        if !plan.after_scan.is_empty() {
+            println!("After scan: {}", plan.after_scan.join("; "));
+        }
         println!(
             "Source SHA (locally known): {}",
             plan.source_sha.as_deref().unwrap_or("unknown")

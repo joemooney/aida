@@ -77,6 +77,11 @@ behavior with `aida config transport disable`. Each supports `--json` and
 `--format json`. Settings live in `aida-transport.json` under the common Git
 directory, shared by linked worktrees; no tracked project file or store object
 is changed. Configuration works before AIDA store/projection initialization.
+In `show --json`, `pull_refspec` keeps its net mapping
+`refs/heads/aida-store:refs/remotes/origin/aida-store`; `pull_fetch_refspec`
+names the staging refspec a pull actually fetches and `pull_after_scan` the ref
+updates made once the staged history passes the scan (the human output prints
+them as `Pull:` and `Pull after scan:`).
 
 The profile pins a fingerprint of origin's single resolved fetch/push endpoint.
 Filesystem endpoints resolve symlinks and parent components in filesystem order;
@@ -97,7 +102,9 @@ operator's decision; it does not scan or certify that history.
 and `aida pull --dry-run` inspect local metadata without fetching, opening a
 store cache, or running lifecycle actions. `--json` also selects planning;
 JSON plans explicitly report `executed: false` and never execute a push.
-Plans name origin, exact store refspecs, locally known source SHA, refs that
+Plans name origin, the exact store refspec executed (a pull fetches
+`refs/heads/aida-store:refs/aida-transport/incoming` and lists the post-scan
+`after_scan` ref updates), locally known source SHA, refs that
 execution could move, flag dispositions, and missing prerequisites. Code legs
 are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
 `aida pull --store-only` are redundant. Executing pushes also print flag dispositions.
@@ -154,8 +161,22 @@ It can only refuse known shapes and listed tokens, so keep work-filed defects
 generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
 `aida push/pull`; raw Git and other sync entry points bypass it. There is no
-server-side enforcement. Keep work-filed defects generic and sanitized before
-they enter any store that may become public.
+server-side enforcement: the hub does not scan what it receives, so it can
+accept unscanned history from another client and forward it to a public
+remote. Keep work-filed defects generic and sanitized before they enter any
+store that may become public.
+
+**The end-to-end path.** A generic defect filed with `aida add --sanitized` in
+the WORK clone becomes one pseudonymous store commit. `aida push` scans it and
+publishes exactly that commit to the hub's `aida-store`; another WORK clone of
+the hub receives it with `aida pull`. Forwarding from the hub to a public
+remote is the operator's own step (raw Git or an ordinary clone) and is not
+guarded by this profile: what arrives publicly is exactly what the hub holds.
+Only store refs move: a push moves `refs/heads/aida-store` on the hub; a pull
+stages the fetch in `refs/aida-transport/incoming`, then moves the clone's
+`refs/remotes/origin/aida-store` and fast-forwards its `refs/heads/aida-store`
+(the pull plan names these before running). Product branches, mailbox state,
+ID counters and other remotes are untouched by the transport.
 <!-- trace:STORY-1742 | ai:codex -->
 
 ---
@@ -368,8 +389,9 @@ Repeated promotion is a no-op. `db retire-legacy-ids` refuses destructive
 collapse of native node IDs: those IDs remain permanent lookup aliases, and
 `merge-gate` already supplies the canonical display ID. WORK/HUB post-pull processing skips promotion;
 Git ref transport does not enroll a clone or allocate display IDs. Conflict audit
-and transport serialization scanning remain separate follow-up work; this
-change does not make an arbitrary union safe.
+remains separate follow-up work. The WORK transport scanner (see
+[`aida config transport policy`](#aida-config-transport-policy)) refuses unsafe
+content; it does not make an arbitrary union safe.
 
 ## Extending aida with external commands
 
