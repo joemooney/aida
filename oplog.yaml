@@ -78888,5 +78888,31 @@ operations:
   timestamp: 2026-10-27T16:03:06.616416964Z
   kind: !SetStatus
     status: Completed
-clock: 6135
+- id: 01a17e2a-9583-74e2-8984-f5827ad0e333
+  target_id: 01a17e2a-8ae8-7822-9113-f4f96f612371
+  author: aida
+  node_id: '1'
+  lamport: 6136
+  timestamp: 2026-10-27T16:21:22.435953071Z
+  kind: !Create
+    title: 'Review PR-2981: [AI:claude] fix(transport): git 2.56 URL push writes origin tracking ref (BUG-b6b1278890774ef993d2ebc327862470-007)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/transport-test-flake`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2981>
+      - Branch: `fix/transport-test-flake` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-007
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2981` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6136
 node_id: '1'
