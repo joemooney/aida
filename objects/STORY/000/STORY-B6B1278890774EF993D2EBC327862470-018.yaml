@@ -1,0 +1,35 @@
+id: 01a17c23-1274-79b3-835c-dfbd8aed437c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-018
+title: 'Review PR-2967: [AI:claude] feat(transport): fast-forward-only store pull behind the incoming-history scan (Refs STORY-1742)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1742-next`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2967>
+  - Branch: `story-1742-next` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1742
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2967` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-27T06:53:55.700179581Z
+modified_at: 2026-10-27T06:53:55.700179581Z
+req_type: Story
+filed_at:
+  code_sha: 2df7e4136a1fb017bd3c3d7c7db9a49629e426c7
+  branch: story-1742-next
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e3fd91e83f
+  vendor: claude
+  session: 2f5cf167-c213-47c3-b02b-ed93cf93eced
