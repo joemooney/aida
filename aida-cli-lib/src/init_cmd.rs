@@ -5920,7 +5920,7 @@ fn publish_initial_store_snapshot(
     use aida_core::git_ops::{self, PushFailure, PushOutcome};
     let initial = match git_ops::push_exact_outcome(store_dir, "origin", sha, branch) {
         Ok(outcome) => outcome,
-        Err(e) if git_ops::is_evidence_refusal(&e) => return Err(e),
+        Err(e) if git_ops::is_sync_refusal(&e) => return Err(e),
         Err(e) => return Ok(InitialStorePublication::Deferred(e)),
     };
     match initial {

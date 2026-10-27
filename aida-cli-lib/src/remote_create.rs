@@ -2697,6 +2697,11 @@ pub fn handle_remote_reconcile(
             _ => true,
         });
         let local_behind = target.as_ref().is_some_and(|u| *u != pre);
+        // trace:BUG-2017 | ai:claude — the complete pinned candidate set
+        // passes the allocation claims check once, before the topology no-op
+        // and before the first merge: a conflict on the last candidate stops
+        // reconcile with nothing merged, reset or pushed.
+        aida_core::allocation_conflicts::refuse_conflicts(&store_dir, Some(&pre), &tips[1..])?;
         if frontier.len() <= 1 && !hub_behind && !local_behind {
             return Ok(None);
         }
@@ -2713,8 +2718,10 @@ pub fn handle_remote_reconcile(
             Ok(union) => Ok(Some((union, frontier, merge_notes))),
             // trace:BUG-2162 | ai:claude — the evidence gate never resets: it
             // refused before its own Git step, or stopped after Git with the
-            // pinned and resulting commits named for explicit recovery.
-            Err(e) if aida_core::git_ops::is_evidence_refusal(&e) => {
+            // pinned and resulting commits named for explicit recovery. An
+            // allocation refusal (BUG-2017) always stops before its Git step.
+            // trace:BUG-2017 | ai:claude
+            Err(e) if aida_core::git_ops::is_sync_refusal(&e) => {
                 Err(evidence_stop(&store_dir, &pre, e))
             }
             Err(e) => Err(rollback_to_preimage(&store_dir, &pre, e)),
@@ -2949,8 +2956,9 @@ fn merge_and_validate(
     Ok(union)
 }
 
-/// A hypothesis evidence refusal stops reconcile WITHOUT the preimage
-/// rollback: every merge already finished passed the evidence gate, and a
+/// A store-sync refusal (hypothesis evidence or allocation claims) stops
+/// reconcile WITHOUT the preimage rollback: every merge already finished
+/// passed the same gates, and a
 /// stop after Git keeps its state for explicit recovery, as for any other
 /// store sync. Says where the store is, and that nothing was pushed or reset.
 // trace:BUG-2162 | ai:claude
@@ -2965,7 +2973,7 @@ fn evidence_stop(store_dir: &Path, pre: &str, err: anyhow::Error) -> anyhow::Err
         Err(e) => format!("the store HEAD could not be read ({e}); inspect {}", store_dir.display()),
     };
     err.context(format!(
-        "reconcile stopped at the hypothesis evidence check; nothing was pushed or reset; {at}"
+        "reconcile stopped at the store sync check; nothing was pushed or reset; {at}"
     ))
 }
 

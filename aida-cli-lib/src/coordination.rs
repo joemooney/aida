@@ -547,13 +547,15 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
 }
 
 /// Best-effort store refresh for a coordination write. An unreachable store
-/// keeps the local-only path (`Ok`); a hypothesis evidence refusal is the one
-/// failure that stops the write and its publish (`Err`).
+/// keeps the local-only path (`Ok`); a store-sync refusal (hypothesis evidence
+/// or allocation claims) is the one failure that stops the write and its
+/// publish (`Err`).
 // trace:BUG-2162 | ai:claude
+// trace:BUG-2017 | ai:claude
 fn refresh_store(store_root: &Path, branch: &str) -> Result<std::result::Result<(), String>> {
     match aida_core::git_ops::pull_rebase(store_root, "origin", branch) {
         Ok(()) => Ok(Ok(())),
-        Err(e) if aida_core::git_ops::is_evidence_refusal(&e) => Err(e),
+        Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
         Err(e) => Ok(Err(e.to_string())),
     }
 }
@@ -2928,6 +2930,11 @@ ttl_secs = 1800
 #[cfg(test)]
 #[path = "tests/bug_2162_evidence_refusal_tests.rs"]
 mod bug_2162_evidence_refusal_tests;
+
+// trace:BUG-2017 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2017_allocation_refusal_tests.rs"]
+mod bug_2017_allocation_refusal_tests;
 
 // trace:BUG-2188 | ai:codex
 #[cfg(test)]

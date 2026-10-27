@@ -217,6 +217,19 @@ pub(in super::super) fn pull(root: &Path, profile: &Profile) -> Result<()> {
             // Incoming history is never a new trust root: scan from the
             // enrolled root exactly as a push of that tip would be scanned.
             scan.history(&store, profile, &incoming)?;
+            // Conflicting or unreadable allocation claims refuse before the
+            // tracking ref, index/worktree or branch moves. The typed
+            // AllocationRefusal is returned unwrapped, so is_sync_refusal()
+            // holds for it like at every other sync merge point.
+            // trace:BUG-2017 | ai:claude
+            if let Err(e) = aida_core::allocation_conflicts::refuse_conflicts(
+                &store,
+                Some(&local),
+                std::slice::from_ref(&incoming),
+            ) {
+                debug_assert!(aida_core::git_ops::is_sync_refusal(&e));
+                return Err(e);
+            }
             scan.revalidate(&private)?;
             transition(&private, &store, &local, &incoming, forward, tracking.as_deref())
         })())
