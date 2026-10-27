@@ -104,7 +104,8 @@ pub(crate) fn handle_mailbox_command(
                 }
                 if !crate::gate::role_authority::has_integrity_floor_authority() {
                     anyhow::bail!(
-                        "recording mail retention activation runs only for a human operator at                          an interactive terminal; agents can run `{}`",
+                        "recording mail retention activation runs only for a human operator at \
+                         an interactive terminal; agents can run `{}`",
                         aida_core::mailbox_lifecycle::ACTIVATION_COMMAND
                     );
                 }
@@ -880,26 +881,6 @@ fn read_send_body(
     }
 }
 
-/// What `aida mailbox gc --phantoms` did: counts plus one line per message.
-// trace:TASK-1766 | ai:claude
-#[derive(Debug, Default)]
-pub(crate) struct PhantomGcReport {
-    pub archived: usize,
-    pub readdressed: usize,
-    pub lines: Vec<String>,
-}
-
-/// Archive live mail addressed to a phantom recipient — a junk shape `--to`
-/// refuses, a commit SHA, or an `@mention` notice for a handle that is no known
-/// person, role or agent. A recipient that is only whitespace-padded around a
-/// deliverable id is re-addressed to that id (archive + a copy) rather than
-/// lost: a known id under its stored spelling, and direct (non-mention) mail
-/// to an unknown id under the trimmed id, since `--to` itself would have sent
-/// it there. A known identity is never read as a SHA, so an agent named like
-/// `cafe1234` keeps its mail.
-// trace:TASK-1766 | ai:antigravity
-// trace:TASK-1766 | ai:claude
-// trace:TASK-1955 | ai:claude (TASK-1918)
 /// `aida mailbox retention activate --dry-run`: the read-only QC1 report.
 // trace:STORY-1843 | ai:claude
 #[cfg(unix)]
@@ -967,7 +948,8 @@ fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Re
             print_retention_report(project_root, false)?;
         }
         anyhow::bail!(
-            "mail retention activation was NOT recorded: not every mail writer is known to take              a write permit"
+            "mail retention activation was NOT recorded: not every mail writer is known to take \
+             a write permit"
         );
     }
     Ok(())
@@ -978,6 +960,26 @@ fn record_retention_activation(_project_root: &std::path::Path, _json: bool) -> 
     anyhow::bail!("mail retention is only available on Unix")
 }
 
+/// What `aida mailbox gc --phantoms` did: counts plus one line per message.
+// trace:TASK-1766 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct PhantomGcReport {
+    pub archived: usize,
+    pub readdressed: usize,
+    pub lines: Vec<String>,
+}
+
+/// Archive live mail addressed to a phantom recipient — a junk shape `--to`
+/// refuses, a commit SHA, or an `@mention` notice for a handle that is no known
+/// person, role or agent. A recipient that is only whitespace-padded around a
+/// deliverable id is re-addressed to that id (archive + a copy) rather than
+/// lost: a known id under its stored spelling, and direct (non-mention) mail
+/// to an unknown id under the trimmed id, since `--to` itself would have sent
+/// it there. A known identity is never read as a SHA, so an agent named like
+/// `cafe1234` keeps its mail.
+// trace:TASK-1766 | ai:antigravity
+// trace:TASK-1766 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-1918)
 pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<PhantomGcReport> {
     archive_phantom_inboxes_for(store_root, &crate::inbox_identities())
 }
@@ -1154,6 +1156,39 @@ mod tests {
     use super::*;
     use crate::cli::{Cli, Command, MailboxCommand};
     use clap::Parser;
+
+    /// Recording the activation is for a human at a terminal: a caller whose
+    /// stdin is not a TTY (an agent) is refused before anything is scanned or
+    /// written, and pointed at the dry run.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn retention_activate_refuses_a_caller_without_a_terminal() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: dir.path().to_path_buf(),
+            stdin_is_terminal: false,
+            stdout_is_terminal: false,
+            stderr_is_terminal: false,
+        }));
+        let cmd = MailboxCommand::Retention {
+            command: RetentionCommand::Activate {
+                dry_run: false,
+                json: false,
+            },
+        };
+        let result = handle_mailbox_command(&cmd, &store);
+        crate::test_ambient::replace(outer);
+        let err = result
+            .expect_err("a non-TTY caller cannot record")
+            .to_string();
+        assert!(err.contains("human operator"), "{err}");
+        assert!(
+            err.contains(aida_core::mailbox_lifecycle::ACTIVATION_COMMAND),
+            "{err}"
+        );
+    }
 
     // Send tests need actual recipients now that unknown names and empty roles refuse.
     // trace:STORY-1843 | ai:codex

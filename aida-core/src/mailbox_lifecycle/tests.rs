@@ -82,6 +82,7 @@ pub(super) fn activate(root: &Path) {
             schema: SCHEMA,
             all_writer_hosts_admitting: true,
             recorded_at: "2026-10-26T00:00:00Z".into(),
+            build: this_build(),
         },
     )
     .unwrap();

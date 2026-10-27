@@ -14,8 +14,9 @@ use std::path::Path;
 
 /// Retire the mail source of `worktree`, a seat clone when `is_clone`. A
 /// clone's retention home is its main checkout's anchor, resolved only
-/// through the verified host-recorded binding; without one, only a clone
-/// with no mail bytes may go.
+/// through the verified host-recorded binding; without one, a clone that
+/// owns a mailbox refuses, mail or not (it cannot be fenced), and only a
+/// clone with no `.aida/` of its own may go.
 pub(crate) fn retire_tree(
     project_root: &Path,
     worktree: &Path,

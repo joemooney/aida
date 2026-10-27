@@ -523,3 +523,205 @@ fn every_core_destructive_entry_keeps_the_lifecycle_lock_a_leaf() {
     assert_eq!(destroyed.unwrap().removed_count(), 1);
     check("worktree_pool_destroy::destroy", &seen, true);
 }
+
+// ── Rework r3: hook writes, reservation tokens, clone writers ───────────────
+
+/// Binding 63 #1: a pre_destroy hook's mail write is caught by the check
+/// right before the removal, never trusted. The tree is kept, the source is
+/// reopened with the retired mail copied back, and the late write stays.
+#[test]
+fn a_pre_destroy_hook_that_writes_mail_keeps_the_torn_down_tree() {
+    let (dir, wt) = repo_with_worktree();
+    activate(&wt);
+    write_local_message(&wt, &message("old")).unwrap();
+    let hook = "printf '{}' > .aida/mailbox/late.json".to_string();
+    let err =
+        crate::worktree_pool_destroy::teardown_worktree_path(dir.path(), &wt, &[hook]).unwrap_err();
+    let refusal = refusal_of(&err);
+    assert!(refusal.reason.contains("late.json"), "{err:#}");
+    assert!(!refusal.needs_activation);
+    assert!(wt.exists(), "the tree is kept");
+    assert_eq!(files_under(&mailbox(&wt)), ["late.json", "old.json"]);
+    assert_open(&wt);
+}
+
+#[test]
+fn a_pre_destroy_hook_that_writes_mail_keeps_the_pool_tree() {
+    use crate::worktree_pool::read_state;
+    use crate::worktree_pool_destroy::{destroy, DestroyAction, DestroyOptions, DestroySelector};
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let repo = pool_repo();
+    let root = repo.path();
+    let (first, second) = two_idle_trees(root);
+    activate(&first);
+    write_local_message(&first, &message("old")).unwrap();
+    std::fs::create_dir_all(second.join(".aida")).unwrap();
+    // The hook runs in every tree; it writes into `first`'s mailbox only.
+    let late = mailbox(&first).join("late.json");
+    let hook = format!(
+        "[ \"$(pwd -P)\" = {:?} ] && printf '{{}}' > .aida/mailbox/late.json || true",
+        first.canonicalize().unwrap().display().to_string()
+    );
+    let report = destroy(
+        root,
+        &DestroySelector::All,
+        &DestroyOptions {
+            pre_destroy_hooks: vec![hook],
+            ..Default::default()
+        },
+        &mut |_| {},
+    )
+    .unwrap();
+    let target = |p: &Path| report.targets.iter().find(|t| t.entry.path == p).unwrap();
+    assert_eq!(target(&first).action, DestroyAction::Skipped);
+    assert!(
+        target(&first).reason.contains("kept"),
+        "{}",
+        target(&first).reason
+    );
+    assert_eq!(
+        target(&second).action,
+        DestroyAction::Removed,
+        "a late write keeps only its own tree"
+    );
+    assert!(first.exists() && late.exists());
+    assert_eq!(files_under(&mailbox(&first)), ["late.json", "old.json"]);
+    assert_open(&first);
+    let pool = read_state(root).unwrap();
+    assert_eq!(pool.entries.len(), 1);
+    assert!(pool.entries[0].retiring.is_none());
+}
+
+/// A destroy releases only the reservations it made: a concurrent pool call
+/// in the same process (the server, a dispatcher thread) keeps its own.
+#[test]
+fn a_pool_destroy_never_clears_another_calls_reservation_in_this_process() {
+    use crate::worktree_pool::{read_state, with_state_lock, PoolRetiring};
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let repo = pool_repo();
+    let root = repo.path();
+    let (busy, idle) = two_idle_trees(root);
+    std::fs::create_dir_all(idle.join(".aida")).unwrap();
+    let other = PoolRetiring::mine();
+    with_state_lock(root, |pool| {
+        for e in &mut pool.entries {
+            if e.path == busy {
+                e.retiring = Some(other.clone());
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    let report = destroy_all(root).unwrap();
+    assert_eq!(report.removed_count(), 1);
+    let pool = read_state(root).unwrap();
+    assert_eq!(pool.entries.len(), 1);
+    assert_eq!(pool.entries[0].path, busy);
+    assert!(
+        pool.entries[0]
+            .retiring
+            .as_ref()
+            .is_some_and(|r| r.is(&other)),
+        "the other call's reservation is kept: {:?}",
+        pool.entries[0].retiring
+    );
+    assert!(
+        !PoolRetiring::mine().is(&other),
+        "every call has its own token"
+    );
+}
+
+/// A seat clone laid out as the creator makes it: a real `.git` whose
+/// alternates borrow main's objects, the marker naming main, and a `clone`
+/// lease in main's sessions naming the clone.
+fn bound_clone(main: &Path, parent: &Path) -> PathBuf {
+    let clone = parent.join("aida-seat-w");
+    let info = clone.join(".git/objects/info");
+    std::fs::create_dir_all(&info).unwrap();
+    let objects = main.join(".git/objects").canonicalize().unwrap();
+    std::fs::write(info.join("alternates"), format!("{}\n", objects.display())).unwrap();
+    std::fs::create_dir_all(mailbox(&clone)).unwrap();
+    std::fs::write(
+        clone.join(crate::seat_clone_detect::MARKER_RELATIVE),
+        format!(
+            "main = {:?}\n",
+            main.canonicalize().unwrap().display().to_string()
+        ),
+    )
+    .unwrap();
+    let sessions = main.join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(
+        sessions.join("seat.toml"),
+        format!(
+            "tree_kind = \"clone\"\nworktree_path = {:?}\n",
+            clone.canonicalize().unwrap().display().to_string()
+        ),
+    )
+    .unwrap();
+    clone
+}
+
+/// Writers inside a seat clone take permits under main's anchor through the
+/// clone binding, so the fence the clone's teardown takes there is honoured.
+#[test]
+fn a_writer_inside_a_bound_clone_is_admitted_and_fenced_under_mains_anchor() {
+    let main = repo();
+    activate(main.path());
+    let clones = tempfile::tempdir().unwrap();
+    let clone = bound_clone(main.path(), clones.path());
+    let anchor = source(main.path()).anchor;
+    let clone_source = resolve_clone_source(main.path(), &clone).unwrap().unwrap();
+
+    let permit = admit_local_write(&clone).unwrap().expect("admitted");
+    let held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
+    let record = load_record(&anchor, &clone_source.key, &held)
+        .unwrap()
+        .unwrap();
+    drop(held);
+    assert_eq!(record.permits.len(), 1, "the permit is under main's anchor");
+    permit.complete().unwrap();
+
+    std::fs::write(mailbox(&clone).join("m.json"), "{}").unwrap();
+    let retirement = retire_clone_checkout(Some(main.path()), &clone, "test")
+        .unwrap()
+        .expect("retired");
+    assert!(
+        matches!(
+            admit_local_write(&clone),
+            Err(LifecycleError::SourceRetiring { .. })
+        ),
+        "a writer in the retiring clone is refused"
+    );
+    retirement.reopen().unwrap();
+
+    // Without the lease in main the binding does not verify: no anchor.
+    std::fs::remove_file(main.path().join(".aida/sessions/seat.toml")).unwrap();
+    assert!(admit_local_write(&clone).unwrap().is_none());
+}
+
+/// Only the build that recorded the activation honours it: a record from any
+/// other build, or one with no build, reads as not activated.
+#[test]
+fn an_activation_recorded_by_another_build_is_not_honoured() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let write = |build| {
+        write_json(
+            &anchor.join(ACTIVATION_FILE),
+            &Activation {
+                schema: SCHEMA,
+                all_writer_hosts_admitting: true,
+                recorded_at: "t".into(),
+                build,
+            },
+        )
+        .unwrap()
+    };
+    write(None);
+    assert!(!activated(&anchor).unwrap());
+    write(Some((0, 0)));
+    assert!(!activated(&anchor).unwrap());
+    write(this_build());
+    assert!(activated(&anchor).unwrap());
+}

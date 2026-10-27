@@ -109,31 +109,39 @@ pub struct PoolEntry {
     pub retiring: Option<PoolRetiring>,
 }
 
-/// Who is retiring a pool tree's mail source, and the operation once known.
+/// Which pool call reserved a tree while its mail source is retired. The
+/// pid (with its start identity) is for heal's liveness check; the call is
+/// named by `op_id` and `generation`, so two calls in one process (the
+/// server, dispatcher threads) never release each other's reservation.
 // trace:STORY-1843 | ai:claude
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct PoolRetiring {
     pub pid: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pid_start: Option<String>,
+    /// Unique per pool call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub op_id: Option<String>,
+    /// This process's sequence number for the call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generation: Option<u64>,
 }
 
 impl PoolRetiring {
-    fn mine() -> Self {
+    /// A new reservation token for one pool call by this process.
+    pub fn mine() -> Self {
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         PoolRetiring {
             pid: std::process::id(),
             pid_start: crate::liveness::process_start_identity(std::process::id()),
-            op_id: None,
-            generation: None,
+            op_id: Some(uuid::Uuid::new_v4().to_string()),
+            generation: Some(SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
         }
     }
 
-    fn is_mine(&self) -> bool {
-        self.pid == std::process::id()
+    /// Is this the reservation `token` made?
+    pub fn is(&self, token: &PoolRetiring) -> bool {
+        self.pid == token.pid && self.op_id == token.op_id && self.generation == token.generation
     }
 }
 
@@ -584,8 +592,10 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
     let mut passed_over: Vec<PathBuf> = Vec::new();
     let mut skipped = ReclaimSkips::default();
     loop {
+        let token = PoolRetiring::mine();
         match reserve(
             project_root,
+            &token,
             opts,
             max_trees,
             lease_ttl,
@@ -596,15 +606,24 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
             Reserved::Reuse { path, expired } => {
                 match prepare_reuse(project_root, &path, expired, &mut skipped) {
                     Some(retirement) => {
-                        return finish_reuse(project_root, opts, &base_ref, &path, retirement)
+                        return finish_reuse(
+                            project_root,
+                            &token,
+                            opts,
+                            &base_ref,
+                            &path,
+                            retirement,
+                        )
                     }
                     None => {
-                        unstage(project_root, &path);
+                        unstage(project_root, &path, &token);
                         passed_over.push(path);
                     }
                 }
             }
-            Reserved::Create(path) => return create_reserved(project_root, opts, &base_ref, &path),
+            Reserved::Create(path) => {
+                return create_reserved(project_root, &token, opts, &base_ref, &path)
+            }
         }
     }
 }
@@ -625,6 +644,7 @@ enum Reserved {
 // trace:STORY-1843 | ai:claude
 fn reserve(
     project_root: &Path,
+    token: &PoolRetiring,
     opts: &AcquireOptions,
     max_trees: usize,
     lease_ttl: i64,
@@ -644,7 +664,7 @@ fn reserve(
             if !expired && !e.is_idle() {
                 continue;
             }
-            e.retiring = Some(PoolRetiring::mine());
+            e.retiring = Some(token.clone());
             return Ok(Reserved::Reuse {
                 path: e.path.clone(),
                 expired,
@@ -664,7 +684,7 @@ fn reserve(
             name,
             path: path.clone(),
             created_at: Some(now_ts()),
-            retiring: Some(PoolRetiring::mine()),
+            retiring: Some(token.clone()),
             ..Default::default()
         });
         Ok(Reserved::Create(path))
@@ -747,13 +767,13 @@ fn prepare_reuse(
     }
 }
 
-/// Is `path` still reserved by this process? A short locked read.
-fn still_reserved(project_root: &Path, path: &Path) -> Result<bool> {
+/// Is `path` still reserved by `token`? A short locked read.
+fn still_reserved(project_root: &Path, path: &Path, token: &PoolRetiring) -> Result<bool> {
     with_state_lock(project_root, |pool| {
         Ok(pool
             .entries
             .iter()
-            .any(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine)))
+            .any(|e| e.path == path && e.retiring.as_ref().is_some_and(|r| r.is(token))))
     })
 }
 
@@ -764,13 +784,14 @@ fn still_reserved(project_root: &Path, path: &Path) -> Result<bool> {
 // trace:STORY-1843 | ai:claude
 fn finish_reuse(
     project_root: &Path,
+    token: &PoolRetiring,
     opts: &AcquireOptions,
     base_ref: &str,
     path: &Path,
     retirement: Option<crate::mailbox_lifecycle::guard::Retirement>,
 ) -> Result<PathBuf> {
     let finished = (|| {
-        let reset = match still_reserved(project_root, path) {
+        let reset = match still_reserved(project_root, path, token) {
             Ok(true) => git_ops::reset_worktree_to(path, base_ref)
                 .with_context(|| format!("reset pooled worktree {}", path.display())),
             Ok(false) => Err(anyhow::anyhow!(
@@ -792,7 +813,7 @@ fn finish_reuse(
             let Some(e) = pool
                 .entries
                 .iter_mut()
-                .find(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
+                .find(|e| e.path == path && e.retiring.as_ref().is_some_and(|r| r.is(token)))
             else {
                 anyhow::bail!(
                     "pooled worktree {} left the pool while it was being reset",
@@ -809,7 +830,7 @@ fn finish_reuse(
         })
     })();
     if finished.is_err() {
-        unstage(project_root, path);
+        unstage(project_root, path, token);
     }
     finished
 }
@@ -821,6 +842,7 @@ fn finish_reuse(
 // trace:STORY-1843 | ai:claude
 fn create_reserved(
     project_root: &Path,
+    token: &PoolRetiring,
     opts: &AcquireOptions,
     base_ref: &str,
     path: &Path,
@@ -850,7 +872,7 @@ fn create_reserved(
             let Some(e) = pool
                 .entries
                 .iter_mut()
-                .find(|e| e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
+                .find(|e| e.path == path && e.retiring.as_ref().is_some_and(|r| r.is(token)))
             else {
                 anyhow::bail!(
                     "the pool reservation for {} was lost while it was created",
@@ -882,28 +904,27 @@ fn create_reserved(
         // The entry was never handed out: drop the reservation, as a failed
         // create never registered one before.
         let _ = with_state_lock(project_root, |pool| {
-            pool.entries.retain(|e| {
-                !(e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine))
-            });
+            pool.entries
+                .retain(|e| !(e.path == path && e.retiring.as_ref().is_some_and(|r| r.is(token))));
             Ok(())
         });
     }
     created
 }
 
-/// Clear this process's reservation on `path` after a refused retirement or
-/// a failed step. Best-effort: heal clears it once this process is gone.
+/// Clear `token`'s reservation on `path` after a refused retirement or a
+/// failed step. Best-effort: heal clears it once this process is gone.
 // trace:STORY-1843 | ai:claude
-fn unstage(project_root: &Path, path: &Path) {
+fn unstage(project_root: &Path, path: &Path, token: &PoolRetiring) {
     let _ = with_state_lock(project_root, |pool| {
-        unreserve_in(pool, path);
+        unreserve_in(pool, path, token);
         Ok(())
     });
 }
 
-fn unreserve_in(pool: &mut Pool, path: &Path) {
+fn unreserve_in(pool: &mut Pool, path: &Path, token: &PoolRetiring) {
     for e in &mut pool.entries {
-        if e.path == path && e.retiring.as_ref().is_some_and(PoolRetiring::is_mine) {
+        if e.path == path && e.retiring.as_ref().is_some_and(|r| r.is(token)) {
             e.retiring = None;
             e.destroying = false;
         }
@@ -1053,6 +1074,7 @@ pub fn return_to_pool_with(
     // Stage the entry, then retire the occupant's mail outside the pool lock
     // so the next occupant never sees it. A refusal keeps the tree leased,
     // as it is. trace:STORY-1843 | ai:claude
+    let token = PoolRetiring::mine();
     let staged = with_state_lock(project_root, |pool| {
         let idx = find(pool)?;
         if pool.entries[idx].retiring.is_some() {
@@ -1061,7 +1083,7 @@ pub fn return_to_pool_with(
                 worktree_path.display()
             );
         }
-        pool.entries[idx].retiring = Some(PoolRetiring::mine());
+        pool.entries[idx].retiring = Some(token.clone());
         Ok(pool.entries[idx].path.clone())
     });
     let path = match staged {
@@ -1073,7 +1095,7 @@ pub fn return_to_pool_with(
         None => match crate::mailbox_lifecycle::guard::retire_checkout(&path, "pool return") {
             Ok(retirement) => retirement,
             Err(refusal) => {
-                unstage(project_root, &path);
+                unstage(project_root, &path, &token);
                 return Err(anyhow::Error::new(refusal));
             }
         },
@@ -1083,7 +1105,7 @@ pub fn return_to_pool_with(
     // lock; the lock is re-taken only to mark the entry idle.
     // trace:STORY-1843 | ai:claude
     let finished = (|| {
-        let reset = match still_reserved(project_root, &path) {
+        let reset = match still_reserved(project_root, &path, &token) {
             // BUG-660: never SILENTLY discard uncommitted work on the reset
             // below — if a returning tree is dirty (e.g. a drive shelved a
             // spec mid-edit, or a commit failed), salvage its diff to
@@ -1121,7 +1143,7 @@ pub fn return_to_pool_with(
                 pool.entries[idx]
                     .retiring
                     .as_ref()
-                    .is_some_and(PoolRetiring::is_mine)
+                    .is_some_and(|r| r.is(&token))
             });
             let Some(idx) = staged else {
                 anyhow::bail!(
@@ -1142,7 +1164,7 @@ pub fn return_to_pool_with(
         })
     })();
     if finished.is_err() {
-        unstage(project_root, &path);
+        unstage(project_root, &path, &token);
     }
     finished
 }

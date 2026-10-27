@@ -10,7 +10,9 @@
 //! A host is *known to admit* when it runs the same executable file (device
 //! and inode) as the process producing the report, which is a build with
 //! admission. Any other build, a replaced (deleted) binary, or a process
-//! whose executable cannot be read is *unverified*.
+//! whose executable cannot be read is *unverified*. The record names the
+//! build that wrote it, and only that build honours it: after an upgrade or
+//! `aida dev rollback` the new build records its own.
 //!
 //! trace:STORY-1843 | ai:claude
 
@@ -170,6 +172,7 @@ pub(crate) fn record_at(
             schema: super::SCHEMA,
             all_writer_hosts_admitting: true,
             recorded_at: now.to_string(),
+            build: super::this_build(),
         },
     )?;
     report.recorded = true;

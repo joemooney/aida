@@ -505,6 +505,52 @@ pub(crate) fn complete_retirement(ticket: &RetirementTicket) -> Result<()> {
     }
 }
 
+/// The last look before the caller's destructive step, after its salvage
+/// and hooks ran: under Lifecycle, the source must still be retired by this
+/// operation with no permit, and its mailbox must be the fenced directory and
+/// still empty. Anything else was written after the commit by a writer that
+/// took no permit (a hook, a pre-admission binary): the step is refused and
+/// the caller reopens the source, keeping the tree.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn verify_quiet(
+    ticket: &RetirementTicket,
+) -> Result<std::result::Result<(), RefusalReason>> {
+    let entry = require_journal(&ticket.anchor, &ticket.op_id)?;
+    let changed = |detail: &str| {
+        Ok(Err(RefusalReason::StateChanged {
+            detail: detail.to_string(),
+        }))
+    };
+    if entry.phase != Phase::Committed {
+        return changed("the retirement is no longer committed");
+    }
+    let held = match lock(&entry.anchor, LIFECYCLE_LOCK_TIMEOUT) {
+        Ok(held) => held,
+        Err(LifecycleError::LockTimeout { .. }) => return Ok(Err(RefusalReason::LockBusy)),
+        Err(e) => return Err(e),
+    };
+    let record = require_record(&entry, &held)?;
+    if !matches!(&record.state, SourceState::Retired { op_id, .. } if *op_id == entry.op_id) {
+        return changed("the source is no longer retired by this operation");
+    }
+    if !record.permits.is_empty() {
+        return changed("a write permit appeared after the commit");
+    }
+    match std::fs::symlink_metadata(&entry.mailbox) {
+        Ok(meta)
+            if meta.file_type().is_dir() && meta.dev() == entry.dev && meta.ino() == entry.ino => {}
+        _ => return changed("the mailbox directory was replaced"),
+    }
+    let late: Vec<String> = sorted_entries(&entry.mailbox)?
+        .into_iter()
+        .map(|(name, _, _)| name)
+        .collect();
+    if !late.is_empty() {
+        return Ok(Err(RefusalReason::LateWriter { entries: late }));
+    }
+    Ok(Ok(()))
+}
+
 /// The caller's destructive step did not happen (it failed, or was refused
 /// after `Retired`): journal `Reopened`, copy the preserved bytes back where
 /// absent (the retained copy is kept), and reopen the source under a new
@@ -1221,9 +1267,9 @@ fn remove_index(anchor: &Path, path: &Path) -> Result<()> {
 }
 
 /// Create the index directory. An anchor written before the index existed
-/// is migrated once: every unfinished journal entry is indexed and every
-/// finished one pruned, then the directory is created, so the scan never
-/// runs again.
+/// is migrated once: every unfinished journal entry is indexed, then the
+/// directory is created, so the scan never runs again. Finished entries are
+/// skipped, not pruned: nothing reads them once the index exists.
 fn ensure_pending_index(anchor: &Path) -> Result<()> {
     let dir = anchor.join(PENDING_DIR);
     if std::fs::symlink_metadata(&dir).is_ok() {

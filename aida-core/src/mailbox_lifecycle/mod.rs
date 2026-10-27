@@ -862,13 +862,29 @@ pub struct Activation {
     pub schema: u32,
     pub all_writer_hosts_admitting: bool,
     pub recorded_at: String,
+    /// The build that recorded it: its executable's device and inode, the
+    /// identity the activation report judges writers by. `None` in a record
+    /// written before builds were bound, which no build honours.
+    #[serde(default)]
+    pub build: Option<(u64, u64)>,
 }
 
-/// Has an operator recorded that every writer host is admitting
-/// ([`activation::record`])?
+/// This process's build: the device and inode of the executable it runs.
+pub fn this_build() -> Option<(u64, u64)> {
+    std::fs::metadata("/proc/self/exe")
+        .ok()
+        .map(|m| (m.dev(), m.ino()))
+}
+
+/// Has an operator recorded, with this very build, that every writer host is
+/// admitting ([`activation::record`])? A record made by any other build (an
+/// older binary after `aida dev rollback`, or a newer one) does not count:
+/// that build must record its own.
+// trace:STORY-1843 | ai:claude
 pub(crate) fn activated(anchor: &Path) -> Result<bool> {
+    let build = this_build();
     Ok(read_json::<Activation>(&anchor.join(ACTIVATION_FILE))?
-        .is_some_and(|a| a.all_writer_hosts_admitting))
+        .is_some_and(|a| a.all_writer_hosts_admitting && build.is_some() && a.build == build))
 }
 
 // ── Local writer admission ──────────────────────────────────────────────────
@@ -917,7 +933,7 @@ pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
 
 fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
     // Git runs here, before any lock.
-    let Some(source) = resolve_source(project_root)? else {
+    let Some(source) = writer_source(project_root)? else {
         return Ok(None);
     };
     match admit_resolved(&source)? {
@@ -928,6 +944,22 @@ fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
             .map(Some)
             .map_err(|op_id| LifecycleError::SourceRetiring { op_id }),
         Err(op_id) => Err(LifecycleError::SourceRetiring { op_id }),
+    }
+}
+
+/// The source a writer at `project_root` takes its permit under. Inside a
+/// seat clone (whose own Git is never asked) that is the clone's source under
+/// its main checkout's anchor, through the clone binding, so the fence the
+/// clone's teardown takes there is honoured. A clone with no verifiable
+/// binding has no anchor.
+// trace:STORY-1843 | ai:claude
+fn writer_source(project_root: &Path) -> Result<Option<Source>> {
+    match crate::seat_clone_detect::seat_clone_root(project_root) {
+        Some(clone_root) => match crate::seat_clone_detect::clone_writer_main(&clone_root) {
+            Some(main) => resolve_clone_source(&main, &clone_root),
+            None => Ok(None),
+        },
+        None => resolve_source(project_root),
     }
 }
 

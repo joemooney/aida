@@ -71,6 +71,15 @@ pub mod guard {
         crate::git_ops::remove_worktree_unguarded(repo_root, worktree_path, force)
     }
 
+    pub fn remove_retired<T>(
+        _checkout: &Path,
+        _retirement: Option<Retirement>,
+        step: impl FnOnce() -> anyhow::Result<T>,
+        _on_success: impl FnOnce(Retirement) -> std::io::Result<()>,
+    ) -> anyhow::Result<T> {
+        step()
+    }
+
     pub fn settle<T>(
         step: anyhow::Result<T>,
         _retirement: Option<Retirement>,

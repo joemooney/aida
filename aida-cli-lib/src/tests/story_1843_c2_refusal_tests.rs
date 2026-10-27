@@ -79,9 +79,13 @@ fn activate(root: &Path) {
     std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
         .create(&anchor)
         .unwrap();
+    // Only the build that recorded an activation honours it: this test binary.
+    let (dev, exe) = aida_core::mailbox_lifecycle::this_build().unwrap();
     std::fs::write(
         anchor.join("activation.json"),
-        r#"{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z"}"#,
+        format!(
+            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","build":[{dev},{exe}]}}"#
+        ),
     )
     .unwrap();
 }

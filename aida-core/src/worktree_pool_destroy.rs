@@ -201,6 +201,8 @@ pub fn destroy(
     // operation reserved is skipped. Classification runs Git, so it happens
     // below, outside the lock (signoff 63 #1). trace:STORY-1843 | ai:claude
     let mut selected: Vec<PoolEntry> = Vec::new();
+    // This call's reservation token: the final pass releases only its own.
+    let token = worktree_pool::PoolRetiring::mine();
     worktree_pool::with_state_lock(project_root, |pool| {
         for e in pool.entries.iter_mut() {
             // Skip entries outside a named selection.
@@ -221,11 +223,7 @@ pub fn destroy(
             }
             selected.push(e.clone());
             if !opts.dry_run {
-                e.retiring = Some(worktree_pool::PoolRetiring {
-                    pid: std::process::id(),
-                    pid_start: crate::liveness::process_start_identity(std::process::id()),
-                    ..Default::default()
-                });
+                e.retiring = Some(token.clone());
             }
         }
         Ok(())
@@ -326,6 +324,15 @@ pub fn destroy(
                 target.action = DestroyAction::Removed;
                 target.reason = format!("{} — removed", class.label());
             }
+            // Mail landed after the commit (a hook, a writer that took no
+            // permit): the source was reopened and the tree is kept.
+            // trace:STORY-1843 | ai:claude
+            Err(e)
+                if e.downcast_ref::<crate::mailbox_lifecycle::guard::RetentionRefusal>()
+                    .is_some() =>
+            {
+                target.reason = format!("{} — kept, {e:#}", class.label());
+            }
             Err(e) => {
                 target.reason = format!("{} — removal failed: {e:#}", class.label());
                 failure = Some(e);
@@ -339,11 +346,10 @@ pub fn destroy(
         .filter(|t| t.action == DestroyAction::Removed)
         .map(|t| t.entry.path.clone())
         .collect();
-    let mine = std::process::id();
     worktree_pool::with_state_lock(project_root, |pool| {
         pool.entries.retain(|e| !removed.contains(&e.path));
         for e in &mut pool.entries {
-            if e.retiring.as_ref().is_some_and(|r| r.pid == mine) {
+            if e.retiring.as_ref().is_some_and(|r| r.is(&token)) {
                 e.retiring = None;
                 e.destroying = false;
             }

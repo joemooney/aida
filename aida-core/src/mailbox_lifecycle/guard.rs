@@ -125,9 +125,9 @@ pub type Gate = std::result::Result<Option<Retirement>, RetentionRefusal>;
 
 /// Retire the mail source of the checkout at `checkout` before a destructive
 /// step. `Ok(None)` when there is nothing to retain: the checkout is already
-/// gone, owns no mailbox (no `.aida/`, or one linked to another checkout), or
-/// has no anchor and holds no mail bytes. Every failure to run
-/// the barrier refuses (fail closed).
+/// gone or owns no mailbox (no `.aida/`, or one linked to another checkout).
+/// A checkout with no anchor refuses, whatever its mailbox holds, and every
+/// failure to run the barrier refuses (fail closed).
 pub fn retire_checkout(checkout: &Path, reason: &str) -> Gate {
     retire_with(checkout, reason, |opts| {
         retire::retire_source_claimed(checkout, opts)
@@ -285,11 +285,48 @@ pub fn remove_worktree_with(
     force: bool,
     retirement: Option<Retirement>,
 ) -> anyhow::Result<()> {
-    settle(
-        crate::git_ops::remove_worktree_unguarded(repo_root, worktree_path, force),
+    remove_retired(
+        worktree_path,
         retirement,
+        || crate::git_ops::remove_worktree_unguarded(repo_root, worktree_path, force),
         Retirement::complete,
     )
+}
+
+/// Run the destructive `step` behind `retirement`, then settle it. The
+/// caller's salvage and hooks ran since the commit, so the retired mailbox is
+/// re-verified immediately before the step: new bytes, or a permit admitted
+/// since, reopen the source and refuse with a [`RetentionRefusal`] (the step
+/// never runs, the tree is kept). Binding 63 #1: a hook's writes are caught
+/// by this check, never trusted.
+// trace:STORY-1843 | ai:claude
+pub fn remove_retired<T>(
+    checkout: &Path,
+    retirement: Option<Retirement>,
+    step: impl FnOnce() -> anyhow::Result<T>,
+    on_success: impl FnOnce(Retirement) -> std::io::Result<()>,
+) -> anyhow::Result<T> {
+    let Some(retirement) = retirement else {
+        return step();
+    };
+    let why = match retire::verify_quiet(&retirement.ticket) {
+        Ok(Ok(())) => return settle(step(), Some(retirement), on_success),
+        Ok(Err(reason)) => reason.to_string(),
+        Err(e) => lifecycle_failure(&e),
+    };
+    let refusal = RetentionRefusal {
+        checkout: checkout.to_path_buf(),
+        reason: why,
+        needs_activation: false,
+        retained_dir: Some(retirement.retained_dir.clone()),
+    };
+    match retirement.reopen() {
+        Ok(()) => Err(refusal.into()),
+        Err(reopen) => Err(anyhow::Error::new(refusal).context(format!(
+            "and the retired mailbox could not be reopened ({reopen}); the next mail write \
+             reopens it"
+        ))),
+    }
 }
 
 /// Settle `retirement` after a destructive step: `on_success` when it ran

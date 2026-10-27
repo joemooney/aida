@@ -1075,11 +1075,12 @@ pub(crate) fn next_command_hint_with_untracked(
         DispatchState::AwaitingIntegration => Some(integration_hint(None)),
         // STORY-1843 C2: the end was refused to keep the tree's mail.
         // trace:STORY-1843 | ai:claude
+        // The cause is the lease's recorded reason (activation is only one of
+        // them), so the hint names where to read it, not a fix.
         DispatchState::EndingRetained => Some(format!(
             "session end refused: the mail in {wt} could not be retained, so the tree, lease and \
-             claim are kept and its grant is revoked — fix the cause (`{}`), then retry \
-             `aida session end`",
-            aida_core::mailbox_lifecycle::ACTIVATION_COMMAND
+             claim are kept and its grant is revoked — `aida session end` prints the cause; fix \
+             it, then retry"
         )),
         DispatchState::Unknown => Some(format!(
             "liveness unknown — no pid recorded for {wt} (branch {branch}, last commit \"{last_commit}\"); \

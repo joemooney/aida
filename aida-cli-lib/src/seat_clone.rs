@@ -1975,12 +1975,28 @@ fn destroy_inner(
                 }
             }
         };
-        aida_core::mailbox_lifecycle::guard::settle(
-            std::fs::remove_dir_all(clone)
-                .with_context(|| format!("remove the seat clone {}", clone.display())),
+        // Re-verified right before the removal: mail that landed since the
+        // commit keeps the clone. trace:STORY-1843 | ai:claude
+        let removed = aida_core::mailbox_lifecycle::guard::remove_retired(
+            clone,
             retirement,
+            || {
+                std::fs::remove_dir_all(clone)
+                    .with_context(|| format!("remove the seat clone {}", clone.display()))
+            },
             aida_core::mailbox_lifecycle::guard::Retirement::complete,
-        )?;
+        );
+        if let Err(error) = removed {
+            if let Some(refusal) =
+                error.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+            {
+                return Ok(Destroyed::Kept {
+                    reason: crate::mail_retention::refusal_lines(refusal).join("; "),
+                    salvage: salvaged,
+                });
+            }
+            return Err(error);
+        }
     }
     let name = clone.file_name().context("a seat clone has a name")?;
     let target = main.join("target").join("worktrees").join(name);

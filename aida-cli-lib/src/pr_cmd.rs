@@ -445,6 +445,51 @@ pub(crate) enum PrRebaseMode {
     Interactive,
 }
 
+/// Remove `aida pr rebase`'s temp worktree through the mail-retention guard;
+/// a mail-less tree takes the fast path, and a refusal keeps the tree. A
+/// directory Git no longer knows as a worktree (an interrupted run) is
+/// deleted only when its mailbox holds no file.
+// trace:STORY-1843 | ai:claude
+fn remove_rebase_worktree(project_root: &std::path::Path, wt_path: &std::path::Path) -> Result<()> {
+    let error = match crate::mail_retention::remove_worktree(
+        project_root,
+        wt_path,
+        true,
+        "pr rebase temp worktree",
+    ) {
+        Ok(()) => return Ok(()),
+        Err(e) => e,
+    };
+    if error
+        .downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+        .is_some()
+        || mailbox_holds_files(&aida_core::mailbox::local_mailbox_dir(wt_path))
+    {
+        return Err(error);
+    }
+    match std::fs::remove_dir_all(wt_path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(error.context(format!("and removing the directory failed: {e}"))),
+    }
+}
+
+/// Does `dir` hold any non-directory entry, at any depth? Unreadable counts
+/// as holding one.
+fn mailbox_holds_files(dir: &std::path::Path) -> bool {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => return e.kind() != std::io::ErrorKind::NotFound,
+    };
+    entries.into_iter().any(|entry| match entry {
+        Ok(entry) => match std::fs::symlink_metadata(entry.path()) {
+            Ok(meta) if meta.file_type().is_dir() => mailbox_holds_files(&entry.path()),
+            _ => true,
+        },
+        Err(_) => true,
+    })
+}
+
 /// Preserve the actionable refusal text after the disposable rebase worktree
 /// is removed. Best-effort: cleanup must still happen if logging fails.
 // trace:BUG-1218 | ai:codex
@@ -625,18 +670,14 @@ pub(crate) fn pr_rebase_handler(
     let wt_path = temp_worktree_path(&project_root, n);
     if wt_path.exists() {
         // Leftover from a previous interrupted run. Remove --force so
-        // we don't strand the next attempt.
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args([
-                "worktree",
-                "remove",
-                "--force",
-                wt_path.to_str().unwrap_or(""),
-            ])
-            .status();
-        let _ = std::fs::remove_dir_all(&wt_path);
+        // we don't strand the next attempt, behind the mail-retention guard.
+        // trace:STORY-1843 | ai:claude
+        remove_rebase_worktree(&project_root, &wt_path).with_context(|| {
+            format!(
+                "a previous rebase left {}, and it was kept",
+                wt_path.display()
+            )
+        })?;
     }
     if let Some(parent) = wt_path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -667,17 +708,12 @@ pub(crate) fn pr_rebase_handler(
     .with_context(|| format!("prepare submodules in PR worktree {}", wt_path.display()))?;
 
     let cleanup_worktree = || {
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args([
-                "worktree",
-                "remove",
-                "--force",
-                wt_path.to_str().unwrap_or(""),
-            ])
-            .status();
-        let _ = std::fs::remove_dir_all(&wt_path);
+        if let Err(e) = remove_rebase_worktree(&project_root, &wt_path) {
+            eprintln!(
+                "warning: kept the rebase worktree {}: {e:#}",
+                wt_path.display()
+            );
+        }
     };
 
     // ---- Step 5b (TASK-1080): stale-stack-record guard for --onto-parent. ----
