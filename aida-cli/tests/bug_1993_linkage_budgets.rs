@@ -159,7 +159,11 @@ fn linkage_timeouts_render_unknown_not_unshipped() {
     assert_eq!(fast["shipped"], true, "baseline shipped: {fast}");
     assert_eq!(fast["complete"], true, "baseline complete: {fast}");
 
-    // The referencing-commit `git log --all --date-order` stalls.
+    // The commit scan's history walk stalls. The baseline show warmed the
+    // BUG-2221 linkage index, which answers without walking history; drop
+    // it so the stalled cold `log --date-order` walk is what answers.
+    let index_dir = repo.join(".git/aida/linkage-index");
+    std::fs::remove_dir_all(&index_dir).expect("baseline show built the index");
     let slow_log = git_shim(&base_dir, "--date-order");
     let started = std::time::Instant::now();
     let l = show_json(&repo, &home, &spec, Some(&slow_log));
