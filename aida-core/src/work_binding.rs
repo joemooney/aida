@@ -10,7 +10,7 @@ pub const COUNTER_FILE: &str = "aida-work-dispenser.toml";
 
 /// Additive representation: legacy NodeConfig keeps its original meanings.
 /// No host, user, email, friendly name or path can enter this serialization.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkBinding {
     pub version: u32,
@@ -30,41 +30,96 @@ impl WorkBinding {
 
 /// Bounded handle read: links, pipes, foreign/shared writers and malformed state refuse.
 fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>> {
-    use std::io::Read;
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-    // Atomic replacement can unlink the inode between open and fstat. Reopen
-    // that transient snapshot only; hard links and every unsafe type still
-    // refuse. Each attempt retains O_NOFOLLOW/O_NONBLOCK and the byte bound.
-    // trace:BUG-2017 | ai:codex
-    for attempt in 0..8 {
-        let mut f = match std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(path)
-        {
-            Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
-        };
-        let m = f.metadata()?;
-        if m.nlink() == 0 && attempt < 7 {
-            std::thread::yield_now();
-            continue;
-        }
-        anyhow::ensure!(
-            m.is_file()
-                && m.nlink() == 1
-                && m.uid() == unsafe { libc::geteuid() }
-                && m.mode() & 0o022 == 0
-                && m.len() <= 1024 * 1024,
-            "unsafe WORK allocation state"
-        );
-        let mut s = String::new();
-        f.by_ref().take(1024 * 1024 + 1).read_to_string(&mut s)?;
-        anyhow::ensure!(s.len() <= 1024 * 1024, "oversize WORK allocation state");
-        return Ok(Some(toml::from_str(&s)?));
+    use std::os::unix::fs::OpenOptionsExt;
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+    {
+        Ok(f) => read_handle(f, path).map(Some),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(anyhow::Error::new(e).context(format!(
+            "cannot open WORK allocation state {}",
+            path.display()
+        ))),
     }
-    bail!("WORK allocation state changed repeatedly while opening")
+}
+
+/// Why `read_handle` refuses an allocation state file, with its repair.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnsafeState {
+    pub problem: String,
+    pub repair: String,
+}
+
+impl std::fmt::Display for UnsafeState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}; {}", self.problem, self.repair)
+    }
+}
+
+/// Why `read_handle` would refuse this file, or `None` when it is safe.
+/// Shared by the reader and `aida doctor`; repair commands quote the path.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+pub fn unsafe_state(m: &std::fs::Metadata, path: &Path) -> Option<UnsafeState> {
+    use std::os::unix::fs::MetadataExt;
+    let p = path.display();
+    let q = shell_quote(&path.to_string_lossy());
+    let euid = unsafe { libc::geteuid() };
+    let (problem, repair) = if !m.is_file() {
+        (
+            format!("{p} is not a regular file"),
+            "explicit recovery required".to_string(),
+        )
+    } else if m.nlink() > 1 {
+        (
+            format!("{p} has {} hard links", m.nlink()),
+            "replace it with a single-link copy".to_string(),
+        )
+    } else if m.uid() != euid {
+        (
+            format!(
+                "{p} is owned by uid {}, not the current user (uid {euid})",
+                m.uid()
+            ),
+            format!("run `chown {euid} {q}`"),
+        )
+    } else if m.mode() & 0o022 != 0 {
+        (
+            format!(
+                "{p} is group- or other-writable (mode {:04o})",
+                m.mode() & 0o7777
+            ),
+            format!("run `chmod go-w {q}`"),
+        )
+    } else if m.len() > 1024 * 1024 {
+        (
+            format!("{p} exceeds 1 MiB"),
+            "explicit recovery required".to_string(),
+        )
+    } else {
+        return None;
+    };
+    Some(UnsafeState { problem, repair })
+}
+
+/// Atomic replacement can unlink the inode between open and fstat. That
+/// handle is still the complete snapshot that was at the path when it was
+/// opened, so read it: a bounded reopen loop lost to a busy writer under
+/// load. Writers and read-modify-write readers hold the dispense lock, so no
+/// replacement races them. Hard links and every unsafe type still refuse.
+// trace:BUG-2017 trace:BUG-b6b1278890774ef993d2ebc327862470-004 | ai:claude
+fn read_handle<T: serde::de::DeserializeOwned>(mut f: std::fs::File, path: &Path) -> Result<T> {
+    use std::io::Read;
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    if let Some(problem) = unsafe_state(&f.metadata()?, path) {
+        bail!("unsafe WORK allocation state: {problem}");
+    }
+    let mut s = String::new();
+    f.by_ref().take(1024 * 1024 + 1).read_to_string(&mut s)?;
+    anyhow::ensure!(s.len() <= 1024 * 1024, "oversize WORK allocation state");
+    Ok(toml::from_str(&s)?)
 }
 
 pub fn load(root: &Path) -> Result<Option<WorkBinding>> {
@@ -102,13 +157,7 @@ pub fn bound_counter_state(path: &Path) -> Result<Option<DispenserState>> {
     );
     let state: DispenserState =
         read(&original)?.context("bound WORK counter missing; explicit recovery required")?;
-    anyhow::ensure!(
-        state.mode
-            == IdMode::Distributed {
-                node_id: binding.node_id
-            },
-        "WORK counter binding mismatch"
-    );
+    ensure_bound(&state, &binding.node_id, &original)?;
     Ok(Some(state))
 }
 
@@ -116,6 +165,8 @@ pub fn bound_counter_state(path: &Path) -> Result<Option<DispenserState>> {
 /// Store writer precedes the common dispenser lock. Restart after publishing
 /// the counter but before publishing the binding recovers that same UUID.
 pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(root)?;
     if crate::allocation_authority::resolve(root)?.authoritative {
         return Ok(None);
     }
@@ -126,13 +177,7 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
             if let Some(b) = load(root)? {
                 let state: DispenserState =
                     read(&counter)?.context("WORK counter missing; explicit recovery required")?;
-                anyhow::ensure!(
-                    state.mode
-                        == IdMode::Distributed {
-                            node_id: b.node_id.clone()
-                        },
-                    "WORK counter binding mismatch"
-                );
+                ensure_bound(&state, &b.node_id, &counter)?;
                 return Ok(Some(b));
             }
             let mut state: DispenserState = match read(&counter)? {
@@ -158,25 +203,7 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
                 // counters. Require the complete original pair; only absence of
                 // both records is cold bootstrap. Never infer a zero high-water.
                 // trace:BUG-2017 | ai:codex
-                let node = read::<crate::node::NodeConfig>(&root.join(".aida/node.toml"))?;
-                let old = read::<DispenserState>(&legacy)?;
-                match (&node, &old) {
-                    (None, None) => {}
-                    (Some(node), Some(old)) => {
-                        crate::node::validate_node_id(&node.node_id).map_err(anyhow::Error::msg)?;
-                        anyhow::ensure!(
-                            old.mode == node.id_mode(),
-                            "legacy node/provider binding mismatch"
-                        );
-                    }
-                    _ => bail!("incomplete legacy node/provider pair; explicit recovery required"),
-                }
-                if let Some(old) = old {
-                    for (prefix, n) in old.sequences {
-                        let high = state.sequences.entry(prefix).or_default();
-                        *high = (*high).max(n);
-                    }
-                }
+                merge_legacy_state(root, &legacy, &mut state)?;
                 crate::write_atomic(&counter, toml::to_string_pretty(&state)?)?;
                 crate::write_atomic(
                     &common.join(BINDING_FILE),
@@ -188,6 +215,85 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
         })
     })
 }
+
+// Shared by ordinary bootstrap and the unspent prepared candidate path.
+// trace:BUG-2017 | ai:codex
+// trace:STORY-1742 | ai:codex
+fn merge_legacy_state(root: &Path, legacy: &Path, state: &mut DispenserState) -> Result<()> {
+    let node = read::<crate::node::NodeConfig>(&root.join(".aida/node.toml"))?;
+    let old = read::<DispenserState>(&legacy)?;
+    match (&node, &old) {
+        (None, None) => {}
+        (Some(node), Some(old)) => {
+            crate::node::validate_node_id(&node.node_id).map_err(anyhow::Error::msg)?;
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+            anyhow::ensure!(
+                old.mode == node.id_mode(),
+                "legacy node/provider binding mismatch: {} is bound to node {} but {} records {}; \
+                 set its mode to node {} only if no IDs were dispensed under the other node",
+                root.join(".aida/node.toml").display(),
+                node.node_id,
+                legacy.display(),
+                mode_label(&old.mode),
+                node.node_id
+            );
+        }
+        _ => bail!("incomplete legacy node/provider pair; explicit recovery required"),
+    }
+    if let Some(old) = old {
+        for (prefix, n) in old.sequences {
+            let high = state.sequences.entry(prefix).or_default();
+            *high = (*high).max(n);
+        }
+    }
+    Ok(())
+}
+
+/// Quote `s` as one POSIX shell word, so a path pasted from a repair hint
+/// names exactly that file. Plain paths stay unquoted.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+pub fn shell_quote(s: &str) -> String {
+    let plain = !s.is_empty()
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"/._-+:=@,%".contains(&b));
+    if plain {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
+/// Refuse a WORK counter recorded under a node other than the binding's,
+/// naming both nodes.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+fn ensure_bound(state: &DispenserState, node_id: &str, counter: &Path) -> Result<()> {
+    anyhow::ensure!(
+        state.mode
+            == IdMode::Distributed {
+                node_id: node_id.to_string()
+            },
+        "WORK counter binding mismatch: this clone is bound to node {node_id} but {} records {}; \
+         explicit recovery required",
+        counter.display(),
+        mode_label(&state.mode)
+    );
+    Ok(())
+}
+
+/// The doctor check that diagnoses a refused allocation, named by refusals.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+pub const DOCTOR_ALLOCATION_COMMAND: &str = "aida doctor check allocation";
+
+/// Human label for a dispenser mode in diagnostics.
+pub fn mode_label(mode: &IdMode) -> String {
+    match mode {
+        IdMode::Distributed { node_id } => format!("node {node_id}"),
+        other => format!("{other:?}").to_lowercase(),
+    }
+}
+
+#[path = "work_candidate.rs"]
+pub(crate) mod candidate;
 
 #[cfg(test)]
 mod tests {
@@ -352,12 +458,19 @@ mod tests {
                     linked.clone()
                 };
                 std::thread::spawn(move || {
-                    let node = bootstrap(&path).unwrap().unwrap().node_id;
+                    let node = bootstrap(&path)
+                        .unwrap_or_else(|e| panic!("bootstrap {}: {e:#}", path.display()))
+                        .unwrap()
+                        .node_id;
                     let dispenser = crate::allocation_authority::dispenser(&path, None).unwrap();
                     (
                         node,
                         (0..20)
-                            .map(|_| dispenser.next("BUG").unwrap())
+                            .map(|_| {
+                                dispenser
+                                    .next("BUG")
+                                    .unwrap_or_else(|e| panic!("next {}: {e:#}", path.display()))
+                            })
                             .collect::<Vec<_>>(),
                     )
                 })
@@ -375,6 +488,26 @@ mod tests {
                 .unwrap(),
             161
         );
+    }
+
+    /// Unlocked readers (provider admission, `state`, `peek`) race `next`'s
+    /// atomic replacement. A handle superseded between open and fstat is a
+    /// complete snapshot; it used to refuse as "unsafe WORK allocation state".
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-004 | ai:claude
+    #[test]
+    fn superseded_counter_handle_reads_its_snapshot() {
+        let d = tempfile::tempdir().unwrap();
+        crate::git_ops::init(d.path()).unwrap();
+        bootstrap(d.path()).unwrap();
+        let path = counter_path(d.path()).unwrap();
+        let before = std::fs::File::open(&path).unwrap();
+        let provider = crate::allocation_authority::dispenser(d.path(), None).unwrap();
+        assert_eq!(provider.next("BUG").unwrap(), 1);
+        let old: DispenserState = read_handle(before, &path).unwrap();
+        assert!(old.sequences.is_empty());
+        let linked = d.path().join("linked.toml");
+        std::fs::hard_link(&path, &linked).unwrap();
+        assert!(read_handle::<DispenserState>(std::fs::File::open(&path).unwrap(), &path).is_err());
     }
 
     #[test]

@@ -1811,6 +1811,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
+    // BUG-b6b1278890774ef993d2ebc327862470-001: node-local ID allocation that
+    // would refuse (unsafe state file, dispenser on another node). Report-only.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    (
+        &["allocation", "id-allocation", "dispenser", "node-binding"],
+        "allocation",
+    ),
     // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
     // trace:BUG-2140 | ai:antigravity
     (
@@ -2085,13 +2092,9 @@ pub(crate) fn scan_completed_without_commit_with_options(
     // exactly "a tracked file carries the trace". Unioning trace hits keeps the
     // reference set as complete as possible so the check stays conservative
     // (false positives erode trust faster than the rare miss).
-    if let Some(grep) = git(&[
-        "grep",
-        "-hoI",
-        "-E",
-        r"trace:[A-Za-z]+-[0-9]+(-[0-9]+)?",
-        &default_ref,
-    ]) {
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let trace_pattern = format!("trace:{}", crate::SPEC_ID_ERE);
+    if let Some(grep) = git(&["grep", "-hoI", "-E", &trace_pattern, &default_ref]) {
         for line in grep.lines() {
             if let Some(id) = parse_trace_id_token(line) {
                 referenced.insert(id);

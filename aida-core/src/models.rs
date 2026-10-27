@@ -5470,6 +5470,14 @@ impl std::fmt::Debug for LoadSnapshot {
     }
 }
 
+/// Record a refused allocation's cause and return the legacy sentinel (empty
+/// ID, or sequence 0) that the save boundary turns into an error.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+fn refused<T: Default>(error: anyhow::Error) -> T {
+    crate::allocation_authority::record_failure(&error);
+    T::default()
+}
+
 /// Wrapper for Arc<dyn Dispenser> that implements Debug and Clone.
 /// This avoids requiring Debug on the Dispenser trait itself.
 #[derive(Clone)]
@@ -5873,7 +5881,7 @@ impl RequirementsStore {
     pub fn next_meta_id(&mut self, prefix: &str) -> String {
         if let Some(ref dispenser) = self.dispenser {
             // trace:BUG-2017 | ai:codex
-            return dispenser.next_id(prefix).unwrap_or_default();
+            return dispenser.next_id(prefix).unwrap_or_else(refused);
         }
         let counter = self.meta_counters.entry(prefix.to_string()).or_insert(1);
         let num = *counter;
@@ -6476,7 +6484,7 @@ impl RequirementsStore {
     fn get_next_counter_for_prefix(&mut self, prefix: &str) -> u32 {
         if let Some(ref dispenser) = self.dispenser {
             // trace:BUG-2017 | ai:codex — zero is a refused allocation, never a global fallback.
-            return dispenser.next(prefix).unwrap_or(0);
+            return dispenser.next(prefix).unwrap_or_else(refused);
         }
         let upper = prefix.to_uppercase();
         let counter = self.prefix_counters.entry(upper).or_insert(1);
@@ -6491,7 +6499,7 @@ impl RequirementsStore {
     fn get_next_global_number(&mut self) -> u32 {
         if let Some(ref dispenser) = self.dispenser {
             // trace:BUG-2017 | ai:codex
-            return dispenser.next("GLOBAL").unwrap_or(0);
+            return dispenser.next("GLOBAL").unwrap_or_else(refused);
         }
         let n = self.next_spec_number;
         self.next_spec_number += 1;
@@ -6520,15 +6528,13 @@ impl RequirementsStore {
                 if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
                     && Requirement::validate_prefix(&prefix).is_none()
                 {
-                    return String::new();
+                    return refused(anyhow::anyhow!(
+                        "invalid node-local requirement prefix {prefix}"
+                    ));
                 }
                 // trace:BUG-2017 | ai:codex — validate formatting/binding before sequence advancement.
-                if self
-                    .dispenser
-                    .as_ref()
-                    .is_some_and(|d| d.format_id(&prefix, 1).is_err())
-                {
-                    return String::new();
+                if let Some(Err(e)) = self.dispenser.as_ref().map(|d| d.format_id(&prefix, 1)) {
+                    return refused(e);
                 }
                 let number = if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
                     // trace:BUG-2017 | ai:codex — WORK sequences are per type.
@@ -6548,7 +6554,7 @@ impl RequirementsStore {
                     return if number == 0 {
                         String::new()
                     } else {
-                        dispenser.format_id(&prefix, number).unwrap_or_default()
+                        dispenser.format_id(&prefix, number).unwrap_or_else(refused)
                     };
                 }
 
@@ -6557,7 +6563,9 @@ impl RequirementsStore {
             IdFormat::TwoLevel => {
                 // trace:BUG-2017 | ai:codex
                 if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
-                    return String::new();
+                    return refused(anyhow::anyhow!(
+                        "two-level IDs are not supported by node-local allocation"
+                    ));
                 }
                 let feat = feature_prefix
                     .map(|s| s.to_uppercase())
@@ -6606,11 +6614,11 @@ impl RequirementsStore {
     ) {
         // trace:BUG-2017 | ai:codex — preserve infallible legacy API, but poison
         // a refused row instead of advancing counters; persistence rejects it.
-        if self
-            .dispenser
-            .as_ref()
-            .is_some_and(|d| d.admit_requirement(&req).is_err())
-        {
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude — the
+        // cause rides to the save boundary; drop any stale one first.
+        crate::allocation_authority::take_failure();
+        if let Some(Err(e)) = self.dispenser.as_ref().map(|d| d.admit_requirement(&req)) {
+            refused::<()>(e);
             req.spec_id = Some(String::new());
             self.requirements.push(req);
             return;
@@ -6635,14 +6643,16 @@ impl RequirementsStore {
         if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
             && Requirement::validate_prefix(&prefix_upper).is_none()
         {
-            return String::new();
+            return refused(anyhow::anyhow!(
+                "invalid node-local requirement prefix {prefix_upper}"
+            ));
         }
-        if self
+        if let Some(Err(e)) = self
             .dispenser
             .as_ref()
-            .is_some_and(|d| d.format_id(&prefix_upper, 1).is_err())
+            .map(|d| d.format_id(&prefix_upper, 1))
         {
-            return String::new();
+            return refused(e);
         }
 
         let number = if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
@@ -6666,7 +6676,7 @@ impl RequirementsStore {
             } else {
                 dispenser
                     .format_id(&prefix_upper, number)
-                    .unwrap_or_default()
+                    .unwrap_or_else(refused)
             };
         }
 

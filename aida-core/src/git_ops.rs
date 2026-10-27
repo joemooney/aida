@@ -15,6 +15,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+#[path = "work_commit.rs"]
+#[cfg(unix)]
+mod work_commit;
+#[cfg(unix)]
+pub(crate) use work_commit::PreparedCommit;
+
 /// Result of a git command execution.
 #[derive(Debug)]
 pub struct GitResult {

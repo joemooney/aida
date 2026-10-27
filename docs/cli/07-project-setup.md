@@ -128,9 +128,10 @@ The profile baseline and local remote-tracking refs are not advanced by this
 slice. Local hook-profile installation/verification is the existing store Git
 policy; it does not change the canonical store.
 
-**Sanitization is still pending.** This slice does not establish a safe WORK
-export path. Only manually sanitized generic AIDA defects may be exported;
-refusal scanning and sanitized intake are the next slice. Plans do not validate
+**Sanitization is refusal-only.** A reviewed policy (below) gates every push
+and every store write; see [sanitized intake](#sanitized-intake-aida-add---sanitized).
+It can only refuse known shapes and listed tokens, so keep work-filed defects
+generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
 `aida push/pull`; raw Git and other sync entry points bypass it. There is no
 server-side enforcement. Keep work-filed defects generic and sanitized before
@@ -269,6 +270,8 @@ they enter any store that may become public.
 **Primary-checkout drift.** `aida doctor check main-checkout-drift` reports when the primary checkout (the main worktree that linked worktrees hang off) has uncommitted tracked edits, untracked files, a branch other than `main`, or commits ahead of or behind its upstream. It lists the drifting paths. Where an untracked file's modification time falls inside a live session's window, it names that session as the likely owner so you know whom to ask. It only reads: nothing is deleted or moved. The same condition adds one `main checkout: …` line to the session-start context (set `AIDA_MAIN_CHECKOUT_DRIFT=off` to silence it) and shows a `⌂!` marker in `aida statusline`. <!-- trace:STORY-1648 | ai:claude -->
 
 **Cached compiler-wrapper errors.** `aida doctor` reports a `rustc-cache` finding when Cargo's `target/.rustc_info.json` contains a failed wrapper probe (such as an sccache permission error). It also checks the target selected by `CARGO_TARGET_DIR`; relative values resolve from the invocation directory, as in Cargo. `aida doctor rustc-cache` diagnoses just that cache without running Cargo; `aida doctor rustc-cache --fix` rechecks and removes the failed cache so Cargo can regenerate it. Plain diagnosis and general `--heal` leave it in place. Healthy caches, malformed JSON, and failures unrelated to a compiler wrapper are retained. <!-- trace:TASK-2324 | ai:codex -->
+
+**Refused ID allocation.** When a clone cannot allocate node-local IDs, `aida add` names the cause (for example a group-writable `.aida/node.toml`, with the `chmod go-w` that fixes it, or a dispenser that records a different node than the clone) instead of a generic failure. `aida doctor check allocation` reports the same faults before an `aida add` hits them: allocation state files the reader refuses (group- or other-writable, owned by another user, hard-linked, not a regular file), a legacy `.aida/dispenser.toml` whose node disagrees with `.aida/node.toml`, and a missing half of that pair. Each finding gives the repair. The check is report-only. Rewriting a dispenser's node is safe only when no IDs were dispensed under the other node. <!-- trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude -->
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
@@ -480,8 +483,69 @@ turn tracking refs into trusted evidence. An uncertain push leaves the receipt
 unchanged. If publication succeeds but receipt persistence or policy
 revalidation fails, the command reports that partial result and does not retry.
 
-**Remaining acceptance:** canonical intake enforcement and actual recoverable
-FF pull are not available in this slice. The client guard does not enforce hub
-receiving hooks or PUBLIC forwarding, and raw Git/foreign writers can bypass it.
-No history rewrite, clean export, live hub hook or automatic forwarding is
-provided.
+### `aida add --sanitized` (sanitized intake)
+
+<!-- trace:STORY-1742 | ai:claude -->
+
+With a reviewed policy enabled, every requirement-store write from this clone is
+checked before anything is persisted. The complete write is prepared first:
+object, metadata and `oplog.yaml` bytes, deletions, the clone-local counter and
+binding update, and the commit message and effective Git author and committer.
+All of it must pass the same scanner as a push, and the effective Git identity
+must equal the policy's `git_name`/`git_identity`. The plan is checked again
+immediately before the first file changes and is applied once. A refusal leaves
+the store, counters, history and refs exactly as they were, and never echoes the
+refused text. The private policy is read before the store write lock is taken.
+
+```bash
+aida add --sanitized --template > defect.md      # generic problem/reproduction/expected/actual scaffold
+aida add --sanitized --preview "Generic failure" --description-from-file defect.md
+aida add --sanitized "Generic failure" --description-from-file defect.md
+```
+
+`--sanitized` files one draft (a bug unless `--type` says otherwise) with only a
+title, description, type and priority. It never adds an owner, tags, feature,
+parent or session context, and refuses flags that would. `--template` and
+`--preview` work in any clone and write nothing: preview reports the policy
+verdict of the store a write would use (an explicitly chosen requirements
+file, the detected store, or the project), not of the current directory, and, when the text
+passes, shows the candidate. Preview is for your review only; it reserves no
+identifier and is not a permission token. A `--sanitized` write requires an
+enabled profile.
+
+New requirements omit the optional machine and session filing context and say so
+in a `filing_provenance_omission_reason` custom field. Existing filing context
+is never changed. Identifiers come from this clone's own counter, allocated only
+inside the prepared write; a refused write consumes no number. Global metadata
+counters cannot change.
+
+Existing store content is read by its YAML structure, not by its characters:
+prose with `&`, `*` or `!` (Markdown emphasis, punctuation) is ordinary text,
+while real YAML anchors, aliases and non-core tags refuse. `oplog.yaml` is
+bounded per record rather than per file, so a long shared history stays
+writable. Content policy covers what a write adds, never history: for
+`oplog.yaml` and `metadata.yaml`, intake and `aida push` both scan only the
+change against the previous version of the file (appended records, changed
+values), while the YAML structure and size checks still cover the whole file.
+Every other file is scanned whole. Older text the current policy would refuse
+therefore blocks neither a new write nor its push. Written files are always `0644` and directories `0755`, whatever the
+umask. A store file or directory that is already group- or other-writable is
+refused with its path and the `chmod go-w` fix. Concurrent writers on one clone
+wait their turn for up to 30 seconds (5 seconds for a server save) instead of
+failing at once.
+
+Supported prepared writes: adding, updating and deleting requirements, whole-store
+saves (including their concurrent-edit conflict rules), bulk updates, per-spec
+compare-and-swap updates and additive batches, through the CLI, MCP and the
+server. MCP `add_requirement` files through the same prepared add; its `parent`
+option is refused while a profile is enabled. Writers without a prepared form refuse before any change while a profile
+is enabled: imports, queue edits, direct object, registry and dispenser writes,
+legacy single-file storage and store initialization. A server discards the
+refused change from its in-memory state instead of reporting success; if it
+cannot reload, it refuses further saves until a reload succeeds.
+
+**Remaining acceptance:** actual recoverable FF pull is not available in this
+slice. The client guard does not enforce hub receiving hooks or PUBLIC
+forwarding, and raw Git, other AIDA writers that do not go through the store
+backend, and foreign writers can bypass it. No history rewrite, clean export,
+live hub hook or automatic forwarding is provided.
