@@ -208,6 +208,15 @@ impl Fixture {
         .unwrap();
     }
 
+    /// Recorded by tests whose outcome depends on git's push tracking-ref
+    /// inference, which changed in git 2.56 (upstream 24e4e2ef8b).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    fn git_version(&self) -> String {
+        let version = self.git(&["--version"]);
+        eprintln!("story_1742 transport push ran with {version}");
+        version
+    }
+
     fn snapshot(&self) -> Vec<String> {
         vec![
             self.git(&["status", "--porcelain=v1"]),
@@ -642,6 +651,7 @@ fn executor_pushes_one_exact_store_ref_with_identity_hook_and_no_code_hooks() {
         "#!/bin/sh\nprintf 'attempt\n' >> attempts\ncat >> received-refs\n",
     );
     fs::write(fixture.root.join("untracked-product"), "not committed").unwrap();
+    let git_version = fixture.git_version();
     let before = fixture.snapshot();
     let profile_before = fs::read(fixture.common.join("aida-transport.json")).unwrap();
     let output = fixture.aida(&["push", "--store-only"]);
@@ -661,7 +671,7 @@ fn executor_pushes_one_exact_store_ref_with_identity_hook_and_no_code_hooks() {
     let received = fs::read_to_string(remote.join("received-refs")).unwrap();
     assert_eq!(received.lines().count(), 1);
     assert!(received.ends_with(&format!("{} refs/heads/aida-store\n", fixture.store_sha)));
-    assert_eq!(before, fixture.snapshot());
+    assert_eq!(before, fixture.snapshot(), "{git_version}");
     assert_eq!(
         profile_before,
         fs::read(fixture.common.join("aida-transport.json")).unwrap()
@@ -866,6 +876,158 @@ fn chained_url_rewrite_is_refused_without_contacting_either_destination() {
 }
 
 #[test]
+#[cfg(unix)]
+// trace:BUG-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+fn reserved_untracked_remote_configuration_refuses_before_any_push() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.identity_policy("aida");
+    hook(
+        &remote.join("hooks/pre-receive"),
+        "#!/bin/sh\nprintf 'attempt\n' >> attempts\ncat >/dev/null\n",
+    );
+    // A pushurl replaces the reserved remote's url in git 2.56's push-URL
+    // match, which would leave origin as the unique tracking remote again.
+    let other = fixture.root.parent().unwrap().join("other.git");
+    fixture.git(&["init", "--bare", "-q", other.to_str().unwrap()]);
+    fixture.git_at(
+        &store,
+        &[
+            "config",
+            "remote.aida-transport-untracked.pushurl",
+            other.to_str().unwrap(),
+        ],
+    );
+    fixture.git_at(
+        &store,
+        &[
+            "config",
+            "remote.aida-transport-untracked.push",
+            "refs/heads/*:refs/heads/*",
+        ],
+    );
+    let before = fixture.snapshot();
+    let output = fixture.aida(&["push"]);
+    assert!(!output.status.success(), "{}", diagnostics(&output));
+    assert!(
+        diagnostics(&output)
+            .contains("Reserved transport remote configuration is present; push refused."),
+        "{}",
+        diagnostics(&output)
+    );
+    assert!(!remote.join("attempts").exists());
+    assert_eq!(fixture.git_at(&remote, &["for-each-ref"]), "");
+    assert_eq!(fixture.git_at(&other, &["for-each-ref"]), "");
+    assert_eq!(fixture.snapshot(), before);
+}
+
+/// Git 2.56's push tracking-remote rule (upstream 24e4e2ef8b,
+/// `repo_remote_for_push_tracking`) over `git config --get-regexp` output: the
+/// unique configured remote listing `url` verbatim among its push URLs
+/// (`pushurl`, else `url`); none when zero or several match.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+fn push_tracking_remote(config: &str, url: &str) -> Option<String> {
+    let mut remotes: std::collections::BTreeMap<&str, (Vec<&str>, Vec<&str>)> = Default::default();
+    for line in config.lines() {
+        let Some((key, value)) = line.split_once(' ') else {
+            continue;
+        };
+        let Some((name, var)) = key
+            .strip_prefix("remote.")
+            .and_then(|rest| rest.rsplit_once('.'))
+        else {
+            continue;
+        };
+        let entry = remotes.entry(name).or_default();
+        match var {
+            "url" => entry.0.push(value),
+            "pushurl" => entry.1.push(value),
+            _ => {}
+        }
+    }
+    let matches: Vec<_> = remotes
+        .into_iter()
+        .filter(|(_, (urls, push_urls))| {
+            let push = if push_urls.is_empty() {
+                urls
+            } else {
+                push_urls
+            };
+            push.contains(&url)
+        })
+        .map(|(name, _)| name.to_owned())
+        .collect();
+    (matches.len() == 1).then(|| matches[0].clone())
+}
+
+// Exercises the git 2.56 defence on any installed git: replay the remote
+// config the real push process saw (from its trace2 argv) through the
+// upstream rule, with a control proving the unguarded config selects origin.
+#[test]
+#[cfg(unix)]
+// trace:BUG-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+fn push_config_leaves_no_unique_tracking_remote_under_git_2_56_rule() {
+    let fixture = Fixture::new();
+    let (store, _remote) = fixture.attach_with_remote();
+    fixture.identity_policy("aida");
+    let git_version = fixture.git_version();
+    let trace = fixture.root.parent().unwrap().join("trace2-events.json");
+    let output = fixture
+        .command(env!("CARGO_BIN_EXE_aida"), &fixture.root, &["push"])
+        .env("GIT_TRACE2_EVENT", &trace)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let pushes: Vec<Vec<String>> = fs::read_to_string(&trace)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|event| event["event"] == "start")
+        .filter_map(|event| serde_json::from_value(event["argv"].clone()).ok())
+        .filter(|argv: &Vec<String>| {
+            argv.iter().any(|arg| arg == "push") && argv.iter().any(|arg| arg == "--end-of-options")
+        })
+        .collect();
+    assert_eq!(pushes.len(), 1, "{pushes:?}");
+    let argv = &pushes[0];
+    let end = argv
+        .iter()
+        .position(|arg| arg == "--end-of-options")
+        .unwrap();
+    let destination = &argv[end + 1];
+    assert_eq!(
+        destination,
+        &fixture.git(&["config", "remote.origin.url"]),
+        "{argv:?}"
+    );
+    let mut replay: Vec<&str> = Vec::new();
+    for pair in argv.windows(2).filter(|pair| pair[0] == "-c") {
+        if pair[1].starts_with("remote.") {
+            replay.extend(["-c", pair[1].as_str()]);
+        }
+    }
+    assert!(!replay.is_empty(), "{argv:?}");
+    replay.extend(["config", "--get-regexp", r"^remote\."]);
+    let guarded = fixture.git_at(&store, &replay);
+    assert_eq!(
+        push_tracking_remote(&guarded, destination),
+        None,
+        "{guarded}"
+    );
+    let unguarded = fixture.git_at(&store, &["config", "--get-regexp", r"^remote\."]);
+    assert_eq!(
+        push_tracking_remote(&unguarded, destination).as_deref(),
+        Some("origin"),
+        "{unguarded}"
+    );
+    assert_eq!(
+        fixture.git(&["for-each-ref", "refs/remotes"]),
+        "",
+        "{git_version}"
+    );
+}
+
+#[test]
 fn endpoint_whitespace_is_preserved_and_multiline_output_is_refused() {
     let fixture = Fixture::new();
     let (_store, remote) = fixture.attach_with_remote();
@@ -1041,6 +1203,7 @@ fn symlink_then_parent_pushes_only_to_gits_actual_origin() {
             ]);
         }
         fixture.enable();
+        let git_version = fixture.git_version();
         let before = fixture.snapshot();
         let output = fixture.aida(&["push"]);
         assert!(output.status.success(), "{}", diagnostics(&output));
@@ -1060,7 +1223,7 @@ fn symlink_then_parent_pushes_only_to_gits_actual_origin() {
             fixture.git(&["ls-remote", "origin"]),
             format!("{}\trefs/heads/aida-store", fixture.store_sha)
         );
-        assert_eq!(fixture.snapshot(), before);
+        assert_eq!(fixture.snapshot(), before, "{git_version}");
     }
 }
 
@@ -1344,6 +1507,7 @@ fn reviewed_non_email_identity_passes_real_store_hook_and_receipt_pins_exact_saf
         "objects/BUG/000/BUG-1.yaml",
         b"title: Generic failure\ndescription: Synthetic reproduction\n",
     );
+    let git_version = fixture.git_version();
     let output = fixture.aida(&["push"]);
     assert!(output.status.success(), "{}", diagnostics(&output));
     assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
@@ -1354,10 +1518,13 @@ fn reviewed_non_email_identity_passes_real_store_hook_and_receipt_pins_exact_saf
     assert_eq!(receipt["accepted_tip"], tip);
     assert_eq!(receipt["trust_root"], fixture.store_sha);
     assert_eq!(receipt["reference"], "refs/heads/aida-store");
-    assert!(!fixture
-        .common
-        .join("refs/remotes/origin/aida-store")
-        .exists());
+    assert!(
+        !fixture
+            .common
+            .join("refs/remotes/origin/aida-store")
+            .exists(),
+        "{git_version}"
+    );
     assert!(!fixture.common.join("FETCH_HEAD").exists());
     // A stricter policy must scan old exported deltas from the original root.
     let policy_path = fixture.common.join("aida-transport-policy.json");
