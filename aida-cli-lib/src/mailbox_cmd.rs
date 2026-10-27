@@ -120,10 +120,20 @@ pub(crate) fn latency_rows(
                     // trace:STORY-1843 | ai:claude — receipts are reads too,
                     // and the latency comes from the same evidence scope.
                     let (unread_side, max_read) = match &evidence {
-                        Some(evidence) => (
-                            evidence.without_receipted_for(who, &inspected),
-                            max_read_latency_ms(evidence, who, &inspected),
-                        ),
+                        Some(evidence) => {
+                            // Look up only mail this recipient can hold
+                            // receipts for, so other recipients' mail never
+                            // spends the shared lookup deadline.
+                            let mine: Vec<aida_core::mailbox::Message> =
+                                aida_core::mailbox::inbox_for(who, &inspected)
+                                    .into_iter()
+                                    .cloned()
+                                    .collect();
+                            (
+                                evidence.without_receipted_for(who, &mine),
+                                max_read_latency_ms(evidence, who, &mine),
+                            )
+                        }
                         None => (inspected.clone(), None),
                     };
                     let latency =

@@ -412,8 +412,8 @@ pub(crate) fn unread_by_recipient(
 /// snapshot reads it (local + canonical layers through `merge_dedup`, then
 /// [`ReadEvidence`]). Unlike the snapshot, a read failure is an error: an
 /// unattended escalation must not mistake an unreadable mailbox for an empty
-/// one. A worktree whose receipts could not be listed only leaves its reads
-/// uncounted, as the watermark-only read did.
+/// one. Receipts are looked up per message ID; a lookup a worktree could not
+/// answer only leaves that read uncounted, as the watermark-only read did.
 // trace:TASK-1492 trace:STORY-1843 | ai:claude
 pub(crate) fn oldest_unread_by_recipient(
     project_root: &Path,

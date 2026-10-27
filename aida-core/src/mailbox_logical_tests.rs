@@ -881,3 +881,39 @@ fn story1843_unusable_receipt_entries_are_skipped() {
     assert_eq!(inspect.lookup("corrupt", "bad"), ReceiptLookup::Unknown);
     assert!(inspect.partial());
 }
+
+/// R4-N1: an unsafe receipt FILE (a symlink, or hard-linked) is evidence
+/// that could not be read — a typed partial in both scopes, never "not
+/// found" for the fleet counters while the snapshot reports a source error.
+#[test]
+fn story1843_unsafe_receipt_files_are_partial_in_both_scopes() {
+    for link in ["symlink", "hardlink"] {
+        let r = repo();
+        put(&r.sib_a, &message("linked", "t", "advisor", 1));
+        let dir = r.sib_a.join(".aida/mailbox/.read-receipts/advisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = r.sib_a.join("receipt-target.txt");
+        std::fs::write(&target, "5").unwrap();
+        if link == "symlink" {
+            std::os::unix::fs::symlink(&target, dir.join("linked.txt")).unwrap();
+        } else {
+            std::fs::hard_link(&target, dir.join("linked.txt")).unwrap();
+        }
+
+        let inspect = inspector(&r, &ReadLimits::explicit_read());
+        assert_eq!(
+            inspect.lookup("advisor", "linked"),
+            ReceiptLookup::Unknown,
+            "{link}"
+        );
+        assert!(inspect.partial(), "{link}");
+
+        let s = snap(&r.main, Some(&r.store), Query::Inbox);
+        assert!(
+            matches!(status_of(&s, &r.sib_a), SourceStatus::Error(_)),
+            "{link}: {:?}",
+            status_of(&s, &r.sib_a)
+        );
+        assert_eq!(s.caught_up(), None, "{link}");
+    }
+}

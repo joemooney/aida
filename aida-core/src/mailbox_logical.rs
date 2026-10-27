@@ -754,7 +754,9 @@ impl ReceiptInspector {
                     Ok(at) => return ReceiptLookup::Read { at },
                     Err(_) => unknown = true,
                 },
-                Err(code) if skippable(code) => {}
+                // An unsafe receipt file (a symlink, or hard-linked) is
+                // evidence that could not be read, the same as in
+                // `logical_snapshot`: Unknown, never NotFound.
                 Err(_) => unknown = true,
             }
         }
@@ -767,8 +769,9 @@ impl ReceiptInspector {
     }
 }
 
-/// An unusable entry (a regular file where a directory belongs, or a
-/// symlink) cannot hold a receipt and is skipped, never followed.
+/// An unusable entry on the path to a key's receipt directory (a regular
+/// file where a directory belongs, or a symlink) cannot hold a receipt and
+/// is skipped, never followed. Receipt files themselves are never skipped.
 fn skippable(code: SourceErrorCode) -> bool {
     matches!(
         code,
