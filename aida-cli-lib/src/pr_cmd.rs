@@ -1352,6 +1352,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     if dirty {
         let subject = ship::commit_subject(&spec, opts.message.as_deref());
         eprintln!("  step 1: committing uncommitted work — {}", subject);
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+        ship::refuse_staged_sandbox_placeholders(&project_root)?;
         ship::commit_tracked_changes(&project_root, &subject)?;
         eprintln!(
             "  {} committed",
