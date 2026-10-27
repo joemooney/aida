@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-27T18:59:26.464709648Z
+modified_at: 2026-10-27T18:59:28.995199383Z
 req_type: Story
 tags:
 - portable-intake
@@ -158,6 +158,12 @@ comments:
   created_at: 2026-10-27T17:09:21.676771790Z
   modified_at: 2026-10-27T17:09:21.676771790Z
   session_id: a98bfb3e-682d-4e9e-8940-0ebeb25eef7d
+- id: 01a17ebb-5663-74c1-a5c4-41816b0ee6ef
+  author: joe
+  content: 'ADVISOR: execution mode drain so the advisor can train independently approved PRs; protected paths still need the operator.'
+  created_at: 2026-10-27T18:59:28.995199383Z
+  modified_at: 2026-10-27T18:59:28.995199383Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16a97-f720-7ad0-b09e-3e490758eade
   author: joe.mooney
