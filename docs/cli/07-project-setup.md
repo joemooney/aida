@@ -97,7 +97,9 @@ operator's decision; it does not scan or certify that history.
 and `aida pull --dry-run` inspect local metadata without fetching, opening a
 store cache, or running lifecycle actions. `--json` also selects planning;
 JSON plans explicitly report `executed: false` and never execute a push.
-Plans name origin, exact store refspecs, locally known source SHA, refs that
+Plans name origin, the exact store refspec executed (a pull fetches
+`refs/heads/aida-store:refs/aida-transport/incoming` and lists the post-scan
+`after_scan` ref updates), locally known source SHA, refs that
 execution could move, flag dispositions, and missing prerequisites. Code legs
 are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
 `aida pull --store-only` are redundant. Executing pushes also print flag dispositions.

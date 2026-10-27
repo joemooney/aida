@@ -155,7 +155,6 @@ pub(in super::super) fn pull(root: &Path, profile: &Profile) -> Result<()> {
     // The explicit endpoint and refspec bypass remote.origin.* fetch config,
     // so no configured refmap, tag following or prune can move other refs.
     // Objects arrive locally; only the private staging ref names them.
-    let refspec = format!("{STORE_REF}:{INCOMING_REF}");
     let mut fetch = aida_core::git_ops::host_git_command(&store);
     fetch
         .args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
@@ -174,7 +173,7 @@ pub(in super::super) fn pull(root: &Path, profile: &Profile) -> Result<()> {
             "--quiet",
             "--end-of-options",
             &destination,
-            &refspec,
+            PULL_REFSPEC,
         ]);
     crate::gitlab_project_create::configure_git_remote_credentials(
         &mut fetch,

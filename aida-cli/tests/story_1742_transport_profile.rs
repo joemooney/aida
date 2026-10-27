@@ -303,9 +303,18 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
             );
         } else {
             assert!(plan["source_sha"].is_null());
+            // The reported refspec is the one executed: fetch into staging,
+            // then the post-scan ref updates.
             assert_eq!(
                 plan["refspec"],
-                "refs/heads/aida-store:refs/remotes/origin/aida-store"
+                "refs/heads/aida-store:refs/aida-transport/incoming"
+            );
+            assert_eq!(
+                plan["after_scan"],
+                serde_json::json!([
+                    "refs/aida-transport/incoming -> refs/remotes/origin/aida-store",
+                    "refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)"
+                ])
             );
         }
         let refused = fixture.aida(&[operation]);
