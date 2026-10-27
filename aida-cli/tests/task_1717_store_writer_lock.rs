@@ -1885,14 +1885,17 @@ fn pull_and_allocation_report_a_failed_pending_commit() {
 
 // ── F4: remote reconcile failure and no-op paths ───────────────────────────
 
-/// After a clean merge, an unreadable block registry fails validation; the
+/// After a clean merge, the publish consent check fails (a local registry
+/// line carries an email no hub has seen, and `--yes` is absent); the
 /// failure goes through the checked rollback (store back at the locked
 /// preimage, said truthfully). With the rollback itself made to fail, the
 /// report says so instead of claiming the store is unchanged.
+// trace:BUG-2017 | ai:claude — an unreadable block registry now refuses at the
+// allocation claims check before any merge, so it no longer reaches rollback.
 #[test]
 fn remote_reconcile_checks_its_rollback() {
     let fx = fixture();
-    let peer = fx.base.join("peer-blocks");
+    let peer = fx.base.join("peer-notes");
     git(
         &fx.base,
         &[
@@ -1904,13 +1907,17 @@ fn remote_reconcile_checks_its_rollback() {
             peer.to_str().unwrap(),
         ],
     );
-    std::fs::create_dir_all(peer.join("registry")).unwrap();
-    std::fs::write(peer.join("registry/blocks.yaml"), "blocks: [unclosed\n").unwrap();
+    std::fs::create_dir_all(peer.join("notes")).unwrap();
+    std::fs::write(peer.join("notes/peer.txt"), "peer\n").unwrap();
     git(&peer, &["add", "-A"]);
-    git(&peer, &["commit", "-qm", "chore: peer breaks blocks"]);
+    git(&peer, &["commit", "-qm", "chore: peer note"]);
     git(&peer, &["push", "-q", "origin", "aida-store"]);
+    fx.write_store_file(
+        "registry/queues/consent.yaml",
+        "owner: someone@corp.example.com\n",
+    );
     let pre = fx.local_commit("local.txt");
-    let out = fx.run(&["remote", "reconcile", "--execute", "--yes"]);
+    let out = fx.run(&["remote", "reconcile", "--execute"]);
     assert!(!out.status.success(), "{}", text(&out));
     assert!(text(&out).contains("back at"), "{}", text(&out));
     assert_eq!(fx.head(), pre);
@@ -1925,7 +1932,7 @@ fn remote_reconcile_checks_its_rollback() {
             git_dir.join("index.lock").display()
         ),
     );
-    let out = fx.run(&["remote", "reconcile", "--execute", "--yes"]);
+    let out = fx.run(&["remote", "reconcile", "--execute"]);
     let _ = std::fs::remove_file(git_dir.join("index.lock"));
     assert!(!out.status.success(), "{}", text(&out));
     assert!(text(&out).contains("rollback to"), "{}", text(&out));
@@ -1997,6 +2004,73 @@ fn remote_reconcile_evidence_refusal_skips_the_rollback() {
             !report.contains("rollback"),
             "diverged={diverged}: {report}"
         );
+        assert_eq!(fx.head(), pre, "diverged={diverged}");
+        assert_eq!(fx.origin_head(), published, "diverged={diverged}");
+        assert_eq!(
+            git(
+                &fx.store,
+                &["status", "--porcelain", "--untracked-files=no"]
+            ),
+            "",
+            "diverged={diverged}"
+        );
+    }
+}
+
+/// BUG-2017: a peer publishes a display ID owned by two different object
+/// UUIDs. Reconcile checks the complete candidate set once, before the
+/// topology decision and the first merge, so both the fast-forward (local
+/// behind) and the union (local diverged) shapes stop with nothing merged,
+/// reset or pushed, and the report names only opaque references.
+// trace:BUG-2017 | ai:claude
+#[test]
+fn remote_reconcile_allocation_conflict_refuses_before_any_merge() {
+    for diverged in [false, true] {
+        let fx = fixture();
+        let peer = fx.base.join("peer-allocation");
+        git(
+            &fx.base,
+            &[
+                "clone",
+                "-q",
+                "-b",
+                "aida-store",
+                fx.origin.to_str().unwrap(),
+                peer.to_str().unwrap(),
+            ],
+        );
+        test_git::enroll_synthetic_home(&peer);
+        let mut first = aida_core::models::Requirement::new("one".into(), "a".into());
+        first.spec_id = Some("FR-901".into());
+        let mut second = aida_core::models::Requirement::new("two".into(), "b".into());
+        second.spec_id = Some("FR-0123456789ABCDEF0123456789ABCDEF-1".into());
+        second.agreed_id = Some("FR-901".into());
+        for row in [&first, &second] {
+            aida_core::object_store::write_object(&peer.join("objects"), row).unwrap();
+        }
+        git(&peer, &["add", "-A"]);
+        git(&peer, &["commit", "-qm", "chore: peer double-issues an id"]);
+        git(&peer, &["push", "-q", "origin", "aida-store"]);
+        let pre = if diverged {
+            fx.local_commit("local.txt")
+        } else {
+            fx.head()
+        };
+        let published = fx.origin_head();
+
+        let out = fx.run(&["remote", "reconcile", "--execute", "--yes"]);
+        let report = text(&out);
+        assert!(!out.status.success(), "diverged={diverged}: {report}");
+        assert!(
+            report.contains("allocation claims check refused"),
+            "diverged={diverged}: {report}"
+        );
+        assert!(
+            report.contains(&first.id.to_string()) && report.contains(&second.id.to_string()),
+            "diverged={diverged}: {report}"
+        );
+        assert!(!report.contains("FR-901"), "diverged={diverged}: {report}");
+        assert!(!report.contains("back at"), "diverged={diverged}: {report}");
         assert_eq!(fx.head(), pre, "diverged={diverged}");
         assert_eq!(fx.origin_head(), published, "diverged={diverged}");
         assert_eq!(
