@@ -1479,169 +1479,325 @@ const GATE_DISPATCH_IMPORT_ALLOWLIST: &[&str] = &[
     "DispatchVendor",
 ];
 
-/// The `crate::dispatch` items `text` names, each as written after the
-/// module path. Use trees are walked structurally, so groups, nesting,
-/// renames and `self` all resolve to the path they import; a glob is
-/// reported as `*`, and anything that hands over the module itself (or the
-/// crate root it hangs off) as `dispatch`. Paths in code, attribute
-/// arguments and macro tokens (string literals included) are checked too.
+/// What a source file reaches outside itself, scanned as module code
+/// `level` steps below the crate root (`gate/dispatch_*.rs` sits at 2).
+/// Use trees are walked structurally, so groups, nesting, renames and
+/// `self` all resolve to the path they import; paths in code, attribute
+/// arguments and macro tokens (string literals included) are seen too.
+// trace:STORY-1889 | trace:TASK-b6b1278890774ef993d2ebc327862470-009 | trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[derive(Default)]
+struct Reach {
+    /// Every path that resolves to the crate root, as the segments after
+    /// it, with whether it is a glob and whether it hands over the module
+    /// it names whole (renamed or globbed rather than named).
+    rooted: Vec<(Vec<String>, bool, bool)>,
+    /// Every `#[path]` target (and `path = "..."` in attribute or macro
+    /// tokens), escapes decoded.
+    path_targets: Vec<String>,
+    /// How many times the `include` macro is named.
+    includes: usize,
+    level: usize,
+    /// Skip root handovers through a private `use` (a test module's
+    /// `use super::*;`), which no other module can reach through.
+    public_handovers_only: bool,
+    private_use: bool,
+}
+
+impl Reach {
+    /// Records `segs` when it resolves to the crate root: it starts at
+    /// `crate`, climbs out of `level` with `super`, or is spelled at the
+    /// root itself (where a bare `dispatch::x` names the module).
+    fn note(&mut self, segs: &[String], glob: bool, whole: bool) {
+        let mut crate_root = false;
+        let mut supers = 0;
+        let mut i = 0;
+        for s in segs {
+            match s.as_str() {
+                "crate" if i == 0 => crate_root = true,
+                "super" => supers += 1,
+                "self" => {}
+                _ => break,
+            }
+            i += 1;
+        }
+        let tail = &segs[i..];
+        if tail.is_empty() && self.public_handovers_only && self.private_use {
+            return;
+        }
+        // A lone unrooted name at the root is a local, not a path.
+        if i == 0 && tail.len() == 1 && !glob && !whole {
+            return;
+        }
+        if crate_root || supers >= self.level {
+            self.rooted.push((tail.to_vec(), glob, whole));
+        }
+    }
+
+    fn tree(&mut self, prefix: &mut Vec<String>, tree: &syn::UseTree) {
+        match tree {
+            syn::UseTree::Path(p) => {
+                prefix.push(p.ident.to_string());
+                self.tree(prefix, &p.tree);
+                prefix.pop();
+            }
+            syn::UseTree::Group(g) => g.items.iter().for_each(|t| self.tree(prefix, t)),
+            syn::UseTree::Glob(_) => self.note(prefix, true, true),
+            syn::UseTree::Name(n) => self.leaf(prefix, &n.ident, false),
+            syn::UseTree::Rename(r) => self.leaf(prefix, &r.ident, true),
+        }
+    }
+
+    /// A named (or renamed) leaf; `self` names the prefix itself.
+    fn leaf(&mut self, prefix: &mut Vec<String>, ident: &syn::Ident, renamed: bool) {
+        self.ident(ident);
+        let name = ident.to_string();
+        let pushed = name != "self" || prefix.is_empty();
+        if pushed {
+            prefix.push(name);
+        }
+        self.note(prefix, false, renamed);
+        if pushed {
+            prefix.pop();
+        }
+    }
+
+    fn ident(&mut self, ident: &impl std::fmt::Display) {
+        if ident.to_string() == "include" {
+            self.includes += 1;
+        }
+    }
+
+    /// Paths spelled inside unparsed tokens (macro bodies, attribute
+    /// arguments), including string literals that parse as a path, and
+    /// `path = "..."` pairs.
+    fn tokens(&mut self, ts: proc_macro2::TokenStream) {
+        use proc_macro2::{Spacing, TokenTree};
+        let tts: Vec<TokenTree> = ts.into_iter().collect();
+        for w in tts.windows(3) {
+            if let [TokenTree::Ident(i), TokenTree::Punct(p), TokenTree::Literal(l)] = w {
+                if i == "path" && p.as_char() == '=' {
+                    if let Ok(s) = syn::parse_str::<syn::LitStr>(&l.to_string()) {
+                        self.path_targets.push(s.value());
+                    }
+                }
+            }
+        }
+        let mut cur: Vec<String> = Vec::new();
+        let mut joined = false;
+        let mut it = tts.into_iter().peekable();
+        while let Some(tt) = it.next() {
+            match tt {
+                TokenTree::Ident(i) => {
+                    self.ident(&i);
+                    if !joined {
+                        self.flush(&mut cur);
+                    }
+                    cur.push(i.to_string());
+                    joined = false;
+                    continue;
+                }
+                TokenTree::Punct(p)
+                    if p.as_char() == ':'
+                        && p.spacing() == Spacing::Joint
+                        && matches!(it.peek(), Some(TokenTree::Punct(q)) if q.as_char() == ':') =>
+                {
+                    it.next();
+                    joined = true;
+                    continue;
+                }
+                TokenTree::Group(g) => {
+                    self.flush(&mut cur);
+                    self.tokens(g.stream());
+                }
+                TokenTree::Literal(l) => {
+                    self.flush(&mut cur);
+                    let s = syn::parse_str::<syn::LitStr>(&l.to_string()).map(|s| s.value());
+                    if let Ok(path) = s.and_then(|s| syn::parse_str::<syn::Path>(&s)) {
+                        self.path(&path);
+                    }
+                }
+                TokenTree::Punct(_) => {}
+            }
+            self.flush(&mut cur);
+            joined = false;
+        }
+        self.flush(&mut cur);
+    }
+
+    fn flush(&mut self, cur: &mut Vec<String>) {
+        if cur.len() > 1 {
+            self.note(cur, false, false);
+        }
+        cur.clear();
+    }
+
+    fn path(&mut self, p: &syn::Path) {
+        if p.leading_colon.is_none() {
+            let segs: Vec<String> = p.segments.iter().map(|s| s.ident.to_string()).collect();
+            self.note(&segs, false, false);
+        }
+    }
+}
+
+impl<'ast> syn::visit::Visit<'ast> for Reach {
+    fn visit_item_use(&mut self, u: &'ast syn::ItemUse) {
+        self.private_use = matches!(u.vis, syn::Visibility::Inherited);
+        self.tree(&mut Vec::new(), &u.tree);
+        self.private_use = false;
+    }
+    fn visit_item_extern_crate(&mut self, e: &'ast syn::ItemExternCrate) {
+        // `extern crate self as me;` renames the crate root.
+        if e.ident == "self" {
+            self.rooted.push((Vec::new(), false, true));
+        }
+    }
+    fn visit_item_mod(&mut self, m: &'ast syn::ItemMod) {
+        // An inline `mod m { .. }` is one level further from the root.
+        let inline = m.content.is_some();
+        self.level += usize::from(inline);
+        syn::visit::visit_item_mod(self, m);
+        self.level -= usize::from(inline);
+    }
+    fn visit_ident(&mut self, i: &'ast proc_macro2::Ident) {
+        self.ident(i);
+    }
+    fn visit_path(&mut self, p: &'ast syn::Path) {
+        self.path(p);
+        syn::visit::visit_path(self, p);
+    }
+    fn visit_macro(&mut self, m: &'ast syn::Macro) {
+        self.tokens(m.tokens.clone());
+        syn::visit::visit_macro(self, m);
+    }
+    fn visit_meta_list(&mut self, m: &'ast syn::MetaList) {
+        self.tokens(m.tokens.clone());
+        syn::visit::visit_meta_list(self, m);
+    }
+    fn visit_meta_name_value(&mut self, m: &'ast syn::MetaNameValue) {
+        if m.path.is_ident("path") {
+            if let syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(s),
+                ..
+            }) = &m.value
+            {
+                self.path_targets.push(s.value());
+            }
+        }
+        syn::visit::visit_meta_name_value(self, m);
+    }
+}
+
+fn reach(text: &str, level: usize) -> Reach {
+    scan_reach(
+        text,
+        Reach {
+            level,
+            ..Reach::default()
+        },
+    )
+}
+
+fn scan_reach(text: &str, mut reach: Reach) -> Reach {
+    use syn::visit::Visit;
+    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
+    reach.visit_file(&file);
+    reach
+}
+
+/// The `crate::dispatch` items a `gate/dispatch_*` source names, each as
+/// written after the module path. A glob is reported as `*`, and anything
+/// that hands over the module itself (or the crate root it hangs off) as
+/// `dispatch`.
 // trace:STORY-1889 | trace:TASK-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 fn dispatch_items_named(text: &str) -> Vec<String> {
-    use syn::visit::Visit;
+    dispatch_items_at(text, 2)
+}
 
-    #[derive(Default)]
-    struct Imports(Vec<String>);
+/// [`dispatch_items_named`] for code `level` steps below the crate root.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn dispatch_items_at(text: &str, level: usize) -> Vec<String> {
+    dispatch_items(reach(text, level))
+}
 
-    impl Imports {
-        /// Records what the rooted path `segs` reaches in `crate::dispatch`.
-        /// `whole` marks a path that is renamed or globbed rather than
-        /// named: at the crate root that hands over `dispatch` too.
-        fn note(&mut self, segs: &[String], glob: bool, whole: bool) {
-            let roots = segs
-                .iter()
-                .take_while(|s| matches!(s.as_str(), "crate" | "super" | "self"))
-                .count();
-            if roots == 0 {
-                return;
-            }
-            let Some((first, tail)) = segs[roots..].split_first() else {
-                // `use crate as c`, `use crate::*`, `use super::super::*`;
-                // a lone `super`/`self` is the gate module, not the root.
-                let gate_local = roots == 1 && segs[0] != "crate";
-                if (glob || whole) && !gate_local {
-                    self.0.push("dispatch".to_string());
-                }
-                return;
+/// What a source `gate/dispatch_*` may reach (an allowlisted definer, or a
+/// crate-root file) hands on from `crate::dispatch`: like
+/// [`dispatch_items_at`], but a private `use super::*;` is not a handover.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn launders_at(text: &str, level: usize) -> Vec<String> {
+    let reach = Reach {
+        level,
+        public_handovers_only: true,
+        ..Reach::default()
+    };
+    dispatch_items(scan_reach(text, reach))
+}
+
+fn dispatch_items(reach: Reach) -> Vec<String> {
+    reach
+        .rooted
+        .into_iter()
+        .filter_map(|(segs, glob, whole)| {
+            // `use crate as c`, `use crate::*`: the root hands over `dispatch` too.
+            let Some((first, tail)) = segs.split_first() else {
+                return (glob || whole).then(|| "dispatch".to_string());
             };
             if first != "dispatch" {
-                return;
+                return None;
             }
             let tail = match tail.split_first() {
                 Some((m, t)) if m == "dispatch_args" && !t.is_empty() => t,
                 _ => tail,
             };
-            self.0.push(match tail.first() {
+            Some(match tail.first() {
                 Some(item) => item.clone(),
                 None if glob => "*".to_string(),
                 None => "dispatch".to_string(),
-            });
-        }
+            })
+        })
+        .collect()
+}
 
-        fn tree(&mut self, prefix: &mut Vec<String>, tree: &syn::UseTree) {
-            match tree {
-                syn::UseTree::Path(p) => {
-                    prefix.push(p.ident.to_string());
-                    self.tree(prefix, &p.tree);
-                    prefix.pop();
-                }
-                syn::UseTree::Group(g) => g.items.iter().for_each(|t| self.tree(prefix, t)),
-                syn::UseTree::Glob(_) => self.note(prefix, true, true),
-                syn::UseTree::Name(n) => self.leaf(prefix, &n.ident, false),
-                syn::UseTree::Rename(r) => self.leaf(prefix, &r.ident, true),
-            }
-        }
+/// The crate-root names a `gate/dispatch_*` source reaches: `*` for a glob
+/// of the root and `crate` for the root handed over under another name.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn crate_root_names(text: &str) -> Vec<String> {
+    reach(text, 2)
+        .rooted
+        .into_iter()
+        .filter_map(|(segs, glob, whole)| match segs.first() {
+            Some(name) => Some(name.clone()),
+            None if glob => Some("*".to_string()),
+            None if whole => Some("crate".to_string()),
+            None => None,
+        })
+        .collect()
+}
 
-        /// A named (or renamed) leaf; `self` names the prefix itself.
-        fn leaf(&mut self, prefix: &mut Vec<String>, ident: &syn::Ident, renamed: bool) {
-            let name = ident.to_string();
-            let pushed = name != "self" || prefix.is_empty();
-            if pushed {
-                prefix.push(name);
-            }
-            self.note(prefix, false, renamed);
-            if pushed {
-                prefix.pop();
-            }
-        }
-
-        /// Paths spelled inside unparsed tokens (macro bodies, attribute
-        /// arguments), including string literals that parse as a path.
-        fn tokens(&mut self, ts: proc_macro2::TokenStream) {
-            use proc_macro2::{Spacing, TokenTree};
-            let mut cur: Vec<String> = Vec::new();
-            let mut joined = false;
-            let mut it = ts.into_iter().peekable();
-            while let Some(tt) = it.next() {
-                match tt {
-                    TokenTree::Ident(i) => {
-                        if !joined {
-                            self.flush(&mut cur);
-                        }
-                        cur.push(i.to_string());
-                        joined = false;
-                        continue;
-                    }
-                    TokenTree::Punct(p)
-                        if p.as_char() == ':'
-                            && p.spacing() == Spacing::Joint
-                            && matches!(it.peek(), Some(TokenTree::Punct(q)) if q.as_char() == ':') =>
-                    {
-                        it.next();
-                        joined = true;
-                        continue;
-                    }
-                    TokenTree::Group(g) => {
-                        self.flush(&mut cur);
-                        self.tokens(g.stream());
-                    }
-                    TokenTree::Literal(l) => {
-                        self.flush(&mut cur);
-                        let s = syn::parse_str::<syn::LitStr>(&l.to_string()).map(|s| s.value());
-                        if let Ok(path) = s.and_then(|s| syn::parse_str::<syn::Path>(&s)) {
-                            self.path(&path);
-                        }
-                    }
-                    TokenTree::Punct(_) => {}
-                }
-                self.flush(&mut cur);
-                joined = false;
-            }
-            self.flush(&mut cur);
-        }
-
-        fn flush(&mut self, cur: &mut Vec<String>) {
-            if cur.len() > 1 {
-                self.note(cur, false, false);
-            }
-            cur.clear();
-        }
-
-        fn path(&mut self, p: &syn::Path) {
-            if p.leading_colon.is_none() {
-                let segs: Vec<String> = p.segments.iter().map(|s| s.ident.to_string()).collect();
-                self.note(&segs, false, false);
-            }
+/// The ways a `gate/dispatch_*` source compiles code from outside `gate/`
+/// into itself: any `include!` (however it is spelled or renamed), and any
+/// `#[path]` target that is absolute, climbs with `..` or carries a
+/// separator or escape that could hide either.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn source_inclusions(text: &str) -> Vec<String> {
+    let reach = reach(text, 2);
+    let mut found = vec!["include!".to_string(); reach.includes.min(1)];
+    let escapes = |t: &str| {
+        t.starts_with('/')
+            || t.contains('\\')
+            || t.contains(':')
+            || t.split('/').any(|seg| seg == "..")
+    };
+    // The raw spellings catch what an escape decodes to; the decoded ones
+    // catch attributes the regex cannot see.
+    for target in path_attr_targets(text)
+        .into_iter()
+        .chain(reach.path_targets)
+    {
+        if escapes(&target) {
+            found.push(format!("#[path = {target:?}]"));
         }
     }
-
-    impl<'ast> Visit<'ast> for Imports {
-        fn visit_item_use(&mut self, u: &'ast syn::ItemUse) {
-            self.tree(&mut Vec::new(), &u.tree);
-        }
-        fn visit_item_extern_crate(&mut self, e: &'ast syn::ItemExternCrate) {
-            // `extern crate self as me;` renames the crate root.
-            if e.ident == "self" {
-                self.0.push("dispatch".to_string());
-            }
-        }
-        fn visit_path(&mut self, p: &'ast syn::Path) {
-            self.path(p);
-            syn::visit::visit_path(self, p);
-        }
-        fn visit_macro(&mut self, m: &'ast syn::Macro) {
-            self.tokens(m.tokens.clone());
-            syn::visit::visit_macro(self, m);
-        }
-        fn visit_meta_list(&mut self, m: &'ast syn::MetaList) {
-            self.tokens(m.tokens.clone());
-            syn::visit::visit_meta_list(self, m);
-        }
-    }
-
-    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
-    let mut imports = Imports::default();
-    imports.visit_file(&file);
-    imports.0
+    found
 }
 
 // trace:STORY-1889 | trace:TASK-b6b1278890774ef993d2ebc327862470-009 | ai:claude
@@ -1791,6 +1947,270 @@ fn gate_dispatch_imports_nothing_authority_bearing_from_dispatch() {
             io.contains(primitive),
             "gate/dispatch_io.rs lost `{primitive}`"
         );
+    }
+}
+
+/// Crate-root names `gate/dispatch_*` may reach, each with the unprotected
+/// `aida-cli-lib/src` file that defines it (`""` for `gate` itself and for
+/// `dispatch`, whose items [`GATE_DISPATCH_IMPORT_ALLOWLIST`] governs).
+/// Any other root module could re-export a `crate::dispatch` primitive
+/// under a new path (`pub use crate::dispatch::sha256_hex;` in `util`, then
+/// `crate::util::sha256_hex`), so a new entry needs gate review.
+const GATE_DISPATCH_ROOT_ALLOWLIST: &[(&str, &str)] = &[
+    ("gate", ""),
+    ("dispatch", ""),
+    ("agent_registry", "agent_registry.rs"),
+    ("forge", "forge.rs"),
+    ("mandate_drive", "mandate_drive.rs"),
+    ("process_probe", "process_probe.rs"),
+    ("canonical_role_name", "kernel.rs"),
+    ("load_store_for_lookup", "lib_part3.rs"),
+];
+
+/// Every `gate/dispatch_*.rs` source, by file name.
+fn gate_dispatch_sources() -> Vec<(String, String)> {
+    let gate_dir = workspace_root().join("aida-cli-lib/src/gate");
+    let mut out: Vec<(String, String)> = std::fs::read_dir(&gate_dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("dispatch_") && n.ends_with(".rs"))
+        .map(|n| {
+            let text = std::fs::read_to_string(gate_dir.join(&n)).unwrap();
+            (n, text)
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[test]
+fn source_inclusion_detection_sees_evasive_forms() {
+    for src in [
+        "include!(\"../dispatch.rs\");",
+        "fn f() { include!(\"../dispatch.rs\") }",
+        "std::include!(\"../dispatch.rs\");",
+        "fn f() { core::include!(\"../dispatch.rs\") }",
+        "use std::include as inc;\nfn f() { inc!(\"../dispatch.rs\") }",
+        "use std::{include};",
+        "macro_rules! m { () => { include!(\"../dispatch.rs\"); } }",
+        "#[path = \"../dispatch.rs\"] mod x;",
+        "#[path = \"tests/../../dispatch.rs\"] mod x;",
+        "#[path = \"/home/u/aida/aida-cli-lib/src/dispatch.rs\"] mod x;",
+        "#[path = \"\\x2e\\x2e/dispatch.rs\"] mod x;",
+        "#[path = r\"..\\dispatch.rs\"] mod x;",
+        "#[path = r#\"../dispatch.rs\"#] mod x;",
+        "#[path =\n    \"../dispatch.rs\"]\nmod x;",
+        "#[cfg_attr(test, path = \"../dispatch.rs\")] mod x;",
+        "#[cfg_attr(all(), cfg_attr(all(), path = \"../dispatch.rs\"))] mod x;",
+        "mod outer { #[path = \"../../dispatch.rs\"] mod x; }",
+        "macro_rules! m { () => { #[path = \"../dispatch.rs\"] mod x; } }",
+    ] {
+        assert!(
+            !source_inclusions(src).is_empty(),
+            "`{src}` compiles outside source into the gate unseen"
+        );
+    }
+    for src in [
+        "#[cfg(test)]\n#[path = \"tests/story_1917_dispatch_exec_tests.rs\"]\nmod t;",
+        "mod inline { fn f() {} }",
+        "fn f() { let _ = \"start with --include-supervised\"; }",
+        "fn f() { let _ = include_str!(\"tests/fixture.txt\"); }",
+    ] {
+        assert_eq!(source_inclusions(src), Vec::<String>::new(), "{src}");
+    }
+}
+
+/// `gate/dispatch_*` compiles no source from outside `gate/`:
+/// `include!("../dispatch.rs")` or `#[path = "../dispatch.rs"] mod x;`
+/// would put unprotected `dispatch.rs` code inside the gate module.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[test]
+fn gate_dispatch_includes_no_source_from_outside_the_gate() {
+    let bad: Vec<String> = gate_dispatch_sources()
+        .into_iter()
+        .flat_map(|(name, text)| {
+            source_inclusions(&text)
+                .into_iter()
+                .map(move |how| format!("  gate/{name}: {how}"))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "gate/dispatch_* compiles source from outside `gate/`:\n{}\nMove the \
+         code into a gate module and mount it with a plain relative `#[path]`.",
+        bad.join("\n")
+    );
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[test]
+fn crate_root_name_detection_sees_evasive_forms() {
+    for (src, want) in [
+        ("use crate::util::sha256_hex;", "util"),
+        ("use crate::util::sha256_hex as h;", "util"),
+        ("use crate::{gate, util::{sha256_hex}};", "util"),
+        ("use super::super::util::sha256_hex;", "util"),
+        ("use self::super::super::util::sha256_hex;", "util"),
+        ("use super::super::{util};", "util"),
+        ("mod m { use super::super::super::util::x; }", "util"),
+        (
+            "mod m { mod n { fn f() { super::super::super::super::util::x(); } } }",
+            "util",
+        ),
+        ("fn f() { crate::util::sha256_hex(b); }", "util"),
+        ("fn f() -> crate::util::Rec { todo!() }", "util"),
+        ("fn f() { m!(crate::util::sha256_hex); }", "util"),
+        (
+            "fn f() { let _ = format!(\"{}\", crate::util::sha256_hex(b)); }",
+            "util",
+        ),
+        ("#[serde(with = \"crate::util::codec\")]\nstruct S;", "util"),
+        ("macro_rules! m { () => { $crate::util::x() } }", "util"),
+        ("fn f() { use crate::{util as u}; }", "util"),
+        ("use crate as c;", "crate"),
+        ("use crate::{self as c};", "crate"),
+        ("use super::super as c;", "crate"),
+        ("extern crate self as me;", "crate"),
+        ("use crate::*;", "*"),
+        ("use super::super::*;", "*"),
+    ] {
+        let got = crate_root_names(src);
+        assert!(
+            got.iter().any(|g| g == want),
+            "`{src}` must report `{want}`, got {got:?}"
+        );
+    }
+    for src in [
+        "use super::*;",
+        "use super::dispatch_io::sha256_hex;",
+        "use self::inner::x;",
+        "mod tests { use super::*; }",
+        "mod tests { use super::super::dispatch_io::x; }",
+        "fn f() { std::fs::read(\"x\").ok(); }",
+        "fn f() { let _ = \"reviewer\"; }",
+    ] {
+        assert_eq!(crate_root_names(src), Vec::<String>::new(), "{src}");
+    }
+    assert_eq!(crate_root_names("use crate::gate::mandate;"), vec!["gate"]);
+}
+
+/// `gate/dispatch_*` reaches the crate root only through
+/// [`GATE_DISPATCH_ROOT_ALLOWLIST`], and neither those names' defining
+/// sources nor the crate-root sources (`lib.rs` and what it `include!`s,
+/// where a `use` could shadow an allowlisted name) touch `crate::dispatch`.
+/// Without this, a mandate-shipped `pub use crate::dispatch::sha256_hex;` in
+/// any unprotected module launders the primitive past the import ratchet.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[test]
+fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
+    let allowed = |n: &str| GATE_DISPATCH_ROOT_ALLOWLIST.iter().any(|(a, _)| *a == n);
+    let mut bad = Vec::new();
+    for (name, text) in gate_dispatch_sources() {
+        for root in crate_root_names(&text) {
+            if !allowed(&root) {
+                bad.push(format!("  gate/{name}: crate::{root}"));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "gate/dispatch_* reaches crate-root names off the allowlist:\n{}\nUse \
+         the item through a gate module, or add its module to \
+         GATE_DISPATCH_ROOT_ALLOWLIST with gate review.",
+        bad.join("\n")
+    );
+
+    let src = workspace_root().join("aida-cli-lib/src");
+    let read =
+        |f: &str| std::fs::read_to_string(src.join(f)).unwrap_or_else(|e| panic!("{f}: {e}"));
+    let lib = read("lib.rs");
+    let include = regex::Regex::new(r#"include!\s*\(\s*"([^"]+)""#).unwrap();
+    let root_files: Vec<String> = std::iter::once("lib.rs".to_string())
+        .chain(include.captures_iter(&lib).map(|c| c[1].to_string()))
+        .collect();
+    // (file, levels below the root its top-level code sits)
+    let mut scanned: Vec<(String, usize)> = root_files.iter().map(|f| (f.clone(), 0)).collect();
+    for (name, file) in GATE_DISPATCH_ROOT_ALLOWLIST {
+        if file.is_empty() || root_files.iter().any(|f| f == file) {
+            continue;
+        }
+        let text = read(file);
+        let defines = regex::Regex::new(&format!(r"\b(fn|mod)\s+{name}\b")).unwrap();
+        assert!(
+            *file == format!("{name}.rs") || defines.is_match(&text),
+            "{file} no longer defines allowlisted `{name}`"
+        );
+        scanned.push((file.to_string(), 1));
+        // Modules the allowlisted file mounts sit one level further down.
+        for target in reach(&text, 1).path_targets {
+            if !target.starts_with("tests/") {
+                scanned.push((target, 2));
+            }
+        }
+    }
+    for (name, file) in GATE_DISPATCH_ROOT_ALLOWLIST {
+        if root_files.iter().any(|f| f == file) {
+            let defines = regex::Regex::new(&format!(r"\bfn\s+{name}\s*[(<]")).unwrap();
+            assert!(
+                defines.is_match(&read(file)),
+                "{file} no longer defines `fn {name}`"
+            );
+        }
+    }
+    let launders: Vec<String> = scanned
+        .iter()
+        .flat_map(|(file, level)| {
+            launders_at(&read(file), *level)
+                .into_iter()
+                .map(move |item| format!("  {file}: crate::dispatch::{item}"))
+        })
+        .collect();
+    assert!(
+        launders.is_empty(),
+        "a source gate/dispatch_* may reach names `crate::dispatch`, so it \
+         could re-export a dispatch primitive into the gate:\n{}",
+        launders.join("\n")
+    );
+}
+
+// The laundering forms an allowlisted (or crate-root) source could use are
+// seen at that source's level.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[test]
+fn dispatch_item_detection_sees_laundering_at_each_level() {
+    for (src, level) in [
+        ("pub use crate::dispatch::sha256_hex;", 1),
+        ("pub use super::dispatch::sha256_hex;", 1),
+        ("pub use super::super::dispatch::sha256_hex;", 2),
+        (
+            "pub fn h(b: &[u8]) -> String { crate::dispatch::sha256_hex(b) }",
+            1,
+        ),
+        ("pub use dispatch::sha256_hex as canonical_role_name;", 0),
+        (
+            "pub fn load_store_for_lookup() { dispatch::sha256_hex(b); }",
+            0,
+        ),
+        ("pub use self::dispatch::*;", 0),
+        ("pub use super::*;", 1),
+        ("pub(crate) use super::{self as root};", 1),
+        ("mod tests { pub(crate) use super::super::*; }", 1),
+        ("use crate::dispatch::sha256_hex;", 1),
+    ] {
+        assert!(
+            !launders_at(src, level).is_empty(),
+            "`{src}` at level {level} must be seen"
+        );
+    }
+    for (src, level) in [
+        ("mod dispatch;\nuse kernel::*;\n", 0),
+        ("fn f() { let _ = \"dispatch\"; }", 0),
+        ("mod tests { use super::*; }", 0),
+        ("use super::*;", 1),
+    ] {
+        assert!(launders_at(src, level).is_empty(), "{src}");
     }
 }
 
