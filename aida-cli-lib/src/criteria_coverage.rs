@@ -290,12 +290,24 @@ fn git_grep_lines(project_root: &Path, pattern: &str, pathspecs: &[&str]) -> Opt
     }
 }
 
-const CRITERION_TOKEN_PATTERN: &str = r"trace:[A-Z]+-[0-9-]+\.(ac|AC|a|A)[0-9A-Za-z_-]+";
-const TRACE_COMMENT_PATTERN: &str = r"trace:[A-Z]+-[0-9][0-9-]*";
+/// `git grep -E` patterns over the shared spec-id shape, so node-local ids
+/// (`TASK-<hex node>-NNN`) count.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+fn criterion_token_pattern() -> String {
+    format!(r"trace:{}\.(ac|AC|a|A)[0-9A-Za-z_-]+", crate::SPEC_ID_ERE)
+}
+
+fn trace_comment_pattern() -> String {
+    format!("trace:{}", crate::SPEC_ID_ERE)
+}
 
 pub(crate) fn collect_trace_tokens(project_root: &Path) -> TraceTokens {
-    let criterion = git_grep_lines(project_root, CRITERION_TOKEN_PATTERN, &[]);
-    let comments = git_grep_lines(project_root, TRACE_COMMENT_PATTERN, TRACE_SOURCE_PATHSPECS);
+    let criterion = git_grep_lines(project_root, &criterion_token_pattern(), &[]);
+    let comments = git_grep_lines(
+        project_root,
+        &trace_comment_pattern(),
+        TRACE_SOURCE_PATHSPECS,
+    );
     match (criterion, comments) {
         (Some(criterion), Some(comments)) => TraceTokens {
             criterion_tokens: criterion
