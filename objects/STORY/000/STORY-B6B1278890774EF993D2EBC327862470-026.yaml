@@ -1,0 +1,35 @@
+id: 01a17e35-16b8-7f90-8c8b-da0ef9b42985
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-026
+title: 'Review PR-2982: [AI:claude] perf(show): run the filing-drift walk concurrently with the shipped check and branch search (Refs BUG-2221)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2221-drift`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2982>
+  - Branch: `bug-2221-drift` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2221
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2982` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-27T16:32:50.872372520Z
+modified_at: 2026-10-27T16:32:50.872372520Z
+req_type: Story
+filed_at:
+  code_sha: 0824afb4a4f293c27f7582148a572bfbbe155e26
+  branch: bug-2221-drift
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0c374c424f
+  vendor: claude
+  session: c3748f87-d524-493c-98c8-3430cb368078
