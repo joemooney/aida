@@ -847,7 +847,11 @@ pub(crate) fn filing_drift_hint(
 
 /// [`filing_drift_hint`] for `aida show`: each git call is also clipped to
 /// the linkage `deadline`; a call the deadline cuts short reads "unknown".
-// trace:BUG-1993 | ai:claude
+/// BUG-2221: show now gets this answer from
+/// [`collect_git_linkage_with_drift_until`]; this serial form is the test
+/// reference it must equal.
+// trace:BUG-1993 trace:BUG-2221 | ai:claude
+#[cfg(test)]
 pub(crate) fn filing_drift_hint_until(
     project_root: &std::path::Path,
     filed_at: Option<&aida_core::FilingProvenance>,
@@ -993,7 +997,22 @@ pub(crate) fn collect_git_linkage_until(
     ids: &[String],
     deadline: std::time::Instant,
 ) -> GitLinkage {
-    collect_git_linkage_inner(project_root, ids, true, Some(deadline))
+    collect_git_linkage_inner(project_root, ids, true, Some(deadline), None).0
+}
+
+/// [`collect_git_linkage_until`] plus the [`filing_drift_hint_until`] answer,
+/// under the same `deadline`. The drift walk starts on its own thread as soon
+/// as its inputs (`commits` and `files`) are known and overlaps the shipped
+/// check and branch search; it is joined before this returns, so its output
+/// equals the serial `collect_git_linkage_until` then `filing_drift_hint_until`.
+// trace:BUG-2221 | ai:claude
+pub(crate) fn collect_git_linkage_with_drift_until(
+    project_root: &std::path::Path,
+    ids: &[String],
+    filed_at: Option<&aida_core::FilingProvenance>,
+    deadline: std::time::Instant,
+) -> (GitLinkage, Option<String>) {
+    collect_git_linkage_inner(project_root, ids, true, Some(deadline), Some(filed_at))
 }
 
 /// The orphan git-canonical requirements-store branch name (see CLAUDE.md
@@ -1032,7 +1051,7 @@ pub(crate) fn collect_git_linkage_opts(
     ids: &[String],
     scan_trace: bool,
 ) -> GitLinkage {
-    collect_git_linkage_inner(project_root, ids, scan_trace, None)
+    collect_git_linkage_inner(project_root, ids, scan_trace, None, None).0
 }
 
 /// What the referencing-commit scan produced: the original query's raw
@@ -1046,14 +1065,16 @@ enum LogOutput {
 /// The linkage collector. `deadline` is `Some` only for `aida show`
 /// ([`collect_git_linkage_until`]); with `None` every call keeps its
 /// pre-BUG-1993-rework bound (the shared resolvers and the worktree probe
-/// unbounded).
+/// unbounded). `drift` is `Some(filed_at)` when the caller also wants the
+/// filing-drift hint (BUG-2221); the second element is `None` otherwise.
 // trace:BUG-1993 | ai:claude
 fn collect_git_linkage_inner(
     project_root: &std::path::Path,
     ids: &[String],
     scan_trace: bool,
     deadline: Option<std::time::Instant>,
-) -> GitLinkage {
+    drift: Option<Option<&aida_core::FilingProvenance>>,
+) -> (GitLinkage, Option<String>) {
     use std::process::Command as PCmd;
     // BUG-1993: a per-call budget, clipped to the show deadline when there is one.
     let cap = |budget: std::time::Duration| match deadline {
@@ -1275,6 +1296,20 @@ fn collect_git_linkage_inner(
         })
         .collect();
     let commits = indexed_commits.unwrap_or(parsed);
+
+    // BUG-2221: the drift walk needs only `commits` and `files`, so it starts
+    // here and overlaps the oracle settle, the shipped check and the branch
+    // search instead of running after them. One thread, joined below; each of
+    // its git calls keeps its own bound clipped to `deadline`.
+    // trace:BUG-2221 | ai:claude
+    let drift_handle = drift.map(|filed_at| {
+        let (root, filed_at) = (project_root.to_path_buf(), filed_at.cloned());
+        let (files, commits) = (files.clone(), commits.clone());
+        std::thread::spawn(move || {
+            let _drift_phase = crate::usage::phase("linkage.drift");
+            filing_drift_hint_inner(&root, filed_at.as_ref(), &files, &commits, deadline)
+        })
+    });
 
     // BUG-2221: settle the probe's deferral with the original collector's
     // answer. Only a successful, completely framed run counts as an oracle
@@ -1539,22 +1574,30 @@ fn collect_git_linkage_inner(
         }
     }
 
-    GitLinkage {
-        commits,
-        files,
-        shipped,
-        branch,
-        other_branches,
-        branch_scan_truncated,
-        files_scan_incomplete,
-        commits_scan_incomplete,
-        shipped_unknown,
-        worktree_scan_incomplete,
-        worktree,
-        shipped_pr,
-        // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
-        repo: workspace_repo_slug(project_root),
-    }
+    let repo = workspace_repo_slug(project_root);
+    // BUG-2221: a panic in the drift walk propagates as it did when serial.
+    let drift_since_filing =
+        drift_handle.and_then(|h| h.join().unwrap_or_else(|p| std::panic::resume_unwind(p)));
+
+    (
+        GitLinkage {
+            commits,
+            files,
+            shipped,
+            branch,
+            other_branches,
+            branch_scan_truncated,
+            files_scan_incomplete,
+            commits_scan_incomplete,
+            shipped_unknown,
+            worktree_scan_incomplete,
+            worktree,
+            shipped_pr,
+            // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
+            repo,
+        },
+        drift_since_filing,
+    )
 }
 
 pub(crate) fn print_git_linkage(
@@ -1581,6 +1624,10 @@ pub(crate) fn print_git_linkage(
             .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
     };
 
+    // BUG-2221: the drift hint is computed alongside the collection and
+    // printed last, as before. trace:BUG-2221 | ai:claude
+    let (linkage, drift_since_filing) =
+        collect_git_linkage_with_drift_until(project_root, ids, filed_at, deadline);
     let GitLinkage {
         commits,
         files,
@@ -1596,7 +1643,7 @@ pub(crate) fn print_git_linkage(
         shipped_pr,
         // trace:STORY-634 | ai:claude
         repo,
-    } = collect_git_linkage_until(project_root, ids, deadline);
+    } = linkage;
 
     if commits.is_empty() && files.is_empty() && commits_scan_incomplete {
         // BUG-1993 (PRIN-5): the commit scan timed out — the linkage is
@@ -1857,8 +1904,7 @@ pub(crate) fn print_git_linkage(
     // say (no provenance, unresolvable sha, no traced files, or no drift).
     // trace:TASK-1475 | ai:claude
     // trace:BUG-1993 | ai:claude
-    if let Some(hint) = filing_drift_hint_until(project_root, filed_at, &files, &commits, deadline)
-    {
+    if let Some(hint) = drift_since_filing {
         println!("  {}", hint.dimmed());
     }
 }
@@ -3936,3 +3982,7 @@ mod bug_1993_show_deadline_tests;
 #[cfg(test)]
 #[path = "tests/bug_2221_trace_traversal_tests.rs"]
 mod bug_2221_trace_traversal_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2221_drift_concurrency_tests.rs"]
+mod bug_2221_drift_concurrency_tests;
