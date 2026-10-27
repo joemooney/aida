@@ -1811,6 +1811,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
+    // BUG-b6b1278890774ef993d2ebc327862470-001: node-local ID allocation that
+    // would refuse (unsafe state file, dispenser on another node). Report-only.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    (
+        &["allocation", "id-allocation", "dispenser", "node-binding"],
+        "allocation",
+    ),
     // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
     // trace:BUG-2140 | ai:antigravity
     (

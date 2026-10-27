@@ -36,9 +36,51 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>> {
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
     {
-        Ok(f) => read_handle(f).map(Some),
+        Ok(f) => {
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+            if let Some(problem) = f.metadata().ok().and_then(|m| unsafe_state(&m, path)) {
+                bail!("unsafe WORK allocation state: {problem}");
+            }
+            read_handle(f).map(Some)
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(anyhow::Error::new(e).context(format!(
+            "cannot open WORK allocation state {}",
+            path.display()
+        ))),
+    }
+}
+
+/// Why `read_handle` would refuse this file, phrased with its repair, or
+/// `None` when it is safe. Shared by the reader and `aida doctor`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+pub fn unsafe_state(m: &std::fs::Metadata, path: &Path) -> Option<String> {
+    use std::os::unix::fs::MetadataExt;
+    let p = path.display();
+    let euid = unsafe { libc::geteuid() };
+    if !m.is_file() {
+        Some(format!(
+            "{p} is not a regular file; explicit recovery required"
+        ))
+    } else if m.nlink() > 1 {
+        Some(format!(
+            "{p} has {} hard links; replace it with a single-link copy",
+            m.nlink()
+        ))
+    } else if m.uid() != euid {
+        Some(format!(
+            "{p} is owned by uid {}, not the current user (uid {euid}); run `chown {euid} {p}`",
+            m.uid()
+        ))
+    } else if m.mode() & 0o022 != 0 {
+        Some(format!(
+            "{p} is group- or other-writable (mode {:04o}); run `chmod go-w {p}`",
+            m.mode() & 0o7777
+        ))
+    } else if m.len() > 1024 * 1024 {
+        Some(format!("{p} exceeds 1 MiB; explicit recovery required"))
+    } else {
+        None
     }
 }
 
@@ -182,9 +224,16 @@ fn merge_legacy_state(root: &Path, legacy: &Path, state: &mut DispenserState) ->
         (None, None) => {}
         (Some(node), Some(old)) => {
             crate::node::validate_node_id(&node.node_id).map_err(anyhow::Error::msg)?;
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
             anyhow::ensure!(
                 old.mode == node.id_mode(),
-                "legacy node/provider binding mismatch"
+                "legacy node/provider binding mismatch: {} is bound to node {} but {} records {}; \
+                 set its mode to node {} only if no IDs were dispensed under the other node",
+                root.join(".aida/node.toml").display(),
+                node.node_id,
+                legacy.display(),
+                mode_label(&old.mode),
+                node.node_id
             );
         }
         _ => bail!("incomplete legacy node/provider pair; explicit recovery required"),
@@ -196,6 +245,14 @@ fn merge_legacy_state(root: &Path, legacy: &Path, state: &mut DispenserState) ->
         }
     }
     Ok(())
+}
+
+/// Human label for a dispenser mode in diagnostics.
+pub fn mode_label(mode: &IdMode) -> String {
+    match mode {
+        IdMode::Distributed { node_id } => format!("node {node_id}"),
+        other => format!("{other:?}").to_lowercase(),
+    }
 }
 
 #[path = "work_candidate.rs"]

@@ -278,6 +278,16 @@ impl Dispenser for FileDispenser {
 
         let result = (|| {
             let mut state = self.load_state()?;
+            // A counter recorded under another node must never be advanced and
+            // written back under that node while IDs format as this one.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+            anyhow::ensure!(
+                state.mode == self.mode,
+                "{} records {} but this clone is {}; run `aida doctor allocation` for the repair",
+                self.path.display(),
+                crate::work_binding::mode_label(&state.mode),
+                crate::work_binding::mode_label(&self.mode)
+            );
             let counter = state
                 .sequences
                 .entry(object_type.to_uppercase())
@@ -605,6 +615,29 @@ mod tests {
         .unwrap();
         assert_eq!(d2.next("FR").unwrap(), 4);
         assert_eq!(d2.peek("FEAT").unwrap(), 1);
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn file_dispenser_refuses_a_counter_recorded_under_another_node() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.toml");
+        let foreign = "[mode.Distributed]\nnode_id = 2\n\n[sequences]\nGLOBAL = 52\n";
+        std::fs::write(&path, foreign).unwrap();
+        let d = FileDispenser::open(
+            path.clone(),
+            IdMode::Distributed {
+                node_id: "1".to_string(),
+            },
+        )
+        .unwrap();
+        let err = d.next("GLOBAL").unwrap_err().to_string();
+        assert!(
+            err.contains("records node 2 but this clone is node 1"),
+            "{err}"
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), foreign);
     }
 
     #[cfg(feature = "native")]
