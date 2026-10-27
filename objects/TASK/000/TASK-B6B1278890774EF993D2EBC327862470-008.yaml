@@ -6,12 +6,12 @@ description: |-
 
   non-blocking (cosmetic): zen_drive::looks_like_spec_id now inherits the shared rule, so 'aida do' newly treats single-token hyphenated thoughts ending in digits (e.g. 'follow-up-2') as spec ids, and a 1-letter prefix ('X-1') as a thought; arg containing leading/trailing whitespace is now rejected rather than trimmed (callers trim first, so no live impact). Existing zen tests still pass.
   Reviewed sha: a3bc7b0b7d4d64f8aa6548fadf32506f0afc478c
-status: Draft
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-26T23:32:56.033994896Z
-modified_at: 2026-10-27T07:06:19.244467960Z
+modified_at: 2026-10-27T07:49:52.206179136Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-006
@@ -24,12 +24,27 @@ relationships:
   target_id: 01a17c2e-2698-7822-8750-2190d8aeb666
   created_at: 2026-10-27T07:06:19.244465300Z
   created_by: joe
+comments:
+- id: 01a17c56-49ce-7692-ba35-c5fd48cffae7
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (d388256) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-27T07:49:52.206176909Z
+  modified_at: 2026-10-27T07:49:52.206176909Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17c2e-7135-73c2-ab3f-ea3c7bc3bb03
   author: joe
   timestamp: 2026-10-27T07:06:20.853635852Z
   session_id: 3a6f6dcb-e80d-45a8-b8a5-895914394646
   changes: []
+- id: 01a17c56-49ce-7692-ba35-c5e7421ad582
+  author: aida-auto-bump
+  timestamp: 2026-10-27T07:49:52.206175622Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 596fbdfbb71ac7c680bdf0e75abb9702782ccc67
   branch: main
