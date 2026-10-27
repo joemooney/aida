@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-27T17:08:43.504229537Z
+modified_at: 2026-10-27T17:08:48.376744444Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1083,6 +1083,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: C2 round 2: F2-F7 from round 1 land with tests (ending-retained readers, unbound clones refuse, clone endings, refusal fixtures, journal index, fail-closed activation scan, operator-only record, pool work out of the lock). But CI is red at e8d93f3 (cli-0 and lib-0 ''Run tests'' failed), and pool destroy/teardown run pre_destroy hooks after the retirement commits with no recheck before git worktree remove, so hook-written mail is destroyed (binding 63 #1).. No triage reason was given.'
   created_at: 2026-10-27T17:08:43.504221919Z
   modified_at: 2026-10-27T17:08:43.504221919Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17e56-0278-7153-be33-bdfe14376f93
+  author: joe
+  content: 'ADVISOR triage: back to approved; C1 (#2949) and B1/B2a landed, B2b (#2952) in re-review, C2 (#2973) in round-3 rework; C3x and B2c follow.'
+  created_at: 2026-10-27T17:08:48.376744444Z
+  modified_at: 2026-10-27T17:08:48.376744444Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
