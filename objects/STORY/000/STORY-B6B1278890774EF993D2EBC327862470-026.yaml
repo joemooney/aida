@@ -23,8 +23,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T16:32:50.872372520Z
-modified_at: 2026-10-27T16:32:50.872372520Z
+modified_at: 2026-10-27T16:33:00.757968228Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
+  created_at: 2026-10-27T16:33:00.757963449Z
+  created_by: joe
+history:
+- id: 01a17e35-46a3-7a01-a589-d7ffa962ff3f
+  author: joe
+  timestamp: 2026-10-27T16:33:03.139195545Z
+  session_id: c3748f87-d524-493c-98c8-3430cb368078
+  changes: []
 filed_at:
   code_sha: 0824afb4a4f293c27f7582148a572bfbbe155e26
   branch: bug-2221-drift
