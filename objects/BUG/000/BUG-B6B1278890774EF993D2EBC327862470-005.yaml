@@ -7,8 +7,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T22:41:09.808737170Z
-modified_at: 2026-10-26T22:41:09.808737170Z
+modified_at: 2026-10-27T05:28:22.981154519Z
 req_type: Bug
+comments:
+- id: 01a17bd4-c0c5-78e3-8c66-c02d39a2df2f
+  author: joe
+  content: 'ADVISOR: duplicate of BUG-b6b1278890774ef993d2ebc327862470-006, fixed by PR #2956 (shared looks_like_spec_id cap raised 40->64; node-local IDs now parse in auto-queue, auto-bump and ship).'
+  created_at: 2026-10-27T05:28:22.981154519Z
+  modified_at: 2026-10-27T05:28:22.981154519Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 filed_at:
   code_sha: d03e173556b1d485c37aeb5f75a046d7180455a1
   branch: followups-2934-2942
