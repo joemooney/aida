@@ -2428,18 +2428,15 @@ pub(crate) fn normalize_agent_type(raw: String) -> String {
     }
 }
 
-fn env_nonempty(key: &str) -> Option<String> {
-    std::env::var(key).ok().filter(|s| !s.trim().is_empty())
+/// Canonical spec ids only: a lower-case `story-431` is a branch or session
+/// name here, not a scope.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+fn looks_like_spec_id(s: &str) -> bool {
+    crate::looks_like_canonical_spec_id(s)
 }
 
-fn looks_like_spec_id(s: &str) -> bool {
-    let Some((prefix, number)) = s.split_once('-') else {
-        return false;
-    };
-    !prefix.is_empty()
-        && prefix.chars().all(|c| c.is_ascii_uppercase())
-        && !number.is_empty()
-        && number.chars().all(|c| c.is_ascii_digit())
+fn env_nonempty(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|s| !s.trim().is_empty())
 }
 
 // trace:STORY-994 | ai:codex
@@ -4693,6 +4690,12 @@ source = "mcp"
         assert!(looks_like_spec_id("TASK-498"));
         assert!(!looks_like_spec_id("story-431"));
         assert!(!looks_like_spec_id("branch-name"));
+        assert!(looks_like_spec_id(
+            "TASK-b6b1278890774ef993d2ebc327862470-007"
+        ));
+        assert!(!looks_like_spec_id(
+            "task-b6b1278890774ef993d2ebc327862470-007"
+        ));
     }
 
     // trace:BUG-1920 | ai:claude
