@@ -79353,5 +79353,31 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6172
+- id: 01a17f77-e79b-7751-9877-d52807f99e74
+  target_id: 01a17f77-d8c9-7cb3-9dcd-a0bfa2450e6f
+  author: aida
+  node_id: '1'
+  lamport: 6173
+  timestamp: 2026-10-27T22:25:26.939106124Z
+  kind: !Create
+    title: 'Review PR-2994: [AI:claude] feat(allocation): read-only `aida db audit-ids`, registry scanner fixtures and docs (BUG-2017)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2017-s3ii`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2994>
+      - Branch: `bug-2017-s3ii` → `main`
+
+      ## Covers
+
+      - BUG-2017
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2994` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6173
 node_id: '1'
