@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T16:38:01.593846674Z
+modified_at: 2026-10-27T17:07:39.002577932Z
 req_type: Bug
 tags:
 - id-allocation
@@ -780,6 +780,12 @@ comments:
   content: 'ADVISOR 2026-10-27 09:45 MST: execution mode set to drain (operator asked for unattended landing; every PR on this spec still needs an independent reviewer approval at head and green CI; protected gate paths still need the operator).'
   created_at: 2026-10-27T16:38:01.593846674Z
   modified_at: 2026-10-27T16:38:01.593846674Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17e54-f37a-7a10-8045-2dbb128ee55a
+  author: joe
+  content: 'ADVISOR triage: back to approved; S3-i (#2972) is in its merge-order rework now that S3c landed; S3-ii follows.'
+  created_at: 2026-10-27T17:07:39.002577932Z
+  modified_at: 2026-10-27T17:07:39.002577932Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
