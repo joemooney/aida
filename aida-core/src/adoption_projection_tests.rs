@@ -375,7 +375,7 @@ fn a_stale_projection_is_withheld_when_the_refresh_fails() {
     let Delivery::Withheld { reason } = delivered_guidance(&top) else {
         panic!("revision {first} delivered after a failed refresh");
     };
-    assert!(reason.contains(".aida/config.toml"), "{reason}");
+    assert!(reason.contains(CONFIG), "{reason}");
 
     // With the config intact again the projection is merely behind: still
     // withheld rather than delivered as the old revision.
