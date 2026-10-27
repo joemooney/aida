@@ -365,10 +365,16 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
             );
         }
         // The plan reports every limitation `config transport show` does for
-        // this operation; pull additionally carries the fast-forward caveat.
+        // this operation, then the plan-only caveat; pull additionally carries
+        // the fast-forward caveat.
         // trace:STORY-1742 | ai:claude
         let limits = plan["limitations"].to_string();
-        for expected in ["raw Git", "without scanning it", "reviewed private policy"] {
+        for expected in [
+            "raw Git",
+            "without scanning it",
+            "reviewed private policy",
+            "Plans inspect local metadata only",
+        ] {
             assert!(limits.contains(expected), "{operation}: {limits}");
         }
         assert_eq!(
