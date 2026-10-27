@@ -3606,6 +3606,12 @@ Commands:
                          (two requirements claiming the same short id, which the gate-time check
                          prevents going forward but doesn't retroactively detect)
   migrate-related-edges  Repair custom edges that graph traversals do not follow
+  audit-ids              Audit allocation claims for conflicts, read-only. Reads the store's
+                         committed HEAD plus every `--against` ref (already-local commits only;
+                         nothing is fetched) and all their merge bases, and reports every global ID
+                         range, node binding and display ID that two claims dispute, with a manual
+                         repair plan. Changes nothing. Exits non-zero when it finds a conflict or
+                         cannot read every claim
   help                   Print this message or the help of the given subcommand(s)
 
 Options:
@@ -4016,6 +4022,35 @@ Options:
 
       --json
           Emit the report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida db audit-ids
+Audit allocation claims for conflicts, read-only. Reads the store's committed HEAD plus every
+`--against` ref (already-local commits only; nothing is fetched) and all their merge bases, and
+reports every global ID range, node binding and display ID that two claims dispute, with a manual
+repair plan. Changes nothing. Exits non-zero when it finds a conflict or cannot read every claim
+
+Usage: aida db audit-ids [OPTIONS]
+
+Options:
+      --against <REF>
+          Also audit the claims of this already-local commit or ref (for example a remote-tracking
+          ref of the store branch). Repeatable. Nothing is fetched: fetch first if the ref should be
+          current
+
+      --json
+          Emit the audit as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -28647,6 +28682,37 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit the report as JSON"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "db",
+      "audit-ids"
+    ],
+    "about": "Audit allocation claims for conflicts, read-only. Reads the store's committed HEAD plus every `--against` ref (already-local commits only; nothing is fetched) and all their merge bases, and reports every global ID range, node binding and display ID that two claims dispute, with a manual repair plan. Changes nothing. Exits non-zero when it finds a conflict or cannot read every claim",
+    "flags": [
+      {
+        "name": "against",
+        "takes_value": true,
+        "help": "Also audit the claims of this already-local commit or ref (for example a remote-tracking ref of the store branch). Repeatable. Nothing is fetched: fetch first if the ref should be current"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the audit as JSON"
       }
     ],
     "hidden": true

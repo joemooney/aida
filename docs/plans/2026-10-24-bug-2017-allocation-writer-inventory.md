@@ -82,8 +82,9 @@ authoritative setting during validation.
 - [x] Core merge_gate: explicit global canonical promotion requires local authority
   before lock/counter/object/ref changes. Slice 2 integrates automatic caller
   behavior and verifies WORK-to-HOME alias-preserving promotion end to end.
-- [ ] All pull/rebase/fast-forward/union preflights and read-only audit: slice 3.
-- [ ] Pseudonymous UUID binding without identifying fields: slice 2. Existing
+- [x] All pull/rebase/fast-forward/union preflights: slice 3 S3-i (#2972). Read-only
+  audit (`aida db audit-ids`) and node/registry scanner fixtures: slice 3 S3-ii.
+- [x] Pseudonymous UUID binding without identifying fields: slice 2. Existing
   binding schema is preserved in slice 1; no automatic legacy registration on WORK.
 
 ## Validation plan
@@ -129,11 +130,12 @@ native CLI/MCP and distributed contracts, fast gates, touched-test selection and
 compile-only workspace check. Author check findings are not independent review.
 Final exact-head pass/failure evidence belongs in the PR and canonical comments.
 
-## Remaining slice 3 / deployment boundary
+## Slice 3 / deployment boundary
 
-All-conflict reconciliation preflight/audit (global ranges, node bindings and
-display-ID/UUID assignments), STORY-1742 serialization/scanner integration, and
-final acceptance documentation remain mandatory. The current post-pull caller
+All-conflict reconciliation preflight (global ranges, node bindings and
+display-ID/UUID assignments) runs at every sync merge point (S3-i). The read-only
+audit, the STORY-1742 node/registry serialization scanner fixtures and the final
+acceptance documentation (`docs/cli/10-storage.md`) are S3-ii. The post-pull caller
 condition changes only promotion; it does not introduce a new transport executor,
 scanner exemption, prepared-candidate policy engine or outer lock. Actual HOME
 enrollment and live rollout remain explicit operator actions after source review;

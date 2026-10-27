@@ -111,7 +111,8 @@ pub enum ConflictKind {
 }
 
 impl ConflictKind {
-    fn describe(self) -> &'static str {
+    /// The fixed sanitized phrase for this category.
+    pub fn describe(self) -> &'static str {
         match self {
             ConflictKind::GlobalRange => "global ID ranges can dispense the same ID",
             ConflictKind::NodeBinding => "one node id is bound to different registrations",
@@ -144,7 +145,8 @@ pub enum GapKind {
 }
 
 impl GapKind {
-    fn describe(self) -> &'static str {
+    /// The fixed sanitized phrase for this gap.
+    pub fn describe(self) -> &'static str {
         match self {
             GapKind::GitRead => "a git read failed or was refused",
             GapKind::Bound => "a resource bound was exceeded",
