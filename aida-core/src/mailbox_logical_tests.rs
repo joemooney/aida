@@ -704,3 +704,216 @@ fn story1843_readdir_error_is_never_a_complete_listing() {
         Err(SourceErrorCode::Unreadable)
     );
 }
+
+/// A non-Git project still reads its own local mailbox, but the view is
+/// typed partial: no siblings, no store (it could belong to any repository),
+/// never complete or caught up. A path inside a Git checkout is not
+/// downgraded to local-only.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_local_only_context_is_partial_and_reads_no_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(dir.path()).unwrap();
+    let store = root.join(".aida-store");
+    put(&root, &message("local-1", "t", "advisor", 1));
+    put_canonical(&store, &message("store-1", "t", "advisor", 2));
+    let ctx = MailboxContext::resolve_or_local(&root, Some(&store)).unwrap();
+    assert!(ctx.repository().is_none());
+    let s = logical_snapshot(
+        &ctx,
+        &advisor(),
+        &Query::Inbox,
+        &ReadLimits::explicit_read(),
+    );
+    assert_eq!(ids(&s), vec!["local-1"]);
+    assert_eq!(s.inventory_error, Some(SourceErrorCode::NotAGitCheckout));
+    assert!(!s.complete());
+    assert_eq!(s.caught_up(), None);
+
+    let r = repo();
+    assert!(MailboxContext::resolve_or_local(&r.main, None)
+        .unwrap()
+        .repository()
+        .is_some());
+    std::fs::create_dir_all(r.main.join("sub")).unwrap();
+    assert_eq!(
+        MailboxContext::resolve_or_local(&r.main.join("sub"), None).unwrap_err(),
+        SourceErrorCode::NotAGitCheckout,
+        "a directory inside a checkout is not a local-only project"
+    );
+}
+
+/// A lookup by ID or thread, and the addressable set the follow-up verbs
+/// resolve against, include the audience's own sent mail wherever it lives;
+/// the inbox never lists it. Shared keys never claim a send.
+#[test]
+fn lookups_include_own_sent_mail_and_the_inbox_does_not() {
+    let r = repo();
+    let me = ResolvedAudience::from_identity_policy(
+        vec!["seat-a".into()],
+        vec![],
+        vec!["advisor".into()],
+    )
+    .unwrap();
+    let mut sent = message("sent-by-me", "conv", "someone", 10);
+    sent["from"] = "seat-a".into();
+    put(&r.sib_b, &sent);
+    put(&r.sib_b, &message("reply", "conv", "seat-a", 20));
+    let mut role_sent = message("role-sent", "role", "someone", 30);
+    role_sent["from"] = "advisor".into();
+    put(&r.sib_b, &role_sent);
+    put(&r.sib_b, &message("stranger", "other", "someone", 40));
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    let take = |q: Query| {
+        let s = logical_snapshot(&ctx, &me, &q, &ReadLimits::explicit_read());
+        s.records
+            .iter()
+            .map(|r| r.message.id.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(take(Query::Inbox), vec!["reply"]);
+    assert_eq!(take(Query::Addressable), vec!["sent-by-me", "reply"]);
+    assert_eq!(
+        take(Query::Thread("conv".into())),
+        vec!["sent-by-me", "reply"]
+    );
+    assert_eq!(
+        take(Query::ExactId("sent-by-me".into())),
+        vec!["sent-by-me"]
+    );
+    assert!(take(Query::ExactId("role-sent".into())).is_empty());
+    assert!(take(Query::ExactId("stranger".into())).is_empty());
+}
+
+fn receipt(root: &Path, key: &str, id: &str, at: i64) {
+    let dir = root.join(".aida/mailbox/.read-receipts").join(key);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{id}.txt")), at.to_string()).unwrap();
+}
+
+fn inspector(r: &Repo, limits: &ReadLimits) -> ReceiptInspector {
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    ReceiptInspector::new(&ctx, limits)
+}
+
+/// R3-F1: a receipt tree far larger than the snapshot listing budget is never
+/// listed; exact per-ID lookups still find the receipt in any worktree, and
+/// an exact miss is a complete "not found".
+#[test]
+fn story1843_receipt_lookups_are_exact_per_id_at_scale() {
+    let r = repo();
+    let limits = ReadLimits::explicit_read();
+    // More receipt entries than the whole listing budget, spread over keys
+    // and worktrees.
+    let per_key = limits.max_entries / 4 + 1;
+    for (n, root) in [&r.main, &r.sib_a, &r.sib_b, &r.pool0].iter().enumerate() {
+        for k in 0..2 {
+            let dir = root
+                .join(".aida/mailbox/.read-receipts")
+                .join(format!("seat-{n}-{k}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            for i in 0..per_key {
+                std::fs::write(dir.join(format!("filler-{i}.txt")), "1").unwrap();
+            }
+        }
+    }
+    receipt(&r.pool0, "advisor", "wanted", 42);
+    let started = Instant::now();
+    let inspect = inspector(&r, &limits);
+    assert_eq!(
+        inspect.lookup("advisor", "wanted"),
+        ReceiptLookup::Read { at: 42 }
+    );
+    assert_eq!(
+        inspect.lookup("seat-3-1", &format!("filler-{}", per_key - 1)),
+        ReceiptLookup::Read { at: 1 }
+    );
+    assert_eq!(
+        inspect.lookup("advisor", "never-read"),
+        ReceiptLookup::NotFound
+    );
+    assert_eq!(inspect.lookup("nobody", "wanted"), ReceiptLookup::NotFound);
+    assert!(!inspect.partial(), "exact lookups answered every source");
+    assert!(started.elapsed() < Duration::from_secs(2));
+}
+
+/// R3-F1: a lookup the deadline cuts off is a typed partial, never "no
+/// receipt"; a receipt already found still counts.
+#[test]
+fn story1843_receipt_lookup_past_the_deadline_is_unknown() {
+    let r = repo();
+    receipt(&r.sib_b, "advisor", "seen", 7);
+    let inspect = inspector(&r, &ReadLimits::with_deadline(Instant::now()));
+    assert_eq!(inspect.lookup("advisor", "seen"), ReceiptLookup::Unknown);
+    assert_eq!(inspect.lookup("advisor", "other"), ReceiptLookup::Unknown);
+    assert!(inspect.partial());
+    assert_eq!(
+        ReceiptInspector::unavailable().lookup("advisor", "seen"),
+        ReceiptLookup::Unknown
+    );
+}
+
+/// R3-F3: a stray regular file or symlink where a key directory belongs is
+/// skipped; it neither aborts its worktree's other receipts nor makes the
+/// lookup partial. A corrupt receipt is unknown, not absent.
+#[test]
+fn story1843_unusable_receipt_entries_are_skipped() {
+    let r = repo();
+    let receipts = r.sib_a.join(".aida/mailbox/.read-receipts");
+    std::fs::create_dir_all(&receipts).unwrap();
+    std::fs::write(receipts.join("stray"), "not a directory").unwrap();
+    std::os::unix::fs::symlink(r.sib_b.join("elsewhere"), receipts.join("linked")).unwrap();
+    receipt(&r.sib_a, "advisor", "kept", 9);
+    receipt(&r.sib_b, "corrupt", "bad", 0);
+    std::fs::write(
+        r.sib_b.join(".aida/mailbox/.read-receipts/corrupt/bad.txt"),
+        "garbage",
+    )
+    .unwrap();
+    let inspect = inspector(&r, &ReadLimits::explicit_read());
+    assert_eq!(
+        inspect.lookup("advisor", "kept"),
+        ReceiptLookup::Read { at: 9 }
+    );
+    assert_eq!(inspect.lookup("stray", "kept"), ReceiptLookup::NotFound);
+    assert_eq!(inspect.lookup("linked", "kept"), ReceiptLookup::NotFound);
+    assert!(!inspect.partial());
+    assert_eq!(inspect.lookup("corrupt", "bad"), ReceiptLookup::Unknown);
+    assert!(inspect.partial());
+}
+
+/// R4-N1: an unsafe receipt FILE (a symlink, or hard-linked) is evidence
+/// that could not be read — a typed partial in both scopes, never "not
+/// found" for the fleet counters while the snapshot reports a source error.
+#[test]
+fn story1843_unsafe_receipt_files_are_partial_in_both_scopes() {
+    for link in ["symlink", "hardlink"] {
+        let r = repo();
+        put(&r.sib_a, &message("linked", "t", "advisor", 1));
+        let dir = r.sib_a.join(".aida/mailbox/.read-receipts/advisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = r.sib_a.join("receipt-target.txt");
+        std::fs::write(&target, "5").unwrap();
+        if link == "symlink" {
+            std::os::unix::fs::symlink(&target, dir.join("linked.txt")).unwrap();
+        } else {
+            std::fs::hard_link(&target, dir.join("linked.txt")).unwrap();
+        }
+
+        let inspect = inspector(&r, &ReadLimits::explicit_read());
+        assert_eq!(
+            inspect.lookup("advisor", "linked"),
+            ReceiptLookup::Unknown,
+            "{link}"
+        );
+        assert!(inspect.partial(), "{link}");
+
+        let s = snap(&r.main, Some(&r.store), Query::Inbox);
+        assert!(
+            matches!(status_of(&s, &r.sib_a), SourceStatus::Error(_)),
+            "{link}: {:?}",
+            status_of(&s, &r.sib_a)
+        );
+        assert_eq!(s.caught_up(), None, "{link}");
+    }
+}

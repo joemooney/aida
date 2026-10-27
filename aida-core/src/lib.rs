@@ -136,6 +136,9 @@ pub mod mailbox;
 #[cfg(all(unix, feature = "native"))]
 pub mod mailbox_lifecycle;
 // trace:STORY-1843 | ai:claude
+#[cfg(feature = "native")]
+pub mod mailbox_identity;
+// trace:STORY-1843 | ai:claude
 pub mod mailbox_logical;
 pub mod meta;
 pub mod models;
