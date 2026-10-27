@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-27T16:37:43.069725657Z
+modified_at: 2026-10-27T16:37:45.656973639Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1071,6 +1071,12 @@ comments:
   content: 'ADVISOR 2026-10-27 09:40 MST: execution mode set to drain (operator asked for unattended landing; every PR on this spec still needs an independent reviewer approval at head and green CI; protected gate paths still need the operator).'
   created_at: 2026-10-27T16:35:55.840937252Z
   modified_at: 2026-10-27T16:35:55.840937252Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17e39-9638-7381-8811-67b0ea009efb
+  author: joe
+  content: 'ADVISOR 2026-10-27 09:45 MST: execution mode set to drain (operator asked for unattended landing; every PR on this spec still needs an independent reviewer approval at head and green CI; protected gate paths still need the operator).'
+  created_at: 2026-10-27T16:37:45.656973639Z
+  modified_at: 2026-10-27T16:37:45.656973639Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
