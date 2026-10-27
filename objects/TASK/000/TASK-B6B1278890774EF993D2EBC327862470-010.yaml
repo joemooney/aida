@@ -8,12 +8,12 @@ description: |-
 
   PR: #2966
   Reviewed sha: 31a3ef47afc79c9eaaa0c6b3e0792650a8b86a37
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-27T15:07:42.693702567Z
-modified_at: 2026-10-27T20:26:58.590713661Z
+modified_at: 2026-10-27T21:57:24.228516361Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-009
@@ -46,6 +46,20 @@ history:
   session_id: 01a17f09b8f0
   harness_version: 2.1.311 (Claude Code)
   changes: []
+- id: 01a17f5e-3a10-7d81-93ce-e2b2c07f666e
+  author: aida-auto-bump
+  timestamp: 2026-10-27T21:57:24.112405935Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a17f5e-3a84-7ae3-9aab-4f33e005fc5b
+  timestamp: 2026-10-27T21:57:24.228507853Z
+  agent: aida
+  commit_sha: 259fed79cd7f96bac2d2ba3a83a742f7bcaaf752
+  summary: 'Round 2: all four round-1 findings closed (private-glob/alias rooting, cross-root re-export rejection + root-binding shadow check, cfg(test)-based mount skipping, plain mod x; following); include!/#[path] inclusion and re-export laundering named in TASK-010 are detected with negative tests; CI run 40586410369 green at head. Residual name-based-ratchet limits filed as non-blocking findings.'
+  review_verdict: approved
 filed_at:
   code_sha: 2fbb7c4925c6a313f71645e7c50a07b3578a979d
   branch: main
@@ -54,11 +68,7 @@ filed_at:
   aida_build_sha: 195b5ccc05
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Source-inclusion ratchet is solid and well tested; the laundering ratchet still has holes that need no gate edit to exploit: a private glob of the crate root plus a bare dispatch:: path in an allowlisted definer (kernel.rs already has use crate::*), and two-hop re-exports or rebinds through an allowlisted name. CI was still in progress at review time.'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-010 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-27T20:26:58.590713661Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-27T21:57:24.112401034Z
+  completion_sha: 259fed79cd7f96bac2d2ba3a83a742f7bcaaf752
