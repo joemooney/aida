@@ -2445,24 +2445,28 @@ pub(crate) fn prepare_lane_worktree(
         let retirement =
             aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse")
                 .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
-        let checkout = aida_core::git_ops::host_git_command(wt_path)
-            .args(["checkout", "-B", branch, &resolved_start])
-            .output()
-            .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))
-            .and_then(|out| {
-                if out.status.success() {
-                    Ok(())
-                } else {
-                    Err(anyhow::anyhow!(
-                        "git checkout -B {branch} {resolved_start} in {} failed: {}",
-                        wt_path.display(),
-                        String::from_utf8_lossy(&out.stderr).trim()
-                    ))
-                }
-            });
-        aida_core::mailbox_lifecycle::guard::settle(
-            checkout,
+        // The quiet re-check runs right before the checkout. trace:STORY-1843 | ai:claude
+        let checkout = || {
+            aida_core::git_ops::host_git_command(wt_path)
+                .args(["checkout", "-B", branch, &resolved_start])
+                .output()
+                .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))
+                .and_then(|out| {
+                    if out.status.success() {
+                        Ok(())
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "git checkout -B {branch} {resolved_start} in {} failed: {}",
+                            wt_path.display(),
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ))
+                    }
+                })
+        };
+        aida_core::mailbox_lifecycle::guard::remove_retired(
+            wt_path,
             retirement,
+            checkout,
             aida_core::mailbox_lifecycle::guard::Retirement::complete_reuse,
         )?;
     } else {

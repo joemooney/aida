@@ -791,7 +791,7 @@ fn finish_reuse(
     retirement: Option<crate::mailbox_lifecycle::guard::Retirement>,
 ) -> Result<PathBuf> {
     let finished = (|| {
-        let reset = match still_reserved(project_root, path, token) {
+        let reset = || match still_reserved(project_root, path, token) {
             Ok(true) => git_ops::reset_worktree_to(path, base_ref)
                 .with_context(|| format!("reset pooled worktree {}", path.display())),
             Ok(false) => Err(anyhow::anyhow!(
@@ -800,9 +800,10 @@ fn finish_reuse(
             )),
             Err(e) => Err(e),
         };
-        crate::mailbox_lifecycle::guard::settle(
-            reset,
+        crate::mailbox_lifecycle::guard::remove_retired(
+            path,
             retirement,
+            reset,
             crate::mailbox_lifecycle::guard::Retirement::complete_reuse,
         )?;
         git_ops::ensure_aida_runtime_excluded(path)
@@ -1102,10 +1103,14 @@ pub fn return_to_pool_with(
     };
 
     // Revalidate the reservation, then salvage and reset outside the pool
-    // lock; the lock is re-taken only to mark the entry idle.
+    // lock; the lock is re-taken only to mark the entry idle. R4-F1: the
+    // retired mailbox is re-verified quiet before the salvage and reset
+    // (`remove_retired`), so mail that landed since the retirement refuses
+    // with a typed RetentionRefusal and the tree is neither salvaged nor
+    // reset.
     // trace:STORY-1843 | ai:claude
     let finished = (|| {
-        let reset = match still_reserved(project_root, &path, &token) {
+        let reset = || match still_reserved(project_root, &path, &token) {
             // BUG-660: never SILENTLY discard uncommitted work on the reset
             // below — if a returning tree is dirty (e.g. a drive shelved a
             // spec mid-edit, or a commit failed), salvage its diff to
@@ -1133,9 +1138,10 @@ pub fn return_to_pool_with(
             )),
             Err(e) => Err(e),
         };
-        crate::mailbox_lifecycle::guard::settle(
-            reset,
+        crate::mailbox_lifecycle::guard::remove_retired(
+            &path,
             retirement,
+            reset,
             crate::mailbox_lifecycle::guard::Retirement::complete_reuse,
         )?;
         with_state_lock(project_root, |pool| {

@@ -81,7 +81,7 @@ fn activate(root: &Path) {
         .unwrap();
     // Only the source build that recorded an activation honours it: this
     // test binary's, named as `main_entry` names it.
-    crate::upgrade_release::register_source_build();
+    crate::upgrade_release::register_test_source_build();
     let build = aida_core::mailbox_lifecycle::source_build().expect("a git build");
     std::fs::write(
         anchor.join("activation.json"),
@@ -418,24 +418,167 @@ fn r3_f1_late_mail_before_a_session_end_removal_keeps_the_session() {
 }
 
 #[test]
-fn r3_f3_a_rebase_worktree_whose_removal_fails_is_kept_not_deleted_unfenced() {
+fn r4_f3_a_locked_rebase_worktree_is_removed_through_the_guard() {
     let repo = repo();
     let root = repo.path();
-    // An empty mailbox and a removal git refuses (a locked worktree): the old
-    // fallback deleted it with `remove_dir_all`, unfenced.
+    // An empty mailbox and a locked worktree: main removed it, so the guarded
+    // removal does too (unlocked under the fence), never `remove_dir_all`.
     let wt = worktree(root, "rebase-locked");
     std::fs::create_dir_all(mailbox(&wt)).unwrap();
     git(root, &["worktree", "lock", wt.to_str().unwrap()]);
-    assert!(crate::pr_cmd::remove_rebase_worktree(root, &wt).is_err());
-    assert!(wt.exists(), "a failed guarded removal keeps the tree");
+    crate::pr_cmd::remove_rebase_worktree(root, &wt).unwrap();
+    assert!(!wt.exists(), "the locked leftover is removed");
 
-    // A refusal keeps it too, with its mail.
-    git(root, &["worktree", "unlock", wt.to_str().unwrap()]);
+    // A refusal keeps a tree, with its mail.
+    let wt = worktree(root, "rebase-mail");
     put_mail(&wt, "m.json");
     let refused = crate::pr_cmd::remove_rebase_worktree(root, &wt).unwrap_err();
     assert!(crate::mail_retention::retention_refusal(&refused).is_some());
     assert!(wt.exists());
     assert_eq!(mail_in(&wt), ["m.json"]);
+}
+
+/// R4-F3: a leftover directory Git no longer knows (an interrupted run, a
+/// prune) never blocks later rebases. With no mail source it is removed; one
+/// with a `.aida/` cannot be fenced, so it is kept with its mail, and the run
+/// steps around it to a fresh path.
+#[test]
+fn r4_f3_a_leftover_directory_git_no_longer_knows_never_blocks_the_next_rebase() {
+    let repo = repo();
+    let root = repo.path();
+    let wt = crate::pr_rebase::temp_worktree_path(root, 77);
+    std::fs::create_dir_all(wt.join("src")).unwrap();
+    std::fs::write(wt.join("src").join("half.rs"), "x").unwrap();
+    assert_eq!(crate::pr_cmd::rebase_worktree_for_run(root, 77), wt);
+    assert!(!wt.exists(), "the mail-less leftover is removed");
+
+    put_mail(&wt, "m.json");
+    let refused = crate::pr_cmd::remove_rebase_worktree(root, &wt).unwrap_err();
+    assert!(crate::mail_retention::retention_refusal(&refused).is_some());
+    let fresh = crate::pr_cmd::rebase_worktree_for_run(root, 77);
+    assert_ne!(fresh, wt, "the run steps around the kept leftover");
+    assert!(!fresh.exists());
+    assert_eq!(mail_in(&wt), ["m.json"], "the kept leftover keeps its mail");
+
+    // The recovery it prints works: with its `.aida/` moved out, the next run
+    // removes it.
+    let moved = root.join("moved-aida");
+    std::fs::rename(wt.join(".aida"), &moved).unwrap();
+    assert_eq!(crate::pr_cmd::rebase_worktree_for_run(root, 77), wt);
+    assert!(!wt.exists());
+    assert!(crate::pr_cmd::REBASE_LEFTOVER_RECOVERY.contains(".aida/"));
+}
+
+/// A pool tree leased to a session, as `aida session end --return` finds it.
+fn pooled_session(root: &Path, id: &str) -> (PathBuf, PathBuf) {
+    let tree = aida_core::worktree_pool::acquire(
+        root,
+        &aida_core::worktree_pool::AcquireOptions {
+            lease_holder: Some(id.to_string()),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .canonicalize()
+    .unwrap();
+    std::fs::create_dir_all(tree.join(".aida")).unwrap();
+    let file = write_lease(root, id, &tree, "HEAD", "");
+    (tree, file)
+}
+
+fn end_returning(id: &str) -> anyhow::Result<()> {
+    crate::session_end::session_end(
+        Some(id),
+        None,
+        None,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+    )
+}
+
+fn pool_entry_leased(root: &Path, tree: &Path) -> bool {
+    aida_core::worktree_pool::read_state(root)
+        .unwrap()
+        .entries
+        .iter()
+        .any(|e| e.path.canonicalize().ok().as_deref() == Some(tree) && e.leased)
+}
+
+/// R4-F1: the default session end of a pooled tree (TASK-985 return). Mail
+/// that lands after the retirement committed is caught before the salvage
+/// and reset, and the session does not end: the lease, manifest and pool
+/// lease stay, the tree is not reset, and no punt record is written (R4-F2).
+#[test]
+fn r4_f1_late_mail_before_a_session_end_pool_return_keeps_the_session() {
+    let repo = repo();
+    let root = repo.path();
+    let id = "0019f1843a06";
+    let (tree, file) = pooled_session(root, id);
+    let manifest = crate::session_manifest::manifest_path(root, id);
+    std::fs::write(&manifest, "kept\n").unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    late_mail_before_removal(&tree, "late.json");
+
+    let text = format!("{:#}", end_returning(id).unwrap_err());
+    assert!(text.contains("NOT ended"), "{text}");
+    assert_late_retained(&file);
+    assert!(manifest.exists(), "the manifest is kept");
+    assert_eq!(mail_in(&tree), ["late.json"], "the late mail is kept");
+    assert!(
+        pool_entry_leased(root, &tree),
+        "the pool entry stays leased"
+    );
+    assert!(
+        !root.join(".aida").join("punts.jsonl").exists()
+            && !root.join(".aida").join("salvage").exists(),
+        "a kept session records no ending and salvages nothing"
+    );
+}
+
+/// R4-F1 (advisor round 5): a pool return that fails for another reason (a
+/// held `index.lock` fails the reset) also keeps the lease, claim and
+/// manifest, since its mail was reopened into the tree.
+#[test]
+fn r4_f1_a_failed_pool_reset_at_session_end_keeps_the_session() {
+    let repo = repo();
+    let root = repo.path();
+    activate(root);
+    let id = "0019f1843a07";
+    let (tree, file) = pooled_session(root, id);
+    put_mail(&tree, "m.json");
+    let manifest = crate::session_manifest::manifest_path(root, id);
+    std::fs::write(&manifest, "kept\n").unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let lock = hold_index_lock(&tree);
+
+    let text = format!("{:#}", end_returning(id).unwrap_err());
+    assert!(text.contains("NOT ended"), "{text}");
+    assert!(text.contains("aida session end"), "{text}");
+    assert!(!text.contains("worktree dismiss"), "{text}");
+    assert_late_retained(&file);
+    assert!(manifest.exists());
+    assert_eq!(
+        mail_in(&tree),
+        ["m.json"],
+        "the failed reset reopened the mail"
+    );
+    assert!(pool_entry_leased(root, &tree));
+    std::fs::remove_file(lock).unwrap();
 }
 
 #[test]

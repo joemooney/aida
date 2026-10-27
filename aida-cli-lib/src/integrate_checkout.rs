@@ -68,10 +68,15 @@ pub(crate) fn ensure_integrator_checkout(project_root: &Path) -> Result<PathBuf>
             .map_err(|refusal| {
                 anyhow::anyhow!("refusing to reuse the integrator worktree: {refusal}")
             })?;
-            aida_core::mailbox_lifecycle::guard::settle(
-                aida_core::git_ops::reset_worktree_to(&entry.path, &base_ref)
-                    .with_context(|| format!("reset integrator worktree {}", entry.path.display())),
+            // The quiet re-check runs right before the reset. trace:STORY-1843 | ai:claude
+            aida_core::mailbox_lifecycle::guard::remove_retired(
+                &entry.path,
                 retirement,
+                || {
+                    aida_core::git_ops::reset_worktree_to(&entry.path, &base_ref).with_context(
+                        || format!("reset integrator worktree {}", entry.path.display()),
+                    )
+                },
                 aida_core::mailbox_lifecycle::guard::Retirement::complete_reuse,
             )?;
             aida_core::git_ops::init_submodules_or_warn(

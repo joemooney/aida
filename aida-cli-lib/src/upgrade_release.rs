@@ -36,6 +36,19 @@ pub(crate) fn register_source_build() {
     );
 }
 
+/// Test binaries are often built from a dirty tree, which names no source
+/// build (R4-F5). Fixtures that record an activation name this binary at its
+/// build SHA instead, as a clean build of it would.
+#[cfg(test)]
+pub(crate) fn register_test_source_build() {
+    register_source_build();
+    aida_core::mailbox_lifecycle::set_source_build(
+        current_version(),
+        env!("AIDA_BUILD_GIT_SHA"),
+        false,
+    );
+}
+
 /// True when the working directory is inside the aida source repo itself —
 /// the one project where a spec's filing code SHA and the filing binary's
 /// build SHA describe the same code, so a mismatch is meaningful.

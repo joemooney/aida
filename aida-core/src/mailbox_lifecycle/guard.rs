@@ -74,16 +74,32 @@ impl Retirement {
     /// one (a new key and generation) and never sees this occupant's mail.
     /// Anything found in it was written after the commit by a writer that
     /// took no permit: the reuse fails and the source is reopened with it.
+    ///
+    /// R4-F1: that late failure is a [`RetentionRefusal`] (inside the
+    /// `io::Error`, kept typed by [`settle`]), so a session ending keeps its
+    /// lease, claim and manifest instead of reading it as an ordinary failure.
     pub fn complete_reuse(self) -> std::io::Result<()> {
+        let checkout = self
+            .mailbox
+            .parent()
+            .and_then(Path::parent)
+            .unwrap_or(&self.mailbox)
+            .to_path_buf();
         match remove_empty_tree(&self.mailbox) {
             Ok(()) => self.complete(),
             Err(e) => {
-                let late = std::io::Error::other(format!(
-                    "the retired mailbox {} is not empty after the reset: {e}",
-                    self.mailbox.display()
-                ));
+                let late = RetentionRefusal {
+                    checkout,
+                    reason: format!(
+                        "the retired mailbox {} is not empty after the reset ({e}); the mail \
+                         was put back",
+                        self.mailbox.display()
+                    ),
+                    needs_activation: false,
+                    retained_dir: Some(self.retained_dir.clone()),
+                };
                 self.reopen()?;
-                Err(late)
+                Err(std::io::Error::other(late))
             }
         }
     }
@@ -347,7 +363,18 @@ pub fn settle<T>(
     match step {
         Ok(value) => {
             on_success(retirement).map_err(|e| {
-                anyhow::anyhow!("the step ran, but its mail retirement could not be finished: {e}")
+                // A late refusal stays typed so callers keep recovery
+                // ownership (R4-F1). trace:STORY-1843 | ai:claude
+                let message = e.to_string();
+                match e
+                    .into_inner()
+                    .map(|inner| inner.downcast::<RetentionRefusal>())
+                {
+                    Some(Ok(refusal)) => anyhow::Error::new(*refusal),
+                    _ => anyhow::anyhow!(
+                        "the step ran, but its mail retirement could not be finished: {message}"
+                    ),
+                }
             })?;
             Ok(value)
         }

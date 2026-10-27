@@ -872,18 +872,19 @@ pub struct Activation {
 
 static SOURCE_BUILD: OnceLock<String> = OnceLock::new();
 
-/// The identity of a build of `version` at `git_sha` (`dirty` when the tree
-/// had uncommitted changes), or `None` when the SHA is unknown: a build that
-/// cannot name its source never honours an activation.
+/// The identity of a build of `version` at `git_sha`, or `None` when the SHA
+/// is unknown or the tree had uncommitted changes (`dirty`): a build that
+/// cannot name its exact source never honours or records an activation.
+/// R4-F5: two dirty builds of one SHA can differ in their local edits (one
+/// may drop admission), so a shared `-dirty` identity would let one honour
+/// the other's record, the R2-F6 rollback hazard.
+// trace:STORY-1843 | ai:claude
 pub fn source_build_id(version: &str, git_sha: &str, dirty: bool) -> Option<String> {
     let sha = git_sha.trim();
-    if sha.is_empty() || sha == "unknown" {
+    if dirty || sha.is_empty() || sha == "unknown" {
         return None;
     }
-    Some(format!(
-        "{version}+{sha}{}",
-        if dirty { "-dirty" } else { "" }
-    ))
+    Some(format!("{version}+{sha}"))
 }
 
 /// Name this process's source build, once, at startup. Each binary that can

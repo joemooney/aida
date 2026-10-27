@@ -456,9 +456,11 @@ fn cleanup_failed_clone(
             Ok(retirement) => retirement,
             Err(kept) => return refusal(dest, anyhow::anyhow!("{error:#}; {kept}")),
         };
-        if let Err(cleanup) = aida_core::mailbox_lifecycle::guard::settle(
-            std::fs::remove_dir_all(dest).map_err(anyhow::Error::from),
+        // The quiet re-check runs right before the removal. trace:STORY-1843 | ai:claude
+        if let Err(cleanup) = aida_core::mailbox_lifecycle::guard::remove_retired(
+            dest,
             retirement,
+            || std::fs::remove_dir_all(dest).map_err(anyhow::Error::from),
             aida_core::mailbox_lifecycle::guard::Retirement::complete,
         ) {
             return refusal(
@@ -673,9 +675,10 @@ impl Drop for CloneCleanupGuard {
                 return;
             }
         };
-        if let Err(error) = aida_core::mailbox_lifecycle::guard::settle(
-            std::fs::remove_dir_all(&self.clone).map_err(anyhow::Error::from),
+        if let Err(error) = aida_core::mailbox_lifecycle::guard::remove_retired(
+            &self.clone,
             retirement,
+            || std::fs::remove_dir_all(&self.clone).map_err(anyhow::Error::from),
             aida_core::mailbox_lifecycle::guard::Retirement::complete,
         ) {
             eprintln!(

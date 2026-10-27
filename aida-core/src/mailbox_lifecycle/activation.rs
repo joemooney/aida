@@ -399,6 +399,35 @@ mod tests {
         );
     }
 
+    /// R4-F5: a dirty build has no source identity, so it neither records
+    /// an activation nor honours one another dirty build of the same SHA
+    /// recorded (their local edits may differ).
+    #[test]
+    fn r4_f5_a_dirty_build_never_names_a_source_build() {
+        use super::super::source_build_id;
+        assert_eq!(source_build_id("1.0.0", "abc1234", true), None);
+        assert_eq!(source_build_id("1.0.0", "unknown", false), None);
+        assert_eq!(
+            source_build_id("1.0.0", " abc1234 ", false).as_deref(),
+            Some("1.0.0+abc1234")
+        );
+        // No `-dirty` identity exists any more, so an old `-dirty` record is
+        // honoured by no build.
+        let anchor = tempfile::tempdir().unwrap();
+        super::super::write_json(
+            &anchor.path().join(super::super::ACTIVATION_FILE),
+            &super::super::Activation {
+                schema: super::super::SCHEMA,
+                all_writer_hosts_admitting: true,
+                recorded_at: "t".into(),
+                source_build: Some("0.0.0+test-dirty".into()),
+            },
+        )
+        .unwrap();
+        super::super::set_source_build("0.0.0", "test", false);
+        assert!(!super::super::activated(anchor.path()).unwrap());
+    }
+
     #[test]
     fn only_a_complete_scan_of_admitting_hosts_would_record() {
         let me = (1, 10);

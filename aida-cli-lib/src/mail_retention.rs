@@ -140,11 +140,38 @@ pub(crate) fn retention_refusal(error: &anyhow::Error) -> Option<&RetentionRefus
         .find_map(|cause| cause.downcast_ref::<RetentionRefusal>())
 }
 
-/// The guarded command an operator runs to remove a tree an entry left in
-/// place. Never a raw `git worktree remove`: that runs no fence and would
-/// delete mail reopened into the tree (R3-F2).
-pub(crate) fn guarded_removal_command(tree: &Path) -> String {
-    format!("aida worktree dismiss {}", tree.display())
+/// The recovery-ownership record for a retired tree whose guarded step
+/// (removal, clone destroy, pool return) failed for a reason other than a
+/// retention refusal (R4-F1). Its mail was reopened into the tree, so the
+/// ending keeps the lease, claim and manifest as a refusal does.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn failed_step_refusal(tree: &Path, failure: String) -> RetentionRefusal {
+    RetentionRefusal {
+        checkout: tree.to_path_buf(),
+        reason: failure,
+        needs_activation: false,
+        retained_dir: None,
+    }
+}
+
+/// The operator-facing lines for [`failed_step_refusal`]. The retry is the
+/// ending itself, which re-runs the guarded step whatever the tree is (a pool
+/// tree, a detached tree or a branch tree), never a raw `git worktree remove`
+/// (R3-F2) or `aida worktree dismiss`, which skips detached trees (R4-F4).
+pub(crate) fn failed_step_lines(refusal: &RetentionRefusal, retry: &str) -> Vec<String> {
+    vec![
+        format!(
+            "{}: {}; its mail was put back",
+            refusal.checkout.display(),
+            refusal.reason
+        ),
+        String::new(),
+        format!(
+            "The session was NOT ended: its lease is kept (marked ending-retained, its grant \
+             revoked) with its claim and manifest, and the tree is in place. Retry `{retry}` \
+             once the cause is fixed."
+        ),
+    ]
 }
 
 /// The operator-facing lines for a refusal that came after the retirement

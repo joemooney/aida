@@ -27,7 +27,7 @@ fn activate(main: &Path) {
         .unwrap();
     // Only the source build that recorded an activation honours it: this
     // test binary's, named as `main_entry` names it.
-    crate::upgrade_release::register_source_build();
+    crate::upgrade_release::register_test_source_build();
     let build = aida_core::mailbox_lifecycle::source_build().expect("a git build");
     std::fs::write(
         anchor.join("activation.json"),

@@ -3238,6 +3238,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
     crate::mail_retention::before_guarded_removal();
+    let had_retirement = retirement.is_some();
     let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_with(
         project_root,
         &lease.worktree_path,
@@ -3245,7 +3246,17 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         retirement,
     );
     if let Err(e) = &removed {
-        if let Some(refusal) = crate::mail_retention::retention_refusal(e) {
+        // R4-F1: a retired tree whose removal failed for any reason keeps its
+        // lease, manifest and activity log, as a late refusal does.
+        // trace:STORY-1843 | ai:claude
+        let failed = (crate::mail_retention::retention_refusal(e).is_none() && had_retirement)
+            .then(|| {
+                crate::mail_retention::failed_step_refusal(
+                    &lease.worktree_path,
+                    format!("the worktree could not be removed: {e:#}"),
+                )
+            });
+        if let Some(refusal) = crate::mail_retention::retention_refusal(e).or(failed.as_ref()) {
             #[cfg(unix)]
             if let Err(err) =
                 crate::worktree_gc::link_worktree_runtime_state(project_root, &lease.worktree_path)
@@ -3253,7 +3264,12 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
                 eprintln!("  warning: the worktree's runtime links could not be restored: {err}");
             }
             crate::mail_retention::keep_ending_retained(lease_target, refusal);
-            for line in crate::mail_retention::late_refusal_lines(refusal, "aida session end") {
+            let lines = if failed.is_some() {
+                crate::mail_retention::failed_step_lines(refusal, "aida session end")
+            } else {
+                crate::mail_retention::late_refusal_lines(refusal, "aida session end")
+            };
+            for line in lines.into_iter().filter(|l| !l.is_empty()) {
                 eprintln!(
                     "  {} kept session {}: {line}",
                     "Warning:".yellow().bold(),
@@ -3262,13 +3278,12 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
             }
             return false;
         }
-        // R3-F2: name the guarded removal, never a raw `git worktree remove`.
+        // R3-F2: never a raw `git worktree remove`; a tree with no mail
+        // source of its own is ended as before.
         eprintln!(
-            "  {} could not remove worktree {} ({e:#}) — remove it with `{}` once the cause \
-             is fixed",
+            "  {} could not remove worktree {} ({e:#}); it was left in place",
             "Warning:".yellow().bold(),
             lease.worktree_path.display(),
-            crate::mail_retention::guarded_removal_command(&lease.worktree_path),
         );
     }
 

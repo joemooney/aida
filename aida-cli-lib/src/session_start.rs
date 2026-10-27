@@ -1415,9 +1415,12 @@ impl SessionStartCleanup {
                 }
             };
             let removed = if let Some(clone) = &self.clone {
-                aida_core::mailbox_lifecycle::guard::settle(
-                    std::fs::remove_dir_all(&clone.path).map_err(anyhow::Error::from),
+                // The quiet re-check runs right before the removal.
+                // trace:STORY-1843 | ai:claude
+                aida_core::mailbox_lifecycle::guard::remove_retired(
+                    &clone.path,
                     retirement,
+                    || std::fs::remove_dir_all(&clone.path).map_err(anyhow::Error::from),
                     aida_core::mailbox_lifecycle::guard::Retirement::complete,
                 )
                 .and_then(|_| {
