@@ -32,6 +32,11 @@ const INCOMING_REF: &str = "refs/aida-transport/incoming";
 /// only after the staged history is scanned (`PULL_AFTER_SCAN`).
 // trace:STORY-1742 | ai:claude
 const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/aida-transport/incoming";
+/// The net remote-to-tracking mapping `config transport show --json` has
+/// always reported as `pull_refspec`; kept stable for existing consumers.
+/// The executed refspec is reported separately as `pull_fetch_refspec`.
+// trace:STORY-1742 | ai:claude
+const PULL_NET_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store";
 const PULL_AFTER_SCAN: [&str; 2] = [
     "refs/aida-transport/incoming -> refs/remotes/origin/aida-store",
     "refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)",
@@ -300,6 +305,8 @@ struct ProfileStatus<'a> {
     remote: &'static str,
     push_refspec: &'static str,
     pull_refspec: &'static str,
+    pull_fetch_refspec: &'static str,
+    pull_after_scan: [&'static str; 2],
     code_leg: &'static str,
     execution_available: bool,
     pull_execution_available: bool,
@@ -321,7 +328,10 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         profile,
         remote: "origin",
         push_refspec: PUSH_REFSPEC,
-        pull_refspec: PULL_REFSPEC,
+        pull_refspec: PULL_NET_REFSPEC,
+        // trace:STORY-1742 | ai:claude
+        pull_fetch_refspec: PULL_REFSPEC,
+        pull_after_scan: PULL_AFTER_SCAN,
         code_leg: if profile.is_some() {
             "forbidden"
         } else {

@@ -222,6 +222,7 @@ impl Fixture {
 // trace:STORY-1742.acda93d1 | ai:codex
 // trace:STORY-1742.ac80f8ef | ai:codex
 // trace:STORY-1742.ac7443a3 | ai:codex
+// trace:STORY-1742.acc84d5d | ai:claude
 fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     let fixture = Fixture::new();
     let initial = fixture.snapshot();
@@ -236,6 +237,43 @@ fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     assert_eq!(enabled["execution_available"], true);
     assert_eq!(enabled["pull_execution_available"], true);
     assert_eq!(enabled["sanitization_available"], true);
+    // `pull_refspec` keeps its original net mapping; the executed staging
+    // refspec and the post-scan updates are separate fields.
+    assert_eq!(
+        enabled["pull_refspec"],
+        "refs/heads/aida-store:refs/remotes/origin/aida-store"
+    );
+    assert_eq!(
+        enabled["pull_fetch_refspec"],
+        "refs/heads/aida-store:refs/aida-transport/incoming"
+    );
+    assert_eq!(
+        enabled["pull_after_scan"],
+        serde_json::json!([
+            "refs/aida-transport/incoming -> refs/remotes/origin/aida-store",
+            "refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)"
+        ])
+    );
+    assert_eq!(
+        fixture.json(&["config", "transport", "show", "--json"])["pull_after_scan"],
+        enabled["pull_after_scan"]
+    );
+    let human = fixture.aida(&["config", "transport", "show"]);
+    assert!(human.status.success());
+    let human = String::from_utf8_lossy(&human.stdout);
+    assert!(
+        human.contains(
+            "Pull: origin refs/heads/aida-store:refs/aida-transport/incoming (fast-forward only)"
+        ),
+        "{human}"
+    );
+    assert!(
+        human.contains(
+            "Pull after scan: refs/aida-transport/incoming -> refs/remotes/origin/aida-store; \
+             refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)"
+        ),
+        "{human}"
+    );
     assert!(enabled["limitations"]
         .as_array()
         .unwrap()
@@ -2456,8 +2494,15 @@ fn generic_defect_travels_work_to_hub_to_public_moving_only_the_store_ref() {
 
     // hub -> peer WORK clone: a scanned fast-forward of the store only.
     let peer_main = fixture.git_at(&peer, &["rev-parse", "refs/heads/main"]);
+    let peer_private = fixture.private_state(&peer);
+    assert!(peer_private
+        .iter()
+        .any(|(name, _)| name == "aida-transport.json"));
     let pulled = fixture.aida_at(&peer, &["pull"]);
     assert!(pulled.status.success(), "{}", diagnostics(&pulled));
+    // Post-pull lifecycle mutations (ID counters, assignment) are skipped: the
+    // peer's private aida-* files are byte-identical across the pull.
+    assert_eq!(peer_private, fixture.private_state(&peer));
     assert_eq!(fixture.git_at(&peer_store, &["rev-parse", "HEAD"]), tip);
     assert_eq!(
         fixture.git_at(&peer, &["rev-parse", "refs/remotes/origin/aida-store"]),

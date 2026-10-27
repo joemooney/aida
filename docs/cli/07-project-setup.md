@@ -77,6 +77,11 @@ behavior with `aida config transport disable`. Each supports `--json` and
 `--format json`. Settings live in `aida-transport.json` under the common Git
 directory, shared by linked worktrees; no tracked project file or store object
 is changed. Configuration works before AIDA store/projection initialization.
+In `show --json`, `pull_refspec` keeps its net mapping
+`refs/heads/aida-store:refs/remotes/origin/aida-store`; `pull_fetch_refspec`
+names the staging refspec a pull actually fetches and `pull_after_scan` the ref
+updates made once the staged history passes the scan (the human output prints
+them as `Pull:` and `Pull after scan:`).
 
 The profile pins a fingerprint of origin's single resolved fetch/push endpoint.
 Filesystem endpoints resolve symlinks and parent components in filesystem order;
