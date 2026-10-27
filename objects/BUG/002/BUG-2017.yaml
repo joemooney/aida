@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T05:31:08.033086636Z
+modified_at: 2026-10-27T07:55:24.449787932Z
 req_type: Bug
 tags:
 - id-allocation
@@ -751,6 +751,18 @@ comments:
   created_at: 2026-10-27T05:31:08.033086636Z
   modified_at: 2026-10-27T05:31:08.033086636Z
   session_id: 2f5cf167-c213-47c3-b02b-ed93cf93eced
+- id: 01a17c5b-5ba1-7bf3-9752-7a16a90b5744
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-27 01:30 MST on the BUG-2017 S3 implementation note (2026-10-27 05:31Z). APPROVED as written (additive claim schema, pure collector over local tip + incoming tips + ALL merge bases, the stated bounds with Incomplete => refuse, typed AllocationRefusal through one shared is_sync_refusal(), placement inside with_sync_lock before every merge/rebase/FF path including no-op exits, read-only `aida db audit-ids` in its own module), with binding conditions:
+    1. Any git read that is refused or fails (including a seat-clone helper refusal) makes the result Incomplete, which refuses. It is never an empty or clean answer.
+    2. The collector only reads; it applies no permission or ownership checks to store files it does not create. The audit CLI writes nothing.
+    3. Merge order: S3-i lands AFTER STORY-1742 S3c (#2967), which touches the same sync paths. Merge main again before review.
+    4. Report text stays sanitized exactly as specified, with a test that no legacy name, email, host or path snippet appears.
+    Slicing approved: S3-i (collector, wrappers, typed refusal and propagation; Refs BUG-2017), then S3-ii (audit CLI, scanner fixtures, docs; completes BUG-2017 if nothing else remains).
+  created_at: 2026-10-27T07:55:24.449787932Z
+  modified_at: 2026-10-27T07:55:24.449787932Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
