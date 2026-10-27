@@ -78774,5 +78774,17 @@ operations:
   timestamp: 2026-10-27T12:02:45.355632181Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6123
+- id: 01a17dbe-16e5-7992-8b60-06bad3a9168c
+  target_id: 01a17dbe-1000-7670-b78d-abca9c9b0397
+  author: aida
+  node_id: '1'
+  lamport: 6124
+  timestamp: 2026-10-27T14:22:52.133835141Z
+  kind: !Create
+    title: 'Review PR-2978: [AI:claude] chore(ci): budget the gate dispatch-suite mount ratchet (Refs STORY-1889)'
+    description: Hand-filed review story (Refs-only PR).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6124
 node_id: '1'
