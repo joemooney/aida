@@ -78457,5 +78457,13 @@ operations:
   timestamp: 2026-10-27T05:28:09.721447206Z
   kind: !SetStatus
     status: Completed
-clock: 6100
+- id: 01a17bd4-d21e-7d51-b617-b39351c20283
+  target_id: 01a17a5f-eeb0-7d42-a5af-d0c95c62020a
+  author: aida
+  node_id: '1'
+  lamport: 6101
+  timestamp: 2026-10-27T05:28:27.422477537Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6101
 node_id: '1'
