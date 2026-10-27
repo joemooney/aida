@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T09:59:22.933625107Z
+modified_at: 2026-10-27T10:01:02.233262910Z
 req_type: Bug
 tags:
 - id-allocation
@@ -762,6 +762,12 @@ comments:
     Slicing approved: S3-i (collector, wrappers, typed refusal and propagation; Refs BUG-2017), then S3-ii (audit CLI, scanner fixtures, docs; completes BUG-2017 if nothing else remains).
   created_at: 2026-10-27T07:55:24.449787932Z
   modified_at: 2026-10-27T07:55:24.449787932Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17cce-6019-78e0-87b7-607c67fe460c
+  author: joe
+  content: 'ADVISOR 03:10 MST: PR #2972 (S3-i) is approved in substance and blocked only by the 01:30 merge-order condition. When #2967 (S3c, fast-forward-only store pull) lands, merge main into bug-2017-s3i and place the collector at the new FF store-pull point too (before the staging ref advances refs/heads/aida-store), with a test; then re-review.'
+  created_at: 2026-10-27T10:01:02.233262910Z
+  modified_at: 2026-10-27T10:01:02.233262910Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
