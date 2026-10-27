@@ -436,14 +436,16 @@ pub(crate) fn extract_fn_source(path: &Path, start_line: usize) -> String {
     let mut out = String::new();
     let mut depth: isize = 0;
     let mut started = false;
+    let mut braces = BraceScanner::for_path(path);
     for (idx, line) in content.lines().enumerate() {
         if idx + 1 < start_line {
             continue;
         }
         out.push_str(line);
         out.push('\n');
-        depth += brace_delta(line);
-        if brace_delta(line) != 0 || line.contains('{') {
+        let delta = braces.delta(line);
+        depth += delta;
+        if delta != 0 || line.contains('{') {
             started = true;
         }
         if started && depth <= 0 {
@@ -731,12 +733,14 @@ fn scan_braced_test_file(
     let mut out = Vec::new();
     let mut pending_traces = Vec::new();
     let mut current: Option<(String, usize, isize, Vec<String>, bool)> = None;
+    let mut braces = BraceScanner::c_like();
     for (index, line) in content.lines().enumerate() {
         let line_no = index + 1;
         let trimmed = line.trim_start();
         if current.is_none() {
             if let Some(name) = test_name(trimmed) {
-                let delta = brace_delta(line);
+                braces = BraceScanner::c_like();
+                let delta = braces.delta(line);
                 let mut traces = std::mem::take(&mut pending_traces);
                 traces.extend(traces_in_line(line, spec));
                 current = Some((name, line_no, delta, traces, line.contains('{')));
@@ -745,7 +749,7 @@ fn scan_braced_test_file(
             }
         } else if let Some((_, _, depth, traces, started)) = current.as_mut() {
             traces.extend(traces_in_line(line, spec));
-            *depth += brace_delta(line);
+            *depth += braces.delta(line);
             *started |= line.contains('{');
         }
         if current
@@ -797,6 +801,7 @@ fn scan_rust_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> V
     // trace:BUG-1189 | ai:claude
     let mut pending_traces: Vec<String> = Vec::new();
     let mut current: Option<(String, usize, usize, Vec<String>)> = None;
+    let mut braces = BraceScanner::rust();
     for (idx, line) in content.lines().enumerate() {
         let line_no = idx + 1;
         let trimmed = line.trim_start();
@@ -806,7 +811,8 @@ fn scan_rust_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> V
         if current.is_none() {
             if pending_test {
                 if let Some(name) = rust_fn_name(trimmed) {
-                    let depth = brace_delta(line).max(0) as usize;
+                    braces = BraceScanner::rust();
+                    let depth = braces.delta(line).max(0) as usize;
                     let mut traces = std::mem::take(&mut pending_traces);
                     traces.extend(traces_in_line(line, spec));
                     current = Some((name, line_no, depth, traces));
@@ -822,7 +828,7 @@ fn scan_rust_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> V
         }
         if let Some((name, start, depth, traces)) = current.as_mut() {
             traces.extend(traces_in_line(line, spec));
-            let next = (*depth as isize + brace_delta(line)).max(0) as usize;
+            let next = (*depth as isize + braces.delta(line)).max(0) as usize;
             *depth = next;
             if next == 0 && line_no > *start {
                 let traces = dedupe(std::mem::take(traces));
@@ -854,12 +860,160 @@ fn rust_fn_name(trimmed: &str) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// Net `{`/`}` balance of one source line on its own (no carried literal
+/// state); the scanners use [`BraceScanner`] so a literal spanning lines
+/// stays a literal.
+#[cfg(test)]
 fn brace_delta(line: &str) -> isize {
-    line.chars().fold(0, |acc, ch| match ch {
-        '{' => acc + 1,
-        '}' => acc - 1,
-        _ => acc,
-    })
+    BraceScanner::rust().delta(line)
+}
+
+/// Literal the scanner is inside at the end of a line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LiteralState {
+    Code,
+    /// A `"`, backtick, or (outside Rust) `'` literal (escapes honored).
+    Quoted(char),
+    /// A Rust raw string closed by `"` plus this many `#`.
+    Raw(usize),
+}
+
+/// Net `{`/`}` balance of source lines fed in order, ignoring braces inside
+/// string, byte, raw, backtick, and char literals and after a `//` comment.
+/// String/raw/backtick literal state carries ACROSS lines, so a fixture such
+/// as `r#"{` ... `}"#;` does not end the fn early. In Rust `"` and raw
+/// strings may span lines; in JS/TS/Go only backtick literals do, and `'`
+/// quotes a string or rune.
+// trace:STORY-1742 | ai:claude
+struct BraceScanner {
+    state: LiteralState,
+    rust: bool,
+}
+
+impl BraceScanner {
+    fn rust() -> Self {
+        Self {
+            state: LiteralState::Code,
+            rust: true,
+        }
+    }
+
+    fn c_like() -> Self {
+        Self {
+            state: LiteralState::Code,
+            rust: false,
+        }
+    }
+
+    fn for_path(path: &Path) -> Self {
+        if path.extension().and_then(|value| value.to_str()) == Some("rs") {
+            Self::rust()
+        } else {
+            Self::c_like()
+        }
+    }
+
+    fn delta(&mut self, line: &str) -> isize {
+        let depth = self.line_delta(line);
+        // Only backtick literals cross a line break outside Rust.
+        if !self.rust && self.state != LiteralState::Quoted('`') {
+            self.state = LiteralState::Code;
+        }
+        depth
+    }
+
+    fn line_delta(&mut self, line: &str) -> isize {
+        let chars: Vec<char> = line.chars().collect();
+        let mut depth = 0;
+        let mut i = match self.resume(&chars, 0) {
+            Some(next) => next,
+            None => return 0,
+        };
+        while i < chars.len() {
+            let ch = chars[i];
+            let before = |back: usize| i.checked_sub(back).and_then(|at| chars.get(at));
+            // `r` starts a raw string only as its own token or right after a lone `b`.
+            let raw_prefix =
+                !is_ident(before(1)) || (before(1) == Some(&'b') && !is_ident(before(2)));
+            match ch {
+                '/' if chars.get(i + 1) == Some(&'/') => break,
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                '"' | '`' | '\'' if ch != '\'' || !self.rust => {
+                    self.state = LiteralState::Quoted(ch);
+                    match self.resume(&chars, i + 1) {
+                        Some(next) => i = next - 1,
+                        None => break,
+                    }
+                }
+                // Rust raw strings: r"..", r#".."#, br#".."#.
+                'r' if self.rust && raw_prefix => {
+                    let hashes = chars[i + 1..].iter().take_while(|c| **c == '#').count();
+                    if chars.get(i + 1 + hashes) == Some(&'"') {
+                        self.state = LiteralState::Raw(hashes);
+                        match self.resume(&chars, i + 2 + hashes) {
+                            Some(next) => i = next - 1,
+                            None => break,
+                        }
+                    }
+                }
+                // Char literals ('{', '\''); a lifetime ('a) has no closing quote.
+                '\'' if chars.get(i + 1) == Some(&'\\') => {
+                    i = skip_quoted(&chars, i + 1, '\'').unwrap_or(chars.len());
+                }
+                '\'' if chars.get(i + 2) == Some(&'\'') => i += 2,
+                _ => {}
+            }
+            i += 1;
+        }
+        depth
+    }
+
+    /// Continue the open literal from `start`: the index just past its close
+    /// (state back to `Code`), or `None` when it runs past the end of the line.
+    fn resume(&mut self, chars: &[char], start: usize) -> Option<usize> {
+        let close = match self.state {
+            LiteralState::Code => return Some(start),
+            LiteralState::Quoted(quote) => skip_quoted(chars, start, quote)?,
+            LiteralState::Raw(hashes) => skip_raw(chars, start, hashes)?,
+        };
+        self.state = LiteralState::Code;
+        Some(close + 1)
+    }
+}
+
+fn is_ident(ch: Option<&char>) -> bool {
+    ch.is_some_and(|c| c.is_alphanumeric() || *c == '_')
+}
+
+/// Index of the closing `quote` at or after `start` (honoring `\` escapes),
+/// or `None` when the literal runs past the end of the line.
+fn skip_quoted(chars: &[char], start: usize, quote: char) -> Option<usize> {
+    let mut i = start;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            c if c == quote => return Some(i),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Index of the last `#` closing a raw string (or its `"` when unhashed).
+fn skip_raw(chars: &[char], start: usize, hashes: usize) -> Option<usize> {
+    (start..chars.len())
+        .find(|&i| {
+            chars[i] == '"'
+                && chars[i + 1..]
+                    .iter()
+                    .take(hashes)
+                    .filter(|c| **c == '#')
+                    .count()
+                    == hashes
+        })
+        .map(|i| i + hashes)
 }
 
 fn traces_in_line(line: &str, spec: &str) -> Vec<String> {
@@ -969,6 +1123,113 @@ mod tests {
             Some(vec!["T-1.AC2".to_string()])
         );
         assert!(by_name.get("unrelated").is_none(), "{by_name:?}");
+    }
+
+    // Braces inside literals and comments do not move the scanner's depth.
+    // trace:STORY-1742 | ai:claude
+    #[test]
+    fn brace_delta_ignores_braces_in_literals_and_comments() {
+        assert_eq!(
+            super::brace_delta(r#"fs::write(&p, b"{not json").unwrap();"#),
+            0
+        );
+        assert_eq!(super::brace_delta(r#"let s = "}\"{"; {"#), 1);
+        assert_eq!(super::brace_delta(r##"let s = r#"{"}"#; }"##), -1);
+        assert_eq!(super::brace_delta(r##"let s = br#"{{"#;"##), 0);
+        assert_eq!(super::brace_delta("match c { '{' => 1, '\\'' => 2 }"), 0);
+        assert_eq!(super::brace_delta("fn f<'a>(x: &'a str) {"), 1);
+        assert_eq!(super::brace_delta("const t = `${a}{`; // }"), 0);
+        assert_eq!(super::brace_delta("for r in rows {"), 1);
+        assert_eq!(super::brace_delta("} else {"), 0);
+    }
+
+    // Literal state carries across lines: a brace inside a multi-line string
+    // or raw string does not move the depth on its continuation lines.
+    // trace:STORY-1742 | ai:claude
+    #[test]
+    fn brace_scanner_carries_literal_state_across_lines() {
+        let mut rust = super::BraceScanner::rust();
+        let deltas: Vec<isize> = ["fn f() {", "    let j = r#\"{", "  \"a\": 1", "}\"#;", "}"]
+            .iter()
+            .map(|line| rust.delta(line))
+            .collect();
+        assert_eq!(deltas, vec![1, 0, 0, 0, -1]);
+        let mut rust = super::BraceScanner::rust();
+        let deltas: Vec<isize> = ["let s = \"{\\\"", "} \\\" {", "}\"; {"]
+            .iter()
+            .map(|line| rust.delta(line))
+            .collect();
+        assert_eq!(deltas, vec![0, 0, 1]);
+        let mut js = super::BraceScanner::c_like();
+        let deltas: Vec<isize> = ["const t = `{", "  ${x} }", "`; {", "let q = 'say \"{'; }"]
+            .iter()
+            .map(|line| js.delta(line))
+            .collect();
+        assert_eq!(deltas, vec![0, 0, 1, -1]);
+    }
+
+    fn scan_rust(src: &str) -> Vec<super::TracedTest> {
+        super::scan_rust_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.rs"),
+            src,
+            "T-1",
+        )
+    }
+
+    // trace:STORY-1742 | ai:claude
+    #[test]
+    fn traced_test_after_multi_line_raw_string_fixture_keeps_its_trace() {
+        let src = "#[test]\nfn fixture() {\n    let j = r#\"{\n  \"a\": 1\n}\"#;\n    // trace:T-1.AC1 | ai:claude\n    assert!(j.len() > 0);\n}\n";
+        let tests = scan_rust(src);
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
+    }
+
+    // trace:STORY-1742 | ai:claude
+    #[test]
+    fn traced_test_after_multi_line_string_with_braces_keeps_its_trace() {
+        let src = "#[test]\nfn fixture() {\n    let j = \"{\n  \\\"a\\\": {1}\n}}\";\n    // trace:T-1.AC1 | ai:claude\n    assert!(true);\n}\n";
+        let tests = scan_rust(src);
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
+    }
+
+    // trace:STORY-1742 | ai:claude
+    #[test]
+    fn js_test_after_multi_line_template_literal_keeps_its_trace() {
+        let src = "test('fixture', () => {\n  const t = `{\n  \"a\": ${x}\n}`;\n  // trace:T-1.AC1\n  expect(t).toBeTruthy();\n});\n\ntest('next', () => {\n  // trace:T-1.AC2\n});\n";
+        let tests = super::scan_javascript_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.test.ts"),
+            src,
+            "T-1",
+        );
+        let by_name: std::collections::BTreeMap<_, _> = tests
+            .iter()
+            .map(|t| (t.name.as_str(), t.traces.clone()))
+            .collect();
+        assert_eq!(
+            by_name.get("fixture").cloned(),
+            Some(vec!["T-1.AC1".to_string()])
+        );
+        assert_eq!(
+            by_name.get("next").cloned(),
+            Some(vec!["T-1.AC2".to_string()])
+        );
+    }
+
+    #[test]
+    fn traced_test_with_brace_in_byte_literal_keeps_its_whole_body() {
+        let src = "#[test]\nfn literal() {\n    write(b\"{not json\");\n    // trace:T-1.AC1 | ai:claude\n    assert!(true);\n}\n";
+        let tests = super::scan_rust_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.rs"),
+            src,
+            "T-1",
+        );
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
     }
 
     use super::*;
