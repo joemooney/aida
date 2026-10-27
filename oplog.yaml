@@ -78984,5 +78984,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6141
+- id: 01a17e53-ae9e-7720-b2e5-b48e5a877a41
+  target_id: 01a17e53-a6dd-7b81-8cd6-a65a9ff1d3b8
+  author: aida
+  node_id: '1'
+  lamport: 6142
+  timestamp: 2026-10-27T17:06:15.838360551Z
+  kind: !Create
+    title: 'Non-blocking: pull plan limitations (transport_profile.rs plan()) omit TRUST_LI…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-1742, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking: pull plan limitations (transport_profile.rs plan()) omit TRUST_LIMIT, which config transport show now reports.
+
+      PR: #2971
+      Reviewed sha: 96e2795fb58d057a28fb57cca90d0475f24e6923
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6142
 node_id: '1'

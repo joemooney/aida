@@ -1,0 +1,29 @@
+id: 01a17e53-a6dd-7b81-8cd6-a65a9ff1d3b8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-012
+title: 'Non-blocking: pull plan limitations (transport_profile.rs plan()) omit TRUST_LI…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1742, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: pull plan limitations (transport_profile.rs plan()) omit TRUST_LIMIT, which config transport show now reports.
+
+  PR: #2971
+  Reviewed sha: 96e2795fb58d057a28fb57cca90d0475f24e6923
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-27T17:06:13.853143716Z
+modified_at: 2026-10-27T17:06:13.853143716Z
+req_type: Task
+tags:
+- carried-from:STORY-1742
+- finding-hash:fc19cec1
+- from-review:PR-2971
+- kind:carried-forward
+filed_at:
+  code_sha: 1b5806bce2f1b05f4dac72eae7c18d4be01fcebe
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8ae30fc168
+  vendor: claude
