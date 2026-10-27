@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T18:06:03.492394268Z
+modified_at: 2026-10-27T05:31:04.537923448Z
 req_type: Bug
 tags:
 - id-allocation
@@ -706,6 +706,26 @@ comments:
   content: OPERATOR METHOD HANDOFF — 2026-10-25 11:03 Arizona, received directly in this Codex session. Authorized for S3b only. Preserve BUG-2017 S1+S2 allocation authority and lock order exactly. The previously recorded one-use candidate lifetime and admission boundaries on STORY-1742 are now the signed contract; changing them needs a new sketch first. BUG-2017 existing tests must remain unchanged and green. This implementer is sole owner of the shared methods until the S3b PR merges; BUG-2017 S3 will not be dispatched onto them before then. S3a ships as its own PR. S3b PR trailer must be (Refs STORY-1742, Refs BUG-2017), with independent strict review of lock order and allocation authority. No S3b source edits yet at this checkpoint; S3a final verification/publication remains first. No allocation-authority, grant, HOME enrollment, containment or merge permission was inferred beyond this explicit handoff.
   created_at: 2026-10-25T18:06:03.492385533Z
   modified_at: 2026-10-25T18:06:03.492385533Z
+- id: 01a17bd7-37d9-7000-a79a-615702b3cc5b
+  author: joe
+  content: |
+    INVENTORY 2026-10-26 (claude implementer, main e3fd91e83f). Source-checked; not a new test claim.
+
+    DONE
+    - AC1 common-Git versioned authority setting; missing = non-authoritative, malformed refuses: S1+S2 54c64e26a5 (#2919).
+    - AC2 non-authoritative WORK allocates only node-local <TYPE>-<hex32>-<n> through every writer; global/block requests refuse before side effects: 54c64e26a5 (#2919). The writer surface (add/save/update/bulk/BulkWriter/cached) now routes through the shared prepared admission with the one-use detached candidate: S3b 0e12874b32 (#2938, Refs BUG-2017).
+    - AC3 (binding half) pseudonymous UUID-only WorkBinding {version,node_id}, legacy node/alias schema kept additive: 54c64e26a5.
+    - AC3 (scanner half, partial) the STORY-1742 refusal-only scanner already treats registry/nodes.toml, registry/blocks.yaml and registry/agreed_counters.toml as fixed scanned paths with no exemption: 194e40346c (#2929). There is no dedicated node/registry serialization negative fixture yet.
+    - AC4 home-only claim/dispense/promotion and alias preservation across renumbering: 54c64e26a5 (#2919). The operator enrollment of real HOME remains an operator action.
+
+    REMAINING (slice 3)
+    - AC5 shared all-conflict reconciliation preflight before union/ref advancement in all four git_ops sync wrappers and the whole-candidate-set check in remote reconcile; read-only audit plus manual repair plan; typed refusal that survives the best-effort callers (advisor S3 readiness ruling, 2026-10-25 12:31).
+    - AC3 dedicated scanner fixtures over node/registry serialization (no exemptions).
+    - Final docs (docs/cli/10-storage.md allocation guidance) and the completing (BUG-2017) trailer.
+    - Ruling 12:31 item 6 requires a short implementation note BEFORE source changes. It follows as a separate comment (IMPLEMENTATION NOTE S3). Not started in code; awaiting advisor signoff on that note.
+  created_at: 2026-10-27T05:31:04.537923448Z
+  modified_at: 2026-10-27T05:31:04.537923448Z
+  session_id: 2f5cf167-c213-47c3-b02b-ed93cf93eced
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
