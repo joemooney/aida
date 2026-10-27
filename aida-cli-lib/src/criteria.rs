@@ -854,12 +854,74 @@ fn rust_fn_name(trimmed: &str) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// Net `{`/`}` balance of one source line, ignoring braces inside string,
+/// byte, raw, backtick, and char literals and after a `//` comment, so a test
+/// body such as `b"{not json"` does not end the fn early.
+// trace:STORY-1742 | ai:claude
 fn brace_delta(line: &str) -> isize {
-    line.chars().fold(0, |acc, ch| match ch {
-        '{' => acc + 1,
-        '}' => acc - 1,
-        _ => acc,
-    })
+    let chars: Vec<char> = line.chars().collect();
+    let mut depth = 0;
+    let mut i = 0;
+    while i < chars.len() {
+        let ch = chars[i];
+        let before = |back: usize| i.checked_sub(back).and_then(|at| chars.get(at));
+        // `r` starts a raw string only as its own token or right after a lone `b`.
+        let raw_prefix = !is_ident(before(1)) || (before(1) == Some(&'b') && !is_ident(before(2)));
+        match ch {
+            '/' if chars.get(i + 1) == Some(&'/') => break,
+            '{' => depth += 1,
+            '}' => depth -= 1,
+            '"' | '`' => i = skip_quoted(&chars, i + 1, ch),
+            // Rust raw strings: r"..", r#".."#, br#".."#.
+            'r' if raw_prefix => {
+                let hashes = chars[i + 1..].iter().take_while(|c| **c == '#').count();
+                if chars.get(i + 1 + hashes) == Some(&'"') {
+                    i = skip_raw(&chars, i + 2 + hashes, hashes);
+                }
+            }
+            // Char literals ('{', '\''); a lifetime ('a) has no closing quote.
+            '\'' if chars.get(i + 1) == Some(&'\\') => {
+                i = skip_quoted(&chars, i + 1, '\'');
+            }
+            '\'' if chars.get(i + 2) == Some(&'\'') => i += 2,
+            _ => {}
+        }
+        i += 1;
+    }
+    depth
+}
+
+fn is_ident(ch: Option<&char>) -> bool {
+    ch.is_some_and(|c| c.is_alphanumeric() || *c == '_')
+}
+
+/// Index of the closing `quote` at or after `start` (honoring `\` escapes),
+/// or the last index when the literal runs past the end of the line.
+fn skip_quoted(chars: &[char], start: usize, quote: char) -> usize {
+    let mut i = start;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            c if c == quote => return i,
+            _ => {}
+        }
+        i += 1;
+    }
+    chars.len()
+}
+
+fn skip_raw(chars: &[char], start: usize, hashes: usize) -> usize {
+    (start..chars.len())
+        .find(|&i| {
+            chars[i] == '"'
+                && chars[i + 1..]
+                    .iter()
+                    .take(hashes)
+                    .filter(|c| **c == '#')
+                    .count()
+                    == hashes
+        })
+        .map_or(chars.len(), |i| i + hashes)
 }
 
 fn traces_in_line(line: &str, spec: &str) -> Vec<String> {
@@ -969,6 +1031,37 @@ mod tests {
             Some(vec!["T-1.AC2".to_string()])
         );
         assert!(by_name.get("unrelated").is_none(), "{by_name:?}");
+    }
+
+    // Braces inside literals and comments do not move the scanner's depth.
+    // trace:STORY-1742 | ai:claude
+    #[test]
+    fn brace_delta_ignores_braces_in_literals_and_comments() {
+        assert_eq!(
+            super::brace_delta(r#"fs::write(&p, b"{not json").unwrap();"#),
+            0
+        );
+        assert_eq!(super::brace_delta(r#"let s = "}\"{"; {"#), 1);
+        assert_eq!(super::brace_delta(r##"let s = r#"{"}"#; }"##), -1);
+        assert_eq!(super::brace_delta(r##"let s = br#"{{"#;"##), 0);
+        assert_eq!(super::brace_delta("match c { '{' => 1, '\\'' => 2 }"), 0);
+        assert_eq!(super::brace_delta("fn f<'a>(x: &'a str) {"), 1);
+        assert_eq!(super::brace_delta("const t = `${a}{`; // }"), 0);
+        assert_eq!(super::brace_delta("for r in rows {"), 1);
+        assert_eq!(super::brace_delta("} else {"), 0);
+    }
+
+    #[test]
+    fn traced_test_with_brace_in_byte_literal_keeps_its_whole_body() {
+        let src = "#[test]\nfn literal() {\n    write(b\"{not json\");\n    // trace:T-1.AC1 | ai:claude\n    assert!(true);\n}\n";
+        let tests = super::scan_rust_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.rs"),
+            src,
+            "T-1",
+        );
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
     }
 
     use super::*;

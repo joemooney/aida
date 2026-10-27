@@ -364,6 +364,18 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
                 ])
             );
         }
+        // The plan reports every limitation `config transport show` does for
+        // this operation; pull additionally carries the fast-forward caveat.
+        // trace:STORY-1742 | ai:claude
+        let limits = plan["limitations"].to_string();
+        for expected in ["raw Git", "without scanning it", "reviewed private policy"] {
+            assert!(limits.contains(expected), "{operation}: {limits}");
+        }
+        assert_eq!(
+            limits.contains("Pull is fast-forward only"),
+            operation == "pull",
+            "{limits}"
+        );
         let refused = fixture.aida(&[operation]);
         assert!(!refused.status.success());
         assert!(
@@ -1901,7 +1913,7 @@ fn legacy_main_created_profile_and_lock_stay_usable_and_disable_clears_them() {
     assert_eq!(fs::metadata(&lock).unwrap().mode() & 0o777, 0o600);
 
     // A corrupt but safely stored profile is still cleared by disable.
-    fs::write(&profile, b"\x7bnot json").unwrap();
+    fs::write(&profile, b"{not json").unwrap();
     fs::set_permissions(&profile, fs::Permissions::from_mode(0o644)).unwrap();
     assert!(!fixture
         .aida(&["config", "transport", "show"])
