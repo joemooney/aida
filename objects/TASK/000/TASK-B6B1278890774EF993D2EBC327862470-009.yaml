@@ -1,0 +1,29 @@
+id: 01a17bc6-633f-7041-8079-a584018f0806
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-009
+title: (minor, non-blocking) dispatch_items_named (tests/story_1888_gate_paths_tests.r…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1889, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (minor, non-blocking) dispatch_items_named (tests/story_1888_gate_paths_tests.rs:1485) misses the aliased whole-module form: in the flattened text `use crate::{dispatch as d};` becomes `{dispatchasd}`, so \bdispatch\b and the path regex both fail and gate/dispatch_* could reach crate::dispatch items through d:: without tripping gate_dispatch_imports_nothing_authority_bearing_from_dispatch. Same family as TASK-2319. Add that form to dispatch_item_detection.
+
+  PR: #2953
+  Reviewed sha: 93f82f218dc5104e442ea749d173638767d2412b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-27T05:12:41.535494232Z
+modified_at: 2026-10-27T05:12:41.535494232Z
+req_type: Task
+tags:
+- carried-from:STORY-1889
+- finding-hash:2b598ea8
+- from-review:PR-2953
+- kind:carried-forward
+filed_at:
+  code_sha: e3fd91e83fe3ffef5e9b26365de8e302a92c6904
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c0b841d865
+  vendor: claude

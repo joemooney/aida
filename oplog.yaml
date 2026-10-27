@@ -78395,5 +78395,23 @@ operations:
   timestamp: 2026-10-27T05:12:37.425019831Z
   kind: !SetStatus
     status: Rejected
-clock: 6094
+- id: 01a17bc6-6a66-71c3-9007-9418b572f785
+  target_id: 01a17bc6-633f-7041-8079-a584018f0806
+  author: aida
+  node_id: '1'
+  lamport: 6095
+  timestamp: 2026-10-27T05:12:43.366446095Z
+  kind: !Create
+    title: (minor, non-blocking) dispatch_items_named (tests/story_1888_gate_paths_tests.r…
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-1889, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (minor, non-blocking) dispatch_items_named (tests/story_1888_gate_paths_tests.rs:1485) misses the aliased whole-module form: in the flattened text `use crate::{dispatch as d};` becomes `{dispatchasd}`, so \bdispatch\b and the path regex both fail and gate/dispatch_* could reach crate::dispatch items through d:: without tripping gate_dispatch_imports_nothing_authority_bearing_from_dispatch. Same family as TASK-2319. Add that form to dispatch_item_detection.
+
+      PR: #2953
+      Reviewed sha: 93f82f218dc5104e442ea749d173638767d2412b
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6095
 node_id: '1'
