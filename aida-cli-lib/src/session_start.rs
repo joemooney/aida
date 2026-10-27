@@ -1397,37 +1397,47 @@ impl SessionStartCleanup {
                 );
                 return false;
             }
+            // Retire the tree's mail before the rollback removes or resets
+            // it; a refusal keeps the tree. trace:STORY-1843 | ai:claude
+            let retirement = match crate::mail_retention::retire_tree(
+                &self.root,
+                path,
+                self.clone.is_some(),
+                "launch rollback",
+            ) {
+                Ok(retirement) => retirement,
+                Err(refusal) => {
+                    eprintln!(
+                        "launch cleanup kept {}: {refusal}; inspect `aida session leases --all`",
+                        path.display()
+                    );
+                    return false;
+                }
+            };
             let removed = if let Some(clone) = &self.clone {
-                std::fs::remove_dir_all(&clone.path)
-                    .map_err(anyhow::Error::from)
-                    .and_then(|_| {
-                        let out = std::process::Command::new("git")
-                            .current_dir(&self.root)
-                            .args(["update-ref", "-d", &clone.pin, &clone.base_sha])
-                            .output()?;
-                        anyhow::ensure!(
-                            out.status.success(),
-                            "private clone pin identity changed; inspect `git show-ref {}`",
-                            clone.pin
-                        );
-                        Ok(())
-                    })
+                aida_core::mailbox_lifecycle::guard::settle(
+                    std::fs::remove_dir_all(&clone.path).map_err(anyhow::Error::from),
+                    retirement,
+                    aida_core::mailbox_lifecycle::guard::Retirement::complete,
+                )
+                .and_then(|_| {
+                    let out = std::process::Command::new("git")
+                        .current_dir(&self.root)
+                        .args(["update-ref", "-d", &clone.pin, &clone.base_sha])
+                        .output()?;
+                    anyhow::ensure!(
+                        out.status.success(),
+                        "private clone pin identity changed; inspect `git show-ref {}`",
+                        clone.pin
+                    );
+                    Ok(())
+                })
             } else if aida_core::worktree_pool::is_pool_worktree(&self.root, path) {
-                aida_core::worktree_pool::return_to_pool(&self.root, path)
+                aida_core::worktree_pool::return_to_pool_with(&self.root, path, retirement)
             } else {
-                std::process::Command::new("git")
-                    .current_dir(&self.root)
-                    .args(["worktree", "remove", "--force", "--"])
-                    .arg(path)
-                    .output()
-                    .map_err(anyhow::Error::from)
-                    .and_then(|out| {
-                        if out.status.success() {
-                            Ok(())
-                        } else {
-                            Err(anyhow::anyhow!("{}", String::from_utf8_lossy(&out.stderr)))
-                        }
-                    })
+                aida_core::mailbox_lifecycle::guard::remove_worktree_with(
+                    &self.root, path, true, retirement,
+                )
             };
             if let Err(error) = removed {
                 eprintln!("launch cleanup could not remove {}: {error:#}; inspect `aida session leases --all`", path.display());

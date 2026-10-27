@@ -3088,6 +3088,34 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     let lease_file_via_symlink = lease_path(project_root, &lease.id);
     let canonical_lease = lease_file_via_symlink.canonicalize().ok();
 
+    // Retire the tree's mail before anything that ends the session. A
+    // refusal keeps the tree, lease and manifest; the grant is still revoked.
+    // trace:STORY-1843 | ai:claude
+    let retirement = match crate::mail_retention::retire_tree(
+        project_root,
+        &lease.worktree_path,
+        false,
+        "lease cleanup",
+    ) {
+        Ok(retirement) => retirement,
+        Err(refusal) => {
+            crate::mail_retention::keep_ending_retained(
+                canonical_lease
+                    .as_deref()
+                    .unwrap_or(&lease_file_via_symlink),
+                &refusal,
+            );
+            for line in crate::mail_retention::refusal_lines(&refusal) {
+                eprintln!(
+                    "  {} kept session {}: {line}",
+                    "Warning:".yellow().bold(),
+                    &lease.id[..lease.id.len().min(8)],
+                );
+            }
+            return false;
+        }
+    };
+
     // Aggregate the session's activity log into project-level role activity
     // before we delete the log — same ordering as `session_end`.
     aggregate_session_activity_into_roles(project_root, &lease.id);
@@ -3141,28 +3169,24 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // `git worktree remove --force` — `--force` because the dirty-tree
     // refusal in `session_end` is gated by interactive prompts; an
     // escalation cleanup never had a chance to commit, so we just remove.
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args([
-            "worktree",
-            "remove",
-            "--force",
-            "--", // trace:BUG-1622 | ai:claude
-            lease.worktree_path.to_str().unwrap_or_default(),
-        ])
-        .output();
-    let removed = matches!(&res, Ok(o) if o.status.success());
-    if !removed {
+    // The retired source completes, or reopens if the removal failed.
+    // trace:STORY-1843 | ai:claude
+    let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_with(
+        project_root,
+        &lease.worktree_path,
+        true,
+        retirement,
+    );
+    if let Err(e) = &removed {
         eprintln!(
-            "  {} could not remove worktree {} — remove manually with \
+            "  {} could not remove worktree {} ({e:#}) — remove manually with \
              `git worktree remove --force {}`",
             "Warning:".yellow().bold(),
             lease.worktree_path.display(),
             lease.worktree_path.display(),
         );
     }
-    removed
+    removed.is_ok()
 }
 
 /// TASK-358: on a triage that takes a spec out of `NeedsAttention`, find any

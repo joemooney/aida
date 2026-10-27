@@ -433,7 +433,18 @@ fn cleanup_failed_clone(
     error: anyhow::Error,
 ) -> anyhow::Error {
     if dest.exists() {
-        if let Err(cleanup) = std::fs::remove_dir_all(dest) {
+        // No lease yet, so no verified binding: an unfinished clone goes only
+        // while its mailbox holds no bytes. trace:STORY-1843 | ai:claude
+        let retirement = match crate::mail_retention::retire_tree(main, dest, true, "failed clone")
+        {
+            Ok(retirement) => retirement,
+            Err(kept) => return refusal(dest, anyhow::anyhow!("{error:#}; {kept}")),
+        };
+        if let Err(cleanup) = aida_core::mailbox_lifecycle::guard::settle(
+            std::fs::remove_dir_all(dest).map_err(anyhow::Error::from),
+            retirement,
+            aida_core::mailbox_lifecycle::guard::Retirement::complete,
+        ) {
             return refusal(
                 dest,
                 anyhow::anyhow!("{error:#}; clone cleanup failed: {cleanup}"),
@@ -583,7 +594,27 @@ impl Drop for CloneCleanupGuard {
         if !self.armed {
             return;
         }
-        if let Err(error) = std::fs::remove_dir_all(&self.clone) {
+        // trace:STORY-1843 | ai:claude
+        let retirement = match crate::mail_retention::retire_tree(
+            &self.main,
+            &self.clone,
+            true,
+            "unfinished clone",
+        ) {
+            Ok(retirement) => retirement,
+            Err(kept) => {
+                eprintln!(
+                    "kept the unfinished seat clone {}: {kept}",
+                    self.clone.display()
+                );
+                return;
+            }
+        };
+        if let Err(error) = aida_core::mailbox_lifecycle::guard::settle(
+            std::fs::remove_dir_all(&self.clone).map_err(anyhow::Error::from),
+            retirement,
+            aida_core::mailbox_lifecycle::guard::Retirement::complete,
+        ) {
             eprintln!(
                 "could not remove the unfinished seat clone {}: {error}",
                 self.clone.display()
@@ -1766,6 +1797,38 @@ pub(crate) fn destroy_with_shipped(
     expect_head: Option<&str>,
     shipped: &[String],
 ) -> Result<Destroyed> {
+    destroy_retained(main, clone, mode, expect_head, shipped, None)
+}
+
+/// [`destroy_with_shipped`] for a caller that already retired the clone's
+/// mail (`session end` retires before it deletes the lease the binding
+/// needs). With `retired == None` the clone is retired here, through the
+/// verified host binding, right before the removal; a refusal keeps it.
+/// Every path that keeps the clone reopens the retirement.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn destroy_retained(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+    retired: Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+) -> Result<Destroyed> {
+    let mut retired = retired;
+    let outcome = destroy_inner(main, clone, mode, expect_head, shipped, &mut retired);
+    // Anything not consumed by the removal was kept: reopen it.
+    crate::mail_retention::reopen_quietly(retired);
+    outcome
+}
+
+fn destroy_inner(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+    retired: &mut Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+) -> Result<Destroyed> {
     if !is_seat_clone_location(main, clone) {
         anyhow::bail!(
             "{} is not a seat clone of {} (it must be an `{CLONE_DIR_PREFIX}*` directory in the \
@@ -1833,8 +1896,28 @@ pub(crate) fn destroy_with_shipped(
                 });
             }
         }
-        std::fs::remove_dir_all(clone)
-            .with_context(|| format!("remove the seat clone {}", clone.display()))?;
+        // Retire the clone's mail into main's anchor before the removal.
+        // trace:STORY-1843 | ai:claude
+        let retirement = match retired.take() {
+            Some(retirement) => Some(retirement),
+            None => {
+                match crate::mail_retention::retire_tree(main, clone, true, "seat clone teardown") {
+                    Ok(retirement) => retirement,
+                    Err(refusal) => {
+                        return Ok(Destroyed::Kept {
+                            reason: crate::mail_retention::refusal_lines(&refusal).join("; "),
+                            salvage: salvaged,
+                        })
+                    }
+                }
+            }
+        };
+        aida_core::mailbox_lifecycle::guard::settle(
+            std::fs::remove_dir_all(clone)
+                .with_context(|| format!("remove the seat clone {}", clone.display())),
+            retirement,
+            aida_core::mailbox_lifecycle::guard::Retirement::complete,
+        )?;
     }
     let name = clone.file_name().context("a seat clone has a name")?;
     let target = main.join("target").join("worktrees").join(name);

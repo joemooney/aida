@@ -1194,6 +1194,20 @@ fn reap_one_with_clear_hooks(
             if let Some(in_use) = e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>() {
                 return format!("skipped — worktree {}", in_use.summary());
             }
+            // Its mail could not be retired: the session is kept, ending-
+            // retained, with its grant revoked. trace:STORY-1843 | ai:claude
+            if let Some(refusal) =
+                e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+            {
+                crate::mail_retention::keep_ending_retained(
+                    &crate::lease_path(project_root, &lease.id),
+                    refusal,
+                );
+                return format!(
+                    "skipped — {}",
+                    crate::mail_retention::refusal_lines(refusal).join("; ")
+                );
+            }
             return format!(
                 "failed — could not remove worktree {}",
                 lease.worktree_path.display()

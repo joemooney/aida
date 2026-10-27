@@ -135,6 +135,9 @@ pub mod mailbox;
 // Mail-source permits and the retention barrier. trace:STORY-1843 | ai:claude
 #[cfg(all(unix, feature = "native"))]
 pub mod mailbox_lifecycle;
+#[cfg(all(not(unix), feature = "native"))]
+#[path = "mailbox_lifecycle_stub.rs"]
+pub mod mailbox_lifecycle;
 // trace:STORY-1843 | ai:claude
 pub mod mailbox_logical;
 pub mod meta;

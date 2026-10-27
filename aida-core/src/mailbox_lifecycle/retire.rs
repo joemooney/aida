@@ -18,21 +18,19 @@
 //! claim and manifest. Retirement is retryable; it never blocks.
 //!
 //! Retention bound: every attempt that reaches preservation keeps its copy
-//! under `retained/<key>/<generation>/`, refused attempts included, and C1
-//! prunes none of them. A source refused N times after preserving holds N
-//! copies of its mailbox; pruning copies superseded by a later attempt or a
-//! committed retirement is C2 work.
+//! under `retained/<key>/<generation>/`, refused attempts included, and none
+//! is pruned. A source refused N times after preserving holds N copies of its
+//! mailbox.
 //!
 //! The caller performs the destructive step after `Retired` and then calls
-//! `complete_retirement`. C2 wires the destructive entries; until then this
-//! module has no production caller.
+//! `complete_retirement`. When that step fails, `reopen_retirement` is the way
+//! back: it journals `Reopened`, copies the preserved bytes back where absent
+//! (the retained copy is kept) and reopens the source under a new generation.
+//! A source whose driver died between `Committed` and the destructive step
+//! (its claim is free) is *abandoned*: the next admission reopens it, and the
+//! next retirement adopts the committed operation instead.
 //!
 //! trace:STORY-1843 | ai:claude
-
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "C2 wires the destructive entries to the barrier")
-)]
 
 use super::{
     activated, check_regular, delete_record, ensure_dir, enter_lock_class, fsync_dir, hex,
@@ -68,6 +66,9 @@ pub(crate) enum Phase {
     Removed,
     Finalized,
     Aborted,
+    /// Terminal: the source was retired, the caller's destructive step did
+    /// not happen, and the source was reopened.
+    Reopened,
 }
 
 /// Why a retirement refused. The caller keeps its tree either way.
@@ -182,7 +183,7 @@ pub(crate) enum RetireOutcome {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct RetireOptions {
+pub struct RetireOptions {
     pub reason: String,
     /// Bounded wait for admitted writers to finish.
     pub quiesce_timeout: Duration,
@@ -329,40 +330,92 @@ fn point(_: Point) -> Result<()> {
 /// the barrier could not run or record its progress; the journal then holds
 /// the last durable phase and the next call replays it.
 pub(crate) fn retire_source(project_root: &Path, opts: &RetireOptions) -> Result<RetireOutcome> {
+    retire_source_claimed(project_root, opts).map(|(outcome, _)| outcome)
+}
+
+/// [`retire_source`], keeping the retirement claim on `Retired` so the
+/// caller holds the source exclusively until its destructive step is done.
+pub(crate) fn retire_source_claimed(
+    project_root: &Path,
+    opts: &RetireOptions,
+) -> Result<(RetireOutcome, Option<RetirementClaim>)> {
     let mailbox = crate::mailbox::local_mailbox_dir(project_root);
-    match std::fs::symlink_metadata(&mailbox) {
-        Ok(meta) if meta.file_type().is_dir() => {}
-        Ok(_) => {
-            return Ok(refused(
-                RefusalReason::UnsafeMailbox {
-                    detail: format!("{} is not a real directory", mailbox.display()),
-                },
-                None,
-            ))
-        }
-        // An absent mailbox still needs an identity to fence: a writer could
-        // create it during the window.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => std::fs::create_dir_all(&mailbox)?,
-        Err(e) => return Err(e.into()),
+    if let Some(refusal) = prepare_mailbox(&mailbox)? {
+        return Ok((refusal, None));
     }
-    let source = match resolve_source(project_root) {
-        Ok(Some(source)) => source,
-        Ok(None) => return Ok(refused(RefusalReason::Unanchored, None)),
-        Err(LifecycleError::Unsafe { path, why }) => {
-            return Ok(refused(
-                RefusalReason::UnsafeMailbox {
-                    detail: format!("{}: {why}", path.display()),
-                },
-                None,
-            ))
+    match resolve_source(project_root) {
+        Ok(Some(source)) => retire_resolved(&source, opts),
+        Ok(None) => Ok((refused(RefusalReason::Unanchored, None), None)),
+        Err(LifecycleError::Unsafe { path, why }) => Ok((unsafe_mailbox(&path, &why), None)),
+        Err(e) => Err(e),
+    }
+}
+
+/// Retire a seat clone's mail source under `main`'s anchor. The caller has
+/// verified the host-recorded binding between `clone_root` and `main`; the
+/// source key is derived from that binding, never from the clone's own Git.
+pub(crate) fn retire_clone_claimed(
+    main: &Path,
+    clone_root: &Path,
+    opts: &RetireOptions,
+) -> Result<(RetireOutcome, Option<RetirementClaim>)> {
+    let mailbox = crate::mailbox::local_mailbox_dir(clone_root);
+    if let Some(refusal) = prepare_mailbox(&mailbox)? {
+        return Ok((refusal, None));
+    }
+    match super::resolve_clone_source(main, clone_root) {
+        Ok(Some(source)) => retire_resolved(&source, opts),
+        Ok(None) => Ok((refused(RefusalReason::Unanchored, None), None)),
+        Err(LifecycleError::Unsafe { path, why }) => Ok((unsafe_mailbox(&path, &why), None)),
+        Err(e) => Err(e),
+    }
+}
+
+/// The mailbox must be a real directory. An absent one is created: it still
+/// needs an identity to fence, since a writer could create it during the
+/// window.
+fn prepare_mailbox(mailbox: &Path) -> Result<Option<RetireOutcome>> {
+    match std::fs::symlink_metadata(mailbox) {
+        Ok(meta) if meta.file_type().is_dir() => Ok(None),
+        Ok(_) => Ok(Some(refused(
+            RefusalReason::UnsafeMailbox {
+                detail: format!("{} is not a real directory", mailbox.display()),
+            },
+            None,
+        ))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(mailbox)?;
+            Ok(None)
         }
-        Err(e) => return Err(e),
-    };
-    // Held until this call returns, across every replay and the drive.
-    let _claim = match claim(&source.anchor, &source.key, opts.claim_timeout)? {
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn unsafe_mailbox(path: &Path, why: &str) -> RetireOutcome {
+    refused(
+        RefusalReason::UnsafeMailbox {
+            detail: format!("{}: {why}", path.display()),
+        },
+        None,
+    )
+}
+
+fn retire_resolved(
+    source: &super::Source,
+    opts: &RetireOptions,
+) -> Result<(RetireOutcome, Option<RetirementClaim>)> {
+    // Held until this call returns, across every replay and the drive, and
+    // handed to the caller on `Retired`.
+    let claim = match claim(&source.anchor, &source.key, opts.claim_timeout)? {
         Some(claim) => claim,
-        None => return Ok(refused(RefusalReason::RetiringElsewhere, None)),
+        None => return Ok((refused(RefusalReason::RetiringElsewhere, None), None)),
     };
+    let outcome = retire_claimed(source, opts)?;
+    let claim = matches!(outcome, RetireOutcome::Retired { .. }).then_some(claim);
+    Ok((outcome, claim))
+}
+
+fn retire_claimed(source: &super::Source, opts: &RetireOptions) -> Result<RetireOutcome> {
     for _ in 0..MAX_REPLAYS {
         let held = match lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT) {
             Ok(held) => held,
@@ -371,7 +424,7 @@ pub(crate) fn retire_source(project_root: &Path, opts: &RetireOptions) -> Result
             }
             Err(e) => return Err(e),
         };
-        let mut record = load_or_create(&source, &held)?;
+        let mut record = load_or_create(source, &held)?;
         let pending = match &record.state {
             SourceState::Fenced { op_id, .. } | SourceState::Retired { op_id, .. } => {
                 Some(require_journal(&source.anchor, op_id)?)
@@ -381,7 +434,7 @@ pub(crate) fn retire_source(project_root: &Path, opts: &RetireOptions) -> Result
         if let Some(entry) = pending {
             drop(held);
             match entry.phase {
-                Phase::Aborted => finish_abort(&entry)?,
+                Phase::Aborted | Phase::Reopened => finish_abort(&entry)?,
                 // The old checkout is gone and a new one reused its inode.
                 Phase::Removed | Phase::Finalized => finalize(entry)?,
                 _ => return drive(entry, opts),
@@ -444,6 +497,61 @@ pub(crate) fn complete_retirement(ticket: &RetirementTicket) -> Result<()> {
     }
 }
 
+/// The caller's destructive step did not happen (it failed, or was refused
+/// after `Retired`): journal `Reopened`, copy the preserved bytes back where
+/// absent (the retained copy is kept), and reopen the source under a new
+/// generation. Idempotent. The caller still holds the retirement claim.
+pub(crate) fn reopen_retirement(ticket: &RetirementTicket) -> Result<()> {
+    let mut entry = require_journal(&ticket.anchor, &ticket.op_id)?;
+    match entry.phase {
+        Phase::Committed => {
+            // The checkout is still there: its mailbox is the fenced one.
+            match std::fs::symlink_metadata(&entry.mailbox) {
+                Ok(meta) if meta.dev() == entry.dev && meta.ino() == entry.ino => {}
+                Ok(_) => {
+                    return Err(conflict(&entry, &"the mailbox directory was replaced"));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(conflict(&entry, &"the checkout is already gone"));
+                }
+                Err(e) => return Err(e.into()),
+            }
+            advance(&mut entry, Phase::Reopened)?;
+            finish_abort(&entry)
+        }
+        Phase::Reopened => finish_abort(&entry),
+        other => Err(LifecycleError::Corrupt {
+            path: journal_path(&ticket.anchor, &ticket.op_id),
+            why: format!("operation is at {other:?}, not committed"),
+        }),
+    }
+}
+
+/// Reopen a source left `Retired` by a driver that is gone: its claim is free
+/// (the kernel dropped the flock with the process) and the checkout's mailbox
+/// is still the retired one. `Ok(false)` when a live driver still holds the
+/// claim, so the source stays retired. Called by admission, never under the
+/// Lifecycle lock.
+pub(crate) fn reopen_abandoned(source: &super::Source, op_id: &str) -> Result<bool> {
+    let Some(_claim) = claim(&source.anchor, &source.key, Duration::ZERO)? else {
+        return Ok(false);
+    };
+    let entry = require_journal(&source.anchor, op_id)?;
+    match entry.phase {
+        Phase::Committed | Phase::Reopened => reopen_retirement(&RetirementTicket {
+            anchor: entry.anchor,
+            op_id: entry.op_id,
+        })?,
+        // Recorded as removed while a mailbox with the same identity exists:
+        // finish forgetting the old source; admission then starts a new one.
+        Phase::Removed | Phase::Finalized => finalize(entry)?,
+        // Interrupted before the commit: the next retirement replays it, and
+        // until then the source stays fenced.
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
 // ── Phases ──────────────────────────────────────────────────────────────────
 
 fn drive(mut entry: JournalEntry, opts: &RetireOptions) -> Result<RetireOutcome> {
@@ -495,7 +603,7 @@ fn drive(mut entry: JournalEntry, opts: &RetireOptions) -> Result<RetireOutcome>
                     },
                 })
             }
-            Phase::Aborted => {
+            Phase::Aborted | Phase::Reopened => {
                 finish_abort(&entry)?;
                 let reason = entry
                     .refusal
@@ -879,6 +987,8 @@ pub(super) fn abort(mut entry: JournalEntry, reason: RefusalReason) -> Result<Re
 
 /// Copy preserved bytes back into the mailbox where absent (the retained
 /// copy is kept) and reopen the source under a new generation. Idempotent.
+/// Finishes both a refused operation (`Aborted`, source `Fenced`) and a
+/// reopened one (`Reopened`, source `Retired`).
 fn finish_abort(entry: &JournalEntry) -> Result<()> {
     let data = entry.retained_dir().join("data");
     if data.is_dir() {
@@ -887,7 +997,16 @@ fn finish_abort(entry: &JournalEntry) -> Result<()> {
     }
     let held = lock(&entry.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
     if let Some(mut record) = load_record(&entry.anchor, &entry.key, &held)? {
-        if matches!(&record.state, SourceState::Fenced { op_id, .. } if *op_id == entry.op_id) {
+        let ours = match &record.state {
+            SourceState::Fenced { op_id, .. } => {
+                entry.phase == Phase::Aborted && *op_id == entry.op_id
+            }
+            SourceState::Retired { op_id, .. } => {
+                entry.phase == Phase::Reopened && *op_id == entry.op_id
+            }
+            SourceState::Open => false,
+        };
+        if ours {
             // A fresh generation keeps each attempt's retained copy immutable:
             // the reopened mailbox changes, and the next attempt preserves
             // into its own directory.
@@ -944,7 +1063,8 @@ const CLAIMS_DIR: &str = "claims";
 /// A held per-source retirement claim. The flock is released when this drops
 /// or when the holding process dies, whichever comes first.
 #[must_use = "the claim is released when the guard drops"]
-struct RetirementClaim {
+#[derive(Debug)]
+pub(crate) struct RetirementClaim {
     file: std::fs::File,
 }
 
@@ -1048,7 +1168,12 @@ fn unfinished_for(anchor: &Path, key: &str) -> Result<Option<JournalEntry>> {
         let Some(entry) = read_json::<JournalEntry>(&path)? else {
             continue;
         };
-        if entry.key == key && !matches!(entry.phase, Phase::Finalized | Phase::Aborted) {
+        if entry.key == key
+            && !matches!(
+                entry.phase,
+                Phase::Finalized | Phase::Aborted | Phase::Reopened
+            )
+        {
             return Ok(Some(entry));
         }
     }
@@ -1110,7 +1235,7 @@ fn sorted_entries(dir: &Path) -> Result<Vec<Entry>> {
 
 /// Does `dir` hold anything but directories? Any file counts as mail,
 /// receipt or watermark bytes, even an empty one.
-fn holds_bytes(dir: &Path) -> Result<bool> {
+pub(crate) fn holds_bytes(dir: &Path) -> Result<bool> {
     for (name, path, meta) in sorted_entries(dir)? {
         if stale_staging(&name, &path, &meta)? {
             continue;

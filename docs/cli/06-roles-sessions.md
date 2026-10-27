@@ -312,6 +312,15 @@ An invalid or unreadable individual agent record produces a warning while other 
 The report's fingerprint covers mailbox and read-state content; recipient liveness is sampled advisory information. Historical shared group watermarks cannot reconstruct private acknowledgements. The command does not assign recipient UUIDs, acknowledge mail, rewrite messages or enable a new layout. Write-mode migration is unavailable pending advisor review of the real-store report and compatibility policy.
 <!-- trace:STORY-1843 | ai:codex -->
 
+#### Mail retention when a worktree goes
+
+Removing, resetting or reusing a worktree first moves its local mailbox (messages, read receipts and watermarks) into a private retention area under the repository's Git directory. This applies to `aida session end`, pool return and reuse, `aida worktree pool destroy`, `aida worktree gc` and `dismiss`, reaps and doctor heals, and seat-clone teardown. The next occupant of a reused tree starts with an empty mailbox. Retained mail is kept, not acknowledged or archived.
+
+If the mail cannot be retained safely, the worktree is kept. In that case the session is not ended: its lease, claim and manifest stay, and the lease is marked `ending_retained_at`. Only its grant is revoked. Retry once the cause is fixed.
+
+A worktree whose mailbox holds mail is kept until every AIDA process on the machine that can write mail is known to take a write permit. To see where that stands, run `aida mailbox retention activate --dry-run`; add `--json` for the report. It lists each running `aida` and `aida-server` process and whether it runs this build. It records nothing; recording an activation has not shipped yet. A worktree with an empty mailbox is not affected.
+<!-- trace:STORY-1843 | ai:claude -->
+
 #### Mailbox layout upgrade order
 
 The recipient-UUID mailbox layout replaces each legacy mailbox directory (`.aida/mailbox/` and the store's `mailbox/`) with a small manifest file. The file starts with `# aida-mailbox-layout-manifest` and names the new layout. The legacy directory is archived beside it, and the original paths of its unresolved addresses stay readable. A binary older than the manifest fails at that path: creating or listing a directory there is an error, so it exits nonzero without writing. A binary that knows the marker refuses with "migrated to layout N … Upgrade aida on this clone first". Neither can silently write mail that the new layout would never read.

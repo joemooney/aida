@@ -6012,14 +6012,22 @@ pub(crate) fn cleanup_dead_reviewer_worktree(main_worktree: &Path, pr: u64) -> R
             continue;
         }
         preserve_reviewer_worktree_hold(main_worktree, &rev_wt, &pr_scope)?;
-        let out = aida_core::git_ops::host_git_command(main_worktree)
-            .args(["worktree", "remove", "--force"])
-            .arg(&rev_wt)
-            .output()
-            .with_context(|| {
-                format!("failed to run git worktree remove on {}", rev_wt.display())
-            })?;
-        if !out.status.success() && rev_wt.exists() {
+        // The reviewer's mail is retired first; a refused retirement keeps the
+        // tree and fails the cleanup. trace:STORY-1843 | ai:claude
+        let removed = crate::mail_retention::remove_worktree(
+            main_worktree,
+            &rev_wt,
+            true,
+            "reviewer cleanup",
+        );
+        if let Err(e) = &removed {
+            if e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+                .is_some()
+            {
+                bail!("refusing to clean up reviewer worktree: {e:#}");
+            }
+        }
+        if removed.is_err() && rev_wt.exists() {
             let _ = aida_core::git_ops::host_git_command(main_worktree)
                 .args(["worktree", "prune"])
                 .output();
@@ -6229,17 +6237,31 @@ pub(crate) fn prepare_lane_worktree(
     };
 
     if wt_path.exists() {
-        let out = aida_core::git_ops::host_git_command(wt_path)
+        // Reuse: retire the previous occupant's mail so the next one never
+        // sees it; a refusal keeps the tree as it is. trace:STORY-1843 | ai:claude
+        let retirement =
+            aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse")
+                .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
+        let checkout = aida_core::git_ops::host_git_command(wt_path)
             .args(["checkout", "-B", branch, &resolved_start])
             .output()
-            .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))?;
-        if !out.status.success() {
-            bail!(
-                "git checkout -B {branch} {resolved_start} in {} failed: {}",
-                wt_path.display(),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
+            .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))
+            .and_then(|out| {
+                if out.status.success() {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!(
+                        "git checkout -B {branch} {resolved_start} in {} failed: {}",
+                        wt_path.display(),
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ))
+                }
+            });
+        aida_core::mailbox_lifecycle::guard::settle(
+            checkout,
+            retirement,
+            aida_core::mailbox_lifecycle::guard::Retirement::complete_reuse,
+        )?;
     } else {
         let out = aida_core::git_ops::host_git_command(main_worktree)
             .args(["worktree", "add", "-B", branch])

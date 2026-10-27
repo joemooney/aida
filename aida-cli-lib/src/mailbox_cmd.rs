@@ -95,6 +95,17 @@ pub(crate) fn handle_mailbox_command(
             let report = mailbox_migration::report(project_root, store_root)?;
             mailbox_migration::print_report(&report, *json || crate::output_format_is_json())
         }
+        // trace:STORY-1843 | ai:claude
+        MailboxCommand::Retention { command } => match command {
+            self::mailbox_cmd_args::RetentionCommand::Activate { dry_run, json } => {
+                if !dry_run {
+                    anyhow::bail!(
+                        "mail retention activation requires --dry-run; recording is not available yet"
+                    );
+                }
+                print_retention_report(project_root, *json || crate::output_format_is_json())
+            }
+        },
         MailboxCommand::Latency { recipient, json } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -884,6 +895,53 @@ pub(crate) struct PhantomGcReport {
 // trace:TASK-1766 | ai:antigravity
 // trace:TASK-1766 | ai:claude
 // trace:TASK-1955 | ai:claude (TASK-1918)
+/// `aida mailbox retention activate --dry-run`: the read-only QC1 report.
+// trace:STORY-1843 | ai:claude
+#[cfg(unix)]
+fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let report = aida_core::mailbox_lifecycle::activation::dry_run_report(project_root);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    println!("Mail retention activation (dry run; nothing is recorded)");
+    println!(
+        "  recorded activation: {}",
+        if report.recorded { "yes" } else { "no" }
+    );
+    if report.hosts.is_empty() {
+        println!("  no AIDA mail writers are running");
+    }
+    for host in &report.hosts {
+        let verdict = match &host.verdict {
+            aida_core::mailbox_lifecycle::activation::HostVerdict::Admitting => {
+                "takes a write permit".to_string()
+            }
+            aida_core::mailbox_lifecycle::activation::HostVerdict::Unverified { why } => {
+                format!("not known to take a write permit: {why}")
+            }
+        };
+        println!("  pid {:>7}  {}  ({verdict})", host.pid, host.command);
+    }
+    if let Some(why) = &report.scan_incomplete {
+        println!("  the process scan is incomplete: {why}");
+    }
+    if report.would_record {
+        println!("Every running mail writer takes a write permit; activation would be recorded.");
+    } else {
+        println!(
+            "Not every mail writer is known to take a write permit; activation would NOT be \
+             recorded. Restart the listed processes on this build, then re-run."
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn print_retention_report(_project_root: &std::path::Path, _json: bool) -> Result<()> {
+    anyhow::bail!("mail retention is only available on Unix")
+}
+
 pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<PhantomGcReport> {
     archive_phantom_inboxes_for(store_root, &crate::inbox_identities())
 }
@@ -2495,6 +2553,7 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
                     | MailboxCommand::WakeSnapshot { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
+                    | MailboxCommand::Retention { .. }
             )
         ) {
             SA::Read

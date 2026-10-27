@@ -34,6 +34,13 @@ pub enum MailboxCommand {
         json: bool,
     },
 
+    /// Mail retention: check whether worktree mail can be retired safely.
+    // trace:STORY-1843 | ai:claude
+    Retention {
+        #[clap(subcommand)]
+        command: RetentionCommand,
+    },
+
     /// Show mailbox read latency for the active identity (or an explicit recipient).
     // trace:TASK-1271 | ai:codex
     Latency {
@@ -248,4 +255,22 @@ pub enum MailboxCommand {
     /// Digest the local layer into the git-canonical store (durable, replayable,
     /// shareable across clones) and commit it on the orphan branch. Idempotent.
     Sync,
+}
+
+/// `aida mailbox retention` subcommands.
+// trace:STORY-1843 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RetentionCommand {
+    /// Report whether every AIDA process on this machine that can write mail
+    /// takes a write permit. A worktree whose mailbox holds mail is kept on
+    /// removal or reset until that is recorded. Only the read-only report is
+    /// available: nothing is recorded.
+    Activate {
+        /// Produce a read-only report. Recording is not available yet.
+        #[clap(long, required = true)]
+        dry_run: bool,
+        /// Print the report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }

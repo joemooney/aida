@@ -613,7 +613,12 @@ impl LocalRails<'_> {
             &["worktree", "add", "--quiet", "--detach", &path_s, rev],
         )?;
         let result = (self.check)(&path);
-        let _ = git(&self.repo, &["worktree", "remove", "--force", &path_s]);
+        // Retire the checkout's mail first; a refusal keeps it. trace:STORY-1843 | ai:claude
+        if let Err(e) =
+            crate::mail_retention::remove_worktree(&self.repo, &path, true, "train check")
+        {
+            eprintln!("warning: kept the train check checkout {path_s}: {e:#}");
+        }
         Ok(match result {
             Ok(()) => CiVerdict::Green,
             Err(why) => CiVerdict::Red(format!("local check at {}: {why}", short(rev))),

@@ -28,9 +28,9 @@
 //! a regular file owned by this uid with one link and under a size cap.
 //! Symlinks, hardlinks and FIFOs are refused.
 //!
-//! In C1 nothing in production fences a source, so admission never refuses
-//! and mail delivery is unchanged; `retire` has no production caller until
-//! C2.
+//! Every destructive or reuse entry (worktree removal, pool reset, return
+//! and destroy, session end, seat-clone teardown) retires the source first
+//! through [`guard`], and keeps its tree when retirement refuses (C2).
 //!
 //! Hardening applies to what AIDA creates and owns: the anchor directories
 //! (0700) and their files (0600), whatever the umask. The common Git
@@ -47,8 +47,12 @@
 //!
 //! trace:STORY-1843 | ai:claude
 
+pub mod activation;
+pub mod guard;
 pub(crate) mod retire;
 
+#[cfg(test)]
+mod guard_tests;
 #[cfg(test)]
 mod tests;
 
@@ -71,21 +75,17 @@ use crate::process_probe::{Probe, ProbeSource, ProcessIdentity};
 /// means something is wrong; the caller retries rather than blocks.
 pub const LIFECYCLE_LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// The operator command that records every writer host on the machine as
-/// admitting (QC1). A mail-bearing source refuses retirement until it has
-/// run; the command ships first as a dry-run report.
-pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate";
+/// The operator command that reports whether every writer host on the
+/// machine is admitting (QC1). A mail-bearing source refuses retirement until
+/// an activation is recorded; the command ships first as a dry-run report.
+pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate --dry-run";
 
 /// Directory under the common Git dir that holds the anchor.
 const ANCHOR_PARENT: &str = "aida";
 const ANCHOR_DIR: &str = "mail-lifecycle";
 const LOCK_FILE: &str = "lifecycle.lock";
 const GENERATION_FILE: &str = "generation.json";
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read only by retirement until C2")
-)]
-const ACTIVATION_FILE: &str = "activation.json";
+pub(crate) const ACTIVATION_FILE: &str = "activation.json";
 pub(crate) const SOURCES_DIR: &str = "sources";
 pub(crate) const RETAINED_DIR: &str = "retained";
 pub(crate) const JOURNAL_DIR: &str = "journal";
@@ -354,6 +354,35 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
         key,
         mailbox,
         admin: anchored.admin,
+        dev: meta.dev(),
+        ino: meta.ino(),
+    }))
+}
+
+/// Resolve a seat clone's mail source under `main`'s anchor. The clone's
+/// own Git is never asked (host Git refuses to run there); the caller has
+/// verified the host-recorded binding, and the key is derived from it: main's
+/// common Git dir, the clone root, and the clone mailbox's device and inode.
+pub(crate) fn resolve_clone_source(main: &Path, clone_root: &Path) -> Result<Option<Source>> {
+    let Some(anchored) = locate_anchor(main)? else {
+        return Ok(None);
+    };
+    let clone_root = std::fs::canonicalize(clone_root)?;
+    let admin = format!("seat-clone:{}", clone_root.display());
+    let mailbox = crate::mailbox::local_mailbox_dir(&clone_root);
+    let meta = std::fs::symlink_metadata(&mailbox)?;
+    if !meta.file_type().is_dir() {
+        return Err(LifecycleError::Unsafe {
+            path: mailbox,
+            why: "the mailbox is not a real directory".into(),
+        });
+    }
+    let key = source_key(&anchored.common, &admin, meta.dev(), meta.ino());
+    Ok(Some(Source {
+        anchor: anchored.anchor,
+        key,
+        mailbox,
+        admin,
         dev: meta.dev(),
         ino: meta.ino(),
     }))
@@ -805,10 +834,6 @@ fn store_permits(anchor: &Path, record: &SourceRecord, _held: &LifecycleGuard) -
 }
 
 /// Remove the record for `key`. Lifecycle held.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "called only by retirement until C2")
-)]
 pub(crate) fn delete_record(anchor: &Path, key: &str, _held: &LifecycleGuard) -> Result<()> {
     let path = record_path(anchor, key);
     match std::fs::remove_file(&path) {
@@ -827,12 +852,9 @@ pub struct Activation {
     pub recorded_at: String,
 }
 
-/// Has an operator recorded that every writer host is admitting? Nothing in
-/// C1 writes the record, so this is false in production.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "called only by retirement until C2")
-)]
+/// Has an operator recorded that every writer host is admitting? Only the
+/// dry-run report ships so far, so nothing writes the record yet and this is
+/// false in production.
 pub(crate) fn activated(anchor: &Path) -> Result<bool> {
     Ok(read_json::<Activation>(&anchor.join(ACTIVATION_FILE))?
         .is_some_and(|a| a.all_writer_hosts_admitting))
@@ -887,17 +909,33 @@ fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
     let Some(source) = resolve_source(project_root)? else {
         return Ok(None);
     };
+    match admit_resolved(&source)? {
+        Ok(permit) => Ok(Some(permit)),
+        // A retirement whose driver is gone (it died, or its destructive step
+        // never ran) is reopened once, then admission retries.
+        Err(op_id) if retire::reopen_abandoned(&source, &op_id)? => admit_resolved(&source)?
+            .map(Some)
+            .map_err(|op_id| LifecycleError::SourceRetiring { op_id }),
+        Err(op_id) => Err(LifecycleError::SourceRetiring { op_id }),
+    }
+}
+
+/// Admit under a short Lifecycle hold. A fenced source refuses with
+/// `SourceRetiring`; a retired one returns `Ok(Err(op_id))` so the caller can
+/// try to reopen it if its retirement was abandoned.
+fn admit_resolved(source: &Source) -> Result<std::result::Result<LocalPermit, String>> {
     let probe = ProbeSource::system();
     let holder = this_process();
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
-    let mut record = load_or_create(&source, &held)?;
+    let mut record = load_or_create(source, &held)?;
     match &record.state {
         SourceState::Open => {}
-        SourceState::Fenced { op_id, .. } | SourceState::Retired { op_id, .. } => {
+        SourceState::Fenced { op_id, .. } => {
             return Err(LifecycleError::SourceRetiring {
                 op_id: op_id.clone(),
             })
         }
+        SourceState::Retired { op_id, .. } => return Ok(Err(op_id.clone())),
     }
     // Reap rows whose writer is proven dead (killed mid-write, or a release
     // that failed twice), so an open source's record never grows to the cap.
@@ -916,9 +954,9 @@ fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
     });
     store_permits(&source.anchor, &record, &held)?;
     drop(held);
-    Ok(Some(LocalPermit {
-        anchor: source.anchor,
-        key: source.key,
+    Ok(Ok(LocalPermit {
+        anchor: source.anchor.clone(),
+        key: source.key.clone(),
         permit_id,
         done: false,
     }))

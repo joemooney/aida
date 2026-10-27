@@ -193,11 +193,12 @@ pub fn destroy(
         DestroySelector::Paths(ps) => Some(ps.iter().map(|p| canonical(p)).collect()),
     };
 
+    let mut targets: Vec<DestroyTarget> = Vec::new();
+    // (index into `targets`, class) of each tree staged for removal.
+    let mut staged: Vec<(usize, DestroyClass)> = Vec::new();
     worktree_pool::with_state_lock(project_root, |pool| {
-        let mut targets: Vec<DestroyTarget> = Vec::new();
-        let mut remove_idx: Vec<usize> = Vec::new();
-
-        for (idx, entry) in pool.entries.iter().enumerate() {
+        for idx in 0..pool.entries.len() {
+            let entry = pool.entries[idx].clone();
             // Skip entries outside a named selection.
             if let Some(sel) = &selected_canon {
                 if !sel.iter().any(|p| *p == canonical(&entry.path)) {
@@ -205,7 +206,7 @@ pub fn destroy(
                 }
             }
 
-            let class = classify_for_destroy(entry, &default_ref);
+            let class = classify_for_destroy(&entry, &default_ref);
             let missing = missing_flag(class, opts, leased_named);
 
             // A live process using the tree (a cwd, open file, or running
@@ -249,40 +250,96 @@ pub fn destroy(
                     reason: format!("{} — skipped, needs {}", class.label(), flag),
                 }),
                 (false, None) => {
-                    // Salvage unlanded work before the irreversible remove.
-                    if matches!(
-                        class,
-                        DestroyClass::Dirty | DestroyClass::Unmerged | DestroyClass::Unverified
-                    ) {
-                        salvage(&entry.path);
-                    }
-                    // pre_destroy hooks (cargo clean) — TASK-0396 swept HERE.
-                    crate::worktree_hooks::run_hooks(
-                        &opts.pre_destroy_hooks,
-                        &entry.path,
-                        "pre_destroy",
-                    );
-                    git_ops::remove_worktree_at(project_root, &entry.path, true)?;
-                    remove_idx.push(idx);
+                    // Staged: the mail retirement, salvage, hooks and removal
+                    // run below, outside this lock. trace:STORY-1843 | ai:claude
+                    pool.entries[idx].destroying = true;
+                    pool.entries[idx].retiring = Some(worktree_pool::PoolRetiring {
+                        pid: std::process::id(),
+                        pid_start: crate::liveness::process_start_identity(std::process::id()),
+                        ..Default::default()
+                    });
+                    staged.push((targets.len(), class));
                     targets.push(DestroyTarget {
                         entry: entry.clone(),
                         class,
-                        action: DestroyAction::Removed,
-                        reason: format!("{} — removed", class.label()),
+                        action: DestroyAction::Skipped,
+                        reason: String::new(),
                     });
                 }
             }
         }
+        Ok(())
+    })?;
 
-        // Drop removed entries from the registry (reverse order keeps indices valid).
-        for idx in remove_idx.into_iter().rev() {
-            pool.entries.remove(idx);
+    // Outside the pool lock: retire each staged tree's mail, salvage, run the
+    // pre_destroy hooks and remove. A refused retirement keeps the tree.
+    // trace:STORY-1843 | ai:claude
+    let mut failure = None;
+    for &(t, class) in &staged {
+        let target = &mut targets[t];
+        if failure.is_some() {
+            target.reason = format!("{} — skipped, an earlier removal failed", class.label());
+            continue;
         }
+        let path = target.entry.path.clone();
+        let retirement =
+            match crate::mailbox_lifecycle::guard::retire_checkout(&path, "pool destroy") {
+                Ok(retirement) => retirement,
+                Err(refusal) => {
+                    target.reason = format!("{} — kept, {refusal}", class.label());
+                    continue;
+                }
+            };
+        // Salvage unlanded work before the irreversible remove.
+        if matches!(
+            class,
+            DestroyClass::Dirty | DestroyClass::Unmerged | DestroyClass::Unverified
+        ) {
+            salvage(&path);
+        }
+        // pre_destroy hooks (cargo clean) — TASK-0396 swept HERE.
+        crate::worktree_hooks::run_hooks(&opts.pre_destroy_hooks, &path, "pre_destroy");
+        match crate::mailbox_lifecycle::guard::remove_worktree_with(
+            project_root,
+            &path,
+            true,
+            retirement,
+        ) {
+            Ok(()) => {
+                target.action = DestroyAction::Removed;
+                target.reason = format!("{} — removed", class.label());
+            }
+            Err(e) => {
+                target.reason = format!("{} — removal failed: {e:#}", class.label());
+                failure = Some(e);
+            }
+        }
+    }
 
-        Ok(DestroyReport {
-            dry_run: opts.dry_run,
-            targets,
-        })
+    // Re-take the pool lock: drop removed entries, release kept ones.
+    let removed: Vec<PathBuf> = targets
+        .iter()
+        .filter(|t| t.action == DestroyAction::Removed)
+        .map(|t| t.entry.path.clone())
+        .collect();
+    let mine = std::process::id();
+    worktree_pool::with_state_lock(project_root, |pool| {
+        pool.entries.retain(|e| !removed.contains(&e.path));
+        for e in &mut pool.entries {
+            if e.retiring.as_ref().is_some_and(|r| r.pid == mine) {
+                e.retiring = None;
+                e.destroying = false;
+            }
+        }
+        Ok(())
+    })?;
+    if let Some(e) = failure {
+        return Err(e);
+    }
+
+    Ok(DestroyReport {
+        dry_run: opts.dry_run,
+        targets,
     })
 }
 
@@ -324,11 +381,22 @@ pub fn teardown_worktree_path(
             clone.display()
         );
     }
+    // Retire the tree's mail before anything irreversible; a refusal keeps
+    // the tree, and no hook has run. trace:STORY-1843 | ai:claude
+    let retirement =
+        crate::mailbox_lifecycle::guard::retire_checkout(worktree_path, "worktree teardown")?;
     // pre_destroy hooks (cargo clean) fire while the tree still exists.
     if worktree_path.exists() {
         crate::worktree_hooks::run_hooks(pre_destroy_hooks, worktree_path, "pre_destroy");
     }
-    git_ops::remove_worktree_at(project_root, worktree_path, true)?;
+    // The Lifecycle lock is released by the time the pool lock is taken
+    // below for deregistration.
+    crate::mailbox_lifecycle::guard::remove_worktree_with(
+        project_root,
+        worktree_path,
+        true,
+        retirement,
+    )?;
 
     // Deregister from the pool registry if this was a pooled tree (no-op
     // otherwise). Best-effort: a registry hiccup must not fail the teardown.
