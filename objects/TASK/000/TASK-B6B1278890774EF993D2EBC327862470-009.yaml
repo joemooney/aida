@@ -8,12 +8,12 @@ description: |-
 
   PR: #2953
   Reviewed sha: 93f82f218dc5104e442ea749d173638767d2412b
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-27T05:12:41.535494232Z
-modified_at: 2026-10-27T14:55:53.321672055Z
+modified_at: 2026-10-27T15:07:36.945198587Z
 req_type: Task
 tags:
 - carried-from:STORY-1889
@@ -45,6 +45,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a17de7-0df0-7f00-8f94-2207e90feb79
+  author: aida-auto-bump
+  timestamp: 2026-10-27T15:07:36.816300591Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a17de7-0e71-7722-aa23-82af75ed5a31
+  timestamp: 2026-10-27T15:07:36.945186514Z
+  agent: aida
+  commit_sha: 2fbb7c4925c6a313f71645e7c50a07b3578a979d
+  summary: dispatch_items_named now walks the syn AST (use trees incl. renames/self/nested groups/globs, code paths, macro + attribute tokens), so 'use crate::{dispatch as d};' and related aliased forms are reported; covered by dispatch_item_detection_sees_evasive_forms; all CI green at head after rerun of a lib-1 time-budget flake.
+  review_verdict: approved
 filed_at:
   code_sha: e3fd91e83fe3ffef5e9b26365de8e302a92c6904
   branch: main
@@ -52,3 +67,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c0b841d865
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-27T15:07:36.816295602Z
+  completion_sha: 2fbb7c4925c6a313f71645e7c50a07b3578a979d
