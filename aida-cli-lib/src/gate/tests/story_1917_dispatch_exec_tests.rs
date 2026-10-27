@@ -38,8 +38,9 @@ use crate::gate::dispatch_ledger::{
 };
 use crate::gate::dispatch_lock::{
     acquire_dispatch_lock, activate_dispatch_v2_lock_quiescent, proc_mount_options,
-    proc_view_refusal, verify_sole_open_fd_for_inode, TEST_FAIL_ROLLBACK_EXCHANGE,
-    TEST_POST_EXCHANGE_HOOK, TEST_PRE_FLOCK_V2_HOOK, TEST_PROC_PID_ALLOWLIST, TEST_PROC_VIEW,
+    proc_view_refusal, unreadable_fd_dir_guidance, verify_sole_open_fd_for_inode,
+    TEST_FAIL_ROLLBACK_EXCHANGE, TEST_POST_EXCHANGE_HOOK, TEST_PRE_FLOCK_V2_HOOK,
+    TEST_PROC_PID_ALLOWLIST, TEST_PROC_VIEW,
 };
 use crate::gate::mandate::{self, Mandate, Scope};
 use chrono::Duration;
@@ -412,6 +413,83 @@ fn review_runner_kills_a_hung_launch_at_its_bound() {
     assert!(
         !crate::process_probe::process_identity_is_alive(pid, None),
         "the hung review child is killed"
+    );
+}
+
+/// The bounded review keeps `Command::output`'s process semantics: stdin is
+/// not a terminal (it reads as empty, `/dev/null`), and the child stays in
+/// serve's process group so a terminal Ctrl+C stops it together with serve.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn review_runner_child_keeps_null_stdin_and_the_callers_process_group() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let probe = f._tmp.path().join("review-probe.txt");
+    let fake_aida = f.write_executable_script(
+        "probe-aida.sh",
+        &format!(
+            "#!/bin/sh\n{{ if [ -t 0 ]; then echo tty; else echo notty; fi; \
+             readlink /proc/self/fd/0; cut -d' ' -f5 /proc/$$/stat; }} > '{}'\n",
+            probe.display()
+        ),
+    );
+    let _bins = install_test_bins(Some(fake_aida), None);
+
+    let rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 206,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &rev.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+
+    let text = std::fs::read_to_string(&probe).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.first(), Some(&"notty"), "{text}");
+    assert_eq!(lines.get(1), Some(&"/dev/null"), "{text}");
+    // SAFETY: `getpgrp` takes no arguments and cannot fail.
+    let own_pgid = unsafe { libc::getpgrp() };
+    assert_eq!(
+        lines.get(2).and_then(|l| l.parse::<i32>().ok()),
+        Some(own_pgid),
+        "the review child shares the caller's process group: {text}"
+    );
+}
+
+/// A review that cannot start reports why, with the binary it tried.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn review_runner_spawn_failure_names_the_binary_and_cause() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let missing = f._tmp.path().join("no-such-aida");
+    let _bins = install_test_bins(Some(missing.clone()), None);
+    let rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 207,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &rev.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
+    assert!(
+        res.summary.contains(&missing.display().to_string())
+            && res.summary.contains("No such file or directory"),
+        "{}",
+        res.summary
     );
 }
 
@@ -3679,6 +3757,36 @@ fn story_1917_proc_view_refusal_covers_namespaces_and_hidepid() {
         proc_mount_options("22 1 0:21 / /sys rw - sysfs sysfs rw\n"),
         None
     );
+}
+
+/// The unreadable-descriptor refusal names the process, why its files cannot
+/// be checked and the way forward; any other error adds nothing.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn unreadable_fd_dir_guidance_names_process_cause_and_way_forward() {
+    let tmp = tempfile::tempdir().unwrap();
+    let proc_dir = tmp.path().join("4242");
+    std::fs::create_dir_all(&proc_dir).unwrap();
+    std::fs::write(proc_dir.join("comm"), "ssh-agent\n").unwrap();
+
+    let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+    let text = unreadable_fd_dir_guidance(&denied, 4242, &proc_dir);
+    assert!(text.contains("Process 4242 (`ssh-agent`)"), "{text}");
+    assert!(text.contains("non-dumpable or sandboxed"), "{text}");
+    assert!(text.contains("open files cannot be checked"), "{text}");
+    assert!(
+        text.contains("Stop it for the moment")
+            && text.contains("then run `aida dispatch activate-lock` again"),
+        "{text}"
+    );
+
+    let no_comm = unreadable_fd_dir_guidance(&denied, 7, &tmp.path().join("missing"));
+    assert!(no_comm.contains("Process 7 is non-dumpable"), "{no_comm}");
+
+    for kind in [std::io::ErrorKind::NotFound, std::io::ErrorKind::Other] {
+        let err = std::io::Error::from(kind);
+        assert_eq!(unreadable_fd_dir_guidance(&err, 4242, &proc_dir), "");
+    }
 }
 
 /// `aida dispatch activate-lock` is a direct-human act: an AIDA-managed agent

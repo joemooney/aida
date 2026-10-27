@@ -383,19 +383,61 @@ pub(crate) fn command_output_with_timeout_detail(
 /// `cap` means the output was cut off.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn command_output_with_timeout_capped(
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     timeout: std::time::Duration,
     cap: u64,
 ) -> BoundedCommandOutput {
+    run_bounded(cmd, timeout, cap, true).unwrap_or(BoundedCommandOutput::SpawnFailed)
+}
+
+/// [`command_output_with_timeout_capped`] for a child that must keep the
+/// caller's process group: no `process_group(0)`, so a terminal's Ctrl+C
+/// reaches the child together with the caller, and only the direct child is
+/// killed at the bound or the cap. A spawn failure comes back as `Err` with
+/// its cause; `Ok` is never [`BoundedCommandOutput::SpawnFailed`]. Stdin is
+/// whatever `cmd` sets (inherited when unset).
+// trace:STORY-1917 | ai:claude
+pub(crate) fn command_output_with_timeout_in_caller_group(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+    cap: u64,
+) -> std::io::Result<BoundedCommandOutput> {
+    run_bounded(cmd, timeout, cap, false)
+}
+
+/// Kill a child spawned by [`run_bounded`]: its whole group when it was
+/// given its own (`own_group`), else only the child itself, since the
+/// child then shares the caller's group.
+// trace:STORY-1917 | ai:claude
+#[cfg(unix)]
+fn kill_bounded_child(pid: u32, own_group: bool) {
+    if own_group {
+        kill_process_group(pid);
+    } else {
+        // SAFETY: `pid` is this process's own child; plain signal syscall.
+        unsafe {
+            libc::kill(pid as libc::pid_t, libc::SIGKILL);
+        }
+    }
+}
+
+fn run_bounded(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+    cap: u64,
+    own_group: bool,
+) -> std::io::Result<BoundedCommandOutput> {
     use std::io::Read;
 
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
+        if own_group {
+            cmd.process_group(0);
+        }
     }
 
-    let mut child = match cmd
+    let mut child = cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         // BUG-1735: a bare spawn here turns a transient ETXTBSY into
@@ -403,12 +445,8 @@ pub(crate) fn command_output_with_timeout_capped(
         // start". Every bounded-run caller inherits that, so the retry
         // belongs in the wrapper, not at each call site.
         // trace:BUG-1735 | ai:claude
-        .spawn_retrying_etxtbsy()
-    {
-        Ok(child) => child,
-        Err(_) => return BoundedCommandOutput::SpawnFailed,
-    };
-    // Only used to target `killpg` below; on non-unix targets nothing reads
+        .spawn_retrying_etxtbsy()?;
+    // Only used to target the kill below; on non-unix targets nothing reads
     // it, so it is cfg-gated too rather than left as a dead binding.
     #[cfg(unix)]
     let pid = child.id();
@@ -422,7 +460,7 @@ pub(crate) fn command_output_with_timeout_capped(
         let _ = pipe.take(cap.saturating_add(1)).read_to_end(&mut buf);
         if buf.len() as u64 > cap {
             #[cfg(unix)]
-            kill_process_group(pid);
+            kill_bounded_child(pid, own_group);
         }
         buf
     };
@@ -446,7 +484,7 @@ pub(crate) fn command_output_with_timeout_capped(
                 if start.elapsed() >= timeout {
                     killed = true;
                     #[cfg(unix)]
-                    kill_process_group(pid);
+                    kill_bounded_child(pid, own_group);
                     let _ = child.kill();
                     let _ = child.wait();
                     break None;
@@ -462,7 +500,7 @@ pub(crate) fn command_output_with_timeout_capped(
             Err(_) => {
                 killed = true;
                 #[cfg(unix)]
-                kill_process_group(pid);
+                kill_bounded_child(pid, own_group);
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
@@ -481,14 +519,14 @@ pub(crate) fn command_output_with_timeout_capped(
     };
     let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
     let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
-    match status {
+    Ok(match status {
         Some(status) => BoundedCommandOutput::Completed(std::process::Output {
             status,
             stdout,
             stderr,
         }),
         None => BoundedCommandOutput::TimedOut,
-    }
+    })
 }
 
 /// BUG-1594: the message a forge lookup carries when the scoped

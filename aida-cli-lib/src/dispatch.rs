@@ -2221,8 +2221,13 @@ fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
 
 /// Bound on one headless review (`aida queue work PR-<pr> --role reviewer
 /// --no-human`), matching `pr ship-batch`'s review wait. A hung launch is
-/// killed with its process group so it cannot hold a flow claim and a
-/// review cap slot forever (R6: bounded subprocesses).
+/// killed so it cannot hold a flow claim and a review cap slot forever (R6:
+/// bounded subprocesses).
+///
+/// Only the time bound is new: the child keeps `Command::output`'s null
+/// stdin and stays in serve's process group, so a terminal Ctrl+C on
+/// `aida dispatch serve` stops the review with it and the review never reads
+/// the operator's TTY.
 const REVIEW_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 /// Bytes of review output kept for the dispatch log.
 const REVIEW_OUTPUT_CAP: u64 = 4 * 1024 * 1024;
@@ -2262,6 +2267,7 @@ pub(crate) fn run_review_verb(
         }
     };
 
+    let aida_bin_display = aida_bin.display().to_string();
     let pr_arg = format!("PR-{pr}");
     let mut cmd = std::process::Command::new(aida_bin);
     cmd.current_dir(main_worktree).args([
@@ -2276,12 +2282,15 @@ pub(crate) fn run_review_verb(
         cmd.args(["--vendor", v.as_str()]);
     }
     cmd.env_remove("AIDA_SESSION_PURPOSE")
-        .env_remove(DISPATCH_CLAIM_TOKEN_ENV);
+        .env_remove(DISPATCH_CLAIM_TOKEN_ENV)
+        .stdin(std::process::Stdio::null());
 
     // trace:STORY-1917 | ai:claude
     let timeout = review_run_timeout();
-    match crate::command_output_with_timeout_capped(cmd, timeout, REVIEW_OUTPUT_CAP) {
-        crate::BoundedCommandOutput::Completed(out) => {
+    let bounded =
+        crate::command_output_with_timeout_in_caller_group(cmd, timeout, REVIEW_OUTPUT_CAP);
+    match bounded {
+        Ok(crate::BoundedCommandOutput::Completed(out)) => {
             let combined = format!(
                 "{}{}",
                 String::from_utf8_lossy(&out.stdout),
@@ -2302,7 +2311,7 @@ pub(crate) fn run_review_verb(
                 }
             }
         }
-        crate::BoundedCommandOutput::TimedOut => {
+        Ok(crate::BoundedCommandOutput::TimedOut) => {
             let summary = format!(
                 "review of PR #{pr} did not finish within {}s and was killed",
                 timeout.as_secs()
@@ -2313,8 +2322,14 @@ pub(crate) fn run_review_verb(
                 exit_code: None,
             }
         }
-        crate::BoundedCommandOutput::SpawnFailed => RunnerOutcome::Failed {
-            summary: format!("failed to spawn `aida queue work PR-{pr}`"),
+        // The caller-group runner reports a spawn failure as `Err` with its
+        // cause; `Ok(SpawnFailed)` does not occur.
+        Err(err) => RunnerOutcome::Failed {
+            summary: format!("failed to spawn `{aida_bin_display} queue work PR-{pr}`: {err}"),
+            exit_code: None,
+        },
+        Ok(crate::BoundedCommandOutput::SpawnFailed) => RunnerOutcome::Failed {
+            summary: format!("failed to spawn `{aida_bin_display} queue work PR-{pr}`"),
             exit_code: None,
         },
     }
