@@ -49,6 +49,7 @@ const TRUST_LIMIT: &str = "Enrolling a trust root trusts its entire reachable hi
 const PULL_LIMIT: &str = "Pull is fast-forward only: fetched history is scanned from the enrolled trust root before any accepted ref moves, so incoming commits that fail the reviewed policy (including other identities) refuse.";
 // trace:STORY-1742 | ai:claude
 const SANITIZATION_LIMIT: &str = "Store writes are checked against the reviewed private policy before anything is persisted; use `aida add --sanitized` for generic intake. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
+const PLAN_LIMIT: &str = "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed.";
 const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
 
 #[derive(Subcommand, Debug)]
@@ -530,7 +531,11 @@ fn plan(
         source_sha,
         destination_ref: if push { STORE_REF } else { TRACKING_REF },
         refspec: if push { PUSH_REFSPEC } else { PULL_REFSPEC },
-        after_scan: if push { vec![] } else { PULL_AFTER_SCAN.to_vec() },
+        after_scan: if push {
+            vec![]
+        } else {
+            PULL_AFTER_SCAN.to_vec()
+        },
         refs_that_may_move: if push {
             vec![STORE_REF]
         } else {
@@ -541,7 +546,20 @@ fn plan(
         execution_available: true,
         executed: false,
         blockers,
-        limitations: vec![BYPASS_LIMIT, SANITIZATION_LIMIT, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
+        // Every limitation `config transport show` reports for this operation,
+        // then the plan-only caveat.
+        // trace:STORY-1742 | ai:claude
+        limitations: if push {
+            vec![SANITIZATION_LIMIT, TRUST_LIMIT, BYPASS_LIMIT, PLAN_LIMIT]
+        } else {
+            vec![
+                PULL_LIMIT,
+                SANITIZATION_LIMIT,
+                TRUST_LIMIT,
+                BYPASS_LIMIT,
+                PLAN_LIMIT,
+            ]
+        },
     })
 }
 
