@@ -157,6 +157,17 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
         );
     }
 
+    // The mailbox Lifecycle lock is a leaf: nothing is acquired under it.
+    // trace:STORY-1843 | ai:claude
+    #[cfg(unix)]
+    if crate::mailbox_lifecycle::lifecycle_lock_held() {
+        anyhow::bail!(
+            "lock-order violation: refusing to acquire store write lock {} while holding \
+             the mailbox lifecycle lock",
+            root.display()
+        );
+    }
+
     let dir = root.join(".aida");
     std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
     let path = dir.join(STORE_WRITE_LOCK_FILE);
