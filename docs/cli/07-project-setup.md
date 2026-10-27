@@ -165,8 +165,11 @@ publishes exactly that commit to the hub's `aida-store`; another WORK clone of
 the hub receives it with `aida pull`. Forwarding from the hub to a public
 remote is the operator's own step (raw Git or an ordinary clone) and is not
 guarded by this profile: what arrives publicly is exactly what the hub holds.
-Only `refs/heads/aida-store` moves at each hop; product branches, mailbox
-state, ID counters and other remotes are untouched by the transport.
+Only store refs move: a push moves `refs/heads/aida-store` on the hub; a pull
+stages the fetch in `refs/aida-transport/incoming`, then moves the clone's
+`refs/remotes/origin/aida-store` and fast-forwards its `refs/heads/aida-store`
+(the pull plan names these before running). Product branches, mailbox state,
+ID counters and other remotes are untouched by the transport.
 <!-- trace:STORY-1742 | ai:codex -->
 
 ---

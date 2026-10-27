@@ -1687,7 +1687,7 @@ fn legacy_main_created_profile_and_lock_stay_usable_and_disable_clears_them() {
     assert_eq!(fs::metadata(&lock).unwrap().mode() & 0o777, 0o600);
 
     // A corrupt but safely stored profile is still cleared by disable.
-    fs::write(&profile, b"{not json").unwrap();
+    fs::write(&profile, b"\x7bnot json").unwrap();
     fs::set_permissions(&profile, fs::Permissions::from_mode(0o644)).unwrap();
     assert!(!fixture
         .aida(&["config", "transport", "show"])

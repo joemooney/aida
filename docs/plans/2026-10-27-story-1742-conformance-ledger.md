@@ -14,6 +14,9 @@ Test locations:
 - `G:` `aida-cli-lib/src/transport_scan.rs` unit tests
 - `V:` `aida-server/src/service.rs` tests
 
+Trace check: `aida criteria STORY-1742` lists every acceptance criterion
+below with at least one traced test (`Untested criteria: none`).
+
 Slices: 1 = #2904, 2 = #2910, S3a = #2929, S3b = #2938, S3c = #2967, S3d = this ledger's PR.
 
 ## Acceptance
