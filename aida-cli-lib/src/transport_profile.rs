@@ -1,6 +1,6 @@
-//! Clone-local transport policy, read-only plans, and ref-only store pushes.
-//! Pull execution remains separate work. Store writes are prepared and
-//! checked in aida-core before persistence.
+//! Clone-local transport policy, read-only plans, ref-only store pushes and
+//! fast-forward-only store pulls. Store writes are prepared and checked in
+//! aida-core before persistence.
 // trace:STORY-1742 | ai:codex
 
 use anyhow::{bail, Context, Result};
@@ -26,10 +26,13 @@ const STORE_REF: &str = "refs/heads/aida-store";
 const TRACKING_REF: &str = "refs/remotes/origin/aida-store";
 const PUSH_REFSPEC: &str = "refs/heads/aida-store:refs/heads/aida-store";
 const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store";
+/// Private staging for fetched store history until it has been scanned.
+// trace:STORY-1742 | ai:claude
+const INCOMING_REF: &str = "refs/aida-transport/incoming";
 const BYPASS_LIMIT: &str =
     "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
-const PENDING: &str =
-    "Transport pull execution is not available in this slice; use --dry-run to inspect the plan.";
+// trace:STORY-1742 | ai:claude
+const PULL_LIMIT: &str = "Pull is fast-forward only: fetched history is scanned from the enrolled trust root before any accepted ref moves, so incoming commits that fail the reviewed policy (including other identities) refuse.";
 // trace:STORY-1742 | ai:claude
 const SANITIZATION_LIMIT: &str = "Store writes are checked against the reviewed private policy before anything is persisted; use `aida add --sanitized` for generic intake. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
 const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
@@ -316,7 +319,7 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
             "ordinary behavior"
         },
         execution_available: profile.is_some(),
-        pull_execution_available: false,
+        pull_execution_available: profile.is_some(),
         sanitization_available: true,
         scanner_version: aida_core::transport_sanitization::SCANNER_VERSION,
         scan_categories: vec![
@@ -333,7 +336,7 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
-        limitations: vec![PENDING, SANITIZATION_LIMIT, BYPASS_LIMIT],
+        limitations: vec![PULL_LIMIT, SANITIZATION_LIMIT, BYPASS_LIMIT],
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
@@ -359,7 +362,8 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
             println!("Code leg: forbidden");
             println!("Push: origin {PUSH_REFSPEC}");
             println!("Push execution: available (clean attached store required)");
-            println!("Pull plan: origin {PULL_REFSPEC} (fast-forward only)");
+            println!("Pull: origin {PULL_REFSPEC} (fast-forward only)");
+            println!("Pull execution: available (clean attached store required)");
         }
         for limitation in status.limitations {
             println!("{limitation}");
@@ -488,16 +492,14 @@ fn plan(
 ) -> Result<TransportPlan> {
     verify_origin(root, profile)?;
     let source_sha = commit(root, if push { STORE_REF } else { TRACKING_REF })?;
-    let mut blockers = if push { vec![] } else { vec![PENDING] };
+    let mut blockers = vec![];
     if flags.values().any(|value| *value == "forbidden") {
         blockers.push(FORBIDDEN);
     }
-    if source_sha.is_none() {
-        blockers.push(if push {
-            "Local aida-store tip is missing."
-        } else {
-            "Remote aida-store tip is unknown; this plan does not fetch."
-        });
+    // An unknown remote tip only means the plan does not fetch; execution
+    // fetches it into private staging first.
+    if push && source_sha.is_none() {
+        blockers.push("Local aida-store tip is missing.");
     }
     Ok(TransportPlan {
         profile: ProfileName::Work,
@@ -507,10 +509,14 @@ fn plan(
         source_sha,
         destination_ref: if push { STORE_REF } else { TRACKING_REF },
         refspec: if push { PUSH_REFSPEC } else { PULL_REFSPEC },
-        refs_that_may_move: if push { vec![STORE_REF] } else { vec![TRACKING_REF, STORE_REF] },
+        refs_that_may_move: if push {
+            vec![STORE_REF]
+        } else {
+            vec![INCOMING_REF, TRACKING_REF, STORE_REF]
+        },
         code_leg: "forbidden",
         flags,
-        execution_available: push,
+        execution_available: true,
         executed: false,
         blockers,
         limitations: vec![BYPASS_LIMIT, SANITIZATION_LIMIT, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
@@ -590,7 +596,7 @@ fn handle(
         if push {
             executor::push(root, &profile, plan.source_sha.as_deref())?;
         } else {
-            bail!("{PENDING}");
+            executor::pull(root, &profile)?;
         }
     }
     Ok(true)
