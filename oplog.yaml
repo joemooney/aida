@@ -79042,5 +79042,33 @@ operations:
   timestamp: 2026-10-27T17:08:55.771214192Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6147
+- id: 01a17e66-3ac2-76e1-8211-1f24fc3805e5
+  target_id: 01a17e66-324c-7331-bd8c-89d83466f744
+  author: aida
+  node_id: '1'
+  lamport: 6148
+  timestamp: 2026-10-27T17:26:31.362525539Z
+  kind: !Create
+    title: 'Review PR-2985: [AI:claude] feat(adoption): locate the shared adoption plane without a product marker (Refs STORY-1741)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1741`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2985>
+      - Branch: `story-1741` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-1741
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2985` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6148
 node_id: '1'
