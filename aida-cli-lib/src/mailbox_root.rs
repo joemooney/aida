@@ -59,31 +59,60 @@ pub(crate) fn mailbox_latency_warning(
     project_root: &std::path::Path,
     role: Option<&str>,
 ) -> Option<String> {
-    // A no-role child must not warn about its inherited parent's private mail.
-    // trace:STORY-1843 | ai:codex
-    let identity = role
+    // A no-role child must not warn about its inherited parent's private mail:
+    // the audience is the one the core identity policy verified for this
+    // process. A role narrows it only when the role is one of its keys.
+    // trace:STORY-1843 | ai:codex,claude
+    let own = crate::mailbox_view::own_audience();
+    let audience = role
         .filter(|s| !s.trim().is_empty())
-        .map(str::to_owned)
-        .or_else(crate::agent_handle::current_session_handle_for_cwd)
-        .unwrap_or_else(|| current_user_id(None));
-    let store_root = project_root.join(".aida-store");
-    let local = mailbox_store::read_local_messages(project_root).ok()?;
-    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
-    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let latency = aida_core::mailbox::mailbox_latency(
-        &identity,
-        &merged,
-        mailbox_store::read_watermark(project_root, &identity),
-        chrono::Utc::now().timestamp_millis(),
+        .and_then(|r| own.narrowed_to(r))
+        .unwrap_or(own);
+    let view = crate::mailbox_view::read_own_mail(
+        project_root,
+        &project_root.join(".aida-store"),
+        &audience,
+        &crate::mailbox_view::passive_limits(),
     );
-    aida_core::mailbox::mailbox_latency_warns(&latency, mailbox_warn_after_ms(project_root)).then(
-        || {
-            format!(
-                "⚠ mail: oldest unread {}",
-                format_mail_age(latency.oldest_unread_age_ms.unwrap_or(0))
-            )
-        },
+    mailbox_latency_warning_for(
+        &view,
+        chrono::Utc::now().timestamp_millis(),
+        mailbox_warn_after_ms(project_root),
     )
+}
+
+/// The latency warning for one own-audience view: unread mail older than
+/// `warn_after_ms`; a partial view is never silent.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn mailbox_latency_warning_for(
+    view: &crate::mailbox_view::OwnMail,
+    now_ms: i64,
+    warn_after_ms: i64,
+) -> Option<String> {
+    let unread = view.unread();
+    let latency = aida_core::mailbox::MailboxLatency {
+        unread: unread.len(),
+        oldest_unread_age_ms: unread
+            .iter()
+            .map(|m| m.timestamp)
+            .min()
+            .map(|ts| (now_ms - ts).max(0)),
+    };
+    let partial = if view.is_partial() {
+        " (partial view)"
+    } else {
+        ""
+    };
+    if aida_core::mailbox::mailbox_latency_warns(&latency, warn_after_ms) {
+        Some(format!(
+            "⚠ mail: oldest unread {}{partial}",
+            format_mail_age(latency.oldest_unread_age_ms.unwrap_or(0))
+        ))
+    } else if view.is_partial() {
+        Some("⚠ mail: view partial — some mail may be missing".to_string())
+    } else {
+        None
+    }
 }
 
 // trace:STORY-583 trace:TASK-782 | ai:codex,claude
@@ -195,6 +224,13 @@ pub(crate) fn mailbox_operator_id() -> String {
 /// One mailbox message as a compact line: short-id, urgency flag, originator →
 /// recipient, local time, body. trace:STORY-539 | ai:claude
 pub(crate) fn print_mailbox_line(m: &aida_core::mailbox::Message) {
+    print_mailbox_line_tagged(m, None);
+}
+
+/// [`print_mailbox_line`] with an optional dimmed read-state tag, such as
+/// `read (legacy)`.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn print_mailbox_line_tagged(m: &aida_core::mailbox::Message, tag: Option<&str>) {
     let to = match &m.to {
         aida_core::mailbox::Recipient::Agent(a) => a.clone(),
         aida_core::mailbox::Recipient::Broadcast => "all".to_string(),
@@ -224,11 +260,14 @@ pub(crate) fn print_mailbox_line(m: &aida_core::mailbox::Message) {
         String::new()
     };
     // trace:TASK-1211 | ai:codex
-    let archived_tag = if m.archived {
+    let mut archived_tag = if m.archived {
         format!("{} ", "[archived]".dimmed())
     } else {
         String::new()
     };
+    if let Some(tag) = tag {
+        archived_tag.push_str(&format!("{} ", format!("[{tag}]").dimmed()));
+    }
     let body = mailbox_line_body(m);
     // BUG-1533: `from` alone is ambiguous whenever the sender collapsed to
     // the bare shell user (or predates the `from_source` field) — several
@@ -293,150 +332,70 @@ pub(crate) fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
 /// normalized (`dialog` → `advisor`). trace:STORY-585 | ai:claude
 // trace:TASK-818 | ai:claude
 // trace:BUG-1592 | ai:claude
+/// The session binding a selected registry row (`None`: no row) yields. A
+/// row with no valid handle is no binding at all — the session lookup
+/// never selects one, and TASK-2345 reads it as unbound — while any other
+/// refusal fails closed.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn session_binding_from_row(
+    row: Option<&std::path::Path>,
+    env: &aida_core::mailbox_identity::IdentityEnv,
+) -> aida_core::mailbox_identity::SessionBinding {
+    use aida_core::mailbox_identity::{BindingRefusal, SessionBinding, SessionBindingFacts};
+    match row.map(|row| SessionBindingFacts::verify(row, env)) {
+        None | Some(Err(BindingRefusal::NoHandle)) => SessionBinding::Unbound,
+        Some(Ok(facts)) => SessionBinding::Bound(facts),
+        Some(Err(why)) => SessionBinding::Unverified(why),
+    }
+}
+
 pub(crate) fn inbox_identities() -> Vec<String> {
-    inbox_identities_from_facts(&MailIdentityFacts::collect())
+    aida_core::mailbox_identity::inbox_identities(&collect_mail_identity_facts())
 }
 
-/// Everything [`inbox_identities`] reads from the process, gathered once:
-/// the persisted session binding, env aliases, user and role. Production
-/// collects real facts; tests construct them, so the identity policy is
-/// asserted without depending on who runs the suite (the real process
-/// ancestry and registry otherwise decide the session binding).
-// trace:TASK-2345 | ai:claude
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct MailIdentityFacts {
-    /// Handle of this process's persisted session binding.
-    pub(crate) own_handle: Option<String>,
-    /// Vendor recorded on that same binding.
-    pub(crate) own_vendor: Option<String>,
-    /// `current_user_id(None)`.
-    pub(crate) user: String,
-    /// The user is an intentional person in the people catalog. Only
-    /// consulted when a bound handle differs from the user.
-    pub(crate) user_is_known_person: bool,
-    /// Non-empty handle/launch-name env values, in precedence order.
-    pub(crate) aliases: Vec<String>,
-    /// Raw non-empty `AIDA_SESSION_ROLE`.
-    pub(crate) role: Option<String>,
-    /// Raw non-empty `AIDA_AGENT_TYPE`.
-    pub(crate) env_vendor: Option<String>,
+pub(crate) use aida_core::mailbox_identity::MailIdentityFacts;
+
+/// The one production collector of this process's mail identity facts. The
+/// CLI's session lookup selects the persisted registry row; core reads and
+/// verifies it against this process's own evidence, so no caller-supplied
+/// string becomes recipient authority. The people catalog is read only when
+/// the bound handle differs from the user (or the binding failed), the
+/// only cases the policy consults it.
+// trace:TASK-2345 trace:STORY-1843 | ai:claude
+pub(crate) fn collect_mail_identity_facts() -> MailIdentityFacts {
+    let root = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| crate::find_aida_project_root_from(&cwd).ok());
+    collect_mail_identity_facts_in(root.as_deref())
 }
 
-impl MailIdentityFacts {
-    /// The one production collector: ancestry/registry, catalog and env.
-    // trace:TASK-2345 | ai:claude
-    pub(crate) fn collect() -> Self {
-        let nonempty = |key: &str| std::env::var(key).ok().filter(|s| !s.trim().is_empty());
-        // A raw child can inherit a parent's launch aliases. Its persisted
-        // process/session binding wins for private mail, as on the sender side.
-        // trace:STORY-1843 | ai:codex
-        let own_session = crate::agent_handle::current_session_entry_for_cwd();
-        let own_handle = own_session.as_ref().and_then(|e| e.name.clone());
-        let user = current_user_id(None);
-        let user_is_known_person = own_handle
-            .as_deref()
-            .is_some_and(|own| !own.eq_ignore_ascii_case(&user))
-            && std::env::current_dir()
-                .ok()
-                .and_then(|cwd| crate::find_aida_project_root_from(&cwd).ok())
-                .map(|root| crate::main_worktree_root_from(&root).join(".aida-store"))
-                .is_some_and(|store| {
-                    known_mailbox_people(&store).contains_key(&user.to_lowercase())
-                });
-        Self {
-            own_handle,
-            own_vendor: own_session.map(|e| e.agent_type),
-            user,
-            user_is_known_person,
-            aliases: [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"]
-                .into_iter()
-                .filter_map(nonempty)
-                .collect(),
-            role: nonempty("AIDA_SESSION_ROLE"),
-            env_vendor: nonempty("AIDA_AGENT_TYPE"),
-        }
-    }
-}
-
-/// The [`inbox_identities`] policy over explicit facts. Reads nothing from
-/// the process.
-// trace:TASK-2345 | ai:claude
-pub(crate) fn inbox_identities_from_facts(facts: &MailIdentityFacts) -> Vec<String> {
-    let own_handle = facts.own_handle.as_deref();
-    let user = &facts.user;
-    // AIDA_USER is also inherited by raw children. Once a session has its
-    // own handle, an unrelated user string cannot add another private agent
-    // inbox. Keep intentional human inboxes from the people catalog; shared
-    // role/vendor audiences are added independently below. This changes only
-    // mail visibility, never the principal used for grants or queue ownership.
-    // trace:STORY-1843 | ai:codex
-    let include_user =
-        own_handle.is_none_or(|own| own.eq_ignore_ascii_case(user)) || facts.user_is_known_person;
-    let mut ids = if include_user {
-        vec![user.clone()]
-    } else {
-        Vec::new()
+/// [`collect_mail_identity_facts`] against the project at `project_root`
+/// (its main checkout's registry and store); `None` when there is no
+/// project, which leaves the process unbound.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn collect_mail_identity_facts_in(
+    project_root: Option<&std::path::Path>,
+) -> MailIdentityFacts {
+    use aida_core::mailbox_identity::{IdentityEnv, PeopleCatalogView, SessionBinding};
+    let env = IdentityEnv::observed();
+    let binding = session_binding_from_row(
+        project_root
+            .and_then(crate::agent_handle::current_session_row_in)
+            .as_deref(),
+        &env,
+    );
+    let needs_catalog = match &binding {
+        SessionBinding::Unbound => false,
+        SessionBinding::Unverified(_) => true,
+        SessionBinding::Bound(b) => !b.handle().eq_ignore_ascii_case(env.user()),
     };
-    // BUG-1592: `resolve_mail_sender_identity` puts `AIDA_AGENT_NAME` FIRST in
-    // the send-side precedence (ahead of `AIDA_USER`), but this read-side set
-    // never included it — a seat whose launcher sets `AIDA_AGENT_NAME` to
-    // something other than `AIDA_USER` sends mail under a name it never reads
-    // its own inbox for, so replies go unread. The launchers currently set
-    // `AIDA_USER = AIDA_AGENT_NAME`, which is why this was latent; any future
-    // override inside a launched agent splits send-identity from
-    // read-identity without this union.
-    // A headless child also reads its own handle's inbox (STORY-1843).
-    // trace:STORY-1843 | ai:claude
-    for agent_name in &facts.aliases {
-        if own_handle.is_some_and(|own| own != agent_name) {
-            continue;
-        }
-        if !ids.iter().any(|i| i == agent_name) {
-            ids.push(agent_name.clone());
-        }
-    }
-    if let Some(raw) = &facts.role {
-        let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
-        if !ids.iter().any(|i| i == &role) {
-            ids.push(role);
-        }
-    }
-    // TASK-818: union the short agent TYPE name (`AIDA_AGENT_TYPE`, e.g.
-    // `codex`) into the inbox identities so a coordinator addressing the type
-    // name (`--to codex`) reaches the mailbox too — matching how briefs already
-    // route by the short type name (`.aida/agent-briefs/codex/`). Post-BUG-558
-    // the stable per-instance name (`AIDA_USER`, e.g. `codex-implementer-1`)
-    // owns mailbox/queue identity; this adds the type as an ADDITIONAL inbox so
-    // both forms of addressing land. Known tradeoff (signed-off, reversible):
-    // multiple instances of the SAME type share the `<type>` inbox and race on
-    // mark-seen because the read watermark is keyed per identity STRING — the
-    // first instance to read a type-addressed message advances the shared
-    // `<type>` watermark and the others won't see it via the type identity
-    // (their stable-name inboxes are unaffected). Acceptable for the rare
-    // multi-instance-same-type case.
-    // Prefer the child's registered vendor to an inherited parent vendor.
-    // trace:STORY-1843 | ai:codex
-    if let Some(raw) = facts
-        .own_vendor
-        .clone()
-        .or_else(|| facts.env_vendor.clone())
-        .filter(|s| !s.trim().is_empty())
-    {
-        let type_name = agent_registry::normalize_agent_type(raw);
-        if !ids.iter().any(|i| i == &type_name) {
-            ids.push(type_name);
-        }
-    }
-    // STORY-1843: the handle this session holds, resolved from its persisted
-    // registry binding (hook payload or the client's per-session env), so
-    // mail sent to the handle reaches a session no launcher named.
-    // trace:STORY-1843 | ai:claude
-    if let Some(handle) = own_handle {
-        if !ids.iter().any(|i| i.eq_ignore_ascii_case(handle)) {
-            ids.push(handle.to_string());
-        }
-    }
-    ids
+    let catalog = project_root
+        .filter(|_| needs_catalog)
+        .map(|root| {
+            PeopleCatalogView::load(&crate::main_worktree_root_from(root).join(".aida-store"))
+        })
+        .unwrap_or_default();
+    MailIdentityFacts::observed(binding, &catalog, env)
 }
 
 /// The set of identities a mailbox recipient can legitimately resolve to: the
@@ -506,30 +465,9 @@ pub(crate) fn known_mailbox_recipients(
 pub(crate) fn known_mailbox_people(
     store_root: &std::path::Path,
 ) -> std::collections::HashMap<String, String> {
-    let mut map = std::collections::HashMap::new();
-    let mut add = |s: &str| {
-        let t = s.trim();
-        if !t.is_empty() {
-            map.entry(t.to_lowercase()).or_insert_with(|| t.to_string());
-        }
-    };
-    for member in aida_core::team::build_team_members(store_root) {
-        add(&member.user_id);
-    }
-    for (user, _) in aida_core::team::TeamRoster::load(store_root).entries() {
-        add(&user);
-    }
-    if let Ok(store) = aida_core::GitBackend::read_metadata_only(store_root) {
-        for user in store.users {
-            add(&user.handle);
-        }
-    }
-    let aliases = aida_core::alias::AliasRegistry::load(store_root);
-    for (alias, canonical) in &aliases.aliases {
-        add(canonical);
-        add(alias);
-    }
-    map
+    aida_core::mailbox_identity::PeopleCatalogView::load(store_root)
+        .spellings()
+        .clone()
 }
 
 /// Render an unread-mail notice as plain, agent-facing context text (no ANSI —

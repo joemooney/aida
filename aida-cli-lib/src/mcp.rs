@@ -2808,8 +2808,9 @@ impl<'a> McpServer<'a> {
         // BUG-557: mirror the CLI fix — `in_reply_to` must attach the reply to
         // the target's thread, not open a new one. Precedence: explicit
         // `thread` > the reply target's thread > a fresh thread. Resolved
-        // against the local layer (the same set `read_inbox` reads); a dangling
-        // reference falls back to a fresh thread. trace:BUG-557 | ai:claude
+        // against the same logical snapshot `read_inbox` lists (STORY-1843),
+        // so every ID it returned resolves; a dangling reference falls back
+        // to a fresh thread. trace:BUG-557 trace:STORY-1843 | ai:claude
         let in_reply_to = args
             .get("in_reply_to")
             .and_then(|v| v.as_str())
@@ -2817,9 +2818,13 @@ impl<'a> McpServer<'a> {
         let thread_id = if let Some(t) = args.get("thread").and_then(|v| v.as_str()) {
             t.to_string()
         } else if let Some(target) = in_reply_to.as_deref() {
-            let local = crate::mailbox_store::read_local_messages(&self.project_root)
-                .map_err(|e| e.to_string())?;
-            aida_core::mailbox::reply_target_thread(target, &local).unwrap_or_else(|| id.clone())
+            let book = crate::mailbox_view::addressable_for(
+                &self.project_root,
+                &self.project_root.join(".aida-store"),
+                &crate::mailbox_view::own_audience_in(&self.project_root),
+            );
+            aida_core::mailbox::reply_target_thread(target, book.messages())
+                .unwrap_or_else(|| id.clone())
         } else {
             id.clone()
         };
@@ -2908,12 +2913,6 @@ impl<'a> McpServer<'a> {
     /// oldest-first, as JSON. `agent` defaults to this server's identity.
     // trace:STORY-493 | ai:claude
     fn tool_read_inbox(&self, args: &Value) -> Result<String, String> {
-        use aida_core::mailbox::{inbox_for, Recipient};
-        let agent = args
-            .get("agent")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| crate::current_user_id(None));
         let unread_only = args
             .get("unread")
             .and_then(|v| v.as_bool())
@@ -2922,98 +2921,100 @@ impl<'a> McpServer<'a> {
             .get("mark_seen")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        // STORY-643: merge the canonical (orphan-store) layer with the local
-        // one so foreign messages another clone published and we pulled down
-        // surface here — matching `aida mailbox inbox` on the CLI. Without this
-        // an MCP agent only ever saw its own clone's locally-sent mail.
-        // trace:STORY-643 | ai:claude
+        // STORY-1843: this server's verified audience, read as one logical
+        // view across the repository's worktrees and the canonical store
+        // (which keeps STORY-643's foreign-clone mail visible). `agent`
+        // narrows it to one of its own inboxes; naming any other inbox is a
+        // read-only inspection of this checkout and the store.
+        // trace:STORY-643 trace:STORY-1843 | ai:claude
+        let own = crate::mailbox_view::own_audience_in(&self.project_root);
+        let requested = args.get("agent").and_then(|v| v.as_str());
+        let audience = match requested {
+            None => own,
+            Some(agent) => match own.narrowed_to(agent) {
+                Some(narrowed) => narrowed,
+                None => return self.inspect_inbox(agent, unread_only, mark_seen),
+            },
+        };
+        let store_root = self.project_root.join(".aida-store");
+        let view = crate::mailbox_view::read_own_mail(
+            &self.project_root,
+            &store_root,
+            &audience,
+            &crate::mailbox_view::explicit_limits(),
+        );
+        let shown: Vec<&aida_core::mailbox_logical::SnapshotRecord> = view
+            .records()
+            .iter()
+            .filter(|r| {
+                !unread_only
+                    || (!r.message.archived
+                        && crate::mailbox_view::ReadState::of(r)
+                            == crate::mailbox_view::ReadState::Unread)
+            })
+            .collect();
+        let messages: Vec<Value> = shown
+            .iter()
+            .map(|r| {
+                let mut entry = mcp_mail_entry(&r.message);
+                entry["read"] = json!(crate::mailbox_view::ReadState::of(r).as_str());
+                entry
+            })
+            .collect();
+        // Explicit ack only (STORY-585 #4: the default is a non-marking
+        // peek): per-ID receipts for exactly the returned unread messages,
+        // written before the response is built.
+        // trace:STORY-585 trace:TASK-1271 trace:STORY-1843 | ai:codex,claude
+        if mark_seen {
+            crate::mailbox_view::mark_displayed(&self.project_root, view.audience(), &shown)
+                .map_err(|e| e.to_string())?;
+        }
+        serde_json::to_string_pretty(&json!({
+            "agent": audience.keys().collect::<Vec<_>>().join(" + "),
+            "count": messages.len(),
+            "unread": unread_only,
+            "partial": view.is_partial(),
+            "partial_note": view.partial_note(),
+            "messages": messages,
+        }))
+        .map_err(|e| e.to_string())
+    }
+
+    /// `read_inbox` for an inbox this server does not hold: read-only, this
+    /// checkout and the canonical store only, never marked.
+    // trace:STORY-1843 | ai:claude
+    fn inspect_inbox(
+        &self,
+        agent: &str,
+        unread_only: bool,
+        mark_seen: bool,
+    ) -> Result<String, String> {
+        use aida_core::mailbox::inbox_for;
+        if mark_seen {
+            return Err(format!(
+                "mark_seen applies only to this session's own inboxes; `{agent}` is not one of them"
+            ));
+        }
         let local = crate::mailbox_store::read_local_messages(&self.project_root)
             .map_err(|e| e.to_string())?;
         let store_root = self.project_root.join(".aida-store");
         let canonical =
             crate::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
         let all = aida_core::mailbox::merge_dedup(&local, &canonical);
-        let watermark = crate::mailbox_store::read_watermark(&self.project_root, &agent);
-        let full = inbox_for(&agent, &all);
-        // `--unread`/`unread` filters to messages past the watermark; the
-        // seen-mark still advances to the FULL inbox's newest (an explicit ack
-        // catches everything, not just the filtered slice).
-        let mark = watermark.unwrap_or(i64::MIN);
-        let shown: Vec<&aida_core::mailbox::Message> = if unread_only {
-            full.iter()
-                .copied()
-                .filter(|m| m.timestamp > mark)
-                .collect()
-        } else {
-            full.clone()
-        };
-        let messages: Vec<Value> = shown
-            .iter()
-            .map(|m| {
-                let to = match &m.to {
-                    Recipient::Agent(a) => a.clone(),
-                    Recipient::Broadcast => "all".to_string(),
-                };
-                let mut entry = json!({
-                    "id": m.id,
-                    "thread_id": m.thread_id,
-                    "from": m.from,
-                    // trace:BUG-1533 | ai:claude — which precedence tier
-                    // resolved `from` at send time, so a reader can tell a
-                    // real seat apart from the ambiguous shell-user/legacy
-                    // fallback without inferring it from body prose.
-                    "from_source": m.from_source.as_str(),
-                    "from_attributed": m.from_source.is_attributed(),
-                    "to": to,
-                    "timestamp": m.timestamp,
-                    "in_reply_to": m.in_reply_to,
-                    "body": m.body,
-                    "urgent": m.urgent,
-                    "intent": m.intent.as_str(),
-                });
-                // trace:BUG-1461 | ai:claude — mirror the CLI: an explicit
-                // subject is present, an unset one is omitted (not null).
-                if let Some(subject) = &m.subject {
-                    entry["subject"] = json!(subject);
-                }
-                // trace:BUG-1592 | ai:claude — mirror `from_source`: the
-                // sender's role when it was known at send time, omitted (not
-                // null) when it wasn't.
-                if let Some(from_role) = &m.from_role {
-                    entry["from_role"] = json!(from_role);
-                }
-                // trace:BUG-1534 | ai:claude — the relayed claim's original seat.
-                if let Some(orig) = &m.relayed_from {
-                    entry["relayed_from"] = json!(orig);
-                }
-                entry
-            })
+        // trace:STORY-1843 | ai:claude — a receipt in any worktree is a read.
+        let evidence = crate::mailbox_store::ReadEvidence::load(&self.project_root)
+            .map_err(|e| e.to_string())?;
+        let messages: Vec<Value> = inbox_for(agent, &all)
+            .into_iter()
+            .filter(|m| !unread_only || !evidence.read_by(agent, m))
+            .map(mcp_mail_entry)
             .collect();
-        // Explicit ack only: record receipts for latency history, then advance
-        // the watermark to the full inbox's newest so the unread/notice surface
-        // clears. Default is a non-marking peek (STORY-585 acceptance #4).
-        // trace:STORY-585 trace:TASK-1271 | ai:codex
-        if mark_seen {
-            if let Some(newest) = full.iter().map(|m| m.timestamp).max() {
-                // Only messages beyond the pre-read watermark were newly
-                // acknowledged. Older messages may predate receipt tracking,
-                // so backfilling them would invent a misleading latency.
-                // trace:TASK-1271 | ai:codex
-                let ids: Vec<&str> = full
-                    .iter()
-                    .filter(|m| m.timestamp > mark)
-                    .map(|m| m.id.as_str())
-                    .collect();
-                crate::mailbox_store::record_seen(&self.project_root, &agent, &ids)
-                    .map_err(|e| e.to_string())?;
-                crate::mailbox_store::set_watermark(&self.project_root, &agent, newest)
-                    .map_err(|e| e.to_string())?;
-            }
-        }
         serde_json::to_string_pretty(&json!({
             "agent": agent,
             "count": messages.len(),
             "unread": unread_only,
+            "inspection": true,
+            "partial": evidence.partial(),
             "messages": messages,
         }))
         .map_err(|e| e.to_string())
@@ -7560,13 +7561,13 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "read_inbox",
-            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Reading does NOT mark the inbox seen unless `mark_seen` is true (the explicit ack); pass `unread` to return only messages past the read-watermark. Returns pretty-printed JSON.",
+            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Reading does NOT mark the inbox seen unless `mark_seen` is true (the explicit ack); pass `unread` to return only messages with no read receipt. Returns pretty-printed JSON.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" },
-                    "unread": { "type": "boolean", "description": "Return only unread messages (newer than this inbox's read-watermark). Default false (whole inbox).", "default": false, "example": true },
-                    "mark_seen": { "type": "boolean", "description": "Advance the read-watermark to the newest message after reading — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false, "example": true }
+                    "unread": { "type": "boolean", "description": "Return only unread messages (no read receipt, and newer than any legacy read-watermark). Default false (whole inbox).", "default": false, "example": true },
+                    "mark_seen": { "type": "boolean", "description": "Record a read receipt for each returned unread message — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false, "example": true }
                 }
             },
             "outputSchema": text_envelope_output_schema(
@@ -8958,6 +8959,49 @@ fn _force_use() {
 // ============================================================================
 // Tests — STORY-361
 // ============================================================================
+
+/// One mailbox message as `read_inbox` JSON (STORY-493).
+// trace:STORY-493 | ai:claude
+fn mcp_mail_entry(m: &aida_core::mailbox::Message) -> Value {
+    use aida_core::mailbox::Recipient;
+    let to = match &m.to {
+        Recipient::Agent(a) => a.clone(),
+        Recipient::Broadcast => "all".to_string(),
+    };
+    let mut entry = json!({
+        "id": m.id,
+        "thread_id": m.thread_id,
+        "from": m.from,
+        // trace:BUG-1533 | ai:claude — which precedence tier
+        // resolved `from` at send time, so a reader can tell a
+        // real seat apart from the ambiguous shell-user/legacy
+        // fallback without inferring it from body prose.
+        "from_source": m.from_source.as_str(),
+        "from_attributed": m.from_source.is_attributed(),
+        "to": to,
+        "timestamp": m.timestamp,
+        "in_reply_to": m.in_reply_to,
+        "body": m.body,
+        "urgent": m.urgent,
+        "intent": m.intent.as_str(),
+    });
+    // trace:BUG-1461 | ai:claude — mirror the CLI: an explicit
+    // subject is present, an unset one is omitted (not null).
+    if let Some(subject) = &m.subject {
+        entry["subject"] = json!(subject);
+    }
+    // trace:BUG-1592 | ai:claude — mirror `from_source`: the
+    // sender's role when it was known at send time, omitted (not
+    // null) when it wasn't.
+    if let Some(from_role) = &m.from_role {
+        entry["from_role"] = json!(from_role);
+    }
+    // trace:BUG-1534 | ai:claude — the relayed claim's original seat.
+    if let Some(orig) = &m.relayed_from {
+        entry["relayed_from"] = json!(orig);
+    }
+    entry
+}
 
 #[cfg(test)]
 mod tests {
@@ -10790,6 +10834,14 @@ mod tests {
     // trace:STORY-493 | ai:claude
     #[test]
     fn mcp_mailbox_send_then_read_inbox_roundtrip() {
+        // STORY-1843: `agent` narrows the server's own verified audience;
+        // this server is an unbound `claude` reader whatever session runs
+        // the suite.
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
         // Direct vendor mail now requires a real live registry reader.
@@ -10885,6 +10937,14 @@ mod tests {
     // trace:BUG-1461 | ai:claude
     #[test]
     fn mcp_mailbox_send_with_subject_then_read_inbox_roundtrip() {
+        // STORY-1843: `agent` narrows the server's own verified audience;
+        // this server is an unbound `claude` reader whatever session runs
+        // the suite.
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
         // Direct vendor mail now requires a real live registry reader.
@@ -10922,11 +10982,90 @@ mod tests {
         );
     }
 
+    /// STORY-1843 F5: MCP `read_inbox` on the shared actual-Git matrix. A
+    /// sibling-only message is in the peek, the unread slice and the
+    /// `mark_seen` ack (a receipt in this checkout); afterwards it reads as
+    /// read. Another inbox is an inspection that refuses `mark_seen`; a
+    /// missing worktree makes the view partial; a reply to the listed ID
+    /// attaches to its thread.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mcp_read_inbox_shares_the_logical_view() {
+        use crate::mailbox_view::tests::{mail, mail_repo};
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("operator")),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
+        let r = mail_repo();
+        crate::mailbox_store::write_message(&r.sib, &mail("sib-only", "operator", 10, false))
+            .unwrap();
+        let server = mk_server(&r.main);
+        let read = |args: Value| -> Value {
+            serde_json::from_str(&server.tool_read_inbox(&args).unwrap()).unwrap()
+        };
+
+        let peek = read(json!({}));
+        assert_eq!(peek["count"], 1, "{peek}");
+        assert_eq!(peek["partial"], false);
+        assert_eq!(peek["messages"][0]["id"], "sib-only");
+        assert_eq!(peek["messages"][0]["read"], "unread");
+        assert_eq!(
+            read(json!({ "unread": true }))["count"],
+            1,
+            "peek did not consume"
+        );
+
+        crate::agent_registry::register_existing_agent(
+            &r.main,
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            r.main.clone(),
+            Some("mail-reader".into()),
+            None,
+        )
+        .unwrap();
+        let reply = server
+            .tool_send_message(&json!({
+                "to": "claude", "body": "ack", "from": "operator", "in_reply_to": "sib-only"
+            }))
+            .unwrap();
+        assert!(reply.contains("(thread sib-only)"), "{reply}");
+
+        let acked = read(json!({ "agent": "operator", "mark_seen": true, "unread": true }));
+        assert_eq!(acked["count"], 1);
+        assert!(crate::mailbox_store::read_receipts(&r.main, "operator").contains_key("sib-only"));
+        let after = read(json!({ "unread": true }));
+        assert_eq!(after["count"], 0, "{after}");
+        assert_eq!(read(json!({}))["messages"][0]["read"], "read");
+
+        let err = server
+            .tool_read_inbox(&json!({ "agent": "stranger", "mark_seen": true }))
+            .unwrap_err();
+        assert!(err.contains("not one of them"), "{err}");
+        assert_eq!(read(json!({ "agent": "stranger" }))["inspection"], true);
+
+        std::fs::remove_dir_all(&r.sib).unwrap();
+        let partial = read(json!({}));
+        assert_eq!(partial["partial"], true, "{partial}");
+        assert!(partial["partial_note"].as_str().is_some());
+    }
+
     // trace:STORY-585 trace:TASK-1271 | ai:claude+codex
     /// read_inbox is a non-marking peek by default; `mark_seen` advances the
     /// watermark (the explicit ack) and `unread` filters to the unread slice.
     #[test]
     fn mcp_read_inbox_peek_unread_and_mark_seen() {
+        // STORY-1843: `agent` narrows the server's own verified audience;
+        // this server is an unbound `claude` reader whatever session runs
+        // the suite.
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
         // Direct vendor mail now requires a real live registry reader.
@@ -10970,8 +11109,11 @@ mod tests {
         let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
         let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
         assert_eq!(receipts.len(), 2, "ack records a receipt for each message");
-        let max_read_latency_ms =
-            crate::mailbox_cmd::max_read_latency_ms(dir.path(), "claude", &messages);
+        let max_read_latency_ms = crate::mailbox_cmd::max_read_latency_ms(
+            &crate::mailbox_store::ReadEvidence::load(dir.path()).unwrap(),
+            "claude",
+            &messages,
+        );
         assert!(
             max_read_latency_ms.is_some(),
             "latency history is populated after MCP mark_seen"
@@ -10992,9 +11134,44 @@ mod tests {
         assert_eq!(full_p["count"], 2);
     }
 
+    /// STORY-1843 R2-F1: inspecting another inbox counts a receipt (what
+    /// an inbox read writes, with no watermark move) as a read.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mcp_inspection_unread_counts_receipts_as_read() {
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let m = crate::mailbox_view::tests::mail("insp-1", "reviewer-seat", 10, false);
+        crate::mailbox_store::write_message(dir.path(), &m).unwrap();
+        let unread = |server: &McpServer<'static>| -> Value {
+            serde_json::from_str(&server.inspect_inbox("reviewer-seat", true, false).unwrap())
+                .unwrap()
+        };
+        assert_eq!(unread(&server)["count"], 1);
+        crate::mailbox_store::record_seen(dir.path(), "reviewer-seat", &[m.id.as_str()]).unwrap();
+        assert_eq!(
+            crate::mailbox_store::read_watermark(dir.path(), "reviewer-seat"),
+            None
+        );
+        assert_eq!(unread(&server)["count"], 0);
+    }
+
     // trace:TASK-1271 | ai:codex
     #[test]
     fn mcp_mark_seen_does_not_backfill_receipts_at_or_below_existing_watermark() {
+        // STORY-1843: `agent` narrows the server's own verified audience;
+        // this server is an unbound `claude` reader whatever session runs
+        // the suite.
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
         // Direct vendor mail now requires a real live registry reader.

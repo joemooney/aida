@@ -71,6 +71,9 @@
 pub mod agents_config;
 pub mod ai;
 pub mod alias;
+// Shared non-executable adoption settings on the store plane. trace:STORY-1741 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+pub mod adoption_plane;
 pub mod analytics;
 pub mod block_allocation;
 // trace:BUG-2017 | ai:codex
@@ -138,6 +141,9 @@ pub mod mailbox;
 // Mail-source permits and the retention barrier. trace:STORY-1843 | ai:claude
 #[cfg(all(unix, feature = "native"))]
 pub mod mailbox_lifecycle;
+// trace:STORY-1843 | ai:claude
+#[cfg(feature = "native")]
+pub mod mailbox_identity;
 // trace:STORY-1843 | ai:claude
 pub mod mailbox_logical;
 pub mod meta;
