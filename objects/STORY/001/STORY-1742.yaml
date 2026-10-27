@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-26T11:42:59.544886264Z
+modified_at: 2026-10-27T05:30:13.183079922Z
 req_type: Story
 tags:
 - docs:impacted
@@ -473,6 +473,24 @@ comments:
   created_at: 2026-10-26T11:42:41.335735073Z
   modified_at: 2026-10-26T11:42:41.335735073Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17bd6-6f3f-71b3-82fe-de0ccdd28c7c
+  author: joe
+  content: |
+    INVENTORY 2026-10-26 (claude implementer, main e3fd91e83f, after S3a #2929 and S3b #2938 landed). Source-checked against main; not a new test claim.
+
+    DONE
+    - Enable/show/disable a clone-local profile; no tracked/store files touched; common-Git-dir shared across worktrees: slice 1 8b523a4422 (#2904), hardening in S3a 194e40346c (#2929).
+    - Bare push = one pinned ref-only aida-store push, code leg disabled; refuses dirty/in-progress store; no commit/mail/ID/reconcile/fan-out; --store-only redundant, --code-only forbidden; human+JSON plan with exact refspecs; ordinary clones unchanged: slice 2 fbbb7ef193 (#2910).
+    - Constraints: verified store hooks/identity gate preserved, no force/NFF, endpoint pinned and rewrite-checked, no credentials in diagnostics: fbbb7ef193 (#2910).
+    - Refusal-only scanner (signed R1), private policy/deny list, enrolled baseline, successful-push receipt, push gate over Reach(T)-Reach(B) history+metadata: S3a 194e40346c (#2929).
+    - Sanitized intake (aida add --sanitized, preview/template) and the shared prepared write boundary across CLI/MCP/server/bulk with safe generated metadata; delta-only scan for oplog/metadata shared by intake and the push gate (11:42 ruling): S3b 0e12874b32 (#2938).
+
+    REMAINING
+    - S3c: actual transport-profile pull. Today handle() bails with PENDING for every non-dry-run pull (aida-cli-lib/src/transport_profile.rs). Signed SKETCH v2 section 4 + R2: private staging fetch with no accepted ref or FETCH_HEAD movement, scan of the incoming delta under strict WORK policy, FF ancestry plus clean/attached/config recheck under the writer lock, guarded index/worktree/ref transition with old-value checks and honest partial-state reporting. -> implementing now as a Refs PR.
+    - S3d: complete WORK->hub->PUBLIC e2e fixture chain, docs/show boundary text for pull, final conformance ledger. Only the final completing PR carries (STORY-1742).
+  created_at: 2026-10-27T05:30:13.183079922Z
+  modified_at: 2026-10-27T05:30:13.183079922Z
+  session_id: 2f5cf167-c213-47c3-b02b-ed93cf93eced
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
