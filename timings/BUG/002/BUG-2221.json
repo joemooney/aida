@@ -1,0 +1,466 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2221",
+  "publishes": [
+    {
+      "at": "2026-10-27T19:37:05.443958485Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T16:48:02.776123655Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T19:45:59.783852725Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "origin/bug-2221",
+        "first_seen": "2026-10-25T19:45:59.783795813+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T01:14:20.593022630Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "pr-2928",
+        "first_seen": "2026-10-26T01:14:20.586799630+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T01:14:20.593356155Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "bug-2221",
+        "first_seen": "2026-10-26T01:14:20.593277846+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T06:08:28.747691132Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T06:13:09.276939563Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T06:42:40.538157459Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "origin/bug-2221-positive",
+        "first_seen": "2026-10-26T06:42:40.538092095+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T06:45:46.240950181Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T07:34:04.308816942Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T07:35:15.960508009Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T07:35:16.052465221Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T07:36:18.660032514Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T08:42:47.385107282Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T08:43:28.148516609Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T09:12:22.884609371Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T09:12:22.971901238Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T09:13:36.880692985Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T09:53:25.554765795Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "origin/bug-2221-p1",
+        "first_seen": "2026-10-26T09:53:25.554728756+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T10:33:15.147085995Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T10:33:15.226462634Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T10:34:31.645674516Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T10:35:10.720281941Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T11:20:01.347944026Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:20:01.379580043Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:20:42.197301445Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T11:30:39.191142318Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:31:34.142324729Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:32:22.930121945Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T11:34:27.255827195Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:34:27.290170856Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:34:45.539236356Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:34:58.077040101Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T14:33:10.986839359Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "origin/bug-2221-p1-wip-salvage",
+        "first_seen": "2026-10-26T14:33:10.984986326+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T16:10:56.457414591Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2221",
+        "branch": "bug-2221-v3",
+        "first_seen": "2026-10-26T16:10:56.455142362+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T16:36:09.983629848Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T16:36:10.017121688Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T16:36:24.577653647Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T05:17:26.943023647Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T05:17:38.376890578Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T18:09:59.738664754Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-27T19:37:00.391841127Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-27T19:37:05.298655161Z",
+      "spec": "BUG-2221",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-27T19:37:05.326740639Z",
+      "spec": "BUG-2221",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
