@@ -3146,7 +3146,19 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
                 crate::session_reap::release_lease_files(project_root, &lease.id);
                 true
             }
-            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => kept(reason),
+            Ok(crate::seat_clone::Destroyed::Kept {
+                reason, retention, ..
+            }) => {
+                // R3-F1: a refusal after the retirement committed keeps the
+                // lease for recovery ownership, stamped. trace:STORY-1843 | ai:claude
+                if let Some(refusal) = &retention {
+                    crate::mail_retention::keep_ending_retained(
+                        &lease_path(project_root, &lease.id),
+                        refusal,
+                    );
+                }
+                kept(reason)
+            }
             Err(error) => kept(format!("{error:#}")),
         };
     }
@@ -3215,10 +3227,52 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         }
     }
 
-    // Lease file first — once gone the session no longer counts as active.
+    // `git worktree remove --force` — `--force` because the dirty-tree
+    // refusal in `session_end` is gated by interactive prompts; an
+    // escalation cleanup never had a chance to commit, so we just remove.
+    // The retired source completes, or reopens if the removal failed.
+    // R3-F1: the lease, manifest and activity log go only once the guarded
+    // removal succeeded, so a refusal after the retirement committed keeps
+    // them for recovery ownership. trace:STORY-1843 | ai:claude
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    crate::mail_retention::before_guarded_removal();
+    let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_with(
+        project_root,
+        &lease.worktree_path,
+        true,
+        retirement,
+    );
+    if let Err(e) = &removed {
+        if let Some(refusal) = crate::mail_retention::retention_refusal(e) {
+            #[cfg(unix)]
+            if let Err(err) =
+                crate::worktree_gc::link_worktree_runtime_state(project_root, &lease.worktree_path)
+            {
+                eprintln!("  warning: the worktree's runtime links could not be restored: {err}");
+            }
+            crate::mail_retention::keep_ending_retained(lease_target, refusal);
+            for line in crate::mail_retention::late_refusal_lines(refusal, "aida session end") {
+                eprintln!(
+                    "  {} kept session {}: {line}",
+                    "Warning:".yellow().bold(),
+                    &lease.id[..lease.id.len().min(8)],
+                );
+            }
+            return false;
+        }
+        // R3-F2: name the guarded removal, never a raw `git worktree remove`.
+        eprintln!(
+            "  {} could not remove worktree {} ({e:#}) — remove it with `{}` once the cause \
+             is fixed",
+            "Warning:".yellow().bold(),
+            lease.worktree_path.display(),
+            crate::mail_retention::guarded_removal_command(&lease.worktree_path),
+        );
+    }
+
+    // Then the lease file — once gone the session no longer counts as active.
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
@@ -3235,26 +3289,6 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         let _ = std::fs::remove_file(&activity_target);
     }
 
-    // `git worktree remove --force` — `--force` because the dirty-tree
-    // refusal in `session_end` is gated by interactive prompts; an
-    // escalation cleanup never had a chance to commit, so we just remove.
-    // The retired source completes, or reopens if the removal failed.
-    // trace:STORY-1843 | ai:claude
-    let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_with(
-        project_root,
-        &lease.worktree_path,
-        true,
-        retirement,
-    );
-    if let Err(e) = &removed {
-        eprintln!(
-            "  {} could not remove worktree {} ({e:#}) — remove manually with \
-             `git worktree remove --force {}`",
-            "Warning:".yellow().bold(),
-            lease.worktree_path.display(),
-            lease.worktree_path.display(),
-        );
-    }
     removed.is_ok()
 }
 

@@ -25,12 +25,14 @@ fn activate(main: &Path) {
     std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
         .create(&anchor)
         .unwrap();
-    // Only the build that recorded an activation honours it: this test binary.
-    let (dev, exe) = aida_core::mailbox_lifecycle::this_build().unwrap();
+    // Only the source build that recorded an activation honours it: this
+    // test binary's, named as `main_entry` names it.
+    crate::upgrade_release::register_source_build();
+    let build = aida_core::mailbox_lifecycle::source_build().expect("a git build");
     std::fs::write(
         anchor.join("activation.json"),
         format!(
-            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","build":[{dev},{exe}]}}"#
+            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","source_build":"{build}"}}"#
         ),
     )
     .unwrap();

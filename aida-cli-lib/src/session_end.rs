@@ -1715,71 +1715,15 @@ pub(crate) fn session_end(
         .clone()
         .unwrap_or_else(|| activity_file.clone());
 
-    // Delete the lease file BEFORE removing the worktree. The canonical
-    // path resolved above points at the parent's sessions dir, so the
-    // unlink succeeds regardless of whether the worktree's symlink chain
-    // is still intact. Reporting is honest: success printed only on
-    // actual success; missing file is a quiet no-op (already-released
-    // lease from a previous partial run is fine); other errors warn so
-    // the user can clean up manually instead of trusting a stale check mark.
-    // trace:BUG-56 | ai:claude
+    // R3-F1: the lease is resolved here but deleted only AFTER the guarded
+    // removal/return below succeeds. The final quiet check before that step
+    // can still refuse after the retirement committed (mail landed since),
+    // and recovery ownership then needs the lease, claim and manifest kept;
+    // a seat clone's writers also verify their binding through this lease.
+    // trace:STORY-1843 trace:BUG-56 | ai:claude
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
-    // BUG-2139: a headless child's grant ends with its lease.
-    // trace:BUG-2139 | ai:claude
-    crate::session::revoke_lease_child_grant(lease_target);
-    match std::fs::remove_file(lease_target) {
-        Ok(_) => eprintln!(
-            "{} lease deleted",
-            crate::glyph(crate::glyphs::Glyph::Check).green()
-        ),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // Already gone — keep quiet.
-        }
-        Err(e) => {
-            eprintln!(
-                "{} could not delete lease at {}: {} — remove manually",
-                "Warning:".yellow().bold(),
-                lease_target.display(),
-                e
-            );
-        }
-    }
-
-    // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
-    // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`
-    // alongside the session lease; without this, `session end` released the
-    // session lease but left the mcp-claim behind, so the spec kept surfacing
-    // as stale running work long after the worktree was gone (TASK-702's claim
-    // lingered 24 days). Best-effort + NotFound-quiet, mirroring the lease
-    // unlink above. trace:BUG-694 | ai:claude
-    let mcp_claim = mcp::mcp_claim_path(&leases_dir(&project_root), &target.scope);
-    match std::fs::remove_file(&mcp_claim) {
-        Ok(_) => eprintln!(
-            "{} mcp-claim reaped ({})",
-            crate::glyph(crate::glyphs::Glyph::Check).green(),
-            target.scope
-        ),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // No MCP claim for this scope — the common case. Quiet.
-        }
-        Err(e) => {
-            eprintln!(
-                "{} could not reap mcp-claim {}: {} — remove manually",
-                "Warning:".yellow().bold(),
-                mcp_claim.display(),
-                e
-            );
-        }
-    }
-
-    // BUG-1988: the mcp-claim reap deliberately stays BEFORE the remove/return
-    // (it is a local unlink, so it does not widen the recheck window): the
-    // claim file sits in the sessions dir and parses as a lease, so leaving
-    // it in place would make the BUG-483 peer check below treat this
-    // session's own MCP claim as a peer sharing the tree and skip the
-    // removal. trace:BUG-1988 | ai:claude
 
     // TASK-68: detect whether the user's shell was sitting inside the
     // worktree we're about to nuke. We capture cwd BEFORE we chdir away
@@ -1834,16 +1778,19 @@ pub(crate) fn session_end(
     let mut returned_to_pool = false;
     // trace:TASK-2053 | ai:claude
     let mut clone_kept = false;
+    // A retention refusal from the step below (R3-F1). trace:STORY-1843 | ai:claude
+    let mut late_refusal: Option<aida_core::mailbox_lifecycle::guard::RetentionRefusal> = None;
+    crate::mail_retention::before_guarded_removal();
     if !has_worktree {
-        // BUG-734: worktree-less lease — the record is gone; nothing on disk
-        // to remove or return. trace:BUG-734 | ai:claude
+        // BUG-734: worktree-less lease — the record is removed below; nothing
+        // on disk to remove or return. trace:BUG-734 | ai:claude
         eprintln!(
             "{} no worktree attached to this session — lease record removed; nothing on disk to clean up",
             "→".dimmed()
         );
     } else if let Some(peer) = shared_peer {
-        // Skip the removal; this lease/registry entry is already gone, so the
-        // session has ended — we just leave the shared worktree standing.
+        // Skip the removal; this lease/registry entry is removed below, so the
+        // session ends — we just leave the shared worktree standing.
         eprintln!(
             "{} worktree {} is shared by lease {} ({}) — ending this session but leaving the shared worktree in place",
             "→".dimmed(),
@@ -1880,6 +1827,10 @@ pub(crate) fn session_end(
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
             }
+            Ok(crate::seat_clone::Destroyed::Kept {
+                retention: Some(refusal),
+                ..
+            }) => late_refusal = Some(refusal),
             Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
                 clone_kept = true;
                 eprintln!(
@@ -1913,11 +1864,14 @@ pub(crate) fn session_end(
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
             }
-            Err(e) => eprintln!(
-                "{} could not return worktree to the pool: {} — left in place",
-                "Warning:".yellow().bold(),
-                e
-            ),
+            Err(e) => match crate::mail_retention::retention_refusal(&e) {
+                Some(refusal) => late_refusal = Some(refusal.clone()),
+                None => eprintln!(
+                    "{} could not return worktree to the pool: {} — left in place",
+                    "Warning:".yellow().bold(),
+                    e
+                ),
+            },
         }
     } else {
         // BUG-67: always pass `--force`. We've already gated on the dirty
@@ -1941,17 +1895,103 @@ pub(crate) fn session_end(
                     remove_session_cargo_target_dir(path, &target.worktree_path);
                 }
             }
-            Err(e) => {
-                eprintln!(
-                    "{} `git worktree remove` failed ({e:#}); you may need to run it manually with --force",
-                    "Warning:".yellow().bold()
-                );
-            }
+            Err(e) => match crate::mail_retention::retention_refusal(&e) {
+                Some(refusal) => late_refusal = Some(refusal.clone()),
+                // R3-F2: never a raw `git worktree remove --force`, which
+                // would delete reopened mail with no fence.
+                None => eprintln!(
+                    "{} the worktree could not be removed ({e:#}); it was left in place. \
+                     Remove it with `{}` once the cause is fixed",
+                    "Warning:".yellow().bold(),
+                    crate::mail_retention::guarded_removal_command(&target.worktree_path)
+                ),
+            },
         }
     }
     // A retirement no branch consumed (the tree was left in place) reopens.
     // trace:STORY-1843 | ai:claude
     crate::mail_retention::reopen_quietly(retirement);
+    // R3-F1: the final quiet check refused after the retirement committed:
+    // mail landed in the tree since (a late writer, a hook, a clone writer).
+    // The tree is kept, its mail reopened, and the session does NOT end: the
+    // lease (stamped ending-retained, grant revoked), claim and manifest stay
+    // for recovery ownership, and nothing below runs.
+    // trace:STORY-1843 | ai:claude
+    if let Some(refusal) = late_refusal {
+        #[cfg(unix)]
+        if !is_clone {
+            if let Err(err) = crate::worktree_gc::link_worktree_runtime_state(
+                &project_root,
+                &target.worktree_path,
+            ) {
+                eprintln!("warning: the worktree's runtime links could not be restored: {err}");
+            }
+        }
+        crate::mail_retention::keep_ending_retained(lease_target, &refusal);
+        anyhow::bail!(
+            "{}",
+            crate::mail_retention::late_refusal_lines(&refusal, "aida session end").join("\n")
+        );
+    }
+
+    // Delete the lease file now that the tree is removed, returned or kept
+    // for a reason that is not a retention refusal. The canonical path
+    // resolved above points at the parent's sessions dir, so the unlink
+    // succeeds although the worktree (and its symlink chain) is gone. Reporting is honest: success printed only on
+    // actual success; missing file is a quiet no-op (already-released
+    // lease from a previous partial run is fine); other errors warn so
+    // the user can clean up manually instead of trusting a stale check mark.
+    // trace:BUG-56 | ai:claude
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
+    match std::fs::remove_file(lease_target) {
+        Ok(_) => eprintln!(
+            "{} lease deleted",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Already gone — keep quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not delete lease at {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                lease_target.display(),
+                e
+            );
+        }
+    }
+
+    // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
+    // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`
+    // alongside the session lease; without this, `session end` released the
+    // session lease but left the mcp-claim behind, so the spec kept surfacing
+    // as stale running work long after the worktree was gone (TASK-702's claim
+    // lingered 24 days). Best-effort + NotFound-quiet, mirroring the lease
+    // unlink above. trace:BUG-694 | ai:claude
+    // It runs after the removal, so the BUG-483 peer check above sees this
+    // session's own MCP claim; `without_own_claim` (BUG-1991) excludes it.
+    let mcp_claim = mcp::mcp_claim_path(&leases_dir(&project_root), &target.scope);
+    match std::fs::remove_file(&mcp_claim) {
+        Ok(_) => eprintln!(
+            "{} mcp-claim reaped ({})",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            target.scope
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // No MCP claim for this scope — the common case. Quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not reap mcp-claim {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                mcp_claim.display(),
+                e
+            );
+        }
+    }
+
     // BUG-1988: the steps below used to run between the final holder recheck
     // and the remove/return above. They are moved here so that window holds
     // only local filesystem steps and the salvage diff: `release_claim` in

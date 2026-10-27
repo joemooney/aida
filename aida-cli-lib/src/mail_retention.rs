@@ -110,6 +110,61 @@ pub(crate) fn refusal_lines(refusal: &RetentionRefusal) -> Vec<String> {
 }
 
 #[cfg(test)]
+thread_local! {
+    static BEFORE_GUARDED_REMOVAL: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Fixture seam: run `hook` once, on this thread, right before the next
+/// guarded removal of a retired tree (a late writer landing mail after the
+/// retirement committed).
+#[cfg(test)]
+pub(crate) fn on_before_guarded_removal(hook: impl FnOnce() + 'static) {
+    BEFORE_GUARDED_REMOVAL.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+}
+
+/// Called by the session-ending entries between retirement and their
+/// guarded removal. Production builds pass through.
+pub(crate) fn before_guarded_removal() {
+    #[cfg(test)]
+    if let Some(hook) = BEFORE_GUARDED_REMOVAL.with(|h| h.borrow_mut().take()) {
+        hook();
+    }
+}
+
+/// The [`RetentionRefusal`] behind `error`, when the guarded step refused:
+/// the final quiet check found mail written after the retirement committed.
+pub(crate) fn retention_refusal(error: &anyhow::Error) -> Option<&RetentionRefusal> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<RetentionRefusal>())
+}
+
+/// The guarded command an operator runs to remove a tree an entry left in
+/// place. Never a raw `git worktree remove`: that runs no fence and would
+/// delete mail reopened into the tree (R3-F2).
+pub(crate) fn guarded_removal_command(tree: &Path) -> String {
+    format!("aida worktree dismiss {}", tree.display())
+}
+
+/// The operator-facing lines for a refusal that came after the retirement
+/// committed (R3-F1): the tree, lease, claim and manifest were all kept, so
+/// the session did not end. `retry` names what re-runs the ending.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn late_refusal_lines(refusal: &RetentionRefusal, retry: &str) -> Vec<String> {
+    let mut lines = refusal_lines(refusal);
+    lines.push(String::new());
+    lines.push(format!(
+        "The session was NOT ended: mail reached {} after its mail was retired, and was put \
+         back. Its lease is kept (marked ending-retained, its grant revoked) with its claim \
+         and manifest, and the tree was not removed or reset. Read or move that mail, then \
+         retry `{retry}`.",
+        refusal.checkout.display()
+    ));
+    lines
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

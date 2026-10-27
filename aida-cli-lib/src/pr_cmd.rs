@@ -446,48 +446,17 @@ pub(crate) enum PrRebaseMode {
 }
 
 /// Remove `aida pr rebase`'s temp worktree through the mail-retention guard;
-/// a mail-less tree takes the fast path, and a refusal keeps the tree. A
-/// directory Git no longer knows as a worktree (an interrupted run) is
-/// deleted only when its mailbox holds no file.
+/// a mail-less tree takes the fast path. A refusal, and any other failure of
+/// the guarded removal (a directory Git no longer knows as a worktree, say),
+/// keeps the tree: by then the retirement was reopened, so deleting it here
+/// would run unfenced, racing any writer (R3-F3). The caller names the kept
+/// tree for the operator.
 // trace:STORY-1843 | ai:claude
-fn remove_rebase_worktree(project_root: &std::path::Path, wt_path: &std::path::Path) -> Result<()> {
-    let error = match crate::mail_retention::remove_worktree(
-        project_root,
-        wt_path,
-        true,
-        "pr rebase temp worktree",
-    ) {
-        Ok(()) => return Ok(()),
-        Err(e) => e,
-    };
-    if error
-        .downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
-        .is_some()
-        || mailbox_holds_files(&aida_core::mailbox::local_mailbox_dir(wt_path))
-    {
-        return Err(error);
-    }
-    match std::fs::remove_dir_all(wt_path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(error.context(format!("and removing the directory failed: {e}"))),
-    }
-}
-
-/// Does `dir` hold any non-directory entry, at any depth? Unreadable counts
-/// as holding one.
-fn mailbox_holds_files(dir: &std::path::Path) -> bool {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(e) => return e.kind() != std::io::ErrorKind::NotFound,
-    };
-    entries.into_iter().any(|entry| match entry {
-        Ok(entry) => match std::fs::symlink_metadata(entry.path()) {
-            Ok(meta) if meta.file_type().is_dir() => mailbox_holds_files(&entry.path()),
-            _ => true,
-        },
-        Err(_) => true,
-    })
+pub(crate) fn remove_rebase_worktree(
+    project_root: &std::path::Path,
+    wt_path: &std::path::Path,
+) -> Result<()> {
+    crate::mail_retention::remove_worktree(project_root, wt_path, true, "pr rebase temp worktree")
 }
 
 /// Preserve the actionable refusal text after the disposable rebase worktree

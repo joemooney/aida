@@ -862,29 +862,87 @@ pub struct Activation {
     pub schema: u32,
     pub all_writer_hosts_admitting: bool,
     pub recorded_at: String,
-    /// The build that recorded it: its executable's device and inode, the
-    /// identity the activation report judges writers by. `None` in a record
-    /// written before builds were bound, which no build honours.
+    /// The source build that recorded it ([`source_build`]): the version and
+    /// git SHA that `aida` and `aida-server` built from one checkout share.
+    /// `None` in a record written before records named their source build
+    /// (those named an executable's inode), which no build honours.
     #[serde(default)]
-    pub build: Option<(u64, u64)>,
+    pub source_build: Option<String>,
 }
 
-/// This process's build: the device and inode of the executable it runs.
-pub fn this_build() -> Option<(u64, u64)> {
-    std::fs::metadata("/proc/self/exe")
-        .ok()
-        .map(|m| (m.dev(), m.ino()))
+static SOURCE_BUILD: OnceLock<String> = OnceLock::new();
+
+/// The identity of a build of `version` at `git_sha` (`dirty` when the tree
+/// had uncommitted changes), or `None` when the SHA is unknown: a build that
+/// cannot name its source never honours an activation.
+pub fn source_build_id(version: &str, git_sha: &str, dirty: bool) -> Option<String> {
+    let sha = git_sha.trim();
+    if sha.is_empty() || sha == "unknown" {
+        return None;
+    }
+    Some(format!(
+        "{version}+{sha}{}",
+        if dirty { "-dirty" } else { "" }
+    ))
 }
 
-/// Has an operator recorded, with this very build, that every writer host is
-/// admitting ([`activation::record`])? A record made by any other build (an
-/// older binary after `aida dev rollback`, or a newer one) does not count:
-/// that build must record its own.
+/// Name this process's source build, once, at startup. Each binary that can
+/// retire mail calls it with its own build stamps; a process that never
+/// does has no source build and honours no activation (fail closed).
 // trace:STORY-1843 | ai:claude
+pub fn set_source_build(version: &str, git_sha: &str, dirty: bool) {
+    if let Some(id) = source_build_id(version, git_sha, dirty) {
+        let _ = SOURCE_BUILD.set(id);
+    }
+}
+
+/// This process's source build, as [`set_source_build`] named it.
+pub fn source_build() -> Option<&'static str> {
+    SOURCE_BUILD.get().map(String::as_str)
+}
+
+/// Whether an activation is recorded under an anchor, for this build.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActivationState {
+    /// Nothing is recorded.
+    Absent,
+    /// Recorded by this source build.
+    Current,
+    /// Recorded by another source build (`None`: one that named none), so
+    /// this build must record its own. `this` is this build's identity.
+    OtherBuild {
+        recorded: Option<String>,
+        this: Option<String>,
+    },
+}
+
+/// The activation recorded under `anchor`, judged against this process's
+/// source build. A record made from another source (an older binary after
+/// `aida dev rollback`, or a newer one) does not count: that build must
+/// record its own. `aida-server` and a re-promoted build of the same source
+/// share the identity, so they honour it.
+// trace:STORY-1843 | ai:claude
+pub fn activation_state(anchor: &Path) -> Result<ActivationState> {
+    let Some(record) = read_json::<Activation>(&anchor.join(ACTIVATION_FILE))? else {
+        return Ok(ActivationState::Absent);
+    };
+    if !record.all_writer_hosts_admitting {
+        return Ok(ActivationState::Absent);
+    }
+    let this = source_build();
+    Ok(match (&record.source_build, this) {
+        (Some(recorded), Some(this)) if recorded == this => ActivationState::Current,
+        _ => ActivationState::OtherBuild {
+            recorded: record.source_build,
+            this: this.map(str::to_string),
+        },
+    })
+}
+
+/// Has an operator recorded, with this source build, that every writer host
+/// is admitting ([`activation::record`])?
 pub(crate) fn activated(anchor: &Path) -> Result<bool> {
-    let build = this_build();
-    Ok(read_json::<Activation>(&anchor.join(ACTIVATION_FILE))?
-        .is_some_and(|a| a.all_writer_hosts_admitting && build.is_some() && a.build == build))
+    Ok(activation_state(anchor)? == ActivationState::Current)
 }
 
 // ── Local writer admission ──────────────────────────────────────────────────

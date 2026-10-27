@@ -232,6 +232,13 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok(); // Load .env if present, silently ignore if missing
+                            // Name this build's source for mail retention, as the aida CLI does.
+                            // trace:STORY-1843 | ai:claude
+    aida_core::mailbox_lifecycle::set_source_build(
+        env!("CARGO_PKG_VERSION"),
+        env!("AIDA_BUILD_GIT_SHA"),
+        env!("AIDA_BUILD_GIT_DIRTY") == "1",
+    );
 
     let args = Args::parse();
 

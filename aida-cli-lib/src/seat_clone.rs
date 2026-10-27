@@ -1825,6 +1825,9 @@ pub(crate) enum Destroyed {
     Kept {
         reason: String,
         salvage: Option<PathBuf>,
+        /// The mail-retention refusal that kept it, if that was the reason:
+        /// the caller then keeps the lease for recovery ownership (R3-F1).
+        retention: Option<aida_core::mailbox_lifecycle::guard::RetentionRefusal>,
     },
 }
 
@@ -1908,12 +1911,14 @@ fn destroy_inner(
                 return Ok(Destroyed::Kept {
                     reason: format!("its state could not be read ({why}), so it is kept"),
                     salvage: None,
+                    retention: None,
                 })
             }
             Probe::HasSubmodules(reason) => {
                 return Ok(Destroyed::Kept {
                     reason,
                     salvage: None,
+                    retention: None,
                 })
             }
         };
@@ -1922,6 +1927,7 @@ fn destroy_inner(
                 return Ok(Destroyed::Kept {
                     reason: "its HEAD moved since the scan".to_string(),
                     salvage: None,
+                    retention: None,
                 });
             }
         }
@@ -1935,6 +1941,7 @@ fn destroy_inner(
                     return Ok(Destroyed::Kept {
                         reason: format!("{error:#}"),
                         salvage: None,
+                        retention: None,
                     })
                 }
             }
@@ -1942,6 +1949,7 @@ fn destroy_inner(
                 return Ok(Destroyed::Kept {
                     reason: unshipped_reason(&facts),
                     salvage: salvaged,
+                    retention: None,
                 });
             }
         }
@@ -1956,6 +1964,7 @@ fn destroy_inner(
                 return Ok(Destroyed::Kept {
                     reason: format!("it is in use: {in_use}"),
                     salvage: salvaged,
+                    retention: None,
                 });
             }
         }
@@ -1970,6 +1979,7 @@ fn destroy_inner(
                         return Ok(Destroyed::Kept {
                             reason: crate::mail_retention::refusal_lines(&refusal).join("; "),
                             salvage: salvaged,
+                            retention: Some(refusal),
                         })
                     }
                 }
@@ -1987,12 +1997,11 @@ fn destroy_inner(
             aida_core::mailbox_lifecycle::guard::Retirement::complete,
         );
         if let Err(error) = removed {
-            if let Some(refusal) =
-                error.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
-            {
+            if let Some(refusal) = crate::mail_retention::retention_refusal(&error) {
                 return Ok(Destroyed::Kept {
                     reason: crate::mail_retention::refusal_lines(refusal).join("; "),
                     salvage: salvaged,
+                    retention: Some(refusal.clone()),
                 });
             }
             return Err(error);

@@ -7,7 +7,7 @@ use super::guard::{
 };
 use super::tests::{
     activate, assert_open, assert_retiring, files_under, mailbox, message, record, repo, seed_mail,
-    source, SEEDED,
+    source, test_source_build, SEEDED,
 };
 use super::*;
 use crate::mailbox::write_local_message;
@@ -703,6 +703,35 @@ fn a_writer_inside_a_bound_clone_is_admitted_and_fenced_under_mains_anchor() {
 /// Only the build that recorded the activation honours it: a record from any
 /// other build, or one with no build, reads as not activated.
 #[test]
+fn r3_f4_a_mail_bearing_retirement_names_the_other_build_that_recorded() {
+    let dir = repo();
+    seed_mail(dir.path());
+    let anchor = source(dir.path()).anchor;
+    let this = test_source_build();
+    write_json(
+        &anchor.join(ACTIVATION_FILE),
+        &Activation {
+            schema: SCHEMA,
+            all_writer_hosts_admitting: true,
+            recorded_at: "t".into(),
+            source_build: Some("0.0.0+other".into()),
+        },
+    )
+    .unwrap();
+    let refusal = retire_checkout(dir.path(), "test").unwrap_err();
+    assert!(refusal.needs_activation);
+    assert!(
+        refusal
+            .reason
+            .contains("different build (0.0.0+other; this is ")
+            && refusal.reason.contains(&this)
+            && refusal.reason.contains(ACTIVATION_COMMAND),
+        "{}",
+        refusal.reason
+    );
+}
+
+#[test]
 fn an_activation_recorded_by_another_build_is_not_honoured() {
     let dir = repo();
     let anchor = source(dir.path()).anchor;
@@ -713,15 +742,37 @@ fn an_activation_recorded_by_another_build_is_not_honoured() {
                 schema: SCHEMA,
                 all_writer_hosts_admitting: true,
                 recorded_at: "t".into(),
-                build,
+                source_build: build,
             },
         )
         .unwrap()
     };
+    let this = test_source_build();
     write(None);
     assert!(!activated(&anchor).unwrap());
-    write(Some((0, 0)));
-    assert!(!activated(&anchor).unwrap());
-    write(this_build());
+    // R3-F4: a record from other source says so, naming both builds.
+    write(Some("0.0.0+other".into()));
+    assert_eq!(
+        activation_state(&anchor).unwrap(),
+        ActivationState::OtherBuild {
+            recorded: Some("0.0.0+other".into()),
+            this: Some(this.clone()),
+        }
+    );
+    // The same source build (aida-server, or a re-promoted binary) honours it.
+    write(Some(this));
     assert!(activated(&anchor).unwrap());
+    // A pre-source-build record (an executable inode) is ignored, not corrupt.
+    std::fs::write(
+        anchor.join(ACTIVATION_FILE),
+        r#"{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"t","build":[1,2]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        activation_state(&anchor).unwrap(),
+        ActivationState::OtherBuild {
+            recorded: None,
+            this: source_build().map(str::to_string),
+        }
+    );
 }

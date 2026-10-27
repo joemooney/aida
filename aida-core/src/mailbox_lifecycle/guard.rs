@@ -101,8 +101,8 @@ impl Retirement {
 pub struct RetentionRefusal {
     pub checkout: PathBuf,
     pub reason: String,
-    /// The source holds mail and no activation is recorded (QC1); the reason
-    /// names [`super::ACTIVATION_COMMAND`].
+    /// The source holds mail and no activation is recorded for this build
+    /// (QC1); the reason names [`super::ACTIVATION_COMMAND`].
     pub needs_activation: bool,
     /// A preserved copy that is also kept.
     pub retained_dir: Option<PathBuf>,
@@ -199,7 +199,11 @@ fn retire_with(
             _,
         )) => Err(refusal(
             reason.to_string(),
-            reason == RefusalReason::MailBearingBeforeActivation,
+            matches!(
+                reason,
+                RefusalReason::MailBearingBeforeActivation
+                    | RefusalReason::ActivationForOtherBuild { .. }
+            ),
             retained_dir,
         )),
         Err(e) => Err(refusal(lifecycle_failure(&e), false, None)),

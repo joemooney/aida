@@ -1443,12 +1443,26 @@ pub(crate) fn reap_one_clone(
             release_lease_files(project_root, &lease.id);
             "reaped — seat clone removed, base pin released, lease released".to_string()
         }
-        Ok(crate::seat_clone::Destroyed::Kept { reason, salvage }) => format!(
-            "skipped — seat clone kept: {reason}{}",
-            salvage
-                .map(|p| format!(" (salvage patch: {})", p.display()))
-                .unwrap_or_default()
-        ),
+        Ok(crate::seat_clone::Destroyed::Kept {
+            reason,
+            salvage,
+            retention,
+        }) => {
+            // A retention refusal takes the recovery-ownership ending.
+            // trace:STORY-1843 | ai:claude
+            if let Some(refusal) = &retention {
+                crate::mail_retention::keep_ending_retained(
+                    &crate::lease_path(project_root, &lease.id),
+                    refusal,
+                );
+            }
+            format!(
+                "skipped — seat clone kept: {reason}{}",
+                salvage
+                    .map(|p| format!(" (salvage patch: {})", p.display()))
+                    .unwrap_or_default()
+            )
+        }
         Err(error) => format!("failed — {error:#}"),
     }
 }

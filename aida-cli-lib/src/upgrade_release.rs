@@ -23,6 +23,19 @@ pub(crate) fn register_filing_identity() {
     });
 }
 
+/// Name this build's source for the mail-retention activation record: the
+/// version and git SHA that `aida-server` built from the same checkout also
+/// names, so a record either one makes is honoured by both, and by a
+/// re-promoted build of the same source.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn register_source_build() {
+    aida_core::mailbox_lifecycle::set_source_build(
+        current_version(),
+        env!("AIDA_BUILD_GIT_SHA"),
+        env!("AIDA_BUILD_GIT_DIRTY") == "1",
+    );
+}
+
 /// True when the working directory is inside the aida source repo itself —
 /// the one project where a spec's filing code SHA and the filing binary's
 /// build SHA describe the same code, so a mismatch is meaningful.

@@ -40,9 +40,9 @@
 //! trace:STORY-1843 | ai:claude
 
 use super::{
-    activated, check_regular, delete_record, ensure_dir, enter_lock_class, fsync_dir, hex,
+    activation_state, check_regular, delete_record, ensure_dir, enter_lock_class, fsync_dir, hex,
     load_or_create, load_record, lock, mint_generation, open_checked, read_json, resolve_source,
-    store_record, write_json, LifecycleError, Result, SourceState, JOURNAL_DIR,
+    store_record, write_json, ActivationState, LifecycleError, Result, SourceState, JOURNAL_DIR,
     LIFECYCLE_LOCK_TIMEOUT, RETAINED_DIR, SCHEMA,
 };
 use crate::process_probe::{Probe, ProbeSource};
@@ -102,6 +102,13 @@ pub(crate) enum RefusalReason {
     /// The source holds mail, receipt or watermark bytes and no operator has
     /// recorded that every writer host is admitting (QC1).
     MailBearingBeforeActivation,
+    /// The source holds mail and the recorded activation names another
+    /// source build (`None`: one that named none), so this build must record
+    /// its own. `this` is this build's identity, if it has one.
+    ActivationForOtherBuild {
+        recorded: Option<String>,
+        this: Option<String>,
+    },
     PreserveFailed {
         detail: String,
     },
@@ -142,6 +149,17 @@ impl std::fmt::Display for RefusalReason {
                 f,
                 "the mailbox holds mail, and not every mail writer on this machine is known to \
                  take a write permit yet; run `{}` to check and record that",
+                super::ACTIVATION_COMMAND
+            ),
+            RefusalReason::ActivationForOtherBuild { recorded, this } => write!(
+                f,
+                "the mailbox holds mail, and its mail retention activation was recorded by a \
+                 different build ({}; this is {}); re-run `{}` with this build to check and \
+                 record it again",
+                recorded
+                    .as_deref()
+                    .unwrap_or("a build that named no source"),
+                this.as_deref().unwrap_or("a build that names no source"),
                 super::ACTIVATION_COMMAND
             ),
             RefusalReason::PreserveFailed { detail } => {
@@ -620,10 +638,17 @@ fn drive(mut entry: JournalEntry, opts: &RetireOptions) -> Result<RetireOutcome>
             }
             Phase::Quiesced => {
                 let data = entry.retained_dir().join("data");
-                if !activated(&entry.anchor)?
-                    && (holds_bytes(&entry.mailbox)? || holds_bytes(&data)?)
-                {
-                    return abort(entry, RefusalReason::MailBearingBeforeActivation);
+                let unactivated = match activation_state(&entry.anchor)? {
+                    ActivationState::Current => None,
+                    ActivationState::Absent => Some(RefusalReason::MailBearingBeforeActivation),
+                    ActivationState::OtherBuild { recorded, this } => {
+                        Some(RefusalReason::ActivationForOtherBuild { recorded, this })
+                    }
+                };
+                if let Some(reason) = unactivated {
+                    if holds_bytes(&entry.mailbox)? || holds_bytes(&data)? {
+                        return abort(entry, reason);
+                    }
                 }
                 if let Err(reason) = preserve(&entry, opts)? {
                     return abort(entry, reason);

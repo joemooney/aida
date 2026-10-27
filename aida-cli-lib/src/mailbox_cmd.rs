@@ -1020,10 +1020,9 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
         return Ok(());
     }
     println!("Mail retention activation (dry run; nothing is recorded)");
-    println!(
-        "  recorded activation: {}",
-        if report.recorded { "yes" } else { "no" }
-    );
+    for line in retention_record_lines(&report) {
+        println!("  {line}");
+    }
     if report.hosts.is_empty() {
         println!("  no AIDA mail writers are running");
     }
@@ -1050,6 +1049,32 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
         );
     }
     Ok(())
+}
+
+/// The report's lines about the recorded activation. A record made by
+/// another source build is named as such, so an operator who already
+/// activated knows to activate again after a promote or rollback (R3-F4).
+// trace:STORY-1843 | ai:claude
+#[cfg(unix)]
+pub(crate) fn retention_record_lines(
+    report: &aida_core::mailbox_lifecycle::activation::ActivationReport,
+) -> Vec<String> {
+    let this = report
+        .this_build
+        .as_deref()
+        .unwrap_or("a build that names no source");
+    match (&report.recorded_by_other_build, report.recorded) {
+        (_, true) => vec![format!("recorded activation: yes (by this build, {this})")],
+        (Some(other), false) => vec![
+            format!(
+                "recorded activation: no (one is recorded, by a different build: {other}; \
+                 this is {this})"
+            ),
+            "re-run `aida mailbox retention activate` with this build to record it again"
+                .to_string(),
+        ],
+        (None, false) => vec!["recorded activation: no".to_string()],
+    }
 }
 
 #[cfg(not(unix))]

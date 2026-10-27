@@ -8,6 +8,9 @@
 /// Named by pool and session-end refusals; never reached off Unix.
 pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate --dry-run";
 
+/// Activation is never consulted off Unix.
+pub fn set_source_build(_version: &str, _git_sha: &str, _dirty: bool) {}
+
 pub mod guard {
     use std::path::Path;
 

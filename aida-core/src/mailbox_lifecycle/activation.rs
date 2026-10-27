@@ -11,8 +11,10 @@
 //! and inode) as the process producing the report, which is a build with
 //! admission. Any other build, a replaced (deleted) binary, or a process
 //! whose executable cannot be read is *unverified*. The record names the
-//! build that wrote it, and only that build honours it: after an upgrade or
-//! `aida dev rollback` the new build records its own.
+//! source build that wrote it (version and git SHA, shared by the `aida` and
+//! `aida-server` built from one checkout and by a re-promoted build of the
+//! same source), and only that source build honours it: after an upgrade or
+//! `aida dev rollback` to other source, that build records its own.
 //!
 //! trace:STORY-1843 | ai:claude
 
@@ -53,8 +55,16 @@ pub struct WriterHost {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ActivationReport {
     pub dry_run: bool,
-    /// An activation is already recorded under this repository's anchor.
+    /// An activation is already recorded under this repository's anchor,
+    /// for this source build.
     pub recorded: bool,
+    /// An activation is recorded, but by another source build (its identity,
+    /// or `"unnamed"` for a record that names none), so this build does not
+    /// honour it until it is recorded again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_by_other_build: Option<String>,
+    /// This process's source build, the identity a record now would name.
+    pub this_build: Option<String>,
     pub hosts: Vec<WriterHost>,
     /// Why the process scan itself is incomplete, if it is.
     pub scan_incomplete: Option<String>,
@@ -119,6 +129,8 @@ pub fn classify(
     ActivationReport {
         dry_run: true,
         recorded,
+        recorded_by_other_build: None,
+        this_build: super::source_build().map(str::to_string),
         hosts,
         scan_incomplete,
         would_record,
@@ -132,11 +144,16 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
         .ok()
         .map(|m| (m.dev(), m.ino()));
     let (processes, incomplete) = scan_proc(Path::new("/proc"), std::process::id());
-    let recorded = super::resolve_source(project_root)
+    let state = super::resolve_source(project_root)
         .ok()
         .flatten()
-        .is_some_and(|source| super::activated(&source.anchor).unwrap_or(false));
-    classify(&processes, me, std::process::id(), incomplete, recorded)
+        .and_then(|source| super::activation_state(&source.anchor).ok());
+    let recorded = state == Some(super::ActivationState::Current);
+    let mut report = classify(&processes, me, std::process::id(), incomplete, recorded);
+    if let Some(super::ActivationState::OtherBuild { recorded, .. }) = state {
+        report.recorded_by_other_build = Some(recorded.unwrap_or_else(|| "unnamed".into()));
+    }
+    report
 }
 
 /// Record the activation under `project_root`'s anchor. A fresh scan runs
@@ -162,6 +179,11 @@ pub(crate) fn record_at(
     now: &str,
 ) -> super::Result<ActivationReport> {
     report.dry_run = false;
+    // A build that cannot name its source records nothing it would honour.
+    let Some(source_build) = super::source_build() else {
+        report.would_record = false;
+        return Ok(report);
+    };
     if !report.would_record {
         return Ok(report);
     }
@@ -172,10 +194,11 @@ pub(crate) fn record_at(
             schema: super::SCHEMA,
             all_writer_hosts_admitting: true,
             recorded_at: now.to_string(),
-            build: super::this_build(),
+            source_build: Some(source_build.to_string()),
         },
     )?;
     report.recorded = true;
+    report.recorded_by_other_build = None;
     Ok(report)
 }
 
@@ -354,6 +377,7 @@ mod tests {
 
     #[test]
     fn record_writes_the_activation_only_when_the_report_would_record() {
+        super::super::set_source_build("0.0.0", "test", false);
         let anchor = tempfile::tempdir().unwrap();
         let me = (1, 10);
         let refused = classify(&[view(5, "/bin/aida", (1, 11))], Some(me), 1, None, false);
@@ -365,6 +389,14 @@ mod tests {
         let out = record_at(anchor.path(), admitted, "t").unwrap();
         assert!(out.recorded);
         assert!(super::super::activated(anchor.path()).unwrap());
+        let written: super::super::Activation = serde_json::from_slice(
+            &std::fs::read(anchor.path().join(super::super::ACTIVATION_FILE)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            written.source_build.as_deref(),
+            super::super::source_build()
+        );
     }
 
     #[test]

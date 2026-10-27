@@ -74,6 +74,12 @@ fn edit_record(root: &Path, f: impl FnOnce(&mut SourceRecord)) {
     store_record(&source.anchor, &record, &held).unwrap();
 }
 
+/// Name this test process's source build, as each binary does at startup.
+pub(super) fn test_source_build() -> String {
+    set_source_build("0.0.0", "test", false);
+    source_build().expect("named").to_string()
+}
+
 pub(super) fn activate(root: &Path) {
     let anchor = source(root).anchor;
     write_json(
@@ -82,7 +88,7 @@ pub(super) fn activate(root: &Path) {
             schema: SCHEMA,
             all_writer_hosts_admitting: true,
             recorded_at: "2026-10-26T00:00:00Z".into(),
-            build: this_build(),
+            source_build: Some(test_source_build()),
         },
     )
     .unwrap();

@@ -79,12 +79,14 @@ fn activate(root: &Path) {
     std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
         .create(&anchor)
         .unwrap();
-    // Only the build that recorded an activation honours it: this test binary.
-    let (dev, exe) = aida_core::mailbox_lifecycle::this_build().unwrap();
+    // Only the source build that recorded an activation honours it: this
+    // test binary's, named as `main_entry` names it.
+    crate::upgrade_release::register_source_build();
+    let build = aida_core::mailbox_lifecycle::source_build().expect("a git build");
     std::fs::write(
         anchor.join("activation.json"),
         format!(
-            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","build":[{dev},{exe}]}}"#
+            r#"{{"schema":1,"all_writer_hosts_admitting":true,"recorded_at":"2026-10-27T00:00:00Z","source_build":"{build}"}}"#
         ),
     )
     .unwrap();
@@ -324,4 +326,143 @@ fn a_refused_retirement_revokes_the_grant_and_a_second_stamp_keeps_it_revoked() 
     let table: toml::Table = std::fs::read_to_string(&file).unwrap().parse().unwrap();
     assert_eq!(table["unmodelled"].as_str(), Some("kept"));
     assert!(!crate::gate::seat_authority::revoke_by_id(&grant).unwrap());
+}
+
+/// The ending-retained stamp a refusal after the commit leaves: kept, and
+/// naming the late write rather than a missing activation.
+fn assert_late_retained(file: &Path) {
+    assert!(file.exists(), "the lease is kept");
+    let lease = read_lease(file);
+    assert!(
+        crate::leases::is_ending_retained(&lease),
+        "the lease is stamped ending-retained"
+    );
+    assert!(lease
+        .ending_retained_reason
+        .as_deref()
+        .is_some_and(|r| !r.is_empty()));
+}
+
+/// Land `name` in `tree`'s mailbox right before the next guarded removal:
+/// a writer that took no permit, after the retirement committed.
+fn late_mail_before_removal(tree: &Path, name: &'static str) {
+    let tree = tree.to_path_buf();
+    crate::mail_retention::on_before_guarded_removal(move || put_mail(&tree, name));
+}
+
+#[test]
+fn r3_f1_late_mail_before_a_force_cleanup_removal_keeps_the_lease_and_manifest() {
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let repo = repo();
+    let root = repo.path();
+    let wt = worktree(root, "late-cleanup");
+    let id = "0019f1843a04";
+    let file = write_lease(root, id, &wt, "late-cleanup", "");
+    let manifest = crate::session_manifest::manifest_path(root, id);
+    std::fs::write(&manifest, "kept\n").unwrap();
+    late_mail_before_removal(&wt, "late.json");
+
+    assert!(!crate::leases::force_cleanup_lease(
+        root,
+        &read_lease(&file)
+    ));
+    assert_late_retained(&file);
+    assert!(manifest.exists(), "the manifest is kept");
+    assert!(wt.exists(), "the tree is kept");
+    assert_eq!(mail_in(&wt), ["late.json"], "the late mail is kept");
+    // The runtime links the cleanup stripped are put back.
+    assert!(wt.join(".aida").join("sessions").is_symlink());
+}
+
+#[test]
+fn r3_f1_late_mail_before_a_session_end_removal_keeps_the_session() {
+    let repo = repo();
+    let root = repo.path();
+    let wt = worktree(root, "late-end");
+    let id = "0019f1843a05";
+    let file = write_lease(root, id, &wt, "late-end", "");
+    let manifest = crate::session_manifest::manifest_path(root, id);
+    std::fs::write(&manifest, "kept\n").unwrap();
+    // One guard for the ambient and the trust pin: the env lock is not
+    // reentrant.
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    late_mail_before_removal(&wt, "late.json");
+
+    let refused = crate::session_end::session_end(
+        Some(id),
+        None,
+        None,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
+        false,
+    )
+    .unwrap_err();
+    let text = format!("{refused:#}");
+    assert!(text.contains("NOT ended"), "{text}");
+    // R3-F2: the refusal never suggests an unfenced raw removal.
+    assert!(!text.contains("--force"), "{text}");
+    assert_late_retained(&file);
+    assert!(manifest.exists(), "the manifest is kept");
+    assert!(wt.exists(), "the tree is kept");
+    assert_eq!(mail_in(&wt), ["late.json"], "the late mail is kept");
+}
+
+#[test]
+fn r3_f3_a_rebase_worktree_whose_removal_fails_is_kept_not_deleted_unfenced() {
+    let repo = repo();
+    let root = repo.path();
+    // An empty mailbox and a removal git refuses (a locked worktree): the old
+    // fallback deleted it with `remove_dir_all`, unfenced.
+    let wt = worktree(root, "rebase-locked");
+    std::fs::create_dir_all(mailbox(&wt)).unwrap();
+    git(root, &["worktree", "lock", wt.to_str().unwrap()]);
+    assert!(crate::pr_cmd::remove_rebase_worktree(root, &wt).is_err());
+    assert!(wt.exists(), "a failed guarded removal keeps the tree");
+
+    // A refusal keeps it too, with its mail.
+    git(root, &["worktree", "unlock", wt.to_str().unwrap()]);
+    put_mail(&wt, "m.json");
+    let refused = crate::pr_cmd::remove_rebase_worktree(root, &wt).unwrap_err();
+    assert!(crate::mail_retention::retention_refusal(&refused).is_some());
+    assert!(wt.exists());
+    assert_eq!(mail_in(&wt), ["m.json"]);
+}
+
+#[test]
+fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
+    use aida_core::mailbox_lifecycle::activation::ActivationReport;
+    let report = |recorded, other: Option<&str>| ActivationReport {
+        dry_run: true,
+        recorded,
+        recorded_by_other_build: other.map(str::to_string),
+        this_build: Some("0.16.0+abc1234".into()),
+        hosts: Vec::new(),
+        scan_incomplete: None,
+        would_record: true,
+    };
+    let other =
+        crate::mailbox_cmd::retention_record_lines(&report(false, Some("0.16.0+0ld"))).join("\n");
+    assert!(
+        other.contains("by a different build: 0.16.0+0ld") && other.contains("0.16.0+abc1234"),
+        "{other}"
+    );
+    assert!(
+        other.contains("re-run `aida mailbox retention activate`"),
+        "{other}"
+    );
+    assert_eq!(
+        crate::mailbox_cmd::retention_record_lines(&report(false, None)),
+        ["recorded activation: no"]
+    );
+    assert!(crate::mailbox_cmd::retention_record_lines(&report(true, None))[0].contains("yes"));
 }
