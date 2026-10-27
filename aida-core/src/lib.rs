@@ -79,6 +79,9 @@ pub mod block_allocation;
 // trace:BUG-2017 | ai:codex
 #[cfg(all(unix, feature = "native"))]
 pub mod allocation_authority;
+// trace:BUG-2017 | ai:claude
+#[cfg(feature = "native")]
+pub mod allocation_conflicts;
 // trace:BUG-2017 | ai:codex
 pub mod conflict;
 #[cfg(all(unix, feature = "native"))]
