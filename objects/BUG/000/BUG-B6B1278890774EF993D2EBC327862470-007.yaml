@@ -1,0 +1,19 @@
+id: 01a17dd8-7a13-7a30-854a-bb1355ae316f
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-007
+title: 'Flaky: story_1742_transport_profile executor_pushes_one_exact_store_ref and reviewed_non_email_identity tests panic intermittently in CI (cli-1)'
+description: 'Train PR #2975 (2026-10-27) cli-1 failed at aida-cli/tests/story_1742_transport_profile.rs:610 (executor_pushes_one_exact_store_ref_with_identity_hook_and_no_code_hooks) and :1303 (reviewed_non_email_identity_passes_real_store_hook_and_receipt_pins_exact_safe_history), while main CI was green at the same base and the train members (#2950 index, #2966 gate test) do not touch transport. Diagnose the race (shared temp state, hook timing, store lock) and fix the cause; no retries or skips. Loop the two tests under parallel load as proof.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-27T14:51:41.459608617Z
+modified_at: 2026-10-27T14:51:41.459608617Z
+req_type: Bug
+filed_at:
+  code_sha: 195b5ccc05525017258e668eaff62e78ad8284d6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 195b5ccc05
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
