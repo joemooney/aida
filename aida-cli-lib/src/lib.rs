@@ -357,6 +357,8 @@ mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
 mod findings;
+#[cfg(unix)]
+mod forwarded_signals;
 pub mod graded_review;
 mod identity_gate;
 mod implementer_preflight;

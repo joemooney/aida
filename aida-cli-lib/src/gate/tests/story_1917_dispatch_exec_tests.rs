@@ -353,8 +353,9 @@ fn tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
 }
 
 /// R6: the headless review launch is bounded. A `queue work` that hangs is
-/// killed with its process group when the bound runs out, and the request
-/// fails, so it cannot hold its claim and a review cap slot forever.
+/// killed when the bound runs out together with the vendor it started in a
+/// process group of its own, and the request fails, so neither can hold the
+/// claim, the review lease or a cap slot past the bound.
 // trace:STORY-1917 | ai:claude
 #[test]
 fn review_runner_kills_a_hung_launch_at_its_bound() {
@@ -362,11 +363,13 @@ fn review_runner_kills_a_hung_launch_at_its_bound() {
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
     let pid_file = f._tmp.path().join("hung-review.pid");
+    let vendor_pid_file = f._tmp.path().join("hung-vendor.pid");
     let fake_aida = f.write_executable_script(
         "hung-aida.sh",
         &format!(
-            "#!/bin/sh\necho $$ > '{}'\nexec sleep 60\n",
-            pid_file.display()
+            "#!/bin/sh\necho $$ > '{}'\nsetsid sh -c 'echo $$ > {}; exec sleep 60'\n",
+            pid_file.display(),
+            vendor_pid_file.display()
         ),
     );
     let _bins = install_test_bins(Some(fake_aida), None);
@@ -399,29 +402,35 @@ fn review_runner_kills_a_hung_launch_at_its_bound() {
         "{}",
         res.summary
     );
-    let pid: u32 = std::fs::read_to_string(&pid_file)
-        .unwrap()
-        .trim()
-        .parse()
-        .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while crate::process_probe::process_identity_is_alive(pid, None)
-        && std::time::Instant::now() < deadline
-    {
-        std::thread::sleep(std::time::Duration::from_millis(20));
+    for (file, what) in [
+        (&pid_file, "the hung review child"),
+        (&vendor_pid_file, "the vendor it started in its own group"),
+    ] {
+        let pid: u32 = std::fs::read_to_string(file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while crate::process_probe::process_identity_is_alive(pid, None)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            !crate::process_probe::process_identity_is_alive(pid, None),
+            "{what} is killed"
+        );
     }
-    assert!(
-        !crate::process_probe::process_identity_is_alive(pid, None),
-        "the hung review child is killed"
-    );
 }
 
-/// The bounded review keeps `Command::output`'s process semantics: stdin is
-/// not a terminal (it reads as empty, `/dev/null`), and the child stays in
-/// serve's process group so a terminal Ctrl+C stops it together with serve.
+/// The bounded review's stdin is not a terminal (it reads as empty,
+/// `/dev/null`), and the child leads a process group of its own so the bound
+/// can kill its tree; terminal signals reach it by forwarding (see
+/// `forwarded_signals`).
 // trace:STORY-1917 | ai:claude
 #[test]
-fn review_runner_child_keeps_null_stdin_and_the_callers_process_group() {
+fn review_runner_child_has_null_stdin_and_its_own_process_group() {
     let f = ExecFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -430,7 +439,7 @@ fn review_runner_child_keeps_null_stdin_and_the_callers_process_group() {
         "probe-aida.sh",
         &format!(
             "#!/bin/sh\n{{ if [ -t 0 ]; then echo tty; else echo notty; fi; \
-             readlink /proc/self/fd/0; cut -d' ' -f5 /proc/$$/stat; }} > '{}'\n",
+             readlink /proc/self/fd/0; cut -d' ' -f5 /proc/$$/stat; echo $$; }} > '{}'\n",
             probe.display()
         ),
     );
@@ -456,10 +465,12 @@ fn review_runner_child_keeps_null_stdin_and_the_callers_process_group() {
     assert_eq!(lines.get(1), Some(&"/dev/null"), "{text}");
     // SAFETY: `getpgrp` takes no arguments and cannot fail.
     let own_pgid = unsafe { libc::getpgrp() };
+    let child_pgid = lines.get(2).and_then(|l| l.parse::<i32>().ok());
+    assert_ne!(child_pgid, Some(own_pgid), "{text}");
     assert_eq!(
-        lines.get(2).and_then(|l| l.parse::<i32>().ok()),
-        Some(own_pgid),
-        "the review child shares the caller's process group: {text}"
+        child_pgid,
+        lines.get(3).and_then(|l| l.parse::<i32>().ok()),
+        "the review child leads its own process group: {text}"
     );
 }
 

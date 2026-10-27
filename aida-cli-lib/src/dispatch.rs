@@ -2224,10 +2224,11 @@ fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
 /// killed so it cannot hold a flow claim and a review cap slot forever (R6:
 /// bounded subprocesses).
 ///
-/// Only the time bound is new: the child keeps `Command::output`'s null
-/// stdin and stays in serve's process group, so a terminal Ctrl+C on
-/// `aida dispatch serve` stops the review with it and the review never reads
-/// the operator's TTY.
+/// The child has a null stdin, so it never reads the operator's TTY, and runs
+/// in its own process group so the bound can kill its whole tree, including
+/// the vendor reviewer `queue work` starts in a group of its own. A terminal
+/// Ctrl+C (or SIGTERM/SIGHUP) still stops it: the signal is forwarded to that
+/// tree, and once it is reaped the worker re-raises the signal on itself.
 const REVIEW_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 /// Bytes of review output kept for the dispatch log.
 const REVIEW_OUTPUT_CAP: u64 = 4 * 1024 * 1024;
@@ -2287,8 +2288,20 @@ pub(crate) fn run_review_verb(
 
     // trace:STORY-1917 | ai:claude
     let timeout = review_run_timeout();
-    let bounded =
-        crate::command_output_with_timeout_in_caller_group(cmd, timeout, REVIEW_OUTPUT_CAP);
+    let bounded = crate::command_output_with_timeout_forwarding(cmd, timeout, REVIEW_OUTPUT_CAP);
+    let (bounded, interrupted) = match bounded {
+        Ok((out, sig)) => (Ok(out), sig),
+        Err(err) => (Err(err), None),
+    };
+    if let Some(sig) = interrupted {
+        let _ = append_dispatch_log(
+            main_worktree,
+            &req.id(),
+            &format!("review of PR #{pr} stopped by forwarded signal {sig}\n"),
+        );
+        #[cfg(unix)]
+        crate::forwarded_signals::reraise(sig);
+    }
     match bounded {
         Ok(crate::BoundedCommandOutput::Completed(out)) => {
             let combined = format!(
@@ -2322,7 +2335,7 @@ pub(crate) fn run_review_verb(
                 exit_code: None,
             }
         }
-        // The caller-group runner reports a spawn failure as `Err` with its
+        // The forwarding runner reports a spawn failure as `Err` with its
         // cause; `Ok(SpawnFailed)` does not occur.
         Err(err) => RunnerOutcome::Failed {
             summary: format!("failed to spawn `{aida_bin_display} queue work PR-{pr}`: {err}"),

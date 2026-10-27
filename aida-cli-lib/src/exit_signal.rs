@@ -483,7 +483,7 @@ enum TreeSignal {
 /// Collect `root` plus every transitive descendant PID, via `sysinfo`'s
 /// parent-pointer graph. Returns `root` even when the process table can't be
 /// read, so the caller always has at least the immediate child to signal.
-fn collect_process_tree(root: u32) -> Vec<u32> {
+pub(crate) fn collect_process_tree(root: u32) -> Vec<u32> {
     use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
 
     let mut sys =
