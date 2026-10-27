@@ -83,7 +83,7 @@ fn a_launch_delivers_verified_plane_guidance_and_reports_how() {
     std::fs::write(top.join(GUIDANCE_DIR).join("review-norms.md"), "edited\n").unwrap();
     let section = render_adoption_guidance_section(&top);
     assert!(
-        section.contains("no shared guidance was delivered"),
+        section.contains("No shared guidance was delivered"),
         "{section}"
     );
     assert!(!section.contains("### review-norms"));
@@ -127,4 +127,97 @@ fn config_edits_and_scaffolding_refuse_in_an_adopted_worktree() {
     assert!(aida_core::scaffolding::codex_hooks::scaffold_antigravity_hooks(&top, true).is_err());
     assert!(!top.join(".codex").exists() && !top.join(".agents").exists());
     assert!(git(&top, &["status", "--porcelain"], None).is_empty());
+}
+
+/// Point the plane at a new commit carrying `settings`.
+fn republish(dir: &Path, settings: &str) -> String {
+    let blob = git(dir, &["hash-object", "-w", "--stdin"], Some(settings));
+    let sub = git(
+        dir,
+        &["mktree"],
+        Some(&format!("100644 blob {blob}\tsettings.toml\n")),
+    );
+    let tree = git(
+        dir,
+        &["mktree"],
+        Some(&format!("040000 tree {sub}\tadoption\n")),
+    );
+    let commit = git(dir, &["commit-tree", &tree, "-m", "plane"], None);
+    git(dir, &["update-ref", "refs/heads/aida-store", &commit], None);
+    commit
+}
+
+#[test]
+fn a_failed_refresh_is_reported_and_delivers_nothing_stale() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, first) = adopted(&tmp.path().join("p"), SETTINGS);
+    assert_eq!(refresh_adoption_projection(&top), None);
+    let second = republish(
+        &top,
+        "schema = 1\n[guidance]\nreview-norms = \"Second revision.\\n\"\n",
+    );
+    std::fs::write(top.join(CONFIG), "edited = 1\n").unwrap();
+
+    let warning = refresh_adoption_projection(&top).expect("the failure is reported");
+    assert!(warning.contains("none is delivered"), "{warning}");
+    let section = render_adoption_guidance_section(&top);
+    assert!(
+        section.contains("No shared guidance was delivered")
+            && !section.contains(&format!("revision {first}"))
+            && !section.contains(&format!("revision {second}"))
+            && !section.contains("### review-norms"),
+        "{section}"
+    );
+    assert!(describe_adoption_state(&top).contains("no shared guidance is delivered"));
+}
+
+#[test]
+fn an_edited_projected_config_reads_the_same_in_preview_and_launch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, _) = adopted(&tmp.path().join("p"), SETTINGS);
+    refresh_adoption_projection(&top);
+    std::fs::write(top.join(CONFIG), "edited = 1\n").unwrap();
+
+    let preview = describe_adoption_state(&top);
+    let section = render_adoption_guidance_section(&top);
+    assert!(
+        preview.contains("damaged (.aida/config.toml); no shared guidance is delivered"),
+        "{preview}"
+    );
+    assert!(
+        section.contains("No shared guidance was delivered")
+            && section.contains(".aida/config.toml")
+            && !section.contains("### review-norms"),
+        "{section}"
+    );
+}
+
+#[test]
+fn a_tracked_product_config_skip_is_reported_in_preview_and_launch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, commit) = adopted(&tmp.path().join("p"), SETTINGS);
+    std::fs::create_dir_all(top.join(".aida")).unwrap();
+    std::fs::write(top.join(CONFIG), "[agents]\nvendor = \"legacy\"\n").unwrap();
+    git(&top, &["add", "-f", CONFIG], None);
+    git(&top, &["commit", "-q", "-m", "legacy scaffolding"], None);
+
+    let warning = refresh_adoption_projection(&top).expect("the skip is reported");
+    assert!(warning.contains("tracks .aida/config.toml"), "{warning}");
+    let section = render_adoption_guidance_section(&top);
+    assert!(
+        section.contains(&format!("revision {commit}"))
+            && section.contains("settings are not applied here")
+            && section.contains("### review-norms"),
+        "{section}"
+    );
+    let preview = describe_adoption_state(&top);
+    assert!(
+        preview.contains(&format!("current at {commit}"))
+            && preview.contains("tracks .aida/config.toml"),
+        "{preview}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(top.join(CONFIG)).unwrap(),
+        "[agents]\nvendor = \"legacy\"\n"
+    );
 }

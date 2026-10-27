@@ -78,21 +78,20 @@ pub enum State {
     /// No plane, or a plane without an adoption namespace.
     NotAdopted,
     /// Adopted, but never projected into this worktree.
-    NotProjected {
-        plane: String,
-    },
+    NotProjected { plane: String },
+    /// `config_tracked`: the product branch tracks `.aida/config.toml`, so
+    /// the plane's settings are not applied here.
     Current {
         commit: String,
+        config_tracked: bool,
     },
     Stale {
         projected: String,
         plane: String,
+        config_tracked: bool,
     },
     /// Owned outputs that were edited, removed, or left mid-refresh.
-    Damaged {
-        commit: String,
-        paths: Vec<String>,
-    },
+    Damaged { commit: String, paths: Vec<String> },
 }
 
 /// Discover the plane for `worktree`, read it and refresh the projection.
@@ -121,7 +120,8 @@ pub fn inspect(worktree: &Path) -> Result<State> {
             plane: adoption.revision.commit,
         });
     };
-    let damaged = damaged_paths(&root, &manifest)?;
+    let config_tracked = !tracked(&root, &[CONFIG])?.is_empty();
+    let damaged = damaged_paths(&root, &manifest, config_tracked)?;
     Ok(if !damaged.is_empty() {
         State::Damaged {
             commit: manifest.commit,
@@ -133,10 +133,12 @@ pub fn inspect(worktree: &Path) -> Result<State> {
         State::Stale {
             projected: manifest.commit,
             plane: adoption.revision.commit,
+            config_tracked,
         }
     } else {
         State::Current {
             commit: manifest.commit,
+            config_tracked,
         }
     })
 }
@@ -181,12 +183,26 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
         .iter()
         .map(|(rel, body)| (rel.clone(), sha256(body.as_bytes())))
         .collect();
-    let stale: Vec<String> = previous
+    let dropped: Vec<&str> = previous
         .iter()
         .flat_map(|m| m.files.keys().chain(m.pending.keys()))
+        .map(String::as_str)
         .filter(|rel| !outputs.contains_key(*rel))
-        .cloned()
         .collect();
+    // A dropped path the product branch now tracks (a checkout replaced the
+    // ignored copy) is the product's: forget it, never check or delete it.
+    let now_tracked = if dropped.is_empty() {
+        Vec::new()
+    } else {
+        tracked(&root, &dropped)?
+    };
+    let mut stale: Vec<String> = dropped
+        .into_iter()
+        .filter(|rel| !now_tracked.iter().any(|t| t == rel))
+        .map(str::to_string)
+        .collect();
+    stale.sort_unstable();
+    stale.dedup();
     let mut unchanged = previous.as_ref().is_some_and(|m| {
         m.pending.is_empty()
             && m.commit == adoption.revision.commit
@@ -273,32 +289,55 @@ pub fn render(adoption: &Adoption, include_config: bool) -> Result<BTreeMap<Stri
 /// What a launch may deliver from the projection in `worktree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Delivery {
-    /// No projection here.
+    /// Not adopted here.
     None,
-    /// A projection exists but an owned guidance file is missing, edited or
-    /// mid-refresh, so nothing is delivered.
-    Unverified,
-    /// The projected revision and its `(name, body)` guidance documents.
+    /// Adopted, but the projection is missing, behind the plane, damaged or
+    /// unreadable, so nothing is delivered; `reason` says which.
+    Withheld { reason: String },
+    /// The projected revision, its `(name, body)` guidance documents, and
+    /// whether the product branch's tracked config kept the settings out.
     Verified {
         commit: String,
         docs: Vec<(String, String)>,
+        config_tracked: bool,
     },
 }
 
-/// The manifest-verified guidance for a launch from `worktree`.
+/// The guidance a launch from `worktree` may deliver. Decided by
+/// [`inspect`], the same predicate the launch preview reports, so the two
+/// always agree: only a projection that is `Current` with the discovered
+/// plane is delivered.
 pub fn delivered_guidance(worktree: &Path) -> Delivery {
     let Ok(root) = worktree_root(worktree) else {
         return Delivery::None;
     };
-    if !is_projected(&root) {
-        return Delivery::None;
+    let withheld = |reason: String| Delivery::Withheld { reason };
+    match inspect(&root) {
+        Ok(State::NotAdopted) => Delivery::None,
+        Ok(State::Current {
+            commit,
+            config_tracked,
+        }) => verified_guidance(&root, commit, config_tracked)
+            .unwrap_or_else(|| withheld("an owned guidance file changed while it was read".into())),
+        Ok(State::NotProjected { plane }) => {
+            withheld(format!("plane {plane} has not been projected here"))
+        }
+        Ok(State::Stale {
+            projected, plane, ..
+        }) => withheld(format!(
+            "the projection holds {projected} but the plane is at {plane}"
+        )),
+        Ok(State::Damaged { paths, .. }) => withheld(format!(
+            "owned projection files are edited, missing or mid-refresh ({})",
+            paths.join(", ")
+        )),
+        Err(e) => withheld(format!("the adoption plane could not be read ({e:#})")),
     }
-    verified_guidance(&root).unwrap_or(Delivery::Unverified)
 }
 
-fn verified_guidance(root: &Path) -> Option<Delivery> {
+fn verified_guidance(root: &Path, commit: String, config_tracked: bool) -> Option<Delivery> {
     let manifest = read_manifest(root).ok()??;
-    if !manifest.pending.is_empty() {
+    if !manifest.pending.is_empty() || manifest.commit != commit {
         return None;
     }
     let prefix = format!("{GUIDANCE_DIR}/");
@@ -317,8 +356,9 @@ fn verified_guidance(root: &Path) -> Option<Delivery> {
         docs.push((name.to_string(), String::from_utf8(bytes).ok()?));
     }
     Some(Delivery::Verified {
-        commit: manifest.commit,
+        commit,
         docs,
+        config_tracked,
     })
 }
 
@@ -394,9 +434,15 @@ fn write_manifest(root: &Path, manifest: &Manifest) -> Result<()> {
         .with_context(|| format!("Failed to write {MANIFEST}"))
 }
 
-fn damaged_paths(root: &Path, manifest: &Manifest) -> Result<Vec<String>> {
+/// Owned files that are pending, edited or missing. A recorded config the
+/// product branch now tracks is the product's, not damage: the next refresh
+/// forgets it.
+fn damaged_paths(root: &Path, manifest: &Manifest, config_tracked: bool) -> Result<Vec<String>> {
     let mut damaged: Vec<String> = manifest.pending.keys().cloned().collect();
     for (rel, hash) in &manifest.files {
+        if config_tracked && rel == CONFIG {
+            continue;
+        }
         let intact = read_regular(root, rel)?.is_some_and(|bytes| sha256(&bytes) == *hash);
         if !intact && !damaged.contains(rel) {
             damaged.push(rel.clone());

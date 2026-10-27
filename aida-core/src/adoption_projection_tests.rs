@@ -116,6 +116,15 @@ fn adoption(top: &Path) -> Adoption {
     load(&discover(top).unwrap().unwrap()).unwrap().unwrap()
 }
 
+/// The adoption at plane `commit`, rebuilt by moving the store ref back.
+fn load_at(top: &Path, commit: &str) -> Adoption {
+    let current = git_out(top, &["rev-parse", STORE_REF]);
+    git_out(top, &["update-ref", STORE_REF, commit]);
+    let adoption = adoption(top);
+    git_out(top, &["update-ref", STORE_REF, &current]);
+    adoption
+}
+
 #[test]
 fn a_projection_feeds_readers_without_touching_the_product_tree() {
     let tmp = tempfile::tempdir().unwrap();
@@ -149,10 +158,14 @@ fn a_projection_feeds_readers_without_touching_the_product_tree() {
     assert_eq!(
         inspect(&top).unwrap(),
         State::Current {
-            commit: commit.clone()
+            commit: commit.clone(),
+            config_tracked: false
         }
     );
-    let Delivery::Verified { commit: rev, docs } = delivered_guidance(&top) else {
+    let Delivery::Verified {
+        commit: rev, docs, ..
+    } = delivered_guidance(&top)
+    else {
         panic!("guidance not delivered");
     };
     assert_eq!(rev, commit);
@@ -191,7 +204,8 @@ fn a_refresh_is_deterministic_and_replaces_only_owned_outputs() {
         inspect(&top).unwrap(),
         State::Stale {
             projected: read_manifest(&top).unwrap().unwrap().commit,
-            plane: second.clone()
+            plane: second.clone(),
+            config_tracked: false
         }
     );
     assert!(sync(&top).unwrap().unwrap().written);
@@ -232,9 +246,8 @@ fn an_edited_or_unowned_output_is_preserved_and_refused() {
             paths: vec![format!("{GUIDANCE_DIR}/review-norms.md")]
         }
     );
-    assert_eq!(
-        delivered_guidance(&top),
-        Delivery::Unverified,
+    assert!(
+        matches!(delivered_guidance(&top), Delivery::Withheld { .. }),
         "edited guidance is never delivered"
     );
     publish(&top, V2);
@@ -298,6 +311,96 @@ fn a_tracked_product_config_is_never_projected_over() {
         .unwrap()
         .files
         .contains_key(CONFIG));
+    assert!(matches!(
+        inspect(&top).unwrap(),
+        State::Current {
+            config_tracked: true,
+            ..
+        }
+    ));
+    assert!(matches!(
+        delivered_guidance(&top),
+        Delivery::Verified {
+            config_tracked: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_config_the_product_branch_starts_tracking_is_forgotten_not_deleted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    sync(&top).unwrap();
+    let projected = std::fs::read(top.join(CONFIG)).unwrap();
+
+    // A checkout that tracks the config, byte-identical to the owned copy so
+    // the ownership hash alone would claim it.
+    git_out(&top, &["add", "-f", CONFIG]);
+    git_out(&top, &["commit", "-q", "-m", "track config"]);
+    let before = product_snapshot(&top);
+    let outcome = sync(&top).unwrap().unwrap();
+    assert!(outcome.config_tracked);
+    assert_eq!(std::fs::read(top.join(CONFIG)).unwrap(), projected);
+    assert_eq!(product_snapshot(&top), before);
+    assert!(!read_manifest(&top)
+        .unwrap()
+        .unwrap()
+        .files
+        .contains_key(CONFIG));
+
+    // Different tracked bytes: still neither refused nor touched.
+    std::fs::write(top.join(CONFIG), "[agents]\nvendor = \"product\"\n").unwrap();
+    git_out(&top, &["commit", "-q", "-am", "product config"]);
+    let mut manifest = read_manifest(&top).unwrap().unwrap();
+    manifest.files.insert(CONFIG.into(), sha256(&projected));
+    write_manifest(&top, &manifest).unwrap();
+    let before = product_snapshot(&top);
+    assert!(matches!(inspect(&top).unwrap(), State::Current { .. }));
+    sync(&top).unwrap();
+    assert_eq!(product_snapshot(&top), before);
+}
+
+#[test]
+fn a_stale_projection_is_withheld_when_the_refresh_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    let first = publish(&top, V1);
+    sync(&top).unwrap();
+    let second = publish(&top, V2);
+    // The refresh refuses: the owned config was edited.
+    std::fs::write(top.join(CONFIG), "edited = 1\n").unwrap();
+    assert!(sync(&top).is_err());
+    let Delivery::Withheld { reason } = delivered_guidance(&top) else {
+        panic!("revision {first} delivered after a failed refresh");
+    };
+    assert!(reason.contains(".aida/config.toml"), "{reason}");
+
+    // With the config intact again the projection is merely behind: still
+    // withheld rather than delivered as the old revision.
+    let manifest = read_manifest(&top).unwrap().unwrap();
+    let body = render(&load_at(&top, &first), true).unwrap()[CONFIG].clone();
+    std::fs::write(top.join(CONFIG), body).unwrap();
+    assert_eq!(manifest.commit, first);
+    let Delivery::Withheld { reason } = delivered_guidance(&top) else {
+        panic!("stale revision delivered");
+    };
+    assert!(reason.contains(&second), "{reason}");
+}
+
+#[test]
+fn an_edited_projected_config_withholds_guidance_like_the_preview_says() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    sync(&top).unwrap();
+    std::fs::write(top.join(CONFIG), "edited = 1\n").unwrap();
+    assert!(matches!(inspect(&top).unwrap(), State::Damaged { .. }));
+    assert!(matches!(
+        delivered_guidance(&top),
+        Delivery::Withheld { .. }
+    ));
 }
 
 #[test]
@@ -319,10 +422,19 @@ fn an_interrupted_refresh_completes_instead_of_reading_as_an_edit() {
     write_manifest(&top, &intent).unwrap();
     std::fs::write(top.join(CONFIG), &outputs[CONFIG]).unwrap();
     assert!(matches!(inspect(&top).unwrap(), State::Damaged { .. }));
-    assert_eq!(delivered_guidance(&top), Delivery::Unverified);
+    assert!(matches!(
+        delivered_guidance(&top),
+        Delivery::Withheld { .. }
+    ));
 
     sync(&top).unwrap();
-    assert_eq!(inspect(&top).unwrap(), State::Current { commit: second });
+    assert_eq!(
+        inspect(&top).unwrap(),
+        State::Current {
+            commit: second,
+            config_tracked: false
+        }
+    );
 }
 
 #[test]
@@ -342,7 +454,13 @@ fn concurrent_refreshes_converge_on_one_projection() {
         .filter(|o| o.written)
         .count();
     assert_eq!(written, 1);
-    assert_eq!(inspect(&top).unwrap(), State::Current { commit });
+    assert_eq!(
+        inspect(&top).unwrap(),
+        State::Current {
+            commit,
+            config_tracked: false
+        }
+    );
 }
 
 #[test]

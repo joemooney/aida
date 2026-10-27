@@ -4068,7 +4068,9 @@ pub(crate) fn prepare_agent_launch_context(
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating agent context dir {}", dir.display()))?;
     let path = dir.join(format!("{}-{token}.context.md", config.agent_type));
-    refresh_adoption_projection(&plan.launch_cwd);
+    if let Some(warning) = refresh_adoption_projection(&plan.launch_cwd) {
+        eprintln!("{warning}");
+    }
     let body = render_agent_launch_context(config, plan, &token)?;
     std::fs::write(&path, &body).with_context(|| format!("writing {}", path.display()))?;
     if options.show {
@@ -5503,13 +5505,23 @@ pub(crate) fn agent_guidance_files(
         .collect()
 }
 
+const CONFIG_TRACKED_NOTE: &str = "the product branch tracks .aida/config.toml, so the \
+                                   adoption plane's settings are not applied here";
+
 /// Bring the launch worktree's adoption projection up to the plane before
-/// the context is rendered. A failure never blocks the launch: it is
-/// reported, and the context then delivers no unverified guidance.
+/// the context is rendered, returning the warning to report, if any. A
+/// failure never blocks the launch: it is reported, and the context then
+/// delivers no guidance, since the projection no longer matches the plane.
 // trace:STORY-1741 | ai:claude
-fn refresh_adoption_projection(worktree: &std::path::Path) {
-    if let Err(e) = aida_core::adoption_projection::sync(worktree) {
-        eprintln!("warning: shared adoption guidance not refreshed: {e:#}");
+fn refresh_adoption_projection(worktree: &std::path::Path) -> Option<String> {
+    match aida_core::adoption_projection::sync(worktree) {
+        Err(e) => Some(format!(
+            "warning: shared adoption guidance not refreshed, so none is delivered: {e:#}"
+        )),
+        Ok(Some(outcome)) if outcome.config_tracked => {
+            Some(format!("warning: {CONFIG_TRACKED_NOTE}"))
+        }
+        Ok(_) => None,
     }
 }
 
@@ -5520,15 +5532,22 @@ pub(crate) fn render_adoption_guidance_section(worktree: &std::path::Path) -> St
     use aida_core::adoption_projection::{delivered_guidance, Delivery};
     match delivered_guidance(worktree) {
         Delivery::None => String::new(),
-        Delivery::Unverified => "## Project Guidance\n\n_The shared adoption projection is \
-             incomplete or was edited, so no shared guidance was delivered. Run a fresh launch \
-             after fixing it._\n\n"
-            .to_string(),
-        Delivery::Verified { commit, docs } => {
+        Delivery::Withheld { reason } => format!(
+            "## Project Guidance\n\n_No shared guidance was delivered: {reason}. Run a fresh \
+             launch after fixing it._\n\n"
+        ),
+        Delivery::Verified {
+            commit,
+            docs,
+            config_tracked,
+        } => {
             let mut out = format!(
                 "## Project Guidance\n\nShared guidance from the adoption plane, revision \
                  {commit}.\n\n"
             );
+            if config_tracked {
+                out.push_str(&format!("_Note: {CONFIG_TRACKED_NOTE}._\n\n"));
+            }
             for (name, body) in docs {
                 out.push_str(&format!("### {name}\n\n{}\n\n", body.trim_end()));
             }
@@ -5538,21 +5557,38 @@ pub(crate) fn render_adoption_guidance_section(worktree: &std::path::Path) -> St
 }
 
 /// One line for the launch preview: the projection's state and how the
-/// child receives it.
+/// child receives it. Read from the same `inspect` predicate that decides
+/// what the launch delivers, so the two agree.
 // trace:STORY-1741 | ai:claude
 pub(crate) fn describe_adoption_state(worktree: &std::path::Path) -> String {
     use aida_core::adoption_projection::{inspect, State};
     const VIA: &str = "delivered in the launch context file; harnesses started outside \
                        `aida agent` do not receive shared guidance";
+    let tracked = |config_tracked: bool| {
+        if config_tracked {
+            format!("; {CONFIG_TRACKED_NOTE}")
+        } else {
+            String::new()
+        }
+    };
     match inspect(worktree) {
         Ok(State::NotAdopted) => "not adopted".to_string(),
         Ok(State::NotProjected { plane }) => {
             format!("plane {plane}, not yet projected (a launch projects it; {VIA})")
         }
-        Ok(State::Current { commit }) => format!("current at {commit} ({VIA})"),
-        Ok(State::Stale { projected, plane }) => {
-            format!("projected {projected}, plane at {plane} (a launch refreshes it; {VIA})")
-        }
+        Ok(State::Current {
+            commit,
+            config_tracked,
+        }) => format!("current at {commit} ({VIA}){}", tracked(config_tracked)),
+        Ok(State::Stale {
+            projected,
+            plane,
+            config_tracked,
+        }) => format!(
+            "projected {projected}, plane at {plane} (a launch refreshes it, and delivers \
+             nothing if that fails; {VIA}){}",
+            tracked(config_tracked)
+        ),
         Ok(State::Damaged { commit, paths }) => format!(
             "projection of {commit} damaged ({}); no shared guidance is delivered",
             paths.join(", ")
