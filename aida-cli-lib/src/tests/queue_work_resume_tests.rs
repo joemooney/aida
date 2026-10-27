@@ -246,6 +246,8 @@ fn update_lease_branch_rewrites_only_the_branch() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     };
@@ -323,6 +325,8 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     };

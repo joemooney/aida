@@ -185,6 +185,20 @@ pub(crate) struct SessionLease {
     // trace:TASK-1518 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) interrupted_reason: Option<String>,
+    /// STORY-1843 C2: stamped when the session's end, reap or heal was
+    /// refused because the tree's mail could not be retired. The tree, lease,
+    /// claim and manifest are kept and the child grant is revoked; the
+    /// session reads as `ending-retained`, never as active work and never as
+    /// cleaned up, until a retried end succeeds. Written as a generic TOML
+    /// key by `mail_retention`, and kept by every typed lease rewrite.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ending_retained_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Why the retention refused. Informational; readers key on
+    /// `ending_retained_at`.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ending_retained_reason: Option<String>,
     /// The driver this lease's session works for (`relay:<run>`, ...), read
     /// from `AIDA_RELAY_RUN` / `AIDA_DRIVER` when the lease was minted. Lets
     /// a lease whose own process is gone read as driven while its driver is
@@ -335,6 +349,8 @@ pub(crate) fn session_harness_worktree_register(
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
     };
@@ -628,7 +644,17 @@ pub(crate) fn lease_blocks_agent_dispatch(lease: &SessionLease) -> bool {
 
 // trace:BUG-2002 | ai:codex
 pub(crate) fn lease_visible_in_default_listing(lease: &SessionLease, state: LeaseState) -> bool {
-    !matches!(state, LeaseState::Stale) || lease_blocks_agent_dispatch(lease)
+    !matches!(state, LeaseState::Stale)
+        || lease_blocks_agent_dispatch(lease)
+        || lease.ending_retained_at.is_some()
+}
+
+/// STORY-1843 C2: a lease whose end was refused to keep its tree's mail is
+/// shown as `ending-retained`, not by its process liveness: it is neither
+/// active work nor cleaned up.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn is_ending_retained(lease: &SessionLease) -> bool {
+    lease.ending_retained_at.is_some()
 }
 
 // The actual listing and its tests share the default/--all selection boundary.
@@ -2479,6 +2505,9 @@ pub(crate) fn leases_json_rows(
                 "pid": pid,
                 // trace:BUG-2197 | ai:claude
                 "owner_unknown": lease_owner_unknown(l, *pid),
+                // trace:STORY-1843 | ai:claude
+                "ending_retained_at": l.ending_retained_at.map(|t| t.to_rfc3339()),
+                "ending_retained_reason": l.ending_retained_reason,
                 "drain": lease_drain_xref(&l.scope, drain),
             })
         })
@@ -2808,6 +2837,12 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         );
         let label = format!("{} {}", state.glyph(), state.label());
         let colored = match state {
+            _ if is_ending_retained(l) => format!(
+                "{} ending-retained",
+                crate::glyph(crate::glyphs::Glyph::Warning)
+            )
+            .yellow()
+            .bold(),
             LeaseState::Live => label.green(),
             LeaseState::Dormant => label.cyan(),
             LeaseState::Stale => label.yellow(),
@@ -2835,6 +2870,20 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
                     " ".repeat(15)
                 )
                 .dimmed()
+            );
+        }
+        // trace:STORY-1843 | ai:claude
+        if is_ending_retained(l) {
+            println!(
+                "{}",
+                format!(
+                    "{}! session end refused: {} — the tree, lease and claim are kept; retry `aida session end`",
+                    " ".repeat(15),
+                    l.ending_retained_reason
+                        .as_deref()
+                        .unwrap_or("its mail could not be retained")
+                )
+                .yellow()
             );
         }
         // STORY-301: annotate the lease the orchestrator is currently driving.
@@ -3064,11 +3113,31 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
             );
             false
         };
-        return match crate::seat_clone::destroy(
+        // The clone's mail is retired first, as for a worktree: a refusal
+        // takes the recovery-ownership ending (grant revoked, lease stamped
+        // ending-retained) and keeps the clone. trace:STORY-1843 | ai:claude
+        let retirement = match crate::mail_retention::retire_tree(
+            project_root,
+            &lease.worktree_path,
+            true,
+            "lease cleanup",
+        ) {
+            Ok(retirement) => retirement,
+            Err(refusal) => {
+                crate::mail_retention::keep_ending_retained(
+                    &lease_path(project_root, &lease.id),
+                    &refusal,
+                );
+                return kept(crate::mail_retention::refusal_lines(&refusal).join("; "));
+            }
+        };
+        return match crate::seat_clone::destroy_retained(
             project_root,
             &lease.worktree_path,
             crate::seat_clone::DestroyMode::SalvageUnshipped,
             None,
+            &[],
+            retirement,
         ) {
             Ok(crate::seat_clone::Destroyed::Removed { salvage }) => {
                 if let Some(patch) = salvage {

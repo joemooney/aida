@@ -137,6 +137,83 @@ mod tests {
         );
     }
 
+    fn lease_toml(extra: &str) -> String {
+        format!(
+            "id = \"s1\"\nscope = \"TASK-1\"\nslug = \"task-1\"\nowner = \"o\"\n\
+             worktree_path = \"/w\"\nbranch = \"b\"\n\
+             started_at = \"2026-10-27T00:00:00Z\"\nhostname = \"h\"\n{extra}"
+        )
+    }
+
+    #[test]
+    fn the_stamp_is_read_by_the_typed_lease_and_survives_a_typed_rewrite() {
+        // F2: the stamp written as generic keys is modelled, so ps, leases,
+        // reap, doctor and the statusline see it, and a typed rewrite (e.g.
+        // a branch update) keeps it.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("s1.toml");
+        std::fs::write(&file, lease_toml("")).unwrap();
+        keep_ending_retained(&file, &refusal(true));
+        let lease: crate::SessionLease =
+            toml::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert!(crate::leases::is_ending_retained(&lease));
+        assert_eq!(
+            lease.ending_retained_reason.as_deref(),
+            Some("the mailbox holds mail")
+        );
+        let rewritten = toml::to_string_pretty(&lease).unwrap();
+        let again: crate::SessionLease = toml::from_str(&rewritten).unwrap();
+        assert_eq!(again.ending_retained_at, lease.ending_retained_at);
+        assert_eq!(again.ending_retained_reason, lease.ending_retained_reason);
+
+        let plain: crate::SessionLease = toml::from_str(&lease_toml("")).unwrap();
+        assert!(!crate::leases::is_ending_retained(&plain));
+        assert!(!toml::to_string(&plain).unwrap().contains("ending_retained"));
+    }
+
+    #[test]
+    fn every_reader_shows_an_ending_retained_lease_as_neither_active_nor_cleaned_up() {
+        use crate::dispatch_health_ps::{apply_ending_retained, DispatchState as D};
+        let stamped: crate::SessionLease = toml::from_str(&lease_toml(
+            "ending_retained_at = \"2026-10-27T01:00:00Z\"\n\
+             ending_retained_reason = \"no activation\"\n",
+        ))
+        .unwrap();
+        let plain: crate::SessionLease = toml::from_str(&lease_toml("")).unwrap();
+        // aida ps: overrides every observed state, including moving.
+        for state in [D::Moving, D::Stalled, D::Stopped, D::Unknown] {
+            assert_eq!(apply_ending_retained(state, true), D::EndingRetained);
+            assert_eq!(apply_ending_retained(state, false), state);
+        }
+        assert_eq!(D::EndingRetained.label(), "ending-retained");
+        // session leases: never hidden as stale.
+        let stale = aida_core::liveness::LeaseState::Stale;
+        let mut harness = stamped.clone();
+        harness.scope = String::new();
+        assert!(crate::leases::lease_visible_in_default_listing(
+            &harness, stale
+        ));
+        let mut harness_plain = plain.clone();
+        harness_plain.scope = String::new();
+        assert!(!crate::leases::lease_visible_in_default_listing(
+            &harness_plain,
+            stale
+        ));
+        // statusline.
+        assert!(crate::statusline_cmd::ending_retained_segment(&stamped).is_some());
+        assert!(crate::statusline_cmd::ending_retained_segment(&plain).is_none());
+        // reap rows.
+        let note = crate::session_reap::ending_retained_note(&stamped, "x".into());
+        assert!(
+            note.starts_with("ending-retained") && note.contains("no activation"),
+            "{note}"
+        );
+        assert_eq!(
+            crate::session_reap::ending_retained_note(&plain, "x".into()),
+            "x"
+        );
+    }
+
     #[test]
     fn the_refusal_names_the_activation_command_only_when_it_is_missing() {
         let command = aida_core::mailbox_lifecycle::ACTIVATION_COMMAND;

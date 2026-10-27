@@ -3278,6 +3278,8 @@ mod story_1043_unshipped_work_tests {
             manual_enter_at: None,
             interrupted_at: None,
             interrupted_reason: None,
+            ending_retained_at: None,
+            ending_retained_reason: None,
             driver: None,
             child_grant_id: None,
         };
