@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T16:37:59.040032186Z
+modified_at: 2026-10-27T16:38:01.593846674Z
 req_type: Bug
 tags:
 - id-allocation
@@ -774,6 +774,12 @@ comments:
   content: 'ADVISOR 2026-10-27 09:40 MST: execution mode set to drain (operator asked for unattended landing; every PR on this spec still needs an independent reviewer approval at head and green CI; protected gate paths still need the operator).'
   created_at: 2026-10-27T16:35:55.869221025Z
   modified_at: 2026-10-27T16:35:55.869221025Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17e39-d479-7732-8209-19320230e88a
+  author: joe
+  content: 'ADVISOR 2026-10-27 09:45 MST: execution mode set to drain (operator asked for unattended landing; every PR on this spec still needs an independent reviewer approval at head and green CI; protected gate paths still need the operator).'
+  created_at: 2026-10-27T16:38:01.593846674Z
+  modified_at: 2026-10-27T16:38:01.593846674Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
