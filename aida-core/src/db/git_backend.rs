@@ -20,6 +20,10 @@ use crate::models::{
 };
 use crate::object_store;
 
+#[cfg(all(unix, feature = "native"))]
+#[path = "work_intake.rs"]
+mod work_intake;
+
 /// Git-backed storage backend.
 ///
 /// Directory layout:
@@ -194,11 +198,14 @@ struct StoreMetadata {
     prefix_counters: std::collections::HashMap<String, u32>,
     #[serde(default)]
     relationship_definitions: Vec<crate::models::RelationshipDefinition>,
-    #[serde(default)]
+    // Absent built-in keys mean AIDA's defaults, matching `RequirementsStore`;
+    // WORK metadata writes omit unchanged built-ins (see work_intake).
+    // trace:STORY-1742 | ai:claude
+    #[serde(default = "crate::models::default_reaction_definitions")]
     reaction_definitions: Vec<crate::models::ReactionDefinition>,
     #[serde(default)]
     meta_counters: std::collections::HashMap<String, u32>,
-    #[serde(default)]
+    #[serde(default = "crate::models::default_type_definitions")]
     type_definitions: Vec<crate::models::CustomTypeDefinition>,
     #[serde(default)]
     allowed_prefixes: Vec<String>,
@@ -517,6 +524,10 @@ impl GitBackend {
         let objects_root = root.join("objects");
         let metadata_path = root.join("metadata.yaml");
 
+        #[cfg(all(unix, feature = "native"))]
+        if !objects_root.is_dir() || !metadata_path.is_file() {
+            crate::transport_policy::refuse_unsupported(root)?;
+        }
         std::fs::create_dir_all(&objects_root)
             .with_context(|| format!("Failed to create objects dir: {}", objects_root.display()))?;
 
@@ -1039,11 +1050,17 @@ impl GitBackend {
     /// + `save`, which is overkill when the operation is purely additive.
     ///   trace:FR-1-002 | ai:claude
     pub fn bulk_writer(&self) -> Result<BulkWriter<'_>> {
+        // trace:STORY-1742 | ai:claude — WORK defers identities to `finish`.
+        #[cfg(all(unix, feature = "native"))]
+        let work = self.work_admission()?.is_some();
+        #[cfg(not(all(unix, feature = "native")))]
+        let work = false;
         let metadata = self.load_metadata()?;
         // trace:BUG-1613 | ai:claude — the baseline `finish` merges against.
         let base = metadata_value(&metadata)?;
         Ok(BulkWriter {
             backend: self,
+            work,
             metadata,
             base,
             assigned: std::collections::HashSet::new(),
@@ -1342,15 +1359,36 @@ impl GitBackend {
         } else {
             None
         };
-        let mut stamped = requirement.clone();
-        crate::provenance::stamp_write(
-            &mut stamped,
+        let (stamped, ops, authority_advance) = Self::prepare_requirement_update(
+            requirement,
             existing.as_ref(),
             &crate::provenance::WriteContext::capture(),
         )?;
+        for kind in ops {
+            self.record_op(requirement.id, kind);
+        }
+
+        let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
+        if wrote && authority_advance {
+            self.pending_authority_advance
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        Ok(if wrote { Some(spec_id) } else { None })
+    }
+
+    // Pure row/op preparation shared by ordinary staging and WORK plans.
+    // trace:STORY-1742 | ai:codex
+    fn prepare_requirement_update(
+        requirement: &Requirement,
+        existing: Option<&Requirement>,
+        context: &crate::provenance::WriteContext,
+    ) -> Result<(Requirement, Vec<crate::oplog::OpKind>, bool)> {
+        let mut ops = Vec::new();
+        let mut stamped = requirement.clone();
+        crate::provenance::stamp_write(&mut stamped, existing, context)?;
 
         // Record ops for changed fields (compare with existing if possible).
-        let authority_advance = existing.as_ref().is_some_and(|old| {
+        let authority_advance = existing.is_some_and(|old| {
             crate::lifecycle::status_advance_records_authority_trailers(
                 &old.status,
                 &requirement.status,
@@ -1358,44 +1396,29 @@ impl GitBackend {
         });
         if let Some(old) = existing {
             if old.title != requirement.title {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetTitle {
-                        title: requirement.title.clone(),
-                    },
-                );
+                ops.push(crate::oplog::OpKind::SetTitle {
+                    title: requirement.title.clone(),
+                });
             }
             if old.effective_status() != requirement.effective_status() {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetStatus {
-                        status: requirement.effective_status(),
-                    },
-                );
+                ops.push(crate::oplog::OpKind::SetStatus {
+                    status: requirement.effective_status(),
+                });
             }
             if old.effective_priority() != requirement.effective_priority() {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetPriority {
-                        priority: requirement.effective_priority(),
-                    },
-                );
+                ops.push(crate::oplog::OpKind::SetPriority {
+                    priority: requirement.effective_priority(),
+                });
             }
             if old.owner != requirement.owner {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetOwner {
-                        owner: requirement.owner.clone(),
-                    },
-                );
+                ops.push(crate::oplog::OpKind::SetOwner {
+                    owner: requirement.owner.clone(),
+                });
             }
             if old.description != requirement.description {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::SetDescription {
-                        description: requirement.description.clone(),
-                    },
-                );
+                ops.push(crate::oplog::OpKind::SetDescription {
+                    description: requirement.description.clone(),
+                });
             }
             // BUG-587: tag edits must reach the oplog too. Previously `aida edit
             // --tags` wrote ONLY the YAML object and recorded no operation, so
@@ -1405,27 +1428,16 @@ impl GitBackend {
             // "every status flip, priority change, tag edit lands as a structured
             // row" invariant. trace:BUG-587 | ai:claude
             for added in requirement.tags.difference(&old.tags) {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::AddTag { tag: added.clone() },
-                );
+                ops.push(crate::oplog::OpKind::AddTag { tag: added.clone() });
             }
             for removed in old.tags.difference(&requirement.tags) {
-                self.record_op(
-                    requirement.id,
-                    crate::oplog::OpKind::RemoveTag {
-                        tag: removed.clone(),
-                    },
-                );
+                ops.push(crate::oplog::OpKind::RemoveTag {
+                    tag: removed.clone(),
+                });
             }
         }
 
-        let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
-        if wrote && authority_advance {
-            self.pending_authority_advance
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-        Ok(if wrote { Some(spec_id) } else { None })
+        Ok((stamped, ops, authority_advance))
     }
 
     /// Apply field updates to many existing requirements in a SINGLE git commit
@@ -1438,6 +1450,11 @@ impl GitBackend {
     /// YAML actually changed (unchanged reqs are skipped, so re-running is a
     /// no-op). trace:BUG-425 | ai:claude
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
+        // trace:STORY-1742 | ai:claude
+        #[cfg(all(unix, feature = "native"))]
+        if let Some(admission) = self.work_admission()? {
+            return self.work_bulk_update(&admission, requirements, commit_subject);
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.lock_store()?;
@@ -1500,6 +1517,11 @@ impl GitBackend {
     where
         F: FnMut(&mut Requirement) -> bool,
     {
+        // trace:STORY-1742 | ai:claude
+        #[cfg(all(unix, feature = "native"))]
+        if let Some(admission) = self.work_admission()? {
+            return self.work_bulk_update_atomically(&admission, targets, commit_subject, keep);
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:BUG-1671 | ai:claude — one lock spans every re-check and every
         // write, so no lock-respecting writer can slip between them.
@@ -1641,6 +1663,10 @@ impl GitBackend {
     // and the cache lock (if any) second, matching `CachedGitBackend`.
     // trace:BUG-1677 | ai:claude
     fn lock_queue_write(&self) -> Result<super::store_lock::StoreWriteGuard> {
+        // Queue registry writes have no prepared WORK plan yet; refuse them
+        // before any effect. trace:STORY-1742 | ai:claude
+        #[cfg(all(unix, feature = "native"))]
+        crate::transport_policy::refuse_unsupported(&self.root)?;
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         self.lock_store()
     }
@@ -1674,6 +1700,14 @@ impl GitBackend {
         store: &RequirementsStore,
         imported: bool,
     ) -> Result<SaveReport> {
+        // Imports carry foreign provenance and have no prepared WORK plan.
+        // trace:STORY-1742 | ai:claude
+        #[cfg(all(unix, feature = "native"))]
+        if imported {
+            crate::transport_policy::refuse_unsupported(&self.root)?;
+        } else if let Some(admission) = self.work_admission()? {
+            return self.work_full_save(&admission, store);
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
@@ -2034,6 +2068,11 @@ impl GitBackend {
             anyhow::anyhow!("Cannot update a requirement without a spec_id in the git store")
         })?;
         let spec_id = object_store::canonical_spec_id(spec_id);
+        // trace:STORY-1742 | ai:claude
+        #[cfg(all(unix, feature = "native"))]
+        if let Some(admission) = self.work_admission()? {
+            return self.work_update_spec(&admission, target, commit_subject, update_fn);
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
@@ -2131,6 +2170,16 @@ impl GitBackend {
     {
         use std::collections::HashMap;
 
+        #[cfg(all(unix, feature = "native"))]
+        {
+            let admission = crate::transport_policy::Admission::enter(&self.root)?;
+            if admission.enabled() {
+                return self.work_update(&admission, None, |store| {
+                    update_fn(store);
+                    Ok(())
+                });
+            }
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
@@ -2451,6 +2500,22 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
+        #[cfg(all(unix, feature = "native"))]
+        {
+            let admission = crate::transport_policy::Admission::enter(&self.root)?;
+            if admission.enabled() {
+                self.work_update(&admission, None, |store| {
+                    let row = store
+                        .requirements
+                        .iter_mut()
+                        .find(|row| row.id == requirement.id)
+                        .context("WORK update target was not found")?;
+                    *row = requirement.clone();
+                    Ok(())
+                })?;
+                return Ok(());
+            }
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
         // trace:STORY-1675 | ai:codex
@@ -2472,6 +2537,21 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn delete_requirement(&self, id: &uuid::Uuid) -> Result<()> {
+        #[cfg(all(unix, feature = "native"))]
+        {
+            let admission = crate::transport_policy::Admission::enter(&self.root)?;
+            if admission.enabled() {
+                self.work_update(&admission, None, |store| {
+                    anyhow::ensure!(
+                        store.requirements.iter().any(|row| row.id == *id),
+                        "WORK deletion target was not found"
+                    );
+                    store.requirements.retain(|row| row.id != *id);
+                    Ok(())
+                })?;
+                return Ok(());
+            }
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.lock_store()?;
@@ -2503,6 +2583,21 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
+        #[cfg(all(unix, feature = "native"))]
+        {
+            let admission = crate::transport_policy::Admission::enter(&self.root)?;
+            if admission.enabled() {
+                let id = requirement.id;
+                let (store, _) = self.work_update(&admission, None, |store| {
+                    Self::work_add_to_store(store, requirement)
+                })?;
+                return store
+                    .requirements
+                    .into_iter()
+                    .find(|row| row.id == id)
+                    .context("Admitted WORK requirement was not found after commit");
+            }
+        }
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.lock_store()?;
@@ -2925,6 +3020,8 @@ impl DatabaseBackend for GitBackend {
 /// trace:FR-1-002 | ai:claude
 pub struct BulkWriter<'a> {
     backend: &'a GitBackend,
+    /// Enabled WORK: `add` buffers only; `finish` prepares the whole batch.
+    work: bool,
     metadata: StoreMetadata,
     /// The metadata as loaded by `bulk_writer()`: what `finish` merges
     /// against, so only the counters this batch bumped are written.
@@ -2942,6 +3039,11 @@ impl<'a> BulkWriter<'a> {
     /// sequence during `add()`; candidate construction is not a pure preview.
     // trace:BUG-2017 | ai:codex
     pub fn add(&mut self, mut req: Requirement) -> Result<&Requirement> {
+        if self.work {
+            // trace:STORY-1742 | ai:claude
+            self.staged.push(req);
+            return Ok(self.staged.last().unwrap());
+        }
         // trace:BUG-2017 | ai:codex
         if req.spec_id.is_some() || req.agreed_id.is_some() {
             self.backend.admit_allocations(std::slice::from_ref(&req))?;
@@ -3067,6 +3169,19 @@ impl<'a> BulkWriter<'a> {
     /// full without overwriting the other object. Caller-supplied ids are
     /// written as given.
     pub fn finish(mut self, commit_subject: &str) -> Result<usize> {
+        // trace:STORY-1742 | ai:claude
+        #[cfg(all(unix, feature = "native"))]
+        match (self.backend.work_admission()?, self.work) {
+            (Some(admission), true) => {
+                return self
+                    .backend
+                    .work_bulk_finish(&admission, self.staged, commit_subject)
+            }
+            (None, false) => {}
+            _ => {
+                anyhow::bail!("Transport enrollment changed during this batch; nothing was written")
+            }
+        }
         crate::git_ops::ensure_store_write_safe(&self.backend.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.backend.lock_store()?;
