@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-27T17:11:53.389228971Z
+modified_at: 2026-10-27T17:12:33.682933142Z
 req_type: Story
 relationships:
 - rel_type:
@@ -649,29 +649,27 @@ comments:
 - id: 01a17e58-d52d-7840-b3a4-ee1dc3e99e5f
   author: joe
   content: |
-    STORY-1917 slice 4 inventory (implementer, branch story-1917-slice4 from origin/main e3fd91e83f).
+    STORY-1917 acceptance inventory at origin/main 1b5806bce2 (implementer, story-1917-demo lane).
 
-    DONE (on main):
-    - Request schema, closed verbs flow/review/take/impl/train, dual-end validation, CLI request/list/show/cancel: 2db1d977b0 (#2905).
-    - Executor core, `dispatch serve` (grant-requiring verbs, Boundary B: no self-binding), `dispatch tick` (take/impl only), review/take/impl runners, ledger rows, advisor mail-back: 36419baf87 (#2913).
-    - flow/train runners (R6), DispatchExecutionContext with native pr ship/pr train checkpoints (Q2), dispatch-tick schedule job + `mandate.dispatch_active`/`dispatch.pending` predicates (R5), aida init scaffold, TASK-2338..2344 (all completed), RecoveryRequired fences, v2 lock + `dispatch activate-lock`: e27af75054 (#2924).
-    - Dispatch authority moved into gate/ with its ratchets: e3fd91e83f (#2953, STORY-1889).
+    DONE, with the commit that delivered each:
+    - Closed verbs flow/review/take/impl/train, typed request schema with deny_unknown_fields, CLI request/list/show/cancel: 2db1d977b0 (#2905).
+    - A non-enumerated verb or malformed argument is refused at BOTH ends. At request time: clap plus validators (2db1d977b0; test refuses_malformed_arguments_and_operator_only_or_tampered_briefs). At execution time: revalidation of the request and the frozen brief sha256 (36419baf87; test tampered_request_json_or_frozen_brief_is_refused_before_spawn). Default-branch drift between submit and execute: e27af75054 (TASK-2341).
+    - With no mandate, every request is refused with the reason. None, expired, stopped, or missing `dispatch`/`ship-held` scope is refused at submit (2db1d977b0, e27af75054: TASK-2338, TASK-2340) and again at execution, with advisor mail (36419baf87; test mandate_stopped_expired_human_gates_or_grant_revoked_at_execution_time_refuses_and_mails_advisor). Replacement mandate B never revives request A (f3_* test).
+    - Authority: requester seat grant plus active dispatch mandate plus human gates (2db1d977b0, e27af75054 TASK-2339). Boundary B: there is no self-binding; review/flow/train run only under a human-started `dispatch serve` (36419baf87; tests serve_refuses_without_bound_advisor_grant_and_executes_review_with_grant, no_code_path_outside_role_enter_writes_grant_binding_or_calls_bind_grant_to_pid).
+    - Scheduler tick executes take/impl outside the sandbox and leaves review/flow/train pending (waiting for serve): 36419baf87 (tick_executes_only_take_and_impl_and_refuses_review_flow_train). dispatch-tick schedule job, the mandate.dispatch_active/dispatch.pending predicates, and the aida init scaffold: e27af75054 (R5 tests).
+    - READY to shipped path: the flow runner (approved-at-head fast path, bounded update, CI wait, review, ship/train) and the train runner, DispatchExecutionContext checkpoints inside native pr ship/pr train (Q2): e27af75054. Slice-4 hardening (bounded review launch, ledgered ship checkpoints, context pins, --no-ship CI refusal, activate-lock TTY refusal): 1b5806bce2 (#2968).
+    - Each request leaves a ledger row: dispatch:<verb> MandateDriveAction rows under the request mandate on queue/refuse/finish (36419baf87), plus pr:<N> ship rows at every checkpoint refusal (1b5806bce2). Visibility via dispatch list/show and advisor mail-back (36419baf87).
+    - RecoveryRequired fences, v2 lock and activate-lock (TASK-2344, Q1): e27af75054. Authority moved into gate/ with ratchets: e3fd91e83f (#2953, STORY-1889).
 
-    REMAINING, implemented in this slice (the 2026-10-25 23:50 round-4 fold-ins):
-    1. activate-lock direct-human/TTY refusal test.
-    2. R6 --no-ship refusal when CI is None/Pending (test hook now returns a CiState, so the real ci_state_is_green runs).
-    3. run_review_verb bounded (60 min, output capped, process group killed on timeout).
-    4. pr ship refusals at PostCiWait/UnderMergeLease/PreHoldRelease write a pr:<N> ledger row under the request's mandate.
-    5. Docs: the dispatch-context boundary (unprotected call sites, protected pins), plus a new gate-protected pin that ship/train get the context and that each LiveTrainForge step re-checks it.
-    6. activate-lock refusal for a non-dumpable/sandboxed same-uid process names the process, the cause and the way forward.
-    7. finalize_request finished_at = start + elapsed runner time.
-    8. LiveTrainForge post-merge fetch_main authority loss gets its own warning.
-    (The [process] note about bare completing IDs needs no code; this PR's title carries Refs.)
-
-    REMAINING after this slice (not code):
-    - The parent acceptance demo ("a sandboxed advisor takes a PR from READY to shipped, launches a takeover fixer and a new lane, with no operator command, while a mandate is active") needs live activation: operator `aida dispatch activate-lock` where a legacy lock exists, `aida mandate start --scope dispatch`, and a human-started `aida dispatch serve`. Per the signoffs this is operator-only. Completion should follow that live proof. Until then this PR is Refs.
+    REMAINING (one item, no code):
+    - The live-activation demonstration: a sandboxed advisor takes a real PR from READY to shipped and launches a takeover fixer and a new lane, with no operator command, while a mandate is active. Hermetic tests cover every segment of this path. An automated test cannot honestly prove the live run, because the run depends on four things a test harness would only simulate:
+      (a) `aida mandate start` requires a human at a TTY, by design.
+      (b) `dispatch serve` needs an advisor grant bound by `role enter` in a human terminal; Boundary B forbids any other way to mint it.
+      (c) The advisor must sit inside the real bwrap sandbox, inheriting the session keyring.
+      (d) The merge must land on the real forge.
+      The R6 signoff also forbids agent-side live activation and production config install. This repo's .aida/config.toml does not yet register dispatch-tick; it predates the scaffold, and that file is protected. The operator runbook follows in the next comment. Completion (the bare STORY-1917 trailer) should follow the operator's run of that runbook.
   created_at: 2026-10-27T17:11:53.389228971Z
-  modified_at: 2026-10-27T17:11:53.389228971Z
+  modified_at: 2026-10-27T17:12:33.682932864Z
   session_id: b3592ff1-9a9a-42b2-bada-31c38955f1d9
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
@@ -795,6 +793,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a17e59-7729-7a70-a091-59d7d7b35ebc
+  author: joe
+  timestamp: 2026-10-27T17:12:34.857860012Z
+  session_id: b3592ff1-9a9a-42b2-bada-31c38955f1d9
+  changes: []
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
