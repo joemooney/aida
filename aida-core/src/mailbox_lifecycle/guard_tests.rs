@@ -347,3 +347,179 @@ fn pool_retirement_never_takes_the_pool_lock_under_lifecycle() {
     assert!(seen.contains(&"lifecycle"), "{seen:?}");
     assert!(seen.contains(&"pool"), "{seen:?}");
 }
+
+// ── Pool destroy, teardown and the lock observer (F5 c, d, g) ───────────────
+
+/// Two idle pool trees with no live owner, as `destroy` classifies
+/// `disposable`.
+fn two_idle_trees(root: &Path) -> (PathBuf, PathBuf) {
+    use crate::worktree_pool::{acquire, with_state_lock};
+    let a = acquire(root, &pool_opts()).unwrap();
+    let b = acquire(root, &pool_opts()).unwrap();
+    with_state_lock(root, |pool| {
+        for e in &mut pool.entries {
+            e.owner_pid = None;
+            e.owner_pid_start = None;
+        }
+        Ok(())
+    })
+    .unwrap();
+    (a, b)
+}
+
+fn destroy_all(root: &Path) -> anyhow::Result<crate::worktree_pool_destroy::DestroyReport> {
+    crate::worktree_pool_destroy::destroy(
+        root,
+        &crate::worktree_pool_destroy::DestroySelector::All,
+        &crate::worktree_pool_destroy::DestroyOptions::default(),
+        &mut |_| {},
+    )
+}
+
+#[test]
+fn a_pool_destroy_refusal_keeps_the_entry_and_clears_its_staged_marks() {
+    use crate::worktree_pool::read_state;
+    use crate::worktree_pool_destroy::DestroyAction;
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let repo = pool_repo();
+    let root = repo.path();
+    let (kept, gone) = two_idle_trees(root);
+    // `kept` holds mail and nothing is activated: QC1 refuses it.
+    write_local_message(&kept, &message("stay")).unwrap();
+    std::fs::create_dir_all(gone.join(".aida")).unwrap();
+
+    let report = destroy_all(root).unwrap();
+    let by_path = |p: &Path| {
+        report
+            .targets
+            .iter()
+            .find(|t| t.entry.path == p)
+            .unwrap()
+            .clone()
+    };
+    let refused = by_path(&kept);
+    assert_eq!(refused.action, DestroyAction::Skipped);
+    assert!(refused.reason.contains("kept"), "{}", refused.reason);
+    assert_eq!(by_path(&gone).action, DestroyAction::Removed);
+
+    let pool = read_state(root).unwrap();
+    assert_eq!(pool.entries.len(), 1, "the removed entry is deregistered");
+    let entry = &pool.entries[0];
+    assert_eq!(entry.path, kept);
+    assert!(entry.retiring.is_none() && !entry.destroying, "{entry:?}");
+    assert!(kept.exists() && !gone.exists());
+    assert_eq!(files_under(&mailbox(&kept)), ["stay.json"]);
+}
+
+#[test]
+fn a_failed_pool_removal_reopens_its_mail_and_stops_later_targets() {
+    use crate::worktree_pool::read_state;
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let repo = pool_repo();
+    let root = repo.path();
+    let (first, second) = two_idle_trees(root);
+    activate(&first);
+    write_local_message(&first, &message("back")).unwrap();
+    std::fs::create_dir_all(second.join(".aida")).unwrap();
+    // A locked worktree refuses `git worktree remove --force`.
+    git(root, &["worktree", "lock", first.to_str().unwrap()]);
+
+    let err = destroy_all(root).unwrap_err();
+    assert!(format!("{err:#}").contains("remove"), "{err:#}");
+    assert!(
+        first.exists() && second.exists(),
+        "nothing after the failure"
+    );
+    assert_eq!(
+        files_under(&mailbox(&first)),
+        ["back.json"],
+        "the failed removal reopened the retired mail"
+    );
+    assert_open(&first);
+    let pool = read_state(root).unwrap();
+    assert_eq!(pool.entries.len(), 2);
+    assert!(pool
+        .entries
+        .iter()
+        .all(|e| e.retiring.is_none() && !e.destroying));
+    git(root, &["worktree", "unlock", first.to_str().unwrap()]);
+}
+
+#[test]
+fn a_teardown_refusal_keeps_the_tree_and_runs_no_hook() {
+    let (dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("stay")).unwrap();
+    let marker = dir.path().join("hook-ran");
+    let hook = format!("touch {}", marker.display());
+    let err =
+        crate::worktree_pool_destroy::teardown_worktree_path(dir.path(), &wt, &[hook]).unwrap_err();
+    assert!(refusal_of(&err).needs_activation, "{err:#}");
+    assert!(wt.exists(), "the tree is kept");
+    assert!(
+        !marker.exists(),
+        "no pre_destroy hook ran before the refusal"
+    );
+    assert_eq!(files_under(&mailbox(&wt)), ["stay.json"]);
+}
+
+/// Every section 5 entry that core owns takes the Lifecycle lock and enters
+/// no other lock class (Git, the pool lock, a claim) while holding it.
+#[test]
+fn every_core_destructive_entry_keeps_the_lifecycle_lock_a_leaf() {
+    use crate::worktree_pool::{acquire, return_to_pool, with_state_lock};
+    let _trust = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let check = |entry: &str, seen: &[&str], pool: bool| {
+        assert!(seen.contains(&"lifecycle"), "{entry}: {seen:?}");
+        assert!(!seen.contains(&UNDER_LIFECYCLE), "{entry}: {seen:?}");
+        if pool {
+            assert!(seen.contains(&"pool"), "{entry}: {seen:?}");
+        }
+    };
+
+    let (dir, wt) = repo_with_worktree();
+    activate(&wt);
+    seed_mail(&wt);
+    let (removed, seen) =
+        observe_lock_classes(|| remove_worktree_retained(dir.path(), &wt, true, "test"));
+    removed.unwrap();
+    check("remove_worktree_retained", &seen, false);
+
+    let (dir, wt) = repo_with_worktree();
+    activate(&wt);
+    seed_mail(&wt);
+    let (torn, seen) = observe_lock_classes(|| {
+        crate::worktree_pool_destroy::teardown_worktree_path(dir.path(), &wt, &[])
+    });
+    torn.unwrap();
+    check("teardown_worktree_path", &seen, false);
+
+    let repo = pool_repo();
+    let root = repo.path();
+    let path = acquire(root, &pool_opts()).unwrap();
+    activate(&path);
+    seed_mail(&path);
+    let (returned, seen) = observe_lock_classes(|| return_to_pool(root, &path));
+    returned.unwrap();
+    check("return_to_pool", &seen, true);
+
+    seed_mail(&path);
+    with_state_lock(root, |pool| {
+        pool.entries[0].owner_pid = None;
+        Ok(())
+    })
+    .unwrap();
+    let (reused, seen) = observe_lock_classes(|| acquire(root, &pool_opts()));
+    assert_eq!(reused.unwrap(), path);
+    check("acquire (reuse)", &seen, true);
+
+    with_state_lock(root, |pool| {
+        pool.entries[0].owner_pid = None;
+        pool.entries[0].owner_pid_start = None;
+        Ok(())
+    })
+    .unwrap();
+    seed_mail(&path);
+    let (destroyed, seen) = observe_lock_classes(|| destroy_all(root));
+    assert_eq!(destroyed.unwrap().removed_count(), 1);
+    check("worktree_pool_destroy::destroy", &seen, true);
+}

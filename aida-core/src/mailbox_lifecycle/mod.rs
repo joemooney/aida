@@ -669,16 +669,27 @@ pub fn lifecycle_lock_held() -> bool {
 /// pool lock, a seat permit). None of them may start inside a Lifecycle
 /// hold: the Lifecycle lock is a leaf.
 pub fn enter_lock_class(class: &'static str) {
+    let violation = lifecycle_lock_held();
     debug_assert!(
-        !lifecycle_lock_held(),
+        !violation,
         "lock-order violation: {class} entered while the mailbox lifecycle lock is held"
     );
     OBSERVED.with(|o| {
         if let Some(seen) = o.borrow_mut().as_mut() {
+            // Recorded in every build, so an optimized test run still sees
+            // the violation the debug assertion would have raised.
+            if violation {
+                seen.push(UNDER_LIFECYCLE);
+            }
             seen.push(class);
         }
     });
 }
+
+/// Pushed by the observer right before a class entered while the Lifecycle
+/// lock was held: a lock-order violation.
+#[doc(hidden)]
+pub const UNDER_LIFECYCLE: &str = "under-lifecycle";
 
 /// Run `f` and return the lock classes this thread entered meanwhile, in
 /// order (test seam, same role as `store_write_lock_contended_for`).
