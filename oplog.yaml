@@ -79411,5 +79411,23 @@ operations:
   timestamp: 2026-10-27T22:59:17.818371850Z
   kind: !SetStatus
     status: Completed
-clock: 6177
+- id: 01a17f96-fe1d-76c1-bb5a-333454db97f1
+  target_id: 01a17f96-f6de-7680-af80-3e2a7554c7cc
+  author: aida
+  node_id: '1'
+  lamport: 6178
+  timestamp: 2026-10-27T22:59:24.317454187Z
+  kind: !Create
+    title: 'Non-blocking (minor): criteria.rs extract_fn_source (~line 450) and scan_braced…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-011, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (minor): criteria.rs extract_fn_source (~line 450) and scan_braced_test_file (~746/753) still set 'started' from naive line.contains('{'); a pre-body line whose only brace sits inside a string literal now gives delta 0 with started=true, so the fn is cut early. Use the scanner delta (or an opening-brace count from the scanner) for 'started'.
+
+      PR: #2990
+      Reviewed sha: c03f193c7cffaf1397e5a54bf94c1c2822df5068
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6178
 node_id: '1'
