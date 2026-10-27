@@ -118,6 +118,9 @@ fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Res
 // trace:BUG-1929 | ai:claude
 pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     let cwd = cwd.as_ref();
+    // Git never runs under the mailbox Lifecycle lock. trace:STORY-1843 | ai:claude
+    #[cfg(all(unix, feature = "native"))]
+    crate::mailbox_lifecycle::enter_lock_class("git");
     // BUG-2169: a contained seat's private clone runs seat-written config and
     // hooks; host git never runs there. Same fixed refusal process as below.
     // trace:BUG-2169 | ai:claude
