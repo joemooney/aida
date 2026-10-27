@@ -78563,5 +78563,31 @@ operations:
   timestamp: 2026-10-27T06:54:42.275379672Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6106
+- id: 01a17c24-e896-76d0-be79-a47e35cb52ed
+  target_id: 01a17c24-df59-7912-9443-fff77c1cb023
+  author: aida
+  node_id: '1'
+  lamport: 6107
+  timestamp: 2026-10-27T06:55:56.054337961Z
+  kind: !Create
+    title: 'Review PR-2969: [AI:claude] fix(allocation): surface the real allocation error and add a doctor check (BUG-b6b1278890774ef993d2ebc327862470-001)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/allocation-error-surfacing`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2969>
+      - Branch: `fix/allocation-error-surfacing` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-001
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2969` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6107
 node_id: '1'
