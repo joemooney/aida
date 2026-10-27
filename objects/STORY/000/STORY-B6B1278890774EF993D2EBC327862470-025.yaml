@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T16:21:19.720824045Z
-modified_at: 2026-10-27T16:21:19.720824045Z
+modified_at: 2026-10-27T16:21:31.894344095Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a17dd8-7a13-7a30-854a-bb1355ae316f
+  created_at: 2026-10-27T16:21:31.894340102Z
+  created_by: joe
+history:
+- id: 01a17e2a-c40b-7e41-bb3e-7af49af9e808
+  author: joe
+  timestamp: 2026-10-27T16:21:34.347761188Z
+  session_id: a427fb36-a2fa-4ae5-961b-ea622ddd14a1
+  changes: []
 filed_at:
   code_sha: b5b1c4c1ad0c6f67e2b3bdee977ea7f329a4f5b9
   branch: fix/transport-test-flake
