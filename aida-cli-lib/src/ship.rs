@@ -251,6 +251,134 @@ fn regular_paths_only(root: &std::path::Path, paths: Vec<String>) -> Vec<String>
         .collect()
 }
 
+/// Repository-relative paths the Claude Code bash sandbox masks with
+/// stand-ins (`/dev/null` binds inside the sandbox, empty read-only files on
+/// the host). They are never source: ship refuses to commit one that was
+/// staged.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) const SANDBOX_PLACEHOLDER_PATHS: &[&str] = &[
+    ".claude/agents",
+    ".claude/launch.json",
+    ".claude/loop.md",
+    ".claude/output-styles",
+    ".claude/routines",
+    ".claude/scheduled_tasks.json",
+    ".gitmodules",
+    ".idea",
+    ".vscode",
+];
+
+/// The empty blob's id in SHA-1 and SHA-256 repositories.
+const EMPTY_BLOB_IDS: &[&str] = &[
+    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813",
+];
+
+/// Whether a staged addition at `path` (repository-relative) is a sandbox
+/// stand-in. The staged entry decides first: the empty blob at one of the
+/// paths the sandbox masks. Otherwise the working-tree entry at `meta`: a
+/// character device (the in-sandbox `/dev/null` bind), or an empty regular
+/// file that is read-only or at a masked path (the host view). A real empty
+/// file a human adds (an `__init__.py`) is writable and at no masked path, so
+/// it passes.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn is_sandbox_placeholder(
+    path: &str,
+    staged_blob: &str,
+    meta: Option<&std::fs::Metadata>,
+) -> bool {
+    let masked = SANDBOX_PLACEHOLDER_PATHS.contains(&path);
+    if masked && EMPTY_BLOB_IDS.contains(&staged_blob) {
+        return true;
+    }
+    let Some(meta) = meta else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt as _;
+        if meta.file_type().is_char_device() {
+            return true;
+        }
+    }
+    if !meta.file_type().is_file() || meta.len() != 0 {
+        return false;
+    }
+    meta.permissions().readonly() || masked
+}
+
+/// Staged additions that are sandbox stand-ins (see [`is_sandbox_placeholder`]).
+/// The probe runs through the same seat-safe host git step 1 commits with, so
+/// in a seat clone it gets the host-git refusal; a probe that cannot run is an
+/// error, never "no stand-ins".
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn staged_sandbox_placeholders(
+    project_root: &std::path::Path,
+) -> anyhow::Result<Vec<String>> {
+    staged_sandbox_placeholders_with(project_root, |p| std::fs::symlink_metadata(p))
+}
+
+/// [`staged_sandbox_placeholders`] with the working-tree metadata probe
+/// injected, so a test can present the in-sandbox character-device view.
+fn staged_sandbox_placeholders_with(
+    project_root: &std::path::Path,
+    probe: impl Fn(&std::path::Path) -> std::io::Result<std::fs::Metadata>,
+) -> anyhow::Result<Vec<String>> {
+    use anyhow::Context as _;
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args([
+            "diff",
+            "--cached",
+            "--raw",
+            "--no-abbrev",
+            "--diff-filter=A",
+            "-z",
+        ])
+        .output()
+        .context(
+            "could not list staged files to check for sandbox stand-ins: \
+             `git diff --cached` did not start",
+        )?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "could not list staged files to check for sandbox stand-ins: {} — fix the \
+             repository and re-run",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    // `-z --raw` emits `:<mode> <mode> <src> <dst> A` NUL `<path>` NUL.
+    let mut fields = out.stdout.split(|b| *b == 0).filter(|f| !f.is_empty());
+    let mut found = Vec::new();
+    while let (Some(header), Some(path)) = (fields.next(), fields.next()) {
+        let header = String::from_utf8_lossy(header);
+        let staged_blob = header.split_whitespace().nth(3).unwrap_or_default();
+        let path = String::from_utf8_lossy(path).into_owned();
+        let meta = probe(&project_root.join(&path)).ok();
+        if is_sandbox_placeholder(&path, staged_blob, meta.as_ref()) {
+            found.push(path);
+        }
+    }
+    Ok(found)
+}
+
+/// Step 1's guard: refuses while a sandbox stand-in is staged, or when the
+/// staged files cannot be listed. A committed `.gitmodules` stand-in makes
+/// session end and worktree dismiss refuse salvage.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn refuse_staged_sandbox_placeholders(
+    project_root: &std::path::Path,
+) -> anyhow::Result<()> {
+    let placeholders = staged_sandbox_placeholders(project_root)?;
+    if !placeholders.is_empty() {
+        anyhow::bail!(
+            "staged files are empty sandbox stand-ins, not source: {} — unstage them with \
+             `git rm --cached -- <path>` and re-run",
+            placeholders.join(", ")
+        );
+    }
+    Ok(())
+}
+
 /// Warning printed when step 1 leaves untracked files out of the commit.
 /// `None` when there are none. Lists at most five paths.
 // trace:TASK-2351 | ai:claude
@@ -465,6 +593,97 @@ mod tests {
             vec!["real.txt".into(), "agents".into(), "missing".into()],
         );
         assert_eq!(kept, vec!["real.txt"]);
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+    #[test]
+    fn staged_sandbox_stand_ins_are_named_and_real_files_pass() {
+        let tmp = repo();
+        let root = tmp.path();
+        // Empty at a masked path, writable: the host view of a stand-in.
+        std::fs::write(root.join(".gitmodules"), "").unwrap();
+        // Empty and read-only at an unlisted path: also a stand-in.
+        std::fs::write(root.join("masked"), "").unwrap();
+        // A real empty source file and a real non-empty .idea-style file.
+        std::fs::write(root.join("__init__.py"), "").unwrap();
+        std::fs::write(root.join(".vscode"), "{}\n").unwrap();
+        git(
+            root,
+            &["add", ".gitmodules", "masked", "__init__.py", ".vscode"],
+        );
+        let mut ro = std::fs::metadata(root.join("masked"))
+            .unwrap()
+            .permissions();
+        ro.set_readonly(true);
+        std::fs::set_permissions(root.join("masked"), ro).unwrap();
+
+        let mut found = staged_sandbox_placeholders(root).unwrap();
+        found.sort();
+        assert_eq!(found, vec![".gitmodules", "masked"]);
+    }
+
+    /// Inside the sandbox every stand-in reads as a `/dev/null` character
+    /// device, and one staged from the host view is the empty blob.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn char_device_and_empty_blob_stand_ins_are_named() {
+        let tmp = repo();
+        let root = tmp.path();
+        // Staged as the empty blob at a masked path; the worktree file is
+        // gone, as when the in-sandbox bind hides it.
+        let empty = std::process::Command::new("git")
+            .current_dir(root)
+            .args(["hash-object", "-w", "--stdin"])
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        let empty = String::from_utf8(empty.stdout).unwrap();
+        git(
+            root,
+            &[
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                &format!("100644,{},.gitmodules", empty.trim()),
+            ],
+        );
+        // Non-empty staged content whose worktree entry the probe reports
+        // as a character device.
+        std::fs::write(root.join("bound"), "x\n").unwrap();
+        // A real file the probe sees as a regular file.
+        std::fs::write(root.join("real.rs"), "fn main() {}\n").unwrap();
+        git(root, &["add", "bound", "real.rs"]);
+
+        let mut found = staged_sandbox_placeholders_with(root, |p| {
+            if p.ends_with("bound") {
+                std::fs::symlink_metadata("/dev/null")
+            } else {
+                std::fs::symlink_metadata(p)
+            }
+        })
+        .unwrap();
+        found.sort();
+        assert_eq!(found, vec![".gitmodules", "bound"]);
+    }
+
+    #[test]
+    fn nothing_staged_names_no_stand_ins() {
+        let tmp = repo();
+        std::fs::write(tmp.path().join(".idea"), "").unwrap();
+        assert!(staged_sandbox_placeholders(tmp.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_unrunnable_stand_in_probe_refuses() {
+        // A missing directory, so git cannot discover an enclosing repository
+        // even when the temp dir sits inside a checkout.
+        let tmp = tempfile::tempdir().unwrap();
+        let err = refuse_staged_sandbox_placeholders(&tmp.path().join("missing")).unwrap_err();
+        assert!(
+            err.to_string().contains("could not list staged files"),
+            "{err}"
+        );
     }
 
     #[test]

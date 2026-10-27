@@ -1558,9 +1558,21 @@ pub(crate) fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
     out.extend(collected);
 }
 
+/// Longest token [`looks_like_spec_id`] accepts. Node-local ids carry a
+/// 32-hex node segment (`STORY-b6b1278890774ef993d2ebc327862470-005` is 42
+/// chars), so the old 40-char cap silently dropped every one of them from
+/// commit trailers. 64 leaves room for a long prefix and sequence while still
+/// rejecting arbitrary hyphenated prose. trace:BUG-b6b1278890774ef993d2ebc327862470-006 | ai:claude
+const MAX_SPEC_ID_LEN: usize = 64;
+
+/// The one spec-id shape rule the trailer parsers share: an alphabetic prefix
+/// (2+ letters), optional alphanumeric node segments (`1`, `7`, or a hex node
+/// id), and a numeric sequence — `FR-42`, `BUG-1-038`,
+/// `TASK-b6b1278890774ef993d2ebc327862470-003`. Case-insensitive.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-006 | ai:claude
 pub(crate) fn looks_like_spec_id(s: &str) -> bool {
     let s = s.trim();
-    if s.len() < 3 || s.len() > 40 {
+    if s.len() < 3 || s.len() > MAX_SPEC_ID_LEN {
         return false;
     }
     let mut parts = s.split('-');
@@ -2019,3 +2031,7 @@ pub fn resolve_pr_to_spec(
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_node_local_trailer_tests.rs"]
+mod bug_node_local_trailer_tests;
