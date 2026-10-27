@@ -2142,7 +2142,11 @@ fn pull_fast_forwards_only_the_store_after_scanning_and_names_moved_refs() {
     let tip = fixture.store_commit(
         &store,
         "objects/BUG/000/BUG-1.yaml",
-        b"title: Generic failure\ndescription: Synthetic reproduction\n",
+        &object(
+            1,
+            "BUG-1",
+            "Generic failure\ndescription: Synthetic reproduction",
+        ),
     );
     fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
     let main = fixture.rev("refs/heads/main");
@@ -2194,7 +2198,11 @@ fn pull_tracks_origin_without_moving_a_store_that_is_already_ahead() {
     let fixture = Fixture::new();
     let (store, remote) = fixture.attach_with_remote();
     fixture.seed_hub(&store, &remote, &fixture.store_sha, &fixture.store_sha);
-    let ahead = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    let ahead = fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        &object(1, "BUG-1", "Generic"),
+    );
     let output = fixture.aida(&["pull"]);
     assert!(output.status.success(), "{}", diagnostics(&output));
     assert!(diagnostics(&output).contains("only the remote-tracking ref moved"));
@@ -2248,6 +2256,52 @@ fn unsafe_foreign_or_divergent_incoming_history_moves_no_accepted_ref() {
     fixture.store_commit(&store, "objects/BUG/000/BUG-2.yaml", b"title: Ours\n");
     fixture.assert_pull_refused(&store, "diverged");
     assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+}
+
+/// A minimal store object claiming display ID `spec` for UUID number `n`.
+fn object(n: u128, spec: &str, title: &str) -> Vec<u8> {
+    format!(
+        "id: {}\nspec_id: {spec}\ntitle: {title}\n",
+        uuid::Uuid::from_u128(n)
+    )
+    .into_bytes()
+}
+
+/// BUG-2017 S3-i on the fast-forward pull: an incoming tip whose objects
+/// claim one display ID under two UUIDs refuses before the tracking ref, the
+/// recovery journal, the index/worktree or the branch moves.
+#[test]
+#[cfg(unix)]
+// trace:BUG-2017 | ai:claude
+fn conflicting_incoming_allocation_claim_refuses_the_fast_forward_pull() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        &object(1, "BUG-1", "Generic"),
+    );
+    let tip = fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-2.yaml",
+        &object(2, "BUG-1", "Generic"),
+    );
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    let index = fs::read(fixture.common.join("worktrees/.aida-store/index")).ok();
+    let text = fixture.assert_pull_refused(&store, "allocation claims check refused");
+    assert!(text.contains("1 conflict(s), status complete"), "{text}");
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+    assert_eq!(
+        fixture.git_at(&store, &["rev-parse", "HEAD"]),
+        fixture.store_sha
+    );
+    assert_eq!(fixture.git_at(&store, &["status", "--porcelain=v1"]), "");
+    assert!(!store.join("objects/BUG/000/BUG-2.yaml").exists());
+    assert!(!fixture.common.join("aida-transport-pull.json").exists());
+    assert_eq!(
+        index,
+        fs::read(fixture.common.join("worktrees/.aida-store/index")).ok()
+    );
 }
 
 #[test]
@@ -2317,7 +2371,11 @@ fn interrupted_pull_journal_blocks_push_and_recovers_only_a_clean_known_state() 
     use std::os::unix::fs::PermissionsExt;
     let fixture = Fixture::new();
     let (store, remote) = fixture.attach_with_remote();
-    let tip = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    let tip = fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        &object(1, "BUG-1", "Generic"),
+    );
     fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
     let journal = fixture.common.join("aida-transport-pull.json");
     fs::write(
