@@ -68,6 +68,69 @@ pub(crate) struct DispatchExecutionContext {
     delegates_reviewer: bool,
     ships_pr: bool,
     claim: WorkerClaim,
+    live: LiveMark,
+}
+
+std::thread_local! {
+    /// How many [`DispatchExecutionContext`] values are alive on this thread.
+    static LIVE_CONTEXTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts its context in [`LIVE_CONTEXTS`] for as long as it lives, so a
+/// native merge path reached without a context while one is alive on the
+/// same thread can tell that the context was dropped on the way in.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[derive(Debug)]
+struct LiveMark(std::thread::ThreadId);
+
+impl LiveMark {
+    fn new() -> Self {
+        LIVE_CONTEXTS.with(|n| n.set(n.get() + 1));
+        Self(std::thread::current().id())
+    }
+}
+
+impl Clone for LiveMark {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for LiveMark {
+    fn drop(&mut self) {
+        if std::thread::current().id() == self.0 {
+            LIVE_CONTEXTS.with(|n| n.set(n.get().saturating_sub(1)));
+        }
+    }
+}
+
+/// The dispatch context a native merge path (`pr ship`, `pr train`) was
+/// handed. `None` is an ordinary run, unless a dispatch request is executing
+/// on this thread: then the context was dropped between the dispatch worker
+/// and `surface`, and the run is refused instead of going on without the
+/// request's authority checks.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn carried<'a>(
+    passed: Option<&'a DispatchExecutionContext>,
+    surface: &str,
+) -> Result<Option<&'a DispatchExecutionContext>> {
+    if passed.is_none() && LIVE_CONTEXTS.with(|n| n.get()) > 0 {
+        return Err(anyhow::Error::new(DispatchAuthorityAbortedError(format!(
+            "`{surface}` was reached without its dispatch context while a dispatch \
+             request is executing; refusing to go on without that request's authority checks"
+        ))));
+    }
+    Ok(passed)
+}
+
+/// Re-check `passed` at a checkpoint of `surface`: a no-op for an ordinary
+/// run, a refusal when the context was dropped (see [`carried`]).
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn checkpoint(passed: Option<&DispatchExecutionContext>, surface: &str) -> Result<()> {
+    match carried(passed, surface)? {
+        Some(ctx) => ctx.reverify_now(true),
+        None => Ok(()),
+    }
 }
 
 impl DispatchExecutionContext {
@@ -132,6 +195,7 @@ impl DispatchExecutionContext {
             delegates_reviewer: req.action.delegates_reviewer(),
             ships_pr: req.action.ships_pr(),
             claim,
+            live: LiveMark::new(),
         };
         ctx.reverify(now, ctx.ships_pr)?;
         Ok(ctx)

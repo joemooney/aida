@@ -2096,6 +2096,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
     dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::Entry)?;
+    // Flow tests stand in for the rest of the ship here, after the real
+    // entry check, so a context dropped on the way in still fails them.
+    #[cfg(test)]
+    if let (Some(ctx), Some(pr)) = (dispatch_ctx, n) {
+        let maybe_res = crate::dispatch::dispatch_flow::TEST_FLOW_SHIP_HOOK
+            .with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(pr, ctx)));
+        if let Some(res) = maybe_res {
+            return res;
+        }
+    }
     // The one merge path behind `aida pr ship` and `aida ship`: a standalone
     // implementer stops at an open PR. trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("pr ship")?;
@@ -2818,7 +2828,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             &StepOutcome::Ok,
         );
     }
-    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PostCiWait)?;
+    dispatch_ship_checkpoint_ledgered(
+        &main_worktree,
+        dispatch_ctx,
+        pr_number,
+        ShipCheckpoint::PostCiWait,
+    )?;
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
@@ -2832,7 +2847,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
-    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::UnderMergeLease)?;
+    dispatch_ship_checkpoint_ledgered(
+        &main_worktree,
+        dispatch_ctx,
+        pr_number,
+        ShipCheckpoint::UnderMergeLease,
+    )?;
     // STORY-1698: re-read the mandate under the merge lease. A mandate that
     // covered the early gate but lapsed (or whose approval moved) since
     // refuses here, before any hold is touched. trace:STORY-1698 | ai:claude
@@ -3112,7 +3132,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // `aida merge-hold clear <PR>` run by a human. A reviewer's "clear on
         // my re-review" hold therefore moves to a human once approved.
         // trace:BUG-1167 trace:BUG-1566 | ai:claude
-        dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreHoldRelease)?;
+        dispatch_ship_checkpoint_ledgered(
+            &main_worktree,
+            dispatch_ctx,
+            pr_number,
+            ShipCheckpoint::PreHoldRelease,
+        )?;
         let marker_reason = crate::gate::merge_hold_core::read_hold(&hold_root, pr_number);
         // BUG-1499: a LABEL-ONLY hold (no marker) is never released here —
         // not even for a human — because a ship leaves no clearance record.
@@ -5889,15 +5914,16 @@ std::thread_local! {
         std::cell::RefCell::new(None);
 }
 
-/// Re-check a dispatch-originated ship's authority at `at`; a no-op without
-/// a dispatch context. The error is a typed
+/// Re-check a dispatch-originated ship's authority at `at`; a no-op for an
+/// ordinary ship, and a refusal when a dispatch request executing on this
+/// thread reached `pr ship` without its context. The error is a typed
 /// [`crate::gate::dispatch_auth::DispatchAuthorityAbortedError`].
 // trace:STORY-1917 trace:TASK-2344 | ai:claude
 pub(crate) fn dispatch_ship_checkpoint(
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
     at: ShipCheckpoint,
 ) -> Result<()> {
-    let Some(ctx) = dispatch_ctx else {
+    let Some(ctx) = crate::gate::dispatch_auth::carried(dispatch_ctx, "pr ship")? else {
         return Ok(());
     };
     #[cfg(test)]
@@ -5907,6 +5933,30 @@ pub(crate) fn dispatch_ship_checkpoint(
         }
     });
     ctx.reverify_now(true)
+}
+
+/// [`dispatch_ship_checkpoint`] for a checkpoint after the PR is known and
+/// before the pre-merge one: a refusal also writes a `pr:<N>` row under the
+/// request's own mandate, as the pre-merge refusal does, so every dispatch
+/// stop inside `pr ship` is ledgered and not only the last. The error keeps
+/// its type.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn dispatch_ship_checkpoint_ledgered(
+    root: &std::path::Path,
+    dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
+    pr: u64,
+    at: ShipCheckpoint,
+) -> Result<()> {
+    let Err(err) = dispatch_ship_checkpoint(dispatch_ctx, at) else {
+        return Ok(());
+    };
+    if let Some(ctx) = dispatch_ctx {
+        let why = format!(
+            "PR-{pr} left OPEN at the {at:?} check — its dispatch request no longer has authority to ship ({err:#})"
+        );
+        ledger_mandate_ship_failure(root, Some(&dispatch_ledger_cover(ctx)), pr, &why);
+    }
+    Err(err)
 }
 
 /// Appended to a pre-merge dispatch refusal for a PR whose hold this ship did
