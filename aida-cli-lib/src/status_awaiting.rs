@@ -532,9 +532,8 @@ fn inspected_role_unread(
     let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
     let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
     let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let Ok(evidence) = mailbox_store::ReadEvidence::load(project_root) else {
-        return 0;
-    };
+    // Fails closed: unreadable read evidence counts the mail unread.
+    let evidence = mailbox_store::ReadEvidence::load_fail_closed(project_root);
     aida_core::mailbox::unread_for_identities([role], &merged, &evidence.watermarks)
         .into_iter()
         .filter(|m| !counted.contains(m.id.as_str()) && !evidence.receipted(role, m))

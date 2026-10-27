@@ -274,52 +274,103 @@ pub(crate) struct RecipientUnread {
     pub(crate) oldest_ts: i64,
 }
 
+/// What an inspection prints when its [`ReadEvidence`] is partial.
+pub(crate) const PARTIAL_EVIDENCE_NOTE: &str =
+    "partial read evidence: some read receipts could not be inspected, so unread counts may include mail already read";
+
 /// Read evidence for the fleet-wide counters that count every recipient's
 /// mail (night-shift latency, maintenance predicates, launch context, the
 /// dead-letter list, operator inspection): a message is read when it is at
 /// or below the recipient's legacy watermark in this checkout, or when any
 /// product worktree holds a per-ID receipt for it (the receipt evidence of
 /// the logical snapshot, which is all an inbox read writes since STORY-1843
-/// B2b).
+/// B2b). Receipts are looked up per (recipient, message ID), only for mail
+/// the watermark leaves unread; a lookup that cannot be answered counts the
+/// message unread and makes the evidence [`partial`](Self::partial).
 // trace:STORY-1843 | ai:claude
 pub(crate) struct ReadEvidence {
     pub(crate) watermarks: std::collections::HashMap<String, i64>,
-    receipts: aida_core::mailbox_logical::ReceiptInspection,
+    receipts: aida_core::mailbox_logical::ReceiptInspector,
+    watermarks_unreadable: bool,
 }
 
 impl ReadEvidence {
     /// Watermarks from `project_root`; receipts from every product worktree
-    /// of its repository. A missing watermark directory is empty.
+    /// of its repository. A missing watermark directory is empty; an
+    /// unreadable one is an error.
     pub(crate) fn load(project_root: &Path) -> Result<Self> {
-        use aida_core::mailbox_logical::{inspect_read_receipts, MailboxContext, ReadLimits};
+        let watermarks = read_all_watermarks(project_root)?;
+        Ok(Self::with_watermarks(project_root, watermarks, false))
+    }
+
+    /// [`load`](Self::load) for unattended counters, failing closed: an
+    /// unreadable watermark directory counts every message without a receipt
+    /// as unread and marks the evidence partial, never as zero unread.
+    pub(crate) fn load_fail_closed(project_root: &Path) -> Self {
+        match read_all_watermarks(project_root) {
+            Ok(watermarks) => Self::with_watermarks(project_root, watermarks, false),
+            Err(_) => Self::with_watermarks(project_root, Default::default(), true),
+        }
+    }
+
+    fn with_watermarks(
+        project_root: &Path,
+        watermarks: std::collections::HashMap<String, i64>,
+        watermarks_unreadable: bool,
+    ) -> Self {
+        use aida_core::mailbox_logical::{MailboxContext, ReadLimits, ReceiptInspector};
         let store = project_root.join(".aida-store");
         let store = std::fs::symlink_metadata(&store).is_ok().then_some(store);
-        let receipts = MailboxContext::resolve_or_local(project_root, store.as_deref())
-            .map(|ctx| inspect_read_receipts(&ctx, &ReadLimits::explicit_read()))
-            .unwrap_or_default();
-        Ok(Self {
-            watermarks: read_all_watermarks(project_root)?,
+        let receipts = match MailboxContext::resolve_or_local(project_root, store.as_deref()) {
+            Ok(ctx) => ReceiptInspector::new(&ctx, &ReadLimits::explicit_read()),
+            Err(_) => ReceiptInspector::unavailable(),
+        };
+        Self {
+            watermarks,
             receipts,
-        })
+            watermarks_unreadable,
+        }
+    }
+
+    /// Whether some read evidence could not be established: the watermarks
+    /// were unreadable, or a receipt lookup could not be answered. Partial
+    /// evidence only ever over-counts unread mail.
+    pub(crate) fn partial(&self) -> bool {
+        self.watermarks_unreadable || self.receipts.partial()
+    }
+
+    /// When `key` read `msg` according to a per-ID receipt in any product
+    /// worktree; `None` when no receipt was found (or one could not be read).
+    pub(crate) fn receipt_at(&self, key: &str, msg: &Message) -> Option<i64> {
+        match self.receipts.lookup(key, &msg.id) {
+            aida_core::mailbox_logical::ReceiptLookup::Read { at } => Some(at),
+            _ => None,
+        }
     }
 
     /// Whether `key` has a receipt for `msg` in any product worktree.
     pub(crate) fn receipted(&self, key: &str, msg: &Message) -> bool {
-        self.receipts.receipted(key, &msg.id)
+        self.receipt_at(key, msg).is_some()
     }
 
-    /// Whether `key` has read `msg`: receipt or legacy watermark.
+    fn watermarked(&self, key: &str, msg: &Message) -> bool {
+        self.watermarks
+            .get(key)
+            .is_some_and(|mark| msg.timestamp <= *mark)
+    }
+
+    /// Whether `key` has read `msg`: legacy watermark, else receipt.
     pub(crate) fn read_by(&self, key: &str, msg: &Message) -> bool {
-        msg.timestamp <= self.watermarks.get(key).copied().unwrap_or(i64::MIN)
-            || self.receipted(key, msg)
+        self.watermarked(key, msg) || self.receipted(key, msg)
     }
 
     /// `messages` without the ones `key` holds a receipt for, so a
-    /// watermark-only core helper sees receipt reads as read.
+    /// watermark-only core helper sees receipt reads as read. Mail the
+    /// watermark already covers needs no lookup.
     pub(crate) fn without_receipted_for(&self, key: &str, messages: &[Message]) -> Vec<Message> {
         messages
             .iter()
-            .filter(|m| !self.receipted(key, m))
+            .filter(|m| self.watermarked(key, m) || !self.receipted(key, m))
             .cloned()
             .collect()
     }

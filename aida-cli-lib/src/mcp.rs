@@ -2993,6 +2993,7 @@ impl<'a> McpServer<'a> {
             "count": messages.len(),
             "unread": unread_only,
             "inspection": true,
+            "partial": evidence.partial(),
             "messages": messages,
         }))
         .map_err(|e| e.to_string())
@@ -11087,8 +11088,11 @@ mod tests {
         let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
         let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
         assert_eq!(receipts.len(), 2, "ack records a receipt for each message");
-        let max_read_latency_ms =
-            crate::mailbox_cmd::max_read_latency_ms(dir.path(), "claude", &messages);
+        let max_read_latency_ms = crate::mailbox_cmd::max_read_latency_ms(
+            &crate::mailbox_store::ReadEvidence::load(dir.path()).unwrap(),
+            "claude",
+            &messages,
+        );
         assert!(
             max_read_latency_ms.is_some(),
             "latency history is populated after MCP mark_seen"

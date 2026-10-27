@@ -24,6 +24,7 @@
 
 use crate::mailbox::{message_state_rank, Message, Recipient};
 use crate::mailbox_identity::{classified_identities, IdentityClass, MailIdentityFacts};
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
@@ -628,82 +629,166 @@ pub fn logical_snapshot(
     snapshot
 }
 
-/// Every explicit per-ID read receipt in every inventoried LOCAL source,
-/// keyed by receipt directory (the sanitized mailbox key). Operator
-/// inspection for fleet-wide counters (night-shift latency, maintenance
-/// predicates, launch context, dead-letter list) that count every
-/// recipient's unread mail: it exposes which IDs were read, never message
-/// content, so it needs no audience. The same receipt evidence
-/// [`logical_snapshot`] treats as acknowledgement.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReceiptInspection {
-    by_key: HashMap<String, HashSet<String>>,
-    /// Every inventoried source was fully listed.
-    pub complete: bool,
+/// The outcome of one exact per-ID receipt lookup across every inventoried
+/// LOCAL source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReceiptLookup {
+    /// Some local source holds a receipt; `at` is its read time (epoch ms).
+    Read { at: i64 },
+    /// Every source answered and none holds a receipt.
+    NotFound,
+    /// At least one source could not answer (a worktree the inventory could
+    /// not establish, an unreadable or corrupt receipt, the deadline): a typed
+    /// partial, never "no receipt".
+    Unknown,
 }
 
-impl ReceiptInspection {
-    /// Whether some local source holds a receipt for `id` under `key`.
-    pub fn receipted(&self, key: &str, id: &str) -> bool {
-        self.by_key
-            .get(&sanitize_key(key))
-            .is_some_and(|ids| ids.contains(id))
-    }
+/// Exact per-ID read-receipt lookups in every product worktree of a
+/// context, for the fleet-wide counters that count every recipient's unread
+/// mail (night-shift latency, maintenance predicates, launch context,
+/// dead-letter list, operator inspection). It exposes which IDs were read,
+/// never message content, so it needs no audience; it is the same receipt
+/// evidence [`logical_snapshot`] treats as acknowledgement.
+///
+/// No receipt directory is ever listed: a lookup opens one receipt name per
+/// source (each source's per-key directory is opened once and cached), so
+/// its cost is bounded by the inventoried root count and is not charged to
+/// a directory-listing budget. Never writes.
+pub struct ReceiptInspector {
+    /// One slot per inventoried root; `None` for a root the inventory could
+    /// not establish (every lookup that would need it is `Unknown`).
+    roots: Vec<Option<PathBuf>>,
+    inventory_complete: bool,
+    deadline: Instant,
+    key_dirs: RefCell<HashMap<(usize, String), KeyDir>>,
+    partial: Cell<bool>,
 }
 
-/// Inspect the read receipts of every product worktree of `ctx`. Never
-/// writes; a source that cannot be listed leaves the result incomplete.
-// trace:STORY-1843 | ai:claude
-pub fn inspect_read_receipts(ctx: &MailboxContext, limits: &ReadLimits) -> ReceiptInspection {
-    let mut budget = Budget::new(limits);
-    let (roots, inventory_error) = inventory(ctx, &mut budget);
-    let mut out = ReceiptInspection {
-        complete: inventory_error.is_none(),
-        ..Default::default()
-    };
-    for root in roots {
-        let Ok(root) = root else {
-            out.complete = false;
-            continue;
+/// One source's receipt directory for one key.
+enum KeyDir {
+    Dir(PinnedDir),
+    /// Absent, or an unusable entry (a regular file or symlink where the
+    /// directory should be), which can hold no receipt and is skipped.
+    Absent,
+    /// The directory exists but could not be opened safely.
+    Unknown,
+}
+
+impl ReceiptInspector {
+    /// Inventory `ctx`'s product worktrees. Only the inventory draws from
+    /// `limits`' listing budget; `limits.deadline` also bounds every later
+    /// lookup.
+    // trace:STORY-1843 | ai:claude
+    pub fn new(ctx: &MailboxContext, limits: &ReadLimits) -> Self {
+        let mut budget = Budget::new(limits);
+        let (roots, inventory_error) = inventory(ctx, &mut budget);
+        // A local-only context has no siblings to inventory: its one root
+        // answers for the whole project.
+        let inventory_complete = match inventory_error {
+            None => true,
+            Some(SourceErrorCode::NotAGitCheckout) => ctx.repository.is_none(),
+            Some(_) => false,
         };
-        if receipts_of_source(&root, &mut budget, &mut out.by_key).is_err() {
-            out.complete = false;
+        Self {
+            roots: roots.into_iter().map(Result::ok).collect(),
+            inventory_complete,
+            deadline: limits.deadline,
+            key_dirs: RefCell::default(),
+            partial: Cell::new(!inventory_complete),
         }
     }
-    out
-}
 
-fn receipts_of_source(
-    root: &Path,
-    budget: &mut Budget,
-    out: &mut HashMap<String, HashSet<String>>,
-) -> Result<(), SourceErrorCode> {
-    let mut dir = PinnedDir::open_root(root)?;
-    for component in [".aida", "mailbox", ".read-receipts"] {
-        match dir.child_dir(component)? {
-            Some(child) => dir = child,
-            None => return Ok(()),
+    /// An inspector for a context that could not be resolved: every lookup
+    /// is `Unknown`.
+    pub fn unavailable() -> Self {
+        Self {
+            roots: Vec::new(),
+            inventory_complete: false,
+            deadline: Instant::now(),
+            key_dirs: RefCell::default(),
+            partial: Cell::new(true),
         }
     }
-    for key in dir.names(budget)? {
-        if budget.expired() {
-            return Err(SourceErrorCode::OverBudget);
+
+    /// Whether some lookup (or the inventory) could not be answered fully.
+    pub fn partial(&self) -> bool {
+        self.partial.get()
+    }
+
+    /// Look up `key`'s receipt for message `id` in every source. A receipt
+    /// anywhere is `Read`; otherwise any source that could not answer makes
+    /// it `Unknown` (and the inspector partial).
+    // trace:STORY-1843 | ai:claude
+    pub fn lookup(&self, key: &str, id: &str) -> ReceiptLookup {
+        if !safe_id(id) {
+            // Writers never name a receipt after an unsafe ID.
+            return ReceiptLookup::NotFound;
         }
-        if key.starts_with(b".") {
-            continue;
-        }
-        let key = String::from_utf8_lossy(&key).into_owned();
-        let Some(ids) = dir.child_dir(&key)? else {
-            continue;
-        };
-        let slot = out.entry(key).or_default();
-        for name in ids.names(budget)? {
-            if let Some(id) = name.strip_suffix(b".txt") {
-                slot.insert(String::from_utf8_lossy(id).into_owned());
+        let key = sanitize_key(key);
+        let name = format!("{id}.txt");
+        let mut unknown = !self.inventory_complete;
+        let mut key_dirs = self.key_dirs.borrow_mut();
+        for (index, root) in self.roots.iter().enumerate() {
+            let Some(root) = root else {
+                unknown = true;
+                continue;
+            };
+            if Instant::now() >= self.deadline {
+                unknown = true;
+                break;
+            }
+            let dir = key_dirs
+                .entry((index, key.clone()))
+                .or_insert_with(|| open_key_dir(root, &key));
+            let dir = match dir {
+                KeyDir::Dir(dir) => dir,
+                KeyDir::Absent => continue,
+                KeyDir::Unknown => {
+                    unknown = true;
+                    continue;
+                }
+            };
+            match dir.read_file(OsStr::new(&name), SMALL_FILE) {
+                Ok(None) => {}
+                Ok(Some(bytes)) => match parse_millis(&bytes) {
+                    Ok(at) => return ReceiptLookup::Read { at },
+                    Err(_) => unknown = true,
+                },
+                Err(code) if skippable(code) => {}
+                Err(_) => unknown = true,
             }
         }
+        if unknown {
+            self.partial.set(true);
+            ReceiptLookup::Unknown
+        } else {
+            ReceiptLookup::NotFound
+        }
     }
-    Ok(())
+}
+
+/// An unusable entry (a regular file where a directory belongs, or a
+/// symlink) cannot hold a receipt and is skipped, never followed.
+fn skippable(code: SourceErrorCode) -> bool {
+    matches!(
+        code,
+        SourceErrorCode::LayoutUnsupported | SourceErrorCode::UnsafeEntry
+    )
+}
+
+fn open_key_dir(root: &Path, key: &str) -> KeyDir {
+    let Ok(mut dir) = PinnedDir::open_root(root) else {
+        return KeyDir::Unknown;
+    };
+    for component in [".aida", "mailbox", ".read-receipts", key] {
+        match dir.child_dir(component) {
+            Ok(Some(child)) => dir = child,
+            Ok(None) => return KeyDir::Absent,
+            Err(code) if skippable(code) => return KeyDir::Absent,
+            Err(_) => return KeyDir::Unknown,
+        }
+    }
+    KeyDir::Dir(dir)
 }
 
 fn observation(

@@ -33,19 +33,21 @@ mod mailbox_migration;
 /// Largest recorded read latency among the recipient's 100 most recent
 /// acknowledgements. Keeping this calculation shared lets transport-level
 /// acknowledgement tests verify the same history consumed by the CLI.
-// trace:TASK-1271 | ai:codex
+/// STORY-1843: the receipts come from the same [`mailbox_store::ReadEvidence`]
+/// (every product worktree) that counts the row's unread mail.
+// trace:TASK-1271 trace:STORY-1843 | ai:codex
 pub(crate) fn max_read_latency_ms(
-    project_root: &std::path::Path,
+    evidence: &mailbox_store::ReadEvidence,
     recipient: &str,
     messages: &[aida_core::mailbox::Message],
 ) -> Option<i64> {
-    let receipts = mailbox_store::read_receipts(project_root, recipient);
-    let mut read_latencies: Vec<(i64, i64)> = messages
-        .iter()
+    // Only mail addressed to the recipient can carry its receipt.
+    let mut read_latencies: Vec<(i64, i64)> = aida_core::mailbox::inbox_for(recipient, messages)
+        .into_iter()
         .filter_map(|message| {
-            receipts
-                .get(&message.id)
-                .map(|seen| (*seen, seen.saturating_sub(message.timestamp).max(0)))
+            evidence
+                .receipt_at(recipient, message)
+                .map(|seen| (seen, seen.saturating_sub(message.timestamp).max(0)))
         })
         .collect();
     read_latencies.sort_by_key(|(seen, _)| std::cmp::Reverse(*seen));
@@ -115,18 +117,18 @@ pub(crate) fn latency_rows(
                 }
                 None => {
                     let watermark = mailbox_store::read_watermark(project_root, who);
-                    // trace:STORY-1843 | ai:claude — receipts are reads too.
-                    let unread_side = match &evidence {
-                        Some(evidence) => evidence.without_receipted_for(who, &inspected),
-                        None => inspected.clone(),
+                    // trace:STORY-1843 | ai:claude — receipts are reads too,
+                    // and the latency comes from the same evidence scope.
+                    let (unread_side, max_read) = match &evidence {
+                        Some(evidence) => (
+                            evidence.without_receipted_for(who, &inspected),
+                            max_read_latency_ms(evidence, who, &inspected),
+                        ),
+                        None => (inspected.clone(), None),
                     };
                     let latency =
                         aida_core::mailbox::mailbox_latency(who, &unread_side, watermark, now);
-                    (
-                        latency.unread,
-                        latency.oldest_unread_age_ms,
-                        max_read_latency_ms(project_root, who, &inspected),
-                    )
+                    (latency.unread, latency.oldest_unread_age_ms, max_read)
                 }
             };
             serde_json::json!({
@@ -135,12 +137,19 @@ pub(crate) fn latency_rows(
                 "unread": unread,
                 "oldest_unread_age_ms": oldest,
                 "max_read_latency_ms": max_read,
-                "partial": view.as_ref().is_some_and(|v| v.is_partial()),
+                "partial": view.as_ref().is_some_and(|v| v.is_partial())
+                    || evidence.as_ref().is_some_and(|e| e.partial()),
                 "inspection": view.is_none(),
             })
         })
         .collect();
-    Ok((rows, view.as_ref().and_then(|v| v.partial_note())))
+    let note = view.as_ref().and_then(|v| v.partial_note()).or_else(|| {
+        evidence
+            .as_ref()
+            .filter(|e| e.partial())
+            .map(|_| crate::mailbox_store::PARTIAL_EVIDENCE_NOTE.to_string())
+    });
+    Ok((rows, note))
 }
 
 /// [`max_read_latency_ms`] over a logical view: the largest read latency
@@ -634,6 +643,7 @@ pub(crate) fn handle_mailbox_command(
                     |r| known.contains(&r.trim().to_lowercase()),
                     |r, m| evidence.read_by(r, m),
                 );
+                warn_partial_evidence(&evidence);
                 if rows.is_empty() {
                     println!(
                         "{} no stranded mail — every recipient with unread mail matches a known role or registered agent",
@@ -677,6 +687,7 @@ pub(crate) fn handle_mailbox_command(
                 known_agents.iter().map(String::as_str),
                 |agent, m| evidence.read_by(agent, m),
             );
+            warn_partial_evidence(&evidence);
             if summaries.is_empty() {
                 println!(
                     "{} no agents have mail",
@@ -1141,6 +1152,19 @@ fn archive_mailbox_older_than(
     Ok(())
 }
 
+/// Say on stderr when an inspection's read evidence is partial, so a count
+/// that may include read mail is never shown as exact.
+// trace:STORY-1843 | ai:claude
+fn warn_partial_evidence(evidence: &mailbox_store::ReadEvidence) {
+    if evidence.partial() {
+        eprintln!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            mailbox_store::PARTIAL_EVIDENCE_NOTE
+        );
+    }
+}
+
 // trace:TASK-1211 | ai:codex
 fn message_read_by_all_selected_visible_identities(
     msg: &aida_core::mailbox::Message,
@@ -1267,6 +1291,7 @@ fn inspect_inbox(
     if archived {
         rows.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
     }
+    warn_partial_evidence(&evidence);
     println!(
         "{} {}",
         format!("Inspecting {who}").bold(),

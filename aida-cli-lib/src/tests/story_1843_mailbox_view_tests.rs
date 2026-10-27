@@ -652,3 +652,57 @@ fn story1843_inbox_read_clears_every_fleet_wide_unread_reader() {
     );
     assert!(stranded.is_empty(), "{stranded:?}");
 }
+
+/// R3-F2: an unreadable watermark directory fails closed in the unattended
+/// counters: the mail still counts as unread (and the evidence says it is
+/// partial), never as zero unread.
+#[test]
+fn story1843_unreadable_watermarks_fail_closed() {
+    let r = mail_repo();
+    crate::mailbox_store::write_message(&r.main, &mail("main-mail", "operator", 10, true)).unwrap();
+    put_canonical(&r.store, &mail("canon-mail", "operator", 20, false));
+    let marks = r.main.join(".aida/mailbox/.read");
+    let _ = std::fs::remove_dir_all(&marks);
+    std::fs::write(&marks, "not a directory").unwrap();
+
+    assert!(crate::mailbox_store::ReadEvidence::load(&r.main).is_err());
+    let evidence = crate::mailbox_store::ReadEvidence::load_fail_closed(&r.main);
+    assert!(evidence.partial());
+    let fields: std::collections::BTreeSet<_> =
+        [crate::schedule_predicate::Field::MailUnread].into();
+    assert_eq!(
+        crate::maintenance_schedule::collect_snapshot(&r.main, &fields, None).mail_unread,
+        2
+    );
+    let launch = crate::agent_launch::render_launch_mailbox_section(&r.main, "operator");
+    assert!(!launch.contains("No unread mailbox messages"), "{launch}");
+    assert!(
+        launch.contains(crate::mailbox_store::PARTIAL_EVIDENCE_NOTE),
+        "{launch}"
+    );
+}
+
+/// R3-F1: a receipt that cannot be read counts its message unread and makes
+/// the fleet-wide evidence a typed partial; a readable receipt elsewhere
+/// still counts as a read.
+#[test]
+fn story1843_unanswerable_receipt_is_partial_not_absent() {
+    let r = mail_repo();
+    let read = mail("read-mail", "operator", 10, false);
+    let unknown = mail("unknown-mail", "operator", 20, false);
+    let dir = r.sib.join(".aida/mailbox/.read-receipts/operator");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("read-mail.txt"), "15").unwrap();
+    std::fs::write(dir.join("unknown-mail.txt"), "garbage").unwrap();
+
+    let evidence = crate::mailbox_store::ReadEvidence::load(&r.main).unwrap();
+    assert!(evidence.read_by("operator", &read));
+    assert!(!evidence.partial());
+    assert!(!evidence.read_by("operator", &unknown));
+    assert!(evidence.partial());
+    assert_eq!(
+        crate::mailbox_cmd::max_read_latency_ms(&evidence, "operator", &[read, unknown]),
+        Some(5),
+        "latency reads the same fleet-wide receipts as the unread count"
+    );
+}

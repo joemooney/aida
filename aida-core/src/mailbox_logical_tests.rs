@@ -784,3 +784,100 @@ fn lookups_include_own_sent_mail_and_the_inbox_does_not() {
     assert!(take(Query::ExactId("role-sent".into())).is_empty());
     assert!(take(Query::ExactId("stranger".into())).is_empty());
 }
+
+fn receipt(root: &Path, key: &str, id: &str, at: i64) {
+    let dir = root.join(".aida/mailbox/.read-receipts").join(key);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{id}.txt")), at.to_string()).unwrap();
+}
+
+fn inspector(r: &Repo, limits: &ReadLimits) -> ReceiptInspector {
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    ReceiptInspector::new(&ctx, limits)
+}
+
+/// R3-F1: a receipt tree far larger than the snapshot listing budget is never
+/// listed; exact per-ID lookups still find the receipt in any worktree, and
+/// an exact miss is a complete "not found".
+#[test]
+fn story1843_receipt_lookups_are_exact_per_id_at_scale() {
+    let r = repo();
+    let limits = ReadLimits::explicit_read();
+    // More receipt entries than the whole listing budget, spread over keys
+    // and worktrees.
+    let per_key = limits.max_entries / 4 + 1;
+    for (n, root) in [&r.main, &r.sib_a, &r.sib_b, &r.pool0].iter().enumerate() {
+        for k in 0..2 {
+            let dir = root
+                .join(".aida/mailbox/.read-receipts")
+                .join(format!("seat-{n}-{k}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            for i in 0..per_key {
+                std::fs::write(dir.join(format!("filler-{i}.txt")), "1").unwrap();
+            }
+        }
+    }
+    receipt(&r.pool0, "advisor", "wanted", 42);
+    let started = Instant::now();
+    let inspect = inspector(&r, &limits);
+    assert_eq!(
+        inspect.lookup("advisor", "wanted"),
+        ReceiptLookup::Read { at: 42 }
+    );
+    assert_eq!(
+        inspect.lookup("seat-3-1", &format!("filler-{}", per_key - 1)),
+        ReceiptLookup::Read { at: 1 }
+    );
+    assert_eq!(
+        inspect.lookup("advisor", "never-read"),
+        ReceiptLookup::NotFound
+    );
+    assert_eq!(inspect.lookup("nobody", "wanted"), ReceiptLookup::NotFound);
+    assert!(!inspect.partial(), "exact lookups answered every source");
+    assert!(started.elapsed() < Duration::from_secs(2));
+}
+
+/// R3-F1: a lookup the deadline cuts off is a typed partial, never "no
+/// receipt"; a receipt already found still counts.
+#[test]
+fn story1843_receipt_lookup_past_the_deadline_is_unknown() {
+    let r = repo();
+    receipt(&r.sib_b, "advisor", "seen", 7);
+    let inspect = inspector(&r, &ReadLimits::with_deadline(Instant::now()));
+    assert_eq!(inspect.lookup("advisor", "seen"), ReceiptLookup::Unknown);
+    assert_eq!(inspect.lookup("advisor", "other"), ReceiptLookup::Unknown);
+    assert!(inspect.partial());
+    assert_eq!(
+        ReceiptInspector::unavailable().lookup("advisor", "seen"),
+        ReceiptLookup::Unknown
+    );
+}
+
+/// R3-F3: a stray regular file or symlink where a key directory belongs is
+/// skipped; it neither aborts its worktree's other receipts nor makes the
+/// lookup partial. A corrupt receipt is unknown, not absent.
+#[test]
+fn story1843_unusable_receipt_entries_are_skipped() {
+    let r = repo();
+    let receipts = r.sib_a.join(".aida/mailbox/.read-receipts");
+    std::fs::create_dir_all(&receipts).unwrap();
+    std::fs::write(receipts.join("stray"), "not a directory").unwrap();
+    std::os::unix::fs::symlink(r.sib_b.join("elsewhere"), receipts.join("linked")).unwrap();
+    receipt(&r.sib_a, "advisor", "kept", 9);
+    receipt(&r.sib_b, "corrupt", "bad", 0);
+    std::fs::write(
+        r.sib_b.join(".aida/mailbox/.read-receipts/corrupt/bad.txt"),
+        "garbage",
+    )
+    .unwrap();
+    let inspect = inspector(&r, &ReadLimits::explicit_read());
+    assert_eq!(
+        inspect.lookup("advisor", "kept"),
+        ReceiptLookup::Read { at: 9 }
+    );
+    assert_eq!(inspect.lookup("stray", "kept"), ReceiptLookup::NotFound);
+    assert_eq!(inspect.lookup("linked", "kept"), ReceiptLookup::NotFound);
+    assert!(!inspect.partial());
+    assert_eq!(inspect.lookup("corrupt", "bad"), ReceiptLookup::Unknown);
+    assert!(inspect.partial());
+}
