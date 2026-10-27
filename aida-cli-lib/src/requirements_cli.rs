@@ -6347,22 +6347,17 @@ fn run_show(
                                         // and the drift hint.
                                         let deadline = std::time::Instant::now()
                                             + crate::SHOW_LINKAGE_DEADLINE;
-                                        let linkage = crate::collect_git_linkage_until(
+                                        // TASK-1475: the drift hint is computed before
+                                        // `linkage.{files,commits}` are moved into the JSON
+                                        // payload below; BUG-2221: concurrently with the
+                                        // shipped check and branch search.
+                                        // trace:TASK-1475 trace:BUG-1993 trace:BUG-2221 | ai:claude
+                                        crate::collect_git_linkage_with_drift_until(
                                             &project_root,
                                             &ids,
-                                            deadline,
-                                        );
-                                        // TASK-1475: compute before `linkage.{files,commits}`
-                                        // are moved into the JSON payload below.
-                                        // trace:TASK-1475 trace:BUG-1993 | ai:claude
-                                        let drift_since_filing = crate::filing_drift_hint_until(
-                                            &project_root,
                                             req.filed_at.as_ref(),
-                                            &linkage.files,
-                                            &linkage.commits,
                                             deadline,
-                                        );
-                                        (linkage, drift_since_filing)
+                                        )
                                     };
                                     // trace:BUG-1594 trace:BUG-1993 | ai:claude
                                     let incomplete = linkage.incomplete_notes();
