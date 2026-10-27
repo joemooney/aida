@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T06:55:53.689236665Z
-modified_at: 2026-10-27T06:55:53.689236665Z
+modified_at: 2026-10-27T06:56:03.683352968Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a17604-7775-79c1-a981-b1bf2a25cf16
+  created_at: 2026-10-27T06:56:03.683349580Z
+  created_by: joe
+history:
+- id: 01a17c25-0d9b-7011-8379-4dfb5c584376
+  author: joe
+  timestamp: 2026-10-27T06:56:05.531487579Z
+  session_id: c8ae1509-fd35-41b9-8f6e-b1350b49cfcc
+  changes: []
 filed_at:
   code_sha: 917789a2a148d7cb3fe402cf25c8ccd23b1b4029
   branch: fix/allocation-error-surfacing
