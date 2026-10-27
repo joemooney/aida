@@ -273,6 +273,20 @@ impl NodeConfig {
         }
         let content = toml::to_string_pretty(self)?;
         std::fs::write(path, content)?;
+        // The WORK reader refuses a group- or other-writable node.toml, so a
+        // 0002 umask must not leave every allocation refusing.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(path)?.permissions().mode();
+            if mode & 0o022 != 0 {
+                std::fs::set_permissions(
+                    path,
+                    std::fs::Permissions::from_mode(mode & 0o7777 & !0o022),
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -1582,6 +1596,31 @@ registered = "2026-05-09T00:00:00Z"
         assert_eq!(loaded.node_id, "7");
         assert_eq!(loaded.user_id, 102);
         assert_eq!(loaded.hostname, "joe-laptop");
+    }
+
+    /// A 0002 umask (or an existing 0664 file) must not leave node.toml
+    /// group-writable: the WORK reader refuses it and every allocation fails.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn node_config_save_clears_group_and_other_write() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("node.toml");
+        std::fs::write(&path, "").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        let config = NodeConfig {
+            node_id: "1".to_string(),
+            user_id: 0,
+            hostname: String::new(),
+            email: None,
+            name: None,
+            user: None,
+            registered_at: Utc::now(),
+        };
+        config.save(&path).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o644);
     }
 
     #[cfg(feature = "native")]
