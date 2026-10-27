@@ -51,11 +51,11 @@ pub(crate) fn scan_store(store: &Path) -> Vec<crate::DoctorFinding> {
         let Ok(meta) = std::fs::symlink_metadata(path) else {
             continue;
         };
-        if let Some(problem) = work_binding::unsafe_state(&meta, path) {
+        if let Some(state) = work_binding::unsafe_state(&meta, path) {
             findings.push(finding(
                 format!("unsafe-state:{}", path.display()),
-                format!("ID allocation will refuse: {problem}"),
-                repair_of(&problem),
+                format!("ID allocation will refuse: {}", state.problem),
+                state.repair,
             ));
         }
     }
@@ -88,51 +88,66 @@ pub(crate) fn scan_store(store: &Path) -> Vec<crate::DoctorFinding> {
         return findings;
     }
 
-    match (node_toml.exists(), legacy.exists()) {
-        (true, true) => {
-            let node = read_toml::<aida_core::node::NodeConfig>(&node_toml);
-            let state = read_toml::<DispenserState>(&legacy);
-            if let (Some(node), Some(state)) = (node, state) {
-                if state.mode != node.id_mode() {
-                    let p = legacy.display();
-                    findings.push(finding(
-                        "mode-mismatch".to_string(),
-                        format!(
-                            "ID allocation will refuse: {p} records {} but {} says this clone is node {}",
-                            work_binding::mode_label(&state.mode),
-                            node_toml.display(),
-                            node.node_id
-                        ),
-                        format!(
-                            "if no IDs were dispensed under the other node (its sequences do not \
-                             exceed node {n}'s highest ID), run \
-                             `cp {p} {p}.bak && sed -i 's/^node_id = .*/node_id = \"{n}\"/' {p}`",
-                            n = node.node_id
-                        ),
-                    ));
-                }
+    let (has_node, has_legacy) = (node_toml.exists(), legacy.exists());
+    if has_legacy && (has_node || authoritative) {
+        // An unregistered authoritative clone allocates as the default node.
+        let node = if has_node {
+            read_toml::<aida_core::node::NodeConfig>(&node_toml)
+                .map(|n| (n.node_id, format!("{} says so", node_toml.display())))
+        } else {
+            Some((
+                DEFAULT_NODE.to_string(),
+                format!("the default, with no {}", node_toml.display()),
+            ))
+        };
+        let state = read_toml::<DispenserState>(&legacy);
+        if let (Some((node_id, source)), Some(state)) = (node, state) {
+            if state.mode
+                != (IdMode::Distributed {
+                    node_id: node_id.clone(),
+                })
+            {
+                findings.push(mismatch(&legacy, &state.mode, &node_id, &source));
             }
         }
-        (false, false) => {}
-        _ if authoritative => {}
-        (node_exists, _) => {
-            let (present, missing) = if node_exists {
-                (&node_toml, &legacy)
-            } else {
-                (&legacy, &node_toml)
-            };
-            findings.push(finding(
-                "incomplete-pair".to_string(),
-                format!(
-                    "ID allocation will refuse: {} exists but {} is missing",
-                    present.display(),
-                    missing.display()
-                ),
-                "explicit recovery required: restore the missing file from a backup".to_string(),
-            ));
-        }
+    } else if has_node != has_legacy && !authoritative {
+        let (present, missing) = if has_node {
+            (&node_toml, &legacy)
+        } else {
+            (&legacy, &node_toml)
+        };
+        findings.push(finding(
+            "incomplete-pair".to_string(),
+            format!(
+                "ID allocation will refuse: {} exists but {} is missing",
+                present.display(),
+                missing.display()
+            ),
+            "explicit recovery required: restore the missing file from a backup".to_string(),
+        ));
     }
     findings
+}
+
+/// The node an unregistered clone allocates as (`rel_cards::load_node_id`).
+const DEFAULT_NODE: &str = "1";
+
+fn mismatch(legacy: &Path, recorded: &IdMode, node_id: &str, source: &str) -> crate::DoctorFinding {
+    finding(
+        "mode-mismatch".to_string(),
+        format!(
+            "ID allocation will refuse: {} records {} but this clone is node {node_id} ({source})",
+            legacy.display(),
+            aida_core::work_binding::mode_label(recorded),
+        ),
+        format!(
+            "if no IDs were dispensed under the other node (its sequences do not exceed node \
+             {node_id}'s highest ID), back up {} and set its `[mode.Distributed]` value to \
+             `node_id = {}`",
+            legacy.display(),
+            aida_core::toml_quote::toml_string(node_id)
+        ),
+    )
 }
 
 fn finding(id: String, summary: String, action: String) -> crate::DoctorFinding {
@@ -143,14 +158,6 @@ fn finding(id: String, summary: String, action: String) -> crate::DoctorFinding 
         action,
         safe_heal: false,
     }
-}
-
-/// The repair clause `unsafe_state` ends with (after the last `; `).
-fn repair_of(problem: &str) -> String {
-    problem
-        .rsplit_once("; ")
-        .map(|(_, repair)| repair.to_string())
-        .unwrap_or_else(|| "explicit recovery required".to_string())
 }
 
 fn read_toml<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
@@ -170,14 +177,24 @@ mod tests {
         aida_core::git_ops::init(d.path()).unwrap();
         std::fs::create_dir_all(d.path().join(".aida")).unwrap();
         write(&d.path().join(".aida/node.toml"), NODE, 0o644);
+        let mut state = DispenserState::new(IdMode::Distributed {
+            node_id: dispenser_node.to_string(),
+        });
+        state.sequences.insert("GLOBAL".to_string(), 499);
         write(
             &d.path().join(".aida/dispenser.toml"),
-            &format!(
-                "[mode.Distributed]\nnode_id = \"{dispenser_node}\"\n\n[sequences]\nGLOBAL = 499\n"
-            ),
+            &toml::to_string(&state).unwrap(),
             0o644,
         );
         d
+    }
+
+    fn make_authoritative(d: &tempfile::TempDir) {
+        std::fs::write(
+            d.path().join(".git/aida-allocation.toml"),
+            "version = 1\nauthoritative = true\n",
+        )
+        .unwrap();
     }
 
     fn write(path: &Path, body: &str, mode: u32) {
@@ -224,11 +241,7 @@ mod tests {
     #[test]
     fn authoritative_clone_still_reports_a_dispenser_on_another_node() {
         let d = store("2");
-        std::fs::write(
-            d.path().join(".git/aida-allocation.toml"),
-            "version = 1\nauthoritative = true\n",
-        )
-        .unwrap();
+        make_authoritative(&d);
         let node = d.path().join(".aida/node.toml");
         std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o664)).unwrap();
         let f = scan_store(d.path());
@@ -243,5 +256,68 @@ mod tests {
         let f = scan_store(d.path());
         assert_eq!(f.len(), 1, "{f:?}");
         assert_eq!(f[0].id, "incomplete-pair");
+    }
+
+    /// rel_cards opens the legacy dispenser as node "1" when node.toml is
+    /// absent, so a dispenser on another node refuses every `aida add`.
+    #[test]
+    fn authoritative_clone_without_node_toml_compares_against_the_default_node() {
+        let d = store("2");
+        make_authoritative(&d);
+        std::fs::remove_file(d.path().join(".aida/node.toml")).unwrap();
+        let f = scan_store(d.path());
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(f[0].id, "mode-mismatch");
+        assert!(
+            f[0].summary.contains("this clone is node 1 (the default"),
+            "{}",
+            f[0].summary
+        );
+        assert!(f[0].action.contains("node_id = \"1\""), "{}", f[0].action);
+
+        let healthy = store("1");
+        make_authoritative(&healthy);
+        std::fs::remove_file(healthy.path().join(".aida/node.toml")).unwrap();
+        assert!(scan_store(healthy.path()).is_empty());
+    }
+
+    /// A store path with spaces or shell metacharacters stays one word in the
+    /// pasted repair command.
+    #[test]
+    fn repair_commands_quote_the_path() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("my store; rm -rf x");
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        aida_core::git_ops::init(&root).unwrap();
+        write(&root.join(".aida/node.toml"), NODE, 0o664);
+        write(&root.join(".aida/dispenser.toml"), "", 0o644);
+        let f = scan_store(&root);
+        let unsafe_node = f
+            .iter()
+            .find(|f| f.id.starts_with("unsafe-state:"))
+            .unwrap();
+        let path = root.join(".aida/node.toml");
+        assert_eq!(
+            unsafe_node.action,
+            format!("run `chmod go-w '{}'`", path.display())
+        );
+        assert_eq!(
+            aida_core::work_binding::shell_quote("it's"),
+            "'it'\\''s'",
+            "single quotes are closed, escaped and reopened"
+        );
+    }
+
+    /// Every `aida` command a refusal or repair hint names must parse.
+    #[test]
+    fn named_doctor_command_exists() {
+        let cmd = aida_core::work_binding::DOCTOR_ALLOCATION_COMMAND;
+        let args: Vec<&str> = cmd.split_whitespace().collect();
+        crate::command_registry::try_parse_from(args.clone())
+            .unwrap_or_else(|e| panic!("`{cmd}` does not parse: {e}"));
+        assert_eq!(
+            crate::doctor_root::normalize_doctor_category(args.last().unwrap()).unwrap(),
+            CATEGORY
+        );
     }
 }

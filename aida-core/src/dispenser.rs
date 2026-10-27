@@ -283,10 +283,11 @@ impl Dispenser for FileDispenser {
             // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
             anyhow::ensure!(
                 state.mode == self.mode,
-                "{} records {} but this clone is {}; run `aida doctor allocation` for the repair",
+                "{} records {} but this clone is {}; run `{}` for the repair",
                 self.path.display(),
                 crate::work_binding::mode_label(&state.mode),
-                crate::work_binding::mode_label(&self.mode)
+                crate::work_binding::mode_label(&self.mode),
+                crate::work_binding::DOCTOR_ALLOCATION_COMMAND
             );
             let counter = state
                 .sequences

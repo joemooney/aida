@@ -468,8 +468,9 @@ impl CloneDispenser {
         {
             // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
             bail!(
-                "dispenser does not match this clone's node binding (clone is node {binding}, dispenser records {}); run `aida doctor` for the repair",
-                crate::work_binding::mode_label(&state.mode)
+                "dispenser does not match this clone's node binding (clone is node {binding}, dispenser records {}); run `{}` for the repair",
+                crate::work_binding::mode_label(&state.mode),
+                crate::work_binding::DOCTOR_ALLOCATION_COMMAND
             )
         }
         Ok(inner)
