@@ -79263,5 +79263,17 @@ operations:
   timestamp: 2026-10-27T21:29:37.066092023Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6165
+- id: 01a17f45-dd00-7530-89f8-f7078af1e901
+  target_id: 01a17f45-cee8-7c60-8a9d-c1968143a3b3
+  author: aida
+  node_id: '1'
+  lamport: 6166
+  timestamp: 2026-10-27T21:30:47.424434916Z
+  kind: !Create
+    title: 'Review PR-2990: [AI:claude] fix(transport): review follow-ups (TASK-b6b1278890774ef993d2ebc327862470-011, TASK-b6b1278890774ef993d2ebc327862470-012)'
+    description: Hand-filed review story (auto-queue declined in the lane sandbox).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6166
 node_id: '1'
