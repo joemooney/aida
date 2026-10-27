@@ -479,9 +479,7 @@ pub(crate) fn remove_rebase_worktree(
             wt_path,
             retirement,
             || {
-                let _ = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(project_root)
+                let _ = aida_core::git_ops::host_git_command(project_root)
                     .args(["worktree", "unlock", "--"])
                     .arg(wt_path)
                     .output();

@@ -26,8 +26,12 @@ pub(crate) fn remove_reviewer_worktree_preserving_hold(
     preserve_reviewer_worktree_hold(main_worktree, rev_wt, pr_scope)?;
     // The reviewer's mail is retired first; a refused retirement keeps the
     // tree and fails the cleanup. trace:STORY-1843 | ai:claude
-    let removed =
-        crate::mail_retention::remove_worktree(main_worktree, rev_wt, true, "reviewer cleanup");
+    let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
+        main_worktree,
+        rev_wt,
+        true,
+        "reviewer cleanup",
+    );
     if let Err(e) = &removed {
         if e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
             .is_some()
