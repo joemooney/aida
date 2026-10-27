@@ -9,7 +9,10 @@
 //! re-verifies that context from disk so a stopped/replaced mandate, revoked or
 //! expired grant, tightened human gate, or invalidated worker claim aborts the
 //! in-flight operation before any hold release or merge.
-// mandate-gate
+//!
+//! Which review verdict and CI state let a flow ship is gate authority
+//! ([`crate::gate::dispatch_authority::verdict_at_head`],
+//! [`crate::gate::dispatch_authority::ci_state_is_green`], STORY-1889).
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
 
 use anyhow::{bail, Context, Result};
@@ -18,11 +21,14 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::dispatch::{
-    append_dispatch_log, open_pinned_dispatch_subdir, run_review_verb, DispatchRequest,
-    DispatchVendor, RunnerOutcome, WorkerClaim,
+    append_dispatch_log, open_pinned_dispatch_subdir, run_review_verb, DispatchVendor,
+    RunnerOutcome,
 };
 use crate::gate::dispatch_auth::{is_dispatch_authority_aborted, DispatchExecutionContext};
-use crate::gate::review_verdict::{self, VerdictKind};
+use crate::gate::dispatch_authority::{
+    ci_state_is_green, flow_ship_decision, verdict_at_head, DispatchRequest, ExecutionAdmission,
+    FlowVerdict, WorkerClaim,
+};
 
 const MAX_FLOW_TRIES: usize = 4;
 const FLOW_SHIP_WAIT_SECS: u64 = 3600;
@@ -70,7 +76,7 @@ pub(crate) fn acquire_train_dispatch_lock(main_worktree: &Path) -> Result<TrainD
     use std::os::unix::fs::MetadataExt;
 
     let disp_fd = open_pinned_dispatch_subdir(main_worktree, None)?;
-    let display_path = crate::dispatch::dispatch_root(main_worktree).join(TRAIN_LOCK_FILE);
+    let display_path = crate::gate::dispatch_io::dispatch_root(main_worktree).join(TRAIN_LOCK_FILE);
     let c_name = std::ffi::CString::new(TRAIN_LOCK_FILE)?;
     let fd = unsafe {
         libc::openat(
@@ -234,22 +240,6 @@ fn update_pr_branch_non_force(
     Ok(())
 }
 
-/// Inspect `.aida/review-verdicts/PR-<pr>.json` (through the pinned, no-follow
-/// verdict reader) against `head_oid`.
-// trace:STORY-1917 | ai:agy
-fn verdict_at_head(main_worktree: &Path, pr: u64, head_oid: &str) -> Option<VerdictKind> {
-    let key = format!("PR-{pr}");
-    let v = review_verdict::read_recorded_verdict(main_worktree, &key)?;
-    if v.is_closed() {
-        return None;
-    }
-    let rev_sha = v.reviewed_sha.as_deref()?;
-    if !review_verdict::same_reviewed_sha(rev_sha, head_oid) {
-        return None;
-    }
-    Some(v.kind)
-}
-
 #[cfg(test)]
 type TestFlowShipHook = Box<dyn FnMut(u64, &DispatchExecutionContext) -> Result<()>>;
 #[cfg(test)]
@@ -363,19 +353,6 @@ fn wait_for_pr_ci_with_ctx(
     // a pending run or a failure is never reported as green.
     // trace:STORY-1917 | ai:claude
     ci_state_is_green(pr, state)
-}
-
-/// Accept only [`crate::forge::CiState::Success`] as green CI.
-// trace:STORY-1917 | ai:claude
-pub(crate) fn ci_state_is_green(pr: u64, state: crate::forge::CiState) -> Result<()> {
-    match state {
-        crate::forge::CiState::Success => Ok(()),
-        crate::forge::CiState::Failed => bail!("CI failed for PR #{pr}"),
-        crate::forge::CiState::None => {
-            bail!("PR #{pr} has no CI checks; flow reports green only after CI passes")
-        }
-        other => bail!("CI for PR #{pr} did not pass (state {other:?})"),
-    }
 }
 
 /// Verify `.aida-store` has no uncommitted changes before starting a train pass.
@@ -494,6 +471,7 @@ pub(crate) fn run_flow_verb(
     main_worktree: &Path,
     mandate_dir: &Path,
     req: &DispatchRequest,
+    admission: &ExecutionAdmission,
     claim: &WorkerClaim,
     pr: u64,
     no_ship: bool,
@@ -503,7 +481,7 @@ pub(crate) fn run_flow_verb(
     let ctx = match DispatchExecutionContext::establish(
         main_worktree,
         mandate_dir,
-        &req.id,
+        &req.id(),
         &claim.claim_token,
         now,
     ) {
@@ -536,18 +514,21 @@ pub(crate) fn run_flow_verb(
         && !initial_view
             .merge_state_status
             .eq_ignore_ascii_case("BEHIND")
-        && verdict_at_head(main_worktree, pr, &initial_view.head_ref_oid)
-            == Some(VerdictKind::Approved)
+        && flow_ship_decision(verdict_at_head(
+            main_worktree,
+            pr,
+            &initial_view.head_ref_oid,
+        )) == FlowVerdict::Ship
     {
         let _ = append_dispatch_log(
             main_worktree,
-            &req.id,
+            &req.id(),
             &format!(
                 "fast-path: PR #{pr} already has APPROVED verdict at head {}; shipping\n",
                 initial_view.head_ref_oid
             ),
         );
-        return match ship_or_train_single_pr(main_worktree, &req.id, pr, &ctx, false) {
+        return match ship_or_train_single_pr(main_worktree, &req.id(), pr, &ctx, false) {
             Ok(summary) => RunnerOutcome::Done {
                 summary,
                 spawned_session: None,
@@ -598,7 +579,7 @@ pub(crate) fn run_flow_verb(
             }
             if let Err(err) = update_pr_branch_non_force(
                 main_worktree,
-                &req.id,
+                &req.id(),
                 pr,
                 &view.base_ref_name,
                 &view.head_ref_name,
@@ -640,7 +621,7 @@ pub(crate) fn run_flow_verb(
                         reason: format!("{err:#}"),
                     };
                 }
-                match run_review_verb(main_worktree, req, pr, vendor) {
+                match run_review_verb(main_worktree, req, admission, pr, vendor) {
                     RunnerOutcome::Done { .. } => {}
                     other => return other,
                 }
@@ -653,9 +634,9 @@ pub(crate) fn run_flow_verb(
             }
         };
 
-        match current_verdict {
-            Some(VerdictKind::Approved) => {}
-            Some(VerdictKind::RequestChanges | VerdictKind::Rejected) => {
+        match flow_ship_decision(current_verdict) {
+            FlowVerdict::Ship => {}
+            FlowVerdict::ChangesRequested => {
                 // Stop immediately on CHANGES_REQUESTED / REJECTED without clearing any hold!
                 return RunnerOutcome::Failed {
                     summary: format!(
@@ -665,7 +646,7 @@ pub(crate) fn run_flow_verb(
                     exit_code: Some(1),
                 };
             }
-            _ => {
+            FlowVerdict::NoVerdict => {
                 return RunnerOutcome::Failed {
                     summary: format!(
                         "PR #{pr} review completed without a valid verdict pinned to head {}",
@@ -692,7 +673,7 @@ pub(crate) fn run_flow_verb(
         {
             let _ = append_dispatch_log(
                 main_worktree,
-                &req.id,
+                &req.id(),
                 &format!(
                     "PR #{pr} head/mergeState moved during attempt {attempt} ({} -> {}, mergeState={}); retrying\n",
                     view.head_ref_oid, post_view.head_ref_oid, post_view.merge_state_status
@@ -712,7 +693,7 @@ pub(crate) fn run_flow_verb(
             };
         }
 
-        return match ship_or_train_single_pr(main_worktree, &req.id, pr, &ctx, false) {
+        return match ship_or_train_single_pr(main_worktree, &req.id(), pr, &ctx, false) {
             Ok(summary) => RunnerOutcome::Done {
                 summary,
                 spawned_session: None,
@@ -746,6 +727,7 @@ pub(crate) fn run_train_verb(
     main_worktree: &Path,
     mandate_dir: &Path,
     req: &DispatchRequest,
+    admission: &ExecutionAdmission,
     claim: &WorkerClaim,
     prs: &[u64],
     now: DateTime<Utc>,
@@ -768,7 +750,7 @@ pub(crate) fn run_train_verb(
     let ctx = match DispatchExecutionContext::establish(
         main_worktree,
         mandate_dir,
-        &req.id,
+        &req.id(),
         &claim.claim_token,
         now,
     ) {
@@ -792,7 +774,7 @@ pub(crate) fn run_train_verb(
                 reason: format!("{err:#}"),
             };
         }
-        match ship_or_train_single_pr(main_worktree, &req.id, pr, &ctx, true) {
+        match ship_or_train_single_pr(main_worktree, &req.id(), pr, &ctx, true) {
             Ok(note) => landed_notes.push(note),
             Err(err) => {
                 let msg = format!("{err:#}");
