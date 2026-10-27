@@ -1,0 +1,29 @@
+id: 01a17f5e-93fa-7581-9b68-fc188c97e0e7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-014
+title: (minor, non-blocking) Module entries in GATE_DISPATCH_ROOT_ALLOWLIST (agent_reg…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-010, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (minor, non-blocking) Module entries in GATE_DISPATCH_ROOT_ALLOWLIST (agent_registry, forge, mandate_drive, process_probe) are not verified to mount from the listed file: an unprotected lib.rs edit to #[path = "forge2.rs"] mod forge; makes the scan read forge.rs while the gate's crate::forge resolves to the unscanned forge2.rs. gate_dispatch_reaches_the_crate_only_through_allowlisted_names checks root use-bindings and fn definitions but not the root mod item's #[path] (story_1888_gate_paths_tests.rs, the in_root / fn_entry branch). Assert that each module entry's root mount has no #[path], or resolve it with mounts() and scan the target.
+
+  PR: #2989
+  Reviewed sha: c3492bbb7f08dab133af82f680887c061b0d59a1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-27T21:57:47.130437236Z
+modified_at: 2026-10-27T21:57:47.130437236Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-010
+- finding-hash:8e757c24
+- from-review:PR-2989
+- kind:carried-forward
+filed_at:
+  code_sha: 259fed79cd7f96bac2d2ba3a83a742f7bcaaf752
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1f280c78de
+  vendor: claude
