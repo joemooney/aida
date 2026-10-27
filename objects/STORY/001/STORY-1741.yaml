@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-27T17:09:02.354610533Z
+modified_at: 2026-10-27T17:09:21.676771790Z
 req_type: Story
 tags:
 - portable-intake
@@ -138,6 +138,26 @@ comments:
   content: 'ADVISOR readiness-map disposition2026-10-25: read full codex2 /tmp/codex2-story1741-readiness-map.txt plus canonical signed1741comments; independently spot-checked maina01 store_locate::locate_distributed_store_from_with_roots config-before-location, trusted_config default-product-branch reader, config_commit::finish_config_change staging exact product.aida/config.toml, and transport_profile::SANITIZATION_PENDING. ACCEPT map as source-grounded planning evidence for ALL3signedslices, not implementation/completion. Actual pure Git/common-dir discovery+inertnamespace/localversion first; deterministic owned ignoredprojection plus allconfig/scaffold/hook/harnesslaunchwriters second; inventory-onlymigration/localowneduninstall/explicitCIrevision+docs third. Hard sequencing after REALSTORY1742v1scanner/preparedoutgoinghistory+metadata/trustedbaseline/WORKFFpull+E2E, and integrate finalreviewedBUG2017commonidentity/bootstrap/storelockcontracts. No source-only scanner substitute/adoptionexemption or implementationbeforepredecessor. No newtrustanchor/executableplaneconfig, trackedAGENTS/CLAUDE/harnessoverwrite, auto initialproductcommit, migrationfiledeletion, or authority/credential export. Existing owned watcher schedulerlocalconfig writers must not become sharedadoption content/sideeffects. Future implementation must prove actual supported harness consumption, trackedbytes/index/refs/remotes invariance onclean+predirtyfixtures, stricttrust/unknownrevision/ownership/concurrency/interruption/uninstall preservation. Userfullgoal includes allacceptance; lastsliceonlycompletesafterrealintegrationsandindependentreview. Queued1741bottomimplementer withpredecessornote, no prematurelaunch. Code2newheadPR2919eff2review preempts otherreadinesswork.'
   created_at: 2026-10-25T13:59:21.005857621Z
   modified_at: 2026-10-25T13:59:21.005857621Z
+- id: 01a17e56-848c-74b3-b9f7-a023dcd92874
+  author: joe
+  content: |-
+    INVENTORY 2026-10-27 (claude, implementer; main 1b5806bce2). STORY-1742 is COMPLETED; signed SKETCH v1 + 10:15 rulings govern.
+
+    Acceptance item -> STORY-1742 contribution -> remains
+    1. Adopt without touching tracked product files -> none directly -> slices 2-3 (projection + routing of config/scaffold writers).
+    2. Config/guidance source on an AIDA-owned orphan plane -> none -> slice 1 reads adoption/ inside aida-store (Q1 ruling); slice 2 writes it through the store write lock.
+    3. Conventional discovery with no product marker; nonstandard store via a local untracked locator -> 8b523a4422/fbbb7ef193 established clone-local private files in the Git common dir (transport Private/Profile), the pattern the locator reuses -> slice 1 (this PR).
+    4. Deterministic ignored local projection -> none -> slice 2.
+    5. Uninstall removes projection/hooks only -> none -> slice 3.
+    6. CI bootstrap + verify selected config version -> none -> slice 1 defines the pinned revision/schema/generator contract and the mismatch refusal; slice 3 adds the bootstrap command.
+    7. Dry-run inventory migration -> none -> slice 3 (inventory only, per Q3 ruling).
+    8. Clean product worktree in normal operation -> none -> slices 2-3 regression fixtures.
+    Cross-cutting: outbound sanitization guard (0e12874b32 prepared WORK intake, 194e40346c reviewed-history push gate, 115c8a570e FF-only pull behind incoming scan, bbda3e3d8a WORK->hub->PUBLIC E2E) is now real. Slice 1 is read-only and publishes nothing; any later adoption/ write goes through that same prepared path, no exemption.
+
+    Slice 1 scope (Refs STORY-1741): aida-core adoption_plane module. Discovery from filesystem Git identity only (no .aida/config.toml read, no walk past the nearest repo, temp-root guard); clone-local locator file in the Git common dir (store ref or sibling store dir, both/neither-valid refuses); conventional refs/heads/aida-store, else a single agreeing remote aida-store ref, divergent remotes refuse; ref resolved to an immutable commit; adoption/settings.toml read at that commit via git object read (no worktree needed); schema=1 non-executable allowlist (unknown key, command/hook/credential/path-shaped key refused); revision contract {commit, schema, generator} with an explicit expected-revision mismatch refusal. No product writes, no executable config, config-trust untouched.
+  created_at: 2026-10-27T17:09:21.676771790Z
+  modified_at: 2026-10-27T17:09:21.676771790Z
+  session_id: a98bfb3e-682d-4e9e-8940-0ebeb25eef7d
 history:
 - id: 01a16a97-f720-7ad0-b09e-3e490758eade
   author: joe.mooney
