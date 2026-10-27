@@ -14,8 +14,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T02:22:46.645176120Z
-modified_at: 2026-10-27T06:54:41.039799449Z
+modified_at: 2026-10-27T06:54:45.296673365Z
 req_type: Bug
+comments:
+- id: 01a17c23-d430-77d0-8a4d-b496d129aa9e
+  author: joe
+  content: 'Item (a) root cause (fix/allocation-error-surfacing): nothing rewrote the mode at 14:17. The primary''s .aida/dispenser.toml has recorded node 2 since 2026-05-05: merge ca80edbd7e (''integrate -2- shard reqs from work machine'') brought in the work machine''s then-tracked dispenser.toml (node_id = 2, GLOBAL 52), and 02bbb02d1c only untracked it, leaving node 2 on disk. FileDispenser::next loads, bumps and saves the state with the FILE''s mode, while FileDispenser::state()/format_id use the opener''s mode (node 1), so IDs rendered TASK-1-NNN and the mismatch stayed invisible through GLOBAL 52->499. The 14:17 write was the routine allocation of TASK-1-499 (store reflog 073de075d3, 14:17:02). It only surfaced once the lazy WORK migration ran merge_legacy_state, which compares modes. Fix in this branch: FileDispenser::next refuses a stored mode that differs from the opener''s (it never advances or writes back a foreign-node counter), and aida doctor allocation reports the legacy mismatch on authoritative clones too. Follow-up for the operator: TASK-1-053..499 were counted on node 2''s counter; worth checking them for collisions with the work machine''s -2- range. Item (d) not addressed; NodeConfig::save uses std::fs::write, so a 0002 umask yields a 0664 node.toml, which is how fault 1 arose.'
+  created_at: 2026-10-27T06:54:45.296673365Z
+  modified_at: 2026-10-27T06:54:45.296673365Z
+  session_id: c8ae1509-fd35-41b9-8f6e-b1350b49cfcc
 history:
 - id: 01a176c8-0911-7173-a3f0-75b92e750859
   author: joe
