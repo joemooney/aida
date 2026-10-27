@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-af25abda388597e523c3e0c6936dadb48ac90809197926932805f20d92bf34e1",
+  "thread_id": "review-watch-af25abda388597e523c3e0c6936dadb48ac90809197926932805f20d92bf34e1",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1793113650,
+  "body": "PR-2973 at 5eedc265993f11ae75c6c68fe1d3d092b07ef979 is behind its base branch `story-1843-c1` with overlapping paths. Merge `story-1843-c1` into the branch and push before review. The watcher did not update the branch.",
+  "subject": "PR-2973: merge `story-1843-c1` before review",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
