@@ -2057,6 +2057,17 @@ impl Rails for ForgeRails<'_> {
         self.live.retain(|c| c.id != change.id);
         let main = match self.ports.fetch_main() {
             Ok(main) => main,
+            // The merge landed; only the dispatch re-check before the fetch
+            // failed, so say that rather than blame main.
+            // trace:STORY-1917 | ai:claude
+            Err(e) if crate::gate::dispatch_auth::is_dispatch_authority_aborted(&e) => {
+                self.warn(format!(
+                    "train PR #{} merged, then its dispatch request lost authority ({e:#}), \
+                     so main was not re-read; check its commits on main by hand",
+                    change.id
+                ));
+                train.tip.clone()
+            }
             Err(e) => {
                 self.warn(format!(
                     "train PR #{} merged, but main could not be read after it ({e:#}); \

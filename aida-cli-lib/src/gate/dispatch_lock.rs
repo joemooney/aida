@@ -81,6 +81,34 @@ pub(crate) fn activate_lock_as_human(main_worktree: &Path) -> Result<DispatchLoc
     activate_dispatch_v2_lock_quiescent(main_worktree)
 }
 
+/// Why a same-uid process's descriptors cannot be read, and the way
+/// forward. A permission error there means the process is non-dumpable
+/// (`ssh-agent`, `gpg-agent`, `(sd-pam)`) or runs in a user namespace of its
+/// own (a `bwrap` sandbox): activation cannot prove it does not hold the
+/// legacy lock, so it still refuses.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn unreadable_fd_dir_guidance(
+    err: &std::io::Error,
+    pid: u32,
+    proc_path: &Path,
+) -> String {
+    if err.kind() != std::io::ErrorKind::PermissionDenied {
+        return String::new();
+    }
+    let name = std::fs::read_to_string(proc_path.join("comm"))
+        .ok()
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .map(|c| format!(" (`{c}`)"))
+        .unwrap_or_default();
+    format!(
+        ". Process {pid}{name} is non-dumpable or sandboxed, so its open files cannot be checked. \
+         Stop it for the moment, confirm no dispatch process runs, then run \
+         `aida dispatch activate-lock` again. Only a repo that still has the legacy \
+         lock file needs this step"
+    )
+}
+
 fn is_vanished_proc_error(err: &std::io::Error) -> bool {
     err.kind() == std::io::ErrorKind::NotFound
         || matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH))
@@ -223,8 +251,9 @@ pub(crate) fn verify_sole_open_fd_for_inode(
             Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => continue,
             Err(e) => {
                 bail!(
-                    "cannot read {} for same-uid pid {pid} during legacy lock quiescence check: {e} (unknown FD coverage; fail-closed)",
-                    fd_dir.display()
+                    "cannot read {} for same-uid pid {pid} during legacy lock quiescence check: {e} (unknown FD coverage; fail-closed){}",
+                    fd_dir.display(),
+                    unreadable_fd_dir_guidance(&e, pid, &proc_path)
                 );
             }
         };

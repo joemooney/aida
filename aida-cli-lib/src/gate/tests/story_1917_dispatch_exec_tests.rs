@@ -351,6 +351,88 @@ fn tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
     );
 }
 
+/// R6: the headless review launch is bounded. A `queue work` that hangs is
+/// killed with its process group when the bound runs out, and the request
+/// fails, so it cannot hold its claim and a review cap slot forever.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn review_runner_kills_a_hung_launch_at_its_bound() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let pid_file = f._tmp.path().join("hung-review.pid");
+    let fake_aida = f.write_executable_script(
+        "hung-aida.sh",
+        &format!(
+            "#!/bin/sh\necho $$ > '{}'\nexec sleep 60\n",
+            pid_file.display()
+        ),
+    );
+    let _bins = install_test_bins(Some(fake_aida), None);
+    struct ResetTimeout;
+    impl Drop for ResetTimeout {
+        fn drop(&mut self) {
+            TEST_REVIEW_TIMEOUT.with(|c| c.set(None));
+        }
+    }
+    let _reset = ResetTimeout;
+    TEST_REVIEW_TIMEOUT.with(|c| c.set(Some(std::time::Duration::from_millis(500))));
+
+    let rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 205,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &rev.request.id, true, now).unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
+    assert!(
+        res.summary.contains("did not finish within") && res.summary.contains("was killed"),
+        "{}",
+        res.summary
+    );
+    let pid: u32 = std::fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while crate::process_probe::process_identity_is_alive(pid, None)
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        !crate::process_probe::process_identity_is_alive(pid, None),
+        "the hung review child is killed"
+    );
+}
+
+/// A runner's finish is stamped at its end, not at the start passed down.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn runner_finish_time_adds_the_elapsed_run_to_the_start() {
+    let start = Utc::now();
+    let two_hours = std::time::Duration::from_secs(2 * 60 * 60);
+    assert_eq!(
+        runner_finished_at(start, two_hours),
+        start + Duration::hours(2)
+    );
+    assert_eq!(runner_finished_at(start, std::time::Duration::ZERO), start);
+    assert_eq!(
+        runner_finished_at(start, std::time::Duration::MAX),
+        start,
+        "an unrepresentable span keeps the start"
+    );
+}
+
 // trace:STORY-1917 | ai:agy
 #[test]
 fn serve_refuses_without_bound_advisor_grant_and_executes_review_with_grant() {
@@ -3082,6 +3164,17 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
                 .contains("open-before-flock or waiter race detected"),
         "expected fail-closed unknown FD coverage refusal for non-dumpable same-UID process, got: {nd_err:#}"
     );
+    // The refusal names the cause and the way forward, not only the pid.
+    // trace:STORY-1917 | ai:claude
+    if nd_err.to_string().contains("unknown FD coverage") {
+        let text = nd_err.to_string();
+        assert!(
+            text.contains(&format!("Process {nd_pid}"))
+                && text.contains("non-dumpable or sandboxed")
+                && text.contains("then run `aida dispatch activate-lock` again"),
+            "{text}"
+        );
+    }
     std::fs::write(&nd_release_marker, b"1").unwrap();
     let _ = nd_child.wait();
 
@@ -3586,6 +3679,54 @@ fn story_1917_proc_view_refusal_covers_namespaces_and_hidepid() {
         proc_mount_options("22 1 0:21 / /sys rw - sysfs sysfs rw\n"),
         None
     );
+}
+
+/// `aida dispatch activate-lock` is a direct-human act: an AIDA-managed agent
+/// session, or a session without an interactive terminal, is refused before
+/// any lock is touched, and the legacy lock stays a regular file.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_activate_lock_refuses_without_a_direct_human_at_a_tty() {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let mut f = ExecFixture::new(&["reviewer", "implementer"]);
+    let _ = open_pinned_dispatch_subdir(&f.root, None).unwrap();
+    let lock_path = dispatch_root(&f.root).join("tick.lock");
+    let legacy = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(&lock_path)
+        .unwrap();
+    let orig_ino = legacy.metadata().unwrap().ino();
+    drop(legacy);
+
+    for (agent, tty) in [(Some("drain-worker"), true), (None, false)] {
+        f.ambient.unset_key("AIDA_AGENT_TYPE");
+        match agent {
+            Some(name) => f.ambient.set_key("AIDA_AGENT_NAME", name),
+            None => f.ambient.unset_key("AIDA_AGENT_NAME"),
+        }
+        let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: f.root.clone(),
+            stdin_is_terminal: tty,
+            stdout_is_terminal: tty,
+            stderr_is_terminal: tty,
+        }));
+        let err = crate::gate::dispatch_lock::activate_lock_as_human(&f.root)
+            .err()
+            .expect("must refuse");
+        crate::test_ambient::replace(prev);
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("needs a direct human session at an interactive TTY"),
+            "agent={agent:?} tty={tty}: {text}"
+        );
+        let meta = std::fs::symlink_metadata(&lock_path).unwrap();
+        assert!(meta.is_file(), "the legacy lock stays a regular file");
+        assert_eq!(meta.ino(), orig_ino);
+    }
 }
 
 /// The activation path consults the view: in a PID namespace of its own, or

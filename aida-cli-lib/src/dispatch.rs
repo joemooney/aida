@@ -1571,6 +1571,7 @@ pub(crate) fn execute_one_request_with_token(
     };
 
     // 6. Execute the verb's runner.
+    let started = std::time::Instant::now();
     let runner_outcome = match &req.action() {
         DispatchVerb::Review { pr, vendor } => {
             run_review_verb(main_worktree, &req, &admission, *pr, *vendor)
@@ -1638,6 +1639,7 @@ pub(crate) fn execute_one_request_with_token(
             now,
         ),
     };
+    let now = runner_finished_at(now, started.elapsed());
 
     match runner_outcome {
         RunnerOutcome::Done {
@@ -1684,6 +1686,20 @@ pub(crate) fn execute_one_request_with_token(
             now,
         ),
     }
+}
+
+/// When a runner that started at `now` finished, `elapsed` later: a
+/// multi-hour flow or train records its real finish, not its start, while
+/// staying on the caller's clock (tests pass a fixed `now`).
+// trace:STORY-1917 | ai:claude
+pub(crate) fn runner_finished_at(
+    now: DateTime<Utc>,
+    elapsed: std::time::Duration,
+) -> DateTime<Utc> {
+    chrono::Duration::from_std(elapsed)
+        .ok()
+        .and_then(|d| now.checked_add_signed(d))
+        .unwrap_or(now)
 }
 
 #[derive(Debug)]
@@ -2174,6 +2190,7 @@ pub(crate) fn cleanup_dead_reviewer_worktree(main_worktree: &Path, pr: u64) -> R
 std::thread_local! {
     pub(crate) static TEST_AIDA_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
     pub(crate) static TEST_AGENT_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+    pub(crate) static TEST_REVIEW_TIMEOUT: std::cell::Cell<Option<std::time::Duration>> = const { std::cell::Cell::new(None) };
     pub(crate) static TEST_FAIL_POST_SPAWN_PUBLICATION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     pub(crate) static TEST_FAIL_SUBMIT_STAGE: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     pub(crate) static TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -2200,6 +2217,22 @@ fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
         DispatchVendor::Agy => "agy",
     };
     crate::find_executable_on_path(name).unwrap_or_else(|| PathBuf::from(name))
+}
+
+/// Bound on one headless review (`aida queue work PR-<pr> --role reviewer
+/// --no-human`), matching `pr ship-batch`'s review wait. A hung launch is
+/// killed with its process group so it cannot hold a flow claim and a
+/// review cap slot forever (R6: bounded subprocesses).
+const REVIEW_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+/// Bytes of review output kept for the dispatch log.
+const REVIEW_OUTPUT_CAP: u64 = 4 * 1024 * 1024;
+
+fn review_run_timeout() -> std::time::Duration {
+    #[cfg(test)]
+    if let Some(t) = TEST_REVIEW_TIMEOUT.with(|c| c.get()) {
+        return t;
+    }
+    REVIEW_RUN_TIMEOUT
 }
 
 /// Run the `review` verb (`aida queue work PR-<pr> --role reviewer --no-human [--vendor <v>]`).
@@ -2245,8 +2278,10 @@ pub(crate) fn run_review_verb(
     cmd.env_remove("AIDA_SESSION_PURPOSE")
         .env_remove(DISPATCH_CLAIM_TOKEN_ENV);
 
-    match cmd.output() {
-        Ok(out) => {
+    // trace:STORY-1917 | ai:claude
+    let timeout = review_run_timeout();
+    match crate::command_output_with_timeout_capped(cmd, timeout, REVIEW_OUTPUT_CAP) {
+        crate::BoundedCommandOutput::Completed(out) => {
             let combined = format!(
                 "{}{}",
                 String::from_utf8_lossy(&out.stdout),
@@ -2267,8 +2302,19 @@ pub(crate) fn run_review_verb(
                 }
             }
         }
-        Err(err) => RunnerOutcome::Failed {
-            summary: format!("failed to spawn `aida queue work PR-{pr}`: {err:#}"),
+        crate::BoundedCommandOutput::TimedOut => {
+            let summary = format!(
+                "review of PR #{pr} did not finish within {}s and was killed",
+                timeout.as_secs()
+            );
+            let _ = append_dispatch_log(main_worktree, &req.id(), &format!("{summary}\n"));
+            RunnerOutcome::Failed {
+                summary,
+                exit_code: None,
+            }
+        }
+        crate::BoundedCommandOutput::SpawnFailed => RunnerOutcome::Failed {
+            summary: format!("failed to spawn `aida queue work PR-{pr}`"),
             exit_code: None,
         },
     }
