@@ -2,13 +2,29 @@ id: 01a17bca-a1bb-7501-8db0-8ae8fc98f2ac
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-016
 title: 'Review PR-2965: [AI:claude] chore(ci): budget the story_1843_pr3 claude-to-agy blackbox test (Refs STORY-1843)'
 description: Hand-filed review story (Refs-only PR, BUG-2208).
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T05:17:19.675718175Z
-modified_at: 2026-10-27T05:17:19.675718175Z
+modified_at: 2026-10-27T06:56:32.005681204Z
 req_type: Story
+comments:
+- id: 01a17c25-7505-7513-9237-77554a926930
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2965 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-27T06:56:32.005783646Z
+  modified_at: 2026-10-27T06:56:32.005783646Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+history:
+- id: 01a17c25-7505-7513-9237-7768e0839498
+  author: aida-auto-bump
+  timestamp: 2026-10-27T06:56:32.005789937Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: e3fd91e83fe3ffef5e9b26365de8e302a92c6904
   branch: main
@@ -17,3 +33,6 @@ filed_at:
   aida_build_sha: c0b841d865
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-27T06:56:32.005782651Z
