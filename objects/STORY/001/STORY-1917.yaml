@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-26T06:41:14.457586542Z
+modified_at: 2026-10-27T05:38:47.723638053Z
 req_type: Story
 relationships:
 - rel_type:
@@ -607,6 +607,33 @@ comments:
   created_at: 2026-10-26T06:41:14.457586542Z
   modified_at: 2026-10-26T06:41:14.457586542Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17bde-492b-74a3-933a-625083b9cd13
+  author: joe
+  content: |
+    STORY-1917 slice 4 inventory (implementer, branch story-1917-slice4 from origin/main e3fd91e83f).
+
+    DONE (on main):
+    - Request schema, closed verbs flow/review/take/impl/train, dual-end validation, CLI request/list/show/cancel: 2db1d977b0 (#2905).
+    - Executor core, `dispatch serve` (grant-requiring verbs, Boundary B: no self-binding), `dispatch tick` (take/impl only), review/take/impl runners, ledger rows, advisor mail-back: 36419baf87 (#2913).
+    - flow/train runners (R6), DispatchExecutionContext with native pr ship/pr train checkpoints (Q2), dispatch-tick schedule job + `mandate.dispatch_active`/`dispatch.pending` predicates (R5), aida init scaffold, TASK-2338..2344 (all completed), RecoveryRequired fences, v2 lock + `dispatch activate-lock`: e27af75054 (#2924).
+    - Dispatch authority moved into gate/ with its ratchets: e3fd91e83f (#2953, STORY-1889).
+
+    REMAINING, implemented in this slice (the 2026-10-25 23:50 round-4 fold-ins):
+    1. activate-lock direct-human/TTY refusal test.
+    2. R6 --no-ship refusal when CI is None/Pending (test hook now returns a CiState, so the real ci_state_is_green runs).
+    3. run_review_verb bounded (60 min, output capped, process group killed on timeout).
+    4. pr ship refusals at PostCiWait/UnderMergeLease/PreHoldRelease write a pr:<N> ledger row under the request's mandate.
+    5. Docs: the dispatch-context boundary (unprotected call sites, protected pins), plus a new gate-protected pin that ship/train get the context and that each LiveTrainForge step re-checks it.
+    6. activate-lock refusal for a non-dumpable/sandboxed same-uid process names the process, the cause and the way forward.
+    7. finalize_request finished_at = start + elapsed runner time.
+    8. LiveTrainForge post-merge fetch_main authority loss gets its own warning.
+    (The [process] note about bare completing IDs needs no code; this PR's title carries Refs.)
+
+    REMAINING after this slice (not code):
+    - The parent acceptance demo ("a sandboxed advisor takes a PR from READY to shipped, launches a takeover fixer and a new lane, with no operator command, while a mandate is active") needs live activation: operator `aida dispatch activate-lock` where a legacy lock exists, `aida mandate start --scope dispatch`, and a human-started `aida dispatch serve`. Per the signoffs this is operator-only. Completion should follow that live proof. Until then this PR is Refs.
+  created_at: 2026-10-27T05:38:47.723638053Z
+  modified_at: 2026-10-27T05:38:47.723638053Z
+  session_id: 5e78dfb1-1e10-4fa8-908f-8ebab4b0a3bc
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
