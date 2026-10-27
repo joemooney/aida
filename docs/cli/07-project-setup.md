@@ -154,8 +154,19 @@ It can only refuse known shapes and listed tokens, so keep work-filed defects
 generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
 `aida push/pull`; raw Git and other sync entry points bypass it. There is no
-server-side enforcement. Keep work-filed defects generic and sanitized before
-they enter any store that may become public.
+server-side enforcement: the hub does not scan what it receives, so it can
+accept unscanned history from another client and forward it to a public
+remote. Keep work-filed defects generic and sanitized before they enter any
+store that may become public.
+
+**The end-to-end path.** A generic defect filed with `aida add --sanitized` in
+the WORK clone becomes one pseudonymous store commit. `aida push` scans it and
+publishes exactly that commit to the hub's `aida-store`; another WORK clone of
+the hub receives it with `aida pull`. Forwarding from the hub to a public
+remote is the operator's own step (raw Git or an ordinary clone) and is not
+guarded by this profile: what arrives publicly is exactly what the hub holds.
+Only `refs/heads/aida-store` moves at each hop; product branches, mailbox
+state, ID counters and other remotes are untouched by the transport.
 <!-- trace:STORY-1742 | ai:codex -->
 
 ---
@@ -366,8 +377,9 @@ Repeated promotion is a no-op. `db retire-legacy-ids` refuses destructive
 collapse of native node IDs: those IDs remain permanent lookup aliases, and
 `merge-gate` already supplies the canonical display ID. WORK/HUB post-pull processing skips promotion;
 Git ref transport does not enroll a clone or allocate display IDs. Conflict audit
-and transport serialization scanning remain separate follow-up work; this
-change does not make an arbitrary union safe.
+remains separate follow-up work. The WORK transport scanner (see
+[`aida config transport policy`](#aida-config-transport-policy)) refuses unsafe
+content; it does not make an arbitrary union safe.
 
 ## Extending aida with external commands
 

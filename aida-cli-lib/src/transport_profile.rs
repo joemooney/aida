@@ -29,8 +29,10 @@ const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store
 /// Private staging for fetched store history until it has been scanned.
 // trace:STORY-1742 | ai:claude
 const INCOMING_REF: &str = "refs/aida-transport/incoming";
-const BYPASS_LIMIT: &str =
-    "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
+// trace:STORY-1742 | ai:claude
+const BYPASS_LIMIT: &str = "The profile governs aida push/pull in this clone only; raw Git and other clients bypass it. No server-side enforcement: a hub can accept unscanned history from elsewhere and forward it to a public remote.";
+// trace:STORY-1742 | ai:claude
+const TRUST_LIMIT: &str = "Enrolling a trust root trusts its entire reachable history without scanning it; enroll only a reviewed public-safe commit, never an unsafe tip to silence a refusal.";
 // trace:STORY-1742 | ai:claude
 const PULL_LIMIT: &str = "Pull is fast-forward only: fetched history is scanned from the enrolled trust root before any accepted ref moves, so incoming commits that fail the reviewed policy (including other identities) refuse.";
 // trace:STORY-1742 | ai:claude
@@ -336,7 +338,7 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
-        limitations: vec![PULL_LIMIT, SANITIZATION_LIMIT, BYPASS_LIMIT],
+        limitations: vec![PULL_LIMIT, SANITIZATION_LIMIT, TRUST_LIMIT, BYPASS_LIMIT],
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
