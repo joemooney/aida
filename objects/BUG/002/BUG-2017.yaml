@@ -29,11 +29,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T21:06:43.863112477Z
+modified_at: 2026-10-27T22:25:45.357584170Z
 req_type: Bug
 tags:
 - id-allocation
 - partitioned-store
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a17f77-d8c9-7cb3-9dcd-a0bfa2450e6f
+  created_at: 2026-10-27T22:25:45.357579884Z
+  created_by: joe
 comments:
 - id: 01a16ed5-48a0-7981-8732-4065c5053ecb
   author: joe
@@ -864,6 +870,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a17f78-3dab-7532-b949-28fd588de1e0
+  author: joe
+  timestamp: 2026-10-27T22:25:48.971710253Z
+  session_id: 83c678b7-4d50-40d3-9f12-d23e8eaa52b9
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
