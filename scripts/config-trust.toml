@@ -367,6 +367,12 @@ sites = 2
 channels = ["worktree"]
 sites = 1
 
+# The adoption projection writes the inert plane policy into the ignored
+# worktree copy; it never reads executable keys. trace:STORY-1741 | ai:claude
+[readers."aida-core/src/adoption_projection.rs"]
+channels = ["write"]
+sites = 1
+
 [readers."aida-core/src/agents_config.rs"]
 channels = ["worktree"]
 sites = 4

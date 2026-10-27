@@ -4068,6 +4068,7 @@ pub(crate) fn prepare_agent_launch_context(
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating agent context dir {}", dir.display()))?;
     let path = dir.join(format!("{}-{token}.context.md", config.agent_type));
+    refresh_adoption_projection(&plan.launch_cwd);
     let body = render_agent_launch_context(config, plan, &token)?;
     std::fs::write(&path, &body).with_context(|| format!("writing {}", path.display()))?;
     if options.show {
@@ -4465,6 +4466,8 @@ pub(crate) fn render_agent_launch_context(
     out.push_str("## Role Guidance\n\n");
     out.push_str(&role_guidance_for(&plan.project_root, role));
     out.push_str("\n\n");
+
+    out.push_str(&render_adoption_guidance_section(&plan.launch_cwd));
 
     // A cold product/advisor session must see the independence boundary and
     // the live item at its gate without relying on a prior conversation.
@@ -5047,6 +5050,10 @@ pub(crate) fn render_agent_launch_noexec(
         let marker = if present { "present" } else { "absent" };
         out.push_str(&format!("  {rel_path} ({marker})\n"));
     }
+    out.push_str(&format!(
+        "adoption: {}\n",
+        describe_adoption_state(&plan.launch_cwd)
+    ));
 
     Ok(out)
 }
@@ -5494,6 +5501,64 @@ pub(crate) fn agent_guidance_files(
             (rel.to_string(), present)
         })
         .collect()
+}
+
+/// Bring the launch worktree's adoption projection up to the plane before
+/// the context is rendered. A failure never blocks the launch: it is
+/// reported, and the context then delivers no unverified guidance.
+// trace:STORY-1741 | ai:claude
+fn refresh_adoption_projection(worktree: &std::path::Path) {
+    if let Err(e) = aida_core::adoption_projection::sync(worktree) {
+        eprintln!("warning: shared adoption guidance not refreshed: {e:#}");
+    }
+}
+
+/// The launch-context section carrying the plane's guidance, stamped with
+/// the revision the projection manifest verifies. Empty when not adopted.
+// trace:STORY-1741 | ai:claude
+pub(crate) fn render_adoption_guidance_section(worktree: &std::path::Path) -> String {
+    use aida_core::adoption_projection::{delivered_guidance, Delivery};
+    match delivered_guidance(worktree) {
+        Delivery::None => String::new(),
+        Delivery::Unverified => "## Project Guidance\n\n_The shared adoption projection is \
+             incomplete or was edited, so no shared guidance was delivered. Run a fresh launch \
+             after fixing it._\n\n"
+            .to_string(),
+        Delivery::Verified { commit, docs } => {
+            let mut out = format!(
+                "## Project Guidance\n\nShared guidance from the adoption plane, revision \
+                 {commit}.\n\n"
+            );
+            for (name, body) in docs {
+                out.push_str(&format!("### {name}\n\n{}\n\n", body.trim_end()));
+            }
+            out
+        }
+    }
+}
+
+/// One line for the launch preview: the projection's state and how the
+/// child receives it.
+// trace:STORY-1741 | ai:claude
+pub(crate) fn describe_adoption_state(worktree: &std::path::Path) -> String {
+    use aida_core::adoption_projection::{inspect, State};
+    const VIA: &str = "delivered in the launch context file; harnesses started outside \
+                       `aida agent` do not receive shared guidance";
+    match inspect(worktree) {
+        Ok(State::NotAdopted) => "not adopted".to_string(),
+        Ok(State::NotProjected { plane }) => {
+            format!("plane {plane}, not yet projected (a launch projects it; {VIA})")
+        }
+        Ok(State::Current { commit }) => format!("current at {commit} ({VIA})"),
+        Ok(State::Stale { projected, plane }) => {
+            format!("projected {projected}, plane at {plane} (a launch refreshes it; {VIA})")
+        }
+        Ok(State::Damaged { commit, paths }) => format!(
+            "projection of {commit} damaged ({}); no shared guidance is delivered",
+            paths.join(", ")
+        ),
+        Err(e) => format!("unavailable ({e:#}); no shared guidance is delivered"),
+    }
 }
 
 // trace:TASK-1232 | ai:codex
@@ -6110,3 +6175,8 @@ mod task_1806_launch_mandate_tests {
         );
     }
 }
+
+// trace:STORY-1741 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_1741_adoption_projection_tests.rs"]
+mod story_1741_adoption_projection_tests;

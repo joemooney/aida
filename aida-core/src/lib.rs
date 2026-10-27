@@ -74,6 +74,9 @@ pub mod alias;
 // Shared non-executable adoption settings on the store plane. trace:STORY-1741 | ai:claude
 #[cfg(all(unix, feature = "native"))]
 pub mod adoption_plane;
+// Its ignored local projection. trace:STORY-1741 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+pub mod adoption_projection;
 pub mod analytics;
 pub mod block_allocation;
 // trace:BUG-2017 | ai:codex

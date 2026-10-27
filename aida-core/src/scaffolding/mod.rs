@@ -2716,6 +2716,10 @@ aida show <SPEC-ID>
         preview: &ScaffoldPreview,
         options: &ApplyOptions,
     ) -> Result<Vec<PathBuf>, ScaffoldError> {
+        // An adopted worktree takes its guidance from the shared plane's
+        // ignored projection; scaffolding would write product files.
+        // trace:STORY-1741 | ai:claude
+        refuse_in_adopted_worktree(&self.project_root)?;
         let mut written_files = Vec::new();
         let mut skipped_files = Vec::new();
         let mut warned_links = std::collections::BTreeSet::new();
@@ -3435,6 +3439,24 @@ impl std::fmt::Display for ScaffoldError {
 }
 
 impl std::error::Error for ScaffoldError {}
+
+/// Refuse a scaffold write in a worktree holding an adoption projection:
+/// adoption keeps AIDA scaffolding off the product branch.
+// trace:STORY-1741 | ai:claude
+pub fn refuse_in_adopted_worktree(project_root: &Path) -> Result<(), ScaffoldError> {
+    #[cfg(all(unix, feature = "native"))]
+    if crate::adoption_projection::is_projected(project_root) {
+        return Err(ScaffoldError::IoError {
+            path: project_root.to_path_buf(),
+            message: "this worktree is adopted from a shared AIDA plane, so scaffolding \
+                      would write product files; refused. Shared guidance comes from \
+                      adoption/ on the aida-store plane."
+                .to_string(),
+        });
+    }
+    let _ = project_root;
+    Ok(())
+}
 
 /// Generate the starter CLAUDE.local.md template. Two sections (project
 /// review feedback + personal habits) with brief inline guidance so the
