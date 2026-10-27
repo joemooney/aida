@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T10:01:02.233262910Z
+modified_at: 2026-10-27T16:35:55.869221025Z
 req_type: Bug
 tags:
 - id-allocation
@@ -768,6 +768,12 @@ comments:
   content: 'ADVISOR 03:10 MST: PR #2972 (S3-i) is approved in substance and blocked only by the 01:30 merge-order condition. When #2967 (S3c, fast-forward-only store pull) lands, merge main into bug-2017-s3i and place the collector at the new FF store-pull point too (before the staging ref advances refs/heads/aida-store), with a test; then re-review.'
   created_at: 2026-10-27T10:01:02.233262910Z
   modified_at: 2026-10-27T10:01:02.233262910Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17e37-e95d-73f0-aa9a-7dd000479a21
+  author: joe
+  content: 'ADVISOR 2026-10-27 09:40 MST: execution mode set to drain (operator asked for unattended landing; every PR on this spec still needs an independent reviewer approval at head and green CI; protected gate paths still need the operator).'
+  created_at: 2026-10-27T16:35:55.869221025Z
+  modified_at: 2026-10-27T16:35:55.869221025Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
