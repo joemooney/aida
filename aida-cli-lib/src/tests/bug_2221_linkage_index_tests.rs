@@ -452,6 +452,31 @@ fn uncreatable_namespace_runs_the_original() {
     assert!(!ns(&repo).exists(), "nothing written");
 }
 
+/// Node-local IDs (up to 64 chars since #2956) are indexed and found, and
+/// agree with the original collector.
+#[test]
+fn long_node_local_id_is_indexed_and_found() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    let id = "TASK-b6b1278890774ef993d2ebc327862470-003";
+    let a = commit_at(&repo, T, &format!("fix: node-local ({id})"));
+    let b = commit_at(
+        &repo,
+        T + 1,
+        &format!("chore: body ref\n\ntrace:{id} | ai:claude"),
+    );
+    commit_at(
+        &repo,
+        T + 2,
+        "docs: other (TASK-b6b1278890774ef993d2ebc327862470-004)",
+    );
+
+    let got = answered(&repo, &[id]);
+    assert_eq!(got, oracle(&repo, &[id]));
+    let shas: Vec<&str> = got.iter().map(|(f, _, _)| f.as_str()).collect();
+    assert_eq!(shas, vec![b.as_str(), a.as_str()]);
+}
+
 /// The resolver source the index's rows depend on. Changing ANY of these
 /// functions requires bumping [`PARSER_VERSION`] and re-pinning the hash
 /// below in the same change.
@@ -481,9 +506,11 @@ fn parser_version_ratchet() {
     let hash = format!("{:x}", Sha256::digest(joined.as_bytes()));
     assert_eq!(
         (PARSER_VERSION, hash.as_str()),
+        // 2: #2956 raised looks_like_spec_id's cap from 40 to 64 so
+        // node-local IDs parse.
         (
-            1,
-            "726831f8b27f9d65f4a7435a6af0e7187815e684284b9506f8f18a96f6dc77c8"
+            2,
+            "fd6c41677ce361a62a61879a63251d325acaa6a613f6ed554716b9aa8acf44bb"
         ),
         "the linkage resolver changed: bump PARSER_VERSION and re-pin this hash"
     );

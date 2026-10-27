@@ -55,7 +55,7 @@ const FORMAT_VERSION: u32 = 1;
 /// `parser_version_ratchet` test hashes their source and fails until this
 /// const and its pinned hash are updated together.
 // trace:BUG-2221 | ai:claude
-pub(crate) const PARSER_VERSION: u32 = 1;
+pub(crate) const PARSER_VERSION: u32 = 2;
 
 /// Namespace under the git COMMON dir, so linked worktrees share one index.
 const INDEX_NAMESPACE: &str = "aida/linkage-index/v1";
