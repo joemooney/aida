@@ -2934,11 +2934,12 @@ pub(crate) fn collect_snapshot(
         let local = crate::mailbox_store::read_local_messages(project_root).unwrap_or_default();
         let canonical = crate::mailbox_store::read_canonical_messages(&store).unwrap_or_default();
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-        let watermarks =
-            crate::mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
-        // trace:TASK-1492 | ai:claude — the same per-recipient read the night
-        // shift's mail-latency escalation uses.
-        let per_recipient = crate::mailbox_store::unread_by_recipient(&merged, &watermarks);
+        // trace:TASK-1492 trace:STORY-1843 | ai:claude — the same per-recipient
+        // read (watermark or receipt) the night shift's mail-latency
+        // escalation uses. Fails closed: unreadable read evidence counts the
+        // mail unread, never as zero unread.
+        let evidence = crate::mailbox_store::ReadEvidence::load_fail_closed(project_root);
+        let per_recipient = crate::mailbox_store::unread_by_recipient(&merged, &evidence);
         let unread: i64 = per_recipient.values().map(|u| u.count).sum();
         let oldest: Option<i64> = per_recipient.values().map(|u| u.oldest_ts).min();
         snap.mail_unread = unread;

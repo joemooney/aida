@@ -4673,7 +4673,12 @@ pub(crate) fn render_launch_mailbox_section(
     let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
     let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
     let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
+    // trace:STORY-1843 | ai:claude — mail the agent read through an inbox
+    // (a receipt in any worktree, no watermark move) is not unread here.
+    let evidence = mailbox_store::ReadEvidence::load_fail_closed(project_root);
+    let merged = evidence.without_receipted_for(agent_name, &merged);
+    let partial = evidence.partial();
+    let watermarks = evidence.watermarks;
     let identities = [agent_name.to_string()];
     let summary = aida_core::mailbox::build_notice(
         identities.iter().map(String::as_str),
@@ -4689,6 +4694,12 @@ pub(crate) fn render_launch_mailbox_section(
     } else {
         out.push_str(&render_mailbox_notice(&summary, &identities));
         out.push('\n');
+    }
+    if partial {
+        out.push_str(&format!(
+            "- Note: {}.\n",
+            mailbox_store::PARTIAL_EVIDENCE_NOTE
+        ));
     }
 
     // Always include the guidance — only Claude Code gets the auto-hook, so every

@@ -474,7 +474,7 @@ pub(crate) fn agents_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("agents")
 }
 
-fn registry_path(project_root: &Path, id: &str) -> PathBuf {
+pub(crate) fn registry_path(project_root: &Path, id: &str) -> PathBuf {
     agents_dir(project_root).join(format!("{id}.toml"))
 }
 
@@ -2418,14 +2418,7 @@ fn is_credential_var(key: &str) -> bool {
 }
 
 pub(crate) fn normalize_agent_type(raw: String) -> String {
-    match raw.to_ascii_lowercase().replace(['_', '-'], "").as_str() {
-        "claude" | "claudecode" => "claude".to_string(),
-        "codex" => "codex".to_string(),
-        "antigravity" | "gemini" => "antigravity".to_string(),
-        "shell" => "shell".to_string(),
-        "web" => "web".to_string(),
-        _ => "other".to_string(),
-    }
+    aida_core::mailbox_identity::normalize_agent_type(&raw)
 }
 
 /// Canonical spec ids only: a lower-case `story-431` is a branch or session

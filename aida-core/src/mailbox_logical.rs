@@ -23,6 +23,8 @@
 // trace:STORY-1843 | ai:claude
 
 use crate::mailbox::{message_state_rank, Message, Recipient};
+use crate::mailbox_identity::{classified_identities, IdentityClass, MailIdentityFacts};
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
@@ -121,7 +123,8 @@ pub enum CanonicalCoverage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailboxContext {
     requested_checkout: CheckoutRoot,
-    repository: VerifiedCommonGit,
+    /// `None` for a local-only context (see [`Self::resolve_or_local`]).
+    repository: Option<VerifiedCommonGit>,
     canonical: CanonicalCoverage,
 }
 
@@ -148,17 +151,54 @@ impl MailboxContext {
         };
         Ok(Self {
             requested_checkout: CheckoutRoot(checkout),
-            repository: VerifiedCommonGit(repository),
+            repository: Some(VerifiedCommonGit(repository)),
             canonical,
         })
+    }
+
+    /// [`Self::resolve`], except that a directory with no `.git` entry in it
+    /// or any ancestor (a local-only, non-Git project) still reads its own local
+    /// mailbox. Such a context has no verified repository: no sibling is
+    /// inventoried, no store is read (it could be another repository's), and
+    /// every snapshot reports [`SourceErrorCode::NotAGitCheckout`] as its
+    /// inventory error, so it is never complete or caught up.
+    // trace:STORY-1843 | ai:claude
+    pub fn resolve_or_local(
+        checkout: &Path,
+        store: Option<&Path>,
+    ) -> Result<Self, SourceErrorCode> {
+        match Self::resolve(checkout, store) {
+            Err(SourceErrorCode::NotAGitCheckout) if checkout.is_dir() => {
+                let checkout = std::fs::canonicalize(checkout)
+                    .map_err(|_| SourceErrorCode::NotAGitCheckout)?;
+                // Inside a Git checkout (say a subdirectory of one) is a
+                // wrong root, not a local-only project.
+                if checkout
+                    .ancestors()
+                    .any(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())
+                {
+                    return Err(SourceErrorCode::NotAGitCheckout);
+                }
+                Ok(Self {
+                    requested_checkout: CheckoutRoot(checkout),
+                    repository: None,
+                    canonical: match store {
+                        None => CanonicalCoverage::NotConfigured,
+                        Some(_) => CanonicalCoverage::Refused(SourceErrorCode::NotAGitCheckout),
+                    },
+                })
+            }
+            other => other,
+        }
     }
 
     pub fn requested_checkout(&self) -> &CheckoutRoot {
         &self.requested_checkout
     }
 
-    pub fn repository(&self) -> &VerifiedCommonGit {
-        &self.repository
+    /// The verified common Git directory; `None` for a local-only context.
+    pub fn repository(&self) -> Option<&VerifiedCommonGit> {
+        self.repository.as_ref()
     }
 
     pub fn canonical(&self) -> &CanonicalCoverage {
@@ -187,13 +227,6 @@ impl ResolvedAudience {
     /// people-catalog inboxes; `shared`: role and vendor audiences. Each key
     /// must be a bounded mailbox identity. Crate-private: only the verified
     /// identity path may mint recipient authority.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "STORY-1843 B2 adds the verified-identity caller; drop this then"
-        )
-    )]
     pub(crate) fn from_identity_policy(
         private: Vec<String>,
         human: Vec<String>,
@@ -214,7 +247,49 @@ impl ResolvedAudience {
         })
     }
 
-    fn keys(&self) -> impl Iterator<Item = &str> {
+    /// The audience the mailbox identity policy grants for `facts`. Keys that
+    /// are not bounded mailbox identities are dropped, never widened.
+    // trace:STORY-1843 | ai:claude
+    pub fn from_facts(facts: &MailIdentityFacts) -> Self {
+        let bounded = |key: &str| {
+            !key.is_empty()
+                && key.len() <= 128
+                && !key.chars().any(|c| c.is_control() || c == '/' || c == '\\')
+        };
+        let mut private = Vec::new();
+        let mut human = Vec::new();
+        let mut shared = Vec::new();
+        for (key, class) in classified_identities(facts) {
+            if !bounded(&key) {
+                continue;
+            }
+            match class {
+                IdentityClass::Private => private.push(key),
+                IdentityClass::Human => human.push(key),
+                IdentityClass::Shared => shared.push(key),
+            }
+        }
+        Self::from_identity_policy(private, human, shared)
+            .expect("every key was checked as a bounded mailbox identity")
+    }
+
+    /// This session's own handle/names (or an unbound user).
+    pub fn private_keys(&self) -> &[String] {
+        &self.private
+    }
+
+    /// Intentional people-catalog inboxes.
+    pub fn human_keys(&self) -> &[String] {
+        &self.human
+    }
+
+    /// Role and agent-type audiences several sessions share.
+    pub fn shared_keys(&self) -> &[String] {
+        &self.shared
+    }
+
+    /// Every key, private first.
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.private
             .iter()
             .chain(&self.human)
@@ -222,9 +297,34 @@ impl ResolvedAudience {
             .map(String::as_str)
     }
 
+    /// This audience restricted to the one key spelled `key`
+    /// (case-insensitively), or `None` when `key` is not one of its keys: a
+    /// selector can only narrow the authority the facts granted.
+    pub fn narrowed_to(&self, key: &str) -> Option<Self> {
+        let pick = |keys: &[String]| -> Vec<String> {
+            keys.iter()
+                .filter(|k| k.eq_ignore_ascii_case(key.trim()))
+                .take(1)
+                .cloned()
+                .collect()
+        };
+        let narrowed = Self {
+            private: pick(&self.private),
+            human: pick(&self.human),
+            shared: pick(&self.shared),
+        };
+        let any = narrowed.keys().next().is_some();
+        any.then_some(narrowed)
+    }
+
+    /// Whether a private key of this audience sent `m` (its own sent mail).
+    pub fn sent_by_own(&self, m: &Message) -> bool {
+        self.private.iter().any(|k| *k == m.from)
+    }
+
     /// Audience keys this message is addressed to: direct or broadcast,
     /// never the key's own sent mail, never a deleted message.
-    fn matching_keys(&self, m: &Message) -> Vec<&str> {
+    pub fn matching_keys(&self, m: &Message) -> Vec<&str> {
         self.keys().filter(|key| m.addressed_to(key)).collect()
     }
 }
@@ -238,6 +338,19 @@ pub enum Query {
     ExactId(String),
     /// The visible members of one thread.
     Thread(String),
+    /// Every message visible to the audience plus the audience's own sent
+    /// mail: the set a message ID, prefix or thread reference resolves
+    /// against, so every ID an inbox lists also resolves in the follow-up
+    /// verbs.
+    Addressable,
+}
+
+impl Query {
+    /// Whether the audience's own sent mail is part of the answer. An inbox
+    /// never lists the reader's own sends; a lookup by ID or thread does.
+    fn includes_own_sent(&self) -> bool {
+        !matches!(self, Self::Inbox)
+    }
 }
 
 /// One shared budget for a whole snapshot: the inventory, every source and
@@ -461,11 +574,12 @@ pub fn logical_snapshot(
     }
 
     let in_query = |id: &str, thread: &str| match query {
-        Query::Inbox => true,
+        Query::Inbox | Query::Addressable => true,
         Query::ExactId(want) => id == want,
         Query::Thread(want) => thread == want,
     };
-    let (mut records, conflicts) = reconcile(&observed, local_count, audience);
+    let (mut records, conflicts) =
+        reconcile(&observed, local_count, audience, query.includes_own_sent());
     records.retain(|(m, _)| in_query(&m.id, &m.thread_id));
     let conflicts = conflicts
         .into_iter()
@@ -513,6 +627,171 @@ pub fn logical_snapshot(
         snapshot.exact_found = (found || snapshot.complete()).then_some(found);
     }
     snapshot
+}
+
+/// The outcome of one exact per-ID receipt lookup across every inventoried
+/// LOCAL source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReceiptLookup {
+    /// Some local source holds a receipt; `at` is its read time (epoch ms).
+    Read { at: i64 },
+    /// Every source answered and none holds a receipt.
+    NotFound,
+    /// At least one source could not answer (a worktree the inventory could
+    /// not establish, an unreadable or corrupt receipt, the deadline): a typed
+    /// partial, never "no receipt".
+    Unknown,
+}
+
+/// Exact per-ID read-receipt lookups in every product worktree of a
+/// context, for the fleet-wide counters that count every recipient's unread
+/// mail (night-shift latency, maintenance predicates, launch context,
+/// dead-letter list, operator inspection). It exposes which IDs were read,
+/// never message content, so it needs no audience; it is the same receipt
+/// evidence [`logical_snapshot`] treats as acknowledgement.
+///
+/// No receipt directory is ever listed: a lookup opens one receipt name per
+/// source (each source's per-key directory is opened once and cached), so
+/// its cost is bounded by the inventoried root count and is not charged to
+/// a directory-listing budget. Never writes.
+pub struct ReceiptInspector {
+    /// One slot per inventoried root; `None` for a root the inventory could
+    /// not establish (every lookup that would need it is `Unknown`).
+    roots: Vec<Option<PathBuf>>,
+    inventory_complete: bool,
+    deadline: Instant,
+    key_dirs: RefCell<HashMap<(usize, String), KeyDir>>,
+    partial: Cell<bool>,
+}
+
+/// One source's receipt directory for one key.
+enum KeyDir {
+    Dir(PinnedDir),
+    /// Absent, or an unusable entry (a regular file or symlink where the
+    /// directory should be), which can hold no receipt and is skipped.
+    Absent,
+    /// The directory exists but could not be opened safely.
+    Unknown,
+}
+
+impl ReceiptInspector {
+    /// Inventory `ctx`'s product worktrees. Only the inventory draws from
+    /// `limits`' listing budget; `limits.deadline` also bounds every later
+    /// lookup.
+    // trace:STORY-1843 | ai:claude
+    pub fn new(ctx: &MailboxContext, limits: &ReadLimits) -> Self {
+        let mut budget = Budget::new(limits);
+        let (roots, inventory_error) = inventory(ctx, &mut budget);
+        // A local-only context has no siblings to inventory: its one root
+        // answers for the whole project.
+        let inventory_complete = match inventory_error {
+            None => true,
+            Some(SourceErrorCode::NotAGitCheckout) => ctx.repository.is_none(),
+            Some(_) => false,
+        };
+        Self {
+            roots: roots.into_iter().map(Result::ok).collect(),
+            inventory_complete,
+            deadline: limits.deadline,
+            key_dirs: RefCell::default(),
+            partial: Cell::new(!inventory_complete),
+        }
+    }
+
+    /// An inspector for a context that could not be resolved: every lookup
+    /// is `Unknown`.
+    pub fn unavailable() -> Self {
+        Self {
+            roots: Vec::new(),
+            inventory_complete: false,
+            deadline: Instant::now(),
+            key_dirs: RefCell::default(),
+            partial: Cell::new(true),
+        }
+    }
+
+    /// Whether some lookup (or the inventory) could not be answered fully.
+    pub fn partial(&self) -> bool {
+        self.partial.get()
+    }
+
+    /// Look up `key`'s receipt for message `id` in every source. A receipt
+    /// anywhere is `Read`; otherwise any source that could not answer makes
+    /// it `Unknown` (and the inspector partial).
+    // trace:STORY-1843 | ai:claude
+    pub fn lookup(&self, key: &str, id: &str) -> ReceiptLookup {
+        if !safe_id(id) {
+            // Writers never name a receipt after an unsafe ID.
+            return ReceiptLookup::NotFound;
+        }
+        let key = sanitize_key(key);
+        let name = format!("{id}.txt");
+        let mut unknown = !self.inventory_complete;
+        let mut key_dirs = self.key_dirs.borrow_mut();
+        for (index, root) in self.roots.iter().enumerate() {
+            let Some(root) = root else {
+                unknown = true;
+                continue;
+            };
+            if Instant::now() >= self.deadline {
+                unknown = true;
+                break;
+            }
+            let dir = key_dirs
+                .entry((index, key.clone()))
+                .or_insert_with(|| open_key_dir(root, &key));
+            let dir = match dir {
+                KeyDir::Dir(dir) => dir,
+                KeyDir::Absent => continue,
+                KeyDir::Unknown => {
+                    unknown = true;
+                    continue;
+                }
+            };
+            match dir.read_file(OsStr::new(&name), SMALL_FILE) {
+                Ok(None) => {}
+                Ok(Some(bytes)) => match parse_millis(&bytes) {
+                    Ok(at) => return ReceiptLookup::Read { at },
+                    Err(_) => unknown = true,
+                },
+                // An unsafe receipt file (a symlink, or hard-linked) is
+                // evidence that could not be read, the same as in
+                // `logical_snapshot`: Unknown, never NotFound.
+                Err(_) => unknown = true,
+            }
+        }
+        if unknown {
+            self.partial.set(true);
+            ReceiptLookup::Unknown
+        } else {
+            ReceiptLookup::NotFound
+        }
+    }
+}
+
+/// An unusable entry on the path to a key's receipt directory (a regular
+/// file where a directory belongs, or a symlink) cannot hold a receipt and
+/// is skipped, never followed. Receipt files themselves are never skipped.
+fn skippable(code: SourceErrorCode) -> bool {
+    matches!(
+        code,
+        SourceErrorCode::LayoutUnsupported | SourceErrorCode::UnsafeEntry
+    )
+}
+
+fn open_key_dir(root: &Path, key: &str) -> KeyDir {
+    let Ok(mut dir) = PinnedDir::open_root(root) else {
+        return KeyDir::Unknown;
+    };
+    for component in [".aida", "mailbox", ".read-receipts", key] {
+        match dir.child_dir(component) {
+            Ok(Some(child)) => dir = child,
+            Ok(None) => return KeyDir::Absent,
+            Err(code) if skippable(code) => return KeyDir::Absent,
+            Err(_) => return KeyDir::Unknown,
+        }
+    }
+    KeyDir::Dir(dir)
 }
 
 fn observation(
@@ -731,6 +1010,9 @@ fn inventory(
         _ => None,
     };
     let mut roots = vec![Ok(requested.clone())];
+    let Some(repository) = &ctx.repository else {
+        return (roots, Some(SourceErrorCode::NotAGitCheckout));
+    };
     let records =
         match list_worktrees(&requested, budget).and_then(|b| parse_worktree_porcelain_z(&b)) {
             Ok(records) => records,
@@ -771,7 +1053,7 @@ fn inventory(
             }
         }
         match common_git_of(&path) {
-            Ok(common) if common == *ctx.repository.path() => roots.push(Ok(path)),
+            Ok(common) if common == *repository.path() => roots.push(Ok(path)),
             Ok(_) => roots.push(Err((path, SourceErrorCode::CommonGitMismatch))),
             Err(code) => roots.push(Err((path, code))),
         }
@@ -1180,7 +1462,11 @@ fn reconcile(
     observed: &[Option<ObservedSource>],
     local_count: usize,
     audience: &ResolvedAudience,
+    include_own_sent: bool,
 ) -> (Vec<(Message, Vec<Provenance>)>, Conflicts) {
+    let reaches = |m: &Message| {
+        !audience.matching_keys(m).is_empty() || (include_own_sent && audience.sent_by_own(m))
+    };
     let mut by_id: BTreeMap<&str, Vec<(usize, &ObservedMessage)>> = BTreeMap::new();
     for (index, source) in observed.iter().enumerate() {
         for m in source.iter().flat_map(|s| &s.messages) {
@@ -1193,19 +1479,15 @@ fn reconcile(
     let mut records = Vec::new();
     let mut conflicts = Vec::new();
     for (id, replicas) in by_id {
-        let visible = replicas
-            .iter()
-            .any(|(_, m)| !audience.matching_keys(&m.message).is_empty())
+        let visible = replicas.iter().any(|(_, m)| reaches(&m.message))
             || replicas.iter().any(|(_, m)| {
                 // A delete marker hides the message, but its audience is the
                 // original one; check visibility on the undeleted shape.
                 m.message.deleted
-                    && !audience
-                        .matching_keys(&Message {
-                            deleted: false,
-                            ..m.message.clone()
-                        })
-                        .is_empty()
+                    && reaches(&Message {
+                        deleted: false,
+                        ..m.message.clone()
+                    })
             });
         if !visible {
             continue;
@@ -1243,7 +1525,7 @@ fn reconcile(
             conflicts.push((id.to_string(), threads));
             continue;
         }
-        if message.deleted || audience.matching_keys(&message).is_empty() {
+        if message.deleted || !reaches(&message) {
             continue;
         }
         // A retraction is monotone: a higher-rank replica elsewhere (say the

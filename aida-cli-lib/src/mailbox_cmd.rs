@@ -33,19 +33,21 @@ mod mailbox_migration;
 /// Largest recorded read latency among the recipient's 100 most recent
 /// acknowledgements. Keeping this calculation shared lets transport-level
 /// acknowledgement tests verify the same history consumed by the CLI.
-// trace:TASK-1271 | ai:codex
+/// STORY-1843: the receipts come from the same [`mailbox_store::ReadEvidence`]
+/// (every product worktree) that counts the row's unread mail.
+// trace:TASK-1271 trace:STORY-1843 | ai:codex
 pub(crate) fn max_read_latency_ms(
-    project_root: &std::path::Path,
+    evidence: &mailbox_store::ReadEvidence,
     recipient: &str,
     messages: &[aida_core::mailbox::Message],
 ) -> Option<i64> {
-    let receipts = mailbox_store::read_receipts(project_root, recipient);
-    let mut read_latencies: Vec<(i64, i64)> = messages
-        .iter()
+    // Only mail addressed to the recipient can carry its receipt.
+    let mut read_latencies: Vec<(i64, i64)> = aida_core::mailbox::inbox_for(recipient, messages)
+        .into_iter()
         .filter_map(|message| {
-            receipts
-                .get(&message.id)
-                .map(|seen| (*seen, seen.saturating_sub(message.timestamp).max(0)))
+            evidence
+                .receipt_at(recipient, message)
+                .map(|seen| (seen, seen.saturating_sub(message.timestamp).max(0)))
         })
         .collect();
     read_latencies.sort_by_key(|(seen, _)| std::cmp::Reverse(*seen));
@@ -54,6 +56,130 @@ pub(crate) fn max_read_latency_ms(
         .take(100)
         .map(|(_, latency)| latency)
         .max()
+}
+
+/// The `aida mailbox latency` rows, one per recipient, plus the partial
+/// note to print. STORY-1843: unread counts and read latencies come from the
+/// verified audience's logical view (only mail with no read evidence is
+/// unread; a receipt in any worktree is a read). A recipient that is not one
+/// of this session's inboxes is an operator inspection over this checkout
+/// and the store, the only path that reads them directly.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn latency_rows(
+    project_root: &std::path::Path,
+    store_root: &std::path::Path,
+    own: &aida_core::mailbox_logical::ResolvedAudience,
+    recipient: Option<&str>,
+    now: i64,
+) -> Result<(Vec<serde_json::Value>, Option<String>)> {
+    let (audience, identities) = match recipient {
+        Some(r) => match own.narrowed_to(r) {
+            Some(narrowed) => {
+                let keys = narrowed.keys().map(str::to_string).collect();
+                (Some(narrowed), keys)
+            }
+            None => (None, vec![r.to_string()]),
+        },
+        None => (Some(own.clone()), own.keys().map(str::to_string).collect()),
+    };
+    let view = audience.map(|audience| {
+        crate::mailbox_view::read_own_mail(
+            project_root,
+            store_root,
+            &audience,
+            &crate::mailbox_view::explicit_limits(),
+        )
+    });
+    let inspected = match &view {
+        Some(_) => Vec::new(),
+        None => {
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            aida_core::mailbox::merge_dedup(&local, &canonical)
+        }
+    };
+    let evidence = match &view {
+        Some(_) => None,
+        None => Some(mailbox_store::ReadEvidence::load(project_root)?),
+    };
+    let rows = identities
+        .iter()
+        .map(|who| {
+            let (unread, oldest, max_read) = match &view {
+                Some(view) => {
+                    let unread = view.unread_for(&[who.as_str()]);
+                    let oldest = unread.iter().map(|m| m.timestamp).min();
+                    (
+                        unread.len(),
+                        oldest.map(|ts| (now - ts).max(0)),
+                        view_read_latency_ms(view, who),
+                    )
+                }
+                None => {
+                    let watermark = mailbox_store::read_watermark(project_root, who);
+                    // trace:STORY-1843 | ai:claude — receipts are reads too,
+                    // and the latency comes from the same evidence scope.
+                    let (unread_side, max_read) = match &evidence {
+                        Some(evidence) => {
+                            // Look up only mail this recipient can hold
+                            // receipts for, so other recipients' mail never
+                            // spends the shared lookup deadline.
+                            let mine: Vec<aida_core::mailbox::Message> =
+                                aida_core::mailbox::inbox_for(who, &inspected)
+                                    .into_iter()
+                                    .cloned()
+                                    .collect();
+                            (
+                                evidence.without_receipted_for(who, &mine),
+                                max_read_latency_ms(evidence, who, &mine),
+                            )
+                        }
+                        None => (inspected.clone(), None),
+                    };
+                    let latency =
+                        aida_core::mailbox::mailbox_latency(who, &unread_side, watermark, now);
+                    (latency.unread, latency.oldest_unread_age_ms, max_read)
+                }
+            };
+            serde_json::json!({
+                "recipient": who,
+                "last_seen_at": mailbox_store::read_last_seen(project_root, who),
+                "unread": unread,
+                "oldest_unread_age_ms": oldest,
+                "max_read_latency_ms": max_read,
+                "partial": view.as_ref().is_some_and(|v| v.is_partial())
+                    || evidence.as_ref().is_some_and(|e| e.partial()),
+                "inspection": view.is_none(),
+            })
+        })
+        .collect();
+    let note = view.as_ref().and_then(|v| v.partial_note()).or_else(|| {
+        evidence
+            .as_ref()
+            .filter(|e| e.partial())
+            .map(|_| crate::mailbox_store::PARTIAL_EVIDENCE_NOTE.to_string())
+    });
+    Ok((rows, note))
+}
+
+/// [`max_read_latency_ms`] over a logical view: the largest read latency
+/// among `who`'s 100 most recent per-ID receipts, in any worktree.
+// trace:STORY-1843 | ai:claude
+fn view_read_latency_ms(view: &crate::mailbox_view::OwnMail, who: &str) -> Option<i64> {
+    let mut reads: Vec<(i64, i64)> = view
+        .records()
+        .iter()
+        .filter_map(|r| match &r.read {
+            aida_core::mailbox_logical::ReadEvidence::Acknowledged { key, at, .. }
+                if key.eq_ignore_ascii_case(who) =>
+            {
+                Some((*at, at.saturating_sub(r.message.timestamp).max(0)))
+            }
+            _ => None,
+        })
+        .collect();
+    reads.sort_by_key(|(seen, _)| std::cmp::Reverse(*seen));
+    reads.into_iter().take(100).map(|(_, l)| l).max()
 }
 
 /// Handler for `aida mailbox` — the local layer of the hybrid inter-agent
@@ -96,32 +222,16 @@ pub(crate) fn handle_mailbox_command(
             mailbox_migration::print_report(&report, *json || crate::output_format_is_json())
         }
         MailboxCommand::Latency { recipient, json } => {
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let merged = merge_dedup(&local, &canonical);
-            let identities = recipient.clone().map(|v| vec![v]).unwrap_or_else(|| {
-                std::env::var("AIDA_SESSION_ROLE")
-                    .ok()
-                    .filter(|v| !v.trim().is_empty())
-                    .map(|v| vec![v])
-                    .unwrap_or_else(|| vec![current_user_id(None)])
-            });
-            let now = chrono::Utc::now().timestamp_millis();
-            let rows: Vec<serde_json::Value> = identities
-                .iter()
-                .map(|who| {
-                    let watermark = mailbox_store::read_watermark(project_root, who);
-                    let latency = aida_core::mailbox::mailbox_latency(who, &merged, watermark, now);
-                    let max_read = max_read_latency_ms(project_root, who, &merged);
-                    serde_json::json!({
-                        "recipient": who,
-                        "last_seen_at": mailbox_store::read_last_seen(project_root, who),
-                        "unread": latency.unread,
-                        "oldest_unread_age_ms": latency.oldest_unread_age_ms,
-                        "max_read_latency_ms": max_read,
-                    })
-                })
-                .collect();
+            let (rows, note) = latency_rows(
+                project_root,
+                store_root,
+                &crate::mailbox_view::own_audience(),
+                recipient.as_deref(),
+                chrono::Utc::now().timestamp_millis(),
+            )?;
+            if let Some(note) = note {
+                eprintln!("{note}");
+            }
             if *json {
                 println!("{}", serde_json::to_string_pretty(&rows)?);
             } else {
@@ -212,10 +322,13 @@ pub(crate) fn handle_mailbox_command(
             // ambiguous reply id landed unvalidated. Threading still prefers an
             // explicit --thread; validation no longer depends on which branch
             // wins. trace:BUG-1297 | ai:claude
+            // STORY-1843: a reply target or thread reference resolves
+            // against the same logical snapshot the inbox lists.
+            // trace:STORY-1843 | ai:claude
             let merged = if thread.is_some() || in_reply_to.is_some() {
-                let local = mailbox_store::read_local_messages(project_root)?;
-                let canonical = mailbox_store::read_canonical_messages(store_root)?;
-                merge_dedup(&local, &canonical)
+                crate::mailbox_view::addressable(project_root, store_root)
+                    .messages()
+                    .to_vec()
             } else {
                 Vec::new()
             };
@@ -339,12 +452,17 @@ pub(crate) fn handle_mailbox_command(
             unread,
             recent_read_tail,
         } => {
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let merged = merge_dedup(&local, &canonical);
-
             // Operator-wide read-only view: every message across all agents.
+            // It and an inspection of another inbox read this checkout and
+            // the store directly; the own-audience path below reads only the
+            // budgeted logical snapshot. trace:STORY-1843 | ai:claude
+            let source_local = || -> Result<Vec<Message>> {
+                let local = mailbox_store::read_local_messages(project_root)?;
+                let canonical = mailbox_store::read_canonical_messages(store_root)?;
+                Ok(merge_dedup(&local, &canonical))
+            };
             if *all {
+                let merged = source_local()?;
                 let mut msgs: Vec<&Message> = merged.iter().filter(|m| !m.deleted).collect();
                 msgs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
                 if msgs.is_empty() {
@@ -366,55 +484,39 @@ pub(crate) fn handle_mailbox_command(
             }
 
             // BUG-555: with no explicit --agent, read across the SAME identity
-            // set the notice/hook spans (`inbox_identities()` = shell user +
-            // session role), not just the shell user. Role-addressed mail (e.g.
-            // a handoff to `advisor`) lands in the role's inbox, invisible to
-            // the shell user — so the old shell-user-only read never SHOWED nor
-            // marked-seen role mail, and the unread nag never cleared. We now
-            // union every identity's inbox (dedup by id) and advance EACH
-            // identity's watermark, so reading clears exactly what the notice
-            // surfaces. trace:BUG-555 | ai:claude
-            let who_list: Vec<String> = match agent {
-                Some(a) => vec![a.clone()],
-                None => inbox_identities(),
-            };
-            let mut seen_ids = std::collections::HashSet::new();
-            let mut inbox: Vec<&Message> = Vec::new();
-            for who in &who_list {
-                let wm = mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
-                let visible = if *archived {
-                    let mut rows: Vec<&Message> = inbox_for(who, &merged)
-                        .into_iter()
-                        .filter(|m| m.archived)
-                        .collect();
-                    rows.sort_by(|a, b| {
-                        b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id))
-                    });
-                    rows
-                } else if *unread {
-                    inbox_for(who, &merged)
-                        .into_iter()
-                        .filter(|m| !m.archived && m.timestamp > wm)
-                        .collect()
-                } else {
-                    default_inbox_view(inbox_for(who, &merged), Some(wm), *recent_read_tail)
-                };
-                for m in visible {
-                    // `--unread` filters to messages past THIS identity's
-                    // watermark; the seen-mark below still advances to each
-                    // identity's full-inbox newest (a filtered read must not
-                    // under-advance + resurrect older-but-unread items).
-                    if seen_ids.insert(m.id.clone()) {
-                        inbox.push(m);
+            // set the notice/hook spans, so reading clears exactly what the
+            // notice surfaces. STORY-1843: that set is the audience the core
+            // identity policy grants this process, read as one logical view
+            // across this repository's worktrees and the canonical store.
+            // `--agent` can only narrow it to one of its own inboxes; naming
+            // anyone else's inbox is a read-only operator inspection.
+            // trace:BUG-555 trace:STORY-1843 | ai:claude
+            let own = crate::mailbox_view::own_audience();
+            let audience = match agent {
+                None => own,
+                Some(a) => match own.narrowed_to(a) {
+                    Some(narrowed) => narrowed,
+                    None => {
+                        return inspect_inbox(
+                            &source_local()?,
+                            a,
+                            *archived,
+                            *unread,
+                            *recent_read_tail,
+                            project_root,
+                        )
                     }
-                }
-            }
-            if *unread {
-                inbox.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
-            } else {
-                inbox.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
-            }
-            let who_label = who_list.join(" + ");
+                },
+            };
+            let view = crate::mailbox_view::read_own_mail(
+                project_root,
+                store_root,
+                &audience,
+                &crate::mailbox_view::explicit_limits(),
+            );
+            let inbox = select_inbox_rows(view.records(), *archived, *unread, *recent_read_tail);
+            let who_label = audience.keys().collect::<Vec<_>>().join(" + ");
+            let partial = view.partial_note();
             if inbox.is_empty() {
                 let label = if *archived {
                     "no archived mail for"
@@ -423,13 +525,46 @@ pub(crate) fn handle_mailbox_command(
                 } else {
                     "inbox empty for"
                 };
-                println!(
-                    "{} {} {}",
-                    crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
-                    label,
-                    who_label.cyan()
-                );
+                match &partial {
+                    // A partial view never reads as an empty inbox.
+                    Some(note) => println!(
+                        "{} {} {} — {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        "nothing shown for".yellow(),
+                        who_label.cyan(),
+                        note
+                    ),
+                    None => println!(
+                        "{} {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
+                        label,
+                        who_label.cyan()
+                    ),
+                }
                 return Ok(());
+            }
+            // Reading marks what it displays seen (STORY-539) — UNLESS
+            // `--peek`, which surfaces without consuming (STORY-585 #1/#4).
+            //
+            // This write happens BEFORE any output below, header included.
+            // BUG-1482: established mechanism — `install_sigpipe_handler`
+            // (BUG-99) restores SIGPIPE's default disposition at startup so
+            // `aida ... | head -N` exits with the classic "downstream closed,
+            // terminate quietly" semantics instead of Rust's default
+            // ignore-and-panic-on-EPIPE behavior. That means a write in the
+            // print loop below can end the process via the SIGPIPE signal
+            // itself, mid-loop, with no unwind — so any watermark write
+            // placed AFTER printing (the old order) never ran for a reader
+            // that closed early (`| head`). Doing the write first means every
+            // message this call is about to *display* is already recorded as
+            // seen before the first byte of it reaches a pipe that might
+            // close. trace:BUG-1482 | ai:claude
+            //
+            // STORY-1843 B2b: the marks are per-ID receipts for exactly the
+            // displayed unread messages (wherever they live); the legacy
+            // watermark is never advanced (ruling 76 Q3). trace:STORY-1843 | ai:claude
+            if !*archived && !*peek {
+                crate::mailbox_view::mark_displayed(project_root, view.audience(), &inbox)?;
             }
             let header = if *archived {
                 "Archived for"
@@ -443,51 +578,21 @@ pub(crate) fn handle_mailbox_command(
                 format!("{header} {who_label}").bold(),
                 format!("({})", inbox.len()).dimmed()
             );
-            // Reading marks each identity's inbox seen up to its newest message,
-            // so the unread / urgent surfacing clears (STORY-539) — UNLESS
-            // `--peek`, which surfaces without consuming (STORY-585 #1/#4). Each
-            // mark advances to that identity's FULL inbox newest, not the
-            // filtered view's. trace:BUG-555 | ai:claude
-            //
-            // This write happens BEFORE the print loop below, not after.
-            // BUG-1482: established mechanism — `install_sigpipe_handler`
-            // (BUG-99) restores SIGPIPE's default disposition at startup so
-            // `aida ... | head -N` exits with the classic "downstream closed,
-            // terminate quietly" semantics instead of Rust's default
-            // ignore-and-panic-on-EPIPE behavior. That means a write in the
-            // print loop below can end the process via the SIGPIPE signal
-            // itself, mid-loop, with no unwind — so any watermark write
-            // placed AFTER printing (the old order) never ran for a reader
-            // that closed early (`| head`). Doing the write first means every
-            // message this call is about to *display* is already recorded as
-            // seen before the first byte of it reaches a pipe that might
-            // close. trace:BUG-1482 | ai:claude
-            if *archived {
-                // Read-only audit view.
-            } else if *peek {
-                // marked below, after printing (peek never marks seen).
-            } else {
-                for who in &who_list {
-                    let prior_watermark =
-                        mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
-                    let full_inbox = inbox_for(who, &merged);
-                    if let Some(newest) = full_inbox.iter().map(|m| m.timestamp).max() {
-                        // Receipts describe reads observed by this version of AIDA.
-                        // Do not backfill messages already acknowledged by a legacy
-                        // watermark: their actual read time is unknowable.
-                        // trace:TASK-1271 | ai:codex
-                        let ids: Vec<&str> = full_inbox
-                            .iter()
-                            .filter(|m| m.timestamp > prior_watermark)
-                            .map(|m| m.id.as_str())
-                            .collect();
-                        mailbox_store::record_seen(project_root, who, &ids)?;
-                        mailbox_store::set_watermark(project_root, who, newest)?;
-                    }
-                }
+            if let Some(note) = &partial {
+                println!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    note.yellow()
+                );
             }
-            for m in &inbox {
-                print_mailbox_line(m);
+            for record in &inbox {
+                let tag = match crate::mailbox_view::ReadState::of(record) {
+                    crate::mailbox_view::ReadState::ReadLegacy => {
+                        Some(crate::mailbox_view::ReadState::ReadLegacy.as_str())
+                    }
+                    _ => None,
+                };
+                print_mailbox_line_tagged(&record.message, tag);
             }
             if *peek {
                 println!(
@@ -502,32 +607,40 @@ pub(crate) fn handle_mailbox_command(
             // SessionStart / per-turn hook calls this). Plain text, capped,
             // scoped to the session's identity set; silent when caught up.
             // trace:STORY-585 | ai:claude
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let merged = merge_dedup(&local, &canonical);
-            let watermarks = mailbox_store::read_all_watermarks(project_root)?;
-            let identities: Vec<String> = match agent {
-                Some(a) => vec![a.clone()],
-                None => inbox_identities(),
+            // STORY-1843: the same verified audience and logical view as
+            // `inbox`; only mail with no read evidence is new (a legacy
+            // watermark is not). A partial view says so instead of going
+            // quiet. `--agent` narrows to one of this session's own inboxes;
+            // any other name is not this session's mail and gets no notice.
+            // trace:STORY-1843 | ai:claude
+            let own = crate::mailbox_view::own_audience();
+            let audience = match agent {
+                None => own,
+                Some(a) => match own.narrowed_to(a) {
+                    Some(narrowed) => narrowed,
+                    None => anyhow::bail!(
+                        "`{a}` is not one of this session's inboxes ({}); a notice covers only your own mail",
+                        own.keys().collect::<Vec<_>>().join(", ")
+                    ),
+                },
             };
-            let cap = cap.unwrap_or(aida_core::mailbox::NOTICE_DEFAULT_CAP);
-            let summary = aida_core::mailbox::build_notice(
-                identities.iter().map(String::as_str),
-                &merged,
-                &watermarks,
-                cap,
+            let view = crate::mailbox_view::read_own_mail(
+                project_root,
+                store_root,
+                &audience,
+                &crate::mailbox_view::passive_limits(),
             );
-            if summary.is_empty() {
-                return Ok(()); // caught up → emit nothing (safe hook no-op)
-            }
-            print!("{}", render_mailbox_notice(&summary, &identities));
+            let identities: Vec<String> = audience.keys().map(str::to_string).collect();
+            let cap = cap.unwrap_or(aida_core::mailbox::NOTICE_DEFAULT_CAP);
+            print!("{}", notice_text(&view, &identities, cap));
             Ok(())
         }
         MailboxCommand::List { stranded } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let merged = merge_dedup(&local, &canonical);
-            let watermarks = mailbox_store::read_all_watermarks(project_root)?;
+            // trace:STORY-1843 | ai:claude — receipts are reads too.
+            let evidence = mailbox_store::ReadEvidence::load(project_root)?;
             // BUG-679: dead-letter view — recipients with unread mail that
             // match no known role / registered agent. Pure classification over
             // the mailbox + the same known-identity set the send-time warning
@@ -535,9 +648,12 @@ pub(crate) fn handle_mailbox_command(
             // stranded. trace:BUG-679 | ai:claude
             if *stranded {
                 let known = known_mailbox_identities(project_root);
-                let rows = aida_core::mailbox::stranded_recipients(&merged, &watermarks, |r| {
-                    known.contains(&r.trim().to_lowercase())
-                });
+                let rows = aida_core::mailbox::stranded_recipients_read_by(
+                    &merged,
+                    |r| known.contains(&r.trim().to_lowercase()),
+                    |r, m| evidence.read_by(r, m),
+                );
+                warn_partial_evidence(&evidence);
                 if rows.is_empty() {
                     println!(
                         "{} no stranded mail — every recipient with unread mail matches a known role or registered agent",
@@ -575,11 +691,13 @@ pub(crate) fn handle_mailbox_command(
                 .into_iter()
                 .map(|role| role.name)
                 .collect();
-            let summaries = aida_core::mailbox::agent_summaries_for_agents(
+            let summaries = aida_core::mailbox::agent_summaries_read_by(
                 &merged,
-                &watermarks,
+                &evidence.watermarks,
                 known_agents.iter().map(String::as_str),
+                |agent, m| evidence.read_by(agent, m),
             );
+            warn_partial_evidence(&evidence);
             if summaries.is_empty() {
                 println!(
                     "{} no agents have mail",
@@ -624,11 +742,12 @@ pub(crate) fn handle_mailbox_command(
         }
         // A targeted read is deliberately non-consuming: unlike `inbox`, it
         // never advances a watermark or writes a receipt. trace:BUG-1297 | ai:codex
+        // STORY-1843: every verb taking a message ID resolves against the
+        // same logical snapshot the inbox lists (ruling on PR #2952 F1).
+        // trace:STORY-1843 | ai:claude
         MailboxCommand::Read { message_id } => {
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let merged = merge_dedup(&local, &canonical);
-            let msg = resolve_mailbox_message(&merged, message_id)?;
+            let book = crate::mailbox_view::addressable(project_root, store_root);
+            let msg = book.resolve(message_id)?;
             print_mailbox_line(msg);
             Ok(())
         }
@@ -637,14 +756,13 @@ pub(crate) fn handle_mailbox_command(
             if !policy.allow_retract {
                 anyhow::bail!("mailbox retract is disabled by [mailbox] allow_retract = false");
             }
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let merged = merge_dedup(&local, &canonical);
-            let msg = resolve_mailbox_message(&merged, message_id)?;
+            let book = crate::mailbox_view::addressable(project_root, store_root);
+            let msg = book.resolve(message_id)?;
             if msg.deleted {
                 anyhow::bail!("message {} is deleted", message_id);
             }
             ensure_mailbox_mutation_allowed(msg)?;
+            book.ensure_writable_here(msg, "retract")?;
             let marker = Message {
                 retracted: true,
                 body: String::new(),
@@ -663,11 +781,10 @@ pub(crate) fn handle_mailbox_command(
             if !policy.allow_delete {
                 anyhow::bail!("mailbox delete is disabled by [mailbox] allow_delete = false");
             }
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let merged = merge_dedup(&local, &canonical);
-            let msg = resolve_mailbox_message(&merged, message_id)?;
+            let book = crate::mailbox_view::addressable(project_root, store_root);
+            let msg = book.resolve(message_id)?;
             ensure_mailbox_mutation_allowed(msg)?;
+            book.ensure_writable_here(msg, "delete")?;
             let marker = Message {
                 deleted: true,
                 retracted: false,
@@ -693,10 +810,8 @@ pub(crate) fn handle_mailbox_command(
             }
             match (message_id.as_deref(), older_than.as_deref()) {
                 (Some(id), None) => {
-                    let local = mailbox_store::read_local_messages(project_root)?;
-                    let canonical = mailbox_store::read_canonical_messages(store_root)?;
-                    let merged = merge_dedup(&local, &canonical);
-                    let msg = resolve_mailbox_message(&merged, id)?;
+                    let book = crate::mailbox_view::addressable(project_root, store_root);
+                    let msg = book.resolve(id)?;
                     if msg.deleted {
                         anyhow::bail!("message {id} is deleted");
                     }
@@ -708,16 +823,31 @@ pub(crate) fn handle_mailbox_command(
                         );
                         return Ok(());
                     }
+                    book.ensure_writable_here(msg, "archive")?;
+                    // An own-audience record's read state is the logical
+                    // view's (a per-ID receipt or a legacy watermark); any
+                    // other inbox is inspected over this checkout.
+                    let own_read = match (book.record(&msg.id), agent) {
+                        (Some(record), None) => Some(
+                            crate::mailbox_view::ReadState::of(record)
+                                != crate::mailbox_view::ReadState::Unread,
+                        ),
+                        _ => None,
+                    };
                     let who_list: Vec<String> = match agent {
                         Some(a) => vec![a.clone()],
                         None => inbox_identities(),
                     };
-                    if !message_read_by_all_selected_visible_identities(
-                        msg,
-                        &merged,
-                        project_root,
-                        &who_list,
-                    ) {
+                    let read = match own_read {
+                        Some(read) => read,
+                        None => message_read_by_all_selected_visible_identities(
+                            msg,
+                            book.messages(),
+                            &mailbox_store::ReadEvidence::load(project_root)?,
+                            &who_list,
+                        ),
+                    };
+                    if !read {
                         anyhow::bail!(
                             "message {id} is unread or not visible to the selected inbox; read it before archiving"
                         );
@@ -762,11 +892,10 @@ pub(crate) fn handle_mailbox_command(
             archive_mailbox_older_than(project_root, store_root, agent.as_deref(), older_than)
         }
         MailboxCommand::Thread { thread_id } => {
-            let local = mailbox_store::read_local_messages(project_root)?;
-            let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let all = merge_dedup(&local, &canonical);
-            let resolved_thread = resolve_mailbox_thread(&all, thread_id, false)?;
-            let msgs = thread_view(&resolved_thread, &all);
+            let book = crate::mailbox_view::addressable(project_root, store_root);
+            let all = book.messages();
+            let resolved_thread = resolve_mailbox_thread(all, thread_id, false)?;
+            let msgs = thread_view(&resolved_thread, all);
             if msgs.is_empty() {
                 anyhow::bail!("thread {resolved_thread} exists but has no visible messages");
             }
@@ -993,12 +1122,14 @@ fn archive_mailbox_older_than(
         None => inbox_identities(),
     };
 
+    // Receipts are listed once for every identity, not once per message.
+    let evidence = mailbox_store::ReadEvidence::load(project_root)?;
     let mut by_id: std::collections::BTreeMap<String, Message> = std::collections::BTreeMap::new();
     for who in &who_list {
-        let wm = mailbox_store::read_watermark(project_root, who);
-        for m in archive_candidates(inbox_for(who, &merged), wm, cutoff) {
-            if !message_read_by_all_selected_visible_identities(m, &merged, project_root, &who_list)
-            {
+        // Every message counts as a candidate by age; whether it was read
+        // (receipt or watermark) is checked per selected identity below.
+        for m in archive_candidates(inbox_for(who, &merged), Some(i64::MAX), cutoff) {
+            if !message_read_by_all_selected_visible_identities(m, &merged, &evidence, &who_list) {
                 continue;
             }
             by_id.entry(m.id.clone()).or_insert_with(|| m.clone());
@@ -1031,11 +1162,24 @@ fn archive_mailbox_older_than(
     Ok(())
 }
 
+/// Say on stderr when an inspection's read evidence is partial, so a count
+/// that may include read mail is never shown as exact.
+// trace:STORY-1843 | ai:claude
+fn warn_partial_evidence(evidence: &mailbox_store::ReadEvidence) {
+    if evidence.partial() {
+        eprintln!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            mailbox_store::PARTIAL_EVIDENCE_NOTE
+        );
+    }
+}
+
 // trace:TASK-1211 | ai:codex
 fn message_read_by_all_selected_visible_identities(
     msg: &aida_core::mailbox::Message,
     messages: &[aida_core::mailbox::Message],
-    project_root: &std::path::Path,
+    evidence: &mailbox_store::ReadEvidence,
     identities: &[String],
 ) -> bool {
     let mut visible_to_any = false;
@@ -1047,12 +1191,130 @@ fn message_read_by_all_selected_visible_identities(
             continue;
         }
         visible_to_any = true;
-        let wm = mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
-        if msg.timestamp > wm {
+        if !evidence.read_by(who, msg) {
             return false;
         }
     }
     visible_to_any
+}
+
+/// The ambient notice for an own-audience view: the unread summary, plus a
+/// line when the view is partial. Empty (a safe hook no-op) only when the
+/// view is complete and nothing is unread.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn notice_text(
+    view: &crate::mailbox_view::OwnMail,
+    identities: &[String],
+    cap: usize,
+) -> String {
+    let unread: Vec<aida_core::mailbox::Message> = view.unread().into_iter().cloned().collect();
+    let summary = aida_core::mailbox::build_notice(
+        identities.iter().map(String::as_str),
+        &unread,
+        &std::collections::HashMap::new(),
+        cap,
+    );
+    let mut out = String::new();
+    if !summary.is_empty() {
+        out.push_str(&render_mailbox_notice(&summary, identities));
+    }
+    if let Some(note) = view.partial_note() {
+        out.push_str(&format!(
+            "📬 {note}. `aida mailbox inbox` shows what could be read.\n"
+        ));
+    }
+    out
+}
+
+/// The rows an own-audience inbox shows, in display order: archived (newest
+/// first), unread only (oldest first), or the default view — every unread
+/// message newest first, then the `recent_read_tail` newest read ones (a
+/// legacy-watermark read counts as read here and is labelled).
+// trace:STORY-1843 | ai:claude
+pub(crate) fn select_inbox_rows(
+    records: &[aida_core::mailbox_logical::SnapshotRecord],
+    archived: bool,
+    unread: bool,
+    recent_read_tail: usize,
+) -> Vec<&aida_core::mailbox_logical::SnapshotRecord> {
+    use crate::mailbox_view::ReadState;
+    let newest_first = |rows: &mut Vec<&aida_core::mailbox_logical::SnapshotRecord>| {
+        rows.sort_by(|a, b| {
+            b.message
+                .timestamp
+                .cmp(&a.message.timestamp)
+                .then_with(|| a.message.id.cmp(&b.message.id))
+        })
+    };
+    if archived {
+        let mut rows: Vec<_> = records.iter().filter(|r| r.message.archived).collect();
+        newest_first(&mut rows);
+        return rows;
+    }
+    let live = records.iter().filter(|r| !r.message.archived);
+    let (mut new, mut read): (Vec<_>, Vec<_>) =
+        live.partition(|r| ReadState::of(r) == ReadState::Unread);
+    if unread {
+        // `records` is already oldest first.
+        return new;
+    }
+    newest_first(&mut new);
+    newest_first(&mut read);
+    read.truncate(recent_read_tail);
+    new.extend(read);
+    new
+}
+
+/// `aida mailbox inbox --agent <someone else>`: a read-only inspection of an
+/// inbox this process does not hold. It reads the source-local layers (this
+/// checkout plus the canonical store) the way the pre-STORY-1843 inbox did,
+/// never marks anything, and says so.
+// trace:STORY-1843 | ai:claude
+fn inspect_inbox(
+    merged: &[aida_core::mailbox::Message],
+    who: &str,
+    archived: bool,
+    unread: bool,
+    recent_read_tail: usize,
+    project_root: &std::path::Path,
+) -> Result<()> {
+    use aida_core::mailbox::{default_inbox_view_read_by, inbox_for, Message};
+    // trace:STORY-1843 | ai:claude — a receipt in any worktree is a read.
+    let evidence = mailbox_store::ReadEvidence::load(project_root)?;
+    let mut rows: Vec<&Message> = if archived {
+        inbox_for(who, merged)
+            .into_iter()
+            .filter(|m| m.archived)
+            .collect()
+    } else if unread {
+        inbox_for(who, merged)
+            .into_iter()
+            .filter(|m| !m.archived && !evidence.read_by(who, m))
+            .collect()
+    } else {
+        default_inbox_view_read_by(
+            inbox_for(who, merged),
+            |m| evidence.read_by(who, m),
+            recent_read_tail,
+        )
+    };
+    if archived {
+        rows.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
+    }
+    warn_partial_evidence(&evidence);
+    println!(
+        "{} {}",
+        format!("Inspecting {who}").bold(),
+        format!(
+            "({}; not one of your inboxes — read-only, this checkout and the store only, nothing marked)",
+            rows.len()
+        )
+        .dimmed()
+    );
+    for m in rows {
+        print_mailbox_line(m);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1675,7 +1937,7 @@ mod tests {
     // trace:BUG-1482 | ai:claude
     #[cfg(unix)]
     #[test]
-    fn piped_inbox_read_advances_watermark_even_when_stdout_closes_early() {
+    fn piped_inbox_read_marks_displayed_even_when_stdout_closes_early() {
         if std::env::var("AIDA_BUG_1482_WORKER").is_ok() {
             let project_root = std::path::PathBuf::from(
                 std::env::var("AIDA_BUG_1482_PROJECT").expect("worker needs a project dir"),
@@ -1723,11 +1985,22 @@ mod tests {
         let mut child = std::process::Command::new(exe)
             // `--exact` matches on the FULLY QUALIFIED test name libtest
             // prints, not the bare function name.
-            .arg("mailbox_cmd::tests::piped_inbox_read_advances_watermark_even_when_stdout_closes_early")
+            .arg("mailbox_cmd::tests::piped_inbox_read_marks_displayed_even_when_stdout_closes_early")
             .arg("--exact")
             .arg("--nocapture")
             .env("AIDA_BUG_1482_WORKER", "1")
             .env("AIDA_BUG_1482_PROJECT", project.path())
+            // STORY-1843: `--agent bob` must be one of the worker's own
+            // inboxes to be marked, so the worker is an unbound `bob` with
+            // no inherited session evidence and no project to look one up in.
+            .env("AIDA_USER", "bob")
+            .env_remove("AIDA_HANDLE")
+            .env_remove("AIDA_AGENT_NAME")
+            .env_remove("AIDA_SESSION_ROLE")
+            .env_remove("AIDA_AGENT_TYPE")
+            .env_remove("AIDA_HOOK_PAYLOAD")
+            .env_remove("CLAUDE_PID")
+            .current_dir(project.path())
             .stdout(std::process::Stdio::piped())
             .spawn_retrying_etxtbsy()
             .expect("spawn worker");
@@ -1770,13 +2043,15 @@ mod tests {
             "worker should die specifically from SIGPIPE (the BUG-99 mechanism), got: {status:?}"
         );
 
-        let watermark = mailbox_store::read_watermark(project.path(), "bob");
-        assert_eq!(
-            watermark,
-            Some(2),
-            "watermark must advance to the newest DISPLAYED message even though \
-             the worker died mid-print from the closed pipe"
+        // STORY-1843 (ruling 76 Q3): the marks are per-ID receipts for the
+        // displayed messages, never a legacy watermark.
+        let receipts = mailbox_store::read_receipts(project.path(), "bob");
+        assert!(
+            receipts.contains_key("aaaaaaaa-1111") && receipts.contains_key("bbbbbbbb-2222"),
+            "every DISPLAYED message must be marked even though the worker died \
+             mid-print from the closed pipe: {receipts:?}"
         );
+        assert_eq!(mailbox_store::read_watermark(project.path(), "bob"), None);
     }
 
     // ── BUG-1534: relayed-claim provenance + second-person multicast guard ──
@@ -2067,9 +2342,9 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            mailbox_store::read_watermark(project.path(), "claude-impl-7"),
-            Some(42),
+        assert!(
+            mailbox_store::read_receipts(project.path(), "claude-impl-7")
+                .contains_key("cccccccc-3333"),
             "the default (no --agent) inbox read must union AIDA_AGENT_NAME's inbox \
              and mark its mail seen — before the fix, mail addressed to the agent \
              name was invisible because inbox_identities() never included it"
