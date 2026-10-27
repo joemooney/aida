@@ -24,12 +24,12 @@ description: |
 
   ## Non-goals
   Signatures, key enrollment, offline grant envelopes, a second authority service, automatic full-store trust-boundary merge, malicious raw Git, or copied/rolled-back entire-clone state. This signed single-HOME/node-local contract supersedes the original description signed-grant/offline-import clauses; full SKETCH v2 and signoff remain in comments.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-27T22:25:45.357584170Z
+modified_at: 2026-10-27T22:31:44.174846698Z
 req_type: Bug
 tags:
 - id-allocation
@@ -875,6 +875,15 @@ history:
   timestamp: 2026-10-27T22:25:48.971710253Z
   session_id: 83c678b7-4d50-40d3-9f12-d23e8eaa52b9
   changes: []
+- id: 01a17f7d-a92e-7cf3-8d0d-0bbb98eb9c01
+  author: aida-orchestrator
+  timestamp: 2026-10-27T22:31:44.174864736Z
+  session_id: 01a17f7a0262
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
@@ -883,3 +892,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 3dfcf99117
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'AC1-AC4 and the AC5 sync preflight are in place via #2919/#2938/#2972, and the scanner fixtures pass review. But the new read-only audit cannot see conflicts already inside HEAD: with no --against (or with --against equal to HEAD) collect() uses the single tip as its own merge base, so every in-tree claim counts as baseline and the audit reports clean and exits 0. The docs say the opposite. CI was still in progress at review time.'
+  recovery_hint: address the review findings, move BUG-2017 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-27T22:31:44.174846698Z
