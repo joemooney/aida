@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-27T09:26:30.040352296Z
+modified_at: 2026-10-27T09:26:41.405461235Z
 req_type: Story
 tags:
 - docs:impacted
@@ -502,6 +502,12 @@ comments:
   created_at: 2026-10-27T06:54:21.480536314Z
   modified_at: 2026-10-27T06:54:21.480536314Z
   session_id: 2f5cf167-c213-47c3-b02b-ed93cf93eced
+- id: 01a17cae-edfd-7303-a995-aaf3631b47e5
+  author: joe
+  content: 'S3d opened: PR-2971 at cebf0f344a (base story-1742-next, stacked on S3c #2967; completes STORY-1742). Adds the WORK->hub->PUBLIC e2e chain test (sanitized intake, aida push, peer aida pull, raw-Git hub->PUBLIC forwarding; only aida-store moves, private counters/product refs byte-identical), show boundary text (no hub-side gate; trust-root enrollment trusts unscanned history), setup-chapter end-to-end path, and conformance ledger docs/plans/2026-10-27-story-1742-conformance-ledger.md mapping every acceptance item/constraint/ruling to tests (pull criterion aca124ca now traced). Targeted story_1742_transport_profile 43/43, check-ci-fast 35/35. Reviewer story STORY-b6b1278890774ef993d2ebc327862470-022 queued. Must merge after #2967.'
+  created_at: 2026-10-27T09:26:41.405461235Z
+  modified_at: 2026-10-27T09:26:41.405461235Z
+  session_id: f583dd2d-8ef4-48b4-9628-f4b5b6ec27fb
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
