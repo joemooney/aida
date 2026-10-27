@@ -9,8 +9,18 @@ use std::sync::LazyLock;
 
 pub const SCANNER_VERSION: u32 = 1;
 pub const MAX_BYTES: usize = 1_048_576;
+/// The native oplog is append-only and grows with history, so it is bounded
+/// per record (each line, and each operation's node budget, keeps the
+/// ordinary limits) under this larger whole-file ceiling.
+// trace:STORY-1742 | ai:claude
+pub const MAX_OPLOG_BYTES: usize = 64 * MAX_BYTES;
+const MAX_OPLOG_OPERATIONS: usize = 1_000_000;
 const MAX_NODES: usize = 50_000;
 const MAX_DEPTH: usize = 64;
+
+#[path = "transport_yaml.rs"]
+mod yaml_grammar;
+pub use yaml_grammar::{plain as yaml_plain, Tags as YamlTags};
 
 /// Values never appear in errors or the public status projection.
 #[derive(Clone, Serialize, Deserialize)]
@@ -114,6 +124,20 @@ const FIXED_DIRECTORIES: &[&str] = &[
     ".aida/agents",
     ".aida/burndown",
 ];
+
+/// The record list of a native oplog as written (`operations:` in block
+/// style, then the `clock`/`node_id` trailer), ending at a line boundary:
+/// the bytes an append carries unchanged. `None` for any other layout.
+// trace:STORY-1742 | ai:claude
+pub fn oplog_prefix(bytes: &[u8]) -> Option<&[u8]> {
+    if !bytes.starts_with(b"operations:\n- ") {
+        return None;
+    }
+    let trailer = bytes
+        .windows(b"\nclock: ".len())
+        .rposition(|window| window == b"\nclock: ")?;
+    Some(&bytes[..trailer + 1])
+}
 
 fn canonical_uuid(stem: &str) -> bool {
     uuid::Uuid::parse_str(stem).is_ok_and(|id| id.to_string() == stem)
@@ -266,6 +290,26 @@ impl Policy {
         self.document(self.path_format(path)?, bytes)
     }
 
+    /// The one rule for what a new file version scans, shared by WORK intake
+    /// and the push gate so the two never disagree. `oplog.yaml` and
+    /// `metadata.yaml` scan only their delta against `before` (the parent
+    /// version); every other file is scanned whole. Policy covers what a
+    /// change adds, never history.
+    // trace:STORY-1742 | ai:claude
+    pub fn change(&self, path: &str, before: Option<&[u8]>, after: &[u8]) -> ScanResult {
+        match path {
+            "oplog.yaml" => self.oplog_append(before, after),
+            "metadata.yaml" => self.yaml_change(before, after),
+            path => self.artifact(path, after),
+        }
+    }
+
+    /// Whether [`Self::change`] reads a parent version for `path`.
+    // trace:STORY-1742 | ai:claude
+    pub fn scans_delta(path: &str) -> bool {
+        matches!(path, "oplog.yaml" | "metadata.yaml")
+    }
+
     pub fn validate(&self) -> ScanResult {
         if self.version != 1 || !self.reviewed || self.deny_tokens.len() > 256 {
             return Err(Refusal::Policy);
@@ -384,33 +428,30 @@ impl Policy {
     /// and unknown formats refuse. Both source bytes and decoded keys/scalars
     /// are inspected; no whole-section or schema-suffix exemptions exist.
     pub fn document(&self, extension: &str, bytes: &[u8]) -> ScanResult {
-        if bytes.len() > MAX_BYTES {
+        let oplog = extension == "aida-oplog";
+        if bytes.len() > if oplog { MAX_OPLOG_BYTES } else { MAX_BYTES } {
             return Err(Refusal::Limit);
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Refusal::Encoding)?;
-        self.text(text)?;
-        // Conservative pre-parse bound, including quoted delimiters. False
-        // refusals are preferable to parser recursion on hostile documents.
-        let mut nesting = 0usize;
-        for b in bytes {
-            if matches!(b, b'[' | b'{') {
-                nesting += 1;
+        if oplog {
+            // Every source byte is still scanned, in whole-line chunks; a
+            // single line beyond the ordinary bound refuses.
+            let mut chunk = 0..0;
+            for line in text.split_inclusive('\n') {
+                if line.len() > MAX_BYTES {
+                    return Err(Refusal::Limit);
+                }
+                if chunk.len() + line.len() > MAX_BYTES {
+                    self.text(&text[chunk.clone()])?;
+                    chunk = chunk.end..chunk.end;
+                }
+                chunk.end += line.len();
             }
-            if nesting > MAX_DEPTH {
-                return Err(Refusal::Limit);
-            }
-            if matches!(b, b']' | b'}') {
-                nesting = nesting.saturating_sub(1);
-            }
+            self.text(&text[chunk])?;
+        } else {
+            self.text(text)?;
         }
-        if text.lines().any(|line| {
-            line.bytes()
-                .take_while(|b| matches!(b, b' ' | b'\t'))
-                .count()
-                > 128
-        }) {
-            return Err(Refusal::Limit);
-        }
+        Self::shape(bytes, text)?;
         let mut nodes = MAX_NODES;
         match extension {
             "empty" if bytes.is_empty() => Ok(()),
@@ -423,11 +464,10 @@ impl Policy {
                 Ok(())
             }
             "yaml" | "yml" => {
-                // serde_yaml expands aliases. Forbid them before parsing so a
-                // small source cannot cause unbounded expanded allocations.
-                if text.contains(['&', '*', '!']) {
-                    return Err(Refusal::Unsupported);
-                }
+                // serde_yaml expands aliases. Forbid them (and tags) by event
+                // before parsing so a small source cannot cause unbounded
+                // expanded allocations. Prose bytes are not structure.
+                yaml_plain(bytes, YamlTags::Core)?;
                 let value: serde_yaml::Value =
                     serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
                 self.yaml(&value, 0, &mut nodes)
@@ -448,6 +488,154 @@ impl Policy {
         }
     }
 
+    /// Conservative pre-parse bound, including quoted delimiters. False
+    /// refusals are preferable to parser recursion on hostile documents.
+    fn shape(bytes: &[u8], text: &str) -> ScanResult {
+        let mut nesting = 0usize;
+        for b in bytes {
+            if matches!(b, b'[' | b'{') {
+                nesting += 1;
+            }
+            if nesting > MAX_DEPTH {
+                return Err(Refusal::Limit);
+            }
+            if matches!(b, b']' | b'}') {
+                nesting = nesting.saturating_sub(1);
+            }
+        }
+        if text.lines().any(|line| {
+            line.bytes()
+                .take_while(|b| matches!(b, b' ' | b'\t'))
+                .count()
+                > 128
+        }) {
+            return Err(Refusal::Limit);
+        }
+        Ok(())
+    }
+
+    /// Scan an oplog write. Policy applies to what the write adds, never to
+    /// history: when `after` carries `before`'s record list byte-for-byte,
+    /// only the appended records and trailer are content-scanned, while the
+    /// grammar (size, shape, anchors/aliases/tags, typed parse) covers the
+    /// whole file and the carried records must keep their exact meaning.
+    /// Anything else is scanned whole.
+    // trace:STORY-1742 | ai:claude
+    pub fn oplog_append(&self, before: Option<&[u8]>, after: &[u8]) -> ScanResult {
+        let Some((before, prefix)) = before
+            .and_then(|before| oplog_prefix(before).map(|prefix| (before, prefix)))
+            .filter(|(_, prefix)| after.starts_with(prefix))
+        else {
+            return self.document("aida-oplog", after);
+        };
+        if after.len() > MAX_OPLOG_BYTES {
+            return Err(Refusal::Limit);
+        }
+        let text = std::str::from_utf8(after).map_err(|_| Refusal::Encoding)?;
+        Self::shape(after, text)?;
+        yaml_plain(after, YamlTags::Variants)?;
+        let _: crate::oplog::OpLog = serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
+        // An unchanged record list (a trailer-only change, or a file a later
+        // commit carries as is) adds no records. trace:STORY-1742 | ai:claude
+        let rest = &text[prefix.len()..];
+        let added = if rest.starts_with("- ") {
+            format!("operations:\n{rest}")
+        } else {
+            format!("operations: []\n{rest}")
+        };
+        self.document("aida-oplog", added.as_bytes())?;
+        let records = |bytes: &[u8]| -> Result<Vec<serde_yaml::Value>, Refusal> {
+            let value: serde_yaml::Value =
+                serde_yaml::from_slice(bytes).map_err(|_| Refusal::Encoding)?;
+            value
+                .get("operations")
+                .and_then(serde_yaml::Value::as_sequence)
+                .cloned()
+                .ok_or(Refusal::Unsupported)
+        };
+        let (whole, old, new) = (
+            records(after)?,
+            records(before)?,
+            records(added.as_bytes())?,
+        );
+        if whole.len() > MAX_OPLOG_OPERATIONS
+            || whole.len() != old.len() + new.len()
+            || whole[..old.len()] != old[..]
+            || whole[old.len()..] != new[..]
+        {
+            return Err(Refusal::Unsupported);
+        }
+        Ok(())
+    }
+
+    /// Scan a YAML rewrite (store metadata) by what it adds: source lines
+    /// absent from `before` and decoded values that are new or changed. The
+    /// grammar still covers the whole file. Without a readable `before` the
+    /// file is scanned whole.
+    // trace:STORY-1742 | ai:claude
+    pub fn yaml_change(&self, before: Option<&[u8]>, after: &[u8]) -> ScanResult {
+        let Some((before, old)) = before.and_then(|before| {
+            serde_yaml::from_slice::<serde_yaml::Value>(before)
+                .ok()
+                .map(|old| (before, old))
+        }) else {
+            return self.document("yaml", after);
+        };
+        if after.len() > MAX_BYTES {
+            return Err(Refusal::Limit);
+        }
+        let text = std::str::from_utf8(after).map_err(|_| Refusal::Encoding)?;
+        Self::shape(after, text)?;
+        yaml_plain(after, YamlTags::Core)?;
+        let carried: std::collections::HashSet<&[u8]> = before.split(|b| *b == b'\n').collect();
+        let added: Vec<&str> = text
+            .split('\n')
+            .filter(|line| !carried.contains(line.as_bytes()))
+            .collect();
+        self.text(&added.join("\n"))?;
+        let new: serde_yaml::Value = serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
+        let mut nodes = MAX_NODES;
+        self.yaml_added(&old, &new, 0, &mut nodes)
+    }
+
+    /// Scan the parts of `new` that `old` does not already hold unchanged.
+    fn yaml_added(
+        &self,
+        old: &serde_yaml::Value,
+        new: &serde_yaml::Value,
+        depth: usize,
+        nodes: &mut usize,
+    ) -> ScanResult {
+        use serde_yaml::Value;
+        if old == new {
+            return Ok(());
+        }
+        match (old, new) {
+            (Value::Mapping(old), Value::Mapping(new)) => {
+                Self::budget(depth, nodes)?;
+                for (key, value) in new {
+                    match old.get(key) {
+                        Some(prior) => self.yaml_added(prior, value, depth + 1, nodes)?,
+                        None => {
+                            let mut entry = serde_yaml::Mapping::new();
+                            entry.insert(key.clone(), value.clone());
+                            self.yaml(&Value::Mapping(entry), depth, nodes)?;
+                        }
+                    }
+                }
+                Ok(())
+            }
+            (Value::Sequence(old), Value::Sequence(new)) => {
+                Self::budget(depth, nodes)?;
+                for value in new.iter().filter(|value| !old.contains(value)) {
+                    self.yaml(value, depth + 1, nodes)?;
+                }
+                Ok(())
+            }
+            _ => self.yaml(new, depth, nodes),
+        }
+    }
+
     fn budget(depth: usize, nodes: &mut usize) -> ScanResult {
         if depth > MAX_DEPTH || *nodes == 0 {
             return Err(Refusal::Limit);
@@ -461,9 +649,7 @@ impl Policy {
     /// inspected; arbitrary YAML tags and aliases remain unsupported.
     // trace:STORY-1742 | ai:codex
     fn oplog_document(&self, text: &str, nodes: &mut usize) -> ScanResult {
-        if text.contains(['&', '*']) {
-            return Err(Refusal::Unsupported);
-        }
+        yaml_plain(text.as_bytes(), YamlTags::Variants)?;
         let _: crate::oplog::OpLog = serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
         let mut value: serde_yaml::Value =
             serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
@@ -478,7 +664,10 @@ impl Policy {
             .get_mut(serde_yaml::Value::String("operations".into()))
             .and_then(serde_yaml::Value::as_sequence_mut)
             .ok_or(Refusal::Unsupported)?;
-        for operation in operations {
+        if operations.len() > MAX_OPLOG_OPERATIONS {
+            return Err(Refusal::Limit);
+        }
+        for operation in operations.iter_mut() {
             let operation = operation.as_mapping_mut().ok_or(Refusal::Unsupported)?;
             if operation.keys().any(|key| {
                 !matches!(
@@ -529,7 +718,23 @@ impl Policy {
                 return Err(Refusal::Unsupported);
             }
         }
-        self.yaml(&value, 0, nodes)
+        // Node budgets are per operation record; the header shares `nodes`.
+        for (key, value) in value.as_mapping().ok_or(Refusal::Unsupported)? {
+            let key = key.as_str().ok_or(Refusal::Unsupported)?;
+            self.text(key)?;
+            self.explicit_field(key, value.as_str())?;
+            match value.as_sequence() {
+                Some(records) if key == "operations" => {
+                    Self::budget(1, nodes)?;
+                    for record in records {
+                        let mut budget = MAX_NODES;
+                        self.yaml(record, 2, &mut budget)?;
+                    }
+                }
+                _ => self.yaml(value, 1, nodes)?,
+            }
+        }
+        Ok(())
     }
 
     fn json_document(&self, text: &str, nodes: &mut usize) -> ScanResult {
@@ -793,6 +998,94 @@ mod tests {
                 .is_err());
         }
         assert!(policy.path_format("oplog-private-marker.yaml").is_err());
+    }
+
+    #[test]
+    fn story_1742_oplog_and_metadata_scan_only_what_a_write_adds() {
+        // trace:STORY-1742 | ai:claude
+        let policy = policy();
+        let mut log = crate::oplog::OpLog::new("1".into());
+        let target = uuid::Uuid::new_v4();
+        log.append(
+            target,
+            "aida".into(),
+            crate::oplog::OpKind::SetTitle {
+                title: "R&D private-marker".into(),
+            },
+        );
+        let before = serde_yaml::to_string(&log).unwrap();
+        let prefix = oplog_prefix(before.as_bytes()).unwrap();
+        let append = |title: &str| {
+            let mut next = log.clone();
+            next.append(
+                target,
+                "aida".into(),
+                crate::oplog::OpKind::SetTitle {
+                    title: title.into(),
+                },
+            );
+            let mut bytes = prefix.to_vec();
+            bytes.extend(
+                serde_yaml::to_string(&next.operations[1..])
+                    .unwrap()
+                    .as_bytes(),
+            );
+            bytes.extend(format!("clock: {}\nnode_id: '1'\n", next.clock.0).as_bytes());
+            bytes
+        };
+        let admitted = append("Generic failure");
+        policy
+            .oplog_append(Some(before.as_bytes()), &admitted)
+            .unwrap();
+        assert!(policy
+            .oplog_append(Some(before.as_bytes()), &append("R&D failure"))
+            .is_err());
+        // Without a carried prefix the whole file is new content.
+        assert!(policy.oplog_append(None, &admitted).is_err());
+        // Grammar covers the whole file: an alias in the tail refuses.
+        let mut aliased = admitted.clone();
+        aliased.extend(b"extra: *x\n");
+        assert!(policy
+            .oplog_append(Some(before.as_bytes()), &aliased)
+            .is_err());
+
+        let metadata = b"title: Generic\ndescription: R&D backlog\n";
+        policy
+            .yaml_change(
+                Some(metadata),
+                b"title: Clarified\ndescription: R&D backlog\n",
+            )
+            .unwrap();
+        for added in [
+            &b"title: R&D\ndescription: R&D backlog\n"[..],
+            b"title: Generic\ndescription: R&D backlog\nnote: \"R\\x26D\"\n",
+            b"title: Generic # private-marker\ndescription: R&D backlog\n",
+            b"title: &a Generic\ndescription: *a\n",
+        ] {
+            assert!(
+                policy.yaml_change(Some(metadata), added).is_err(),
+                "{}",
+                String::from_utf8_lossy(added)
+            );
+        }
+        assert!(policy.yaml_change(None, metadata).is_err());
+
+        // `change` is the one rule intake and push share: an unchanged or
+        // trailer-only oplog adds nothing, other files scan whole.
+        policy
+            .change("oplog.yaml", Some(before.as_bytes()), before.as_bytes())
+            .unwrap();
+        let ticked = before.replace("clock: 1\n", "clock: 2\n");
+        assert_ne!(ticked, before);
+        policy
+            .change("oplog.yaml", Some(before.as_bytes()), ticked.as_bytes())
+            .unwrap();
+        policy
+            .change("metadata.yaml", Some(metadata), metadata)
+            .unwrap();
+        assert!(policy
+            .change("README.md", Some(b"R&D\n"), b"R&D\n")
+            .is_err());
     }
 
     #[test]

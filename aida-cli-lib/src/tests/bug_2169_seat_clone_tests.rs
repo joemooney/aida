@@ -213,6 +213,92 @@ fn create_makes_a_reference_clone_pins_the_base_and_writes_the_marker() {
     assert!(!ref_exists(&fx.main, &made.pin));
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+#[test]
+fn a_seat_clone_excludes_sandbox_stand_ins_and_inherits_the_primary_exclude() {
+    use crate::ship::SANDBOX_PLACEHOLDER_PATHS;
+    let fx = fixture();
+    let mut primary = String::from("# comment\n/.aida/\nlocal-scratch/\n.aida-compete-*.log\n");
+    for path in SANDBOX_PLACEHOLDER_PATHS {
+        primary.push_str(&format!("/{path}\n"));
+    }
+    std::fs::write(fx.main.join(".git/info/exclude"), primary).unwrap();
+    let dest = fx.root.join("seats").join("aida-seat-aida-stand-ins");
+
+    create(&fx.main, &dest, "feat", "origin/main").unwrap();
+
+    for path in SANDBOX_PLACEHOLDER_PATHS {
+        let full = dest.join(path);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, "").unwrap();
+    }
+    std::fs::create_dir_all(dest.join("local-scratch")).unwrap();
+    std::fs::write(dest.join("local-scratch/x"), "x").unwrap();
+    std::fs::write(dest.join(".aida-compete-1.log"), "x").unwrap();
+    assert!(
+        git_ok(&dest, &["status", "--porcelain"]).is_empty(),
+        "stand-ins and the primary's own excludes stay out of the clone's status"
+    );
+    let exclude = std::fs::read_to_string(dest.join(".git/info/exclude")).unwrap();
+    assert!(!exclude.contains("/.aida/\n"), "{exclude}");
+    assert_eq!(exclude.matches("/.idea\n").count(), 1, "{exclude}");
+}
+
+#[test]
+fn seat_exclude_body_dedupes_and_skips_only_aida_dir_entries() {
+    let body = seat_exclude_body(
+        "# git default\n",
+        "#c\n\n/.aida/*\n.aida\n.aida/\nfoo\nfoo\n/.vscode\n.aida-compete-*.log\n",
+    );
+    assert!(body.starts_with("# git default\n"));
+    assert_eq!(body.matches("foo\n").count(), 1, "{body}");
+    assert_eq!(body.matches("/.vscode\n").count(), 1, "{body}");
+    assert_eq!(body.matches("/.aida/*\n").count(), 1, "{body}");
+    assert!(
+        !body.contains("\n.aida\n") && !body.contains("\n.aida/\n"),
+        "{body}"
+    );
+    assert!(body.contains("\n.aida-compete-*.log\n"), "{body}");
+    assert!(!body.contains("#c\n"), "{body}");
+}
+
+#[test]
+fn a_seat_clone_does_not_exclude_stand_in_paths_the_primary_does_not_ignore() {
+    let fx = fixture();
+    let dest = fx.root.join("seats").join("aida-seat-aida-no-stand-ins");
+    create(&fx.main, &dest, "feat", "origin/main").unwrap();
+    std::fs::write(dest.join(".gitmodules"), "[submodule \"x\"]\n").unwrap();
+    assert_eq!(git_ok(&dest, &["status", "--porcelain"]), "?? .gitmodules");
+}
+
+/// Inside a seat clone the ship step-1 guard gets the host-git refusal and
+/// fails closed instead of reading the refusal as "nothing staged".
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+#[cfg(unix)]
+#[test]
+fn ship_refuses_a_staged_stand_in_inside_a_seat_clone() {
+    let fx = fixture();
+    let dest = fx.root.join("seats").join("aida-seat-aida-ship-guard");
+    create(&fx.main, &dest, "feat", "origin/main").unwrap();
+    assert!(
+        aida_core::seat_clone_detect::seat_clone_root(&dest).is_some(),
+        "the fixture must be a seat clone host git refuses"
+    );
+    std::fs::write(dest.join("masked"), "").unwrap();
+    git_ok(&dest, &["add", "masked"]);
+    let mut ro = std::fs::metadata(dest.join("masked"))
+        .unwrap()
+        .permissions();
+    ro.set_readonly(true);
+    std::fs::set_permissions(dest.join("masked"), ro).unwrap();
+
+    let err = crate::ship::refuse_staged_sandbox_placeholders(&dest).unwrap_err();
+    assert!(
+        err.to_string().contains("could not list staged files"),
+        "{err}"
+    );
+}
+
 #[test]
 fn a_failed_clone_refuses_loudly_and_leaves_no_directory_and_no_pin() {
     let fx = fixture();

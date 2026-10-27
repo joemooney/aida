@@ -528,12 +528,17 @@ fn clone_and_checkout(
     if let Some(dir) = exclude.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut body = std::fs::read_to_string(&exclude).unwrap_or_default();
-    if !body.is_empty() && !body.ends_with('\n') {
-        body.push('\n');
-    }
-    body.push_str("# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n");
-    std::fs::write(&exclude, body).with_context(|| format!("write {}", exclude.display()))?;
+    let existing = std::fs::read_to_string(&exclude).unwrap_or_default();
+    // Read the exclude from git's resolved common dir rather than a literal
+    // `.git/info/exclude`, so it stays correct if `create` ever accepts a
+    // primary whose `.git` is a gitfile (today it refuses one).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+    let mut common = git(main);
+    common.args(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    let common = PathBuf::from(run(common, "resolve the primary checkout's git dir")?);
+    let primary = std::fs::read_to_string(common.join("info").join("exclude")).unwrap_or_default();
+    std::fs::write(&exclude, seat_exclude_body(&existing, &primary))
+        .with_context(|| format!("write {}", exclude.display()))?;
 
     let marker = SeatCloneMarker {
         main: main.canonicalize().unwrap_or_else(|_| main.to_path_buf()),
@@ -549,6 +554,52 @@ fn clone_and_checkout(
     std::fs::write(&marker_path, toml::to_string(&marker)?)
         .with_context(|| format!("write {}", marker_path.display()))?;
     Ok(())
+}
+
+/// The seat clone's `info/exclude`: the clone's own body, the AIDA runtime
+/// entries, then every entry of the primary's `info/exclude` the clone lacks.
+/// A seat clone is a separate clone, so without this it sees what the primary
+/// ignores (the Claude Code sandbox stand-ins among them) as untracked files a
+/// lane commit picks up; a stand-in the primary does not ignore stays visible,
+/// and ship's zero-byte read-only check is the backstop. Only primary entries
+/// that would shadow the clone's `/.aida/*` are skipped, which leaves tracked
+/// `.aida/` config re-includable.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn seat_exclude_body(existing: &str, primary: &str) -> String {
+    let mut body = existing.to_string();
+    if !body.is_empty() && !body.ends_with('\n') {
+        body.push('\n');
+    }
+    body.push_str("# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n");
+    let mut present: std::collections::HashSet<String> =
+        body.lines().map(|l| l.trim().to_string()).collect();
+    let inherited: Vec<&str> = primary
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !shadows_aida_dir(l))
+        .filter(|l| present.insert(l.to_string()))
+        .collect();
+    if !inherited.is_empty() {
+        body.push_str("# Inherited from the primary checkout's info/exclude\n");
+        for line in inherited {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    body
+}
+
+/// Whether an exclude pattern names the `.aida` directory itself (`.aida`,
+/// `/.aida/`, `.aida/*`, ...), which would shadow the clone's `/.aida/*`
+/// re-include of tracked config. `.aida-store` or `.aida-compete-*.log` do not.
+fn shadows_aida_dir(pattern: &str) -> bool {
+    let p = pattern.strip_prefix('/').unwrap_or(pattern);
+    let p = p
+        .strip_suffix("/**")
+        .or_else(|| p.strip_suffix("/*"))
+        .or_else(|| p.strip_suffix('/'))
+        .unwrap_or(p);
+    p == ".aida"
 }
 
 /// Removes a just-made clone and releases its pin when dropped armed, so a
