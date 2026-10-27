@@ -253,116 +253,10 @@ fn known_mailbox_identities_recognizes_roles_case_insensitively() {
     assert!(!known.contains(&bogus));
 }
 
-/// Unbound (no session binding) identity facts for `user`: what a plain
-/// shell or CI runner collects. Tests compose identities from facts so the
-/// result never depends on the developer's live session binding.
-// trace:TASK-2345 | ai:claude
-fn unbound_facts(user: &str) -> MailIdentityFacts {
-    MailIdentityFacts {
-        user: user.to_string(),
-        ..Default::default()
-    }
-}
-
-/// TASK-818: when both the stable per-instance name (`AIDA_USER`) and the
-/// short agent TYPE name (`AIDA_AGENT_TYPE`) are set, the inbox identities
-/// are BOTH — so a coordinator addressing the type (`--to codex`) AND
-/// one addressing the stable name (`--to codex-implementer-1`) both reach
-/// the mailbox.
-#[test]
-fn inbox_identities_unions_stable_name_and_agent_type() {
-    let ids = inbox_identities_from_facts(&MailIdentityFacts {
-        env_vendor: Some("codex".into()),
-        ..unbound_facts("codex-implementer-1")
-    });
-    assert_eq!(ids, vec!["codex-implementer-1", "codex"]);
-}
-
-/// TASK-818: with only `AIDA_USER` set (no `AIDA_AGENT_TYPE`), the identity
-/// set is just the stable name — the type union must not invent an entry.
-#[test]
-fn inbox_identities_stable_name_only_when_no_agent_type() {
-    let ids = inbox_identities_from_facts(&unbound_facts("solo-user"));
-    assert_eq!(
-        ids,
-        vec!["solo-user".to_string()],
-        "no AIDA_AGENT_TYPE must yield only the stable name: {ids:?}"
-    );
-}
-
-/// STORY-1843 policy over explicit facts: a bound child's own handle and
-/// registered vendor replace the parent aliases and vendor it inherited.
-// trace:TASK-2345 | ai:claude
-#[test]
-fn inbox_identities_bound_child_excludes_inherited_parent_aliases() {
-    let ids = inbox_identities_from_facts(&MailIdentityFacts {
-        own_handle: Some("codex-implementer-03".into()),
-        own_vendor: Some("codex".into()),
-        user: "claude-advisor-01".into(),
-        user_is_known_person: false,
-        aliases: vec!["claude-advisor-01".into(), "parent-launch".into()],
-        role: None,
-        env_vendor: Some("claude".into()),
-    });
-    assert_eq!(ids, vec!["codex", "codex-implementer-03"]);
-}
-
-/// A bound session keeps an intentional catalog human, and its own handle
-/// given as an alias is not duplicated (case-insensitively for the handle).
-// trace:TASK-2345 | ai:claude
-#[test]
-fn inbox_identities_bound_session_keeps_known_human_and_dedups() {
-    let ids = inbox_identities_from_facts(&MailIdentityFacts {
-        own_handle: Some("Claude-Implementer-02".into()),
-        own_vendor: Some("claude".into()),
-        user: "joe".into(),
-        user_is_known_person: true,
-        aliases: vec!["Claude-Implementer-02".into()],
-        role: Some("implementer".into()),
-        env_vendor: None,
-    });
-    assert_eq!(
-        ids,
-        vec!["joe", "Claude-Implementer-02", "implementer", "claude"]
-    );
-}
-
-/// The same session (handle equal to the user, e.g. after a resume) reads
-/// its user inbox once; a role alias normalizes and dedups.
-// trace:TASK-2345 | ai:claude
-#[test]
-fn inbox_identities_same_session_and_role_alias() {
-    let ids = inbox_identities_from_facts(&MailIdentityFacts {
-        own_handle: Some("claude-advisor-01".into()),
-        own_vendor: Some("claude".into()),
-        role: Some("dialog".into()),
-        ..unbound_facts("CLAUDE-ADVISOR-01")
-    });
-    assert_eq!(ids, vec!["CLAUDE-ADVISOR-01", "advisor", "claude"]);
-}
-
-/// The production collector reads the env adapters it owns, and with the
-/// suite runner's own session hidden it projects no binding: no handle, no
-/// registered vendor, and no known-person lookup.
-// trace:TASK-2345 | ai:claude
-#[test]
-fn mail_identity_facts_collect_reads_env_adapters() {
-    let _g = crate::test_env::AgentSessionIsolation::apply(&[
-        ("AIDA_USER", Some("collector-user")),
-        (crate::agent_handle::HANDLE_ENV, Some("child-handle")),
-        ("AIDA_AGENT_NAME", Some("launch-name")),
-        ("AIDA_SESSION_ROLE", Some("reviewer")),
-        ("AIDA_AGENT_TYPE", Some("codex")),
-    ]);
-    let facts = MailIdentityFacts::collect();
-    assert_eq!(facts.own_handle, None);
-    assert_eq!(facts.own_vendor, None);
-    assert!(!facts.user_is_known_person);
-    assert_eq!(facts.user, "collector-user");
-    assert_eq!(facts.aliases, vec!["child-handle", "launch-name"]);
-    assert_eq!(facts.role.as_deref(), Some("reviewer"));
-    assert_eq!(facts.env_vendor.as_deref(), Some("codex"));
-}
+// The TASK-818/TASK-2345 identity-policy cases (stable name + agent type,
+// bound child, known human, role alias) moved with the policy to
+// `aida-core/src/mailbox_identity_tests.rs` (STORY-1843 B2b); the env
+// collector is covered in `story_1843_mailbox_view_tests.rs`.
 
 /// TASK-818: a message addressed to the short TYPE name (`--to codex`) is
 /// delivered to the agent's inbox, mirroring how brief routing reaches the
@@ -371,10 +265,9 @@ fn mail_identity_facts_collect_reads_env_adapters() {
 #[test]
 fn message_to_agent_type_reaches_inbox() {
     use aida_core::mailbox::{build_notice, Intent, Message, Recipient};
-    let identities = inbox_identities_from_facts(&MailIdentityFacts {
-        env_vendor: Some("codex".into()),
-        ..unbound_facts("codex-implementer-1")
-    });
+    let identities = aida_core::mailbox_identity::inbox_identities(
+        &crate::mailbox_view::unbound_facts("codex-implementer-1", None, Some("codex")),
+    );
     let to_type = Message {
         subject: None,
         id: "m1".to_string(),
@@ -1321,11 +1214,13 @@ fn promote_surfaces_queue_add_failure() {
 // merged-newest — exactly what the inbox-read does — drives the count to 0.
 // trace:BUG-625 | ai:claude
 
-/// The unbound `operator` reader's identities, from facts rather than the
+/// The unbound `operator` reader's audience, from facts rather than the
 /// live session binding.
-// trace:TASK-2345 | ai:claude
-fn operator_identities() -> Vec<String> {
-    inbox_identities_from_facts(&unbound_facts("operator"))
+// trace:TASK-2345 trace:STORY-1843 | ai:claude
+fn operator_audience() -> aida_core::mailbox_logical::ResolvedAudience {
+    aida_core::mailbox_logical::ResolvedAudience::from_facts(&crate::mailbox_view::unbound_facts(
+        "operator", None, None,
+    ))
 }
 
 /// Build an urgent broadcast `Message` with the given id, sender, timestamp.
@@ -1358,83 +1253,52 @@ fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Messag
 // trace:BUG-625 | ai:claude
 #[test]
 fn read_urgent_unread_count_sees_canonical_only_message() {
-    let proj = tempfile::tempdir().unwrap();
-    let root = proj.path();
-    let store_root = root.join(".aida-store");
-    // Seed an urgent broadcast in the CANONICAL layer only.
-    let cdir = mailbox_store::canonical_dir(&store_root);
-    std::fs::create_dir_all(&cdir).unwrap();
-    let msg = urgent_broadcast("c1", "codex", 1_000);
-    std::fs::write(
-        cdir.join("c1.json"),
-        serde_json::to_string_pretty(&msg).unwrap(),
-    )
-    .unwrap();
-
-    // Identity that did NOT send the message, no watermark yet → unread.
+    let r = crate::mailbox_view::tests::mail_repo();
+    crate::mailbox_view::tests::put_canonical(&r.store, &urgent_broadcast("c1", "codex", 1_000));
     assert_eq!(
-        read_urgent_unread_count_for(root, operator_identities),
+        read_urgent_unread_count_for(&r.main, &operator_audience()),
         Some(1),
         "a canonical-only urgent broadcast must be counted (merge, not local-only)"
     );
 }
 
-/// The reproduction the operator hit. Seed an urgent broadcast, confirm the
-/// statusline count is > 0, then advance the reader's watermark to the
-/// merged-newest exactly as `aida mailbox inbox`'s mark-seen does, and assert
-/// the count drops to 0. Before the fix the count was computed over a
-/// different (local-only) set, so the inbox-read's watermark advance could
-/// not clear it and the nag stuck forever. (Repro #2.)
-// trace:BUG-625 | ai:claude
+/// The reproduction the operator hit: the statusline count must clear once
+/// the inbox is read. STORY-1843: reading writes per-ID receipts for exactly
+/// what it displayed (a local timestamp watermark no longer vouches for a
+/// canonical-only message), and the count reads the same evidence.
+// trace:BUG-625 trace:STORY-1843 | ai:claude
 #[test]
-fn read_urgent_unread_count_clears_after_inbox_read_advances_watermark() {
-    let proj = tempfile::tempdir().unwrap();
-    let root = proj.path();
-    let store_root = root.join(".aida-store");
-
-    // The urgent broadcast is in the canonical layer (digested); a second,
-    // newer fyi broadcast is still local-only — together they exercise the
-    // merge + per-identity max-watermark "newest" the inbox-read advances to.
-    let cdir = mailbox_store::canonical_dir(&store_root);
-    std::fs::create_dir_all(&cdir).unwrap();
-    let urgent = urgent_broadcast("u1", "codex", 1_000);
-    std::fs::write(
-        cdir.join("u1.json"),
-        serde_json::to_string_pretty(&urgent).unwrap(),
-    )
-    .unwrap();
+fn read_urgent_unread_count_clears_after_inbox_read() {
+    let r = crate::mailbox_view::tests::mail_repo();
+    let audience = operator_audience();
+    crate::mailbox_view::tests::put_canonical(&r.store, &urgent_broadcast("u1", "codex", 1_000));
     let mut later = urgent_broadcast("u2", "codex", 2_000);
     later.urgent = false;
     later.intent = aida_core::mailbox::Intent::Fyi;
-    mailbox_store::write_message(root, &later).unwrap();
+    mailbox_store::write_message(&r.main, &later).unwrap();
 
-    // Before reading: the urgent broadcast is unread.
     assert_eq!(
-        read_urgent_unread_count_for(root, operator_identities),
+        read_urgent_unread_count_for(&r.main, &audience),
         Some(1),
         "urgent broadcast is unread before the inbox is read"
     );
+    // A watermark alone does not clear a canonical-only message.
+    mailbox_store::set_watermark(&r.main, "operator", 2_000).unwrap();
+    assert_eq!(read_urgent_unread_count_for(&r.main, &audience), Some(1));
 
-    // Simulate `aida mailbox inbox`'s mark-seen: advance the reader identity's
-    // watermark to the MERGED inbox newest (the same computation the command
-    // does at the mark-seen step). The reader is `operator`, which did not
-    // send either message, so both are in its inbox.
-    let local = mailbox_store::read_local_messages(root).unwrap();
-    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap();
-    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let newest = aida_core::mailbox::inbox_for("operator", &merged)
-        .iter()
-        .map(|m| m.timestamp)
-        .max()
-        .expect("operator has merged inbox mail");
-    mailbox_store::set_watermark(root, "operator", newest).unwrap();
-
-    // After the read advanced the watermark, the statusline count is 0 —
-    // the two surfaces now agree. This is the regression the operator hit.
+    // `aida mailbox inbox`'s mark-seen step over what it displays.
+    let view = crate::mailbox_view::read_own_mail(
+        &r.main,
+        &r.store,
+        &audience,
+        &crate::mailbox_view::explicit_limits(),
+    );
+    let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, false, 10);
+    crate::mailbox_view::mark_displayed(&r.main, view.audience(), &rows).unwrap();
     assert_eq!(
-        read_urgent_unread_count_for(root, operator_identities),
+        read_urgent_unread_count_for(&r.main, &audience),
         Some(0),
-        "reading the inbox (advancing the watermark) must clear the statusline count"
+        "reading the inbox must clear the statusline count"
     );
 }
 

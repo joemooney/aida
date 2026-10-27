@@ -130,21 +130,10 @@ pub fn send_mail_argv(
 }
 
 // ---------------------------------------------------------------------------
-// IO boundary: reading the local mailbox layer + resolving this shell's
-// identity / project root. Not unit-tested against a terminal — these are
-// thin, best-effort wrappers around aida_core::mailbox + std::fs.
+// IO boundary: reading the logical mailbox view (STORY-1843) + resolving
+// the project root. Not unit-tested against a terminal — these are thin,
+// best-effort wrappers around aida_core::mailbox_logical + std::fs.
 // ---------------------------------------------------------------------------
-
-/// This shell's mail identity: the same precedence the CLI's queue/mailbox
-/// user resolution uses (BUG-89) — `AIDA_USER`, then `USER`, then `USERNAME`
-/// (Windows), then `"default"`.
-// trace:STORY-701 | ai:claude
-fn mail_identity() -> String {
-    std::env::var("AIDA_USER")
-        .or_else(|_| std::env::var("USER"))
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "default".to_string())
-}
 
 /// Resolve the AIDA project root from `cwd`.
 ///
@@ -181,22 +170,81 @@ fn resolve_project_root(cwd: &Path) -> PathBuf {
     cwd.to_path_buf()
 }
 
-/// Read this operator's unread mail from the LOCAL mailbox layer (the fast,
-/// live-exchange layer) and project it into cockpit rows — the Mail scope's
-/// item set. Read-only: never advances the watermark, so painting the
-/// cockpit never marks mail seen (mirrors `aida mailbox inbox --peek`). Best
-/// effort: any read failure yields an empty Vec so the cockpit still paints.
-// trace:STORY-701 | ai:claude
+/// Read this operator's unread mail and project it into cockpit rows — the
+/// Mail scope's item set. STORY-1843: the same logical view the CLI inbox
+/// reads (every worktree of this repository plus the canonical store),
+/// filtered to the audience the core identity policy grants. The session is
+/// found by core's verified lookup, so a cockpit started from an agent
+/// session's shell reads as that session and never takes the inherited
+/// `AIDA_USER`/`AIDA_HANDLE` as its own private inbox. Read-only: never
+/// marks mail seen (mirrors `aida mailbox inbox --peek`); only mail with no
+/// read evidence is a row. A partial view adds one row saying so instead of
+/// looking caught up.
+// trace:STORY-701 trace:STORY-1843 | ai:claude
 pub fn fetch_mail_items() -> Vec<TargetItem> {
     let Ok(cwd) = std::env::current_dir() else {
         return Vec::new();
     };
-    let project_root = resolve_project_root(&cwd);
-    let messages = aida_core::mailbox::read_local_messages(&project_root).unwrap_or_default();
-    let agent = mail_identity();
-    let watermark = aida_core::mailbox::read_local_watermark(&project_root, &agent);
-    let unread = aida_core::mailbox::unread_inbox(&agent, &messages, watermark);
-    mail_items(&unread)
+    mail_items_for(&resolve_project_root(&cwd))
+}
+
+/// [`fetch_mail_items`] for an explicit project root.
+// trace:STORY-1843 | ai:claude
+pub fn mail_items_for(project_root: &Path) -> Vec<TargetItem> {
+    use aida_core::mailbox_identity::{
+        IdentityEnv, MailIdentityFacts, PeopleCatalogView, SessionBinding,
+    };
+    use aida_core::mailbox_logical::{
+        logical_snapshot, MailboxContext, Query, ReadEvidence, ReadLimits, ResolvedAudience,
+    };
+    let env = IdentityEnv::observed();
+    let binding = SessionBinding::lookup(
+        &aida_core::mailbox_identity::registry_dir_for(project_root),
+        &env,
+    );
+    let catalog = match &binding {
+        SessionBinding::Unbound => PeopleCatalogView::default(),
+        _ => PeopleCatalogView::load(&project_root.join(".aida-store")),
+    };
+    let facts = MailIdentityFacts::observed(binding, &catalog, env);
+    let audience = ResolvedAudience::from_facts(&facts);
+    let store = project_root.join(".aida-store");
+    let store = std::fs::symlink_metadata(&store).is_ok().then_some(store);
+    let Ok(ctx) = MailboxContext::resolve_or_local(project_root, store.as_deref()) else {
+        return vec![partial_row()];
+    };
+    let limits = ReadLimits::with_deadline(
+        std::time::Instant::now() + std::time::Duration::from_millis(500),
+    );
+    let snapshot = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    let unread: Vec<&Message> = snapshot
+        .records
+        .iter()
+        .filter(|r| !r.message.archived && r.read == ReadEvidence::Unread)
+        .map(|r| &r.message)
+        .collect();
+    let mut rows = mail_items(&unread);
+    if !snapshot.complete() {
+        rows.push(partial_row());
+    }
+    rows
+}
+
+/// The row a partial mail view adds. It has no sender, so no reply gesture
+/// applies to it.
+// trace:STORY-1843 | ai:claude
+fn partial_row() -> TargetItem {
+    TargetItem {
+        id: "mail-view-partial".to_string(),
+        title: "Mail view partial — some mail may be missing".to_string(),
+        req_type: "Mail".to_string(),
+        status: "partial view · run `aida mailbox inbox`".to_string(),
+        priority: String::new(),
+        body: String::new(),
+        has_test_plan: false,
+        routed_role: None,
+        tags: Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -403,6 +451,7 @@ mod tests {
             let out = std::process::Command::new("git")
                 .arg("-C")
                 .arg(repo)
+                .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
                 .args(args)
                 .output()
                 .expect("git on PATH");
@@ -453,5 +502,179 @@ mod tests {
             "TUI mail path must resolve to the MAIN worktree root, matching \
              `aida mailbox send`, not the nested worktree it was invoked from"
         );
+    }
+
+    /// STORY-1843: the cockpit reads the logical view. A non-Git project
+    /// still shows its own unread mail, plus a row saying the view is
+    /// partial instead of looking caught up; read mail is not a row.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mail_items_for_reads_the_logical_view_and_flags_a_partial_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unread = mail_msg("m-new", "codex", "please look", false, 20);
+        unread.to = Recipient::Broadcast;
+        let mut read = mail_msg("m-read", "codex", "already seen", false, 10);
+        read.to = Recipient::Broadcast;
+        aida_core::mailbox::write_local_message(dir.path(), &unread).unwrap();
+        aida_core::mailbox::write_local_message(dir.path(), &read).unwrap();
+        // An unbound reader always holds its user inbox; a receipt there
+        // acknowledges the broadcast `m-read`.
+        let _env = EnvGuard::set(&[("AIDA_USER", Some("tui-user"))]);
+        let user = "tui-user";
+        let receipts = dir.path().join(".aida/mailbox/.read-receipts").join(&user);
+        std::fs::create_dir_all(&receipts).unwrap();
+        std::fs::write(receipts.join("m-read.txt"), "11").unwrap();
+        let rows = mail_items_for(dir.path());
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert!(ids.contains(&"m-new"), "{ids:?}");
+        assert!(!ids.contains(&"m-read"), "{ids:?}");
+        assert_eq!(ids.last(), Some(&"mail-view-partial"), "{ids:?}");
+        assert!(mail_sender(rows.last().unwrap()).is_none());
+    }
+
+    /// STORY-1843 F5: the cockpit reads the same logical view as the CLI: a
+    /// message only a sibling worktree holds is a row, a receipt in main
+    /// clears it, and a missing worktree adds the partial row.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mail_items_for_reads_sibling_worktrees() {
+        let _env = EnvGuard::set(&[("AIDA_USER", Some("tui-user"))]);
+        let git = |cwd: &Path, args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .current_dir(cwd)
+                .args([
+                    "-c",
+                    "commit.gpgsign=false",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "-c",
+                    "maintenance.auto=false",
+                    "-c",
+                    "gc.auto=0",
+                ])
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t.t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t.t")
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(tmp.path()).unwrap();
+        let main = base.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "-q", "-b", "main"]);
+        std::fs::write(main.join("README.md"), "seed").unwrap();
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "seed"]);
+        let sib = base.join("sib");
+        git(
+            &main,
+            &["worktree", "add", "-q", "-b", "sib", sib.to_str().unwrap()],
+        );
+        let mut m = mail_msg("sib-only", "codex", "from the sibling", false, 10);
+        m.to = Recipient::Agent("tui-user".to_string());
+        aida_core::mailbox::write_local_message(&sib, &m).unwrap();
+
+        let ids = || -> Vec<String> { mail_items_for(&main).into_iter().map(|r| r.id).collect() };
+        assert_eq!(ids(), vec!["sib-only"]);
+        let receipts = main.join(".aida/mailbox/.read-receipts/tui-user");
+        std::fs::create_dir_all(&receipts).unwrap();
+        std::fs::write(receipts.join("sib-only.txt"), "11").unwrap();
+        assert!(ids().is_empty());
+        std::fs::remove_dir_all(&sib).unwrap();
+        assert_eq!(ids(), vec!["mail-view-partial"]);
+    }
+
+    /// Every env key the identity policy reads, cleared or set for one test
+    /// and restored after, under one lock so tests never see each other's.
+    struct EnvGuard {
+        saved: Vec<(&'static str, Option<String>)>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    const IDENTITY_KEYS: [&str; 10] = [
+        "AIDA_USER",
+        "AIDA_HANDLE",
+        "AIDA_AGENT_NAME",
+        "AIDA_SESSION_ROLE",
+        "AIDA_AGENT_TYPE",
+        "AIDA_HOOK_PAYLOAD",
+        "CLAUDE_CODE_SESSION_ID",
+        "CODEX_THREAD_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_PID",
+    ];
+
+    impl EnvGuard {
+        fn set(vars: &[(&'static str, Option<&str>)]) -> Self {
+            static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+            let lock = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let saved = IDENTITY_KEYS
+                .iter()
+                .map(|k| (*k, std::env::var(k).ok()))
+                .collect();
+            for key in IDENTITY_KEYS {
+                std::env::remove_var(key);
+            }
+            for (key, value) in vars {
+                if let Some(v) = value {
+                    std::env::set_var(key, v);
+                }
+            }
+            Self { saved, _lock: lock }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, value) in &self.saved {
+                match value {
+                    Some(v) => std::env::set_var(key, v),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    /// STORY-1843 F6: a cockpit whose process a registry row binds (a TUI
+    /// started from an agent session's shell) reads as that session. The
+    /// inherited parent `AIDA_USER`/`AIDA_HANDLE` are not its private
+    /// inboxes: their mail never becomes a row.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mail_items_for_a_bound_session_ignores_the_inherited_parent_identity() {
+        let _env = EnvGuard::set(&[
+            ("AIDA_USER", Some("parent-user")),
+            ("AIDA_HANDLE", Some("parent-handle")),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let agents = dir.path().join(".aida/agents");
+        std::fs::create_dir_all(&agents).unwrap();
+        std::fs::write(
+            agents.join("child-row.toml"),
+            format!(
+                "id = \"child-row\"\nagent_type = \"claude\"\npid = {}\nname = \"child-seat\"\npid_start = \"{}\"\n",
+                std::process::id(),
+                aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
+            ),
+        )
+        .unwrap();
+        for (id, to) in [
+            ("to-child", "child-seat"),
+            ("to-parent-user", "parent-user"),
+            ("to-parent-handle", "parent-handle"),
+        ] {
+            let mut m = mail_msg(id, "codex", "hi", false, 10);
+            m.to = Recipient::Agent(to.to_string());
+            aida_core::mailbox::write_local_message(dir.path(), &m).unwrap();
+        }
+        let rows = mail_items_for(dir.path());
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert!(ids.contains(&"to-child"), "{ids:?}");
+        assert!(!ids.contains(&"to-parent-user"), "{ids:?}");
+        assert!(!ids.contains(&"to-parent-handle"), "{ids:?}");
     }
 }
