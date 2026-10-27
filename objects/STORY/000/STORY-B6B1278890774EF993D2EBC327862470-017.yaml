@@ -16,12 +16,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2966` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-27T06:36:14.148242835Z
-modified_at: 2026-10-27T06:36:24.706776597Z
+modified_at: 2026-10-27T14:56:00.548952535Z
 req_type: Story
 relationships:
 - rel_type:
@@ -29,12 +29,25 @@ relationships:
   target_id: 01a17bc6-633f-7041-8079-a584018f0806
   created_at: 2026-10-27T06:36:24.706773098Z
   created_by: joe
+comments:
+- id: 01a17ddc-6e24-7381-ba6f-f68a5b7fa5db
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2966 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-27T14:56:00.548950165Z
+  modified_at: 2026-10-27T14:56:00.548950165Z
 history:
 - id: 01a17c13-1241-74c2-bff9-bfde8fd8ab98
   author: joe
   timestamp: 2026-10-27T06:36:27.073837017Z
   session_id: 19924a1a-98ad-4682-b16d-e6ec1856b652
   changes: []
+- id: 01a17ddc-6e24-7381-ba6f-f67cba2e4de6
+  author: aida-auto-bump
+  timestamp: 2026-10-27T14:56:00.548937327Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 31a3ef47afc79c9eaaa0c6b3e0792650a8b86a37
   branch: fix/gate-alias-ratchet
@@ -43,3 +56,7 @@ filed_at:
   aida_build_sha: e3fd91e83f
   vendor: claude
   session: 19924a1a-98ad-4682-b16d-e6ec1856b652
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-27T14:56:00.548932983Z
+  completion_sha: 2fbb7c4925c6a313f71645e7c50a07b3578a979d
