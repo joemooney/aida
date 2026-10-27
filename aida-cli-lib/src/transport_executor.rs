@@ -1,7 +1,12 @@
-//! One pinned store push, without entering the ordinary synchronization path.
+//! One pinned store push or fast-forward pull, without entering the ordinary
+//! synchronization path.
 // trace:STORY-1742 | ai:codex
 
 use super::*;
+
+#[path = "transport_pull.rs"]
+mod pull;
+pub(super) use pull::pull;
 
 /// Command-scoped remote that only defeats push tracking-ref inference.
 const UNTRACKED_REMOTE: &str = "aida-transport-untracked";
@@ -9,7 +14,7 @@ const UNTRACKED_REMOTE: &str = "aida-transport-untracked";
 fn attached_store(root: &Path, common: &Path) -> Result<PathBuf> {
     let output = git(root, &["worktree", "list", "--porcelain", "-z"])?;
     if !output.status.success() {
-        bail!("Cannot inspect attached store worktrees; push refused.");
+        bail!("Cannot inspect attached store worktrees; push/pull refused.");
     }
     let mut path = None;
     let mut candidates = Vec::new();
@@ -23,12 +28,12 @@ fn attached_store(root: &Path, common: &Path) -> Result<PathBuf> {
         }
     }
     if candidates.len() != 1 {
-        bail!("Transport push requires exactly one existing, clean, attached aida-store worktree; attach it explicitly before retrying.");
+        bail!("Transport push/pull requires exactly one existing, clean, attached aida-store worktree; attach it explicitly before retrying.");
     }
     let store = candidates.remove(0);
     if common_dir(&store)?.as_deref() != Some(common) || !aida_core::git_ops::is_store_tree(&store)
     {
-        bail!("Attached store identity is unsupported; push refused.");
+        bail!("Attached store identity is unsupported; push/pull refused.");
     }
     Ok(store)
 }
@@ -37,7 +42,7 @@ fn check_store_state(store: &Path, expected: &str) -> Result<()> {
     if git_text(store, &["symbolic-ref", "-q", "HEAD"])? != STORE_REF
         || commit(store, STORE_REF)?.as_deref() != Some(expected)
     {
-        bail!("Store tip or attachment changed during transport planning; push refused. Retry after inspection.");
+        bail!("Store tip or attachment changed during transport planning; push/pull refused. Retry after inspection.");
     }
     let git_dir = PathBuf::from(git_text(store, &["rev-parse", "--absolute-git-dir"])?);
     for marker in [
@@ -52,7 +57,7 @@ fn check_store_state(store: &Path, expected: &str) -> Result<()> {
     ] {
         match fs::symlink_metadata(git_dir.join(marker)) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            _ => bail!("Store has an in-progress or uncertain Git operation; push refused."),
+            _ => bail!("Store has an in-progress or uncertain Git operation; push/pull refused."),
         }
     }
     Ok(())
@@ -64,7 +69,7 @@ fn check_store_state(store: &Path, expected: &str) -> Result<()> {
 fn pinned_endpoint(root: &Path, profile: &Profile) -> Result<String> {
     let endpoint = origin_endpoint(root)?;
     if format!("{:x}", Sha256::digest(endpoint.as_bytes())) != profile.origin_sha256 {
-        bail!("Origin changed since transport profile enrollment; push refused.");
+        bail!("Origin changed since transport profile enrollment; push/pull refused.");
     }
     refuse_endpoint_rewrites(root, &endpoint)?;
     Ok(endpoint)
@@ -77,7 +82,7 @@ fn refuse_endpoint_rewrites(root: &Path, endpoint: &str) -> Result<()> {
         &["ls-remote", "--get-url", "--end-of-options", endpoint],
     )? != endpoint
     {
-        bail!("Origin has chained or unstable URL rewrites; push refused.");
+        bail!("Origin has chained or unstable URL rewrites; push/pull refused.");
     }
     // ls-remote --get-url expands insteadOf without any network operation.
     // It is fetch-oriented, so separately refuse a pushInsteadOf prefix that
@@ -92,7 +97,7 @@ fn refuse_endpoint_rewrites(root: &Path, endpoint: &str) -> Result<()> {
         ],
     )?;
     if !rewrites.status.success() && rewrites.status.code() != Some(1) {
-        bail!("Cannot inspect origin URL rewrites; push refused.");
+        bail!("Cannot inspect origin URL rewrites; push/pull refused.");
     }
     for entry in rewrites
         .stdout
@@ -102,11 +107,11 @@ fn refuse_endpoint_rewrites(root: &Path, endpoint: &str) -> Result<()> {
         let split = entry
             .iter()
             .position(|byte| *byte == b'\n')
-            .context("Ambiguous origin URL rewrites; push refused.")?;
+            .context("Ambiguous origin URL rewrites; push/pull refused.")?;
         if !entry[..split].ends_with(b".pushinsteadof")
             || endpoint.as_bytes().starts_with(&entry[split + 1..])
         {
-            bail!("Origin has chained or unstable URL rewrites; push refused.");
+            bail!("Origin has chained or unstable URL rewrites; push/pull refused.");
         }
     }
     Ok(())
@@ -122,16 +127,36 @@ fn store_preflight(store: &Path, expected: &str) -> Result<()> {
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_NO_LAZY_FETCH", "1")
         .output()
-        .map_err(|_| anyhow::anyhow!("Cannot inspect store cleanliness; push refused."))?;
+        .map_err(|_| anyhow::anyhow!("Cannot inspect store cleanliness; push/pull refused."))?;
     if !status.status.success() {
-        bail!("Cannot verify store cleanliness or store hooks; push refused.");
+        bail!("Cannot verify store cleanliness or store hooks; push/pull refused.");
     }
     if !status.stdout.is_empty() {
-        bail!("Store is dirty; push refused. Commit or resolve it explicitly before retrying.");
+        bail!(
+            "Store is dirty; push/pull refused. Commit or resolve it explicitly before retrying."
+        );
     }
     aida_core::git_ops::refuse_embedded_repos_for_push(store, expected).map_err(|_| {
-        anyhow::anyhow!("Store contains unsupported repository content; push refused.")
+        anyhow::anyhow!("Store contains unsupported repository content; push/pull refused.")
     })?;
+    Ok(())
+}
+
+// Tree inspection must never lazily fetch from a promisor remote. Partial
+// clones need an explicit hydration step outside this ref-only executor.
+// trace:STORY-1742 | ai:codex
+fn refuse_partial_clone(root: &Path) -> Result<()> {
+    let partial = git(
+        root,
+        &[
+            "config",
+            "--get-regexp",
+            "^(extensions\\.partialclone|remote\\..*\\.promisor)$",
+        ],
+    )?;
+    if partial.status.code() != Some(1) {
+        bail!("Partial or uncertain clone configuration requires explicit hydration outside transport; push/pull refused.");
+    }
     Ok(())
 }
 
@@ -144,19 +169,8 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
         bail!("Transport profile changed during planning; push refused.");
     }
     let expected = expected.context("Local aida-store tip is missing; push refused.")?;
-    // Tree inspection must never lazily fetch from a promisor remote. Partial
-    // clones need an explicit hydration step outside this ref-only executor.
-    let partial = git(
-        root,
-        &[
-            "config",
-            "--get-regexp",
-            "^(extensions\\.partialclone|remote\\..*\\.promisor)$",
-        ],
-    )?;
-    if partial.status.code() != Some(1) {
-        bail!("Partial or uncertain clone configuration requires explicit hydration outside transport; push refused.");
-    }
+    pull::refuse_unfinished(&private)?;
+    refuse_partial_clone(root)?;
     let endpoint = pinned_endpoint(root, profile)?;
     let store = attached_store(root, &common)?;
     let scan = scan::Scan::load(&private)?;

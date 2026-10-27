@@ -588,13 +588,24 @@ pub fn default_inbox_view(
     recent_read_tail: usize,
 ) -> Vec<&Message> {
     let mark = read_watermark.unwrap_or(i64::MIN);
+    default_inbox_view_read_by(inbox, |m| m.timestamp <= mark, recent_read_tail)
+}
+
+/// [`default_inbox_view`] with read state from `is_read` (a watermark or a
+/// per-ID receipt, STORY-1843).
+// trace:STORY-1843 | ai:claude
+pub fn default_inbox_view_read_by(
+    inbox: Vec<&Message>,
+    is_read: impl Fn(&Message) -> bool,
+    recent_read_tail: usize,
+) -> Vec<&Message> {
     let mut unread = Vec::new();
     let mut read = Vec::new();
     for m in inbox {
         if m.archived {
             continue;
         }
-        if m.timestamp > mark {
+        if !is_read(m) {
             unread.push(m);
         } else {
             read.push(m);
@@ -733,6 +744,24 @@ pub fn agent_summaries_for_agents<'a, I>(
 where
     I: IntoIterator<Item = &'a str>,
 {
+    agent_summaries_read_by(messages, watermarks, known_agents, |agent, m| {
+        m.timestamp <= watermarks.get(agent).copied().unwrap_or(i64::MIN)
+    })
+}
+
+/// [`agent_summaries_for_agents`] with read state from `is_read(agent,
+/// message)` (a watermark or a per-ID receipt, STORY-1843). `watermarks`
+/// only seeds the known-agent set.
+// trace:STORY-1843 | ai:claude
+pub fn agent_summaries_read_by<'a, I>(
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    known_agents: I,
+    is_read: impl Fn(&str, &Message) -> bool,
+) -> Vec<AgentMailSummary>
+where
+    I: IntoIterator<Item = &'a str>,
+{
     use std::collections::BTreeSet;
     // Known agents = every explicit direct-recipient + every sender (so an
     // agent that has only ever sent still shows once it receives a broadcast)
@@ -768,8 +797,9 @@ where
             continue; // only list agents that actually have mail waiting
         }
         let latest_ts = inbox.iter().map(|m| m.timestamp).max().unwrap_or(0);
-        let (unread, urgent_unread) =
-            unread_counts(&agent, messages, watermarks.get(&agent).copied());
+        let unread_mail: Vec<&&Message> = inbox.iter().filter(|m| !is_read(&agent, m)).collect();
+        let unread = unread_mail.len();
+        let urgent_unread = unread_mail.iter().filter(|m| m.urgent).count();
         out.push(AgentMailSummary {
             agent,
             total: inbox.len(),
@@ -823,6 +853,22 @@ pub fn stranded_recipients<F>(
 where
     F: Fn(&str) -> bool,
 {
+    stranded_recipients_read_by(messages, is_known, |r, m| {
+        m.timestamp <= watermarks.get(r).copied().unwrap_or(i64::MIN)
+    })
+}
+
+/// [`stranded_recipients`] with read state from `is_read(recipient,
+/// message)` (a watermark or a per-ID receipt, STORY-1843).
+// trace:STORY-1843 | ai:claude
+pub fn stranded_recipients_read_by<F>(
+    messages: &[Message],
+    is_known: F,
+    is_read: impl Fn(&str, &Message) -> bool,
+) -> Vec<StrandedRecipient>
+where
+    F: Fn(&str) -> bool,
+{
     use std::collections::BTreeSet;
     // Distinct direct-recipient strings across all live (non-deleted, non-archived) mail.
     let mut recipients: BTreeSet<&str> = BTreeSet::new();
@@ -853,8 +899,7 @@ where
         if direct.is_empty() {
             continue;
         }
-        let mark = watermarks.get(r).copied().unwrap_or(i64::MIN);
-        let unread = direct.iter().filter(|m| m.timestamp > mark).count();
+        let unread = direct.iter().filter(|m| !is_read(r, m)).count();
         if unread == 0 {
             continue; // read (even if by no live reader) — not a live dead-letter
         }
@@ -1158,7 +1203,21 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
     let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
     let json = serde_json::to_string_pretty(msg)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    crate::write_atomic(&path, json.as_bytes())
+    // Admit before writing so a retiring source refuses the write instead of
+    // losing it; the permit row is removed once the file is in place. Only a
+    // fenced or retired source refuses: an anchor that cannot be established
+    // leaves delivery exactly as it was.
+    // trace:STORY-1843 | ai:claude
+    #[cfg(all(unix, feature = "native"))]
+    let coverage = crate::mailbox_lifecycle::cover_local_write(project_root)?;
+    crate::write_atomic(&path, json.as_bytes())?;
+    // The message is written; a row left behind is reaped once this process
+    // is proven dead, so a failed release must not report the write failed.
+    #[cfg(all(unix, feature = "native"))]
+    if let crate::mailbox_lifecycle::AdmissionCoverage::Admitted(permit) = coverage {
+        let _ = permit.complete();
+    }
+    Ok(())
 }
 
 /// Read every message in the LOCAL layer (`<project_root>/.aida/mailbox/`).

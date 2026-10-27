@@ -383,10 +383,57 @@ pub(crate) fn command_output_with_timeout_detail(
 /// `cap` means the output was cut off.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn command_output_with_timeout_capped(
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     timeout: std::time::Duration,
     cap: u64,
 ) -> BoundedCommandOutput {
+    run_bounded(cmd, timeout, cap, false).map_or(BoundedCommandOutput::SpawnFailed, |(out, _)| out)
+}
+
+/// [`command_output_with_timeout_capped`] for a long headless child that
+/// launches work in process groups of its own (a reviewer `aida queue work`
+/// and its vendor). The child gets its own group, with the stdin `cmd` sets;
+/// SIGINT, SIGTERM and SIGHUP this process receives while it
+/// runs are forwarded to the child's whole tree, and at the bound, the cap or
+/// a forwarded signal's grace the tree is SIGKILLed, descendants in other
+/// groups included. Returns the forwarded signal, if any, for the caller to
+/// re-raise. `run_review_verb` re-raises it right after one log line, before
+/// any outcome is recorded, so the dying worker's request is closed later by
+/// the dead-worker reap, not with a forwarded-signal summary. A spawn failure comes back as
+/// `Err` with its cause; `Ok` never holds [`BoundedCommandOutput::SpawnFailed`].
+// trace:STORY-1917 | ai:claude
+pub(crate) fn command_output_with_timeout_forwarding(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+    cap: u64,
+) -> std::io::Result<(BoundedCommandOutput, Option<i32>)> {
+    run_bounded(cmd, timeout, cap, true)
+}
+
+/// How long a child forwarded a terminal signal may take to exit before its
+/// tree is SIGKILLed.
+#[cfg(unix)]
+const FORWARDED_SIGNAL_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Kill a child spawned by [`run_bounded`]: its group, and with `forward`
+/// also every group its descendants moved into.
+// trace:STORY-1917 | ai:claude
+#[cfg(unix)]
+fn kill_bounded_child(pid: u32, forward: bool) {
+    if forward {
+        let tree = crate::exit_signal::collect_process_tree(pid);
+        crate::forwarded_signals::signal_child_tree(pid, &tree, libc::SIGKILL);
+    } else {
+        kill_process_group(pid);
+    }
+}
+
+fn run_bounded(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+    cap: u64,
+    forward: bool,
+) -> std::io::Result<(BoundedCommandOutput, Option<i32>)> {
     use std::io::Read;
 
     #[cfg(unix)]
@@ -394,8 +441,17 @@ pub(crate) fn command_output_with_timeout_capped(
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
+    // Installed before the spawn so a signal during it is forwarded too.
+    #[cfg(unix)]
+    let mut forwarding = if forward {
+        Some(crate::forwarded_signals::Forwarding::install()?)
+    } else {
+        None
+    };
+    #[cfg(not(unix))]
+    let _ = forward;
 
-    let mut child = match cmd
+    let mut child = cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         // BUG-1735: a bare spawn here turns a transient ETXTBSY into
@@ -403,12 +459,8 @@ pub(crate) fn command_output_with_timeout_capped(
         // start". Every bounded-run caller inherits that, so the retry
         // belongs in the wrapper, not at each call site.
         // trace:BUG-1735 | ai:claude
-        .spawn_retrying_etxtbsy()
-    {
-        Ok(child) => child,
-        Err(_) => return BoundedCommandOutput::SpawnFailed,
-    };
-    // Only used to target `killpg` below; on non-unix targets nothing reads
+        .spawn_retrying_etxtbsy()?;
+    // Only used to target the kill below; on non-unix targets nothing reads
     // it, so it is cfg-gated too rather than left as a dead binding.
     #[cfg(unix)]
     let pid = child.id();
@@ -422,7 +474,7 @@ pub(crate) fn command_output_with_timeout_capped(
         let _ = pipe.take(cap.saturating_add(1)).read_to_end(&mut buf);
         if buf.len() as u64 > cap {
             #[cfg(unix)]
-            kill_process_group(pid);
+            kill_bounded_child(pid, forward);
         }
         buf
     };
@@ -439,14 +491,29 @@ pub(crate) fn command_output_with_timeout_capped(
     // which `aida show` pays several times per run.
     // trace:BUG-1993 | ai:claude
     let mut poll = std::time::Duration::from_millis(1);
+    #[cfg_attr(not(unix), allow(unused_mut))]
+    let mut interrupted: Option<i32> = None;
+    #[cfg_attr(not(unix), allow(unused_mut))]
+    let mut interrupt_deadline: Option<std::time::Instant> = None;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
-                if start.elapsed() >= timeout {
+                // trace:STORY-1917 | ai:claude
+                #[cfg(unix)]
+                if let Some(sig) = forwarding.as_mut().and_then(|f| f.take()) {
+                    let tree = crate::exit_signal::collect_process_tree(pid);
+                    crate::forwarded_signals::signal_child_tree(pid, &tree, sig);
+                    interrupted = Some(sig);
+                    interrupt_deadline
+                        .get_or_insert(std::time::Instant::now() + FORWARDED_SIGNAL_GRACE);
+                }
+                if start.elapsed() >= timeout
+                    || interrupt_deadline.is_some_and(|d| std::time::Instant::now() >= d)
+                {
                     killed = true;
                     #[cfg(unix)]
-                    kill_process_group(pid);
+                    kill_bounded_child(pid, forward);
                     let _ = child.kill();
                     let _ = child.wait();
                     break None;
@@ -462,7 +529,7 @@ pub(crate) fn command_output_with_timeout_capped(
             Err(_) => {
                 killed = true;
                 #[cfg(unix)]
-                kill_process_group(pid);
+                kill_bounded_child(pid, forward);
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
@@ -481,14 +548,15 @@ pub(crate) fn command_output_with_timeout_capped(
     };
     let stdout = stdout_rx.recv_timeout(read_wait).unwrap_or_default();
     let stderr = stderr_rx.recv_timeout(read_wait).unwrap_or_default();
-    match status {
+    let output = match status {
         Some(status) => BoundedCommandOutput::Completed(std::process::Output {
             status,
             stdout,
             stderr,
         }),
         None => BoundedCommandOutput::TimedOut,
-    }
+    };
+    Ok((output, interrupted))
 }
 
 /// BUG-1594: the message a forge lookup carries when the scoped
@@ -1142,56 +1210,39 @@ pub(crate) fn read_draft_backlog_depth(cache_path: &std::path::Path) -> usize {
 /// statusline nag. Returns `None` when there is no mailbox to count (stay
 /// silent), `Some(0)` when caught up.
 ///
-/// This MUST agree with `aida mailbox inbox` — the statusline count and the read
-/// command are two surfaces of one "unread" state, so reading the inbox has to
-/// drive the count to 0. The divergence that left a high count stuck forever was
-/// that this read only the LOCAL `.aida/mailbox/` layer while `aida mailbox
-/// inbox` reads the MERGED (local + canonical orphan-store) set and advances each
-/// identity's watermark to the MERGED per-identity newest. When the two message
-/// sets differed, the watermark the inbox-read advanced could not clear a count
-/// computed over a different set. The fix reads the SAME merged set and the same
-/// identity union, so the surfaces compute "unread" over identical inputs and a
-/// read clears the count. Reading the canonical layer is a plain directory read
-/// of the already-checked-out `.aida-store/mailbox/` — pure file I/O, no git
-/// spawn — so the statusline's no-git contract still holds.
+/// This MUST agree with `aida mailbox inbox`: the statusline count and the
+/// read command are two surfaces of one "unread" state, so reading the inbox
+/// has to drive the count to 0. Both read the same logical view and identity
+/// union (STORY-1843). Finding the repository's product worktrees runs one
+/// bounded `git worktree list`, so this is no longer pure file I/O; the
+/// passive read deadline caps it, and a source not read in time makes the
+/// view partial rather than blocking the statusline.
 // trace:STORY-539 trace:BUG-625 | ai:claude
 pub(crate) fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
-    read_urgent_unread_count_for(project_root, inbox_identities)
+    read_urgent_unread_count_for(project_root, &crate::mailbox_view::own_audience())
 }
 
-/// [`read_urgent_unread_count`] over a supplied identity union (resolved only
-/// once there is mail), so a test drives the same merge/watermark/notice path
-/// from synthetic identity facts.
-// trace:TASK-2345 | ai:claude
+/// [`read_urgent_unread_count`] for a given verified audience. STORY-1843:
+/// the count reads the same logical view (every worktree of this repository
+/// plus the canonical store) and the same read evidence the inbox marks, so
+/// reading the inbox clears it. `None` when there is no visible mail. The
+/// statusline segment shows only a positive urgent count; a partial view is
+/// surfaced by the status, notice and awaiting surfaces.
+// trace:TASK-2345 trace:STORY-1843 | ai:claude
 pub(crate) fn read_urgent_unread_count_for(
     project_root: &std::path::Path,
-    identities: impl FnOnce() -> Vec<String>,
+    audience: &aida_core::mailbox_logical::ResolvedAudience,
 ) -> Option<usize> {
-    let local = mailbox_store::read_local_messages(project_root).ok()?;
-    // Merge in the canonical (orphan-store) layer so this sees exactly what
-    // `aida mailbox inbox` reads (and advances watermarks against). Best-effort:
-    // a missing/unreadable canonical dir degrades to the local layer rather than
-    // silencing the nag. trace:BUG-625
-    let store_root = project_root.join(".aida-store");
-    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
-    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    if merged.is_empty() {
+    let view = crate::mailbox_view::read_own_mail(
+        project_root,
+        &project_root.join(".aida-store"),
+        audience,
+        &crate::mailbox_view::passive_limits(),
+    );
+    if view.records().is_empty() {
         return None;
     }
-    // Scope to the same identity union the agent-facing notice and the inbox-read
-    // use (shell user + session role + agent type), so a role-/type-addressed
-    // urgent message isn't invisible here while the notice surfaces it.
-    // build_notice dedups a broadcast across identities and counts urgent across
-    // the unread set. trace:STORY-585 trace:BUG-625
-    let identities = identities();
-    let watermarks = mailbox_store::read_all_watermarks(project_root).ok()?;
-    let summary = aida_core::mailbox::build_notice(
-        identities.iter().map(String::as_str),
-        &merged,
-        &watermarks,
-        aida_core::mailbox::NOTICE_DEFAULT_CAP,
-    );
-    Some(summary.urgent)
+    Some(view.unread().iter().filter(|m| m.urgent).count())
 }
 
 // ─── STORY-127: Scope-B runtime anti-pattern detectors ──────────────────

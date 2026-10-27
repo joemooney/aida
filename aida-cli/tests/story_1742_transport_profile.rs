@@ -134,18 +134,25 @@ impl Fixture {
     }
 
     fn enroll_policy(&self) {
+        self.enroll_policy_at(&self.root);
+    }
+
+    fn enroll_policy_at(&self, root: &Path) {
         use std::os::unix::fs::PermissionsExt;
-        let path = self.common.join("reviewed-policy-input");
+        let path = root.join(".git/reviewed-policy-input");
         fs::write(&path, br#"{"version":1,"reviewed":true,"deny_tokens":["private-marker"],"git_name":"Fixture","git_identity":"aida"}"#).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
-        let output = self.aida(&[
-            "config",
-            "transport",
-            "policy",
-            "--file",
-            path.to_str().unwrap(),
-            "--reviewed",
-        ]);
+        let output = self.aida_at(
+            root,
+            &[
+                "config",
+                "transport",
+                "policy",
+                "--file",
+                path.to_str().unwrap(),
+                "--reviewed",
+            ],
+        );
         assert!(output.status.success(), "{}", diagnostics(&output));
     }
 
@@ -215,6 +222,7 @@ impl Fixture {
 // trace:STORY-1742.acda93d1 | ai:codex
 // trace:STORY-1742.ac80f8ef | ai:codex
 // trace:STORY-1742.ac7443a3 | ai:codex
+// trace:STORY-1742.acc84d5d | ai:claude
 fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     let fixture = Fixture::new();
     let initial = fixture.snapshot();
@@ -227,13 +235,54 @@ fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     assert_eq!(enabled["profile"]["name"], "work");
     assert_eq!(enabled["origin_matches"], true);
     assert_eq!(enabled["execution_available"], true);
-    assert_eq!(enabled["pull_execution_available"], false);
+    assert_eq!(enabled["pull_execution_available"], true);
     assert_eq!(enabled["sanitization_available"], true);
+    // `pull_refspec` keeps its original net mapping; the executed staging
+    // refspec and the post-scan updates are separate fields.
+    assert_eq!(
+        enabled["pull_refspec"],
+        "refs/heads/aida-store:refs/remotes/origin/aida-store"
+    );
+    assert_eq!(
+        enabled["pull_fetch_refspec"],
+        "refs/heads/aida-store:refs/aida-transport/incoming"
+    );
+    assert_eq!(
+        enabled["pull_after_scan"],
+        serde_json::json!([
+            "refs/aida-transport/incoming -> refs/remotes/origin/aida-store",
+            "refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)"
+        ])
+    );
+    assert_eq!(
+        fixture.json(&["config", "transport", "show", "--json"])["pull_after_scan"],
+        enabled["pull_after_scan"]
+    );
+    let human = fixture.aida(&["config", "transport", "show"]);
+    assert!(human.status.success());
+    let human = String::from_utf8_lossy(&human.stdout);
+    assert!(
+        human.contains(
+            "Pull: origin refs/heads/aida-store:refs/aida-transport/incoming (fast-forward only)"
+        ),
+        "{human}"
+    );
+    assert!(
+        human.contains(
+            "Pull after scan: refs/aida-transport/incoming -> refs/remotes/origin/aida-store; \
+             refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)"
+        ),
+        "{human}"
+    );
     assert!(enabled["limitations"]
         .as_array()
         .unwrap()
         .iter()
         .any(|v| v.as_str().unwrap().contains("raw Git")));
+    // Show states the v1 boundary: no hub-side gate, and enrollment trusts.
+    let limits = enabled["limitations"].to_string();
+    assert!(limits.contains("forward it to a public remote"), "{limits}");
+    assert!(limits.contains("without scanning it"), "{limits}");
     assert_eq!(initial, fixture.snapshot());
     assert!(!fixture.root.join(".aida").exists());
     let sibling = fixture.root.parent().unwrap().join("sibling");
@@ -260,7 +309,7 @@ fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     assert!(fixture.common.join("aida-transport.lock").is_file());
     // With the profile disabled this store-less clone takes ordinary discovery.
     let ordinary = fixture.aida(&["push", "--dry-run"]);
-    assert!(!diagnostics(&ordinary).contains("not available in this slice"));
+    assert!(!diagnostics(&ordinary).contains("Code leg: forbidden"));
 }
 
 #[test]
@@ -277,12 +326,12 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
         assert_eq!(plan["profile"], "work");
         assert_eq!(plan["code_leg"], "forbidden");
         assert_eq!(plan["flags"]["--store-only"], "redundant");
-        assert_eq!(plan["execution_available"], operation == "push");
+        assert_eq!(plan["execution_available"], true);
         assert_eq!(plan["executed"], false);
         assert_eq!(plan["remote"], "origin");
         assert_eq!(
             plan["refs_that_may_move"].as_array().unwrap().len(),
-            if operation == "push" { 1 } else { 2 }
+            if operation == "push" { 1 } else { 3 }
         );
         if operation == "push" {
             assert_eq!(plan["source_sha"], fixture.store_sha);
@@ -292,19 +341,24 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
             );
         } else {
             assert!(plan["source_sha"].is_null());
+            // The reported refspec is the one executed: fetch into staging,
+            // then the post-scan ref updates.
             assert_eq!(
                 plan["refspec"],
-                "refs/heads/aida-store:refs/remotes/origin/aida-store"
+                "refs/heads/aida-store:refs/aida-transport/incoming"
+            );
+            assert_eq!(
+                plan["after_scan"],
+                serde_json::json!([
+                    "refs/aida-transport/incoming -> refs/remotes/origin/aida-store",
+                    "refs/remotes/origin/aida-store -> refs/heads/aida-store (fast-forward)"
+                ])
             );
         }
         let refused = fixture.aida(&[operation]);
         assert!(!refused.status.success());
         assert!(
-            diagnostics(&refused).contains(if operation == "push" {
-                "attached aida-store worktree"
-            } else {
-                "not available in this slice"
-            }),
+            diagnostics(&refused).contains("attached aida-store worktree"),
             "{}",
             diagnostics(&refused)
         );
@@ -1680,7 +1734,7 @@ fn legacy_main_created_profile_and_lock_stay_usable_and_disable_clears_them() {
     assert_eq!(fs::metadata(&lock).unwrap().mode() & 0o777, 0o600);
 
     // A corrupt but safely stored profile is still cleared by disable.
-    fs::write(&profile, b"{not json").unwrap();
+    fs::write(&profile, b"\x7bnot json").unwrap();
     fs::set_permissions(&profile, fs::Permissions::from_mode(0o644)).unwrap();
     assert!(!fixture
         .aida(&["config", "transport", "show"])
@@ -2028,4 +2082,473 @@ fn work_intake_and_push_scan_agree_on_what_a_write_adds() {
     fixture.store_commit(&store, "oplog.yaml", appended.as_bytes());
     fixture.assert_scan_refusal_with(&remote, &[]);
     assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+}
+
+// trace:STORY-1742 | ai:claude
+impl Fixture {
+    /// Publish `tip` to the hub with raw Git, then put the local store back
+    /// on `local`, so the next `aida pull` has something to fetch.
+    fn seed_hub(&self, store: &Path, remote: &Path, tip: &str, local: &str) {
+        self.git_at(
+            store,
+            &[
+                "push",
+                "-q",
+                remote.to_str().unwrap(),
+                &format!("{tip}:refs/heads/aida-store"),
+            ],
+        );
+        self.git_at(store, &["reset", "-q", "--hard", local]);
+    }
+
+    fn rev(&self, reference: &str) -> Option<String> {
+        let output = self
+            .command(
+                "git",
+                &self.root,
+                &["rev-parse", "--verify", "-q", reference],
+            )
+            .output()
+            .unwrap();
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8(output.stdout).unwrap().trim().to_owned())
+    }
+
+    /// A refused pull moves no accepted ref and leaves no staging ref.
+    fn assert_pull_refused(&self, store: &Path, needle: &str) -> String {
+        let before = self.snapshot();
+        let head = self.git_at(store, &["rev-parse", "HEAD"]);
+        let output = self.aida(&["pull"]);
+        assert!(!output.status.success(), "{}", diagnostics(&output));
+        let text = diagnostics(&output);
+        assert!(text.contains(needle), "{text}");
+        assert!(!text.contains("private-marker"), "{text}");
+        assert_eq!(before, self.snapshot());
+        assert_eq!(head, self.git_at(store, &["rev-parse", "HEAD"]));
+        assert_eq!(self.rev("refs/aida-transport/incoming"), None);
+        assert!(!self.common.join("FETCH_HEAD").exists());
+        text
+    }
+}
+
+#[test]
+#[cfg(unix)]
+// trace:STORY-1742.aca124ca | ai:claude
+fn pull_fast_forwards_only_the_store_after_scanning_and_names_moved_refs() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let tip = fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        b"title: Generic failure\ndescription: Synthetic reproduction\n",
+    );
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    let main = fixture.rev("refs/heads/main");
+    let plan = fixture.json(&["pull", "--json"]);
+    assert_eq!(plan["executed"], false);
+    assert_eq!(
+        plan["refs_that_may_move"],
+        serde_json::json!([
+            "refs/aida-transport/incoming",
+            "refs/remotes/origin/aida-store",
+            "refs/heads/aida-store"
+        ])
+    );
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+
+    let output = fixture.aida(&["pull", "--store-only"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let text = diagnostics(&output);
+    assert!(text.contains("--store-only: redundant"), "{text}");
+    assert!(
+        text.contains("refs/remotes/origin/aida-store, refs/heads/aida-store"),
+        "{text}"
+    );
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), tip);
+    assert_eq!(
+        fixture.rev("refs/remotes/origin/aida-store").as_deref(),
+        Some(tip.as_str())
+    );
+    assert_eq!(fixture.git_at(&store, &["status", "--porcelain=v1"]), "");
+    assert!(store.join("objects/BUG/000/BUG-1.yaml").is_file());
+    // Nothing else moves: no product ref, staging ref, FETCH_HEAD, cache or
+    // receipt (a pull is not evidence of a successful push).
+    assert_eq!(fixture.rev("refs/heads/main"), main);
+    assert_eq!(fixture.rev("refs/aida-transport/incoming"), None);
+    assert!(!fixture.common.join("FETCH_HEAD").exists());
+    assert!(!fixture.common.join("aida-transport-pull.json").exists());
+    assert!(!fixture.common.join("aida-transport-receipt.json").exists());
+    assert!(!store.join(".aida/cache.db").exists());
+    assert!(!fixture.root.join(".aida/cache.db").exists());
+
+    let again = fixture.aida(&["pull"]);
+    assert!(again.status.success(), "{}", diagnostics(&again));
+    assert!(diagnostics(&again).contains("already up to date"));
+}
+
+#[test]
+#[cfg(unix)]
+fn pull_tracks_origin_without_moving_a_store_that_is_already_ahead() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.seed_hub(&store, &remote, &fixture.store_sha, &fixture.store_sha);
+    let ahead = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    let output = fixture.aida(&["pull"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    assert!(diagnostics(&output).contains("only the remote-tracking ref moved"));
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), ahead);
+    assert_eq!(
+        fixture.rev("refs/remotes/origin/aida-store").as_deref(),
+        Some(fixture.store_sha.as_str())
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn unsafe_foreign_or_divergent_incoming_history_moves_no_accepted_ref() {
+    // Unsafe content, even when deleted again before the tip.
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        b"title: private-marker\n",
+    );
+    fs::remove_file(store.join("objects/BUG/000/BUG-1.yaml")).unwrap();
+    fixture.git_at(&store, &["add", "--all"]);
+    fixture.git_at(&store, &["commit", "-qm", "Generic change"]);
+    let tip = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    fixture.assert_pull_refused(&store, "Transport scan refused");
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+
+    // A commit by any identity other than the reviewed pseudonym.
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fs::create_dir_all(store.join("objects")).unwrap();
+    fs::write(store.join("objects/.gitkeep"), "").unwrap();
+    fixture.git_at(&store, &["add", "--all"]);
+    let output = fixture
+        .command("git", &store, &["commit", "-qm", "Generic change"])
+        .env("GIT_AUTHOR_NAME", "Someone Else")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let tip = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    fixture.assert_pull_refused(&store, "reviewed transport identity");
+
+    // Divergence is refused, never rebased or merged.
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let theirs = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Theirs\n");
+    fixture.seed_hub(&store, &remote, &theirs, &fixture.store_sha);
+    fixture.store_commit(&store, "objects/BUG/000/BUG-2.yaml", b"title: Ours\n");
+    fixture.assert_pull_refused(&store, "diverged");
+    assert_eq!(fixture.rev("refs/remotes/origin/aida-store"), None);
+}
+
+#[test]
+#[cfg(unix)]
+fn dirty_store_or_missing_policy_refuses_before_fetching() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    // Seed the hub from an independent clone so its tip never enters the
+    // local object database unless a fetch actually runs.
+    let other = fixture.root.parent().unwrap().join("independent");
+    fixture.git_at(
+        fixture.root.parent().unwrap(),
+        &[
+            "clone",
+            "-q",
+            "--no-local",
+            "-b",
+            "aida-store",
+            fixture.root.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    let tip = fixture.store_commit(&other, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    fixture.git_at(
+        &other,
+        &[
+            "push",
+            "-q",
+            remote.to_str().unwrap(),
+            &format!("{tip}:refs/heads/aida-store"),
+        ],
+    );
+    let absent = |fixture: &Fixture| {
+        assert!(
+            fixture
+                .command(
+                    "git",
+                    &store,
+                    &["cat-file", "-e", &format!("{tip}^{{commit}}")]
+                )
+                .output()
+                .unwrap()
+                .status
+                .code()
+                != Some(0),
+            "hub tip reached the local object database"
+        );
+    };
+    absent(&fixture);
+    fs::write(store.join("untracked"), "dirty").unwrap();
+    fixture.assert_pull_refused(&store, "Store is dirty");
+    absent(&fixture);
+    fs::remove_file(store.join("untracked")).unwrap();
+    fs::remove_file(fixture.common.join("aida-transport-policy.json")).unwrap();
+    fixture.assert_pull_refused(&store, "Reviewed private transport policy is missing");
+    // Neither refusal fetched: the hub's tip never arrived locally.
+    absent(&fixture);
+    assert_eq!(
+        fixture.git_at(&store, &["rev-parse", "HEAD"]),
+        fixture.store_sha
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn interrupted_pull_journal_blocks_push_and_recovers_only_a_clean_known_state() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let tip = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
+    let journal = fixture.common.join("aida-transport-pull.json");
+    fs::write(
+        &journal,
+        format!(
+            r#"{{"version":1,"from":"{}","to":"{tip}"}}"#,
+            fixture.store_sha
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&journal, fs::Permissions::from_mode(0o600)).unwrap();
+    let push = fixture.aida(&["push"]);
+    assert!(!push.status.success());
+    assert!(
+        diagnostics(&push).contains("did not finish"),
+        "{}",
+        diagnostics(&push)
+    );
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+
+    // Unknown state (index half-moved): refuse and keep the journal.
+    fixture.git_at(&store, &["read-tree", "-m", "-u", &fixture.store_sha, &tip]);
+    fixture.assert_pull_refused(&store, "matches neither");
+    assert!(journal.exists());
+
+    // Restored cleanly to a journaled commit: recover and finish the pull.
+    fixture.git_at(&store, &["reset", "-q", "--hard", &fixture.store_sha]);
+    let output = fixture.aida(&["pull"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    assert!(!journal.exists());
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), tip);
+}
+
+// trace:STORY-1742 | ai:claude
+impl Fixture {
+    /// A second WORK clone of the same hub, enrolled at `trust_root`.
+    fn peer_work_clone(&self, hub: &Path, trust_root: &str) -> (PathBuf, PathBuf) {
+        let peer = self.root.parent().unwrap().join("peer");
+        fs::create_dir_all(&peer).unwrap();
+        self.git_at(&peer, &["init", "-q", "-b", "main"]);
+        self.git_at(&peer, &["commit", "--allow-empty", "-qm", "product"]);
+        self.git_at(&peer, &["remote", "add", "origin", hub.to_str().unwrap()]);
+        self.git_at(
+            &peer,
+            &[
+                "fetch",
+                "-q",
+                "origin",
+                "refs/heads/aida-store:refs/heads/aida-store",
+            ],
+        );
+        let store = peer.join(".aida-store");
+        self.git_at(
+            &peer,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                store.to_str().unwrap(),
+                "aida-store",
+            ],
+        );
+        let enabled = self.aida_at(
+            &peer,
+            &[
+                "config",
+                "transport",
+                "enable",
+                "work",
+                "--baseline",
+                trust_root,
+            ],
+        );
+        assert!(enabled.status.success(), "{}", diagnostics(&enabled));
+        self.enroll_policy_at(&peer);
+        (peer, store)
+    }
+
+    /// Every clone-local AIDA file in the common Git directory, with bytes.
+    fn private_state(&self, root: &Path) -> Vec<(String, Vec<u8>)> {
+        let mut state: Vec<_> = fs::read_dir(root.join(".git"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.is_file())
+            .filter(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("aida-")
+            })
+            .map(|path| {
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                (name, fs::read(&path).unwrap())
+            })
+            .collect();
+        state.sort();
+        state
+    }
+}
+
+/// The whole signed chain: a generic defect filed through sanitized intake in
+/// a WORK clone reaches the hub by `aida push`, a peer WORK clone receives it
+/// by `aida pull`, and explicit fixture forwarding carries the same inspected
+/// commit to PUBLIC. Only `aida-store` moves anywhere. The hub-to-PUBLIC leg is
+/// raw Git on purpose: v1 has no receiving-side gate (see `BYPASS_LIMIT`).
+#[test]
+#[cfg(unix)]
+// trace:STORY-1742.ac37eb1b | ai:claude
+// trace:STORY-1742.ac804464 | ai:claude
+// trace:STORY-1742.aca124ca | ai:claude
+fn generic_defect_travels_work_to_hub_to_public_moving_only_the_store_ref() {
+    let fixture = Fixture::new();
+    let (store, hub) = fixture.attach_with_remote();
+    fixture.identity_policy("aida");
+    fs::write(store.join("metadata.yaml"), "title: Generic\n").unwrap();
+    fs::create_dir(store.join("objects")).unwrap();
+    fixture.git_at(&store, &["add", "metadata.yaml"]);
+    fixture.git_at(&store, &["commit", "-qm", "seed store"]);
+    let trust_root = fixture.reenroll_at_store_tip(&store);
+    // The operator seeds the hub with the reviewed trust root.
+    fixture.git_at(
+        &store,
+        &[
+            "push",
+            "-q",
+            hub.to_str().unwrap(),
+            &format!("{trust_root}:refs/heads/aida-store"),
+        ],
+    );
+    let (peer, peer_store) = fixture.peer_work_clone(&hub, &trust_root);
+
+    // WORK intake: one generic defect, one pseudonymous store commit.
+    let added = fixture.aida(&[
+        "add",
+        "--sanitized",
+        "Generic failure",
+        "--description",
+        "Synthetic reproduction",
+    ]);
+    assert!(added.status.success(), "{}", diagnostics(&added));
+    let tip = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    let object = fixture
+        .git_at(&store, &["show", "--name-only", "--format=", "HEAD"])
+        .lines()
+        .find(|path| path.starts_with("objects/"))
+        .expect("intake wrote one object")
+        .to_owned();
+    let filed = fs::read(store.join(&object)).unwrap();
+
+    // WORK -> hub: exactly the inspected tip, and nothing but the store moves.
+    let product = fixture.snapshot();
+    let private = fixture.private_state(&fixture.root);
+    let pushed = fixture.aida(&["push"]);
+    assert!(pushed.status.success(), "{}", diagnostics(&pushed));
+    assert_eq!(
+        fixture.git_at(&hub, &["for-each-ref", "--format=%(refname) %(objectname)"]),
+        format!("refs/heads/aida-store {tip}")
+    );
+    assert_eq!(product, fixture.snapshot());
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), tip);
+    assert_eq!(fixture.git_at(&store, &["status", "--porcelain=v1"]), "");
+    assert!(!store.join("mailbox").exists());
+    // The only private change is the successful-push receipt for this tip.
+    let mut after = fixture.private_state(&fixture.root);
+    let receipt = after
+        .iter()
+        .position(|(name, _)| name == "aida-transport-receipt.json")
+        .expect("successful push records a receipt");
+    let (_, bytes) = after.remove(receipt);
+    let receipt: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(receipt["accepted_tip"], tip);
+    assert_eq!(receipt["trust_root"], trust_root);
+    assert_eq!(private, after);
+
+    // hub -> peer WORK clone: a scanned fast-forward of the store only.
+    let peer_main = fixture.git_at(&peer, &["rev-parse", "refs/heads/main"]);
+    let peer_private = fixture.private_state(&peer);
+    assert!(peer_private
+        .iter()
+        .any(|(name, _)| name == "aida-transport.json"));
+    let pulled = fixture.aida_at(&peer, &["pull"]);
+    assert!(pulled.status.success(), "{}", diagnostics(&pulled));
+    // Post-pull lifecycle mutations (ID counters, assignment) are skipped: the
+    // peer's private aida-* files are byte-identical across the pull.
+    assert_eq!(peer_private, fixture.private_state(&peer));
+    assert_eq!(fixture.git_at(&peer_store, &["rev-parse", "HEAD"]), tip);
+    assert_eq!(
+        fixture.git_at(&peer, &["rev-parse", "refs/remotes/origin/aida-store"]),
+        tip
+    );
+    assert_eq!(
+        fixture.git_at(&peer, &["rev-parse", "refs/heads/main"]),
+        peer_main
+    );
+    assert_eq!(fs::read(peer_store.join(&object)).unwrap(), filed);
+    assert!(!peer.join(".git/aida-transport-receipt.json").exists());
+
+    // hub -> PUBLIC by explicit fixture forwarding: the same bytes arrive.
+    let public = fixture.root.parent().unwrap().join("public.git");
+    fixture.git(&["init", "--bare", "-q", public.to_str().unwrap()]);
+    fixture.git_at(
+        &hub,
+        &[
+            "push",
+            "-q",
+            public.to_str().unwrap(),
+            "refs/heads/aida-store",
+        ],
+    );
+    assert_eq!(
+        fixture.git_at(
+            &public,
+            &["for-each-ref", "--format=%(refname) %(objectname)"]
+        ),
+        format!("refs/heads/aida-store {tip}")
+    );
+    let published = fixture
+        .command("git", &public, &["show", &format!("{tip}:{object}")])
+        .output()
+        .unwrap();
+    assert!(published.status.success(), "{}", diagnostics(&published));
+    assert_eq!(published.stdout, filed);
+    assert_eq!(
+        fixture.git_at(
+            &public,
+            &[
+                "log",
+                "--format=%an %ae %cn %ce",
+                &format!("{trust_root}..{tip}")
+            ]
+        ),
+        "Fixture aida Fixture aida"
+    );
 }
