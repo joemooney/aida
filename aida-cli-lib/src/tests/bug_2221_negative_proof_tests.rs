@@ -479,23 +479,44 @@ fn positive_hit_uses_original_date_order() {
         "a parsed hit must defer to the original positive path"
     );
 
-    // Integrated show path (deadline) vs. the non-show oracle (no probe).
+    // Integrated show path (deadline; the SKETCH v3 index answers it) vs.
+    // the non-show oracle (no probe, no index): the same commit SET, in the
+    // O2 order — committer time desc, then index batch desc, then walk
+    // position asc. Same-second ties follow that contract, never Git's
+    // internal `--date-order` tie-break.
     let wanted = ids(&["TASK-7"]);
     let shown = collect_git_linkage_until(&repo, &wanted, Instant::now() + Duration::from_secs(30));
     let oracle = collect_git_linkage_opts(&repo, &wanted, false);
+    let mut shown_set = shown.commits.clone();
+    let mut oracle_set = oracle.commits.clone();
+    shown_set.sort();
+    oracle_set.sort();
     assert_eq!(
-        shown.commits, oracle.commits,
-        "the probe-fronted show path must keep the oracle's commits and order"
+        shown_set, oracle_set,
+        "the probe-fronted show path must keep the oracle's commits"
     );
     let shas: Vec<&str> = shown
         .commits
         .iter()
         .map(|(full, _, _)| full.as_str())
         .collect();
+    let times: Vec<i64> = shas
+        .iter()
+        .map(|sha| {
+            git(&repo, &["show", "-s", "--format=%ct", sha])
+                .parse()
+                .unwrap()
+        })
+        .collect();
+    assert!(
+        times.windows(2).all(|w| w[0] >= w[1]),
+        "O2: committer time never increases: {times:?}"
+    );
     assert_eq!(
         shas,
         vec![hit_two.as_str(), hit_one.as_str()],
-        "date-order newest-first, bookkeeping bare mentions excluded"
+        "O2 newest-first (a same-second child before its parent), \
+         bookkeeping bare mentions excluded"
     );
     assert!(!shown.commits_scan_incomplete);
 }
@@ -1016,8 +1037,9 @@ fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
     assert!(state_on_disk(&repo, &["TASK-8"])
         .is_some_and(|st| st.closed.is_empty() && st.open.is_empty()));
 
-    // Integrated: two cold shows answer COMPLETE (the oracle's own answer),
-    // equal to the unbounded collector; the second seeds the key.
+    // Integrated: cold shows answer COMPLETE, equal to the unbounded
+    // collector. The SKETCH v3 index answers them, and an index answer
+    // never seeds (advisor ruling on deviation 6), so the key stays cold.
     let wanted = ids(&["TASK-9"]);
     let oracle = collect_git_linkage_opts(&repo, &wanted, false);
     for _ in 0..2 {
@@ -1030,8 +1052,43 @@ fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
         );
     }
     assert!(
-        state_on_disk(&repo, &["TASK-9"]).is_some_and(|st| !st.closed.is_empty()),
-        "the seeding show warms the key"
+        state_on_disk(&repo, &["TASK-9"]).is_none(),
+        "an index answer neither marks nor seeds the key"
+    );
+}
+
+/// Advisor ruling on deviation 6 (2026-10-26): only the ORIGINAL query's
+/// complete answer may seed a CLOSED negative. A zero-hit index answer,
+/// cold build or warm read, publishes no negative state and never makes
+/// the probe answer `ProvedEmpty`.
+#[test]
+fn zero_hit_index_answer_seeds_nothing() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "update TASK-7"); // grep-positive, parser-negative
+    commit(&repo, "feat: tip");
+    let wanted = ids(&["TASK-7"]);
+    for _ in 0..3 {
+        let shown =
+            collect_git_linkage_until(&repo, &wanted, Instant::now() + Duration::from_secs(30));
+        assert!(shown.commits.is_empty(), "zero hits: {:?}", shown.commits);
+        assert!(!shown.commits_scan_incomplete);
+        assert!(
+            state_on_disk(&repo, &["TASK-7"]).is_none(),
+            "an index answer publishes no negative state"
+        );
+    }
+    let common = git(&repo, &["rev-parse", "--git-common-dir"]);
+    assert!(
+        repo.join(common)
+            .join("aida/linkage-index/v1/meta")
+            .exists(),
+        "the index answered these shows"
+    );
+    assert_ne!(
+        probe(&repo, &["TASK-7"], &tuning(1024, 0)),
+        NegativeProbe::ProvedEmpty,
+        "nothing seeded, so nothing proves the key empty"
     );
 }
 
@@ -1362,9 +1419,11 @@ fn pure_warm_read_rechecks_snapshot_after_walk() {
 
 /// Ruling 2026-10-25: positive and cold shows pay NO serial snapshot in
 /// front of the original query — structurally, no snapshot-only git read
-/// (`config --list`, the `--no-walk=unsorted` root listing) runs. That holds
-/// for a never-negative key and for a key that turned positive after
-/// holding a negative proof (the hit drops its state).
+/// (the worktree listing and the `for-each-ref` ref evidence R is digested
+/// from) runs. That holds for a never-negative key and for a key that turned
+/// positive after holding a negative proof (the hit drops its state). The
+/// SKETCH v3 index's own reads (its T0 tip listing and config identity) are
+/// the replacement for the original query, not a snapshot in front of it.
 #[cfg(unix)]
 #[test]
 fn positive_show_takes_no_snapshot() {
@@ -1389,7 +1448,10 @@ fn positive_show_takes_no_snapshot() {
         std::fs::read_to_string(&log_path)
             .unwrap_or_default()
             .lines()
-            .filter(|l| l.contains("--no-walk=unsorted") || l.contains("config --list"))
+            .filter(|l| {
+                l.contains("worktree list --porcelain")
+                    || l.contains("for-each-ref --format=%(refname)%00")
+            })
             .map(str::to_string)
             .collect()
     };
