@@ -205,6 +205,9 @@ mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+// trace:STORY-1742 | ai:claude
+#[cfg(unix)]
+mod sanitized_intake;
 // trace:TASK-1993 | ai:codex
 mod review_watch;
 mod role;

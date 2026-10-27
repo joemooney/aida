@@ -115,6 +115,8 @@ pub const STORE_STAGING_IGNORE_PATTERNS: &[&str] = &[
     "schedule/**/*.tmp.*",
     "mailbox/**/*.tmp.*",
     "oplog.tmp.*",
+    // trace:STORY-1742 | ai:claude
+    "metadata.tmp.*",
 ];
 
 /// [`STORE_STAGING_IGNORE_PATTERNS`] as a commented `.gitignore` block, newline
