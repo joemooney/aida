@@ -221,3 +221,152 @@ fn a_tracked_product_config_skip_is_reported_in_preview_and_launch() {
         "[agents]\nvendor = \"legacy\"\n"
     );
 }
+
+/// An adopted worktree whose product branch tracks its own AGENTS.md and
+/// .gitignore, projected; returns the bytes every scaffold writer must keep.
+fn adopted_with_tracked_agents_md(dir: &Path) -> (PathBuf, Vec<(PathBuf, Vec<u8>)>) {
+    let (top, _) = adopted(dir, SETTINGS);
+    std::fs::write(top.join("AGENTS.md"), "# Product agents\n").unwrap();
+    std::fs::write(top.join(".gitignore"), "target/\n").unwrap();
+    git(&top, &["add", "AGENTS.md", ".gitignore"], None);
+    git(&top, &["commit", "-q", "-m", "product guidance"], None);
+    assert_eq!(refresh_adoption_projection(&top), None);
+    let kept = ["AGENTS.md", ".gitignore", CONFIG]
+        .iter()
+        .map(|rel| (top.join(rel), std::fs::read(top.join(rel)).unwrap()))
+        .collect();
+    (top, kept)
+}
+
+fn assert_untouched(top: &Path, kept: &[(PathBuf, Vec<u8>)], path: &str) {
+    assert_eq!(
+        git(top, &["status", "--porcelain"], None),
+        "",
+        "{path} changed the product tree"
+    );
+    for (file, bytes) in kept {
+        assert_eq!(
+            &std::fs::read(file).unwrap(),
+            bytes,
+            "{path}: {}",
+            file.display()
+        );
+    }
+    for dir in [".claude", ".agents", ".codex", ".aida/discipline"] {
+        assert!(!top.join(dir).exists(), "{path} created {dir}");
+    }
+}
+
+fn assert_refused(path: &str, result: anyhow::Result<impl std::fmt::Debug>) {
+    let err = result.expect_err(path);
+    assert!(
+        format!("{err:#}").contains("adopted from a shared AIDA plane"),
+        "{path}: {err:#}"
+    );
+}
+
+#[test]
+fn every_scaffold_write_path_refuses_in_an_adopted_worktree() {
+    use crate::cli::ScaffoldCommand;
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, kept) = adopted_with_tracked_agents_md(&tmp.path().join("p"));
+    let storage = crate::Storage::new(tmp.path().join("store.yaml"));
+    let db = tmp.path().join("cache.db");
+
+    let apply = ScaffoldCommand::Apply {
+        project_root: Some(top.clone()),
+        force: true,
+        dry_run: false,
+        prune: false,
+    };
+    assert_refused(
+        "scaffold apply",
+        crate::scaffold_cmd::handle_scaffold_command(&apply, &storage, &db),
+    );
+    assert_untouched(&top, &kept, "scaffold apply");
+
+    let upgrade = ScaffoldCommand::Upgrade {
+        project_root: Some(top.clone()),
+        dry_run: false,
+        force: true,
+        prune: false,
+        only: None,
+    };
+    assert_refused(
+        "scaffold upgrade",
+        crate::scaffold_cmd::handle_scaffold_command(&upgrade, &storage, &db),
+    );
+    assert_untouched(&top, &kept, "scaffold upgrade");
+
+    // A caller that built its own preview is refused by the upgrade itself.
+    let preview = aida_core::scaffolding::Scaffolder::new(
+        top.clone(),
+        aida_core::scaffolding::ScaffoldConfig::default(),
+    )
+    .preview(&aida_core::RequirementsStore::default());
+    assert_refused(
+        "run_scaffold_upgrade",
+        crate::scaffold_cmd::run_scaffold_upgrade(&top, &preview, false, true, true),
+    );
+    assert_untouched(&top, &kept, "run_scaffold_upgrade");
+    assert!(aida_core::scaffolding::Scaffolder::new(
+        top.clone(),
+        aida_core::scaffolding::ScaffoldConfig::default(),
+    )
+    .apply(&preview)
+    .is_err());
+    assert_untouched(&top, &kept, "Scaffolder::apply");
+
+    // `scaffold refresh` and `init --refresh` share this entry.
+    let refresh = ScaffoldCommand::Refresh {
+        project_root: Some(top.clone()),
+        dest: Some(tmp.path().join("prompts")),
+    };
+    assert_refused(
+        "scaffold refresh",
+        crate::scaffold_cmd::handle_scaffold_command(&refresh, &storage, &db),
+    );
+    assert_refused(
+        "refresh_agent_packs",
+        crate::scaffold_refresh::refresh_agent_packs_at(&top, None, None).map(|p| p.len()),
+    );
+    assert_untouched(&top, &kept, "scaffold refresh");
+
+    assert_refused(
+        "discipline pack",
+        crate::ensure_discipline_pack_scaffold(&top, true).map(|r| r.written),
+    );
+    assert_refused(
+        "discipline .gitignore",
+        crate::ensure_discipline_pack_gitignore_allow_list(&top),
+    );
+    #[cfg(feature = "tui")]
+    assert_refused(
+        "agent profile enable",
+        crate::config_cmd::scaffold_enabled_agent_profile(&top, "codex"),
+    );
+    assert_untouched(&top, &kept, "discipline and profile writers");
+
+    // A writer rooted in a subdirectory is still inside the adopted worktree.
+    std::fs::create_dir_all(top.join("src")).unwrap();
+    assert!(aida_core::scaffolding::refuse_in_adopted_worktree(&top.join("src")).is_err());
+}
+
+#[test]
+fn a_projected_config_refusal_names_where_local_keys_belong() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, _) = adopted(&tmp.path().join("p"), SETTINGS);
+    refresh_adoption_projection(&top);
+    let err = crate::config_edit::set_kv(
+        &top.join(CONFIG),
+        "paths",
+        "scratch",
+        toml_edit::Value::from("scratch-dir"),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("adoption/settings.toml") && err.contains("~/.aida/config.toml"),
+        "{err}"
+    );
+}

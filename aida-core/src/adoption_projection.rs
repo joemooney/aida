@@ -122,6 +122,17 @@ pub fn inspect(worktree: &Path) -> Result<State> {
     };
     let config_tracked = !tracked(&root, &[CONFIG])?.is_empty();
     let damaged = damaged_paths(&root, &manifest, config_tracked)?;
+    // The owned file set must be the one a refresh would write now: a
+    // checkout that stops (or starts) tracking the config changes it with
+    // no plane move, and until a refresh the settings are not applied.
+    let expected: Vec<String> = render(&adoption, !config_tracked)?.into_keys().collect();
+    let owned: Vec<&String> = manifest
+        .files
+        .keys()
+        .filter(|rel| !(config_tracked && rel.as_str() == CONFIG))
+        .collect();
+    let same_files =
+        owned.len() == expected.len() && owned.iter().zip(&expected).all(|(a, b)| *a == b);
     Ok(if !damaged.is_empty() {
         State::Damaged {
             commit: manifest.commit,
@@ -129,6 +140,7 @@ pub fn inspect(worktree: &Path) -> Result<State> {
         }
     } else if manifest.commit != adoption.revision.commit
         || manifest.generator != adoption.revision.generator
+        || !same_files
     {
         State::Stale {
             projected: manifest.commit,
@@ -152,12 +164,7 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
         ensure_real_dir(&root, dir)?;
     }
     crate::git_ops::ensure_aida_runtime_excluded(&root)?;
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(root.join(LOCK))
-        .with_context(|| format!("Failed to open {LOCK}"))?;
+    let lock = open_lock(&root)?;
     fs2::FileExt::lock_exclusive(&lock).with_context(|| format!("Failed to lock {LOCK}"))?;
 
     let config_tracked = !tracked(&root, &[CONFIG])?.is_empty();
@@ -209,6 +216,8 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
             && m.generator == adoption.revision.generator
             && m.files == hashes
     });
+    // What each owned path holds right now, proven by the check below.
+    let mut on_disk: BTreeMap<String, String> = BTreeMap::new();
     for rel in hashes.keys().chain(stale.iter()) {
         let Some(existing) = read_regular(&root, rel)? else {
             unchanged &= !hashes.contains_key(rel);
@@ -223,6 +232,7 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
             );
         }
         unchanged &= hashes.get(rel) == Some(&hash);
+        on_disk.insert(rel.clone(), hash);
     }
     let finished = Manifest {
         version: MANIFEST_VERSION,
@@ -240,11 +250,13 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
         });
     }
 
-    let mut intent = previous.unwrap_or_else(|| Manifest {
-        files: BTreeMap::new(),
-        ..finished.clone()
-    });
-    intent.pending.extend(hashes);
+    // The previous in-flight set is reconciled first: `files` records the
+    // bytes each owned path verifiably holds now, and `pending` only this
+    // refresh's hashes, so a second interruption never forgets a hash a
+    // file still carries.
+    let mut intent = previous.unwrap_or_else(|| finished.clone());
+    intent.files = on_disk;
+    intent.pending = hashes;
     write_manifest(&root, &intent)?;
     for (rel, body) in &outputs {
         crate::write_atomic(&root.join(rel), body)
@@ -363,9 +375,19 @@ fn verified_guidance(root: &Path, commit: String, config_tracked: bool) -> Optio
 }
 
 /// Whether the worktree holding `project_root` has an adoption projection.
-/// A plain file check, cheap enough for every writer guard.
+/// Plain file checks up to the worktree top (the first directory with a
+/// `.git`), cheap enough for every writer guard, so a writer rooted in a
+/// subdirectory is covered too.
 pub fn is_projected(project_root: &Path) -> bool {
-    project_root.join(MANIFEST).is_file()
+    for dir in project_root.ancestors() {
+        if dir.join(MANIFEST).is_file() {
+            return true;
+        }
+        if dir.join(".git").exists() {
+            return false;
+        }
+    }
+    false
 }
 
 /// Whether `path` is a file the adoption projection owns, so a config
@@ -388,11 +410,15 @@ pub fn owns(path: &Path) -> bool {
         .is_some_and(|m| m.files.contains_key(rel.as_ref()) || m.pending.contains_key(rel.as_ref()))
 }
 
-/// The refusal a writer reports for an owned projection file.
+/// The refusal a writer reports for an owned projection file. It names
+/// both destinations, since the plane accepts only shared policy keys: a
+/// local path or preference never belongs on it.
 pub fn owned_write_refusal(path: &Path) -> String {
     format!(
-        "{} is generated from the shared adoption plane; refused to edit it. Change \
-         adoption/settings.toml on the aida-store plane instead.",
+        "{} is generated from the shared adoption plane; refused to edit it. A shared \
+         policy setting belongs in adoption/settings.toml on the aida-store plane. A local \
+         path or personal preference does not: set it in your user config, ~/.aida/config.toml, \
+         or in the config tracked on the default branch if the project agreed to keep one.",
         path.display()
     )
 }
@@ -469,6 +495,27 @@ fn ensure_real_dir(root: &Path, rel: &str) -> Result<()> {
         }
         Err(e) => Err(e.into()),
     }
+}
+
+/// Open the refresh lock without following a symlink: a planted link must
+/// never create or truncate a file outside the projection.
+fn open_lock(root: &Path) -> Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let path = root.join(LOCK);
+    match std::fs::symlink_metadata(&path) {
+        Ok(meta) if !meta.is_file() => {
+            bail!("{LOCK} is not a regular file; the adoption projection refused")
+        }
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+        _ => {}
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&path)
+        .with_context(|| format!("Failed to open {LOCK}"))
 }
 
 /// The bytes of `rel` when it is a regular file; a symlink or other file

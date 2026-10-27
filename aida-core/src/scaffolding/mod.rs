@@ -1295,6 +1295,20 @@ aida show <SPEC-ID>
         }
     }
 
+    /// The preview a scaffold WRITER works from: every path that puts
+    /// scaffold files on disk (apply, upgrade, refresh, profile enable)
+    /// takes its artifacts from here, so the adopted-worktree refusal is
+    /// shared rather than repeated per writer. Read-only callers
+    /// (preview, status, diff) keep using [`Scaffolder::preview`].
+    // trace:STORY-1741 | ai:claude
+    pub fn preview_for_write(
+        &mut self,
+        store: &RequirementsStore,
+    ) -> Result<ScaffoldPreview, ScaffoldError> {
+        refuse_in_adopted_worktree(&self.project_root)?;
+        Ok(self.preview(store))
+    }
+
     /// Generate a preview of what would be scaffolded
     pub fn preview(&mut self, store: &RequirementsStore) -> ScaffoldPreview {
         let mut artifacts = Vec::new();

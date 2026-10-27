@@ -3616,7 +3616,10 @@ fn cli_edit_agent_profile(
 }
 
 #[cfg(feature = "tui")]
-fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str) -> Result<()> {
+pub(crate) fn scaffold_enabled_agent_profile(
+    project_root: &std::path::Path,
+    profile: &str,
+) -> Result<()> {
     let mut selection = crate::init_cmd::AgentSelection {
         claude: false,
         codex: false,
@@ -3637,7 +3640,8 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
         db_path,
     );
     let store = aida_core::RequirementsStore::default();
-    let preview = scaffolder.preview(&store);
+    // trace:STORY-1741 | ai:claude
+    let preview = scaffolder.preview_for_write(&store)?;
     // Codex and Antigravity share the portable `.agents/skills` pack; a
     // legacy per-vendor pack appears in the preview only when it already
     // exists. A pack's delivered-skills manifest is recorded only when this

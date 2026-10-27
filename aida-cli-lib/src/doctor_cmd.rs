@@ -10824,7 +10824,7 @@ hostname = "localhost"
 
         // The refresh migration (header-less and unedited -> wrapped) clears
         // the finding.
-        crate::scaffold_refresh::refresh_agent_packs_at(root, None, None);
+        crate::scaffold_refresh::refresh_agent_packs_at(root, None, None).unwrap();
         let findings = scan_scaffold_drift(root, &store);
         assert!(
             findings.iter().all(|f| f.id != "scaffold-drift/project"),

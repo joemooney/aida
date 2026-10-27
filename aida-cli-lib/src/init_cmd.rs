@@ -6853,7 +6853,7 @@ fn run_init(
     // machine-global Codex custom prompts) onto this binary's templates,
     // so a template fix reaches a non-Claude agent without --force.
     if *refresh && init_footprint == cli::InitFootprint::Full {
-        let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
+        let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None)?;
         scaffold_refresh::print_refresh_summary(&packs);
         // Seed into THIS project's store: the distributed store first, then
         // a local legacy store. Never the registry's ambient default, which

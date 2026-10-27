@@ -488,3 +488,106 @@ fn a_manifest_naming_a_path_outside_aida_refuses() {
         "product\n"
     );
 }
+
+#[test]
+fn a_config_the_product_branch_stops_tracking_reads_as_stale_until_refreshed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    std::fs::create_dir_all(top.join(".aida")).unwrap();
+    std::fs::write(top.join(CONFIG), "[agents]\nvendor = \"legacy\"\n").unwrap();
+    git_out(&top, &["add", "-f", CONFIG]);
+    git_out(&top, &["commit", "-q", "-m", "legacy scaffolding"]);
+    let commit = publish(&top, V1);
+    assert!(sync(&top).unwrap().unwrap().config_tracked);
+
+    // A checkout that drops the config: git deletes the file, and the
+    // manifest has no settings entry, yet the plane is unchanged.
+    git_out(&top, &["rm", "-q", CONFIG]);
+    git_out(&top, &["commit", "-q", "-m", "drop scaffolding"]);
+    assert!(!top.join(CONFIG).exists());
+    assert!(matches!(
+        inspect(&top).unwrap(),
+        State::Stale {
+            config_tracked: false,
+            ..
+        }
+    ));
+    assert!(matches!(
+        delivered_guidance(&top),
+        Delivery::Withheld { .. }
+    ));
+
+    sync(&top).unwrap();
+    assert_eq!(
+        inspect(&top).unwrap(),
+        State::Current {
+            commit,
+            config_tracked: false
+        }
+    );
+    assert!(top.join(CONFIG).is_file());
+}
+
+#[test]
+fn a_second_interrupted_refresh_keeps_every_hash_a_file_still_holds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    sync(&top).unwrap();
+
+    // Refresh to V2 interrupted after the config was written.
+    publish(&top, V2);
+    let outputs = render(&adoption(&top), true).unwrap();
+    let mut intent = read_manifest(&top).unwrap().unwrap();
+    intent.pending = outputs
+        .iter()
+        .map(|(rel, body)| (rel.clone(), sha256(body.as_bytes())))
+        .collect();
+    write_manifest(&top, &intent).unwrap();
+    std::fs::write(top.join(CONFIG), &outputs[CONFIG]).unwrap();
+
+    // The plane moves on, and the next refresh fails on the guidance write
+    // (written first) before it reaches the config.
+    let third = publish(
+        &top,
+        "schema = 1\n[settings.agents]\nvendor = \"antigravity\"\n[guidance]\nthird = \"Third.\\n\"\n",
+    );
+    let guidance = top.join(GUIDANCE_DIR);
+    let mode =
+        |m| std::fs::set_permissions(&guidance, std::os::unix::fs::PermissionsExt::from_mode(m));
+    mode(0o555).unwrap();
+    let probe = guidance.join(".probe");
+    if std::fs::write(&probe, "x").is_ok() {
+        // Running as root: permissions cannot force the failure.
+        std::fs::remove_file(&probe).unwrap();
+        mode(0o755).unwrap();
+        return;
+    }
+    assert!(sync(&top).is_err());
+    mode(0o755).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(top.join(CONFIG)).unwrap(),
+        outputs[CONFIG]
+    );
+
+    sync(&top).unwrap();
+    assert_eq!(
+        inspect(&top).unwrap(),
+        State::Current {
+            commit: third,
+            config_tracked: false
+        }
+    );
+}
+
+#[test]
+fn a_symlinked_lock_refuses_without_creating_its_target() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    std::fs::create_dir_all(top.join(".aida")).unwrap();
+    let target = tmp.path().join("outside.lock");
+    std::os::unix::fs::symlink(&target, top.join(LOCK)).unwrap();
+    assert!(format!("{:#}", sync(&top).unwrap_err()).contains(LOCK));
+    assert!(!target.exists());
+}
