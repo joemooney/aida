@@ -245,7 +245,10 @@ type TestFlowShipHook = Box<dyn FnMut(u64, &DispatchExecutionContext) -> Result<
 #[cfg(test)]
 type TestFlowTrainHook = Box<dyn FnMut(&[u64], &DispatchExecutionContext) -> Result<()>>;
 #[cfg(test)]
-type TestFlowWaitCiHook = Box<dyn FnMut(&Path, u64, &DispatchExecutionContext, bool) -> Result<()>>;
+/// Stands in for the forge CI wait only: the state it returns still goes
+/// through [`ci_state_is_green`], so a test cannot skip the green check.
+type TestFlowWaitCiHook =
+    Box<dyn FnMut(&Path, u64, &DispatchExecutionContext, bool) -> Result<crate::forge::CiState>>;
 
 #[cfg(test)]
 std::thread_local! {
@@ -258,14 +261,6 @@ std::thread_local! {
 }
 
 fn invoke_pr_ship_with_ctx(pr: u64, ctx: &DispatchExecutionContext) -> Result<()> {
-    #[cfg(test)]
-    {
-        let maybe_res =
-            TEST_FLOW_SHIP_HOOK.with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(pr, ctx)));
-        if let Some(res) = maybe_res {
-            return res;
-        }
-    }
     crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
         Some(pr),
         false,
@@ -286,14 +281,6 @@ fn invoke_pr_ship_with_ctx(pr: u64, ctx: &DispatchExecutionContext) -> Result<()
 }
 
 fn invoke_pr_train_with_ctx(prs: &[u64], ctx: &DispatchExecutionContext) -> Result<()> {
-    #[cfg(test)]
-    {
-        let maybe_res =
-            TEST_FLOW_TRAIN_HOOK.with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(prs, ctx)));
-        if let Some(res) = maybe_res {
-            return res;
-        }
-    }
     let opts = crate::pr_train::TrainOptions {
         prs,
         all_ready: false,
@@ -324,8 +311,9 @@ fn wait_for_pr_ci_with_ctx(
                 .map(|hook| hook(main_worktree, pr, ctx, requires_ship_held))
         });
         if let Some(res) = maybe_res {
+            let state = res?;
             ctx.reverify_now(requires_ship_held)?;
-            return res;
+            return ci_state_is_green(pr, state);
         }
     }
     let forge = crate::forge::forge_for(main_worktree);

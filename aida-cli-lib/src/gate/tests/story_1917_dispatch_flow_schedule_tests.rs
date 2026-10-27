@@ -486,7 +486,7 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
     TEST_FLOW_WAIT_CI_HOOK.with(|c| {
         *c.borrow_mut() = Some(Box::new(|_root, _pr, ctx, req_ship| {
             ctx.reverify_now(req_ship)?;
-            Ok(())
+            Ok(crate::forge::CiState::Success)
         }));
     });
 
@@ -666,6 +666,82 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
         vec![401, 402],
         "--no-ship must never call ship"
     );
+}
+
+/// R6: `--no-ship` reports "reviewed and green" only after the exact head's
+/// CI succeeded. An approved head with no CI, or CI still pending, fails the
+/// flow; the forge wait is faked but the green check is the real one.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_flow_no_ship_refuses_green_without_passing_ci() {
+    use crate::forge::CiState;
+    let mut f = FlowFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let _hooks = FlowHookGuard;
+
+    let state_dir = f._tmp.path().join("flow-gh-state");
+    std::fs::create_dir_all(&state_dir).unwrap();
+    let fake_gh = f.write_executable_script(
+        "fake-gh-no-ci.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\n\
+             if [ \"${{1:-}}\" = \"pr\" ] && [ \"${{2:-}}\" = \"view\" ]; then\n\
+               cat '{}'/pr-\"$3\".json\n\
+               exit 0\n\
+             fi\n\
+             exit 1\n",
+            state_dir.display()
+        ),
+    );
+    f.ambient
+        .set_key("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap());
+    let shipped = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u64>::new()));
+    let shipped_clone = shipped.clone();
+    TEST_FLOW_SHIP_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(move |pr, _ctx| {
+            shipped_clone.lock().unwrap().push(pr);
+            Ok(())
+        }));
+    });
+
+    for (pr, state, expected) in [
+        (411, CiState::None, "has no CI checks"),
+        (412, CiState::Pending, "did not pass"),
+    ] {
+        std::fs::write(
+            state_dir.join(format!("pr-{pr}.json")),
+            format!(
+                r#"{{"headRefOid":"eeee{pr}","headRefName":"claude/pr-{pr}","baseRefName":"main","state":"OPEN","mergeStateStatus":"CLEAN","title":"PR {pr} (TASK-100)"}}"#
+            ),
+        )
+        .unwrap();
+        write_approved_verdict(&f.root, pr, &format!("eeee{pr}"), "APPROVED");
+        TEST_FLOW_WAIT_CI_HOOK.with(|c| {
+            *c.borrow_mut() = Some(Box::new(move |_root, _pr, _ctx, _ship| Ok(state)));
+        });
+        let sub = submit_request(
+            &f.root,
+            &f.mandate_dir,
+            &f.principal,
+            &DispatchRequestVerb::Flow {
+                pr,
+                no_ship: true,
+                vendor: None,
+            },
+            now,
+        )
+        .unwrap();
+        let res = execute_one_request(&f.root, &f.mandate_dir, &sub.request.id, true, now).unwrap();
+        assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
+        assert!(
+            res.summary.contains("CI did not pass") && res.summary.contains(expected),
+            "{}",
+            res.summary
+        );
+        assert!(!res.summary.contains("with green CI"), "{}", res.summary);
+    }
+    assert!(shipped.lock().unwrap().is_empty(), "--no-ship never ships");
 }
 
 // trace:STORY-1917 | ai:agy
@@ -1402,6 +1478,7 @@ type Hook = std::cell::RefCell<Option<Box<dyn FnMut()>>>;
 struct NetForge {
     on_watch_ci: Hook,
     on_check_rows: Hook,
+    on_merge: Hook,
     merges: std::cell::Cell<usize>,
     closed: std::cell::Cell<usize>,
 }
@@ -1447,6 +1524,7 @@ impl crate::forge::Forge for NetForge {
         _: &mut dyn crate::network_retry::RetrySink,
     ) -> anyhow::Result<crate::forge::MergeResult> {
         self.merges.set(self.merges.get() + 1);
+        fire(&self.on_merge);
         Ok(crate::forge::MergeResult {
             merged: true,
             sha: None,
@@ -1811,6 +1889,41 @@ fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges
     assert!(ports.live.dispatch_abort.is_some());
 }
 
+/// Authority lost right after a successful merge: the post-merge re-read of
+/// main is refused by its dispatch check, and the warning says the request
+/// lost authority instead of blaming main.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
+    let f = native_fixture(false);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let ctx = establish_train_ctx(&f, vec![9705]);
+    let forge = NetForge::default();
+    let grant_id = std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap();
+    *forge.on_merge.borrow_mut() = Some(Box::new(move || {
+        let file = crate::gate::seat_authority::grant_dir()
+            .unwrap()
+            .join(format!("{grant_id}.json"));
+        let mut g = crate::gate::seat_authority::read_grant(&grant_id).unwrap();
+        g.revoked_at = Some(Utc::now());
+        write_private_atomic(&file, &serde_json::to_vec_pretty(&g).unwrap()).unwrap();
+    }));
+    let mut ports = live_ports(&f, &forge, &ctx, member(9705, None));
+    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
+    let base = crate::pr_train::Rails::main_tip(&mut rails).unwrap();
+    let m = rails.ports.gate(9705).unwrap();
+    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
+    crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
+    let _ = crate::pr_train::Rails::land(&mut rails, &built);
+    let warnings = rails.warnings.join("\n");
+    assert_eq!(forge.merges.get(), 1, "{warnings}");
+    assert!(
+        warnings.contains("merged, then its dispatch request lost authority"),
+        "{warnings}"
+    );
+    assert!(!warnings.contains("main could not be read"), "{warnings}");
+}
+
 /// A human gate added, or the worker's claim changed, while the real CI wait
 /// runs: the real post-wait checkpoint refuses and the train never lands.
 #[test]
@@ -1947,6 +2060,23 @@ fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
         .nth(1)
         .unwrap();
     let body = body.split("\npub(crate) fn ").next().unwrap();
+    // A wrapped checkpoint call (`ShipCheckpoint::X,` then `)` on the next
+    // line) reads as `ShipCheckpoint::X)`.
+    let mut flat = String::new();
+    let mut rest = body;
+    while let Some(i) = rest.find(",\n") {
+        let (head, tail) = rest.split_at(i);
+        let after = tail[2..].trim_start();
+        flat.push_str(head);
+        if after.starts_with(')') {
+            rest = after;
+        } else {
+            flat.push_str(",\n");
+            rest = &tail[2..];
+        }
+    }
+    flat.push_str(rest);
+    let body = flat.as_str();
     let mut last = 0;
     for at in [
         "Entry",
@@ -1976,6 +2106,156 @@ fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
     assert!(window.contains("Some(err) => err.context(refusal)"));
     // No dispatch reverify bypasses the named checkpoint function.
     assert!(!body.contains("reverify_now("));
+}
+
+/// Q2: the dispatch context cannot be dropped silently on the way into the
+/// native ship and train. While a dispatch request's context is alive on
+/// the worker thread, `pr ship` and `pr train` reached without it (the
+/// ordinary entry points, which pass `None`) are refused by the gate before
+/// anything runs, and the same calls carrying the context go on. Every flow
+/// test also runs `dispatch_flow`'s real calls into `pr ship` and `pr train`
+/// (their stand-in hooks sit behind the real entry check), so dropping the
+/// context at one of those call sites fails them too.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[test]
+fn story_1917_dispatch_context_dropped_on_the_way_into_ship_or_train_is_refused() {
+    use crate::gate::dispatch_auth::{carried, is_dispatch_authority_aborted};
+    let f = native_fixture(false);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let _hooks = FlowHookGuard;
+    let ctx = establish_train_ctx(&f, vec![9710]);
+    let shipped = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let trained = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let (s, t) = (shipped.clone(), trained.clone());
+    TEST_FLOW_SHIP_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(move |pr, ctx| {
+            s.borrow_mut().push((pr, ctx.request_id().to_string()));
+            Ok(())
+        }));
+    });
+    TEST_FLOW_TRAIN_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(move |prs, ctx| {
+            t.borrow_mut()
+                .push((prs.to_vec(), ctx.request_id().to_string()));
+            Ok(())
+        }));
+    });
+    let ship = |dispatch_ctx: Option<&DispatchExecutionContext>| {
+        crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
+            Some(9710),
+            false,
+            false,
+            false,
+            false,
+            None,
+            None,
+            false,
+            false,
+            false,
+            Some(1),
+            false,
+            crate::forge::MergeMethod::Squash,
+            false,
+            dispatch_ctx,
+        )
+    };
+    let opts = crate::pr_train::TrainOptions {
+        prs: &[9710],
+        all_ready: false,
+        dry_run: false,
+        local_ci: None,
+        max: 1,
+        no_pull: false,
+    };
+
+    // Dropped: the ordinary entry points, with the request still executing.
+    let err = crate::pr_cmd::pr_ship_with_method(
+        Some(9710),
+        false,
+        false,
+        false,
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        Some(1),
+        false,
+        crate::forge::MergeMethod::Squash,
+        false,
+    )
+    .unwrap_err();
+    assert!(is_dispatch_authority_aborted(&err), "{err:#}");
+    assert!(format!("{err:#}").contains("`pr ship` was reached without its dispatch context"));
+    let err = ship(None).unwrap_err();
+    assert!(is_dispatch_authority_aborted(&err), "{err:#}");
+    let err = crate::pr_train::pr_train_handler(&opts).unwrap_err();
+    assert!(is_dispatch_authority_aborted(&err), "{err:#}");
+    assert!(format!("{err:#}").contains("`pr train` was reached without its dispatch context"));
+    // A clone is the same request still executing.
+    let clone = ctx.clone();
+    assert!(crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, None).is_err());
+    assert!(shipped.borrow().is_empty() && trained.borrow().is_empty());
+
+    // Carried: past the real entry check to the stand-in.
+    ship(Some(&clone)).unwrap();
+    crate::pr_train::pr_train_handler_with_dispatch_ctx(&opts, Some(&ctx)).unwrap();
+    let id = ctx.request_id().to_string();
+    assert_eq!(*shipped.borrow(), vec![(9710, id.clone())]);
+    assert_eq!(*trained.borrow(), vec![(vec![9710], id)]);
+
+    // Once no request is executing, `None` is an ordinary run again.
+    drop(clone);
+    assert!(
+        carried(None, "pr ship").is_err(),
+        "the original is still alive"
+    );
+    drop(ctx);
+    assert!(carried(None, "pr ship").unwrap().is_none());
+}
+
+/// Q2: every native train step re-checks the dispatch context.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_native_train_steps_recheck_the_dispatch_context() {
+    fn fn_body<'a>(src: &'a str, head: &str) -> &'a str {
+        let start = src.find(head).unwrap_or_else(|| panic!("{head} exists"));
+        let body = &src[start..];
+        let end = [body[1..].find("\n    fn "), body.find("\n}\n")]
+            .into_iter()
+            .flatten()
+            .min()
+            .map_or(body.len(), |i| i + 1);
+        &body[..end]
+    }
+    let train_src = include_str!("../../pr_train.rs");
+    let live = train_src
+        .split("impl TrainForge for LiveTrainForge<'_> {")
+        .nth(1)
+        .unwrap();
+    for method in [
+        "fn fetch_main(",
+        "fn build(",
+        "fn gate(",
+        "fn open(",
+        "fn release_hold(",
+        "fn merge(",
+    ] {
+        assert!(
+            fn_body(live, method).contains("self.dispatch_check()"),
+            "LiveTrainForge::{method} must re-check the dispatch context"
+        );
+    }
+    // The two waits re-check after they return, not only before.
+    for (method, wait) in [
+        ("fn wait_ci(", "watch_ci(change)"),
+        ("fn hold_gate_green_after_release(", "wait_hold_gate_green("),
+    ] {
+        let body = fn_body(live, method);
+        let after = &body[body.find(wait).unwrap_or_else(|| panic!("{method}"))..];
+        assert!(after.contains("self.dispatch_check()"), "{method}");
+    }
 }
 
 /// Review round 1: R5 through the actual scheduler. The shipped
@@ -2442,10 +2722,9 @@ impl NativeShip {
         };
         assert_ne!(replacement.id, self.mandate.id, "{case}");
         assert!(self.refused_rows(&replacement.id).is_empty(), "{case}");
-        if at != crate::pr_cmd::ShipCheckpoint::PreMerge {
-            return;
-        }
-        assert!(text.contains("left OPEN"), "{case}: {text}");
+        // Every post-entry refusal, not only the pre-merge one, leaves one
+        // `pr:<N>` row under the request's own mandate.
+        // trace:STORY-1917 | ai:claude
         let rows = self.refused_rows(&self.mandate.id);
         assert_eq!(rows.len(), 1, "{case}: ledgered under its own mandate");
         assert!(
@@ -2455,6 +2734,10 @@ impl NativeShip {
                 .is_some_and(|w| w.contains("left OPEN")),
             "{case}: {rows:?}"
         );
+        if at != crate::pr_cmd::ShipCheckpoint::PreMerge {
+            return;
+        }
+        assert!(text.contains("left OPEN"), "{case}: {text}");
         if self.held {
             assert!(
                 text.contains("The merge-hold is re-armed."),
