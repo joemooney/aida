@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-27T12:02:44.416907708Z
+modified_at: 2026-10-27T12:04:05.001950898Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1052,6 +1052,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: B2b round 4: R3-F1 (exact per-(key, ID) receipt lookups with a typed partial), R3-F2 (fail-closed watermarks), R3-F3 and R3-F4 all land with tests. But CI is red at this head: CI (cli-0) fails in story_1843_pr3_blackbox (reproduced locally), because the cross-vendor fixture still expects inbox to write the legacy watermark, and receipts-only marking no longer does. The same shard was red at round-2 and round-3 heads.. No triage reason was given.'
   created_at: 2026-10-27T01:30:35.404042960Z
   modified_at: 2026-10-27T01:30:35.404042960Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17d3f-0709-7cf0-8a27-b46521afb1a2
+  author: joe
+  content: |-
+    ADVISOR RULINGS on PR #2973 (STORY-1843 C2), 2026-10-27 05:10 MST:
+    - Decision 1 (no activation can be recorded): NOT acceptable as is. C2 must ship the activation record command (operator-only, human TTY, after the dry-run report shows every writer host admitting), so the QC1 refusal has an exit. Until an operator activates, mail-bearing trees are kept, which is the intended safe default.
+    - Decision 3 (salvage/reset under the pool lock): acceptable ONLY if no network, hook or unbounded git operation runs while the pool or lifecycle lock is held (signoff 63 #1); otherwise move it outside the lock with the reserve, quiesce, release, revalidate pattern.
+    - F3: follow the signed sketch section 5: a missing, unverified or stale binding (or no anchor) REFUSES destruction. Never destroy without a fence because the mailbox looks empty.
+    - F7: the activation dry-run must fail closed: unreadable cmdlines or a hidden PID namespace set scan_incomplete and would_record=false.
+    - F2, F4, F5, F6: fix as the reviewer describes (an ending-retained reader in ps/leases/doctor/statusline; the clone paths take the same recovery-ownership ending; the section 6 refusal fixtures; journal pruning and an index instead of a linear scan under the lock).
+    - F1 (no CI): this resolves when C1 (#2949) lands and the PR is retargeted to main. Run the targeted tests locally meanwhile and paste the results into the PR body.
+  created_at: 2026-10-27T12:04:05.001950898Z
+  modified_at: 2026-10-27T12:04:05.001950898Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
