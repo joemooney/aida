@@ -2089,6 +2089,9 @@ impl Fixture {
     /// Publish `tip` to the hub with raw Git, then put the local store back
     /// on `local`, so the next `aida pull` has something to fetch.
     fn seed_hub(&self, store: &Path, remote: &Path, tip: &str, local: &str) {
+        // Git >= 2.56 updates origin's tracking ref on a push to its URL;
+        // seeding the hub must leave that ref as it was.
+        let tracking = self.rev("refs/remotes/origin/aida-store");
         self.git_at(
             store,
             &[
@@ -2098,6 +2101,16 @@ impl Fixture {
                 &format!("{tip}:refs/heads/aida-store"),
             ],
         );
+        match &tracking {
+            Some(old) => self.git_at(
+                store,
+                &["update-ref", "refs/remotes/origin/aida-store", old],
+            ),
+            None => self.git_at(
+                store,
+                &["update-ref", "-d", "refs/remotes/origin/aida-store"],
+            ),
+        };
         self.git_at(store, &["reset", "-q", "--hard", local]);
     }
 
