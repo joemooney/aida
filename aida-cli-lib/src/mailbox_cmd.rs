@@ -98,12 +98,17 @@ pub(crate) fn handle_mailbox_command(
         // trace:STORY-1843 | ai:claude
         MailboxCommand::Retention { command } => match command {
             self::mailbox_cmd_args::RetentionCommand::Activate { dry_run, json } => {
-                if !dry_run {
+                let json = *json || crate::output_format_is_json();
+                if *dry_run {
+                    return print_retention_report(project_root, json);
+                }
+                if !crate::gate::role_authority::has_integrity_floor_authority() {
                     anyhow::bail!(
-                        "mail retention activation requires --dry-run; recording is not available yet"
+                        "recording mail retention activation runs only for a human operator at                          an interactive terminal; agents can run `{}`",
+                        aida_core::mailbox_lifecycle::ACTIVATION_COMMAND
                     );
                 }
-                print_retention_report(project_root, *json || crate::output_format_is_json())
+                record_retention_activation(project_root, json)
             }
         },
         MailboxCommand::Latency { recipient, json } => {
@@ -939,6 +944,37 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
 
 #[cfg(not(unix))]
 fn print_retention_report(_project_root: &std::path::Path, _json: bool) -> Result<()> {
+    anyhow::bail!("mail retention is only available on Unix")
+}
+
+/// `aida mailbox retention activate`: re-run the report and record the
+/// activation only when it shows every writer taking a permit. The caller
+/// checked for a human at a terminal.
+// trace:STORY-1843 | ai:claude
+#[cfg(unix)]
+fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let report = aida_core::mailbox_lifecycle::activation::record(project_root)
+        .map_err(|e| anyhow::anyhow!("mail retention activation could not be recorded: {e}"))?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else if report.recorded {
+        println!(
+            "Mail retention activation recorded: every running mail writer takes a write permit."
+        );
+    }
+    if !report.recorded {
+        if !json {
+            print_retention_report(project_root, false)?;
+        }
+        anyhow::bail!(
+            "mail retention activation was NOT recorded: not every mail writer is known to take              a write permit"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn record_retention_activation(_project_root: &std::path::Path, _json: bool) -> Result<()> {
     anyhow::bail!("mail retention is only available on Unix")
 }
 

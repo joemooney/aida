@@ -17,6 +17,13 @@
 //! mailbox and keeps the retained copy: the caller keeps its tree, lease,
 //! claim and manifest. Retirement is retryable; it never blocks.
 //!
+//! Journal bound: a journal entry lives only while its operation can still be
+//! replayed. Once an operation is finished (`Finalized`, or `Aborted` /
+//! `Reopened` with the source reopened) its entry is deleted. The one
+//! unfinished operation a key can have is indexed at `pending/<key>.json`,
+//! so finding it under the Lifecycle lock reads one file, never the whole
+//! journal, and a damaged entry for one key never fails another key.
+//!
 //! Retention bound: every attempt that reaches preservation keeps its copy
 //! under `retained/<key>/<generation>/`, refused attempts included, and none
 //! is pruned. A source refused N times after preserving holds N copies of its
@@ -455,6 +462,7 @@ fn retire_claimed(source: &super::Source, opts: &RetireOptions) -> Result<Retire
             refusal: None,
             updated_at: now(),
         };
+        index_pending(&entry)?;
         write_journal(&entry)?;
         point(Point::Journal(Phase::Fenced))?;
         record.state = SourceState::Fenced {
@@ -1015,7 +1023,9 @@ fn finish_abort(entry: &JournalEntry) -> Result<()> {
             store_record(&entry.anchor, &record, &held)?;
         }
     }
-    Ok(())
+    drop(held);
+    // The source no longer names this operation: nothing replays it.
+    prune_journal(entry)
 }
 
 fn restore_tree(src: &Path, dst: &Path) -> Result<()> {
@@ -1053,7 +1063,8 @@ fn finalize(mut entry: JournalEntry) -> Result<()> {
         }
     }
     drop(held);
-    advance(&mut entry, Phase::Finalized)
+    advance(&mut entry, Phase::Finalized)?;
+    prune_journal(&entry)
 }
 
 // ── The retirement claim ────────────────────────────────────────────────────
@@ -1135,12 +1146,112 @@ fn write_journal(entry: &JournalEntry) -> Result<()> {
     write_json(&journal_path(&entry.anchor, &entry.op_id), entry)
 }
 
-/// Record the next phase durably, before its side effect.
+/// Record the next phase durably, before its side effect. A phase that
+/// ends replay takes the operation out of the pending index.
 fn advance(entry: &mut JournalEntry, phase: Phase) -> Result<()> {
     entry.phase = phase;
     entry.updated_at = now();
     write_journal(entry)?;
+    if is_finished(phase) {
+        unindex_pending(entry)?;
+    }
     point(Point::Journal(phase))
+}
+
+/// Phases [`unfinished_for`] never replays.
+fn is_finished(phase: Phase) -> bool {
+    matches!(phase, Phase::Finalized | Phase::Aborted | Phase::Reopened)
+}
+
+/// Delete a finished operation's journal entry. Absent is fine.
+fn prune_journal(entry: &JournalEntry) -> Result<()> {
+    match std::fs::remove_file(journal_path(&entry.anchor, &entry.op_id)) {
+        Ok(()) => fsync_dir(&entry.anchor.join(JOURNAL_DIR)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+// ── Pending index ───────────────────────────────────────────────────────────
+
+/// `pending/<key>.json` names the key's one unfinished operation. Retirement
+/// of a key is exclusive (the claim) and a new operation starts only when
+/// none is unfinished, so there is never more than one.
+const PENDING_DIR: &str = "pending";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PendingIndex {
+    schema: u32,
+    op_id: String,
+}
+
+fn pending_path(anchor: &Path, key: &str) -> PathBuf {
+    anchor.join(PENDING_DIR).join(format!("{key}.json"))
+}
+
+/// Index `entry` before its first journal write, so a crash in between
+/// leaves an index naming a missing entry (read as nothing pending), never
+/// an unindexed operation.
+fn index_pending(entry: &JournalEntry) -> Result<()> {
+    ensure_pending_index(&entry.anchor)?;
+    write_json(
+        &pending_path(&entry.anchor, &entry.key),
+        &PendingIndex {
+            schema: SCHEMA,
+            op_id: entry.op_id.clone(),
+        },
+    )
+}
+
+/// Remove the index for `entry`'s key if it names `entry`.
+fn unindex_pending(entry: &JournalEntry) -> Result<()> {
+    let path = pending_path(&entry.anchor, &entry.key);
+    match read_json::<PendingIndex>(&path)? {
+        Some(index) if index.op_id == entry.op_id => remove_index(&entry.anchor, &path),
+        _ => Ok(()),
+    }
+}
+
+fn remove_index(anchor: &Path, path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => fsync_dir(&anchor.join(PENDING_DIR)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Create the index directory. An anchor written before the index existed
+/// is migrated once: every unfinished journal entry is indexed and every
+/// finished one pruned, then the directory is created, so the scan never
+/// runs again.
+fn ensure_pending_index(anchor: &Path) -> Result<()> {
+    let dir = anchor.join(PENDING_DIR);
+    if std::fs::symlink_metadata(&dir).is_ok() {
+        return ensure_dir(&dir, true);
+    }
+    let staging = anchor.join(format!(".{PENDING_DIR}.migrating"));
+    let _ = std::fs::remove_dir_all(&staging);
+    ensure_dir(&staging, true)?;
+    for (name, path, _) in sorted_entries(&anchor.join(JOURNAL_DIR))? {
+        if !name.ends_with(".json") || name.starts_with('.') {
+            continue;
+        }
+        let Some(entry) = read_json::<JournalEntry>(&path)? else {
+            continue;
+        };
+        if is_finished(entry.phase) {
+            continue;
+        }
+        write_json(
+            &staging.join(format!("{}.json", entry.key)),
+            &PendingIndex {
+                schema: SCHEMA,
+                op_id: entry.op_id,
+            },
+        )?;
+    }
+    std::fs::rename(&staging, &dir)?;
+    fsync_dir(anchor)
 }
 
 fn require_journal(anchor: &Path, op_id: &str) -> Result<JournalEntry> {
@@ -1159,25 +1270,23 @@ fn require_journal(anchor: &Path, op_id: &str) -> Result<JournalEntry> {
 
 /// An unfinished operation on `key` that the source record does not name: a
 /// crash after the journal recorded `Fenced` but before the record did, or
-/// after the record was deleted but before `Finalized`.
+/// after the record was deleted but before `Finalized`. Reads the key's
+/// pending index and that one entry. An index whose entry is missing (a
+/// crash before the first journal write) or finished is stale and removed.
 fn unfinished_for(anchor: &Path, key: &str) -> Result<Option<JournalEntry>> {
-    for (name, path, _) in sorted_entries(&anchor.join(JOURNAL_DIR))? {
-        if !name.ends_with(".json") || name.starts_with('.') {
-            continue;
+    ensure_pending_index(anchor)?;
+    let path = pending_path(anchor, key);
+    let Some(index) = read_json::<PendingIndex>(&path)? else {
+        return Ok(None);
+    };
+    let entry = match read_json::<JournalEntry>(&journal_path(anchor, &index.op_id))? {
+        Some(entry) if entry.key == key && !is_finished(entry.phase) => entry,
+        _ => {
+            remove_index(anchor, &path)?;
+            return Ok(None);
         }
-        let Some(entry) = read_json::<JournalEntry>(&path)? else {
-            continue;
-        };
-        if entry.key == key
-            && !matches!(
-                entry.phase,
-                Phase::Finalized | Phase::Aborted | Phase::Reopened
-            )
-        {
-            return Ok(Some(entry));
-        }
-    }
-    Ok(None)
+    };
+    Ok(Some(entry))
 }
 
 fn require_record(

@@ -1,10 +1,11 @@
-//! The activation dry-run report (QC1, STORY-1843 C2).
+//! The activation report and record (QC1, STORY-1843 C2).
 //!
 //! A mail-bearing source refuses retirement until an operator records that
-//! every writer host on the machine admits before it writes. This module
-//! ships the first half only: a read-only report of the AIDA processes that
-//! can write local mail and whether each is known to take a write permit. It
-//! records nothing.
+//! every writer host on the machine admits before it writes. The dry run is a
+//! read-only report of the AIDA processes that can write local mail and
+//! whether each is known to take a write permit; [`record`] re-runs that scan
+//! and writes `activation.json` only when the report would record. The CLI
+//! lets only a human operator at a terminal record.
 //!
 //! A host is *known to admit* when it runs the same executable file (device
 //! and inode) as the process producing the report, which is a build with
@@ -128,7 +129,7 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     let me = std::fs::metadata("/proc/self/exe")
         .ok()
         .map(|m| (m.dev(), m.ino()));
-    let (processes, incomplete) = scan_proc(Path::new("/proc"));
+    let (processes, incomplete) = scan_proc(Path::new("/proc"), std::process::id());
     let recorded = super::resolve_source(project_root)
         .ok()
         .flatten()
@@ -136,11 +137,56 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     classify(&processes, me, std::process::id(), incomplete, recorded)
 }
 
-/// Read every `/proc/<pid>` this user can see. A process that exits during
-/// the scan is skipped; one whose `exe` link is unreadable (another user's,
-/// or hidepid) is listed with no executable and marks the scan incomplete
-/// only if its command line names an AIDA writer.
-fn scan_proc(proc: &Path) -> (Vec<ProcessView>, Option<String>) {
+/// Record the activation under `project_root`'s anchor. A fresh scan runs
+/// first, and nothing is written unless it shows every writer host admitting
+/// with a complete scan; the returned report says which (`recorded`). The
+/// caller has established that a human operator asked for this.
+// trace:STORY-1843 | ai:claude
+pub fn record(project_root: &Path) -> super::Result<ActivationReport> {
+    let report = dry_run_report(project_root);
+    let source = super::resolve_source(project_root)?.ok_or_else(|| {
+        super::LifecycleError::Io(std::io::Error::other(
+            "this checkout has no mail anchor, so no activation can be recorded",
+        ))
+    })?;
+    record_at(&source.anchor, report, &chrono::Utc::now().to_rfc3339())
+}
+
+/// [`record`] against an already-made report: write the record under the
+/// Lifecycle lock when `report.would_record`, else leave the anchor as is.
+pub(crate) fn record_at(
+    anchor: &Path,
+    mut report: ActivationReport,
+    now: &str,
+) -> super::Result<ActivationReport> {
+    report.dry_run = false;
+    if !report.would_record {
+        return Ok(report);
+    }
+    let _held = super::lock(anchor, super::LIFECYCLE_LOCK_TIMEOUT)?;
+    super::write_json(
+        &anchor.join(super::ACTIVATION_FILE),
+        &super::Activation {
+            schema: super::SCHEMA,
+            all_writer_hosts_admitting: true,
+            recorded_at: now.to_string(),
+        },
+    )?;
+    report.recorded = true;
+    Ok(report)
+}
+
+/// Read every `/proc/<pid>` this user can see. Unknown means refuse
+/// (signoff 48 Q2), so the scan is marked incomplete, and nothing would be
+/// recorded, when this process runs in a separate pid namespace (writers
+/// outside it are hidden; [`crate::worktree_holders::TRUST_PID_NAMESPACE_ENV`]
+/// does not waive this, since activation covers the whole machine), when it
+/// cannot see its own pid (a `/proc` of another namespace or a restricted
+/// mount), when a command line cannot be read for any reason but the process
+/// having exited, or when a process whose `exe` link is unreadable names an
+/// AIDA writer. A process that exits during the scan is skipped.
+// trace:STORY-1843 | ai:claude
+fn scan_proc(proc: &Path, self_pid: u32) -> (Vec<ProcessView>, Option<String>) {
     let entries = match std::fs::read_dir(proc) {
         Ok(entries) => entries,
         Err(e) => {
@@ -150,9 +196,22 @@ fn scan_proc(proc: &Path) -> (Vec<ProcessView>, Option<String>) {
             )
         }
     };
+    let mut incomplete = crate::worktree_holders::separate_pid_namespace(proc, self_pid);
+    if !proc.join(self_pid.to_string()).exists() {
+        incomplete.get_or_insert(format!(
+            "this process cannot see itself in {}, so other processes may be hidden",
+            proc.display()
+        ));
+    }
     let mut out = Vec::new();
-    let mut incomplete = None;
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(e) => {
+                incomplete.get_or_insert(format!("{} could not be listed: {e}", proc.display()));
+                continue;
+            }
+        };
         let Some(pid) = entry
             .file_name()
             .to_str()
@@ -167,7 +226,13 @@ fn scan_proc(proc: &Path) -> (Vec<ProcessView>, Option<String>) {
                 .filter(|a| !a.is_empty())
                 .map(|a| String::from_utf8_lossy(a).into_owned())
                 .collect(),
-            Err(_) => continue,
+            Err(e) if exited(&e) => continue,
+            Err(e) => {
+                incomplete.get_or_insert(format!(
+                    "the command line of process {pid} could not be read: {e}"
+                ));
+                continue;
+            }
         };
         let exe = std::fs::read_link(dir.join("exe"))
             .ok()
@@ -197,6 +262,11 @@ fn scan_proc(proc: &Path) -> (Vec<ProcessView>, Option<String>) {
         });
     }
     (out, incomplete)
+}
+
+/// A read error that means the process exited during the scan.
+fn exited(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::NotFound || e.raw_os_error() == Some(3 /* ESRCH */)
 }
 
 #[cfg(test)]
@@ -233,6 +303,65 @@ mod tests {
         );
         assert!(!report.would_record);
         assert!(report.dry_run);
+    }
+
+    fn fake_proc(self_pid: u32, ns: &str) -> tempfile::TempDir {
+        let proc = tempfile::tempdir().unwrap();
+        let me = proc.path().join(self_pid.to_string());
+        std::fs::create_dir_all(me.join("ns")).unwrap();
+        std::fs::write(me.join("cmdline"), b"aida\0mailbox\0").unwrap();
+        std::os::unix::fs::symlink("/bin/true", me.join("exe")).unwrap();
+        std::os::unix::fs::symlink(ns, me.join("ns").join("pid")).unwrap();
+        proc
+    }
+
+    #[test]
+    fn a_scan_from_a_separate_pid_namespace_is_incomplete_and_would_not_record() {
+        // F7: writers outside the namespace are hidden, so the report fails
+        // closed even though every visible host admits.
+        let proc = fake_proc(42, "pid:[4026532000]");
+        let (procs, incomplete) = scan_proc(proc.path(), 42);
+        let why = incomplete.expect("a hidden namespace is incomplete");
+        assert!(why.contains("pid namespace"), "{why}");
+        let me = procs[0].exe_id;
+        assert!(!classify(&procs, me, 42, Some(why), false).would_record);
+
+        let host = fake_proc(42, "pid:[4026531836]");
+        assert_eq!(scan_proc(host.path(), 42).1, None, "the host namespace");
+    }
+
+    #[test]
+    fn an_unreadable_cmdline_or_an_invisible_self_marks_the_scan_incomplete() {
+        let proc = fake_proc(42, "pid:[4026531836]");
+        // A cmdline that is a directory fails to read with an error other
+        // than the process having exited.
+        std::fs::create_dir_all(proc.path().join("77").join("cmdline")).unwrap();
+        let why = scan_proc(proc.path(), 42).1.expect("incomplete");
+        assert!(why.contains("process 77"), "{why}");
+
+        // A process that exited (its directory is gone) is not a gap.
+        std::fs::remove_dir_all(proc.path().join("77")).unwrap();
+        std::fs::create_dir_all(proc.path().join("78")).unwrap();
+        assert_eq!(scan_proc(proc.path(), 42).1, None);
+
+        // A /proc that does not show this process is incomplete.
+        let why = scan_proc(proc.path(), 43).1.expect("incomplete");
+        assert!(why.contains("cannot see itself"), "{why}");
+    }
+
+    #[test]
+    fn record_writes_the_activation_only_when_the_report_would_record() {
+        let anchor = tempfile::tempdir().unwrap();
+        let me = (1, 10);
+        let refused = classify(&[view(5, "/bin/aida", (1, 11))], Some(me), 1, None, false);
+        let out = record_at(anchor.path(), refused, "t").unwrap();
+        assert!(!out.recorded && !out.dry_run);
+        assert!(!super::super::activated(anchor.path()).unwrap());
+
+        let admitted = classify(&[view(5, "/bin/aida", me)], Some(me), 1, None, false);
+        let out = record_at(anchor.path(), admitted, "t").unwrap();
+        assert!(out.recorded);
+        assert!(super::super::activated(anchor.path()).unwrap());
     }
 
     #[test]

@@ -166,6 +166,32 @@ fn journal(ticket: &super::retire::RetirementTicket) -> JournalEntry {
     .unwrap()
 }
 
+/// A finished operation's journal entry is deleted, and its key is no longer
+/// indexed as pending (F6).
+fn assert_pruned(ticket: &super::retire::RetirementTicket) {
+    let path = ticket
+        .anchor
+        .join(JOURNAL_DIR)
+        .join(format!("{}.json", ticket.op_id));
+    assert!(
+        !path.exists(),
+        "finished journal {} is pruned",
+        path.display()
+    );
+    let pending = ticket.anchor.join("pending");
+    let indexed: Vec<String> = std::fs::read_dir(&pending)
+        .map(|d| {
+            d.flatten()
+                .map(|e| std::fs::read_to_string(e.path()).unwrap_or_default())
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        indexed.iter().all(|i| !i.contains(&ticket.op_id)),
+        "{indexed:?}"
+    );
+}
+
 /// Retire and keep the retirement claim, as a caller about to destroy the
 /// checkout does: while it is held, admission cannot reopen the source.
 fn retire_held(
@@ -544,10 +570,10 @@ fn an_empty_source_retires_and_completes_after_removal() {
         Err(LifecycleError::NotRemoved { .. })
     ));
     std::fs::remove_dir_all(dir.path().join(".aida")).unwrap();
+    let key = journal(&ticket).key;
     complete_retirement(&ticket).unwrap();
-    assert_eq!(journal(&ticket).phase, Phase::Finalized);
-    assert!(!record_path(&ticket.anchor, &journal(&ticket).key).exists());
-    complete_retirement(&ticket).unwrap();
+    assert_pruned(&ticket);
+    assert!(!record_path(&ticket.anchor, &key).exists());
 }
 
 #[test]
@@ -948,7 +974,7 @@ fn a_crash_after_removed_finishes_on_the_next_completion() {
     assert_eq!(journal(&ticket).phase, Phase::Removed);
     assert!(record_path(&ticket.anchor, &key).exists());
     complete_retirement(&ticket).unwrap();
-    assert_eq!(journal(&ticket).phase, Phase::Finalized);
+    assert_pruned(&ticket);
     assert!(!record_path(&ticket.anchor, &key).exists());
 }
 
@@ -1084,7 +1110,7 @@ fn a_second_driver_refuses_while_the_first_holds_the_claim() {
     assert_eq!(journal(&ticket).phase, Phase::Committed);
     std::fs::remove_dir_all(dir.path().join(".aida")).unwrap();
     complete_retirement(&ticket).unwrap();
-    assert_eq!(journal(&ticket).phase, Phase::Finalized);
+    assert_pruned(&ticket);
 }
 
 #[test]
@@ -1227,4 +1253,89 @@ fn a_staging_file_alone_does_not_make_a_source_mail_bearing() {
     // Not activated: only real bytes would refuse.
     let (_, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
     assert_eq!(files_under(&retained.join("data")), Vec::<String>::new());
+}
+
+// ── Journal bound (F6) ──────────────────────────────────────────────────────
+
+fn journal_files(root: &Path) -> usize {
+    std::fs::read_dir(source(root).anchor.join(JOURNAL_DIR))
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".json"))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+#[test]
+fn finished_operations_leave_no_journal_behind() {
+    let dir = repo();
+    seed_mail(dir.path());
+    // Refused (no activation) three times: each Aborted entry is pruned.
+    for _ in 0..3 {
+        let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
+        assert_eq!(reason, RefusalReason::MailBearingBeforeActivation);
+    }
+    assert_eq!(journal_files(dir.path()), 0, "aborted entries are pruned");
+    // Retired then reopened: the Reopened entry is pruned too.
+    activate(dir.path());
+    let (outcome, claim) = retire_held(dir.path(), &opts());
+    let (ticket, _) = retired(outcome);
+    assert_eq!(
+        journal_files(dir.path()),
+        1,
+        "a live retirement keeps its entry"
+    );
+    super::retire::reopen_retirement(&ticket).unwrap();
+    drop(claim);
+    assert_pruned(&ticket);
+    assert_eq!(journal_files(dir.path()), 0);
+    assert_eq!(files_under(&mailbox(dir.path())), SEEDED);
+}
+
+#[test]
+fn a_damaged_journal_of_another_operation_does_not_fail_this_retirement() {
+    // F6: the pending index is read per key, so one unreadable entry is not
+    // a repo-wide fail-closed.
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    let journal_dir = source(dir.path()).anchor.join(JOURNAL_DIR);
+    std::fs::write(
+        journal_dir.join("00000000-0000-0000-0000-000000000000.json"),
+        b"{ not json",
+    )
+    .unwrap();
+    // The one-time migration of an index-less anchor reads every entry and
+    // fails closed on a damaged one; an indexed anchor never reads it.
+    std::os::unix::fs::DirBuilderExt::mode(&mut std::fs::DirBuilder::new(), 0o700)
+        .create(source(dir.path()).anchor.join("pending"))
+        .unwrap();
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (_, retained) = retired(outcome);
+    assert_eq!(files_under(&retained.join("data")), SEEDED);
+}
+
+#[test]
+fn an_anchor_without_an_index_indexes_its_unfinished_journal_once() {
+    // An anchor written before the index: crash right after the Fenced
+    // journal write, then drop the index as an older build never wrote it.
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    CRASH_AT.with(|c| c.set(Some(Point::Journal(Phase::Fenced))));
+    let crashed = retire_source(dir.path(), &opts());
+    CRASH_AT.with(|c| c.set(None));
+    assert!(matches!(crashed, Err(LifecycleError::InjectedCrash(_))));
+    let anchor = source(dir.path()).anchor;
+    std::fs::remove_dir_all(anchor.join("pending")).unwrap();
+    let interrupted = only_journal(dir.path());
+
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (ticket, _) = retired(outcome);
+    assert_eq!(
+        ticket.op_id, interrupted.op_id,
+        "the migrated index adopts it"
+    );
+    assert!(anchor.join("pending").is_dir());
 }

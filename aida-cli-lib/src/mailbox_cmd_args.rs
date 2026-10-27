@@ -262,12 +262,14 @@ pub enum MailboxCommand {
 #[derive(Subcommand, Debug)]
 pub enum RetentionCommand {
     /// Report whether every AIDA process on this machine that can write mail
-    /// takes a write permit. A worktree whose mailbox holds mail is kept on
-    /// removal or reset until that is recorded. Only the read-only report is
-    /// available: nothing is recorded.
+    /// takes a write permit, and record that it does. A worktree whose
+    /// mailbox holds mail is kept on removal or reset until that is recorded.
+    /// Recording runs only for a human operator at an interactive terminal,
+    /// and only when the report shows every running mail writer taking a
+    /// permit.
     Activate {
-        /// Produce a read-only report. Recording is not available yet.
-        #[clap(long, required = true)]
+        /// Report only; record nothing.
+        #[clap(long)]
         dry_run: bool,
         /// Print the report as JSON.
         #[clap(long)]

@@ -433,8 +433,9 @@ fn cleanup_failed_clone(
     error: anyhow::Error,
 ) -> anyhow::Error {
     if dest.exists() {
-        // No lease yet, so no verified binding: an unfinished clone goes only
-        // while its mailbox holds no bytes. trace:STORY-1843 | ai:claude
+        // No lease yet, so no verified binding: an unfinished clone that
+        // already has a `.aida/` cannot be fenced and is kept (C SKETCH
+        // section 5). trace:STORY-1843 | ai:claude
         let retirement = match crate::mail_retention::retire_tree(main, dest, true, "failed clone")
         {
             Ok(retirement) => retirement,

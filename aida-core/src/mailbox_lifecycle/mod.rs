@@ -77,7 +77,8 @@ pub const LIFECYCLE_LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The operator command that reports whether every writer host on the
 /// machine is admitting (QC1). A mail-bearing source refuses retirement until
-/// an activation is recorded; the command ships first as a dry-run report.
+/// an activation is recorded; the same command without `--dry-run` records
+/// it, for a human operator at a terminal only.
 pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate --dry-run";
 
 /// Directory under the common Git dir that holds the anchor.
@@ -852,9 +853,8 @@ pub struct Activation {
     pub recorded_at: String,
 }
 
-/// Has an operator recorded that every writer host is admitting? Only the
-/// dry-run report ships so far, so nothing writes the record yet and this is
-/// false in production.
+/// Has an operator recorded that every writer host is admitting
+/// ([`activation::record`])?
 pub(crate) fn activated(anchor: &Path) -> Result<bool> {
     Ok(read_json::<Activation>(&anchor.join(ACTIVATION_FILE))?
         .is_some_and(|a| a.all_writer_hosts_admitting))

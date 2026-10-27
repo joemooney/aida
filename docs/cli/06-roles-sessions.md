@@ -316,9 +316,11 @@ The report's fingerprint covers mailbox and read-state content; recipient livene
 
 Removing, resetting or reusing a worktree first moves its local mailbox (messages, read receipts and watermarks) into a private retention area under the repository's Git directory. This applies to `aida session end`, pool return and reuse, `aida worktree pool destroy`, `aida worktree gc` and `dismiss`, reaps and doctor heals, and seat-clone teardown. The next occupant of a reused tree starts with an empty mailbox. Retained mail is kept, not acknowledged or archived.
 
-If the mail cannot be retained safely, the worktree is kept. In that case the session is not ended: its lease, claim and manifest stay, and the lease is marked `ending_retained_at`. Only its grant is revoked. Retry once the cause is fixed.
+If the mail cannot be retained safely, the worktree is kept. In that case the session is not ended: its lease, claim and manifest stay, and the lease is marked `ending_retained_at`. Only its grant is revoked. `aida ps`, `aida session list` and the doctor show such a session as `ending-retained`, neither active nor cleaned up. Retry once the cause is fixed.
 
-A worktree whose mailbox holds mail is kept until every AIDA process on the machine that can write mail is known to take a write permit. To see where that stands, run `aida mailbox retention activate --dry-run`; add `--json` for the report. It lists each running `aida` and `aida-server` process and whether it runs this build. It records nothing; recording an activation has not shipped yet. A worktree with an empty mailbox is not affected.
+A worktree whose mail cannot be fenced is always kept, even when its mailbox looks empty: a seat clone with no verified host binding to its main checkout, or a worktree outside any Git repository the host can verify.
+
+A worktree whose mailbox holds mail is kept until an operator records that every AIDA process on the machine that can write mail takes a write permit. Run `aida mailbox retention activate --dry-run` to see where that stands; add `--json` for the report. It lists each running `aida` and `aida-server` process and whether it runs this build. The report is incomplete, and nothing can be recorded, when it runs inside a container's pid namespace or cannot read a process's command line. When the report shows every writer taking a permit, run `aida mailbox retention activate` from an interactive terminal to record it. The command re-runs the scan and refuses for agents. A worktree with an empty mailbox is not affected.
 <!-- trace:STORY-1843 | ai:claude -->
 
 #### Mailbox layout upgrade order

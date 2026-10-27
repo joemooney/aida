@@ -190,18 +190,22 @@ fn a_checkout_without_aida_state_has_nothing_to_retire() {
 }
 
 #[test]
-fn an_unanchored_checkout_goes_only_without_mail() {
+fn an_unanchored_checkout_is_kept_even_when_its_mailbox_looks_empty() {
+    // C SKETCH section 5 / F3: no anchor means no fence, so no destruction,
+    // whether the mailbox is absent, empty or mail-bearing.
     let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    let absent = retire_checkout(dir.path(), "test").unwrap_err();
+    assert!(absent.reason.contains("cannot be fenced"), "{absent}");
     let mb = mailbox(dir.path());
     std::fs::create_dir_all(mb.join(".read")).unwrap();
-    assert!(retire_checkout(dir.path(), "test").unwrap().is_none());
+    let empty = retire_checkout(dir.path(), "test").unwrap_err();
+    assert!(empty.reason.contains("cannot be fenced"), "{empty}");
     std::fs::write(mb.join("m.json"), "{}").unwrap();
     let refusal = retire_checkout(dir.path(), "test").unwrap_err();
-    assert!(
-        refusal.reason.contains("could not be retained"),
-        "{refusal}"
-    );
+    assert!(refusal.reason.contains("cannot be fenced"), "{refusal}");
     assert!(!refusal.needs_activation);
+    assert!(mb.join("m.json").exists(), "nothing moved");
 }
 
 #[test]
@@ -235,10 +239,18 @@ fn a_clone_retires_under_its_main_anchor_and_refuses_without_a_binding() {
     std::fs::remove_dir_all(&clone).unwrap();
     retirement.complete().unwrap();
 
-    // An empty clone with no binding has nothing to retain.
+    // An empty clone with no binding is kept too: it cannot be fenced.
     let empty = clones.path().join("aida-seat-y");
     std::fs::create_dir_all(mailbox(&empty)).unwrap();
-    assert!(retire_clone_checkout(None, &empty, "test")
+    let refusal = retire_clone_checkout(None, &empty, "test").unwrap_err();
+    assert!(
+        refusal.reason.contains("verified host binding"),
+        "{refusal}"
+    );
+    // A clone with no `.aida/` of its own owns no source at all.
+    let bare = clones.path().join("aida-seat-z");
+    std::fs::create_dir_all(&bare).unwrap();
+    assert!(retire_clone_checkout(None, &bare, "test")
         .unwrap()
         .is_none());
 }

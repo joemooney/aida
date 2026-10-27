@@ -25,14 +25,14 @@
 //!
 //! Sources with no anchor (no verifiable Git, an orphaned worktree whose
 //! admin directory is gone, a seat clone without a verified host binding)
-//! cannot be fenced. One that holds no mail, receipt or watermark bytes has
-//! nothing to retain and may go; one that holds bytes refuses.
+//! cannot be fenced, so they refuse destruction and the tree is kept, even
+//! when the mailbox looks empty: without a fence a writer can still land
+//! bytes between the look and the removal (C SKETCH section 5).
 //!
 //! trace:STORY-1843 | ai:claude
 
 use super::retire::{
-    self, holds_bytes, RefusalReason, RetireOptions, RetireOutcome, RetirementClaim,
-    RetirementTicket,
+    self, RefusalReason, RetireOptions, RetireOutcome, RetirementClaim, RetirementTicket,
 };
 use super::LifecycleError;
 use std::path::{Path, PathBuf};
@@ -136,18 +136,18 @@ pub fn retire_checkout(checkout: &Path, reason: &str) -> Gate {
 
 /// [`retire_checkout`] for a seat clone. `main` is the checkout the caller
 /// resolved through the host-recorded clone binding; `None` when the binding
-/// is missing, unverified or stale, and then only a clone with no mail bytes
-/// may go.
+/// is missing, unverified or stale, and then a clone that has a `.aida/` of
+/// its own refuses (it cannot be fenced).
 pub fn retire_clone_checkout(main: Option<&Path>, clone_root: &Path, reason: &str) -> Gate {
     match main {
         Some(main) => retire_with(clone_root, reason, |opts| {
             retire::retire_clone_claimed(main, clone_root, opts)
         }),
         None if !owns_a_mailbox(clone_root) => Ok(None),
-        None => unanchored(
+        None => Err(unanchored(
             clone_root,
             "the seat clone has no verified host binding to its main checkout",
-        ),
+        )),
     }
 }
 
@@ -190,7 +190,7 @@ fn retire_with(
                 ..
             },
             _,
-        )) => unanchored(checkout, &RefusalReason::Unanchored.to_string()),
+        )) => Err(unanchored(checkout, &RefusalReason::Unanchored.to_string())),
         Ok((
             RetireOutcome::Refused {
                 reason,
@@ -223,34 +223,16 @@ fn owns_a_mailbox(checkout: &Path) -> bool {
     }
 }
 
-/// No anchor to fence in: go only when the mailbox holds no bytes.
-fn unanchored(checkout: &Path, why: &str) -> Gate {
-    let mailbox = crate::mailbox::local_mailbox_dir(checkout);
-    let refusal = |reason: String| RetentionRefusal {
+/// No anchor to fence in: refuse, whatever the mailbox holds. Destroying an
+/// unfenced source because it looks empty is a check-then-act race with any
+/// writer that lands bytes in between.
+// trace:STORY-1843 | ai:claude
+fn unanchored(checkout: &Path, why: &str) -> RetentionRefusal {
+    RetentionRefusal {
         checkout: checkout.to_path_buf(),
-        reason,
+        reason: format!("{why}, so its mail cannot be fenced and retained"),
         needs_activation: false,
         retained_dir: None,
-    };
-    match std::fs::symlink_metadata(&mailbox) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Ok(meta) if !meta.file_type().is_dir() => {
-            return Err(refusal(format!(
-                "{why}, and {} is not a real directory",
-                mailbox.display()
-            )))
-        }
-        _ => {}
-    }
-    match holds_bytes(&mailbox) {
-        Ok(false) => Ok(None),
-        Ok(true) => Err(refusal(format!(
-            "{why}, and its mailbox holds mail that could not be retained"
-        ))),
-        Err(e) => Err(refusal(format!(
-            "{why}, and its mailbox could not be read: {}",
-            lifecycle_failure(&e)
-        ))),
     }
 }
 
