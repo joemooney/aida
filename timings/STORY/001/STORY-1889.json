@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1889",
+  "publishes": [
+    {
+      "at": "2026-10-27T05:12:40.175407778Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-22T01:47:09.644331723Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T05:07:34.864308581Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2917,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "791af3b22f0a68d8e5588d337946141b08e69f52"
+      }
+    },
+    {
+      "ts": "2026-10-25T05:07:36.288606553Z",
+      "spec": "STORY-1889",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Independent advisor review: relocation mostly preserves behavior, but record_label_state still writes legacy hold markers from merge_hold.rs after that file leaves the protected floor, violating signed marker-writer boundary. Refs STORY-1889.",
+        "recovery_hint": "address the review findings, move STORY-1889 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T05:37:15.968531701Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2917,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "843ef2a961977ee2d31d1e8a62aa265dddd6fd88"
+      }
+    },
+    {
+      "ts": "2026-10-25T05:37:17.670501942Z",
+      "spec": "STORY-1889",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Focused advisor round2: F1 label-state marker writer resolved with protected typed/legacy tests; F2 admitted hold record still crosses to unprotected routing by mutable reference after protected checks, at both persistence paths. Preserve routing behavior but restrict returned mutations to routing fields.",
+        "recovery_hint": "address the review findings, move STORY-1889 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:26:37.726163532Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "88a90b2fd76fe68cc6c114bdbb6125fbec871944"
+      }
+    },
+    {
+      "ts": "2026-10-25T23:38:11.266260701Z",
+      "spec": "STORY-1889",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1889",
+        "branch": "pr-2926",
+        "first_seen": "2026-10-25T23:38:11.263267862+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T02:53:50.580810276Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-26T14:52:27.826061658Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T16:49:22.842837428Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T16:49:22.922761555Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T16:49:46.526903570Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T18:22:10.414039624Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T18:22:10.454166530Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T18:22:25.153018477Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T19:55:20.291654830Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T19:55:20.339976402Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T19:55:34.329177103Z",
+      "spec": "STORY-1889",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T01:32:19.958934564Z",
+      "spec": "STORY-1889",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1889",
+        "branch": "story-1889-dispatch",
+        "first_seen": "2026-10-27T01:32:19.958845877+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T05:12:15.557896594Z",
+      "spec": "STORY-1889",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2953
+      }
+    },
+    {
+      "ts": "2026-10-27T05:12:40.039406331Z",
+      "spec": "STORY-1889",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e3fd91e83fe3ffef5e9b26365de8e302a92c6904",
+        "pr": 2953,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
