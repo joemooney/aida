@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1742",
+  "publishes": [
+    {
+      "at": "2026-10-27T17:06:07.108073553Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T17:08:34.187197766Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T17:09:47.138992055Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-24T21:22:23.108615600Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-25T01:02:39.845834952Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1742",
+        "branch": "story-1742-slice-2",
+        "first_seen": "2026-10-25T01:02:39.845761146+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:35:36.396852700Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:35:36.453368577Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T01:12:04.774302161Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-26T07:13:35.660863628Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T07:14:30.766121400Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T11:42:44.480527497Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:42:44.536101293Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T11:43:02.256496673Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T10:26:16.231540488Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1742",
+        "branch": "pr-2971",
+        "first_seen": "2026-10-27T10:26:16.231487917+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T15:41:28.870868563Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1742",
+        "branch": "story-1742-s3d",
+        "first_seen": "2026-10-27T15:41:28.870802791+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T15:41:28.902439884Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1742",
+        "branch": "story-1742-next",
+        "first_seen": "2026-10-27T15:41:28.902388103+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T16:37:55.958889976Z",
+      "spec": "STORY-1742",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:05:42.877985508Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2971
+      }
+    },
+    {
+      "ts": "2026-10-27T17:06:06.912495633Z",
+      "spec": "STORY-1742",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bbda3e3d8a6007ef8f938103d64227341cc43faf",
+        "pr": 2971,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
