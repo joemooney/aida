@@ -1,0 +1,30 @@
+id: 01a17f97-2791-77d0-b63f-c07eac739556
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-019
+title: 'Non-blocking (minor): criteria.rs extract_fn_source (~line 450) and scan_braced…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): criteria.rs extract_fn_source (~line 450) and scan_braced_test_file (~746/753) still set 'started' from naive line.contains('{'); a pre-body line whose only brace sits inside a string literal now gives delta 0 with started=true, so the fn is cut early. Use the scanner delta (or an opening-brace count from the scanner) for 'started'.
+
+  PR: #2990
+  Reviewed sha: c03f193c7cffaf1397e5a54bf94c1c2822df5068
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-27T22:59:34.929837641Z
+modified_at: 2026-10-27T22:59:34.929837641Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-012
+- finding-hash:2f75a41d
+- from-review:PR-2990
+- kind:carried-forward
+filed_at:
+  code_sha: 56d730c9922ce85b6b463d9789d8bae0ba215f27
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 259fed79cd
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
