@@ -831,38 +831,14 @@ impl BlockedBySuggestion {
     }
 }
 
-/// Whether `s` has the shape of a spec id: 2+ ASCII letters, a hyphen, then a
-/// digit, then digits/hyphens only (`TASK-349`, `STORY-276`, `FR-1-042`).
-/// Mirrors `main::looks_like_spec_id` but is kept local so the punt module
-/// stays self-contained and pure.
+/// Whether `s` has the shape of a spec id in free text (`TASK-349`,
+/// `story-276`, `FR-1-042`, `TASK-b6b1278890774ef993d2ebc327862470-003`) —
+/// the shared free-text rule, so hyphenated prose (`follow-up-2`) is not a
+/// blocker.
 // trace:TASK-349 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
 fn is_spec_id_shape(s: &str) -> bool {
-    let b = s.as_bytes();
-    if b.len() < 3 || b.len() > 40 {
-        return false;
-    }
-    let mut i = 0;
-    while i < b.len() && b[i].is_ascii_alphabetic() {
-        i += 1;
-    }
-    // At least two leading letters, then a hyphen.
-    if i < 2 || i >= b.len() || b[i] != b'-' {
-        return false;
-    }
-    i += 1;
-    // The first char after the hyphen must be a digit.
-    if i >= b.len() || !b[i].is_ascii_digit() {
-        return false;
-    }
-    // The remainder is digits and hyphens only (covers `FR-1-042`).
-    while i < b.len() {
-        if b[i].is_ascii_digit() || b[i] == b'-' {
-            i += 1;
-        } else {
-            return false;
-        }
-    }
-    true
+    crate::looks_like_spec_id_in_text(s)
 }
 
 /// Scan free text for spec-id-shaped tokens. Tokenizes on any character that is
@@ -975,6 +951,23 @@ mod tests {
         // spec id; `--blocked-by` flag text must not match.
         assert!(scan_spec_ids("this is blocked-by nothing in particular").is_empty());
         assert!(scan_spec_ids("run aida edit --blocked-by <dep>").is_empty());
+        assert!(scan_spec_ids("needs a follow-up-2 pass").is_empty());
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    #[test]
+    fn scan_spec_ids_finds_node_local_ids() {
+        let got = scan_spec_ids(
+            "blocked on `TASK-b6b1278890774ef993d2ebc327862470-003` and \
+             story-b6b1278890774ef993d2ebc327862470-005.",
+        );
+        assert_eq!(
+            got,
+            vec![
+                "TASK-B6B1278890774EF993D2EBC327862470-003".to_string(),
+                "STORY-B6B1278890774EF993D2EBC327862470-005".to_string(),
+            ]
+        );
     }
 
     #[test]

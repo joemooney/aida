@@ -2092,13 +2092,9 @@ pub(crate) fn scan_completed_without_commit_with_options(
     // exactly "a tracked file carries the trace". Unioning trace hits keeps the
     // reference set as complete as possible so the check stays conservative
     // (false positives erode trust faster than the rare miss).
-    if let Some(grep) = git(&[
-        "grep",
-        "-hoI",
-        "-E",
-        r"trace:[A-Za-z]+-[0-9]+(-[0-9]+)?",
-        &default_ref,
-    ]) {
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let trace_pattern = format!("trace:{}", crate::SPEC_ID_ERE);
+    if let Some(grep) = git(&["grep", "-hoI", "-E", &trace_pattern, &default_ref]) {
         for line in grep.lines() {
             if let Some(id) = parse_trace_id_token(line) {
                 referenced.insert(id);

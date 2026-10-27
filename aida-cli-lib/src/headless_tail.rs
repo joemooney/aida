@@ -253,27 +253,11 @@ pub fn select_log<'a>(entries: &'a [LogEntry], selector: Option<&str>) -> Result
     }
 }
 
+/// Canonical spec id (`TASK-398`, `TASK-1-001`, node-local
+/// `TASK-<node>-NNN`) vs a lease prefix or uuid.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
 fn looks_like_spec_id(s: &str) -> bool {
-    // Crude SPEC-ID detector: starts with uppercase letters, has at least one
-    // digit segment after a hyphen. Matches `TASK-398`, `STORY-86`,
-    // `TASK-1-001`, `FR-1-042`.
-    let mut chars = s.chars();
-    let first = match chars.next() {
-        Some(c) => c,
-        None => return false,
-    };
-    if !first.is_ascii_uppercase() {
-        return false;
-    }
-    if !s.contains('-') {
-        return false;
-    }
-    let after_first_dash = s.split_once('-').map(|x| x.1).unwrap_or("");
-    after_first_dash
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_digit())
-        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    crate::looks_like_canonical_spec_id(s)
 }
 
 /// Top-level entry point — invoked from main.rs dispatch.
@@ -1099,6 +1083,9 @@ mod tests {
         assert!(!looks_like_spec_id("019e4405"));
         assert!(!looks_like_spec_id("task-398"));
         assert!(!looks_like_spec_id("019e4405-5073-7672-9395-16d4ca8be1a4"));
+        assert!(looks_like_spec_id(
+            "TASK-b6b1278890774ef993d2ebc327862470-007"
+        ));
     }
 
     fn entry(name: &str, mtime_secs: u64) -> LogEntry {

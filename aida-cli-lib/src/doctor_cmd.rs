@@ -13483,7 +13483,9 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
     // Collect every spec_id AND agreed_id from the store. A trace
     // comment is considered valid if it matches either form — the
     // spec_id is the original (pre-merge-gate) id and stays in trace
-    // comments, while agreed_id is the canonical post-merge form.
+    // comments, while agreed_id is the canonical post-merge form. Keyed
+    // upper-case: node-local ids carry a hex node segment written in either
+    // case. trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
     // trace:EPIC-19 | ai:claude
     let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
     walk_yamls(&objects_root, &mut yaml_files);
@@ -13497,20 +13499,21 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
             if let Some(v) = t.strip_prefix("spec_id:") {
                 let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                 if !s.is_empty() {
-                    known_specs.insert(s);
+                    known_specs.insert(s.to_ascii_uppercase());
                 }
             } else if let Some(v) = t.strip_prefix("agreed_id:") {
                 let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                 // agreed_id can be `null` / empty in YAML; skip those.
                 if !s.is_empty() && s != "null" && s != "~" {
-                    known_specs.insert(s);
+                    known_specs.insert(s.to_ascii_uppercase());
                 }
             }
         }
     }
 
     // Collect every trace comment in the project tree.
-    let trace_re = regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let trace_re = crate::trace_marker_re().clone();
     let mut by_spec: std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>> =
         std::collections::HashMap::new();
 
@@ -13518,7 +13521,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
 
     let mut orphan_specs: Vec<&String> = by_spec
         .keys()
-        .filter(|s| !known_specs.contains(*s))
+        .filter(|s| !known_specs.contains(&s.to_ascii_uppercase()))
         .collect();
     orphan_specs.sort();
 
@@ -13728,9 +13731,12 @@ fn rewrite_strip_dangling(
     use regex::Regex;
     // Match `trace:<ID> | ai:<tool>(:<conf>)?` fragments. Capture the
     // id so we can check it against the dangling set.
-    let frag_re =
-        Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)\s*\|\s*ai:[a-zA-Z]+(?::(?:high|med|low))?")
-            .unwrap();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+    let frag_re = Regex::new(&format!(
+        r"trace:({})\s*\|\s*ai:[a-zA-Z]+(?::(?:high|med|low))?",
+        crate::CANONICAL_SPEC_ID_PATTERN
+    ))
+    .unwrap();
 
     let mut out = String::with_capacity(content.len());
     let mut deleted = 0;
@@ -14357,8 +14363,8 @@ fn doctor_fsck() -> Result<()> {
     // false-fail. trace:EPIC-19 | ai:claude
     println!("{}", "── trace comments ──".bold());
     if objects_root.exists() {
-        let trace_re =
-            regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-007 | ai:claude
+        let trace_re = crate::trace_marker_re().clone();
         let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
         walk_yamls(&objects_root, &mut yaml_files);
         let mut known_specs: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -14369,12 +14375,12 @@ fn doctor_fsck() -> Result<()> {
                     if let Some(v) = t.strip_prefix("spec_id:") {
                         let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                         if !s.is_empty() {
-                            known_specs.insert(s);
+                            known_specs.insert(s.to_ascii_uppercase());
                         }
                     } else if let Some(v) = t.strip_prefix("agreed_id:") {
                         let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                         if !s.is_empty() && s != "null" && s != "~" {
-                            known_specs.insert(s);
+                            known_specs.insert(s.to_ascii_uppercase());
                         }
                     }
                 }
@@ -14386,10 +14392,13 @@ fn doctor_fsck() -> Result<()> {
         let total_refs: usize = by_spec.values().map(|v| v.len()).sum();
         let dangling: usize = by_spec
             .iter()
-            .filter(|(s, _)| !known_specs.contains(*s))
+            .filter(|(s, _)| !known_specs.contains(&s.to_ascii_uppercase()))
             .map(|(_, v)| v.len())
             .sum();
-        let dangling_specs: usize = by_spec.keys().filter(|s| !known_specs.contains(*s)).count();
+        let dangling_specs: usize = by_spec
+            .keys()
+            .filter(|s| !known_specs.contains(&s.to_ascii_uppercase()))
+            .count();
         if dangling == 0 {
             println!(
                 "  {} {} unique spec_ids referenced from {} location(s); all resolve.",
