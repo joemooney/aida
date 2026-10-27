@@ -9,12 +9,12 @@ description: |-
   2. .aida-store/.aida/dispenser.toml had mode node_id rewritten from "1" to "2" at 14:17 (GLOBAL = 499 kept). Node 2 is not registered; node.toml says 1. Bootstrap would then refuse with 'legacy node/provider binding mismatch'. Reset to "1"; sequence 499 equals node 1's highest object ID, so no reuse. Backup: .aida-store/.aida/dispenser.toml.node2-bak-20261025.
 
   Fix needed: (a) find what wrote node 2 into the primary clone's counter at 14:17 (14:16 was the TASK-2351 ship); (b) surface the underlying dispenser/bootstrap error text instead of the generic message (models.rs add_requirement_with_id poisons spec_id to empty and next_meta_id uses unwrap_or_default, discarding the cause); (c) aida doctor should check node.toml/dispenser.toml permissions and mode-vs-node agreement, and offer the repair; (d) consider whether a group-writable but user-owned node.toml under a 0002 umask should be refused at all, or normalised during migration.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T02:22:46.645176120Z
-modified_at: 2026-10-27T06:56:10.148240774Z
+modified_at: 2026-10-27T07:18:17.643797660Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -57,6 +57,15 @@ history:
   timestamp: 2026-10-27T06:56:12.106104312Z
   session_id: c8ae1509-fd35-41b9-8f6e-b1350b49cfcc
   changes: []
+- id: 01a17c39-612b-71e0-906f-6a631c6cad72
+  author: aida-orchestrator
+  timestamp: 2026-10-27T07:18:17.643818725Z
+  session_id: 01a17c33b497
+  harness_version: 2.1.311 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 194e40346c073dccb33f397d247b63b27c3bf862
   branch: main
@@ -65,3 +74,11 @@ filed_at:
   aida_build_sha: 881f9a3828
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Error-surfacing and FileDispenser refusal are sound and tested, but CI is red (portability ratchet, lib-1 time budget), one repair hint names a command that does not exist, and doctor item (c) is incomplete
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-001 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-27T07:18:17.643797660Z
