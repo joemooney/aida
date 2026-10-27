@@ -335,6 +335,10 @@ pub fn with_state_lock<T>(
     project_root: &Path,
     f: impl FnOnce(&mut Pool) -> Result<T>,
 ) -> Result<T> {
+    // The pool lock is never taken under the mailbox Lifecycle lock.
+    // trace:STORY-1843 | ai:claude
+    #[cfg(all(unix, feature = "native"))]
+    crate::mailbox_lifecycle::enter_lock_class("pool");
     let dir = pool_dir(project_root);
     std::fs::create_dir_all(&dir).with_context(|| format!("create pool dir {}", dir.display()))?;
 
