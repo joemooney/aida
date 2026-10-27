@@ -284,14 +284,15 @@ fn transition(
     } else {
         "refs/remotes/origin/aida-store already moved. "
     };
-    private.write(
-        JOURNAL_FILE,
-        &serde_json::to_vec(&Journal {
-            version: 1,
-            from: local.into(),
-            to: incoming.into(),
-        })?,
-    )?;
+    // trace:STORY-1742 | ai:claude — a journal failure still names the partial step.
+    let journal = serde_json::to_vec(&Journal {
+        version: 1,
+        from: local.into(),
+        to: incoming.into(),
+    })?;
+    private.write(JOURNAL_FILE, &journal).map_err(|_| {
+        anyhow::anyhow!("The private recovery journal could not be written; {partial}refs/heads/aida-store still names {local} and the store index/worktree were not touched. Pull refused.")
+    })?;
     run(store, &["read-tree", "-m", "-u", local, incoming]).map_err(|_| {
         anyhow::anyhow!("Store index/worktree transition from {local} to {incoming} did not complete; {partial}refs/heads/aida-store still names {local}. The recovery journal is kept: inspect the store, restore it cleanly to either commit, then rerun `aida pull`.")
     })?;

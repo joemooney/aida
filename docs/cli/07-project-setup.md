@@ -144,8 +144,8 @@ private recovery journal: push refuses until `aida pull` finds the store
 cleanly at one of the two journaled commits; any other state refuses and names
 both commits so the operator can restore one.
 Raw hook/remote diagnostics are suppressed to avoid exposing identifiers.
-The profile baseline and local remote-tracking refs are not advanced by this
-slice. Local hook-profile installation/verification is the existing store Git
+The profile baseline is not advanced, and a push does not advance the local
+remote-tracking ref. Local hook-profile installation/verification is the existing store Git
 policy; it does not change the canonical store.
 
 **Sanitization is refusal-only.** A reviewed policy (below) gates every push

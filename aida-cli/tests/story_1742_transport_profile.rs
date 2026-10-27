@@ -2196,17 +2196,56 @@ fn unsafe_foreign_or_divergent_incoming_history_moves_no_accepted_ref() {
 fn dirty_store_or_missing_policy_refuses_before_fetching() {
     let fixture = Fixture::new();
     let (store, remote) = fixture.attach_with_remote();
-    let tip = fixture.store_commit(&store, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
-    fixture.seed_hub(&store, &remote, &tip, &fixture.store_sha);
-    let objects = fixture.git_at(&store, &["count-objects", "-v"]);
+    // Seed the hub from an independent clone so its tip never enters the
+    // local object database unless a fetch actually runs.
+    let other = fixture.root.parent().unwrap().join("independent");
+    fixture.git_at(
+        fixture.root.parent().unwrap(),
+        &[
+            "clone",
+            "-q",
+            "--no-local",
+            "-b",
+            "aida-store",
+            fixture.root.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    let tip = fixture.store_commit(&other, "objects/BUG/000/BUG-1.yaml", b"title: Generic\n");
+    fixture.git_at(
+        &other,
+        &[
+            "push",
+            "-q",
+            remote.to_str().unwrap(),
+            &format!("{tip}:refs/heads/aida-store"),
+        ],
+    );
+    let absent = |fixture: &Fixture| {
+        assert!(
+            fixture
+                .command(
+                    "git",
+                    &store,
+                    &["cat-file", "-e", &format!("{tip}^{{commit}}")]
+                )
+                .output()
+                .unwrap()
+                .status
+                .code()
+                != Some(0),
+            "hub tip reached the local object database"
+        );
+    };
+    absent(&fixture);
     fs::write(store.join("untracked"), "dirty").unwrap();
     fixture.assert_pull_refused(&store, "Store is dirty");
+    absent(&fixture);
     fs::remove_file(store.join("untracked")).unwrap();
     fs::remove_file(fixture.common.join("aida-transport-policy.json")).unwrap();
-    let output = fixture.aida(&["pull"]);
-    assert!(!output.status.success(), "{}", diagnostics(&output));
-    // Neither refusal fetched: the hub's objects never arrived locally.
-    assert_eq!(objects, fixture.git_at(&store, &["count-objects", "-v"]));
+    fixture.assert_pull_refused(&store, "Reviewed private transport policy is missing");
+    // Neither refusal fetched: the hub's tip never arrived locally.
+    absent(&fixture);
     assert_eq!(
         fixture.git_at(&store, &["rev-parse", "HEAD"]),
         fixture.store_sha
