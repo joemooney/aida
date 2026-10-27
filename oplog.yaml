@@ -78597,5 +78597,32 @@ operations:
   timestamp: 2026-10-27T06:56:34.119697389Z
   kind: !SetStatus
     status: Completed
-clock: 6108
+- id: 01a17c2e-2d70-7262-8a7d-43e7eae2e5ec
+  target_id: 01a17c2e-2698-7822-8750-2190d8aeb666
+  author: aida
+  node_id: '1'
+  lamport: 6109
+  timestamp: 2026-10-27T07:06:03.504151385Z
+  kind: !Create
+    title: 'Review PR-2970: [AI:claude] fix(ids): one spec-id shape rule for node-local IDs (TASK-b6b1278890774ef993d2ebc327862470-007, TASK-b6b1278890774ef993d2ebc327862470-008)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/node-local-id-shapes`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2970>
+      - Branch: `fix/node-local-id-shapes` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-007
+      - TASK-b6b1278890774ef993d2ebc327862470-008
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2970` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6109
 node_id: '1'
