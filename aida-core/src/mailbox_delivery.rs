@@ -436,6 +436,26 @@ pub fn bind_queued_delivery(
     }
 }
 
+/// The binding already at `path`, if any. An unparsable one (damaged by
+/// hand or by a writer that predates the link protocol) is an error for
+/// this one delivery only.
+#[cfg(all(unix, feature = "native"))]
+fn existing_binding(path: &Path, delivery_id: &str) -> Result<Option<RecipientUuid>, BindError> {
+    let Some(existing) = crate::mailbox_lifecycle::read_checked_capped(path, DELIVERY_FILE_CAP)
+        .map_err(BindError::Lifecycle)?
+    else {
+        return Ok(None);
+    };
+    DeliveryBinding::parse(&existing, delivery_id)
+        .map(|b| Some(b.recipient_uuid))
+        .map_err(|_| BindError::Io(std::io::Error::other("corrupt delivery binding")))
+}
+
+/// Publish the binding at `dir/name` once: the bytes go to a private temp
+/// file in the same directory, which is written and fsynced in full, then
+/// linked to the final name (`EEXIST`: another binder won). The temp name is
+/// then unlinked and the directory fsynced. The final path therefore never
+/// exists empty or partial, whatever kills the binder.
 #[cfg(all(unix, feature = "native"))]
 fn create_binding(
     dir: &Path,
@@ -447,38 +467,41 @@ fn create_binding(
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     let path = dir.join(name);
-    if let Some(existing) = crate::mailbox_lifecycle::read_checked_capped(&path, DELIVERY_FILE_CAP)
-        .map_err(BindError::Lifecycle)?
-    {
-        let held = DeliveryBinding::parse(&existing, delivery_id)
-            .map_err(|_| std::io::Error::other("corrupt delivery binding"))?;
-        return Ok(BindOutcome::AlreadyBound(held.recipient_uuid));
+    if let Some(held) = existing_binding(&path, delivery_id)? {
+        return Ok(BindOutcome::AlreadyBound(held));
     }
     if !still_owned() {
         return Err(BindError::NotOwned);
     }
-    let mut file = match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(&path)
-    {
-        Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let existing = crate::mailbox_lifecycle::read_checked_capped(&path, DELIVERY_FILE_CAP)
-                .map_err(BindError::Lifecycle)?
-                .ok_or_else(|| std::io::Error::other("delivery binding vanished"))?;
-            let held = DeliveryBinding::parse(&existing, delivery_id)
-                .map_err(|_| std::io::Error::other("corrupt delivery binding"))?;
-            return Ok(BindOutcome::AlreadyBound(held.recipient_uuid));
+    let temp = dir.join(format!(
+        ".{name}.{}.{}.tmp",
+        std::process::id(),
+        uuid::Uuid::new_v4().simple()
+    ));
+    let written = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()
+    })();
+    let linked = written.and_then(|()| std::fs::hard_link(&temp, &path));
+    let _ = std::fs::remove_file(&temp);
+    match linked {
+        Ok(()) => {
+            crate::mailbox_lifecycle::fsync_dir(dir).map_err(BindError::Lifecycle)?;
+            Ok(BindOutcome::Bound)
         }
-        Err(e) => return Err(e.into()),
-    };
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    crate::mailbox_lifecycle::fsync_dir(dir).map_err(BindError::Lifecycle)?;
-    Ok(BindOutcome::Bound)
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            existing_binding(&path, delivery_id)?
+                .map(BindOutcome::AlreadyBound)
+                .ok_or_else(|| BindError::Io(std::io::Error::other("delivery binding vanished")))
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 #[cfg(test)]

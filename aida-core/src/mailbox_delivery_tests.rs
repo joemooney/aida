@@ -439,3 +439,126 @@ fn story1843_d1_symlinked_delivery_dirs_are_refused_not_followed() {
     assert!(matches!(refused, Err(BindError::Io(_))), "{refused:?}");
     assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
 }
+
+fn common_of(root: &Path) -> PathBuf {
+    MailboxContext::resolve(root, None)
+        .unwrap()
+        .repository()
+        .unwrap()
+        .path()
+        .to_path_buf()
+}
+
+fn private_dir(path: &Path) {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+        .unwrap();
+}
+
+// A torn (empty) binding left by a writer that predates the link protocol
+// makes only ITS delivery unknown: that message is hidden and not offered,
+// the view stays complete, and another queued delivery still surfaces and
+// binds. A new bind publishes by link, so its final file is never empty.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_a_torn_binding_is_local_to_its_delivery() {
+    let r = repo();
+    let torn = queue(&r.sib, "torn");
+    let fine = queue(&r.sib, "fine");
+    let bound = common_of(&r.main).join("aida/mail-lifecycle/deliveries/bound");
+    private_dir(&bound);
+    std::fs::write(bound.join(binding_file_name(&torn)), b"").unwrap();
+
+    let a = reviewer("rev-a", Some(1));
+    let (ctx, s) = snap(&r.main, &a);
+    assert!(s.complete(), "a torn binding never makes the view partial");
+    assert!(s.records.is_empty());
+    let offered: Vec<_> = s
+        .pending_deliveries
+        .iter()
+        .map(|p| p.delivery_id.clone())
+        .collect();
+    assert_eq!(
+        offered,
+        [fine.clone()],
+        "only the readable delivery is offered"
+    );
+
+    let common = ctx.repository().map(|c| c.path());
+    let bind = |d: &str| {
+        bind_queued_delivery(
+            common,
+            &r.main,
+            d,
+            &uuid(1),
+            || true,
+            std::time::Duration::from_secs(1),
+        )
+    };
+    assert!(bind(&torn).is_err(), "the torn delivery stays unknown");
+    assert_eq!(bind(&fine).unwrap(), BindOutcome::Bound);
+    let published = std::fs::read(bound.join(binding_file_name(&fine))).unwrap();
+    assert_eq!(
+        DeliveryBinding::parse(&published, &fine)
+            .unwrap()
+            .recipient_uuid,
+        uuid(1)
+    );
+    // No temp file is left behind.
+    let names: Vec<_> = std::fs::read_dir(&bound)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(names.iter().all(|n| !n.ends_with(".tmp")), "{names:?}");
+    assert_eq!(visible(&r.main, &a), ["fine"]);
+}
+
+// Retained sidecars are read by the ID of a message the view holds, never
+// scanned: a corrupt one for an unrelated message is never read, and a
+// corrupt one for a held role message hides only that message. The view
+// stays complete and queued deliveries still surface.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_retained_sidecars_are_looked_up_by_id_and_faults_stay_local() {
+    let r = repo();
+    let deliveries = common_of(&r.main).join("aida/mail-lifecycle/retained/k1/1/data/.deliveries");
+    private_dir(&deliveries);
+    std::fs::write(deliveries.join("unrelated.json"), b"{not json").unwrap();
+    let queued = queue(&r.main, "queued");
+    send(&r.main, "legacy", 10, None);
+    let a = reviewer("rev-a", Some(1));
+    let (_, s) = snap(&r.main, &a);
+    assert!(
+        s.complete(),
+        "an unrelated corrupt retained sidecar is never read"
+    );
+    assert_eq!(visible(&r.main, &a), ["legacy"]);
+    assert_eq!(s.pending_deliveries.len(), 1);
+    assert_eq!(s.pending_deliveries[0].delivery_id, queued);
+
+    // A corrupt retained sidecar for the held legacy message: only that
+    // message's ownership is unknown, so only it is hidden.
+    std::fs::write(deliveries.join("legacy.json"), b"{not json").unwrap();
+    let (_, s) = snap(&r.main, &a);
+    assert!(s.complete(), "the fault is local to its message");
+    assert!(s.records.is_empty());
+    assert_eq!(s.pending_deliveries.len(), 1);
+
+    // A valid retained sidecar gates the replica: an outsider cannot see it.
+    std::fs::write(
+        deliveries.join("legacy.json"),
+        serde_json::to_vec(&DeliverySidecar::cohort(
+            "legacy",
+            "reviewer",
+            10,
+            &[uuid(1)],
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(visible(&r.main, &a), ["legacy"]);
+    assert!(visible(&r.main, &reviewer("rev-b", Some(2))).is_empty());
+}
