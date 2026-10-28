@@ -218,6 +218,7 @@ impl CachedGitBackend {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
+        let started = std::time::Instant::now();
         let scanned = if strict {
             self.id_candidates_strict(id)
         } else {
@@ -234,7 +235,8 @@ impl CachedGitBackend {
             Err(_) if !strict => {
                 #[cfg(test)]
                 super::cache_refresh::test_count("lookup_targeted_fallback");
-                return self.inner.get_requirement_by_spec_id(id);
+                // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+                return self.resolve_by_bounded_scan(id, started + super::cache::READ_LADDER_CAP);
             }
             Err(_) => {
                 let store = self.inner.load()?;
@@ -289,6 +291,52 @@ impl CachedGitBackend {
             }
         }
         self.get_requirement_by_spec_id(id)
+    }
+
+    /// The read fallback when the cache cannot answer: the same collision
+    /// check as the cache path, from canonical objects, inside ADR-53's 5 s
+    /// ceiling. The object the id names on disk is always read; the scan for
+    /// other objects answering to `id` stops at `deadline`. Two or more
+    /// matches refuse with [`AmbiguousIdError`] exactly like the cache path;
+    /// a scan cut short degrades — it serves what it found (or not-found)
+    /// with a warning that the check was incomplete — instead of blocking.
+    ///
+    /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+    fn resolve_by_bounded_scan(
+        &self,
+        id: &str,
+        deadline: std::time::Instant,
+    ) -> Result<Option<Requirement>> {
+        let canonical = crate::object_store::canonical_spec_id(id.trim());
+        // A malformed id never names an object (BUG-599), matching the inner
+        // backend's plain not-found.
+        if !crate::object_store::valid_spec_id_format(&canonical) {
+            return Ok(None);
+        }
+        let objects_root = self.inner.path().join("objects");
+        let mut found = Vec::new();
+        if crate::object_store::object_exists(&objects_root, &canonical)? {
+            // BUG-97: a file that exists but will not parse is the real error.
+            found.push(crate::object_store::read_object(&objects_root, &canonical)?);
+        }
+        let (matches, complete) =
+            crate::object_store::scan_id_matches_until(&objects_root, &canonical, deadline)?;
+        found.extend(matches);
+        let rows: Vec<crate::id_collisions::IdRow> = found
+            .iter()
+            .map(crate::id_collisions::IdRow::from)
+            .collect();
+        let candidates = crate::id_collisions::candidates_for_id(rows.iter(), id);
+        let pick = crate::id_collisions::resolve_candidates(id, candidates)?;
+        if !complete {
+            eprintln!(
+                "warning: another process is updating the cache, so the check for other \
+                 requirements answering to {canonical} stopped early; re-run once it \
+                 finishes to confirm the match"
+            );
+        }
+        Ok(pick.and_then(|uuid| found.into_iter().find(|r| r.id == uuid)))
     }
 
     /// Every ambiguous id in the store, from the cache (one full-table read,
@@ -3449,6 +3497,93 @@ mod tests {
         assert!(
             elapsed < std::time::Duration::from_secs(5),
             "lookup waited {elapsed:?}, past ADR-53's 5 s ceiling"
+        );
+    }
+
+    /// TASK-b6b1278890774ef993d2ebc327862470-029: the read fallback behind a
+    /// writer applies the same collision check as the cache path — an id two
+    /// objects answer to refuses instead of silently serving one of them.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+    #[test]
+    fn read_fallback_refuses_a_colliding_id_behind_a_writer() {
+        use super::super::cache_refresh::{test_counts, CacheReadScope, ReadBudget};
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let mut collider = sample_req("BUG-3", "collider");
+        collider.agreed_id = Some("BUG-2".into());
+        crate::allocation_authority::home_fixture_backend(&store_root)
+            .unwrap()
+            .add_requirement(collider)
+            .unwrap();
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::from_secs(1))));
+        test_counts();
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let found = backend.get_requirement_unambiguous_for_read("bug-2");
+        super::super::cache::set_fast_fail_cache(prev);
+        let counts = test_counts();
+        holder.execute_batch("ROLLBACK").unwrap();
+
+        assert_eq!(
+            counts.get("lookup_targeted_fallback"),
+            Some(&1),
+            "{counts:?}"
+        );
+        let err = found.expect_err("two objects answer to BUG-2");
+        let ambiguous = err
+            .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+            .unwrap_or_else(|| panic!("not an ambiguity refusal: {err:#}"));
+        assert_eq!(ambiguous.candidates.len(), 2, "{ambiguous:?}");
+    }
+
+    /// TASK-b6b1278890774ef993d2ebc327862470-029: the fallback's scan is
+    /// bounded. With the deadline already spent it reads no further objects
+    /// and degrades: a typo'd id is a prompt not-found, and a known id is
+    /// served from the object it names (the warning says the check stopped).
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+    #[test]
+    fn read_fallback_scan_degrades_at_its_deadline() {
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let mut collider = sample_req("BUG-3", "collider");
+        collider.agreed_id = Some("BUG-2".into());
+        crate::allocation_authority::home_fixture_backend(&store_root)
+            .unwrap()
+            .add_requirement(collider)
+            .unwrap();
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+
+        let spent = std::time::Instant::now();
+        assert!(backend
+            .resolve_by_bounded_scan("BUG-999", spent)
+            .unwrap()
+            .is_none());
+        let served = backend
+            .resolve_by_bounded_scan("BUG-2", spent)
+            .unwrap()
+            .expect("the object the id names is always read");
+        assert_eq!(served.title, "second");
+        // With budget left, the same lookup sees the collision.
+        let later = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        assert!(backend.resolve_by_bounded_scan("BUG-2", later).is_err());
+        assert_eq!(
+            backend
+                .resolve_by_bounded_scan("BUG-3", later)
+                .unwrap()
+                .map(|r| r.title),
+            Some("collider".to_string())
         );
     }
 
