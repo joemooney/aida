@@ -81156,5 +81156,13 @@ operations:
   timestamp: 2026-10-28T12:29:49.512106579Z
   kind: !SetStatus
     status: Completed
-clock: 6317
+- id: 01a1827e-21e9-7923-a644-b668d037ba37
+  target_id: 01a18254-53de-7c70-92ad-f3f088caab79
+  author: aida
+  node_id: '1'
+  lamport: 6318
+  timestamp: 2026-10-28T12:31:06.729049788Z
+  kind: !SetStatus
+    status: Rejected
+clock: 6318
 node_id: '1'
