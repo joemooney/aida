@@ -1,0 +1,30 @@
+id: 01a183aa-6248-7252-9235-a705585a4efc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-062
+title: 'minor: mod.rs era_marker_stale compares only (dev,ino). A pruned and recreated …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-052, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: mod.rs era_marker_stale compares only (dev,ino). A pruned and recreated admin dir can reuse the inode, so the marker is not judged stale. That fails closed (refusal with recovery hint), so it is acceptable, but the doc comment should say so.
+
+  PR: #3047
+  Reviewed sha: b15cd18f6b6859bdd0fbeefba0fd1c6e9f21e63c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T17:59:04.008522736Z
+modified_at: 2026-10-28T17:59:04.008522736Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-052
+- finding-hash:41166a64
+- from-review:PR-3047
+- kind:carried-forward
+filed_at:
+  code_sha: ff2227fbeeeb11364c751b769cda372b71cfdce3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f3cda469f7b
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
