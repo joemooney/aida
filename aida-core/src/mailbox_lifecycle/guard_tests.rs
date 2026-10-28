@@ -879,3 +879,27 @@ fn a_nonce_less_mailbox_before_the_era_is_legacy() {
     let anchored = resolve_source(&wt).unwrap().expect("anchored");
     assert!(!anchored.anchor.join(NONCE_ERA_DIR).exists());
 }
+
+/// Without a no-replace rename the reuse is refused, never a replacing
+/// rename; the mailbox keeps its nonce and its source reopens.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn without_noreplace_the_reuse_is_refused_in_place() {
+    let (_dir, wt) = repo_with_worktree();
+    seed_mail(&wt);
+    activate(&wt);
+    let old = source(&wt);
+    let nonce = std::fs::read(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    let retirement = retire_checkout(&wt, "test").unwrap().expect("retired");
+    super::NOREPLACE_UNSUPPORTED.with(|f| f.set(true));
+    let reused = retirement.complete_reuse();
+    super::NOREPLACE_UNSUPPORTED.with(|f| f.set(false));
+    let err = reused.unwrap_err();
+    assert!(err.to_string().contains("without replacing"), "{err}");
+    assert_eq!(
+        std::fs::read(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap(),
+        nonce
+    );
+    assert_eq!(source(&wt).key, old.key);
+    assert_open(&wt);
+}

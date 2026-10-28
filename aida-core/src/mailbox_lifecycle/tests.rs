@@ -1466,3 +1466,32 @@ fn a_creator_that_loses_the_race_keeps_the_existing_mailbox() {
         .collect();
     assert_eq!(left, ["mailbox"], "no staging left behind");
 }
+
+/// Without a no-replace rename the nonce era is recorded first, so a
+/// resolver in the window before the nonce lands refuses instead of keying
+/// the new directory as legacy.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn without_noreplace_the_window_before_the_nonce_fails_closed() {
+    let dir = repo();
+    let root = dir.path().to_path_buf();
+    let in_window = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let seen = in_window.clone();
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(true));
+    IN_PLACE_WINDOW.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move || {
+            *seen.borrow_mut() = Some(resolve_source(&root));
+        }))
+    });
+    let created = create_mailbox_dir(&mailbox(dir.path()));
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(false));
+    created.unwrap();
+    let window = in_window.borrow_mut().take().expect("the window ran");
+    assert!(
+        matches!(window, Err(LifecycleError::Unsafe { .. })),
+        "{window:?}"
+    );
+    assert!(mailbox(dir.path()).join(SOURCE_ID_FILE).is_file());
+    let resolved = resolve_source(dir.path()).unwrap().expect("anchored");
+    assert_eq!(resolved.mailbox, mailbox(dir.path()));
+}

@@ -534,11 +534,7 @@ fn source_nonce(
     admin: &str,
     mailbox: &Path,
 ) -> Result<Option<String>> {
-    let mut h = Sha256::new();
-    h.update(common.as_os_str().as_encoded_bytes());
-    h.update([0]);
-    h.update(admin.as_bytes());
-    let marker = anchor.join(NONCE_ERA_DIR).join(hex(&h.finalize()));
+    let marker = era_marker(anchor, common, admin);
     match read_source_id(mailbox)? {
         Some(nonce) => {
             mark_nonce_era(&marker, admin)?;
@@ -552,6 +548,42 @@ fn source_nonce(
         }),
         None => Ok(None),
     }
+}
+
+/// `<anchor>/nonce-era/<sha256(common, admin)>`.
+fn era_marker(anchor: &Path, common: &Path, admin: &str) -> PathBuf {
+    let mut h = Sha256::new();
+    h.update(common.as_os_str().as_encoded_bytes());
+    h.update([0]);
+    h.update(admin.as_bytes());
+    anchor.join(NONCE_ERA_DIR).join(hex(&h.finalize()))
+}
+
+/// The nonce-era marker and admin name of the source whose mailbox lives at
+/// `<project_root>/.aida/mailbox`, resolved as [`writer_source`] does.
+/// `Ok(None)` when it has no anchor. Runs Git; never under the lock.
+fn era_marker_for(project_root: &Path) -> Result<Option<(PathBuf, String)>> {
+    let (anchored, admin) = match crate::seat_clone_detect::seat_clone_root(project_root) {
+        Some(clone_root) => {
+            let Some(main) = crate::seat_clone_detect::clone_writer_main(&clone_root) else {
+                return Ok(None);
+            };
+            let Some(anchored) = locate_anchor(&main)? else {
+                return Ok(None);
+            };
+            let clone_root = std::fs::canonicalize(clone_root)?;
+            (anchored, format!("seat-clone:{}", clone_root.display()))
+        }
+        None => {
+            let Some(anchored) = locate_anchor(project_root)? else {
+                return Ok(None);
+            };
+            let admin = anchored.admin.clone();
+            (anchored, admin)
+        }
+    };
+    let marker = era_marker(&anchored.anchor, &anchored.common, &admin);
+    Ok(Some((marker, admin)))
 }
 
 /// Record, create-new, that the checkout's mailbox has carried a nonce.
@@ -579,6 +611,10 @@ pub(crate) fn rename_noreplace(from: &Path, to: &Path) -> std::io::Result<()> {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
     };
     let (from, to) = (c(from)?, c(to)?);
+    #[cfg(test)]
+    if NOREPLACE_UNSUPPORTED.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
+    }
     #[cfg(target_os = "linux")]
     // SAFETY: both paths are NUL-terminated and outlive the call.
     let rc = unsafe {
@@ -610,8 +646,23 @@ pub(crate) fn rename_noreplace(from: &Path, to: &Path) -> std::io::Result<()> {
     }
 }
 
+/// Does this rename error mean the filesystem cannot rename without
+/// replacing, rather than that the rename itself failed?
+pub(crate) fn noreplace_unsupported(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(libc::EINVAL | libc::ENOSYS | libc::ENOTSUP)
+    )
+}
+
 #[cfg(test)]
 thread_local! {
+    /// Makes [`rename_noreplace`] fail as on a filesystem without it.
+    pub(crate) static NOREPLACE_UNSUPPORTED: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+    /// Runs between the in-place `mkdir` and its nonce.
+    pub(crate) static IN_PLACE_WINDOW: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
     /// Runs between staging a new mailbox and renaming it into place.
     pub(crate) static BEFORE_PLACE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
@@ -621,7 +672,8 @@ thread_local! {
 /// fresh creation nonce: the directory and its `.source-id` are staged beside
 /// it and renamed into place, so no reader ever sees the new directory
 /// without its nonce. A directory that already exists (or that a concurrent
-/// creator renamed in first) is kept as it is.
+/// creator renamed in first) is kept as it is. Where the filesystem cannot
+/// rename without replacing, see [`create_mailbox_dir_in_place`].
 // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
 pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
     match std::fs::metadata(mailbox) {
@@ -660,6 +712,9 @@ pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
         Err(e) => {
             let _ = std::fs::remove_file(staging.join(SOURCE_ID_FILE));
             let _ = std::fs::remove_dir(&staging);
+            if noreplace_unsupported(&e) {
+                return create_mailbox_dir_in_place(mailbox);
+            }
             // EEXIST: another creator placed the mailbox first; keep it.
             if e.raw_os_error() == Some(libc::EEXIST)
                 && std::fs::metadata(mailbox).is_ok_and(|m| m.is_dir())
@@ -669,6 +724,33 @@ pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
                 Err(e)
             }
         }
+    }
+}
+
+/// [`create_mailbox_dir`] on a filesystem without a no-replace rename,
+/// ordered to fail closed: the checkout's nonce era is recorded first, then
+/// the directory is made in place and its nonce written. A resolver in the
+/// window between the two finds the era begun and no nonce, and refuses
+/// (retriably) instead of keying the directory as legacy.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn create_mailbox_dir_in_place(mailbox: &Path) -> std::io::Result<()> {
+    let root = mailbox.parent().and_then(Path::parent).unwrap_or(mailbox);
+    if let Some((marker, admin)) = era_marker_for(root)? {
+        mark_nonce_era(&marker, &admin)?;
+    }
+    match std::fs::create_dir(mailbox) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Ok(()),
+        Err(e) => return Err(e),
+    }
+    #[cfg(test)]
+    if let Some(hook) = IN_PLACE_WINDOW.with(|h| h.borrow_mut().take()) {
+        hook();
+    }
+    mint_source_id(mailbox)?;
+    match mailbox.parent() {
+        Some(parent) => File::open(parent)?.sync_all(),
+        None => Ok(()),
     }
 }
 

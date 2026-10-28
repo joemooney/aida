@@ -96,14 +96,23 @@ impl Retirement {
                 needs_activation: false,
                 retained_dir: Some(self.retained_dir.clone()),
             })),
-            Emptied::Kept(e) => {
-                let late = RetentionRefusal {
-                    checkout,
-                    reason: format!(
+            kept @ (Emptied::Kept(_) | Emptied::Unsupported(_)) => {
+                let reason = match kept {
+                    Emptied::Unsupported(e) => format!(
+                        "the retired mailbox {} was kept after the reset: {e}; the mail was \
+                         put back",
+                        self.mailbox.display()
+                    ),
+                    Emptied::Kept(e) => format!(
                         "the retired mailbox {} is not empty after the reset ({e}); the mail \
                          was put back",
                         self.mailbox.display()
                     ),
+                    _ => unreachable!("matched above"),
+                };
+                let late = RetentionRefusal {
+                    checkout,
+                    reason,
                     needs_activation: false,
                     retained_dir: Some(self.retained_dir.clone()),
                 };
@@ -311,6 +320,9 @@ enum Emptied {
     /// Still at the mailbox path, nonce and all, holding a late entry: the
     /// source is reopened with it.
     Kept(String),
+    /// Still in place, untouched: the filesystem cannot rename it aside
+    /// without risking a replace. The source is reopened.
+    Unsupported(String),
     /// Late entries left in the tombstone because a new mailbox took the
     /// path meanwhile; never merged into it.
     Stranded(LifecycleError),
@@ -346,6 +358,16 @@ fn remove_retired_mailbox(dir: &Path) -> Emptied {
     };
     let tomb = dir.with_file_name(format!(".mailbox-tomb-{tag}"));
     if let Err(e) = super::rename_noreplace(dir, &tomb) {
+        if super::noreplace_unsupported(&e) {
+            // A replacing rename could swap a new mailbox out from under its
+            // writers; the reuse is refused instead.
+            return Emptied::Unsupported(format!(
+                "this filesystem cannot rename {} to {} without replacing ({e}), so the \
+                 reuse is refused",
+                dir.display(),
+                tomb.display()
+            ));
+        }
         return Emptied::Kept(format!("moving it to {}: {e}", tomb.display()));
     }
     #[cfg(test)]
