@@ -30,12 +30,12 @@ description: |
   - Redesigning code-to-requirement trace semantics or commit-message conventions.
   - Hiding ordinary implementation changes made while fulfilling a requirement.
   - Replacing Git as the canonical shared persistence mechanism.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-28T01:31:45.164466319Z
+modified_at: 2026-10-28T03:44:47.052353800Z
 req_type: Story
 tags:
 - portable-intake
@@ -256,6 +256,14 @@ history:
   session_id: 01a180187d2e
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a1809c-43cc-77a3-8947-c761e75ea7ef
+  author: aida-session-start
+  timestamp: 2026-10-28T03:44:47.052350877Z
+  session_id: 9cc2bb58-fd6f-4259-b78c-4af914893ff6
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
