@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T21:52:35.023246291Z
+modified_at: 2026-10-28T22:14:01.018018785Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1366,6 +1366,12 @@ comments:
   created_at: 2026-10-28T21:52:35.023246291Z
   modified_at: 2026-10-28T21:52:35.023246291Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a18493-cc3a-7520-a0a7-2dd2ac0d0e5d
+  author: joe
+  content: 'aida-relay STORY-122 (D3) PR: joemooney/aida-relay#98 head 9d614b6.'
+  created_at: 2026-10-28T22:14:01.018018785Z
+  modified_at: 2026-10-28T22:14:01.018018785Z
+  session_id: 4633c77c-8ad3-4645-84cc-de44f83f3a7f
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
