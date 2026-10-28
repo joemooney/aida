@@ -9,10 +9,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T21:22:05.109139348Z
-modified_at: 2026-10-28T22:02:32.578906790Z
+modified_at: 2026-10-28T23:17:23.667496509Z
 req_type: Task
 tags:
 - from-review:PR-3049
+comments:
+- id: 01a184cd-d253-7ea1-aa7d-01082b3a2d58
+  author: joe
+  content: 'ADVISOR: landed on main as ada00a6def4 (#3068, approved at 891031203442). The commit trailer named only Refs STORY-1843, so it is completed manually.'
+  created_at: 2026-10-28T23:17:23.667496509Z
+  modified_at: 2026-10-28T23:17:23.667496509Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a18464-5d9d-78e3-afe5-9638a7fb888c
   author: joe
