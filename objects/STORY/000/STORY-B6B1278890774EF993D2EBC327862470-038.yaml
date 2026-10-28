@@ -18,12 +18,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3008` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T07:33:28.618187192Z
-modified_at: 2026-10-28T07:33:38.961191351Z
+modified_at: 2026-10-28T08:08:59.242372722Z
 req_type: Story
 relationships:
 - rel_type:
@@ -31,12 +31,25 @@ relationships:
   target_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
   created_at: 2026-10-28T07:33:38.961187203Z
   created_by: joe
+comments:
+- id: 01a1818e-266a-7db0-8fb3-e1dccfd3fb4a
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3008 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-28T08:08:59.242371281Z
+  modified_at: 2026-10-28T08:08:59.242371281Z
 history:
 - id: 01a1816d-d50d-7b33-aa48-9209296d7eb1
   author: joe
   timestamp: 2026-10-28T07:33:41.261590418Z
   session_id: 2f8d330d-e6f2-4390-a32b-73eb66082380
   changes: []
+- id: 01a1818e-266a-7db0-8fb3-e1c772018a50
+  author: aida-auto-bump
+  timestamp: 2026-10-28T08:08:59.242359066Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 33188d8b5c7097415664e477f3b2d49018844dc5
   branch: chore/dispatch-tick-job
@@ -45,3 +58,7 @@ filed_at:
   aida_build_sha: e33bf322340
   vendor: claude
   session: 2f8d330d-e6f2-4390-a32b-73eb66082380
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T08:08:59.242353408Z
+  completion_sha: 3db38fc9defa15ded2793901126ef8236308fc8d
