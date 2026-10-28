@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T09:55:45.478398600Z
+modified_at: 2026-10-28T09:57:07.870672698Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1124,6 +1124,12 @@ comments:
   created_at: 2026-10-28T08:37:26.084181282Z
   modified_at: 2026-10-28T08:37:26.084181282Z
   session_id: 15c1ef2e-e902-4e79-a9eb-6758b4234253
+- id: 01a181f1-289e-7652-afd0-8e590a8afea1
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 03:00 MST on PR-3015 (B2c) F1 / signoff 60 #5: per-key ledger publication (one durable rename per recipient key) is ACCEPTED as an amendment, replacing ''one atomic publication'' with ''idempotent convergent publication'', on these conditions: (1) AckPlan plans per key — a message is fully acknowledged for a read only when EVERY matched recipient key''s ledger holds the receipt; a retry plans exactly the keys still missing it, so a partial publish (ENOSPC/EIO after key 1) converges on the next read instead of stranding key 2; (2) docs/mailbox.md, ack.rs module/fn docs and the CLI error text describe the real partial-then-converge state, never ''all-or-nothing''/''writes nothing''; (3) a test injects a failure after the first key''s rename, asserts Err + accurate message, then retries and asserts every key is receipted. A journal/combined ledger is NOT required. Findings #4 (CLI post-flush commit-failure test), #8 (conflicting-replica fixture), #6 (ReceiptInspector deadline + byte budget, expiry = Unknown/partial) and the cosmetic test comment are all required in this round.'
+  created_at: 2026-10-28T09:57:07.870672698Z
+  modified_at: 2026-10-28T09:57:07.870672698Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
