@@ -6,12 +6,12 @@ description: |-
 
   non-blocking (minor, race): fill_digests in aida-core/src/mailbox_lifecycle/activation.rs hashes /proc/<pid>/exe without checking that the opened file's dev/ino still equals the exe_id scan_proc saw, and caches the digest per exe_id. If a writer exits and its pid is reused by a process on this build between the scan and the digest, that digest is attributed to the other build's exe_id (and cached for every host sharing it), which would fail open. Fix: compare file.metadata() dev/ino with the expected id in digest_file and treat a mismatch as None.
   Reviewed sha: b6f9c1895b9d1c94fd4afa2853077fbd0122c808
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T13:55:26.569503571Z
-modified_at: 2026-10-28T15:50:28.290519806Z
+modified_at: 2026-10-28T15:51:15.122072557Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-010
@@ -27,6 +27,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18335-5db2-79b2-8732-f6cf5163762f
+  author: aida-session-start
+  timestamp: 2026-10-28T15:51:15.122071450Z
+  session_id: 9adeed50-bc94-4d8d-907f-37a9081985e8
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
   branch: main
