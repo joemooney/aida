@@ -1,0 +1,19 @@
+{
+  "id": "0a2c008e-5b48-489d-ba65-714584e7401b",
+  "thread_id": "0a2c008e-5b48-489d-ba65-714584e7401b",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793206322052,
+  "body": "Dispatch request 15d8853b-66a4-4f88-ad71-985c151ad418 (impl demo-lane (STORY-1917)) refused: cannot launch impl lane `demo-lane` (STORY-1917): unknown occupant: malformed session lease /home/joe/ai/aida/.aida/sessions/01a12b1c7882.activity.toml\nreason: cannot launch impl lane `demo-lane` (STORY-1917): unknown occupant: malformed session lease /home/joe/ai/aida/.aida/sessions/01a12b1c7882.activity.toml\nlog: logs/15d8853b-66a4-4f88-ad71-985c151ad418.log",
+  "subject": "dispatch impl demo-lane (STORY-1917): refused (15d8853b)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}
