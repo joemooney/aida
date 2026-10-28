@@ -6,12 +6,12 @@ description: |
   - [minor, non-blocking] Tests do not cover several bare_admin_name rejection branches: a body over 255 bytes, a quote-only or brace-only fragment without a slash, and '.'. They also do not cover the reap of a write_source_id temp left in <checkout>/.aida by a crashed mailbox mint. Only the anchor-side temp is exercised (leftovers_tests.rs era_marker_writes_are_atomic_and_temps_reaped).
   - [minor, non-blocking] mailbox_lifecycle/mod.rs write_source_id: when rename_noreplace is unsupported, the fallback is hard_link. On a filesystem that has neither RENAME_NOREPLACE nor hard links (some CIFS/SMB mounts), nonce and era-marker writes now fail where create_new+write used to succeed. This is an edge case on a Linux-only tool; consider documenting it or falling back to O_EXCL write of the synced temp contents.
   - [cosmetic, non-blocking] mod.rs write_source_id: on the link fallback, a failed remove_file(temp) after a successful hard_link returns Err even though the target is already placed. The same happens when the directory fsync fails after placement. mark_nonce_era then reports an error for a marker that was written. This fails closed and is harmless, but the error is misleading.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T21:27:09.937752075Z
-modified_at: 2026-10-28T22:15:51.348721670Z
+modified_at: 2026-10-28T22:31:47.189771772Z
 req_type: Task
 tags:
 - from-review:PR-3065
@@ -37,6 +37,21 @@ history:
   timestamp: 2026-10-28T22:15:52.189955118Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a184a4-10e4-7912-8dd0-e2945a253fa4
+  author: aida-auto-bump
+  timestamp: 2026-10-28T22:31:47.172371989Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a184a4-10f5-7291-9b00-d356d910e0ad
+  timestamp: 2026-10-28T22:31:47.189763238Z
+  agent: aida
+  commit_sha: 872aae84a7a43a33fc3e4f22175a472ac8952d73
+  summary: 'All spec items met: create-new fallback when neither rename nor links (tested), post-placement cleanup/fsync errors warn, bare_admin_name rejection + crashed-mint temp-reap tests; CI green at head. One minor non-blocking follow-up (fallback leaves partial file on write error).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6f0694f4d36fce705462dfcf6df8de5d6cb5ad8a
@@ -46,3 +61,7 @@ filed_at:
   aida_build_sha: 6f0694f4d36
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T22:31:47.172368181Z
+  completion_sha: 872aae84a7a43a33fc3e4f22175a472ac8952d73
