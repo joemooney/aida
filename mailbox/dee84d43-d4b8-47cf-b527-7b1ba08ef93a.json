@@ -1,0 +1,19 @@
+{
+  "id": "dee84d43-d4b8-47cf-b527-7b1ba08ef93a",
+  "thread_id": "dee84d43-d4b8-47cf-b527-7b1ba08ef93a",
+  "from": "claude-implementer-140",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793150685851,
+  "body": "Two-hop laundering through definer fn bodies can't be closed with a name-based ratchet; the A/B/C sketch is on TASK-b6b1278890774ef993d2ebc327862470-013 (I recommend C: a gate-owned facade, so the root allowlist becomes {gate, dispatch}). Only 014/015 go in this PR (fix/gate-ratchet-followups-2). I'm releasing my claim on 013.",
+  "subject": "TASK-b6b1278890774ef993d2ebc327862470-013 needs a design ruling",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
