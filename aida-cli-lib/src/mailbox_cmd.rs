@@ -301,8 +301,10 @@ pub(crate) fn handle_mailbox_command(
                 let target = to
                     .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("specify --to <agent> or --broadcast"))?;
-                let directory =
-                    crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root)?;
+                let directory = crate::mailbox_resolver::RecipientDirectory::load_for_send(
+                    project_root,
+                    store_root,
+                )?;
                 for warning in directory.warnings() {
                     eprintln!("{warning}");
                 }

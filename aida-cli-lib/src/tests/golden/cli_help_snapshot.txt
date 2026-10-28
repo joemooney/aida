@@ -25330,6 +25330,8 @@ Commands:
   child-bind  Bind the next child session to an existing run. With `--native-session`, that session
               is bound now; without it, a launch token is printed for the child to present at its
               own startup. The run capability is read from stdin unless `--cap-file` is given
+  outbox      List relay end notices: who is told that an ended run left their mail unread, and
+              whether that notice is delivered or still pending
   end         Record the run's end once. Mail to the label is refused afterwards. The run capability
               is read from stdin unless `--cap-file` is given
   help        Print this message or the help of the given subcommand(s)
@@ -25389,6 +25391,14 @@ Options:
       --protocol <PROTOCOL>
           The relay mail protocol the caller requires (see `probe`)
 
+      --leave-with-old
+          Reusing an ended run's label: leave that run's unread mail with it. The new run does not
+          see it
+
+      --handover
+          Reusing an ended run's label: let the new run read that run's unread mail too. Nothing is
+          moved, renamed or acknowledged
+
       --json
           Print JSON
 
@@ -25421,6 +25431,31 @@ Options:
       --cap-file <CAP_FILE>
           Read the run capability from this file (mode 0600, owned by you) instead of stdin. Never
           pass the capability itself as an argument
+
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida relay-mail outbox
+List relay end notices: who is told that an ended run left their mail unread, and whether that
+notice is delivered or still pending
+
+Usage: aida relay-mail outbox [OPTIONS]
+
+Options:
+      --run <RUN>
+          Only this run
 
       --json
           Print JSON
@@ -49992,6 +50027,11 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "handover",
+        "takes_value": false,
+        "help": "Reusing an ended run's label: let the new run read that run's unread mail too. Nothing is moved, renamed or acknowledged"
+      },
+      {
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
@@ -50005,6 +50045,11 @@ Working on aida itself
         "name": "label",
         "takes_value": true,
         "help": "The relay label other agents address mail to"
+      },
+      {
+        "name": "leave-with-old",
+        "takes_value": false,
+        "help": "Reusing an ended run's label: leave that run's unread mail with it. The new run does not see it"
       },
       {
         "name": "protocol",
@@ -50056,6 +50101,37 @@ Working on aida itself
         "name": "run",
         "takes_value": true,
         "help": "The run id `bind` printed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "relay-mail",
+      "outbox"
+    ],
+    "about": "List relay end notices: who is told that an ended run left their mail unread, and whether that notice is delivered or still pending",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      },
+      {
+        "name": "run",
+        "takes_value": true,
+        "help": "Only this run"
       }
     ],
     "hidden": false

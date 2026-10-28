@@ -2830,7 +2830,7 @@ impl<'a> McpServer<'a> {
                 .get("to")
                 .and_then(|v| v.as_str())
                 .ok_or("specify `to` (an agent) or `broadcast: true`")?;
-            let directory = crate::mailbox_resolver::RecipientDirectory::load(
+            let directory = crate::mailbox_resolver::RecipientDirectory::load_for_send(
                 &self.project_root,
                 &self.mailbox_store_root(),
             )

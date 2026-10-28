@@ -38,6 +38,7 @@ dependencies = [
  "aida-core",
  "chrono",
  "fs2",
+ "libc",
  "portable-pty",
  "rusqlite",
  "serde_json",
