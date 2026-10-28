@@ -82932,5 +82932,19 @@ operations:
   timestamp: 2026-10-28T21:17:31.857726102Z
   kind: !SetStatus
     status: Completed
-clock: 6458
+- id: 01a18464-47b7-7a22-b958-681e4669bcb8
+  target_id: 01a18464-40b5-7312-87bf-c6c27951d7dd
+  author: aida
+  node_id: '1'
+  lamport: 6459
+  timestamp: 2026-10-28T21:22:06.903466640Z
+  kind: !Create
+    title: 'PR-3049 follow-ups: unreadable receipt anchor must make the relay unread count incomplete; remaining D2b review notes'
+    description: |
+      Non-blocking findings from the APPROVED round-2 review of PR #3049 (STORY-1843 D2b) at 6750bc4a36d5. Fix all of them in a Refs STORY-1843 follow-up PR. ADVISOR RULING for the anchor_error case: an unreadable receipt anchor makes the unread count INCOMPLETE (unknown), so headless reuse refuses and settle_ended_runs inserts no end notices until the anchor reads.
+      - [minor, non-blocking] aida-core/src/mailbox_logical.rs live_sources_observed ignores anchor_error. When the receipt anchor cannot be read, read relay mail looks unread but the count is marked complete. settle_ended_runs then inserts permanent end notices telling senders and the advisor that read mail was never read, and --handover writes handovers for read mail. The reuse refusal direction is fail-safe. Treat anchor_error as incomplete for the notice and handover paths, or document the tradeoff.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 6459
 node_id: '1'
