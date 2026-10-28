@@ -16,7 +16,11 @@
 //!
 //! The settings allowlist is the existing BUG-1723 classification: only keys
 //! that `scripts/config-trust.toml` already marks `policy` for the
-//! branch-local copy may appear. Executable, credential and location keys
+//! branch-local copy may appear. A `[settings.<section>]` name is the
+//! manifest's `[keys.worktree.<section>]` name verbatim: `_top` holds
+//! top-level config keys and a dotted name (`"store.sync"`) is that nested
+//! config table, so [`Adoption::config_table`] maps every admitted key to
+//! exactly one config location. Executable, credential and location keys
 //! keep coming from the trusted default-branch copy or `~/.aida`; the plane
 //! adds no new trust anchor.
 //!
@@ -80,6 +84,33 @@ pub struct Adoption {
     pub guidance: BTreeMap<String, String>,
 }
 
+impl Adoption {
+    /// The settings in the `.aida/config.toml` layout the existing readers
+    /// parse. Refuses a section whose name collides with a scalar key.
+    pub fn config_table(&self) -> Result<toml::Table> {
+        let mut root = toml::Table::new();
+        for (section, keys) in &self.settings {
+            let mut table = &mut root;
+            if section != "_top" {
+                for part in section.split('.') {
+                    let slot = table
+                        .entry(part.to_string())
+                        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                    table = slot.as_table_mut().with_context(|| {
+                        format!("Adoption section {section} collides with a setting; refused")
+                    })?;
+                }
+            }
+            for (key, value) in keys {
+                if table.insert(key.clone(), value.clone()).is_some() {
+                    bail!("Adoption setting {section}.{key} collides with a section; refused");
+                }
+            }
+        }
+        Ok(root)
+    }
+}
+
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Locator {
@@ -114,7 +145,7 @@ fn discover_with_roots(start: &Path, temp_roots: &[PathBuf]) -> Result<Option<Pl
         return Ok(None);
     }
     let common = crate::allocation_authority::common_dir(&top)?;
-    match read_locator(&common)? {
+    let plane = match read_locator(&common)? {
         Some(Locator {
             reference: Some(reference),
             store: None,
@@ -123,22 +154,88 @@ fn discover_with_roots(start: &Path, temp_roots: &[PathBuf]) -> Result<Option<Pl
             check_ref_name(&reference)?;
             let commit = resolve_commit(&top, &reference)?
                 .with_context(|| format!("Adoption locator names {reference}, which does not resolve to a commit; refused"))?;
-            Ok(Some(Plane {
-                repo: top,
+            Some(Plane {
+                repo: top.clone(),
                 source: Source::LocatorRef { reference },
                 commit,
-            }))
+            })
         }
         Some(Locator {
             reference: None,
             store: Some(store),
             ..
-        }) => sibling(&common, &store).map(Some),
+        }) => Some(sibling(&common, &store)?),
         Some(_) => bail!(
             "Adoption locator must name exactly one of `ref` or `store`; refused. \
              Fix or remove {LOCATOR_FILE} in the Git common directory."
         ),
-        None => conventional(&top),
+        None => conventional(&top)?,
+    };
+    if let Some(plane) = &plane {
+        ensure_off_product_history(&top, plane)?;
+    }
+    Ok(plane)
+}
+
+/// After [`discover`] refused: whether the clone carries adoption
+/// evidence, so the refusal is a discovery failure rather than a plain
+/// non-adopted clone. Evidence is a locator file in the Git common
+/// directory (whatever its state) or an `adoption/` entry on any candidate
+/// store ref. A conventional store that shares product history, or remotes
+/// that disagree, with no namespace anywhere, is not evidence. Errors mean
+/// the question could not be answered; callers fail closed.
+// trace:STORY-1741 | ai:claude
+pub fn shows_adoption(start: &Path) -> Result<bool> {
+    let Some(top) = nearest_repo(start)? else {
+        return Ok(false);
+    };
+    let common = crate::allocation_authority::common_dir(&top)?;
+    match std::fs::symlink_metadata(common.join(LOCATOR_FILE)) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        _ => return Ok(true),
+    }
+    let candidates = git(
+        &top,
+        &[
+            "for-each-ref",
+            "--format=%(objectname)",
+            STORE_REF,
+            "refs/remotes/*/aida-store",
+        ],
+    )?;
+    for commit in candidates.lines().filter(|line| !line.is_empty()) {
+        if !git(&top, &["ls-tree", commit, "--", "adoption"])?
+            .trim()
+            .is_empty()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The plane is an orphan: it shares no commit with the product's `HEAD`.
+/// A locator naming a product branch (or a store grown out of product
+/// history) refuses rather than reading settings off a code branch.
+fn ensure_off_product_history(top: &Path, plane: &Plane) -> Result<()> {
+    if resolve_commit(top, "HEAD")?.is_none() || resolve_commit(top, &plane.commit)?.is_none() {
+        return Ok(());
+    }
+    let out = crate::git_ops::host_git_command(top)
+        .args(["merge-base", &plane.commit, "HEAD"])
+        .output()
+        .context("Failed to run git merge-base")?;
+    match out.status.code() {
+        Some(1) => Ok(()),
+        Some(0) => bail!(
+            "Adoption plane {} shares history with the product branch; refused. \
+             The plane must be an orphan branch such as {STORE_REF}.",
+            plane.commit
+        ),
+        _ => bail!(
+            "git merge-base failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
     }
 }
 
@@ -161,8 +258,14 @@ fn read_locator(common: &Path) -> Result<Option<Locator>> {
         Err(e) => return Err(e.into()),
         Ok(_) => {}
     }
-    let bytes = crate::transport_policy::Private::open(common)?
-        .read(LOCATOR_FILE)?
+    let bytes = crate::transport_policy::Private::open(common)
+        .and_then(|private| private.read(LOCATOR_FILE))
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Adoption locator {LOCATOR_FILE} in the Git common directory must be a \
+                 regular file only its owner can read (chmod 600); refused"
+            )
+        })?
         .context("Adoption locator changed during discovery; refused")?;
     let locator: Locator = std::str::from_utf8(&bytes)
         .ok()
@@ -363,10 +466,15 @@ fn inert(value: &toml::Value, table: bool) -> bool {
 }
 
 /// `section -> keys` for every `[keys.worktree.<section>]` row classified
-/// `policy` in the config-trust manifest.
+/// `policy` in the config-trust manifest. A `"*"` (dynamic key) row counts
+/// only in a section whose every row is `policy`, so a grandfathered or
+/// executable row added beside it can never be admitted under a wildcard.
 fn policy_keys() -> BTreeMap<String, Vec<String>> {
-    let manifest: toml::Table =
-        toml::from_str(TRUST_MANIFEST).expect("config-trust manifest parses");
+    policy_keys_from(TRUST_MANIFEST)
+}
+
+fn policy_keys_from(manifest: &str) -> BTreeMap<String, Vec<String>> {
+    let manifest: toml::Table = toml::from_str(manifest).expect("config-trust manifest parses");
     let worktree = manifest
         .get("keys")
         .and_then(|keys| keys.get("worktree"))
@@ -375,10 +483,13 @@ fn policy_keys() -> BTreeMap<String, Vec<String>> {
     worktree
         .iter()
         .filter_map(|(section, rows)| {
+            let rows = rows.as_table()?;
+            let all_policy = rows.values().all(|class| class.as_str() == Some("policy"));
             let keys = rows
-                .as_table()?
                 .iter()
-                .filter(|(_, class)| class.as_str() == Some("policy"))
+                .filter(|(key, class)| {
+                    class.as_str() == Some("policy") && (all_policy || key.as_str() != "*")
+                })
                 .map(|(key, _)| key.clone())
                 .collect::<Vec<_>>();
             (!keys.is_empty()).then(|| (section.clone(), keys))

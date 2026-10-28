@@ -178,7 +178,8 @@ pub(crate) fn validate_and_restore_project_configs_after_pull(
         match &snapshot.before {
             Some(before) => {
                 // trace:BUG-1025 | ai:codex
-                aida_core::write_atomic(&snapshot.path, before.clone())
+                // trace:STORY-1741 | ai:claude
+                aida_core::write_config_atomic(&snapshot.path, before.clone())
                     .with_context(|| format!("failed to restore {}", snapshot.path.display()))?;
             }
             None => match std::fs::remove_file(&snapshot.path) {

@@ -76,6 +76,9 @@ pub fn scaffold_codex_hooks(
     project_root: &Path,
     force: bool,
 ) -> std::io::Result<CodexHooksOutcome> {
+    // trace:STORY-1741 | ai:claude
+    super::refuse_in_adopted_worktree(project_root)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string()))?;
     let mut out = CodexHooksOutcome::default();
     let dir = project_root.join(HOOKS_DIR_REL);
     std::fs::create_dir_all(&dir)?;
@@ -285,6 +288,9 @@ pub fn scaffold_antigravity_hooks(
     project_root: &Path,
     force: bool,
 ) -> std::io::Result<CodexHooksOutcome> {
+    // trace:STORY-1741 | ai:claude
+    super::refuse_in_adopted_worktree(project_root)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string()))?;
     let mut out = CodexHooksOutcome::default();
     let wiring = project_root.join(AGY_HOOKS_JSON_REL);
 

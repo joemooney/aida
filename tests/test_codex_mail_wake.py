@@ -646,6 +646,34 @@ class WatcherTests(unittest.TestCase):
         self.assertFalse((directory / "codex-mail-health.json").exists())
         self.assertTrue((directory / "codex-mail-health.lock").exists())
 
+    # trace:STORY-1741 | ai:claude
+    def test_health_job_refuses_a_config_the_adoption_projection_owns(self):
+        directory = self.root / ".aida"
+        (directory / "adoption").mkdir(parents=True)
+        config = directory / "config.toml"
+        config.write_text('[agents]\nvendor="claude"\n')
+        manifest = directory / "adoption/manifest.toml"
+        for body in ('version=1\ncommit="c"\nschema=1\ngenerator="g"\n'
+                     '[files]\n".aida/config.toml"="00"\n', "not toml = ="):
+            manifest.write_text(body)
+            with self.assertRaises(wake.Refusal):
+                wake.own_health_job(self.health_args(), self.root)
+            self.assertEqual(config.read_text(), '[agents]\nvendor="claude"\n')
+            self.assertFalse((directory / "codex-mail-health.json").exists())
+        # A symlinked manifest naming no config refuses rather than being followed.
+        real = self.root / "elsewhere.toml"
+        real.write_text('version=1\ncommit="c"\nschema=1\ngenerator="g"\n[files]\n')
+        manifest.unlink()
+        manifest.symlink_to(real)
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(self.health_args(), self.root)
+        self.assertEqual(config.read_text(), '[agents]\nvendor="claude"\n')
+        manifest.unlink()
+        # A projection that kept a local config does not own it.
+        manifest.write_text('version=1\ncommit="c"\nschema=1\ngenerator="g"\n[files]\n')
+        wake.own_health_job(self.health_args(), self.root)
+        self.assertIn(b"doctor check codex-mail-wake", config.read_bytes())
+
     def test_health_job_refuses_user_collision_edited_block_and_other_target(self):
         directory = self.root / ".aida"
         directory.mkdir()

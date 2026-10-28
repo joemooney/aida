@@ -1208,7 +1208,8 @@ pub fn write_forge_config_provider(project_dir: &Path, kind: ForgeKind) -> Resul
     }
     if changed {
         let trailing_newline = if content.ends_with('\n') { "\n" } else { "" };
-        std::fs::write(
+        // trace:STORY-1741 | ai:claude
+        aida_core::write_config_atomic(
             &config_path,
             format!("{}{}", lines.join("\n"), trailing_newline),
         )

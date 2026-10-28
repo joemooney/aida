@@ -74,6 +74,9 @@ pub mod alias;
 // Shared non-executable adoption settings on the store plane. trace:STORY-1741 | ai:claude
 #[cfg(all(unix, feature = "native"))]
 pub mod adoption_plane;
+// Its ignored local projection. trace:STORY-1741 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+pub mod adoption_projection;
 pub mod analytics;
 pub mod block_allocation;
 // trace:BUG-2017 | ai:codex
@@ -247,7 +250,7 @@ pub use db::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, Version
 pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
 pub use dispenser::{FileDispenser, SqliteDispenser};
-pub use fs_atomic::{read_atomic, write_atomic};
+pub use fs_atomic::{read_atomic, write_atomic, write_config_atomic};
 pub use import::{
     create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,
     ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,

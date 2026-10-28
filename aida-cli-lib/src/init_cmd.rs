@@ -4900,7 +4900,8 @@ pub(crate) fn handle_init_distributed_worktree(
     // trace:STORY-1467 | ai:claude
     let config_content =
         crate::project_capabilities::with_init_config_section(&cwd, config_content);
-    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(&aida_dir.join("config.toml"), &config_content)?;
 
     // STORY-511: surface the auto-detected forge so the operator sees the
     // inference instead of having to read .aida/config.toml. EPIC-35 init UX.
@@ -5228,7 +5229,8 @@ fn handle_init_post_clone(
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
     let config_content = crate::project_capabilities::with_init_config_section(cwd, config_content);
-    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(&aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
         "Done".green(),
@@ -5800,7 +5802,8 @@ pub(crate) fn handle_init_distributed_sibling(
     // trace:STORY-1467 | ai:claude
     let config_content =
         crate::project_capabilities::with_init_config_section(&cwd, config_content);
-    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(&aida_dir.join("config.toml"), &config_content)?;
 
     // Fresh init leaves docs/plans/ to the first plan-writing surface
     // (TASK-1193); an existing plan archive may still gain a missing
@@ -6853,7 +6856,7 @@ fn run_init(
     // machine-global Codex custom prompts) onto this binary's templates,
     // so a template fix reaches a non-Claude agent without --force.
     if *refresh && init_footprint == cli::InitFootprint::Full {
-        let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
+        let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None)?;
         scaffold_refresh::print_refresh_summary(&packs);
         // Seed into THIS project's store: the distributed store first, then
         // a local legacy store. Never the registry's ambient default, which
