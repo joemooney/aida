@@ -2,12 +2,15 @@
 //! (TASK-b6b1278890774ef993d2ebc327862470-024). These modules drive the
 //! forge, the ship flow and the audit log around a gate decision, so they
 //! name more crate code than a decision kernel may. Each lists every path
-//! outside `gate/` it names today, with one reason for the module. The
+//! outside `gate/` it names today, `aida_core` paths included
+//! (TASK-b6b1278890774ef993d2ebc327862470-041), with one reason for the
+//! module. The
 //! story_1888 ratchet fails on a path missing from its list and on an entry
 //! nothing names, so a list only shrinks unless a human merges a change to
 //! this file.
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-041 | ai:claude
 
 /// `(module file, why it reaches outside gate/, every outside path it names)`.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
@@ -17,6 +20,7 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "approval.rs",
         "ship and merge approval: drives the forge client, the pr_cmd ship activity log, review carry-over and the drain phase report",
         &[
+            "aida_core::git_ops::RemoteCredentialsExt",
             "crate::auto_complete",
             "crate::auto_complete::FailureKind::StaleApproval",
             "crate::auto_complete::PhaseFailure",
@@ -63,6 +67,10 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "mandate_ship.rs",
         "mandate ship cover: forge lookup, pinned-change fetch, store history and the merge-hold audit event",
         &[
+            "aida_core::Requirement",
+            "aida_core::RequirementStatus::Completed",
+            "aida_core::RequirementsStore",
+            "aida_core::team::canonical_role",
             "crate::events::Event::new",
             "crate::events::EventKind::MergeHoldChanged",
             "crate::events::active_seat",
@@ -95,6 +103,7 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "merge_hold_core.rs",
         "merge-hold records: label sync, audit events, review carry-over proof and seat-clone root resolution",
         &[
+            "aida_core::fs_atomic::write_atomic",
             "crate::events::Event",
             "crate::events::Event::new",
             "crate::events::EventKind",
@@ -129,6 +138,9 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "review_authority.rs",
         "review authorship ledger: session leases, session manifests and audit events",
         &[
+            "aida_core::liveness::process_identity_matches_strict",
+            "aida_core::liveness::process_start_identity",
+            "aida_core::write_atomic",
             "crate::SessionLease",
             "crate::events::GATE_AUTHORSHIP_LEDGER",
             "crate::events::record_gate_held",
@@ -146,6 +158,12 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "rework_hold_release.rs",
         "rework hold release: forge client, pinned change, label sync, audit events and the review-story lookup",
         &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Guided",
+            "aida_core::ExecutionMode::Operator",
+            "aida_core::Requirement",
+            "aida_core::RequirementsStore",
+            "aida_core::fs_atomic::write_atomic",
             "crate::events::Event::new",
             "crate::events::EventKind::MergeHoldChanged",
             "crate::events::active_seat",
@@ -173,6 +191,8 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "ship.rs",
         "ship status: the awaiting-you classifier, drain lock and state, and vendor activity",
         &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Drain",
             "crate::awaiting_you::PrReviewRow",
             "crate::awaiting_you::PrReviewRow::Blocked",
             "crate::awaiting_you::PrReviewRow::ReworkReady",

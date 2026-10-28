@@ -251,6 +251,125 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
     ),
     ("crate::events::emit", "audit event sink; returns nothing"),
     // ── decision-kernel gate modules (TASK-b6b1278890774ef993d2ebc327862470-024) ──
+    // aida_core is not gate-protected, so each sibling path a kernel reaches is
+    // listed too (TASK-b6b1278890774ef993d2ebc327862470-041).
+    (
+        "aida_core::Comment",
+        "spec comment shape for the sign-off check; read-only",
+    ),
+    (
+        "aida_core::ExecutionMode",
+        "spec execution-mode vocabulary for the mandate exclusions",
+    ),
+    (
+        "aida_core::ExecutionMode::Decide",
+        "decide-mode specs stay human",
+    ),
+    (
+        "aida_core::ExecutionMode::Operator",
+        "operator-mode specs stay human",
+    ),
+    (
+        "aida_core::Requirement",
+        "spec record the mandate classifies; read-only",
+    ),
+    (
+        "aida_core::RequirementStatus::Completed",
+        "spec status vocabulary",
+    ),
+    (
+        "aida_core::RequirementType",
+        "spec type vocabulary for the mandate exclusions",
+    ),
+    ("aida_core::Storage", "legacy store for the operator hold"),
+    (
+        "aida_core::external_tool_output::GH_BRANCH_POLICY_MERGE_REFUSAL",
+        "forge refusal text the branch policy matches",
+    ),
+    (
+        "aida_core::external_tool_output::contains_any_case_insensitive",
+        "forge refusal text matcher",
+    ),
+    (
+        "aida_core::git_ops::host_git_command",
+        "git process builder for gate git reads",
+    ),
+    (
+        "aida_core::lifecycle::CommitAuthority",
+        "commit authority the seat resolver returns",
+    ),
+    (
+        "aida_core::lifecycle::CommitAuthority::Grant",
+        "commit authority by mandate grant",
+    ),
+    (
+        "aida_core::lifecycle::CommitAuthority::Orchestrator",
+        "commit authority by orchestrator seat",
+    ),
+    (
+        "aida_core::lifecycle::register_commit_authority_resolver",
+        "installs the gate's commit authority resolver",
+    ),
+    (
+        "aida_core::liveness::pid_is_alive",
+        "process liveness for fleet lanes; feeds authority",
+    ),
+    (
+        "aida_core::liveness::process_identity_is_alive",
+        "review marker holder liveness; feeds authority",
+    ),
+    (
+        "aida_core::liveness::process_start_time",
+        "process start time for fleet lanes; feeds authority",
+    ),
+    (
+        "aida_core::store_locate::MissedStore",
+        "store discovery miss for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreMiss",
+        "store discovery miss for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreMiss::NoConfig",
+        "store discovery miss for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreMiss::NoStorePath",
+        "store discovery miss for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreMiss::StoreMissing",
+        "store discovery miss for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreMiss::TempRoot",
+        "store discovery miss for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreOverride",
+        "store override for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreOverride::Unusable",
+        "store override for seat authority",
+    ),
+    (
+        "aida_core::store_locate::StoreOverride::Usable",
+        "store override for seat authority",
+    ),
+    (
+        "aida_core::store_locate::locate_distributed_store_from",
+        "store discovery for the team roster; feeds authority",
+    ),
+    (
+        "aida_core::team::TeamRoster::load",
+        "team roster for seat authority; feeds authority",
+    ),
+    (
+        "aida_core::team::canonical_role",
+        "seat name normalisation; feeds authority",
+    ),
     ("crate::DoctorFinding", "doctor report row; output only"),
     (
         "crate::coordination::hostname",
