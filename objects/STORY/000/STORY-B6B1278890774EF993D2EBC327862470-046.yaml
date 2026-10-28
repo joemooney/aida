@@ -16,12 +16,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3025` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T11:12:06.965112319Z
-modified_at: 2026-10-28T11:12:14.624858375Z
+modified_at: 2026-10-28T11:45:12.735464054Z
 req_type: Story
 relationships:
 - rel_type:
@@ -29,12 +29,25 @@ relationships:
   target_id: 01a18162-4ea4-7571-b40e-c81896044e05
   created_at: 2026-10-28T11:12:14.624855247Z
   created_by: joe
+comments:
+- id: 01a18254-1c1f-7483-b75e-5ded17d8f2f0
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3025 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-28T11:45:12.735462750Z
+  modified_at: 2026-10-28T11:45:12.735462750Z
 history:
 - id: 01a18235-f344-7bf3-b53c-07ee3b13ef9c
   author: joe
   timestamp: 2026-10-28T11:12:16.196321032Z
   session_id: 6df68e51-f913-41a4-bf07-7cb9c1bab568
   changes: []
+- id: 01a18254-1c1f-7483-b75e-5dda87dfacee
+  author: aida-auto-bump
+  timestamp: 2026-10-28T11:45:12.735449450Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 6efd7270069d247871f1c043b227c8b21a3ec974
   branch: fix/gate-facade-all-modules
@@ -43,3 +56,7 @@ filed_at:
   aida_build_sha: 75d12e4354f
   vendor: claude
   session: 6df68e51-f913-41a4-bf07-7cb9c1bab568
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T11:45:12.735443926Z
+  completion_sha: 42070fbece09cfca8f00042931b573300d85f0f9
