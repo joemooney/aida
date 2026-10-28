@@ -1103,7 +1103,7 @@ pub(crate) fn retention_record_lines(
 /// leftovers. A tomb holding mail is never removed by AIDA.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 #[cfg(unix)]
-fn retention_leftover_lines(
+pub(crate) fn retention_leftover_lines(
     leftovers: &aida_core::mailbox_lifecycle::leftovers::Leftovers,
 ) -> Vec<String> {
     let mut lines: Vec<String> = leftovers
