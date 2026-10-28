@@ -1,0 +1,26 @@
+id: 01a18334-5e4d-75b0-a32b-6768d63f8f38
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-052
+title: 'PR-3043 follow-ups: surface/reap mailbox tombs, era-marker recovery, reap creator staging dirs, legacy-key test assertion'
+description: |
+  Non-blocking follow-ups from the APPROVED review of PR #3043 (BUG-b6b1278890774ef993d2ebc327862470-011) at cb41f62822b0. The reviewer sandbox could not allocate IDs, so the advisor filed them here as one task. All in aida-core/src/mailbox_lifecycle.
+  1. [minor] guard.rs Stranded reason says "the retired source keeps its preserved mail", but the late entry sits in `.aida/.mailbox-tomb-<nonce>`. Tombs are never reaped or surfaced. Fix: name the tomb path in the reason, surface stranded tombs in `aida doctor` (or the retention dry-run), and reap empty tombs.
+  2. [minor] The nonce-era marker is never removed. A nonce-less mailbox in a checkout that has entered the era (an older binary or long-running aida-server using create_dir_all, or a reused worktree admin name) is refused for retirement and activation with no recovery hint. Fix: an operator-facing recovery hint in the Unsafe error, and drop the era marker when its worktree admin entry is pruned or recreated.
+  3. [minor] A crashed creator leaves `.aida/.mailbox.creating.<uuid>` staging dirs that are never reaped. Fix: reap staging dirs older than a bound during creation and gc.
+  4. [cosmetic] a_nonce_less_mailbox_before_the_era_is_legacy must assert the legacy key and that resolving minted no .source-id.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T15:50:09.741589847Z
+modified_at: 2026-10-28T15:50:09.741589847Z
+req_type: Task
+tags:
+- from-review:PR-3043
+filed_at:
+  code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 679d4187bad
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
