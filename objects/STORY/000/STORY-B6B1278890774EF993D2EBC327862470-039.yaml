@@ -1,0 +1,33 @@
+id: 01a1817e-42e0-7430-9e72-310e30685afb
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-039
+title: 'Review PR-3010: [AI:claude] fix(criteria): keep multi-line Rust test headers until the body opens (TASK-b6b1278890774ef993d2ebc327862470-022)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/criteria-rust-header-scan`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3010>
+  - Branch: `fix/criteria-rust-header-scan` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-022
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3010` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T07:51:37.952776967Z
+modified_at: 2026-10-28T07:51:37.952776967Z
+req_type: Story
+filed_at:
+  code_sha: 1058ae300cf67bd3500ef680c92cc9021d71f7db
+  branch: fix/criteria-rust-header-scan
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e961089c95
+  vendor: claude
+  session: 1a496519-7760-4cc4-bc0f-b69e9d29f4e0
