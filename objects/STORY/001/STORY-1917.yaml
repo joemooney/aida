@@ -13,12 +13,12 @@ description: |-
   - aida init installs the job with the rest of the schedule (enabled only when a mandate allows it). Nothing new to start by hand.
 
   Acceptance: a sandboxed advisor can take a PR from READY to shipped, and launch a takeover fixer and a new lane, with no operator command, while a mandate is active; with no mandate every request is refused with the reason; a request with a non-enumerated verb or a malformed argument is refused at both ends; each request leaves a ledger row.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-28T21:17:27.240083534Z
+modified_at: 2026-10-28T21:17:30.072139759Z
 req_type: Story
 relationships:
 - rel_type:
@@ -935,6 +935,14 @@ history:
   timestamp: 2026-10-27T17:12:34.857860012Z
   session_id: b3592ff1-9a9a-42b2-bada-31c38955f1d9
   changes: []
+- id: 01a18460-0e58-7632-83bf-8c7ffd471fe3
+  author: joe
+  timestamp: 2026-10-28T21:17:30.072137850Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
@@ -943,3 +951,6 @@ filed_at:
   aida_build_sha: c6bb0dc4f1
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T21:17:30.072117043Z
