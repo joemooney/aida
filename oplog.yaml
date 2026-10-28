@@ -80138,5 +80138,13 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6237
+- id: 01a18196-441a-7f00-9489-f768c41918ca
+  target_id: 01a16a96-f6ce-75e3-bdd7-ab32db7ae9c5
+  author: aida
+  node_id: '1'
+  lamport: 6238
+  timestamp: 2026-10-28T08:17:51.130520228Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 6238
 node_id: '1'
