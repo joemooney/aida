@@ -1792,12 +1792,22 @@ fn reach(text: &str, level: usize) -> Reach {
     )
 }
 
-fn scan_reach(text: &str, mut reach: Reach) -> Reach {
+fn scan_reach(text: &str, reach: Reach) -> Reach {
+    scan_reach_in(&parse_source(text), reach)
+}
+
+fn scan_reach_in(file: &syn::File, mut reach: Reach) -> Reach {
     use syn::visit::Visit;
-    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
-    reach.visit_file(&file);
+    reach.visit_file(file);
     reach.resolve();
     reach
+}
+
+/// One parse of a source. The crate-root files run to ~0.5MB, so the
+/// ratchet parses each once and hands the tree to every check.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn parse_source(text: &str) -> syn::File {
+    syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"))
 }
 
 /// The `crate::dispatch` items a `gate/dispatch_*` source names, each as
@@ -1820,12 +1830,16 @@ fn dispatch_items_at(text: &str, level: usize) -> Vec<String> {
 /// [`dispatch_items_at`], but a private `use super::*;` is not a handover.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn launders_at(text: &str, level: usize) -> Vec<String> {
+    launders_in(&parse_source(text), level)
+}
+
+fn launders_in(file: &syn::File, level: usize) -> Vec<String> {
     let reach = Reach {
         level,
         public_handovers_only: true,
         ..Reach::default()
     };
-    dispatch_items(scan_reach(text, reach))
+    dispatch_items(scan_reach_in(file, reach))
 }
 
 fn dispatch_items(reach: Reach) -> Vec<String> {
@@ -1902,6 +1916,10 @@ fn root_reexports_at(text: &str, level: usize) -> Vec<String> {
 /// defines it.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn root_bindings(text: &str, name: &str) -> (Vec<Vec<String>>, Vec<Vec<String>>, bool) {
+    root_bindings_in(&parse_source(text), name)
+}
+
+fn root_bindings_in(file: &syn::File, name: &str) -> (Vec<Vec<String>>, Vec<Vec<String>>, bool) {
     fn walk(
         tree: &syn::UseTree,
         prefix: &mut Vec<String>,
@@ -1943,7 +1961,6 @@ fn root_bindings(text: &str, name: &str) -> (Vec<Vec<String>>, Vec<Vec<String>>,
             _ => {}
         }
     }
-    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
     let (mut explicit, mut globs, mut defines) = (Vec::new(), Vec::new(), false);
     for item in &file.items {
         let ident = match item {
@@ -1989,6 +2006,11 @@ struct Mount {
 /// plus the inline modules around it.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn mounts(file: &str, mod_rs: bool, text: &str) -> Vec<Mount> {
+    let parsed = syn::parse_file(text).unwrap_or_else(|e| panic!("{file} must parse: {e}"));
+    mounts_in(file, mod_rs, &parsed)
+}
+
+fn mounts_in(file: &str, mod_rs: bool, parsed: &syn::File) -> Vec<Mount> {
     fn is_cfg_test(attrs: &[syn::Attribute]) -> bool {
         attrs.iter().any(|a| {
             a.path().is_ident("cfg")
@@ -2050,7 +2072,6 @@ fn mounts(file: &str, mod_rs: bool, text: &str) -> Vec<Mount> {
     } else {
         file.trim_end_matches(".rs").to_string()
     };
-    let parsed = syn::parse_file(text).unwrap_or_else(|e| panic!("{file} must parse: {e}"));
     let mut out = Vec::new();
     if !is_cfg_test(&parsed.attrs) {
         walk(&parsed.items, dir, &owned, &mut Vec::new(), false, &mut out);
@@ -2066,12 +2087,15 @@ fn mounts(file: &str, mod_rs: bool, text: &str) -> Vec<Mount> {
 /// twin of a plain mount (`#[cfg(not(test))] mod forge { .. }`) is seen.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
-    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
+    root_module_mounts_in(&parse_source(text), name)
+}
+
+fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<Vec<String>> {
     let inline = file
         .items
         .iter()
         .filter(|item| matches!(item, syn::Item::Mod(m) if m.content.is_some() && m.ident == name));
-    mounts("lib.rs", true, text)
+    mounts_in("lib.rs", true, file)
         .into_iter()
         .filter(|m| m.depth == 1 && m.name == name)
         .map(|m| m.candidates.into_iter().map(|(c, _)| c).collect())
@@ -2083,12 +2107,21 @@ fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
 /// module declared after it: each `#[macro_use]` module (bare or under
 /// `cfg_attr`, on the item or as an inner `#![macro_use]` in any file
 /// `load` returns for a top-level `mod x;`) as `mod x`, and each top-level
-/// `macro_rules!` by name. A `#[macro_use] mod util;` or root
+/// `macro_rules!` by name. A `#[macro_use] extern crate x;` is reported as
+/// `extern crate x`: it puts `x`'s exported macros in the `macro_use`
+/// prelude, ahead of std's. A `#[macro_use] mod util;` or root
 /// `macro_rules! format` shadows the prelude macro `gate/dispatch_*` calls
 /// bare, so its expansion runs unscanned code inside the gate.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
 fn root_textual_macros(
     text: &str,
+    load: &dyn Fn(&str) -> Option<String>,
+) -> (Vec<String>, Vec<String>) {
+    root_textual_macros_in(&parse_source(text), load)
+}
+
+fn root_textual_macros_in(
+    file: &syn::File,
     load: &dyn Fn(&str) -> Option<String>,
 ) -> (Vec<String>, Vec<String>) {
     let macro_use = regex::Regex::new(r"\bmacro_use\b").unwrap();
@@ -2100,11 +2133,14 @@ fn root_textual_macros(
                         && macro_use.is_match(&l.tokens.to_string()))
         })
     };
-    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
     let (mut mods, mut rules) = (Vec::new(), Vec::new());
     for item in &file.items {
         match item {
             syn::Item::Mod(m) if widens(&m.attrs) => mods.push(format!("mod {}", m.ident)),
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+            syn::Item::ExternCrate(e) if widens(&e.attrs) => {
+                mods.push(format!("extern crate {}", e.ident));
+            }
             syn::Item::Macro(m) if m.mac.path.is_ident("macro_rules") => {
                 if let Some(ident) = &m.ident {
                     rules.push(ident.to_string().trim_start_matches("r#").to_string());
@@ -2114,13 +2150,17 @@ fn root_textual_macros(
         }
     }
     // An out-of-line module's own file can widen the scope from inside.
-    for mount in mounts("lib.rs", true, text) {
+    for mount in mounts_in("lib.rs", true, file) {
         let named = format!("mod {}", mount.name);
         if mount.depth != 1 || mods.contains(&named) {
             continue;
         }
         let inner = mount.candidates.iter().any(|(candidate, _)| {
+            // Most modules never say `macro_use`; skip parsing those.
             load(candidate).is_some_and(|body| {
+                if !macro_use.is_match(&body) {
+                    return false;
+                }
                 let parsed = syn::parse_file(&body)
                     .unwrap_or_else(|e| panic!("{candidate} must parse: {e}"));
                 widens(&parsed.attrs)
@@ -2131,6 +2171,31 @@ fn root_textual_macros(
         }
     }
     (mods, rules)
+}
+
+/// The root-level macros (definitions and invocations) whose tokens name
+/// `name`. syn sees only the unexpanded call, so `m!();` expanding to
+/// `#[path = "forge2.rs"] mod forge;` or `use util::canonical_role_name;`
+/// would rebind an allowlisted name past [`root_module_mounts`] and
+/// [`root_bindings`]; any root macro naming it is refused instead.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn root_macros_naming(file: &syn::File, name: &str) -> Vec<String> {
+    let names = regex::Regex::new(&format!(r"\b(?:r#)?{name}\b")).unwrap();
+    file.items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Macro(m) if names.is_match(&m.mac.tokens.to_string()) => {
+                Some(m.ident.as_ref().map_or_else(
+                    || {
+                        let path = m.mac.path.segments.iter().map(|s| s.ident.to_string());
+                        path.collect::<Vec<_>>().join("::") + "!"
+                    },
+                    |i| format!("macro_rules! {i}"),
+                ))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The macros a source invokes by a bare name (`format!`, not
@@ -2502,7 +2567,17 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
         .chain(include.captures_iter(&lib).map(|c| c[1].to_string()))
         .collect();
     // (file, levels below the root its top-level code sits)
-    let mut scanned: Vec<(String, usize)> = root_files.iter().map(|f| (f.clone(), 0)).collect();
+    // Parse each crate-root file once: every check below walks the same
+    // trees, and re-parsing ~0.5MB per check blew the test time budget.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    let roots: Vec<(&String, syn::File)> = root_files
+        .iter()
+        .map(|f| {
+            let parsed =
+                syn::parse_file(&read(f)).unwrap_or_else(|e| panic!("{f} must parse: {e}"));
+            (f, parsed)
+        })
+        .collect();
     // Allowlisted definers and every non-test module they mount, however
     // deep: (file, level, read mod.rs-style).
     let mut definers: Vec<(String, usize, bool)> = Vec::new();
@@ -2537,7 +2612,6 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
             }
         }
     }
-    scanned.extend(definers.iter().map(|(f, level, _)| (f.clone(), *level)));
 
     // The root binds each allowlisted name to the allowlisted definition:
     // no root-level `use` rebinds it from elsewhere (an explicit
@@ -2552,8 +2626,8 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
             Vec::new()
         };
         let (mut bound, mut defined) = (false, 0);
-        for root in &root_files {
-            let (explicit, globs, defines) = root_bindings(&read(root), name);
+        for (root, parsed) in &roots {
+            let (explicit, globs, defines) = root_bindings_in(parsed, name);
             for path in &explicit {
                 assert!(
                     *path == home,
@@ -2574,19 +2648,31 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
         } else if fn_entry {
             assert!(bound, "the crate root no longer binds `{name}` from {file}");
             assert_eq!(defined, 0, "a crate-root item shadows allowlisted `{name}`");
-        } else if !file.is_empty() {
+        } else {
             // A module entry is scanned as `name.rs`, so the root mounts it
-            // from there: no `#[path]`, no inline body.
+            // from there: no `#[path]`, no inline body. `gate` and
+            // `dispatch` too: the gate sources are read from `gate/`, and
+            // the primitives the ratchet guards from `dispatch`.
             // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-            let plain = vec![file.to_string(), format!("{name}/mod.rs")];
-            let found: Vec<Vec<String>> = root_files
+            let plain = vec![format!("{name}.rs"), format!("{name}/mod.rs")];
+            let found: Vec<Vec<String>> = roots
                 .iter()
-                .flat_map(|root| root_module_mounts(&read(root), name))
+                .flat_map(|(_, parsed)| root_module_mounts_in(parsed, name))
                 .collect();
             assert!(
                 !found.is_empty() && found.iter().all(|c| *c == plain),
                 "the crate root must mount allowlisted `{name}` as a plain \
                  `mod {name};` loading {file}, found {found:?}"
+            );
+        }
+        // A root macro could expand to a mount or binding syn never sees.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+        for (root, parsed) in &roots {
+            let macros = root_macros_naming(parsed, name);
+            assert!(
+                macros.is_empty(),
+                "{root}: root-level {macros:?} names allowlisted `{name}`; \
+                 its expansion could rebind it unscanned"
             );
         }
     }
@@ -2601,9 +2687,9 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
         .flat_map(|(_, text)| bare_macro_names(text))
         .collect();
     let mut shadows = Vec::new();
-    for root in &root_files {
+    for (root, parsed) in &roots {
         let (mods, rules) =
-            root_textual_macros(&read(root), &|f| std::fs::read_to_string(src.join(f)).ok());
+            root_textual_macros_in(parsed, &|f| std::fs::read_to_string(src.join(f)).ok());
         shadows.extend(mods.iter().map(|m| format!("  {root}: #[macro_use] {m}")));
         shadows.extend(
             rules
@@ -2618,14 +2704,19 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
         shadows.join("\n")
     );
 
-    let mut launders: Vec<String> = scanned
+    let mut launders: Vec<String> = roots
         .iter()
-        .flat_map(|(file, level)| {
-            launders_at(&read(file), *level)
+        .flat_map(|(file, parsed)| {
+            launders_in(parsed, 0)
                 .into_iter()
                 .map(move |item| format!("  {file}: crate::dispatch::{item}"))
         })
         .collect();
+    launders.extend(definers.iter().flat_map(|(file, level, _)| {
+        launders_at(&read(file), *level)
+            .into_iter()
+            .map(move |item| format!("  {file}: crate::dispatch::{item}"))
+    }));
     for (file, level, _) in &definers {
         for path in root_reexports_at(&read(file), *level) {
             launders.push(format!("  {file}: re-exports crate::{path}"));
@@ -2818,6 +2909,42 @@ fn root_module_mount_detection_sees_redirected_modules() {
     }
 }
 
+// A root macro that could expand to a mount or binding of an allowlisted
+// name is seen, though syn never expands it.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+#[test]
+fn root_macro_detection_sees_hidden_mounts_and_bindings() {
+    let naming = |src: &str, name: &str| root_macros_naming(&parse_source(src), name);
+    assert_eq!(
+        naming(
+            "macro_rules! m { () => { #[cfg(not(test))] #[path = \"forge2.rs\"] mod forge; } }\n\
+             m!();\n#[cfg(test)]\nmod forge;",
+            "forge"
+        ),
+        vec!["macro_rules! m"]
+    );
+    assert_eq!(
+        naming(
+            "macro_rules! m { ($p:ident, $n:ident) => { use $p::$n; } }\n\
+             m!(util, canonical_role_name);",
+            "canonical_role_name"
+        ),
+        vec!["m!"]
+    );
+    assert_eq!(
+        naming("crate::reexport! { r#forge }", "forge"),
+        vec!["crate::reexport!"]
+    );
+    for src in [
+        "mod forge;",
+        "macro_rules! m { () => { mod forge_x; } }",
+        "include!(\"lib_part1.rs\");",
+        "fn f() { m!(forge); }",
+    ] {
+        assert!(naming(src, "forge").is_empty(), "{src}");
+    }
+}
+
 // Each way a crate-root source widens textual macro scope is seen.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
 #[test]
@@ -2833,6 +2960,22 @@ fn root_textual_macro_detection_sees_evasive_forms() {
     ] {
         assert_eq!(root_textual_macros(src, &none).0, vec!["mod util"], "{src}");
     }
+    // A `#[macro_use] extern crate` fills the `macro_use` prelude.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+    for src in [
+        "#[macro_use] extern crate util;",
+        "#[cfg_attr(all(), macro_use)]\nextern crate util;",
+        "#[macro_use] extern crate util as other;",
+    ] {
+        assert_eq!(
+            root_textual_macros(src, &none).0,
+            vec!["extern crate util"],
+            "{src}"
+        );
+    }
+    assert!(root_textual_macros("extern crate util;", &none)
+        .0
+        .is_empty());
     for (src, want) in [
         ("macro_rules! format { () => {} }", "format"),
         (
