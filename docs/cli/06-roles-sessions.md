@@ -353,6 +353,20 @@ a sibling's local mailbox with `--local-root`. See the [Codex mail wake adapter]
 for opt-in setup, deduplication, and uncertain-delivery recovery.
 <!-- trace:TASK-2347 | ai:codex -->
 
+#### Relay mail lifetime (`aida relay-mail`)
+
+A relay run is one mail recipient for its whole life. Its label is the handle other agents address, and it stays the same while the relay rotates through child sessions. The relay controller calls these commands; operators rarely do.
+
+- `aida relay-mail probe --json` prints the protocol (`aida-relay-mail/1`), its operations and features. A relay compares the protocol exactly and refuses to advertise its label on a mismatch.
+- `aida relay-mail bind --label <L> --controller-pid <PID> --run-lock <PATH> --protocol aida-relay-mail/1` runs before the relay launches any session. It refuses on a different protocol before anything is reserved. The controller must hold its run lock (an exclusive lock on the file, with its pid on the first line). It reserves the label for a new run and prints the run id. The run record, under `.aida/agents/relay-runs/`, stores the controller's pid, process start identity, boot id and PID namespace, and the run lock's identity.
+- `aida relay-mail child-bind --run <ID>` binds the next child session to the same run. With `--native-session <SID>` it binds that session now. Without it, it prints a launch token. Start the child with that token in `AIDA_HANDLE_LAUNCH_TOKEN` and its agent name set to the label, and the child's startup binds the label. The run id never changes across rotations.
+- `aida relay-mail end --run <ID> --controller-pid <PID> [--reason stop|exit|blocked]` records the run's end once. A repeat reports the recorded end and changes nothing.
+
+Mail to the label is accepted between sessions while the run is open and its controller is alive, including while the relay is paused. If the controller's process cannot be observed from the sending shell (another PID namespace), the mail is still delivered, with a warning. After the end is recorded, mail to the label is refused unless a live session still holds it. A controller that dies without calling `end` (a crash or `kill -9`) is ended by the next `relay-mail bind` or host-side `aida agent gc`, once its process is provably gone: the machine rebooted, the pid is free, or the pid belongs to another process. A run whose controller cannot be observed is never ended this way.
+
+An ended run's label is not reused yet: `bind` refuses it, so choose a new label. The run's unread mail stays under the old label.
+<!-- trace:STORY-1843 | ai:claude -->
+
 ### `aida driver`
 
 **One line** — register the long-running loops (relays, drains, headless agents) that work in-progress specs, so every view can say *who* is driving each one.
