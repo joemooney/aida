@@ -92,6 +92,7 @@ fn refusal(result: Result<Option<Plane>>) -> String {
 
 #[test]
 fn conventional_plane_is_found_without_any_product_marker() {
+    // trace:STORY-1741.ac1ebcce | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = repo(&tmp.path().join("p"));
     let commit = plane_commit(&top, STORE_REF, Some(("100644", GOOD)));
@@ -207,6 +208,7 @@ fn remote_copies_must_agree_when_there_is_no_local_branch() {
 
 #[test]
 fn a_locator_ref_selects_a_nonstandard_plane_and_never_falls_back() {
+    // trace:STORY-1741.ac1ebcce | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = repo(&tmp.path().join("p"));
     plane_commit(&top, STORE_REF, Some(("100644", GOOD)));
@@ -264,6 +266,7 @@ fn an_ambiguous_malformed_or_unsafe_locator_refuses() {
 
 #[test]
 fn a_sibling_store_must_be_a_separate_repository_with_an_aida_store_branch() {
+    // trace:STORY-1741.ac1ebcce | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = repo(&tmp.path().join("p"));
     let store = repo(&tmp.path().join("team-store"));
@@ -396,6 +399,7 @@ fn every_policy_row_in_the_trust_manifest_is_admissible() {
 
 #[test]
 fn a_plane_sharing_product_history_refuses() {
+    // trace:STORY-1741.ac189903 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = repo(&tmp.path().join("p"));
     git_out(&top, &["commit", "-q", "--allow-empty", "-m", "product"]);

@@ -699,6 +699,12 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida alias list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida alias add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida alias remove` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida adoption` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida adoption status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida adoption refresh` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida adoption bootstrap` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida adoption inventory` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida adoption uninstall` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida fleet` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida fleet drive` | JSON honoured | fleet drive (preview; changes nothing without --tick) |
 | `aida dispatch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

@@ -71,6 +71,9 @@
 pub mod agents_config;
 pub mod ai;
 pub mod alias;
+// Dry-run inventory of tracked AIDA scaffolding for adoption. trace:STORY-1741 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+pub mod adoption_migration;
 // Shared non-executable adoption settings on the store plane. trace:STORY-1741 | ai:claude
 #[cfg(all(unix, feature = "native"))]
 pub mod adoption_plane;

@@ -32,6 +32,8 @@ macro_rules! println {
     };
 }
 
+// trace:STORY-1741 | ai:claude
+mod adoption_cmd;
 mod advisor;
 mod advisor_cmd_root;
 mod advisor_code_gate;

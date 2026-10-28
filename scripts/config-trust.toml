@@ -373,6 +373,14 @@ sites = 1
 channels = ["write"]
 sites = 1
 
+# The dry-run migration inventory reads the product branch's committed
+# config.toml blob (HEAD, via git objects) only to split it into plane policy
+# keys and kept keys for a report; no value it parses is acted on.
+# trace:STORY-1741 | ai:claude
+[readers."aida-core/src/adoption_migration.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-core/src/agents_config.rs"]
 channels = ["worktree"]
 sites = 4

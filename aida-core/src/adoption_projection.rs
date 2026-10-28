@@ -314,6 +314,159 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
     })
 }
 
+/// CI bootstrap: refresh the projection only when the discovered plane is
+/// exactly `expected` (a full commit id), then prove the projection holds
+/// that revision with the plane's settings applied. Every mismatch refuses.
+// trace:STORY-1741 | ai:claude
+pub fn bootstrap(worktree: &Path, expected: &str) -> Result<Outcome> {
+    let full = matches!(expected.len(), 40 | 64)
+        && expected
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c));
+    if !full {
+        bail!("--revision must be a full lowercase commit id; refused");
+    }
+    let plane = adoption_plane::discover(worktree)?
+        .context("No adoption plane found for this clone; nothing to bootstrap")?;
+    let adoption = adoption_plane::load(&plane)?.with_context(|| {
+        format!(
+            "Adoption plane {} has no {}; nothing to bootstrap",
+            plane.commit,
+            adoption_plane::SETTINGS_PATH
+        )
+    })?;
+    adoption_plane::verify(&adoption, expected)?;
+    let outcome = refresh(worktree, &adoption)?;
+    if let Some(kept) = outcome.config_kept {
+        bail!(
+            "The projection holds {expected}, but {}; refused",
+            kept.note()
+        );
+    }
+    match inspect(worktree)? {
+        State::Current { commit, .. } if commit == expected => Ok(outcome),
+        state => bail!("The projection did not verify at {expected} ({state:?}); refused"),
+    }
+}
+
+/// What [`uninstall`] removed, or would remove in a dry run, and kept.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Removal {
+    /// Owned files, the manifest and the lock, by worktree-relative path.
+    pub removed: Vec<String>,
+    /// `(path, why)` for each recorded file left in place.
+    pub kept: Vec<(String, String)>,
+}
+
+/// Remove this worktree's projection: every file the manifest proves it
+/// owns, then the manifest, the lock and the projection's own directories
+/// once empty. A recorded file that was edited, replaced by something
+/// other than a regular file, or is now tracked by the product branch is
+/// kept and reported. The plane, the store, the locator and every product
+/// file are left alone. The manifest goes last, so an interrupted removal
+/// is finished by running it again.
+// trace:STORY-1741 | ai:claude
+pub fn uninstall(worktree: &Path, dry_run: bool) -> Result<Removal> {
+    let root = worktree_root(worktree)?;
+    let mut removal = Removal::default();
+    let present = |rel: &str| std::fs::symlink_metadata(root.join(rel)).is_ok();
+    if !present(MANIFEST) {
+        if present(LOCK) {
+            removal.removed.push(LOCK.to_string());
+            if !dry_run {
+                remove_if_present(&root, LOCK)?;
+            }
+        }
+        return Ok(removal);
+    }
+    if let Some(found) = tracked(&root, &[MANIFEST, LOCK])?.first() {
+        bail!("{found} is tracked by the product branch; refused to remove the projection");
+    }
+    let had_lock = present(LOCK);
+    let lock = if dry_run {
+        None
+    } else {
+        let lock = open_lock(&root)?;
+        fs2::FileExt::lock_exclusive(&lock).with_context(|| format!("Failed to lock {LOCK}"))?;
+        Some(lock)
+    };
+    let manifest = read_manifest(&root)?.context("The adoption manifest vanished; retry")?;
+    let mut recorded: Vec<&str> = manifest
+        .files
+        .keys()
+        .chain(manifest.pending.keys())
+        .map(String::as_str)
+        .collect();
+    recorded.sort_unstable();
+    recorded.dedup();
+    let now_tracked = if recorded.is_empty() {
+        Vec::new()
+    } else {
+        tracked(&root, &recorded)?
+    };
+    for rel in recorded {
+        if now_tracked.iter().any(|t| t == rel) {
+            removal
+                .kept
+                .push((rel.to_string(), "tracked by the product branch".into()));
+            continue;
+        }
+        let bytes = match read_regular(&root, rel) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => continue,
+            Err(_) => {
+                removal
+                    .kept
+                    .push((rel.to_string(), "not a regular file".into()));
+                continue;
+            }
+        };
+        if !manifest.owns(rel, &sha256(&bytes)) {
+            removal.kept.push((
+                rel.to_string(),
+                "edited since the projection wrote it".into(),
+            ));
+            continue;
+        }
+        if !dry_run {
+            remove_if_present(&root, rel)?;
+        }
+        removal.removed.push(rel.to_string());
+    }
+    removal.removed.push(MANIFEST.to_string());
+    if had_lock || !dry_run {
+        removal.removed.push(LOCK.to_string());
+    }
+    if !dry_run {
+        remove_if_present(&root, MANIFEST)?;
+        for dir in [GUIDANCE_DIR, ".aida/adoption"] {
+            match std::fs::remove_dir(root.join(dir)) {
+                Err(e)
+                    if !matches!(
+                        e.kind(),
+                        std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+                    ) =>
+                {
+                    return Err(e).with_context(|| format!("Failed to remove {dir}"))
+                }
+                _ => {}
+            }
+        }
+        remove_if_present(&root, LOCK)?;
+    }
+    drop(lock);
+    Ok(removal)
+}
+
+fn remove_if_present(root: &Path, rel: &str) -> Result<()> {
+    match std::fs::remove_file(root.join(rel)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(e).with_context(|| format!("Failed to remove {rel}"))
+        }
+        _ => Ok(()),
+    }
+}
+
 /// The projection's files for `adoption`, by worktree-relative path.
 pub fn render(adoption: &Adoption, include_config: bool) -> Result<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
