@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T21:50:57.363821825Z
-modified_at: 2026-10-28T21:50:57.363821825Z
+modified_at: 2026-10-28T23:15:08.409083037Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-075
 - finding-hash:ff4b2ac1
 - from-review:PR-3065
 - kind:carried-forward
+comments:
+- id: 01a184cb-c1f9-7182-9313-fbb1e5f0a78e
+  author: joe
+  content: 'ADVISOR 16:13: carried-forward duplicate. This finding was already fixed by TASK-b6b1278890774ef993d2ebc327862470-078 (merged), or ruled an accepted limitation.'
+  created_at: 2026-10-28T23:15:08.409083037Z
+  modified_at: 2026-10-28T23:15:08.409083037Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 filed_at:
   code_sha: 283eefbb554a1ca0c8bbc7ee04aa2ea4d45286e3
   branch: main
