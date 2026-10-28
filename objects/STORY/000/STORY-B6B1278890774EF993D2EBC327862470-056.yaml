@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T14:56:30.714106281Z
-modified_at: 2026-10-28T14:56:30.714106281Z
+modified_at: 2026-10-28T14:56:37.907803760Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a182e7-665f-7a51-9dfb-2cf67a27791e
+  created_at: 2026-10-28T14:56:37.907800005Z
+  created_by: joe
+history:
+- id: 01a18303-6212-7bc2-b929-9affffe00030
+  author: joe
+  timestamp: 2026-10-28T14:56:39.442096244Z
+  session_id: bc1ea977-c54e-4469-b025-37232e7f0587
+  changes: []
 filed_at:
   code_sha: 879660554219f93713ac377bfd6d25be68d4b9db
   branch: fix/mailbox-source-nonce
