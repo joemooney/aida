@@ -63,7 +63,7 @@ pub(crate) fn scan_at(project_root: &Path, reap: bool, now: SystemTime) -> Lefto
         scan_aida_dir(dir, reap, now, &mut out);
     }
     if let Some(anchored) = &anchor {
-        scan_era_markers(&anchored.anchor, reap, now, &mut out);
+        scan_era_markers(&anchored.anchor, &anchored.common, reap, now, &mut out);
     }
     out
 }
@@ -131,27 +131,47 @@ fn scan_aida_dir(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
     }
 }
 
-fn scan_era_markers(anchor: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
+fn scan_era_markers(
+    anchor: &Path,
+    common: &Path,
+    reap: bool,
+    now: SystemTime,
+    out: &mut Leftovers,
+) {
     let Ok(entries) = std::fs::read_dir(anchor.join(super::NONCE_ERA_DIR)) else {
         return;
     };
     let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
     paths.sort();
     for path in paths {
-        // Only a marker that names its admin entry can be judged here; a
-        // pre-record one is judged when its checkout next resolves.
         let Ok(Some(bytes)) = super::read_checked(&path) else {
             continue;
         };
-        let Ok(record) = serde_json::from_slice::<super::EraMarker>(&bytes) else {
-            continue;
-        };
+        let record = serde_json::from_slice::<super::EraMarker>(&bytes).ok();
         if let Some(marker) = aside_marker(&path) {
-            if is_old(&path, now) && (!reap || settle_aside(&path, &marker, &record.admin_dir)) {
+            // An aside of a pre-record marker (the bare admin name) is judged
+            // against that admin name's entry.
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+            let admin_dir = match record {
+                Some(record) => record.admin_dir,
+                None => match std::str::from_utf8(&bytes) {
+                    Ok(admin) => super::admin_dir(common, admin),
+                    Err(_) => continue,
+                },
+            };
+            if is_old(&path, now) && (!reap || settle_aside(&path, &marker, &admin_dir)) {
                 out.reapable.push(path);
             }
-        } else if super::era_marker_stale(&path, &record.admin_dir)
-            && (!reap || super::drop_stale_era_marker(anchor, &path, &record.admin_dir))
+            continue;
+        }
+        // Only a marker that names its admin entry is judged here; a
+        // pre-record one is judged when its checkout next resolves.
+        let Some(record) = record else {
+            continue;
+        };
+        if super::era_marker_stale(&path, &record.admin_dir)
+            && (!reap
+                || super::drop_stale_era_marker(anchor, &path, &record.admin_dir).unwrap_or(false))
         {
             out.reapable.push(path);
         }

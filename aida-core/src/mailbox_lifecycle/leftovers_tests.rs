@@ -176,3 +176,39 @@ fn old_drop_asides_are_settled_and_young_ones_left() {
         "a standing marker stays"
     );
 }
+
+/// An aside of a pre-record marker (its body the bare admin name) is judged
+/// against that admin name's entry: a lost fresh one is linked back, a
+/// stale one removed.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+#[test]
+fn pre_record_drop_asides_are_judged_by_admin_name() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let put = |name: &str, bytes: &[u8]| {
+        let path = era.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+        path
+    };
+    // The main checkout's admin name is empty and its entry is the common
+    // Git dir, which exists; "gone" names no worktree.
+    let lost = put(".m.drop.1", b"");
+    let stale = put(".g.drop.2", b"gone");
+
+    assert_eq!(
+        scan_at(dir.path(), false, later()).reapable,
+        [stale.clone(), lost.clone()]
+    );
+    scan_at(dir.path(), true, later());
+    assert!(!lost.exists() && !stale.exists());
+    assert_eq!(
+        std::fs::read(era.join("m")).unwrap(),
+        b"",
+        "the lost pre-record marker is linked back"
+    );
+    assert!(!era.join("g").exists(), "a stale one is never restored");
+}

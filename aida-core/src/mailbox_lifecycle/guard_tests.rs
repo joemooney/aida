@@ -1010,11 +1010,32 @@ fn an_era_marker_drop_without_the_lock_keeps_the_marker() {
     std::fs::set_permissions(&marker, std::os::unix::fs::PermissionsExt::from_mode(0o600)).unwrap();
     std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
     let anchor = marker.parent().unwrap().parent().unwrap().to_path_buf();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+    // Not re-entrant on this thread: the lock-order error, not the
+    // lost-nonce recovery.
     let held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
     let err = resolve_source(&wt).unwrap_err();
     drop(held);
-    assert!(matches!(err, LifecycleError::Unsafe { .. }), "{err}");
+    assert!(matches!(err, LifecycleError::LockOrder(_)), "{err}");
     assert!(marker.is_file(), "kept while the lock is unavailable");
+    // Busy in another holder: retriable.
+    let (taken, release) = (std::sync::mpsc::channel(), std::sync::mpsc::channel::<()>());
+    let holder = {
+        let anchor = anchor.clone();
+        let (taken, release) = (taken.0, release.1);
+        std::thread::spawn(move || {
+            let _held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
+            taken.send(()).unwrap();
+            release.recv().unwrap();
+        })
+    };
+    taken.1.recv().unwrap();
+    let err = resolve_source(&wt).unwrap_err();
+    release.0.send(()).unwrap();
+    holder.join().unwrap();
+    assert!(matches!(err, LifecycleError::LockTimeout { .. }), "{err}");
+    assert!(err.to_string().contains("retry"), "{err}");
+    assert!(marker.is_file(), "kept while the lock is busy");
     resolve_source(&wt)
         .unwrap()
         .expect("dropped once the lock is free");
