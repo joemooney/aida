@@ -1,0 +1,34 @@
+id: 01a18343-e50e-71c0-bf81-2609b6ac6413
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-057
+title: 'Review PR-3045: [AI:claude] fix(mailbox): verify exe identity before digesting a writer (TASK-b6b1278890774ef993d2ebc327862470-050 TASK-b6b1278890774ef993d2ebc327862470-051)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/activation-digest-identity`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3045>
+  - Branch: `fix/activation-digest-identity` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-050
+  - TASK-b6b1278890774ef993d2ebc327862470-051
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3045` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T16:07:07.278706872Z
+modified_at: 2026-10-28T16:07:07.278706872Z
+req_type: Story
+filed_at:
+  code_sha: 274cc4a8bb783bbd8dbffbfe72fad328334f3d20
+  branch: fix/activation-digest-identity
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 679d4187bad
+  vendor: claude
+  session: 9adeed50-bc94-4d8d-907f-37a9081985e8
