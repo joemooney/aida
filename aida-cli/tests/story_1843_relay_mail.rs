@@ -133,11 +133,18 @@ impl Controller {
         let fd = file.as_raw_fd();
         let mut cmd = Command::new("sleep");
         cmd.arg("300");
-        // SAFETY: dup2 is async-signal-safe; the duplicate clears
+        // SAFETY: dup2 and fcntl are async-signal-safe; the duplicate clears
         // close-on-exec in the child only.
         unsafe {
             cmd.pre_exec(move || {
-                if libc::dup2(fd, 9) < 0 {
+                // dup2 onto itself is a no-op that keeps close-on-exec,
+                // so fd 9 clears the flag instead.
+                let ok = if fd == 9 {
+                    libc::fcntl(9, libc::F_SETFD, 0) == 0
+                } else {
+                    libc::dup2(fd, 9) >= 0
+                };
+                if !ok {
                     return Err(std::io::Error::last_os_error());
                 }
                 Ok(())
