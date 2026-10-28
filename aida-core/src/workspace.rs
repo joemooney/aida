@@ -239,7 +239,8 @@ pub fn init_workspace(
         let relative_store = format!("../{}", store_dir);
         // trace:BUG-1649 | ai:claude
         let config = workspace_repo_config(&relative_store, name);
-        std::fs::write(aida_dir.join("config.toml"), config)?;
+        // trace:STORY-1741 | ai:claude
+        crate::write_config_atomic(&aida_dir.join("config.toml"), config)?;
     }
 
     // Save workspace manifest

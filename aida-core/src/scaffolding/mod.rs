@@ -1295,6 +1295,20 @@ aida show <SPEC-ID>
         }
     }
 
+    /// The preview a scaffold WRITER works from: every path that puts
+    /// scaffold files on disk (apply, upgrade, refresh, profile enable)
+    /// takes its artifacts from here, so the adopted-worktree refusal is
+    /// shared rather than repeated per writer. Read-only callers
+    /// (preview, status, diff) keep using [`Scaffolder::preview`].
+    // trace:STORY-1741 | ai:claude
+    pub fn preview_for_write(
+        &mut self,
+        store: &RequirementsStore,
+    ) -> Result<ScaffoldPreview, ScaffoldError> {
+        refuse_in_adopted_worktree(&self.project_root)?;
+        Ok(self.preview(store))
+    }
+
     /// Generate a preview of what would be scaffolded
     pub fn preview(&mut self, store: &RequirementsStore) -> ScaffoldPreview {
         let mut artifacts = Vec::new();
@@ -2716,6 +2730,10 @@ aida show <SPEC-ID>
         preview: &ScaffoldPreview,
         options: &ApplyOptions,
     ) -> Result<Vec<PathBuf>, ScaffoldError> {
+        // An adopted worktree takes its guidance from the shared plane's
+        // ignored projection; scaffolding would write product files.
+        // trace:STORY-1741 | ai:claude
+        refuse_in_adopted_worktree(&self.project_root)?;
         let mut written_files = Vec::new();
         let mut skipped_files = Vec::new();
         let mut warned_links = std::collections::BTreeSet::new();
@@ -3435,6 +3453,39 @@ impl std::fmt::Display for ScaffoldError {
 }
 
 impl std::error::Error for ScaffoldError {}
+
+/// Refuse a scaffold write in an adopted worktree, projected yet or not:
+/// adoption keeps AIDA scaffolding off the product branch. Fails closed: a
+/// plane that cannot be discovered refuses too, naming the discovery error.
+// trace:STORY-1741 | ai:claude
+pub fn refuse_in_adopted_worktree(project_root: &Path) -> Result<(), ScaffoldError> {
+    #[cfg(all(unix, feature = "native"))]
+    {
+        use crate::adoption_projection::{adoption_state, AdoptionState};
+        let message = match adoption_state(project_root) {
+            AdoptionState::NotAdopted => None,
+            AdoptionState::Adopted => Some(
+                "this worktree is adopted from a shared AIDA plane, so scaffolding \
+                 would write product files; refused. Shared guidance comes from \
+                 adoption/ on the aida-store plane."
+                    .to_string(),
+            ),
+            AdoptionState::Unknown(error) => Some(format!(
+                "could not tell whether this worktree is adopted from a shared AIDA plane \
+                 ({error}), so scaffolding was refused rather than risk writing product \
+                 files. Fix the adoption locator or the aida-store refs, then retry."
+            )),
+        };
+        if let Some(message) = message {
+            return Err(ScaffoldError::IoError {
+                path: project_root.to_path_buf(),
+                message,
+            });
+        }
+    }
+    let _ = project_root;
+    Ok(())
+}
 
 /// Generate the starter CLAUDE.local.md template. Two sections (project
 /// review feedback + personal habits) with brief inline guidance so the

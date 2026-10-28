@@ -286,7 +286,7 @@ fn install_new_skill(dest: &Path, content: &str) -> std::io::Result<()> {
 pub(crate) fn refresh_agent_packs(
     project_root: &Path,
     codex_prompts_dest: Option<&Path>,
-) -> Vec<PackRefresh> {
+) -> anyhow::Result<Vec<PackRefresh>> {
     let roles_dir = crate::global_roles_dir();
     refresh_agent_packs_at(project_root, codex_prompts_dest, roles_dir.as_deref())
 }
@@ -299,7 +299,7 @@ pub(crate) fn refresh_agent_packs_at(
     project_root: &Path,
     codex_prompts_dest: Option<&Path>,
     roles_dir: Option<&Path>,
-) -> Vec<PackRefresh> {
+) -> anyhow::Result<Vec<PackRefresh>> {
     let mut packs: Vec<PackRefresh> = PROJECT_PACKS
         .iter()
         .map(|(_, label)| PackRefresh {
@@ -325,7 +325,9 @@ pub(crate) fn refresh_agent_packs_at(
         db_path,
     );
     let store = aida_core::RequirementsStore::default();
-    let preview = scaffolder.preview(&store);
+    // An adopted worktree refuses before any pack, AGENTS.md block,
+    // discipline file or .gitignore line is touched. trace:STORY-1741 | ai:claude
+    let preview = scaffolder.preview_for_write(&store)?;
 
     // A memory-lane or minimal footprint project never grows skills from a
     // refresh, and its manifests are left alone (the same gate `aida init
@@ -477,7 +479,7 @@ pub(crate) fn refresh_agent_packs_at(
         packs.push(roles);
     }
     packs.retain(|p| p.report != RefreshReport::default());
-    packs
+    Ok(packs)
 }
 
 /// Add newly shipped guidance to an already-installed starter role without
@@ -818,7 +820,8 @@ global = true
             tmp.path(),
             Some(&tmp.path().join("no-prompts")),
             Some(&roles),
-        );
+        )
+        .unwrap();
         let role_pack = packs
             .iter()
             .find(|pack| pack.label == "Starter roles")
@@ -845,7 +848,8 @@ global = true
             tmp.path(),
             Some(&tmp.path().join("no-prompts")),
             Some(&roles),
-        );
+        )
+        .unwrap();
         assert!(packs.iter().all(|pack| pack.label != "Starter roles"));
         assert_eq!(std::fs::read_to_string(&advisor).unwrap(), custom);
     }
@@ -865,8 +869,8 @@ global = true
         .unwrap();
 
         let unrelated = tempfile::tempdir().unwrap();
-        let _ = refresh_agent_packs_at(unrelated.path(), None, None);
-        let packs = refresh_agent_packs_at(fixture.path(), None, Some(&roles));
+        let _ = refresh_agent_packs_at(unrelated.path(), None, None).unwrap();
+        let packs = refresh_agent_packs_at(fixture.path(), None, Some(&roles)).unwrap();
 
         let role_pack = packs
             .iter()
@@ -910,7 +914,7 @@ global = true
         std::fs::create_dir_all(&commit_dir).unwrap();
         std::fs::write(commit_dir.join("SKILL.md"), &edited).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let claude = packs
             .iter()
             .find(|p| p.label == "Claude skills")
@@ -997,7 +1001,7 @@ global = true
             forget_delivery(&root.join(pack), "aida-orchestrate");
         }
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         for (pack, label) in SKILL_PACKS {
             let rel = PathBuf::from(pack).join("aida-orchestrate/SKILL.md");
             assert!(root.join(&rel).is_file(), "{pack} receives the new skill");
@@ -1009,7 +1013,7 @@ global = true
             );
         }
 
-        let again = refresh_agent_packs_at(root, None, None);
+        let again = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(
             again.iter().all(|p| p.report.installed.is_empty()),
             "a second refresh installs nothing new"
@@ -1028,7 +1032,7 @@ global = true
             std::fs::remove_dir_all(root.join(pack).join("aida-commit")).unwrap();
         }
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(packs.iter().all(|p| p.report.installed.is_empty()));
         for (pack, _) in SKILL_PACKS {
             let dir = root.join(pack);
@@ -1066,7 +1070,7 @@ global = true
         assert_eq!(manifests.len(), SKILL_PACKS.len(), "{manifests:?}");
 
         install_all_packs(root);
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         for (pack, _) in SKILL_PACKS {
             let dir = root.join(pack);
             assert!(!dir.join("aida-orchestrate").exists(), "{pack}");
@@ -1118,7 +1122,7 @@ global = true
         std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
 
         for _ in 0..2 {
-            let packs = refresh_agent_packs_at(root, None, None);
+            let packs = refresh_agent_packs_at(root, None, None).unwrap();
             assert!(
                 packs.iter().all(|p| p.report.installed.is_empty()),
                 "a legacy pack receives nothing"
@@ -1162,7 +1166,7 @@ global = true
         // After that run, deletions are opt-outs.
         std::fs::remove_dir_all(codex.join("aida-commit")).unwrap();
         install_all_packs(root);
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert!(!codex.join("aida-commit").exists());
     }
 
@@ -1198,7 +1202,7 @@ global = true
                 assert!(!m.complete, "{pack}: a partial plan never completes");
             }
             for _ in 0..2 {
-                let packs = refresh_agent_packs_at(root, None, None);
+                let packs = refresh_agent_packs_at(root, None, None).unwrap();
                 assert!(
                     packs.iter().all(|p| p.report.installed.is_empty()),
                     "persist={persist_footprint}"
@@ -1242,7 +1246,7 @@ global = true
         };
 
         // Nothing to do for the skills of a fresh memory-lane project.
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(touched(&packs), (vec![], vec![]));
         assert!(packs.iter().all(|p| p.report.installed.is_empty()));
 
@@ -1259,7 +1263,7 @@ global = true
         let edited = std::fs::read_to_string(&learn).unwrap() + "\nMy own note.\n";
         std::fs::write(&learn, &edited).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(
             touched(&packs),
             (
@@ -1338,7 +1342,7 @@ global = true
             v.sort();
             v
         };
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(
             collect(&packs, |r| &r.refreshed),
             [claude_capture.clone(), codex_learn.clone()]
@@ -1375,7 +1379,7 @@ global = true
         // ... and a later refresh updates them as ordinary pristine files.
         let stale = wrap_with_aida_header(&codex_learn, "---\nname: aida-learn\n---\n# Old\n");
         std::fs::write(root.join(&codex_learn), stale).unwrap();
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(collect(&packs, |r| &r.refreshed), [codex_learn.clone()]);
         assert_eq!(collect(&packs, |r| &r.kept_unmarked), [claude_learn]);
         assert_eq!(
@@ -1398,7 +1402,7 @@ global = true
         }
         let store = aida_core::RequirementsStore::default();
         crate::init_cmd::write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(packs.iter().all(|p| p.report.installed.is_empty()));
         for (pack, _) in SKILL_PACKS {
             assert!(!root.join(pack).join("aida-req").exists(), "{pack}");
@@ -1416,7 +1420,7 @@ global = true
         let pr = root.join(".claude/skills/aida-pr");
         let before = skill_names(&pr);
         forget_delivery(&root.join(".claude/skills"), "aida-pr");
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(skill_names(&pr), before, "examples/ arrives with SKILL.md");
     }
 
@@ -1432,14 +1436,14 @@ global = true
         forget_delivery(&codex, "aida-orchestrate");
         // A plain file where the skill directory would go: the write fails.
         std::fs::write(codex.join("aida-orchestrate"), "blocker").unwrap();
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
         let m = read_skill_manifest(&codex).unwrap().unwrap();
         assert!(!m.knows("aida-orchestrate"), "{m:?}");
         assert!(!m.unconfirmed.contains("aida-orchestrate"), "{m:?}");
 
         std::fs::remove_file(codex.join("aida-orchestrate")).unwrap();
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert!(codex.join("aida-orchestrate/SKILL.md").is_file());
     }
 
@@ -1460,7 +1464,7 @@ global = true
 
         install_all_packs(root);
         install_all_packs(root);
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert!(!pr.exists(), "nothing of aida-pr reappears");
         let m = read_skill_manifest(&root.join(".claude/skills"))
             .unwrap()
@@ -1487,7 +1491,7 @@ global = true
         std::fs::remove_file(agy.join(DELIVERED_MANIFEST)).unwrap();
         std::fs::create_dir_all(agy.join(DELIVERED_MANIFEST)).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(!codex.join("aida-orchestrate").exists());
         assert!(!agy.join("aida-orchestrate").exists());
         assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
@@ -1511,7 +1515,7 @@ global = true
         std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o555)).unwrap();
         let probe = codex.join("probe");
         let writable = std::fs::write(&probe, "x").is_ok();
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o755)).unwrap();
         if writable {
             return; // running as root: permissions are not enforced
@@ -1535,7 +1539,7 @@ global = true
         std::fs::create_dir_all(&target).unwrap();
         std::os::unix::fs::symlink(&target, codex.join("aida-orchestrate")).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(installed_in(&packs, "Codex skills (legacy)").is_empty());
         assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
         let m = read_skill_manifest(&codex).unwrap().unwrap();
@@ -1561,7 +1565,7 @@ global = true
         );
         std::fs::write(skills.join("aida-req.md"), &stale).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(
             packs.iter().all(|p| p.label != "Claude skills"),
             "disabled Claude pack should not refresh: {:?}",
@@ -1584,7 +1588,7 @@ global = true
             "# Guided implement\n\nAsk via `AskUserQuestion`. No arguments placeholder here.\n";
         std::fs::write(&dest, stale).unwrap();
 
-        let packs = refresh_agent_packs_at(tmp.path(), Some(tmp.path()), None);
+        let packs = refresh_agent_packs_at(tmp.path(), Some(tmp.path()), None).unwrap();
         let prompts = packs
             .iter()
             .find(|p| p.label == "Codex prompts (deprecated)")
@@ -1623,7 +1627,7 @@ global = true
         std::fs::write(&master, &original).unwrap();
         std::os::unix::fs::symlink(&master, req_dir.join("SKILL.md")).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let claude = packs
             .iter()
             .find(|p| p.label == "Claude skills")
@@ -1653,7 +1657,7 @@ global = true
         let original = "# My project agents\n\nHouse rules the team wrote.\n";
         std::fs::write(root.join("AGENTS.md"), original).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let pack = packs
             .iter()
             .find(|p| p.label == "AGENTS.md AIDA block")
@@ -1671,7 +1675,7 @@ global = true
         );
 
         // Idempotent: the second refresh reports unchanged, content is stable.
-        let packs2 = refresh_agent_packs_at(root, None, None);
+        let packs2 = refresh_agent_packs_at(root, None, None).unwrap();
         if let Some(pack2) = packs2.iter().find(|p| p.label == "AGENTS.md AIDA block") {
             assert!(pack2.report.refreshed.is_empty(), "{:?}", pack2.report);
             assert_eq!(pack2.report.unchanged, 1);
@@ -1688,7 +1692,7 @@ global = true
     fn refresh_never_creates_agents_md() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
         assert!(!root.join("AGENTS.md").exists());
     }
@@ -1707,7 +1711,7 @@ global = true
         )
         .unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let discipline = packs
             .iter()
             .find(|p| p.label == "Discipline pack")
@@ -1740,7 +1744,7 @@ global = true
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let discipline = packs
             .iter()
             .find(|p| p.label == "Discipline pack")
@@ -1782,7 +1786,7 @@ global = true
         )
         .unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
         assert_eq!(
             std::fs::read_to_string(root.join("AGENTS.md")).unwrap(),
@@ -1843,7 +1847,7 @@ global = true
             crate::init_cmd::write_init_footprint(root, footprint).unwrap();
 
             for _ in 0..2 {
-                let packs = refresh_agent_packs_at(root, None, None);
+                let packs = refresh_agent_packs_at(root, None, None).unwrap();
                 assert!(
                     packs.iter().all(|p| p.report.installed.is_empty()),
                     "{footprint:?}: refresh delivers nothing"
@@ -1887,7 +1891,7 @@ global = true
                 Some(crate::cli::InitFootprint::MemoryLane)
             );
             for _ in 0..2 {
-                let packs = refresh_agent_packs_at(root, None, None);
+                let packs = refresh_agent_packs_at(root, None, None).unwrap();
                 assert!(packs.iter().all(|p| p.report.installed.is_empty()));
             }
             for pack in [".claude/skills", ".agents/skills"] {
@@ -1932,7 +1936,7 @@ global = true
         }
         assert!(crate::init_cmd::looks_like_memory_lane(root));
         for _ in 0..2 {
-            let packs = refresh_agent_packs_at(root, None, None);
+            let packs = refresh_agent_packs_at(root, None, None).unwrap();
             assert!(packs.iter().all(|p| p.report.installed.is_empty()));
         }
         for pack in [".claude/skills", ".agents/skills"] {
@@ -1988,7 +1992,7 @@ global = true
         std::fs::create_dir_all(&pr).unwrap();
         std::fs::write(pr.join("examples"), "blocker").unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(installed_in(&packs, "Claude skills").is_empty());
         assert!(
             !pr.join("SKILL.md").exists(),
@@ -1999,7 +2003,7 @@ global = true
         assert!(!m.unconfirmed.contains("aida-pr"), "{m:?}");
 
         std::fs::remove_file(pr.join("examples")).unwrap();
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(skill_names(&pr), whole, "the retry delivers it whole");
         let m = read_skill_manifest(&claude).unwrap().unwrap();
         assert!(m.delivered.contains("aida-pr"));
@@ -2025,7 +2029,7 @@ global = true
         std::fs::remove_dir_all(codex.join("aida-req")).unwrap();
         std::os::unix::fs::symlink(&target, codex.join("aida-req")).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(
             std::fs::read_to_string(target.join("SKILL.md")).unwrap(),
             stale,
@@ -2109,7 +2113,7 @@ global = true
         assert_eq!(non_aida_snapshot(&pack), before, "after apply");
 
         forget_delivery(&pack, "aida-handoff");
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert!(pack.join("aida-handoff/SKILL.md").is_file(), "delivered");
         assert_eq!(non_aida_snapshot(&pack), before, "after refresh");
 
@@ -2138,7 +2142,7 @@ global = true
         std::fs::create_dir_all(pack.join("typesafe-ai")).unwrap();
         std::fs::write(pack.join("typesafe-ai/SKILL.md"), "third party\n").unwrap();
         for _ in 0..2 {
-            let packs = refresh_agent_packs_at(root, None, None);
+            let packs = refresh_agent_packs_at(root, None, None).unwrap();
             assert!(installed_in(&packs, "Codex/Antigravity skills").is_empty());
         }
         let names: Vec<_> = std::fs::read_dir(&pack)
@@ -2169,7 +2173,7 @@ global = true
         scaffolder.apply(&preview).unwrap();
         assert!(root.join(".claude/skills/aida-req/SKILL.md").is_file());
         assert!(!root.join(".agents").exists());
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert!(!root.join(".agents").exists());
     }
 
@@ -2189,7 +2193,7 @@ global = true
             forget_delivery(&codex, name);
         }
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let installed = installed_in(&packs, "Codex skills (legacy)");
         for name in ["aida-handoff", "aida-grill", "aida-human-audit"] {
             let rel = PathBuf::from(".codex/skills").join(name).join("SKILL.md");
@@ -2254,7 +2258,7 @@ global = true
             assert!(is_memory_lane(root), "persist={persist_footprint}");
             let before = tree_snapshot(root);
             for _ in 0..2 {
-                let packs = refresh_agent_packs_at(root, None, None);
+                let packs = refresh_agent_packs_at(root, None, None).unwrap();
                 assert!(
                     packs.iter().all(|p| p.label != "Discipline pack"),
                     "persist={persist_footprint}"
@@ -2290,7 +2294,7 @@ global = true
         crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::Full).unwrap();
         std::fs::write(root.join("AGENTS.md"), "# AGENTS.md\n\nMy own notes.\n").unwrap();
         assert!(!is_memory_lane(root));
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         assert!(
             packs.iter().any(|p| p.label == "Discipline pack"),
             "{:?}",
@@ -2325,7 +2329,7 @@ global = true
         assert_ne!(outdated, fresh);
         std::fs::write(&path, &outdated).unwrap();
 
-        let packs = refresh_agent_packs_at(root, None, None);
+        let packs = refresh_agent_packs_at(root, None, None).unwrap();
         let agents_row = packs
             .iter()
             .find(|p| p.label == "AGENTS.md AIDA block")
@@ -2337,7 +2341,7 @@ global = true
         assert!(!refreshed.contains("# AIDA Conventions"), "{refreshed}");
 
         // A second refresh has nothing to do.
-        let again = refresh_agent_packs_at(root, None, None);
+        let again = refresh_agent_packs_at(root, None, None).unwrap();
         let row = again
             .iter()
             .find(|p| p.label == "AGENTS.md AIDA block")
@@ -2348,7 +2352,7 @@ global = true
         let custom =
             "# AGENTS.md\n\n<!-- AIDA-AUTOGEN-BEGIN -->\nmine\n<!-- AIDA-AUTOGEN-END -->\n";
         std::fs::write(&path, custom).unwrap();
-        refresh_agent_packs_at(root, None, None);
+        refresh_agent_packs_at(root, None, None).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), custom);
     }
 
@@ -2377,7 +2381,7 @@ global = true
         let before = tree_snapshot(root);
 
         for _ in 0..2 {
-            let packs = refresh_agent_packs_at(root, None, None);
+            let packs = refresh_agent_packs_at(root, None, None).unwrap();
             assert!(
                 packs.iter().all(|p| p.label != "Discipline pack"),
                 "minimal refresh must not install discipline pack"
