@@ -400,3 +400,82 @@ fn without_rename_or_links_the_write_falls_back_to_create_new() {
         .collect();
     assert!(temps.is_empty(), "{temps:?}");
 }
+
+/// Run `f` with `faults` armed in `write_source_id`; `no_rename` and
+/// `no_link` make the filesystem lack a no-replace rename / hard links.
+fn with_faults<T>(
+    faults: &[&'static str],
+    no_rename: bool,
+    no_link: bool,
+    f: impl FnOnce() -> T,
+) -> T {
+    SOURCE_ID_FAULTS.with(|v| *v.borrow_mut() = faults.to_vec());
+    NOREPLACE_UNSUPPORTED.with(|c| c.set(no_rename));
+    LINK_UNSUPPORTED.with(|c| c.set(no_link));
+    let out = f();
+    SOURCE_ID_FAULTS.with(|v| v.borrow_mut().clear());
+    NOREPLACE_UNSUPPORTED.with(|c| c.set(false));
+    LINK_UNSUPPORTED.with(|c| c.set(false));
+    out
+}
+
+fn id_temps(dir: &Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(ID_TEMP_PREFIX))
+        .collect()
+}
+
+/// A fallback write that cannot fill its file leaves no partial file at the
+/// final name, so a retry writes it whole instead of meeting AlreadyExists.
+/// A failed temp write leaves neither the temp nor the target.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-082 | ai:claude
+#[test]
+fn a_failed_fallback_write_leaves_no_partial_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let anchor = dir.path().join("anchor");
+    let era = anchor.join(NONCE_ERA_DIR);
+    std::fs::create_dir_all(&era).unwrap();
+    let marker = era.join("m");
+    let failed = with_faults(&["write-final"], true, true, || {
+        write_source_id(&marker, b"m")
+    });
+    assert_eq!(failed.unwrap_err().raw_os_error(), Some(libc::EIO));
+    assert!(!marker.exists(), "the partial file was unlinked");
+    assert!(id_temps(&anchor).is_empty());
+    with_faults(&[], true, true, || write_source_id(&marker, b"m")).unwrap();
+    assert_eq!(std::fs::read(&marker).unwrap(), b"m");
+
+    let other = era.join("o");
+    let failed = with_faults(&["write-temp"], false, false, || {
+        write_source_id(&other, b"o")
+    });
+    assert_eq!(failed.unwrap_err().raw_os_error(), Some(libc::EIO));
+    assert!(!other.exists());
+    assert!(id_temps(&anchor).is_empty());
+}
+
+/// Once the target is placed, failing to remove the temp or sync a
+/// directory is a warning: the write returns Ok with the file whole, on the
+/// rename path and on the link path (whose temp then survives for gc).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-082 | ai:claude
+#[test]
+fn post_placement_failures_warn_and_return_ok() {
+    let dir = tempfile::tempdir().unwrap();
+    let anchor = dir.path().join("anchor");
+    let era = anchor.join(NONCE_ERA_DIR);
+    std::fs::create_dir_all(&era).unwrap();
+    for (name, no_rename, temps_left) in [("renamed", false, 0), ("linked", true, 1)] {
+        let marker = era.join(name);
+        with_faults(&["remove-temp", "sync-dir"], no_rename, false, || {
+            write_source_id(&marker, b"whole")
+        })
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(std::fs::read(&marker).unwrap(), b"whole", "{name}");
+        assert_eq!(id_temps(&anchor).len(), temps_left, "{name}");
+        for temp in id_temps(&anchor) {
+            std::fs::remove_file(anchor.join(temp)).unwrap();
+        }
+    }
+}
