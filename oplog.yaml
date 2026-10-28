@@ -80960,5 +80960,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6302
+- id: 01a18254-5cdb-7023-81fa-721af95dc908
+  target_id: 01a18254-53de-7c70-92ad-f3f088caab79
+  author: aida
+  node_id: '1'
+  lamport: 6303
+  timestamp: 2026-10-28T11:45:29.307583531Z
+  kind: !Create
+    title: 'Non-blocking (documented limit): the kernel -> orchestrator hop is not followed…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-024, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (documented limit): the kernel -> orchestrator hop is not followed (mandate names four orchestrators, review_author names review_authority and ship, seat_authority names review_authority); bounded only by the orchestrators' frozen inventories.
+
+      PR: #3025
+      Reviewed sha: 6efd7270069d247871f1c043b227c8b21a3ec974
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6303
 node_id: '1'
