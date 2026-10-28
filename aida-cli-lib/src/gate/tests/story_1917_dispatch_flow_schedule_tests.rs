@@ -486,7 +486,7 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
     TEST_FLOW_WAIT_CI_HOOK.with(|c| {
         *c.borrow_mut() = Some(Box::new(|_root, _pr, ctx, req_ship| {
             ctx.reverify_now(req_ship)?;
-            Ok(crate::forge::CiState::Success)
+            Ok(crate::gate::dispatch_types::CiState::Success)
         }));
     });
 
@@ -674,7 +674,7 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
 // trace:STORY-1917 | ai:claude
 #[test]
 fn story_1917_flow_no_ship_refuses_green_without_passing_ci() {
-    use crate::forge::CiState;
+    use crate::gate::dispatch_types::CiState;
     let mut f = FlowFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -1558,9 +1558,12 @@ impl crate::forge::Forge for NetForge {
     fn ci_probe_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::CiProbeResult> {
         unimplemented!()
     }
-    fn watch_ci(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<crate::forge::CiState> {
+    fn watch_ci(
+        &self,
+        _: &crate::forge::ChangeRef,
+    ) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
         fire(&self.on_watch_ci);
-        Ok(crate::forge::CiState::Success)
+        Ok(crate::gate::dispatch_types::CiState::Success)
     }
     fn stream_ci_for_branch(
         &self,
@@ -2686,13 +2689,13 @@ impl NativeShip {
             .count()
     }
 
-    fn refused_rows(&self, mandate_id: &str) -> Vec<crate::mandate_drive::ActionRow> {
+    fn refused_rows(&self, mandate_id: &str) -> Vec<crate::gate::dispatch_types::ActionRow> {
         crate::mandate_drive::ledger_rows(&self.f.root, mandate_id)
             .into_iter()
             .map(|(_, _, row)| row)
             .filter(|row| {
                 row.lane == format!("pr:{}", self.pr)
-                    && row.outcome == crate::mandate_drive::Outcome::Refused
+                    && row.outcome == crate::gate::dispatch_types::Outcome::Refused
             })
             .collect()
     }

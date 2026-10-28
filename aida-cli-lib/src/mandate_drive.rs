@@ -33,57 +33,11 @@ pub(crate) use mandate_drive_args::*;
 
 // ── Ledger rows ─────────────────────────────────────────────────────────────
 
-/// How one action ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum Outcome {
-    Done,
-    Routed,
-    Gated,
-    Refused,
-    Skipped,
-}
-
-impl Outcome {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Done => "done",
-            Self::Routed => "routed",
-            Self::Gated => "gated",
-            Self::Refused => "refused",
-            Self::Skipped => "skipped",
-        }
-    }
-}
-
-/// One `MandateDriveAction` row.
-// trace:STORY-1700 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub(crate) struct ActionRow {
-    pub lane: String,
-    pub subject: String,
-    pub action: String,
-    pub outcome: Outcome,
-    pub why: Option<String>,
-}
-
-impl ActionRow {
-    pub(crate) fn new(
-        lane: &str,
-        subject: &str,
-        action: &str,
-        outcome: Outcome,
-        why: Option<String>,
-    ) -> Self {
-        Self {
-            lane: lane.into(),
-            subject: subject.into(),
-            action: action.into(),
-            outcome,
-            why,
-        }
-    }
-}
+/// The ledger row and outcome live on the floor; re-exported for this
+/// module's callers (TASK-b6b1278890774ef993d2ebc327862470-013).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+use crate::gate::dispatch_deps::emit_action;
+use crate::gate::dispatch_types::{ActionRow, Outcome};
 
 /// The scheduled job's name (and its run ledger at `schedule/<job>.yaml`).
 pub(crate) const JOB: &str = "mandate-drive";
@@ -1414,28 +1368,6 @@ pub(crate) fn emit_due_with(
         relayed_from: None,
     };
     write_mail(root, &msg)
-}
-
-/// Ledger one `MandateDriveAction` row. Best-effort.
-// trace:STORY-1700 | ai:claude
-pub(crate) fn emit_action(root: &Path, mandate_id: &str, actor: &str, row: &ActionRow) {
-    let mut event = crate::events::Event::new(
-        None,
-        "",
-        crate::events::EventKind::MandateDriveAction {
-            mandate_id: mandate_id.into(),
-            actor: actor.into(),
-            lane: row.lane.clone(),
-            subject: row.subject.clone(),
-            action: row.action.clone(),
-            outcome: row.outcome.as_str().into(),
-            why: row.why.clone(),
-        },
-    );
-    if actor == "session" {
-        event.seat = crate::events::active_seat();
-    }
-    crate::events::emit(root, &event);
 }
 
 /// STORY-1700: the ship path's ledger row (`actor: session`) for a ship

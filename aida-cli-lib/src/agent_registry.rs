@@ -13,6 +13,7 @@
 //! the agent's worktree uses `work_grace_secs` (default 10s) to distinguish
 //! recent descendant work from a finished seat.
 
+use crate::gate::dispatch_deps::PidNamespaceProbe;
 use crate::leases::SessionLease;
 use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
@@ -1966,74 +1967,6 @@ pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
 // trace:BUG-2212 | ai:claude
 // trace:TASK-2272 | ai:claude
 pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
-
-/// Raw `/proc` facts that say whether this process sits in a PID namespace
-/// of its own (a sandboxed shell sees only its own few pids).
-// trace:BUG-2212 | ai:claude
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct PidNamespaceProbe {
-    pub(crate) self_ns: Option<u64>,
-    /// `None` when `/proc/1/ns/pid` is unreadable (pid 1 owned by another user).
-    pub(crate) pid1_ns: Option<u64>,
-    /// Entries on the `NSpid:` line of `/proc/self/status`.
-    pub(crate) nspid_levels: usize,
-    pub(crate) pid1_comm: Option<String>,
-}
-
-impl PidNamespaceProbe {
-    pub(crate) fn read() -> Self {
-        use std::os::unix::fs::MetadataExt;
-        let ns = |path: &str| std::fs::metadata(path).ok().map(|m| m.ino());
-        let nspid_levels = std::fs::read_to_string("/proc/self/status")
-            .ok()
-            .and_then(|body| {
-                body.lines()
-                    .find_map(|l| l.strip_prefix("NSpid:"))
-                    .map(|rest| rest.split_whitespace().count())
-            })
-            .unwrap_or(0);
-        Self {
-            self_ns: ns("/proc/self/ns/pid"),
-            pid1_ns: ns("/proc/1/ns/pid"),
-            nspid_levels,
-            pid1_comm: std::fs::read_to_string("/proc/1/comm")
-                .ok()
-                .map(|c| c.trim().to_string()),
-        }
-    }
-
-    /// Isolated when pid 1 lives in another namespace or the kernel reports
-    /// more than one pid level. Only when `/proc/1/ns/pid` is unreadable does
-    /// pid 1's name decide: anything but a known init means a sandbox.
-    // trace:TASK-2272 | ai:claude
-    pub(crate) fn is_isolated(&self) -> bool {
-        const INITS: [&str; 10] = [
-            "systemd",
-            "init",
-            "tini",
-            "dumb-init",
-            "docker-init",
-            "catatonit",
-            "runit",
-            "openrc-init",
-            "s6-svscan",
-            "busybox",
-        ];
-        match (self.self_ns, self.pid1_ns) {
-            (Some(a), Some(b)) if a != b => return true,
-            _ => {}
-        }
-        if self.nspid_levels > 1 {
-            return true;
-        }
-        if self.pid1_ns.is_some() {
-            return false;
-        }
-        self.pid1_comm
-            .as_deref()
-            .is_some_and(|comm| !INITS.contains(&comm))
-    }
-}
 
 /// The PID view a liveness check runs from: which namespace this process is
 /// in, and whether that namespace is an isolated sandbox.
