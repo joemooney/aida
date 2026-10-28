@@ -2971,7 +2971,7 @@ fn gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves() {
     used.extend(outside_paths(&facade.1, true));
     // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
     for (_, text) in gate_kernel_sources() {
-        used.extend(outside_paths(&text, false));
+        used.extend(outside_paths(&text, true));
     }
     let mut seen = std::collections::BTreeSet::new();
     let duplicate: Vec<&str> = leaves
@@ -3471,8 +3471,8 @@ fn all_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 // ── Every gate module (TASK-b6b1278890774ef993d2ebc327862470-024) ──────────
 
 /// The gate's decision kernels: modules that decide, and reach outside
-/// `gate/` only through a gate path, `aida_core` or a
-/// `FACADE_EXTERNAL_LEAVES` entry. Every other non-`dispatch_*` gate module
+/// `gate/` only through a gate path or a `FACADE_EXTERNAL_LEAVES` entry
+/// (`aida_core` paths included: `aida-core/` is not gate-protected). Every other non-`dispatch_*` gate module
 /// is an orchestrator with a frozen inventory in `gate::orchestrator_leaves`.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 const GATE_KERNELS: &[&str] = &[
@@ -3538,11 +3538,12 @@ fn outside_globs(text: &str) -> Vec<String> {
 }
 
 /// Where a decision kernel reaches outside `gate/` past `leaves`: every
-/// outside crate path it names (direct, through an import, re-exported or
-/// handed over whole) must be listed.
+/// outside crate or `aida_core` path it names (direct, through an import,
+/// re-exported or handed over whole) must be listed.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-041 | ai:claude
 fn kernel_outside_reach(text: &str, leaves: &[&str]) -> Vec<String> {
-    outside_paths(text, false)
+    outside_paths(text, true)
         .into_iter()
         .filter(|p| !leaves.contains(&p.as_str()))
         .collect()
@@ -3552,8 +3553,9 @@ fn kernel_outside_reach(text: &str, leaves: &[&str]) -> Vec<String> {
 /// it names that are not listed (`new`), and listed paths it no longer names
 /// (`stale`).
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-041 | ai:claude
 fn orchestrator_drift(text: &str, frozen: &[&str]) -> Vec<String> {
-    let named = outside_paths(text, false);
+    let named = outside_paths(text, true);
     let mut out: Vec<String> = named
         .iter()
         .filter(|p| !frozen.contains(&p.as_str()))
@@ -3684,8 +3686,11 @@ fn gate_orchestrators_reach_outside_only_through_their_frozen_inventory() {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[test]
 fn every_gate_module_class_refuses_new_outside_reach() {
-    let leaves = &["crate::grant_keyring::read"];
-    let frozen = &["crate::forge::forge_for"];
+    let leaves = &[
+        "crate::grant_keyring::read",
+        "aida_core::team::canonical_role",
+    ];
+    let frozen = &["crate::forge::forge_for", "aida_core::team::canonical_role"];
     let refused = [
         // A new outside path.
         "fn f() { crate::forge::resolve_forge_kind(r); }",
@@ -3702,6 +3707,11 @@ fn every_gate_module_class_refuses_new_outside_reach() {
         // A glob of outside code.
         "use crate::*;",
         "use crate::forge::*;",
+        // A new sibling-crate path, direct or through an import
+        // (TASK-b6b1278890774ef993d2ebc327862470-041).
+        "fn f() { aida_core::liveness::pid_is_alive(1); }",
+        "use aida_core::liveness;\nfn f() { liveness::pid_is_alive(1); }",
+        "use aida_core::team::TeamRoster;",
     ];
     for src in refused {
         assert!(
@@ -3741,7 +3751,7 @@ fn every_gate_module_class_refuses_new_outside_reach() {
         "use crate::grant_keyring::read;",
         "fn f() { crate::gate::kernel_deps::current_user_id(None); }",
         "use super::kernel_deps::is_hex_sha;",
-        "fn f() { aida_core::liveness::pid_is_alive(1); }",
+        "fn f() { aida_core::team::canonical_role(s); }",
         "pub(crate) fn f() {}",
     ] {
         assert_eq!(
@@ -3751,11 +3761,17 @@ fn every_gate_module_class_refuses_new_outside_reach() {
         );
     }
     assert_eq!(
-        orchestrator_drift("fn f() { crate::forge::forge_for(r); }", frozen),
+        orchestrator_drift(
+            "fn f() { crate::forge::forge_for(r); aida_core::team::canonical_role(s); }",
+            frozen
+        ),
         Vec::<String>::new()
     );
     assert_eq!(
         orchestrator_drift("fn f() {}", frozen),
-        vec!["stale crate::forge::forge_for".to_string()]
+        vec![
+            "stale crate::forge::forge_for".to_string(),
+            "stale aida_core::team::canonical_role".to_string()
+        ]
     );
 }
