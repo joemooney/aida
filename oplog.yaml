@@ -82104,5 +82104,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6398
+- id: 01a1837d-b9aa-75d2-94dc-55233d1d154f
+  target_id: 01a1837d-b10f-7353-92c2-32a564f4a8a0
+  author: aida
+  node_id: '1'
+  lamport: 6399
+  timestamp: 2026-10-28T17:10:17.258192014Z
+  kind: !Create
+    title: 'non-blocking (cosmetic): fill_digests doc comment at aida-core/src/mailbox_life…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-051, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      non-blocking (cosmetic): fill_digests doc comment at aida-core/src/mailbox_lifecycle/activation.rs:248-250 was left mis-wrapped ('each distinct' / 'file once, so a' on short lines); reflow the paragraph
+
+      PR: #3045
+      Reviewed sha: 7a95a4299ded4dd00fadc3e90bc9af69173b7251
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6399
 node_id: '1'
