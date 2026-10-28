@@ -3,7 +3,7 @@
 //! legacy-mail refusal.
 // trace:STORY-1843 | ai:claude
 
-use super::reuse::{plan_reuse, ReuseChoice};
+use super::reuse::ReuseChoice;
 use super::*;
 use crate::agent_handle::load_reservation;
 use crate::mailbox_resolver::{delivery_sidecar, RecipientDirectory};
@@ -170,29 +170,129 @@ fn legacy_label_mail_refuses_reuse_whatever_the_choice() {
     }
 }
 
+fn git(dir: &Path, args: &[&str]) {
+    let out = crate::test_git::git_command()
+        .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A Git project with a registered sibling worktree whose directory is
+/// gone (missing or prunable).
+fn project_with_missing_sibling(tmp: &Path) -> PathBuf {
+    let project = tmp.join("main");
+    std::fs::create_dir(&project).unwrap();
+    git(&project, &["init", "-q"]);
+    git(&project, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    git(&project, &["worktree", "add", "-q", "../sibling"]);
+    std::fs::remove_dir_all(tmp.join("sibling")).unwrap();
+    project
+}
+
 #[test]
-fn the_count_needs_the_new_runs_capability() {
+fn a_missing_or_prunable_sibling_does_not_block_reuse_or_archiving() {
     let tmp = tempfile::tempdir().unwrap();
-    let (_old, _lock) = ended_with_unread(tmp.path());
-    let capability = new_capability().unwrap();
-    let err = plan_reuse(
-        tmp.path(),
-        "relay-a",
-        &capability_digest("another capability"),
-        &capability,
-        Some(ReuseChoice::Handover),
-    )
-    .err()
-    .unwrap()
-    .to_string();
-    assert!(err.contains("capability does not match"), "{err}");
-    let plan = plan_reuse(
-        tmp.path(),
-        "relay-a",
-        &capability_digest(&capability),
-        &capability,
-        Some(ReuseChoice::Handover),
+    let project = project_with_missing_sibling(tmp.path());
+    // The fixture exercises the narrowed rule: Git lists the sibling as
+    // prunable, and the relay count is still complete.
+    let listed = crate::test_git::git_command()
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("prunable"));
+    let ctx = aida_core::mailbox_logical::MailboxContext::resolve_or_local(&project, None).unwrap();
+    assert!(
+        aida_core::mailbox_logical::relay_run_unread(
+            &ctx,
+            "relay-a",
+            &RecipientUuid::parse("00000000-0000-4000-8000-000000000001").unwrap(),
+            &aida_core::mailbox_logical::ReadLimits::explicit_read(),
+        )
+        .complete
+    );
+
+    // An ended run with no unread mail settles and archives.
+    let lock = held_lock(&project, "quiet.lock");
+    let quiet = bind(
+        &project,
+        "relay-quiet",
+        std::process::id(),
+        &lock.path,
+        PROTOCOL,
     )
     .unwrap();
-    assert!(plan.is_some());
+    let ended = end(
+        &project,
+        &quiet.run,
+        &quiet.capability,
+        TerminalReason::Stop,
+    )
+    .unwrap();
+    assert_eq!(ended.notices.unwrap().archived, 1);
+
+    // A label whose ended run has unread mail is reused on an explicit choice.
+    let (old, lock) = ended_with_unread(&project);
+    let new = rebind(&project, &lock, Some(ReuseChoice::LeaveWithOld)).unwrap();
+    assert_eq!(new.reuse.unwrap().previous_run, old);
+}
+
+fn session_req(label: &str) -> crate::agent_handle::HandleRequest<'_> {
+    crate::agent_handle::HandleRequest {
+        agent_type: "claude",
+        explicit: Some(label),
+        native_session_id: Some("sess-new"),
+        registry_id: Some("sess-new"),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_session_taking_an_ended_runs_label_passes_the_unread_gate() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (old, _lock) = ended_with_unread(tmp.path());
+    // A session cannot choose what happens to the old run's mail, so it is
+    // refused like a headless reuse, and nothing is reserved.
+    let err = crate::agent_handle::reserve_handle(tmp.path(), &session_req("relay-a"))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains(&format!("relay run {old}, which has 3 unread messages")),
+        "{err}"
+    );
+    assert!(crate::agent_handle::preview_handle(tmp.path(), &session_req("relay-a")).is_err());
+    assert_eq!(
+        load_reservation(tmp.path(), "relay-a")
+            .unwrap()
+            .recipient_id,
+        old
+    );
+
+    // An ended run with no unread mail gives its label up.
+    let lock = held_lock(tmp.path(), "quiet.lock");
+    let quiet = bind(
+        tmp.path(),
+        "relay-quiet",
+        std::process::id(),
+        &lock.path,
+        PROTOCOL,
+    )
+    .unwrap();
+    end(
+        tmp.path(),
+        &quiet.run,
+        &quiet.capability,
+        TerminalReason::Stop,
+    )
+    .unwrap();
+    let taken =
+        crate::agent_handle::reserve_handle(tmp.path(), &session_req("relay-quiet")).unwrap();
+    assert_ne!(taken.recipient_id, quiet.run);
 }

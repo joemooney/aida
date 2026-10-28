@@ -120,6 +120,11 @@ pub(crate) struct HandleRequest<'a> {
     /// A launcher reserving for a process it is about to start: the new
     /// reservation records a fresh launch token and this process's pid.
     pub(crate) launcher: bool,
+    /// The ended relay run holding `explicit`'s reservation whose unread
+    /// mail was counted, with no lock held, and found empty. Set only by
+    /// [`reserve_handle`] and [`preview_handle`].
+    // trace:STORY-1843 | ai:claude
+    pub(crate) ended_relay_cleared: Option<String>,
 }
 
 /// Why `name` is not a valid handle spelling, or `None` when it is.
@@ -435,9 +440,20 @@ fn other_live_holder(
     }
     // An ended run's reservation holds nothing itself; a child session still
     // running under the label is a registry holder, checked above. Reusing
-    // the label is gated by `relay-mail bind`'s unread-mail choice.
+    // the label is gated by unread mail: `relay-mail bind` makes its own
+    // choice, and any other requester only after the run's unread mail was
+    // counted as none (the same gate as a headless reuse).
+    // trace:STORY-1843 | ai:claude
     if crate::relay_mail::run_ended(project_root, r) {
-        return None;
+        if req.agent_type == "relay"
+            || req.ended_relay_cleared.as_deref() == Some(r.recipient_id.as_str())
+        {
+            return None;
+        }
+        return Some(format!(
+            "ended relay run {} (its unread mail changed while it was checked; retry)",
+            r.recipient_id
+        ));
     }
     if now.signed_duration_since(r.reserved_at)
         > chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS)
@@ -573,8 +589,25 @@ pub(crate) fn reserve_handle(
     if let Some(name) = req.explicit {
         validate_explicit_handle(name, &reserved)?;
     }
+    let req = clear_ended_relay_label(project_root, req)?;
     let lock = lock_namespace(project_root)?;
-    reserve_validated(project_root, req, &reserved, &lock)
+    reserve_validated(project_root, &req, &reserved, &lock)
+}
+
+/// `req`, once the unread mail of an ended relay run holding its explicit
+/// name was counted as none. Refuses otherwise. The count is a mailbox
+/// read, so it is taken before the namespace lock; under the lock the same
+/// run must still hold the name.
+// trace:STORY-1843 | ai:claude
+fn clear_ended_relay_label<'a>(
+    project_root: &Path,
+    req: &HandleRequest<'a>,
+) -> Result<HandleRequest<'a>> {
+    let mut req = req.clone();
+    if let Some(name) = req.explicit.filter(|_| req.agent_type != "relay") {
+        req.ended_relay_cleared = crate::relay_mail::reuse::clear_for_session(project_root, name)?;
+    }
+    Ok(req)
 }
 
 /// [`reserve_handle`] for a caller already holding the namespace lock, so
@@ -632,7 +665,8 @@ pub(crate) fn preview_handle(project_root: &Path, req: &HandleRequest<'_>) -> Re
     if let Some(name) = req.explicit {
         validate_explicit_handle(name, &reserved)?;
     }
-    Ok(decide(project_root, req, &reserved, Utc::now())?.0)
+    let req = clear_ended_relay_label(project_root, req)?;
+    Ok(decide(project_root, &req, &reserved, Utc::now())?.0)
 }
 
 fn decide(
@@ -919,6 +953,7 @@ pub(crate) fn assign_session_handle(
         registry_id: Some(&id),
         launch_token: token.as_deref(),
         launcher: false,
+        ended_relay_cleared: None,
     };
     if let Some(name) = explicit.as_deref() {
         if handle_spelling_rejection(name).is_some() {
@@ -1336,6 +1371,7 @@ mod tests {
             registry_id: None,
             launch_token: None,
             launcher: false,
+            ended_relay_cleared: None,
         }
     }
 

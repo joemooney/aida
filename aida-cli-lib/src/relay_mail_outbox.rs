@@ -141,14 +141,24 @@ fn load_entry(path: &Path) -> Result<Option<OutboxEntry>> {
     Ok(Some(entry))
 }
 
+/// A run's outbox as read: the entries that parsed, and a report line for
+/// each entry that did not. An unreadable entry is skipped, never fatal,
+/// and is never taken as delivered.
+#[derive(Debug, Default)]
+pub(crate) struct OutboxListing {
+    pub(crate) entries: Vec<OutboxEntry>,
+    pub(crate) unreadable: Vec<String>,
+}
+
 /// Every outbox entry of `run_id`, bounded.
-pub(crate) fn list_entries(project_root: &Path, run_id: &str) -> Result<Vec<OutboxEntry>> {
+// trace:STORY-1843 | ai:claude
+pub(crate) fn read_outbox(project_root: &Path, run_id: &str) -> Result<OutboxListing> {
     let entries = match std::fs::read_dir(outbox_dir(project_root, run_id)) {
         Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(OutboxListing::default()),
         Err(e) => return Err(e).context("reading relay outbox"),
     };
-    let mut out = Vec::new();
+    let mut out = OutboxListing::default();
     for (n, entry) in entries.enumerate() {
         if n >= MAX_OUTBOX_ENTRIES {
             bail!("relay outbox entry budget exceeded for run {run_id}");
@@ -157,12 +167,24 @@ pub(crate) fn list_entries(project_root: &Path, run_id: &str) -> Result<Vec<Outb
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }
-        if let Some(e) = load_entry(&path)? {
-            out.push(e);
+        match load_entry(&path) {
+            Ok(Some(e)) => out.entries.push(e),
+            Ok(None) => {}
+            Err(e) => out.unreadable.push(format!(
+                "relay run {run_id}: skipped outbox entry {}: {e:#}",
+                path.display()
+            )),
         }
     }
-    out.sort_by(|a, b| (a.inserted_at, &a.key).cmp(&(b.inserted_at, &b.key)));
+    out.entries
+        .sort_by(|a, b| (a.inserted_at, &a.key).cmp(&(b.inserted_at, &b.key)));
     Ok(out)
+}
+
+/// The readable outbox entries of `run_id`.
+#[cfg(test)]
+pub(crate) fn list_entries(project_root: &Path, run_id: &str) -> Result<Vec<OutboxEntry>> {
+    Ok(read_outbox(project_root, run_id)?.entries)
 }
 
 fn write_entry(project_root: &Path, entry: &OutboxEntry) -> Result<()> {
@@ -353,6 +375,11 @@ pub(crate) struct SettleReport {
     pub(crate) pending: usize,
     /// Settled runs moved out of the live records.
     pub(crate) archived: usize,
+    /// Runs and outbox entries skipped this pass, with why; retried next
+    /// pass.
+    // trace:STORY-1843 | ai:claude
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) skipped: Vec<String>,
 }
 
 /// Maintenance for ended runs: insert any end notice not yet inserted
@@ -365,7 +392,16 @@ pub(crate) fn settle_ended_runs(project_root: &Path) -> Result<SettleReport> {
         .into_iter()
         .filter(|r| r.terminal.is_some() && !r.notices_settled)
     {
-        let inserted = insert_end_notices(project_root, &run.run_id)?;
+        // One run that cannot be settled never stops the others.
+        let inserted = match insert_end_notices(project_root, &run.run_id) {
+            Ok(inserted) => inserted,
+            Err(e) => {
+                report
+                    .skipped
+                    .push(format!("relay run {}: {e:#}", run.run_id));
+                continue;
+            }
+        };
         report.inserted += inserted.inserted;
         if inserted.partial {
             report.partial_runs += 1;
@@ -380,23 +416,39 @@ pub(crate) fn settle_ended_runs(project_root: &Path) -> Result<SettleReport> {
     let delivered = deliver_pending_notices(project_root)?;
     report.delivered = delivered.delivered;
     report.pending = delivered.pending;
-    report.archived = archive_settled_runs(project_root)?;
+    report.skipped.extend(delivered.skipped);
+    report.archived = archive_settled_runs(project_root, &mut report.skipped)?;
     Ok(report)
+}
+
+/// Whether every notice of `run_id` is known to be delivered. An
+/// unreadable entry is not known to be, so its run is not archived.
+fn all_delivered(project_root: &Path, run_id: &str, skipped: &mut Vec<String>) -> bool {
+    match read_outbox(project_root, run_id) {
+        Ok(listing) => {
+            let done =
+                listing.unreadable.is_empty() && !listing.entries.iter().any(OutboxEntry::pending);
+            skipped.extend(listing.unreadable);
+            done
+        }
+        Err(e) => {
+            skipped.push(format!("relay run {run_id}: {e:#}"));
+            false
+        }
+    }
 }
 
 /// Archive every ended run whose notices are all inserted and delivered,
 /// so it stops counting against the live-record budget. A run with a
-/// pending notice stays live and is retried by the next maintenance pass.
-fn archive_settled_runs(project_root: &Path) -> Result<usize> {
+/// pending or unreadable notice stays live and is retried by the next
+/// maintenance pass.
+fn archive_settled_runs(project_root: &Path, skipped: &mut Vec<String>) -> Result<usize> {
     let mut archived = 0;
     for run in list_runs(project_root)?
         .into_iter()
         .filter(|r| r.terminal.is_some() && r.notices_settled)
     {
-        if list_entries(project_root, &run.run_id)?
-            .iter()
-            .any(OutboxEntry::pending)
-        {
+        if !all_delivered(project_root, &run.run_id, skipped) {
             continue;
         }
         let _lock = agent_handle::lock_namespace(project_root)?;
@@ -404,9 +456,7 @@ fn archive_settled_runs(project_root: &Path) -> Result<usize> {
             continue;
         };
         if !(current.terminal.is_some() && current.notices_settled)
-            || list_entries(project_root, &run.run_id)?
-                .iter()
-                .any(OutboxEntry::pending)
+            || !all_delivered(project_root, &run.run_id, &mut Vec::new())
         {
             continue;
         }
@@ -420,6 +470,7 @@ fn archive_settled_runs(project_root: &Path) -> Result<usize> {
 pub(crate) struct DeliverReport {
     pub(crate) delivered: usize,
     pub(crate) pending: usize,
+    pub(crate) skipped: Vec<String>,
 }
 
 /// A notice ready to write: the message and its delivery record.
@@ -444,7 +495,20 @@ pub(crate) fn deliver_pending_notices(project_root: &Path) -> Result<DeliverRepo
         .into_iter()
         .filter(|r| r.terminal.is_some())
     {
-        let entries = list_entries(project_root, &run.run_id)?;
+        // An unreadable outbox or entry is reported and skipped; the rest
+        // still deliver. trace:STORY-1843 | ai:claude
+        let mut entries = match read_outbox(project_root, &run.run_id) {
+            Ok(listing) => {
+                report.skipped.extend(listing.unreadable);
+                listing.entries
+            }
+            Err(e) => {
+                report
+                    .skipped
+                    .push(format!("relay run {}: {e:#}", run.run_id));
+                continue;
+            }
+        };
         if !entries.iter().any(OutboxEntry::pending) {
             continue;
         }
@@ -455,8 +519,15 @@ pub(crate) fn deliver_pending_notices(project_root: &Path) -> Result<DeliverRepo
                 &store_root(project_root),
             )?),
         };
-        for entry in entries.iter().filter(|e| e.pending()) {
-            let outcome = prepare(project_root, directory, entry, &entries).and_then(|p| {
+        // Sender notices first, so an advisor notice sees whether the
+        // sender's was delivered this pass.
+        let mut order: Vec<usize> = (0..entries.len())
+            .filter(|&i| entries[i].pending())
+            .collect();
+        order.sort_by_key(|&i| entries[i].destination.kind != DestinationKind::Sender);
+        for i in order {
+            let entry = entries[i].clone();
+            let outcome = prepare(project_root, directory, &entry, &entries).and_then(|p| {
                 let Some(p) = p else {
                     return Ok(None);
                 };
@@ -473,8 +544,17 @@ pub(crate) fn deliver_pending_notices(project_root: &Path) -> Result<DeliverRepo
             });
             let _lock = agent_handle::lock_namespace(project_root)?;
             let path = entry_path(project_root, &entry.run, &entry.key);
-            let Some(mut current) = load_entry(&path)? else {
-                continue;
+            let mut current = match load_entry(&path) {
+                Ok(Some(current)) => current,
+                Ok(None) => continue,
+                Err(e) => {
+                    report.skipped.push(format!(
+                        "relay run {}: skipped outbox entry {}: {e:#}",
+                        entry.run,
+                        path.display()
+                    ));
+                    continue;
+                }
             };
             if !current.pending() {
                 continue;
@@ -500,6 +580,7 @@ pub(crate) fn deliver_pending_notices(project_root: &Path) -> Result<DeliverRepo
                 }
             }
             write_entry(project_root, &current)?;
+            entries[i] = current;
         }
     }
     Ok(report)
@@ -558,12 +639,21 @@ fn prepare(
         DestinationKind::Advisor => {
             let resolved = directory.resolve_send(ADVISOR_ROLE, false)?;
             // The sender is told directly; an advisor who sent the message
-            // is not told twice.
+            // is not told twice, but only once the sender's notice was
+            // actually delivered to that recipient. A pending or failed
+            // sender notice tells nobody. trace:STORY-1843 | ai:claude
             let told: Vec<&str> = siblings
                 .iter()
                 .filter(|s| {
                     s.delivery_id == entry.delivery_id
                         && s.destination.kind == DestinationKind::Sender
+                        && matches!(
+                            s.state,
+                            NoticeState::Delivered {
+                                message_id: Some(_),
+                                ..
+                            }
+                        )
                 })
                 .filter_map(|s| s.destination.recipient.as_deref())
                 .collect();

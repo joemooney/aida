@@ -285,3 +285,112 @@ fn a_crashed_run_gets_its_notices_at_reconciliation_and_they_deliver_at_maintena
     assert_eq!(settled.delivered, 1);
     assert!(load_run(project, &run).unwrap().unwrap().notices_settled);
 }
+
+/// A run that crashed with `m1` from `from` unread: its notices are
+/// inserted by reconciliation and none is delivered yet.
+fn crashed_with_unread(project: &Path, from: &str) -> String {
+    let lock_path = project.join("crash.lock");
+    let mut controller = spawn_lock_holder(&lock_path);
+    let run = bind(
+        project,
+        "relay-crash",
+        controller.id(),
+        &lock_path,
+        PROTOCOL,
+    )
+    .unwrap()
+    .run;
+    send(project, "m1", from, "relay-crash");
+    controller.kill().unwrap();
+    controller.wait().unwrap();
+    assert_eq!(
+        reconcile_relay_runs(project).unwrap().ended,
+        vec![run.clone()]
+    );
+    run
+}
+
+fn outbox_path(project: &Path, run: &str) -> PathBuf {
+    runs_dir(project).join(run).join("outbox")
+}
+
+#[test]
+fn a_corrupt_outbox_entry_is_skipped_and_reported_never_fatal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path();
+    reader(project, "advisor-one", "advisor");
+    let run = crashed_with_unread(project, "advisor-one");
+    let corrupt = outbox_path(project, &run).join(format!("{}.json", "f".repeat(64)));
+    std::fs::write(&corrupt, "not json").unwrap();
+
+    let settled = outbox::settle_ended_runs(project).unwrap();
+    // The readable notices still deliver; the corrupt one is reported.
+    assert_eq!(settled.delivered, 2);
+    assert!(
+        settled
+            .skipped
+            .iter()
+            .any(|s| s.contains("skipped outbox entry")),
+        "{:?}",
+        settled.skipped
+    );
+    // An entry that cannot be read is not known to be delivered, so the run
+    // is not archived.
+    assert_eq!(settled.archived, 0);
+    assert!(runs_dir(project).join(format!("{run}.json")).exists());
+    let listing = outbox::read_outbox(project, &run).unwrap();
+    assert_eq!((listing.entries.len(), listing.unreadable.len()), (2, 1));
+
+    // Removing it lets the next pass archive the run.
+    std::fs::remove_file(&corrupt).unwrap();
+    assert_eq!(outbox::settle_ended_runs(project).unwrap().archived, 1);
+}
+
+#[test]
+fn an_advisor_sender_whose_notice_is_pending_is_still_told_as_advisor() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path();
+    let advisor = reader(project, "advisor-one", "advisor");
+    let run = crashed_with_unread(project, "advisor-one");
+    // The sender notice cannot be delivered (its address no longer
+    // resolves), though it names the advisor's recipient UUID.
+    for entry in outbox::list_entries(project, &run).unwrap() {
+        if entry.destination.kind == DestinationKind::Sender {
+            assert_eq!(
+                entry.destination.recipient.as_deref(),
+                Some(advisor.as_str())
+            );
+            let path = outbox_path(project, &run).join(format!("{}.json", entry.key));
+            let mut raw: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            raw["destination"]["address"] = "gone-sender".into();
+            std::fs::write(&path, raw.to_string()).unwrap();
+        }
+    }
+
+    let settled = outbox::settle_ended_runs(project).unwrap();
+    assert_eq!((settled.delivered, settled.pending), (1, 1));
+    let entries = outbox::list_entries(project, &run).unwrap();
+    let sender = entries
+        .iter()
+        .find(|e| e.destination.kind == DestinationKind::Sender)
+        .unwrap();
+    assert!(sender.pending());
+    // The advisor got a notice message of its own, not a folded one.
+    let advisor_entry = entries
+        .iter()
+        .find(|e| e.destination.kind == DestinationKind::Advisor)
+        .unwrap();
+    let NoticeState::Delivered {
+        message_id: Some(id),
+        ..
+    } = &advisor_entry.state
+    else {
+        panic!("advisor not told: {advisor_entry:?}");
+    };
+    let marker = sidecar_of(project, id).unwrap();
+    assert!(marker.deliveries.iter().any(|d| d
+        .recipient_uuid
+        .as_ref()
+        .is_some_and(|r| r.as_str() == advisor)));
+}

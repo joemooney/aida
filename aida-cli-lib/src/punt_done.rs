@@ -204,6 +204,25 @@ pub(crate) fn send_resolved_notification(
     body: String,
 ) {
     send_notification_with_deliveries(store_path, sender, &recipient.address, body, |id| {
+        // A mention never queues and is never refused for want of a reader
+        // UUID: a role whose readers all lack one gets the mention as plain
+        // role mail, as before delivery records. trace:STORY-1843 | ai:claude
+        if let Some(cohort) = recipient
+            .cohort
+            .as_ref()
+            .filter(|c| !c.queued && c.readers.is_empty())
+        {
+            for label in &cohort.uuidless {
+                eprintln!(
+                    "  {}",
+                    format!(
+                        "warning: {label} has no recipient UUID; the mention is plain role mail"
+                    )
+                    .dimmed()
+                );
+            }
+            return Ok(None);
+        }
         let (sidecar, warnings) = crate::mailbox_resolver::delivery_sidecar(
             recipient,
             id,
@@ -458,16 +477,18 @@ pub(crate) fn resolve_comment_mention_recipients(
     }
     let known = crate::known_mailbox_recipients(store_root);
     let project_root = store_root.parent().unwrap_or(store_root);
-    let directory =
-        match crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root) {
-            Ok(directory) => directory,
-            Err(error) => {
-                return (
-                    Vec::new(),
-                    vec![format!("mention delivery refused: {error}")],
-                )
-            }
-        };
+    let directory = match crate::mailbox_resolver::RecipientDirectory::load_for_send(
+        project_root,
+        store_root,
+    ) {
+        Ok(directory) => directory,
+        Err(error) => {
+            return (
+                Vec::new(),
+                vec![format!("mention delivery refused: {error}")],
+            )
+        }
+    };
     let author_trimmed = comment_author.trim();
     let mut deliverable = Vec::new();
     let mut warnings = directory.warnings().to_vec();

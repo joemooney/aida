@@ -9,9 +9,14 @@
 //! the old run's receipts stay intact and the new run acknowledges under its
 //! own UUID.
 //!
-//! The old run's unread mail is inspected by count only, and only by a
-//! caller that proved the controller and its run lock and holds the new
-//! run's capability. Label mail written without a delivery record (legacy
+//! The old run's unread mail is inspected by count only, and only from
+//! `relay-mail bind`, after it proved the controller and its run lock, for
+//! the ended run that holds the label's own reservation. The count is read
+//! with no lock held (a mailbox read never nests under the namespace lock);
+//! `bind` then re-checks under `handles::lock_namespace` that the same run
+//! still holds the reservation, and refuses if it changed. No capability is
+//! involved: the new run's capability does not exist until this bind
+//! mints it. Label mail written without a delivery record (legacy
 //! mail) is readable by whoever holds the spelling, so a label with legacy
 //! unread mail is never reused: it would be read by the new run. A count
 //! that could not be completed is treated as unread mail.
@@ -78,23 +83,64 @@ fn plural(n: usize) -> &'static str {
 }
 
 /// Decide whether a new run may take `label` from the ended run that holds
-/// it. `capability` must be the new run's, matching `new_run_digest`; only
-/// then is the old run's unread mail counted. Taken with no lock held (the
-/// mailbox read never nests under the namespace lock); the bind re-checks
-/// under the lock that the same run still holds the label.
+/// its reservation. Called only from `bind`, after the controller and run
+/// lock checks, with no lock held (the mailbox read never nests under the
+/// namespace lock); `bind` re-checks under the lock that the same run still
+/// holds the label.
 pub(crate) fn plan_reuse(
     project_root: &Path,
     label: &str,
-    new_run_digest: &str,
-    capability: &str,
     choice: Option<ReuseChoice>,
 ) -> Result<Option<ReusePlan>> {
-    if !constant_time_eq(
-        capability_digest(capability).as_bytes(),
-        new_run_digest.as_bytes(),
-    ) {
-        bail!("relay label reuse refused: the new run's capability does not match");
+    let Some((previous, found)) = counted_unread(project_root, label)? else {
+        return Ok(None);
+    };
+    let run = &previous.run_id;
+    let owned = found.unread.len();
+    if owned > 0 && choice.is_none() {
+        bail!(
+            "relay label `{label}` belonged to relay run {run}, which has {owned} unread message{}; pass --leave-with-old to leave {} with that run, or --handover to let the new run read {}",
+            plural(owned),
+            if owned == 1 { "it" } else { "them" },
+            if owned == 1 { "it" } else { "them" }
+        );
     }
+    Ok(Some(ReusePlan {
+        previous: previous.run_id,
+        choice,
+        unread: found.unread,
+    }))
+}
+
+/// For a reservation other than `relay-mail bind` (a session or launch
+/// taking `label` by name): the ended relay run holding `label`, once its
+/// unread mail was counted as none. Such a requester cannot choose what
+/// happens to that mail, so it is refused like a headless reuse: on any
+/// unread mail, or a count that could not be completed.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn clear_for_session(project_root: &Path, label: &str) -> Result<Option<String>> {
+    let Some((previous, found)) = counted_unread(project_root, label)? else {
+        return Ok(None);
+    };
+    let owned = found.unread.len();
+    if owned > 0 {
+        bail!(
+            "agent name `{label}` belonged to relay run {}, which has {owned} unread message{}; a new session would not read {}. Choose another name, or reuse the label with `aida relay-mail bind --leave-with-old` or `--handover`",
+            previous.run_id,
+            plural(owned),
+            if owned == 1 { "it" } else { "them" }
+        );
+    }
+    Ok(Some(previous.run_id))
+}
+
+/// The ended run holding `label` and its unread mail, refusing a count
+/// that could not be completed and label mail with no delivery record,
+/// whatever the caller would choose.
+fn counted_unread(
+    project_root: &Path,
+    label: &str,
+) -> Result<Option<(RelayRun, aida_core::mailbox_logical::RelayRunDeliveries)>> {
     let Some(previous) = ended_run_of_label(project_root, label)? else {
         return Ok(None);
     };
@@ -120,20 +166,7 @@ pub(crate) fn plan_reuse(
             if found.legacy_label == 1 { "it" } else { "them" }
         );
     }
-    let owned = found.unread.len();
-    if owned > 0 && choice.is_none() {
-        bail!(
-            "relay label `{label}` belonged to relay run {run}, which has {owned} unread message{}; pass --leave-with-old to leave {} with that run, or --handover to let the new run read {}",
-            plural(owned),
-            if owned == 1 { "it" } else { "them" },
-            if owned == 1 { "it" } else { "them" }
-        );
-    }
-    Ok(Some(ReusePlan {
-        previous: previous.run_id,
-        choice,
-        unread: found.unread,
-    }))
+    Ok(Some((previous, found)))
 }
 
 /// Carry out `plan` for the new run `new_run`. Call with no lock held:

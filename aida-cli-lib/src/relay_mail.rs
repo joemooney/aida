@@ -787,17 +787,23 @@ pub(crate) fn bind_reusing(
         eprintln!("warning: relay run reconciliation skipped: {e:#}");
     }
     // trace:STORY-1843 | ai:claude
-    if let Err(e) = outbox::settle_ended_runs(project_root) {
-        eprintln!("warning: relay end notices stay pending: {e:#}");
+    match outbox::settle_ended_runs(project_root) {
+        Ok(report) => {
+            for skipped in &report.skipped {
+                eprintln!("warning: {skipped}");
+            }
+        }
+        Err(e) => eprintln!("warning: relay end notices stay pending: {e:#}"),
     }
     let controller = controller_evidence(controller_pid)?;
     let run_lock = run_lock_evidence(run_lock, controller_pid)?;
-    // The caller proved the controller and its run lock; the new run's
-    // capability is minted now, and an ended run's unread mail is counted
-    // only against it, with no lock held. trace:STORY-1843 | ai:claude
+    // The caller proved the controller and its run lock. An ended run's
+    // unread mail is counted now, with no lock held; the reservation it was
+    // counted for is re-checked under the namespace lock below.
+    // trace:STORY-1843 | ai:claude
+    let plan = reuse::plan_reuse(project_root, label, choice)?;
     let capability = new_capability()?;
     let capability_sha256 = capability_digest(&capability);
-    let plan = reuse::plan_reuse(project_root, label, &capability_sha256, &capability, choice)?;
     let (run, plan) = {
         let lock = agent_handle::lock_namespace(project_root)?;
         if let Some(existing) = agent_handle::checked_reservation(project_root, label)? {
@@ -1114,7 +1120,11 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
             };
             let mut entries = Vec::new();
             for run in runs {
-                entries.extend(outbox::list_entries(&root, &run)?);
+                let listing = outbox::read_outbox(&root, &run)?;
+                for skipped in &listing.unreadable {
+                    eprintln!("warning: {skipped}");
+                }
+                entries.extend(listing.entries);
             }
             if *json {
                 return print_json(&entries);

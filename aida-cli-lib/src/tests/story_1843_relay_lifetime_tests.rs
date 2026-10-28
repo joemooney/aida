@@ -503,3 +503,32 @@ fn run_ids_must_be_canonical() {
         );
     }
 }
+
+#[test]
+fn read_only_paths_never_reconcile_but_a_send_does() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    let dead = dead_controller_run(tmp.path(), "relay-dead");
+    let before = agents_snapshot(tmp.path());
+    // The migration preview and a plain directory load are read-only: the
+    // dead run stays open and nothing under `.aida/agents/` changes.
+    crate::mailbox_cmd::handle_mailbox_command(
+        &crate::cli::MailboxCommand::Migrate {
+            dry_run: true,
+            json: true,
+        },
+        &store,
+    )
+    .unwrap();
+    RecipientDirectory::load(tmp.path(), &store).unwrap();
+    assert_eq!(agents_snapshot(tmp.path()), before);
+    assert!(load_run(tmp.path(), &dead)
+        .unwrap()
+        .unwrap()
+        .terminal
+        .is_none());
+    // A send is a reconciliation point.
+    RecipientDirectory::load_for_send(tmp.path(), &store).unwrap();
+    let ended = load_run(tmp.path(), &dead).unwrap().unwrap();
+    assert_eq!(ended.terminal.unwrap().reason, TerminalReason::Crash);
+}

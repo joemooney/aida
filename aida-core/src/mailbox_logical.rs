@@ -625,10 +625,11 @@ pub fn relay_run_unread_deliveries(
         return RelayRunDeliveries::default();
     };
     let snapshot = logical_snapshot(ctx, &audience, &Query::Inbox, limits);
-    // Fully observed, the standard an acknowledgement needs (a local-only
-    // project's one mailbox qualifies).
+    // D1's unsighted rule (ruling 97), not the acknowledgement standard: a
+    // missing or prunable sibling worktree never makes the count unknown.
+    // trace:STORY-1843 | ai:claude
     let mut out = RelayRunDeliveries {
-        complete: snapshot.ack_eligible(),
+        complete: snapshot.live_sources_observed(),
         ..Default::default()
     };
     for record in snapshot.records.iter().filter(|r| unread_record(r)) {
@@ -762,6 +763,28 @@ impl LogicalSnapshot {
                 .iter()
                 .all(|s| !matches!(s.status, SourceStatus::Error(_)))
             && self.conflicts.is_empty()
+    }
+
+    /// Whether every live source was read: the inventory was complete (a
+    /// local-only project's one mailbox qualifies), no present worktree's
+    /// read failed, and no replicas disagree. Unlike [`Self::ack_eligible`],
+    /// a missing or prunable worktree, another repository's worktree, a
+    /// refused canonical store and a receipt-anchor error do not count
+    /// (ruling 97, the same sources D1's fail-closed gate ignores).
+    // trace:STORY-1843 | ai:claude
+    pub fn live_sources_observed(&self) -> bool {
+        self.inventory_error
+            .is_none_or(|code| code == SourceErrorCode::NotAGitCheckout)
+            && self.conflicts.is_empty()
+            && self.sources.iter().all(|s| match (&s.kind, &s.status) {
+                (SourceKind::Local(_), SourceStatus::Error(code)) => matches!(
+                    code,
+                    SourceErrorCode::WorktreeMissing
+                        | SourceErrorCode::WorktreePrunable
+                        | SourceErrorCode::CommonGitMismatch
+                ),
+                _ => true,
+            })
     }
 }
 

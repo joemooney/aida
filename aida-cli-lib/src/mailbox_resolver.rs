@@ -178,6 +178,23 @@ fn select_operator(
 }
 
 impl RecipientDirectory {
+    /// [`Self::load`] for a send. Send is a relay reconciliation point: a
+    /// run whose controller died is ended (and its end notices queued)
+    /// before it is resolved. Every other caller, including read-only
+    /// previews, uses [`Self::load`], which never writes.
+    // trace:STORY-1843 | ai:claude
+    pub(crate) fn load_for_send(project: &Path, store: &Path) -> Result<Self> {
+        let reconciled = crate::relay_mail::reconcile_relay_runs(project);
+        let mut directory = Self::load(project, store)?;
+        if let Err(e) = reconciled {
+            directory
+                .warnings
+                .push(format!("warning: relay run reconciliation skipped: {e:#}"));
+            directory.warnings.sort();
+        }
+        Ok(directory)
+    }
+
     pub(crate) fn load(project: &Path, store: &Path) -> Result<Self> {
         let mut agents = Vec::new();
         let mut warnings = Vec::new();
@@ -245,12 +262,6 @@ impl RecipientDirectory {
             .collect();
         for role in crate::list_roles(project)? {
             roles.insert(role.name.to_lowercase(), role.name);
-        }
-        // Send is a relay reconciliation point: a run whose controller died
-        // is ended (and its end notices queued) before it is resolved.
-        // trace:STORY-1843 | ai:claude
-        if let Err(e) = crate::relay_mail::reconcile_relay_runs(project) {
-            warnings.push(format!("warning: relay run reconciliation skipped: {e:#}"));
         }
         let (relay_runs, relay_warnings) = crate::relay_mail::accepting_runs(project);
         warnings.extend(relay_warnings);
