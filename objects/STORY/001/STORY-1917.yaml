@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-28T13:18:17.376184424Z
+modified_at: 2026-10-28T14:07:16.047293022Z
 req_type: Story
 relationships:
 - rel_type:
@@ -763,6 +763,12 @@ comments:
   created_at: 2026-10-28T13:18:17.376184424Z
   modified_at: 2026-10-28T13:18:17.376184424Z
   session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+- id: 01a182d6-2a4f-7850-b3e8-9759d1c61312
+  author: joe
+  content: 'DEMO EVIDENCE step 6 PASS (advisor, 2026-10-28 07:07 MST). PR #3037 (BUG-b6b1278890774ef993d2ebc327862470-010; touches only aida-core/src/mailbox_lifecycle/activation.rs; author: the impl-bug-010 lane, not the advisor) was approved by an independent reviewer at b6f9c1895b9d with CI green. ''aida dispatch request flow 3037'' -> ''queued: 744174e5-62c0-4f57-b491-b6bb1e5aa07f (flow PR #3037 — pending (waiting for serve))''. dispatch list showed pending -> running (pid 2553473) -> done. dispatch show 744174e5: status done, mandate_id f27d5a3c-77b1-469e-ab75-9ac64518916f, grant_prefix 418aa563, started 13:54:09Z, finished 14:06:48Z, summary ''shipped PR #3037''. gh pr view 3037: MERGED, merge commit 679d4187baddf94613e00f6ac9c90874a1cbf8d8. No operator command was issued. Next: step 7 (take + impl via the tick, with serve stopped).'
+  created_at: 2026-10-28T14:07:16.047293022Z
+  modified_at: 2026-10-28T14:07:16.047293022Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
