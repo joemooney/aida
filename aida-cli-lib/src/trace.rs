@@ -802,6 +802,30 @@ pub(crate) fn linkage_time_left(
 // trace:BUG-1594 | ai:claude
 pub(crate) const LINKAGE_TRACE_SCAN_BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// BUG-b6b1278890774ef993d2ebc327862470-008: the trace-walk budget on the
+/// `aida show` (deadline) path. A healthy page cache walks this repo's
+/// ~50 MB source tree in ~60 ms, but the 3 s [`LINKAGE_TRACE_SCAN_BUDGET`]
+/// let a cold or contended walk spend 2.6-3.2 s in `linkage.content` on
+/// every JSON/human show — three times the 1 s show objective by itself.
+/// Past this budget the file list degrades to partial with the existing
+/// incomplete note instead of blocking the call; unbounded callers keep
+/// the 3 s budget.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+pub(crate) const SHOW_TRACE_SCAN_BUDGET: std::time::Duration =
+    std::time::Duration::from_millis(500);
+
+/// BUG-b6b1278890774ef993d2ebc327862470-008: the trace-walk budget for a
+/// linkage collection — the tight show budget on the deadline path, the
+/// historical one everywhere else.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+pub(crate) fn trace_scan_budget(show_deadline: bool) -> std::time::Duration {
+    if show_deadline {
+        SHOW_TRACE_SCAN_BUDGET
+    } else {
+        LINKAGE_TRACE_SCAN_BUDGET
+    }
+}
+
 /// BUG-1594: the total wall-clock budget `aida show` spends on forge
 /// (PR/MR) lookups across the primary branch and any sibling branches; each
 /// single call is additionally capped at [`FORGE_CLI_CALL_TIMEOUT`].
@@ -1231,10 +1255,11 @@ fn collect_git_linkage_inner(
             });
             let trace_res = if scan_trace {
                 let wanted: HashSet<String> = ids.iter().cloned().collect();
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
                 let (trace_hits, complete) = scan_trace_graph_bounded(
                     project_root,
                     &wanted,
-                    Some(cap(LINKAGE_TRACE_SCAN_BUDGET)),
+                    Some(cap(trace_scan_budget(deadline.is_some()))),
                 );
                 let mut f: Vec<(String, Option<String>)> = trace_hits
                     .values()
@@ -3972,6 +3997,30 @@ mod show_forge_budget_tests {
              ({FORGE_CLI_CALL_TIMEOUT:?}) must stay within show's 10 s forge ceiling"
         );
         assert!(FORGE_CLI_CALL_TIMEOUT > Duration::ZERO);
+    }
+}
+
+#[cfg(test)]
+mod show_trace_budget_tests {
+    use super::{
+        trace_scan_budget, LINKAGE_TRACE_SCAN_BUDGET, SHOW_LINKAGE_DEADLINE, SHOW_TRACE_SCAN_BUDGET,
+    };
+    use std::time::Duration;
+
+    /// BUG-b6b1278890774ef993d2ebc327862470-008: the content-linkage walk on
+    /// the show path is bounded well inside the 1 s show objective (it used
+    /// to inherit the 3 s budget and spend ~3 s per contended call), while
+    /// the unbounded collectors keep their historical budget.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    #[test]
+    fn show_content_linkage_walk_is_bounded_inside_the_show_objective() {
+        assert_eq!(trace_scan_budget(true), SHOW_TRACE_SCAN_BUDGET);
+        assert!(
+            SHOW_TRACE_SCAN_BUDGET <= Duration::from_millis(500),
+            "show's trace walk ({SHOW_TRACE_SCAN_BUDGET:?}) must leave most of the 1 s objective"
+        );
+        assert!(SHOW_TRACE_SCAN_BUDGET < SHOW_LINKAGE_DEADLINE);
+        assert_eq!(trace_scan_budget(false), LINKAGE_TRACE_SCAN_BUDGET);
     }
 }
 

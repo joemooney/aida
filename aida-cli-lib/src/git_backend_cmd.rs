@@ -1402,9 +1402,14 @@ pub(crate) fn handle_git_backend_command(
         Err(e) => return Err(e),
     };
     drop(open_phase);
+    // BUG-b6b1278890774ef993d2ebc327862470-008: the pre-dispatch hygiene
+    // checks (auto-push warning here, team-identity guard below) were time
+    // `show` spent outside every named phase. trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let guard_phase = crate::usage::phase("guard");
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
+    drop(guard_phase);
     if !notice_fast_fail
         && !cache_rebuild
         && !command
@@ -1417,8 +1422,18 @@ pub(crate) fn handle_git_backend_command(
         // probe itself is unchanged — attribution only.
         // trace:BUG-2221 | ai:claude
         let _notice_phase = crate::usage::phase("notice");
+        // BUG-b6b1278890774ef993d2ebc327862470-008: the notice is advisory
+        // and skips itself on any cache error, so on `show` it reads with the
+        // short fast-fail ladder — behind a concurrent writer it degrades to
+        // no notice (re-checked next command) instead of blocking the read.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+        let prev_fast_fail =
+            (command.name() == "show").then(|| aida_core::db::set_fast_fail_cache(true));
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
+        if let Some(prev) = prev_fast_fail {
+            aida_core::db::set_fast_fail_cache(prev);
+        }
     }
 
     // STORY-640: team identity hygiene. In a TEAM context (a roster with >1
@@ -1428,21 +1443,31 @@ pub(crate) fn handle_git_backend_command(
     // single-own-node context is silent, and an unreadable roster never blocks.
     // Skips the `team` command itself (it surfaces the same facts) and the
     // machine-readable JSON status path. trace:STORY-640 | ai:claude
+    let guard_phase = crate::usage::phase("guard");
     maybe_team_identity_guard(store_path, command)?;
+    drop(guard_phase);
 
-    match command {
+    let flow = match command {
         // trace:STORY-1728 | ai:claude
         Command::Registered(invocation) => {
             let store = crate::command_registry::StoreCtx::Git {
                 store_path,
                 backend: &backend,
             };
-            if invocation.run_store(store, None)? == crate::command_registry::Flow::Return {
-                return Ok(());
-            }
+            invocation.run_store(store, None)?
         }
 
         _ => exit_unsupported_on_git_backend(),
+    };
+    // BUG-b6b1278890774ef993d2ebc327862470-008: closing the cached backend
+    // (connection and snapshot teardown) is its own `show` phase rather than
+    // unmeasured time after the handler returns.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let close_phase = crate::usage::phase("close");
+    drop(backend);
+    drop(close_phase);
+    if flow == crate::command_registry::Flow::Return {
+        return Ok(());
     }
 
     if command_triggers_per_write_auto_push(command) {

@@ -263,6 +263,10 @@ pub fn main_entry() {
         }
     };
 
+    // BUG-b6b1278890774ef993d2ebc327862470-008: everything after `run()`
+    // returns — the cache footer, the project-root walk and the telemetry
+    // config read below — is the `exit` phase. trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let exit_phase = usage::phase("exit");
     // trace:TASK-1526 | ai:codex
     cache_output::finish(&cache_scope, exit_code == 0, &argv);
 
@@ -273,12 +277,14 @@ pub fn main_entry() {
     // "no project context" gracefully.
     let project_root = find_main_worktree_root().ok();
     if usage::is_enabled(project_root.as_deref()) {
+        drop(exit_phase);
+        let duration_ms = started.elapsed().as_millis() as u64;
         let ev = usage::UsageEvent {
             ts: chrono::Utc::now().to_rfc3339(),
             cmd: usage::derive_cmd_shape(&argv),
             args_count: usage::count_args(&argv),
             exit_code,
-            duration_ms: started.elapsed().as_millis() as u64,
+            duration_ms,
             binary_sha: build_sha_short(),
             role: std::env::var("AIDA_SESSION_ROLE")
                 .ok()
@@ -294,7 +300,8 @@ pub fn main_entry() {
             // trace:BUG-1600 | ai:claude
             schedule_source: usage::schedule_invocation_source(&argv),
             // trace:BUG-1993 | ai:claude
-            phases: usage::take_phases(),
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+            phases: usage::with_residual(usage::take_phases(), duration_ms),
         };
         usage::append_event(&ev);
     }
@@ -1806,6 +1813,11 @@ pub(crate) fn run() -> Result<()> {
         crate::usage::arm_phases();
         crate::usage::record_phase("argv", run_started.elapsed());
     }
+    // BUG-b6b1278890774ef993d2ebc327862470-008: the pre-dispatch hooks below
+    // (presence flip, removed-cwd warning, role-restore offer, store-less
+    // early dispatch) are the `preflight` phase. No-op unless armed.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let preflight_phase = crate::usage::phase("preflight");
 
     // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
     // it never pollutes machine-readable stdout) only when the operator reached
@@ -1861,6 +1873,7 @@ pub(crate) fn run() -> Result<()> {
     if invocation.run_early(&cli.globals)? == crate::command_registry::Flow::Return {
         return Ok(());
     }
+    drop(preflight_phase);
 
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high

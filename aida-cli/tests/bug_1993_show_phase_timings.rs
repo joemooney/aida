@@ -225,3 +225,67 @@ fn show_phase_accounting_preserves_aggregate_semantics() {
         );
     }
 }
+
+/// BUG-b6b1278890774ef993d2ebc327862470-008: every span of a `show` is
+/// attributed to a named phase — the pre-dispatch hooks (`preflight`), the
+/// hygiene guards (`guard`), the role-activity write (`activity`), backend
+/// teardown (`close`), post-command work (`exit`) — and whatever no phase
+/// measured lands in `residual`, so the top-level phases account for the
+/// whole `duration_ms` (the live trip had ~21 s unattributed). The bounded
+/// content-linkage walk still finds a traced source file on a healthy tree.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+#[test]
+fn show_phases_account_for_the_whole_duration_and_content_linkage_finds_traces() {
+    let (_base, repo, home, spec) = fixture();
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    std::fs::write(
+        repo.join("src").join("lib.rs"),
+        format!("// trace:{spec} | ai:claude\nfn traced_fixture() {{}}\n"),
+    )
+    .unwrap();
+
+    for args in [
+        vec!["show", spec.as_str(), "--format", "json"],
+        vec!["show", spec.as_str(), "--format", "toon"],
+    ] {
+        let record = usage_record_of(&repo, &home, &args);
+        let names = phase_names(&record);
+        for named in [
+            "preflight",
+            "guard",
+            "activity",
+            "close",
+            "exit",
+            "residual",
+        ] {
+            assert!(
+                names.iter().any(|n| n == named),
+                "aida {args:?}: missing `{named}` phase: {record}"
+            );
+        }
+        let top_level: u64 = record["phases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| !p["name"].as_str().unwrap().contains('.'))
+            .map(|p| p["ms"].as_u64().unwrap())
+            .sum();
+        let duration = record["duration_ms"].as_u64().unwrap();
+        assert!(
+            top_level >= duration,
+            "aida {args:?}: top-level phases ({top_level} ms) leave part of \
+             duration_ms ({duration} ms) unattributed: {record}"
+        );
+    }
+
+    let out = run_ok(aida(&repo, &home).args(["show", &spec, "--format", "json"]));
+    let shown: serde_json::Value = serde_json::from_str(&out).expect("show JSON");
+    let files = shown["git_linkage"]["files"]
+        .as_array()
+        .expect("files array");
+    assert!(
+        files.iter().any(|f| f["file"] == "src/lib.rs"),
+        "content linkage missed the traced file: {}",
+        shown["git_linkage"]
+    );
+}
