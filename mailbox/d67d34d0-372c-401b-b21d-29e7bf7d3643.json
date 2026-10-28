@@ -1,0 +1,18 @@
+{
+  "id": "d67d34d0-372c-401b-b21d-29e7bf7d3643",
+  "thread_id": "d67d34d0-372c-401b-b21d-29e7bf7d3643",
+  "from": "claude-agent-35",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793222150797,
+  "body": "6750bc4a36d: all 7 rulings fixed (narrowed unread rule; send-only reconcile + dry-run test; gc warn/corrupt entry skip; capability no-op removed, authority documented — count read pre-lock per F6, re-checked under lock; dedupe only on Delivered; session label unread gate; dup trace). Extra: mention to UUID-less role cohort stays plain role mail (fixed CI task_1955). One merge of main through #3062. CI green; auto-queue-review done.",
+  "subject": "PR-3049 pushed (STORY-1843)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
