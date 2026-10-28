@@ -120,15 +120,18 @@ fn a_reuse_hands_the_next_occupant_an_empty_mailbox() {
     activate(&wt);
     seed_mail(&wt);
     let old = source(&wt);
+    let old_generation = record(&wt).generation;
     let retirement = retire_checkout(&wt, "test").unwrap().expect("retired");
     retirement.complete_reuse().unwrap();
     assert!(!mailbox(&wt).exists(), "the old mailbox directory is gone");
     assert!(!record_path(&old.anchor, &old.key).exists());
-    // The next occupant's first write mints a new source.
+    // The next occupant's first write mints a new source. The filesystem may
+    // hand the recreated directory the freed inode, so the key can repeat;
+    // the generation never does.
     write_local_message(&wt, &message("next")).unwrap();
     assert_eq!(files_under(&mailbox(&wt)), ["next.json"]);
     let new = record(&wt);
-    assert_ne!(new.key, old.key);
+    assert!(new.generation > old_generation, "a new generation");
     assert_eq!(new.state, SourceState::Open);
     let kept = retained_generations(&old.anchor, &old.key);
     assert_eq!(files_under(&kept[0].join("data")), SEEDED);

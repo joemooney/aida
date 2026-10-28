@@ -220,7 +220,9 @@ fn story1843_context_keeps_requested_checkout_and_refuses_foreign_store() {
         &Query::Inbox,
         &ReadLimits::explicit_read(),
     );
-    assert_eq!(ids(&s), vec!["pool-local"]);
+    // The refused store could hold a delivery sidecar, so sidecar-less role
+    // mail is not served from this partial view (STORY-1843 D1 ruling F2).
+    assert!(ids(&s).is_empty());
     assert!(!s.complete());
     assert_eq!(s.caught_up(), None);
 
@@ -413,7 +415,9 @@ fn story1843_unsafe_or_partial_sources_are_typed_incomplete() {
             &SourceStatus::Error(code),
             "{case}"
         );
-        assert_eq!(ids(&s), vec!["main-ok"], "{case}");
+        // An errored source could hold a delivery sidecar, so sidecar-less
+        // role mail is gated for this partial view (STORY-1843 D1 ruling F2).
+        assert!(ids(&s).is_empty(), "{case}");
         assert!(!s.complete(), "{case}");
         assert_eq!(s.caught_up(), None, "{case}");
         let missing = snap(&r.main, Some(&r.store), Query::ExactId("hidden".into()));

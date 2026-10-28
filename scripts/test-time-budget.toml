@@ -111,6 +111,7 @@ default_limit = 10
 "aida-core db::cached_git_backend::tests::non_tty_full_rebuild_winner_files_request_and_serves_deferred_when_spawn_refused" = 20  # max 7.5s, median 6.0s over 7 runs
 "aida-cli-lib bug_1670_stale_cache_callers_tests::focus_guard_uses_fresh_subtree" = 15  # max 5.2s, median 4.5s over 7 runs
 "aida-cli-lib contained_boundary::store_tests::bug_1929_store_git_guard" = 15  # max 7.2s, median 6.6s over 7 runs
+"aida-cli-lib contained_boundary::store_tests::bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit" = 25  # max 10.9s (PR-3042 run 40721026721); x2 rounded up to 5
 "aida-cli-lib coordination::bug_2162_evidence_refusal_tests::bug_2162_best_effort_callers_stop_on_evidence_refusal" = 15  # max 6.4s, median 4.1s over 7 runs
 "aida-cli-lib coordination::bug_2162_evidence_refusal_tests::bug_2162_block_claim_retries_stop_on_evidence_refusal" = 15  # max 6.3s, median 4.4s over 7 runs
 "aida-cli-lib coordination::bug_2162_evidence_refusal_tests::bug_2162_void_cleanup_paths_stop_on_evidence_refusal" = 15  # max 6.2s, median 4.6s over 7 runs

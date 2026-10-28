@@ -682,8 +682,21 @@ pub fn logical_snapshot(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let (delivered, pending_deliveries, delivery_conflicts) =
-        delivery_gates(ctx, &observed, audience, &mut anchor, &mut budget);
+    // A message carries no origin, so any source this snapshot could not
+    // read cleanly may hold the sidecar of any role message (ruling F2).
+    let unsighted = inventory_error.is_some_and(|c| c != SourceErrorCode::NotAGitCheckout)
+        || matches!(&ctx.canonical, CanonicalCoverage::Refused(c) if *c != SourceErrorCode::NotAGitCheckout)
+        || sources
+            .iter()
+            .any(|s| matches!(s.status, SourceStatus::Error(_)));
+    let (delivered, pending_deliveries, delivery_conflicts) = delivery_gates(
+        ctx,
+        &observed,
+        unsighted,
+        audience,
+        &mut anchor,
+        &mut budget,
+    );
     let (mut records, mut conflicts) = reconcile(
         &observed,
         local_count,
@@ -1562,10 +1575,17 @@ enum DeliveryGate {
 /// read or parsed hides that one message (its ownership is unknown) and
 /// offers nothing to bind, without making the whole view partial. Only a
 /// retained area that cannot be opened at all is a view-wide anchor error.
+///
+/// Fail closed (ruling F2): when `unsighted` (a source that could hold a
+/// sidecar was not read cleanly, so the snapshot is already partial), a role
+/// message with no sidecar found anywhere has unknown ownership and is
+/// hidden from every reader of this snapshot, never served as legacy role
+/// mail. Legacy applies only when every source was read cleanly.
 // trace:STORY-1843 | ai:claude
 fn delivery_gates(
     ctx: &MailboxContext,
     observed: &[Option<ObservedSource>],
+    unsighted: bool,
     audience: &ResolvedAudience,
     anchor: &mut AnchorEvidence,
     budget: &mut Budget,
@@ -1614,7 +1634,7 @@ fn delivery_gates(
     if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
         match RetainedDeliveries::open(common.path(), budget) {
             Ok(retained) => {
-                for id in wanted {
+                for &id in &wanted {
                     match retained.lookup(id, budget) {
                         Ok(found) if !found.is_empty() => {
                             sidecars.insert(id.to_string(), found);
@@ -1628,10 +1648,15 @@ fn delivery_gates(
             }
             Err(code) => {
                 anchor.error.get_or_insert(code);
-                for id in wanted {
+                for &id in &wanted {
                     gates.insert(id.to_string(), DeliveryGate::NotOwned);
                 }
             }
+        }
+    }
+    if unsighted {
+        for id in wanted.into_iter().filter(|id| !sidecars.contains_key(*id)) {
+            gates.insert(id.to_string(), DeliveryGate::NotOwned);
         }
     }
     let mut pending = Vec::new();

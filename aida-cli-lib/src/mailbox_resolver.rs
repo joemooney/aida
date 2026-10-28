@@ -279,22 +279,23 @@ impl RecipientDirectory {
     }
 
     pub(crate) fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
-        self.resolve_with_context(target, false, false)
+        self.resolve_with_context(target, false, false, false)
     }
 
-    /// [`Self::resolve`] for a send that may queue for a role with no
-    /// reader (`--queue-for-role`). Queuing applies only to a role.
+    /// [`Self::resolve`] for a CLI send, which may queue for a role with no
+    /// reader (`--queue-for-role`). Queuing applies only to a role, and only
+    /// this surface's refusals name the flag (MCP cannot pass it).
     // trace:STORY-1843 | ai:claude
     pub(crate) fn resolve_send(
         &self,
         target: &str,
         queue_for_role: bool,
     ) -> Result<ResolvedRecipient> {
-        self.resolve_with_context(target, false, queue_for_role)
+        self.resolve_with_context(target, false, queue_for_role, true)
     }
 
     pub(crate) fn resolve_mention(&self, target: &str) -> Result<ResolvedRecipient> {
-        self.resolve_with_context(target, true, false)
+        self.resolve_with_context(target, true, false, false)
     }
 
     /// The recipient UUID a reader's handle reservation gives its row.
@@ -321,6 +322,7 @@ impl RecipientDirectory {
         target: &str,
         mention: bool,
         queue_for_role: bool,
+        cli_hint: bool,
     ) -> Result<ResolvedRecipient> {
         let escape = self.refusal_hint(mention);
         let target = target.trim();
@@ -427,7 +429,12 @@ impl RecipientDirectory {
                 });
             }
             if readers.is_empty() {
-                bail!("send refused: '{address}' has 0 live readers; {escape}");
+                let queue = if cli_hint && role.is_some() {
+                    ", or pass --queue-for-role"
+                } else {
+                    ""
+                };
+                bail!("send refused: '{address}' has 0 live readers; {escape}{queue}");
             }
             // The send-time cohort of a role: the same readers the notice
             // names, split by recipient UUID. trace:STORY-1843 | ai:claude
@@ -1421,6 +1428,13 @@ mod tests {
                 .unwrap_err()
                 .to_string();
         assert!(err.contains("0 live readers"), "{err}");
+        assert!(
+            err.contains("--queue-for-role"),
+            "the CLI names its flag: {err}"
+        );
+        let mcp = d.resolve("implementer").unwrap_err().to_string();
+        assert!(mcp.contains("0 live readers"), "{mcp}");
+        assert!(!mcp.contains("--queue-for-role"), "{mcp}");
         crate::mailbox_cmd::handle_mailbox_command(&role_send("implementer", true), &store)
             .unwrap();
         let written = sidecars(tmp.path());

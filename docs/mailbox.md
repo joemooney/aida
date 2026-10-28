@@ -274,7 +274,11 @@ file itself is unchanged.
 
 Mail sent before this, mail to a handle, a person or a vendor group, and
 broadcasts are unchanged: a role message with no delivery record is read
-through the shared role inbox as before.
+through the shared role inbox as before. That holds only when every mailbox
+in the repository was read cleanly: if one could not be read (a corrupt or
+unsafe file, a read that ran out of time), it may hold the delivery record
+of any role message, so role messages without one are hidden from that
+partial view until a clean read, rather than shown to the whole role.
 
 **Known limitation: a canonical-only clone.** The delivery records stay in
 the sending worktree's mailbox. When that worktree is retired they move with

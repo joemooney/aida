@@ -562,3 +562,47 @@ fn story1843_d1_retained_sidecars_are_looked_up_by_id_and_faults_stay_local() {
     assert_eq!(visible(&r.main, &a), ["legacy"]);
     assert!(visible(&r.main, &reviewer("rev-b", Some(2))).is_empty());
 }
+
+// Ruling F2, fail closed: the cohort sidecar lives only in the sending
+// source. When that source cannot be read (here a corrupt message), a
+// sidecar-less replica elsewhere must not degrade to legacy role mail for a
+// UUID-less or late reader; every sidecar-less role message is gated for
+// that partial snapshot, while direct mail stays visible.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_an_unreadable_sending_source_fails_closed() {
+    let r = repo();
+    let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 20, &[uuid(1)]);
+    send(&r.sib, "cohort", 20, Some(&sidecar));
+    // A sync or copy leaves a replica in main with no sidecar of its own.
+    crate::mailbox::write_local_message(&r.main, &role_message("cohort", 20)).unwrap();
+    send(&r.main, "legacy", 10, None);
+    let direct: crate::mailbox::Message = serde_json::from_value(serde_json::json!({
+        "id": "direct", "thread_id": "direct", "from": "sender",
+        "to": {"kind": "agent", "agent": "rev-old"},
+        "timestamp": 30, "body": "for one handle",
+    }))
+    .unwrap();
+    crate::mailbox::write_local_message(&r.main, &direct).unwrap();
+    let uuidless = reviewer("rev-old", None);
+    let late = reviewer("rev-late", Some(3));
+    assert_eq!(visible(&r.main, &uuidless), ["legacy", "direct"]);
+    assert_eq!(visible(&r.main, &late), ["legacy"]);
+
+    let bad = r.sib.join(".aida/mailbox/bad.json");
+    std::fs::write(&bad, b"{not json").unwrap();
+    for (reader, expect) in [(&uuidless, vec!["direct"]), (&late, vec![])] {
+        let (_, s) = snap(&r.main, reader);
+        assert!(!s.complete(), "the snapshot is partial");
+        let ids: Vec<_> = s.records.iter().map(|r| r.message.id.as_str()).collect();
+        assert_eq!(ids, expect, "no sidecar-less role mail is served");
+    }
+
+    // Read cleanly again, the cohort gate and legacy role mail return.
+    std::fs::remove_file(&bad).unwrap();
+    assert_eq!(visible(&r.main, &uuidless), ["legacy", "direct"]);
+    assert_eq!(
+        visible(&r.main, &reviewer("rev-a", Some(1))),
+        ["legacy", "cohort"]
+    );
+}
