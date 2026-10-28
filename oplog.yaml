@@ -82474,5 +82474,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6424
+- id: 01a183ca-be71-7e21-85f6-1d7f84e31711
+  target_id: 01a183ca-b733-7142-b221-a3857eb1b8e8
+  author: aida
+  node_id: '1'
+  lamport: 6425
+  timestamp: 2026-10-28T18:34:24.753644917Z
+  kind: !Create
+    title: 'cosmetic: leases.rs is_lease_companion staging-name branch (<stem>.tmp.<pid>.<s…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      cosmetic: leases.rs is_lease_companion staging-name branch (<stem>.tmp.<pid>.<seq>) is unreachable at every call site because each caller first requires extension()==toml; harmless, but the doc/trace comment 'and staging files' overstates what the helper adds.
+
+      PR: #3052
+      Reviewed sha: 08c719342aed2fd370e8e1a92e49966b40da638b
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6425
 node_id: '1'

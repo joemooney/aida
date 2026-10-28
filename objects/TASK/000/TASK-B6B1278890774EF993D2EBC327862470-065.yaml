@@ -1,0 +1,30 @@
+id: 01a183ca-b733-7142-b221-a3857eb1b8e8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-065
+title: 'cosmetic: leases.rs is_lease_companion staging-name branch (<stem>.tmp.<pid>.<s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: leases.rs is_lease_companion staging-name branch (<stem>.tmp.<pid>.<seq>) is unreachable at every call site because each caller first requires extension()==toml; harmless, but the doc/trace comment 'and staging files' overstates what the helper adds.
+
+  PR: #3052
+  Reviewed sha: 08c719342aed2fd370e8e1a92e49966b40da638b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T18:34:22.899037085Z
+modified_at: 2026-10-28T18:34:22.899037085Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-012
+- finding-hash:d517b1ed
+- from-review:PR-3052
+- kind:carried-forward
+filed_at:
+  code_sha: aecc4311ee4f4f5b648ef2a0f07b9fdcf3d52004
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f3cda469f7b
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
