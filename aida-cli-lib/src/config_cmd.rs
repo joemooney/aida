@@ -1267,7 +1267,8 @@ fn save_edit_doc(path: &std::path::Path, doc: &DocumentMut) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    aida_core::write_atomic(path, doc.to_string())
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, doc.to_string())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -3509,7 +3510,7 @@ fn cli_toggle_local_aida_mcp_registration(project_root: &std::path::Path) -> aid
 }
 
 // trace:STORY-1131 | ai:codex
-fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
+pub(crate) fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
     let mut root = read_local_mcp_json(project_root)?.unwrap_or_else(|| serde_json::json!({}));
     let root_obj = root
         .as_object_mut()
@@ -3533,7 +3534,7 @@ fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()>
 }
 
 // trace:STORY-1131 | ai:codex
-fn remove_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
+pub(crate) fn remove_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
     let Some(mut root) = read_local_mcp_json(project_root)? else {
         return Ok(());
     };
@@ -3563,6 +3564,9 @@ fn read_local_mcp_json(project_root: &std::path::Path) -> Result<Option<serde_js
 
 // trace:STORY-1131 | ai:codex
 fn write_local_mcp_json(project_root: &std::path::Path, root: &serde_json::Value) -> Result<()> {
+    // `.mcp.json` is harness settings the product branch often tracks.
+    // trace:STORY-1741 | ai:claude
+    aida_core::scaffolding::refuse_in_adopted_worktree(project_root)?;
     let path = project_root.join(".mcp.json");
     let body = serde_json::to_string_pretty(root)?;
     aida_core::write_atomic(&path, format!("{body}\n"))
@@ -3616,7 +3620,10 @@ fn cli_edit_agent_profile(
 }
 
 #[cfg(feature = "tui")]
-fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str) -> Result<()> {
+pub(crate) fn scaffold_enabled_agent_profile(
+    project_root: &std::path::Path,
+    profile: &str,
+) -> Result<()> {
     let mut selection = crate::init_cmd::AgentSelection {
         claude: false,
         codex: false,
@@ -3637,7 +3644,8 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
         db_path,
     );
     let store = aida_core::RequirementsStore::default();
-    let preview = scaffolder.preview(&store);
+    // trace:STORY-1741 | ai:claude
+    let preview = scaffolder.preview_for_write(&store)?;
     // Codex and Antigravity share the portable `.agents/skills` pack; a
     // legacy per-vendor pack appears in the preview only when it already
     // exists. A pack's delivered-skills manifest is recorded only when this
@@ -3940,7 +3948,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
 /// Drop the `[ui] theme` key, preserving the rest of the file. Used by
 /// `aida config glyph theme unicode` to return to the implicit default.
 // trace:STORY-633 | ai:claude
-fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
+pub(crate) fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
     use toml_edit::DocumentMut;
     let body = match std::fs::read_to_string(path) {
         Ok(b) => b,
@@ -3951,7 +3959,8 @@ fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
     if let Some(ui) = doc.get_mut("ui").and_then(|i| i.as_table_mut()) {
         ui.remove("theme");
     }
-    aida_core::write_atomic(path, doc.to_string())?;
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, doc.to_string())?;
     Ok(())
 }
 

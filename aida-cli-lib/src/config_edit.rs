@@ -102,7 +102,9 @@ pub(crate) fn save_doc(path: &Path, doc: &DocumentMut) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    aida_core::write_atomic(path, doc.to_string())
+    // An adopted worktree's config is projected from the shared plane; the
+    // guarded writer refuses an in-place edit. trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, doc.to_string())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 

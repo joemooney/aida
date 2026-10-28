@@ -10842,7 +10842,7 @@ hostname = "localhost"
 
         // The refresh migration (header-less and unedited -> wrapped) clears
         // the finding.
-        crate::scaffold_refresh::refresh_agent_packs_at(root, None, None);
+        crate::scaffold_refresh::refresh_agent_packs_at(root, None, None).unwrap();
         let findings = scan_scaffold_drift(root, &store);
         assert!(
             findings.iter().all(|f| f.id != "scaffold-drift/project"),
@@ -14821,7 +14821,10 @@ pub(crate) fn doctor_migrate_counter_scope_in_store(
 /// Update the `[id_format] counter_scope` value in config.toml. Adds the
 /// line if missing, replaces it in-place if present. Preserves the rest
 /// of the file (comments, other keys, formatting).
-fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -> Result<()> {
+pub(crate) fn update_config_counter_scope(
+    config_path: &std::path::Path,
+    new_value: &str,
+) -> Result<()> {
     let content = std::fs::read_to_string(config_path)?;
     let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
     let mut in_id_format = false;
@@ -14865,7 +14868,8 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
             }
         }
     }
-    std::fs::write(config_path, lines.join("\n") + "\n")?;
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(config_path, lines.join("\n") + "\n")?;
     Ok(())
 }
 

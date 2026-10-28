@@ -233,6 +233,8 @@ pub(crate) fn ensure_discipline_pack_scaffold(
     _force: bool,
 ) -> Result<DisciplinePackScaffoldReport> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
+    // trace:STORY-1741 | ai:claude
+    aida_core::scaffolding::refuse_in_adopted_worktree(root)?;
     let mut pack: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
         .iter()
         .filter_map(|(k, v)| k.strip_prefix(".aida/discipline/").map(|n| (n, *v)))
@@ -529,6 +531,8 @@ pub(crate) fn gitignore_has_discipline_pack_allow_list(content: &str) -> bool {
 pub(crate) fn ensure_discipline_pack_gitignore_allow_list(cwd: &std::path::Path) -> Result<bool> {
     use std::io::Write;
 
+    // trace:STORY-1741 | ai:claude
+    aida_core::scaffolding::refuse_in_adopted_worktree(cwd)?;
     let gitignore_path = cwd.join(".gitignore");
     let Ok(content) = std::fs::read_to_string(&gitignore_path) else {
         return Ok(false);
