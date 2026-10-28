@@ -1502,6 +1502,10 @@ struct Reach {
     unrooted: Vec<Named>,
     /// Root handovers (`use crate::*;`, `use crate as c;`).
     handovers: Vec<Named>,
+    /// Paths that climb with `super` to the module one below the crate
+    /// root (`gate` for a gate file), as the segments after it.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+    top: Vec<Named>,
     /// Modules the source declares, which shadow a root glob's names.
     local_mods: Vec<String>,
     /// Every `#[path]` target (and `path = "..."` in attribute or macro
@@ -1560,6 +1564,8 @@ impl Reach {
             self.root(named);
         } else if supers == 0 && !tail.is_empty() {
             self.unrooted.push(named);
+        } else if supers + 1 == self.level {
+            self.top.push(named);
         }
     }
 
@@ -2030,8 +2036,7 @@ fn gate_dispatch_imports_nothing_authority_bearing_from_dispatch() {
 /// Crate-root names a `gate/dispatch_*` source may reach: `gate` itself and
 /// `dispatch`, whose items [`GATE_DISPATCH_IMPORT_ALLOWLIST`] governs.
 /// Everything else outside `gate/` goes through the facade
-/// [`DISPATCH_DEPS`], so no unprotected definer sits between the gate and
-/// the code it runs (`crate::canonical_role_name` in `kernel.rs` could call
+/// [`DISPATCH_DEPS`] (`crate::canonical_role_name` in `kernel.rs` could call
 /// any root module, and that module `crate::dispatch`).
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 const GATE_DISPATCH_ROOT_ALLOWLIST: &[&str] = &["gate", "dispatch"];
@@ -2040,18 +2045,180 @@ const GATE_DISPATCH_ROOT_ALLOWLIST: &[&str] = &["gate", "dispatch"];
 /// anything outside `gate/`.
 const DISPATCH_DEPS: &str = "dispatch_deps.rs";
 
-/// What the facade names outside `gate/`, as the path after `crate` down
-/// to the item, each only in a `use`: data-only [`CiState`] and the drive
-/// ledger's row, outcome and audit sink, which hands nothing back to the
-/// gate. Code that feeds a gate decision is implemented in the facade.
-///
-/// [`CiState`]: crate::forge::CiState
-const DISPATCH_DEPS_EXTERNAL: &[&str] = &[
-    "forge::CiState",
-    "mandate_drive::ActionRow",
-    "mandate_drive::Outcome",
-    "mandate_drive::emit_action",
-];
+/// The paths in the facade's own `FACADE_EXTERNAL_LEAVES`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+fn facade_leaves() -> Vec<&'static str> {
+    crate::gate::dispatch_deps::FACADE_EXTERNAL_LEAVES
+        .iter()
+        .map(|(path, _)| *path)
+        .collect()
+}
+
+/// Every path outside `gate/` that `text` (a gate file) names, spelled
+/// from `crate::` (and, with `sibling`, from `aida_core::`). A path spelled
+/// through an imported name (`use crate::events;` then `events::emit`) is
+/// reported in full as well as the import. A glob or a handover of a whole
+/// crate root is reported as `::*` or the bare root: no leaf can list it.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+fn outside_paths(text: &str, sibling: bool) -> Vec<String> {
+    type Found = std::collections::BTreeSet<String>;
+    fn take(path: String, n: &Named, found: &mut Found, bound: &mut Vec<(String, String)>) {
+        if n.glob {
+            found.insert(format!("{path}::*"));
+            return;
+        }
+        if let Some(name) = n.rename.clone().or_else(|| n.segs.last().cloned()) {
+            bound.push((name, path.clone()));
+        }
+        found.insert(path);
+    }
+    let reach = reach(text, 2);
+    let mut found = Found::new();
+    let mut bound = Vec::new();
+    for n in &reach.rooted {
+        match n.segs.first() {
+            Some(first) if first == "gate" => {}
+            Some(_) => take(
+                format!("crate::{}", n.segs.join("::")),
+                n,
+                &mut found,
+                &mut bound,
+            ),
+            // `pub(crate)` names the root and hands nothing over.
+            None if !n.glob && !n.whole => {}
+            None => {
+                found.insert(if n.glob { "crate::*" } else { "crate" }.to_string());
+            }
+        }
+    }
+    for n in &reach.unrooted {
+        if sibling && n.segs[0] == "aida_core" {
+            take(n.segs.join("::"), n, &mut found, &mut bound);
+        }
+    }
+    // Follow imported names until nothing new appears.
+    let mut seen = 0;
+    while seen < bound.len() {
+        let (name, path) = bound[seen].clone();
+        seen += 1;
+        for n in &reach.unrooted {
+            if n.segs[0] == name && n.segs.len() > 1 {
+                let full = format!("{path}::{}", n.segs[1..].join("::"));
+                if !found.contains(&full) {
+                    take(full, n, &mut found, &mut bound);
+                }
+            }
+        }
+    }
+    found.into_iter().collect()
+}
+
+/// Where `gate/{name}` reaches outside `gate/` other than through the
+/// facade. Every source but [`DISPATCH_DEPS`] stays inside
+/// [`GATE_DISPATCH_ROOT_ALLOWLIST`]; every outside path the facade names,
+/// crate or `aida_core`, is in `leaves` by its full path.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+fn gate_dispatch_external_reach(name: &str, text: &str, leaves: &[&str]) -> Vec<String> {
+    if name != DISPATCH_DEPS {
+        return crate_root_names(text)
+            .into_iter()
+            .filter(|root| !GATE_DISPATCH_ROOT_ALLOWLIST.contains(&root.as_str()))
+            .map(|root| format!("crate::{root}"))
+            .collect();
+    }
+    outside_paths(text, true)
+        .into_iter()
+        .filter(|p| !leaves.contains(&p.as_str()))
+        .collect()
+}
+
+/// The gate modules `text` (a `gate/dispatch_*` source) names, one hop:
+/// `crate::gate::m`, `super::m`. `Err` carries a form that hands over
+/// `gate` itself (a glob, the bare module), which cannot be followed.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+fn gate_modules_named(text: &str) -> Result<Vec<String>, String> {
+    let reach = reach(text, 2);
+    // `use crate::gate;` then `gate::m::x` names `m` through the import.
+    let imported = reach
+        .unrooted
+        .into_iter()
+        .filter(|n| n.segs[0] == "gate" && n.segs.len() > 1);
+    let gate_rel = reach
+        .rooted
+        .into_iter()
+        .filter(|n| n.segs.first().is_some_and(|s| s == "gate"))
+        .chain(imported)
+        .map(|n| Named {
+            segs: n.segs[1..].to_vec(),
+            ..n
+        })
+        .chain(reach.top);
+    let mut out = std::collections::BTreeSet::new();
+    for n in gate_rel {
+        match n.segs.first() {
+            Some(m) => {
+                out.insert(m.clone());
+            }
+            // `pub(in crate::gate)` and a plain `use crate::gate;` hand
+            // nothing over; a glob or a rename does.
+            None if !n.glob && n.rename.is_none() => {}
+            None => {
+                return Err(format!(
+                    "crate::gate{}",
+                    if n.glob { "::*" } else { " as _" }
+                ))
+            }
+        }
+    }
+    Ok(out.into_iter().collect())
+}
+
+/// The outside reach of each non-`dispatch_*` gate module the `sources`
+/// name, one hop: each outside path must be in `leaves` (calls through the
+/// facade are gate paths and pass). `module` reads `gate/<m>.rs`. Returns
+/// the refusals and the leaves the hop used.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+fn gate_dispatch_one_hop(
+    sources: &[(String, String)],
+    module: impl Fn(&str) -> String,
+    leaves: &[&str],
+) -> (Vec<String>, Vec<String>) {
+    let mut bad = Vec::new();
+    let mut modules = std::collections::BTreeSet::new();
+    for (name, text) in sources {
+        match gate_modules_named(text) {
+            Ok(ms) => modules.extend(ms.into_iter().filter(|m| !m.starts_with("dispatch_"))),
+            Err(how) => bad.push(format!("  gate/{name}: {how} cannot be followed")),
+        }
+    }
+    let mut used = Vec::new();
+    for m in modules {
+        for path in outside_paths(&module(&m), false) {
+            if leaves.contains(&path.as_str()) {
+                used.push(path);
+            } else {
+                bad.push(format!(
+                    "  gate/{m}.rs (named from gate/dispatch_*): {path}"
+                ));
+            }
+        }
+    }
+    (bad, used)
+}
+
+/// The source of gate module `m`: `gate/<m>.rs`, else `gate/<m>/mod.rs`,
+/// else `gate/mod.rs` (an item `crate::gate::x` defined there).
+fn gate_module_source(m: &str) -> String {
+    let gate_dir = workspace_root().join("aida-cli-lib/src/gate");
+    [
+        gate_dir.join(format!("{m}.rs")),
+        gate_dir.join(m).join("mod.rs"),
+        gate_dir.join("mod.rs"),
+    ]
+    .iter()
+    .find_map(|p| std::fs::read_to_string(p).ok())
+    .unwrap()
+}
 
 /// Every `gate/dispatch_*.rs` source, by file name.
 fn gate_dispatch_sources() -> Vec<(String, String)> {
@@ -2182,67 +2349,16 @@ fn crate_root_name_detection_sees_evasive_forms() {
     assert_eq!(crate_root_names("use crate::gate::mandate;"), vec!["gate"]);
 }
 
-/// Where `gate/{name}` reaches outside `gate/` other than through the
-/// facade. Every source but [`DISPATCH_DEPS`] stays inside
-/// [`GATE_DISPATCH_ROOT_ALLOWLIST`]; the facade names only
-/// [`DISPATCH_DEPS_EXTERNAL`] items, each by its full path in a `use`, and
-/// no code of its own reaches outside `gate/`.
-// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
-fn gate_dispatch_external_reach(name: &str, text: &str) -> Vec<String> {
-    use syn::visit::Visit;
-    if name != DISPATCH_DEPS {
-        return crate_root_names(text)
-            .into_iter()
-            .filter(|root| !GATE_DISPATCH_ROOT_ALLOWLIST.contains(&root.as_str()))
-            .map(|root| format!("crate::{root}"))
-            .collect();
-    }
-    // Rooted paths off the gate; `pub(crate)` roots nothing.
-    let outside = |item: &syn::Item| -> Vec<Named> {
-        let mut reach = Reach {
-            level: 2,
-            ..Reach::default()
-        };
-        reach.visit_item(item);
-        reach.resolve();
-        reach
-            .rooted
-            .into_iter()
-            .filter(|n| n.glob || n.whole || !n.segs.is_empty())
-            .filter(|n| n.segs.first().is_none_or(|s| s != "gate"))
-            .collect()
-    };
-    let shown = |n: &Named| {
-        format!(
-            "crate::{}{}",
-            n.segs.join("::"),
-            if n.glob { "::*" } else { "" }
-        )
-    };
-    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("{name} must parse: {e}"));
-    let mut bad = Vec::new();
-    for item in &file.items {
-        let pinned_use = matches!(item, syn::Item::Use(_));
-        for n in outside(item) {
-            let pinned = pinned_use
-                && !n.glob
-                && !n.whole
-                && n.segs.len() == 2
-                && DISPATCH_DEPS_EXTERNAL.contains(&n.segs.join("::").as_str());
-            if !pinned {
-                bad.push(shown(&n));
-            }
-        }
-    }
-    bad
-}
-
 // Each two-hop form from the sketch, and each way around the facade, is
-// refused; the facade's pinned `use`s and gate-internal paths are not.
+// refused; listed leaves and gate-internal paths are not.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 #[test]
 fn gate_dispatch_external_reach_sees_two_hop_forms() {
     let gate = "dispatch_authority.rs";
+    let leaves = &[
+        "crate::events::emit",
+        "aida_core::liveness::process_start_identity",
+    ];
     for (name, src) in [
         // The old allowlisted definers, however they are spelled.
         (gate, "fn f() { crate::canonical_role_name(s); }"),
@@ -2258,6 +2374,8 @@ fn gate_dispatch_external_reach_sees_two_hop_forms() {
         (gate, "use crate::mandate_drive::{ActionRow, Outcome};"),
         // A definer body's next hop.
         (gate, "fn f() { crate::util::wrap(raw); }"),
+        // A listed leaf is the facade's, not every dispatch source's.
+        (gate, "fn f() { crate::events::emit(r, e); }"),
         // A bare name resolved through a root glob or alias.
         (gate, "use crate::*;\nfn f() { canonical_role_name(s); }"),
         (
@@ -2268,7 +2386,7 @@ fn gate_dispatch_external_reach_sees_two_hop_forms() {
             gate,
             "use crate as c;\nfn f() { c::canonical_role_name(s); }",
         ),
-        // The facade: no definer, no glob or handover, no unpinned item.
+        // The facade: no definer, no glob or handover, no unlisted path.
         (
             DISPATCH_DEPS,
             "pub(crate) use crate::kernel::canonical_role_name;",
@@ -2277,22 +2395,14 @@ fn gate_dispatch_external_reach_sees_two_hop_forms() {
         (DISPATCH_DEPS, "use crate::*;"),
         (DISPATCH_DEPS, "use super::super::*;"),
         (DISPATCH_DEPS, "use crate as c;"),
-        (DISPATCH_DEPS, "pub(crate) use crate::forge::*;"),
-        (DISPATCH_DEPS, "pub(crate) use crate::forge;"),
-        (DISPATCH_DEPS, "pub(crate) use crate::forge::CiStatus;"),
+        (DISPATCH_DEPS, "pub(crate) use crate::events::*;"),
+        (
+            DISPATCH_DEPS,
+            "use crate::events;\nfn f() { events::forward(r); }",
+        ),
         (DISPATCH_DEPS, "pub(crate) use crate::dispatch::sha256_hex;"),
-        (
-            DISPATCH_DEPS,
-            "pub(crate) use crate::forge::CiState::Success;",
-        ),
-        // A pinned item, or any outside code, used from a body.
         (DISPATCH_DEPS, "fn f() { crate::canonical_role_name(s); }"),
-        (
-            DISPATCH_DEPS,
-            "fn f() { crate::mandate_drive::emit_action(r, m, a, w); }",
-        ),
         (DISPATCH_DEPS, "fn f() -> crate::forge::CiState { todo!() }"),
-        (DISPATCH_DEPS, "fn f() { use crate::forge::CiState; }"),
         (
             DISPATCH_DEPS,
             "mod m { pub(crate) use crate::forge::CiState; }",
@@ -2301,9 +2411,20 @@ fn gate_dispatch_external_reach_sees_two_hop_forms() {
             DISPATCH_DEPS,
             "pub(crate) fn h(raw: &str) -> String { crate::util::wrap(raw) }",
         ),
+        // An unlisted sibling-crate call, or the sibling crate handed over.
+        (
+            DISPATCH_DEPS,
+            "fn f() { aida_core::liveness::pid_is_alive(1); }",
+        ),
+        (DISPATCH_DEPS, "use aida_core::liveness::*;"),
+        (DISPATCH_DEPS, "use aida_core as core2;"),
+        (
+            DISPATCH_DEPS,
+            "use aida_core::liveness;\nfn f() { liveness::pid_is_alive(1); }",
+        ),
     ] {
         assert!(
-            !gate_dispatch_external_reach(name, src).is_empty(),
+            !gate_dispatch_external_reach(name, src, leaves).is_empty(),
             "gate/{name}: `{src}` must be refused"
         );
     }
@@ -2322,14 +2443,14 @@ fn gate_dispatch_external_reach_sees_two_hop_forms() {
             gate,
             "fn f() { aida_core::liveness::process_start_identity(1); }",
         ),
-        (DISPATCH_DEPS, "pub(crate) use crate::forge::CiState;"),
-        (
-            DISPATCH_DEPS,
-            "pub(crate) use crate::mandate_drive::{emit_action, ActionRow, Outcome};",
-        ),
+        (DISPATCH_DEPS, "fn f() { crate::events::emit(r, e); }"),
         (
             DISPATCH_DEPS,
             "pub(crate) use aida_core::liveness::process_start_identity;",
+        ),
+        (
+            DISPATCH_DEPS,
+            "pub(crate) use super::dispatch_types::CiState;",
         ),
         (DISPATCH_DEPS, "use crate::gate::mandate::MANDATE_SEAT;"),
         (
@@ -2338,42 +2459,142 @@ fn gate_dispatch_external_reach_sees_two_hop_forms() {
         ),
     ] {
         assert_eq!(
-            gate_dispatch_external_reach(name, src),
+            gate_dispatch_external_reach(name, src, leaves),
             Vec::<String>::new(),
             "gate/{name}: {src}"
         );
     }
 }
 
+// One hop into the gate modules `gate/dispatch_*` names: an outside path
+// there must be listed too, including one re-exported under a gate path.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+#[test]
+fn gate_dispatch_one_hop_sees_outside_reach_in_named_gate_modules() {
+    let leaves = &["crate::events::emit"];
+    let hop = |dispatch: &str, module: &'static str| {
+        let sources = vec![("dispatch_authority.rs".to_string(), dispatch.to_string())];
+        gate_dispatch_one_hop(&sources, |_| module.to_string(), leaves)
+    };
+    for (dispatch, module) in [
+        // A protected module re-exporting outside code under a gate path.
+        (
+            "fn f() { crate::gate::mandate::X::new(); }",
+            "pub(crate) use crate::forge::X;",
+        ),
+        ("use super::mandate::X;", "pub(crate) use crate::forge::X;"),
+        (
+            "use crate::gate::{mandate::{X}};",
+            "pub(crate) use super::super::forge::X;",
+        ),
+        // A protected module calling an unprotected definer.
+        (
+            "use crate::gate::seat_authority::grant_check_at;",
+            "fn grant_check_at() { crate::grant_keyring::read(); }",
+        ),
+        (
+            "use crate::gate::seat_authority::f;",
+            "use crate::grant_keyring;\nfn f() { grant_keyring::read(); }",
+        ),
+        (
+            "use crate::gate::seat_authority::f;",
+            "use crate::*;\nfn f() {}",
+        ),
+        // A form that hands over `gate` itself cannot be followed.
+        ("use crate::gate::*;", ""),
+        ("use crate::gate as g;", ""),
+        (
+            "use crate::gate;\nfn f() { gate::mandate::X::new(); }",
+            "pub(crate) use crate::forge::X;",
+        ),
+        ("use super::*;", ""),
+    ] {
+        assert!(
+            !hop(dispatch, module).0.is_empty(),
+            "`{dispatch}` -> `{module}` must be refused"
+        );
+    }
+    for (dispatch, module) in [
+        (
+            "use crate::gate::mandate::f;",
+            "fn f() { crate::events::emit(r, e); }",
+        ),
+        (
+            "use crate::gate::seat_authority::f;",
+            "fn f() { crate::gate::dispatch_deps::canonical_role_name(s); }",
+        ),
+        (
+            "use crate::gate::mandate::f;",
+            "fn f() { aida_core::liveness::process_start_identity(1); }",
+        ),
+        // A visibility path names no module.
+        ("pub(in crate::gate) struct S;", "use crate::*;"),
+        // Only one hop: a `dispatch_*` module is scanned on its own.
+        (
+            "use super::dispatch_io::f;",
+            "fn f() { crate::util::wrap(raw); }",
+        ),
+    ] {
+        assert_eq!(
+            hop(dispatch, module).0,
+            Vec::<String>::new(),
+            "`{dispatch}` -> `{module}`"
+        );
+    }
+}
+
 /// `gate/dispatch_*` reaches outside `gate/` only through the facade
-/// `gate/dispatch_deps.rs`, which implements on the floor every external
-/// item whose behaviour feeds a dispatch decision and pins by name the few
-/// data types and the audit sink that stay outside. With no unprotected definer on the path, a
-/// mandate-shipped edit outside `gate/` cannot change what the gate runs
-/// (the two-hop laundering of TASK-b6b1278890774ef993d2ebc327862470-013).
+/// `gate/dispatch_deps.rs`, and the gate modules they name reach outside
+/// only through the facade or a listed leaf. Every outside path the facade
+/// and those modules name is in the facade's `FACADE_EXTERNAL_LEAVES`, and
+/// every entry there is still used, so the list can only shrink without a
+/// human merge. This checks direct reach from `gate/dispatch_*` and one hop
+/// into the gate modules it names; it does not follow a leaf's own body, nor
+/// gate modules further away (TASK-b6b1278890774ef993d2ebc327862470-024).
 // trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 #[test]
-fn gate_dispatch_reaches_outside_the_gate_only_through_the_facade() {
+fn gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves() {
     let sources = gate_dispatch_sources();
-    assert!(
-        sources.iter().any(|(name, _)| name == DISPATCH_DEPS),
-        "gate/{DISPATCH_DEPS} is missing"
-    );
-    let bad: Vec<String> = sources
+    let leaves = facade_leaves();
+    let facade = sources
+        .iter()
+        .find(|(name, _)| name == DISPATCH_DEPS)
+        .unwrap_or_else(|| panic!("gate/{DISPATCH_DEPS} is missing"));
+    let mut bad: Vec<String> = sources
         .iter()
         .flat_map(|(name, text)| {
-            gate_dispatch_external_reach(name, text)
+            gate_dispatch_external_reach(name, text, &leaves)
                 .into_iter()
                 .map(move |how| format!("  gate/{name}: {how}"))
         })
         .collect();
+    let (hop_bad, mut used) = gate_dispatch_one_hop(&sources, gate_module_source, &leaves);
+    bad.extend(hop_bad);
+    used.extend(outside_paths(&facade.1, true));
+    let mut seen = std::collections::BTreeSet::new();
+    let duplicate: Vec<&str> = leaves
+        .iter()
+        .copied()
+        .filter(|l| !seen.insert(*l))
+        .collect();
+    let stale: Vec<&str> = leaves
+        .iter()
+        .copied()
+        .filter(|l| !used.iter().any(|u| u == l))
+        .collect();
     assert!(
         bad.is_empty(),
-        "gate/dispatch_* reaches outside `gate/` past the facade:\n{}\nCall the \
-         item through `gate/{DISPATCH_DEPS}`; if it feeds a gate decision, \
-         implement it there and re-export it from its old path.",
+        "gate/dispatch_* (or a gate module it names) reaches outside `gate/` \
+         past the facade:\n{}\nCall the item through `gate/{DISPATCH_DEPS}`; if \
+         it feeds a gate decision, implement it on the floor. A leaf that must \
+         stay outside goes in `FACADE_EXTERNAL_LEAVES` with its reason.",
         bad.join("\n")
+    );
+    assert!(
+        stale.is_empty() && duplicate.is_empty(),
+        "`FACADE_EXTERNAL_LEAVES` lists paths nothing reaches (stale: {stale:?}, \
+         duplicate: {duplicate:?}); remove them."
     );
 }
 

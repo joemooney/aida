@@ -16,6 +16,7 @@ pub(crate) mod dispatch_io;
 pub(crate) mod dispatch_ledger;
 pub(crate) mod dispatch_lock;
 pub(crate) mod dispatch_reviewer_hold;
+pub(crate) mod dispatch_types;
 pub(crate) mod fleet_lanes;
 pub(crate) mod mandate;
 pub(crate) mod mandate_drive;

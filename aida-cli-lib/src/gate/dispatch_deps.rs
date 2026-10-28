@@ -1,15 +1,13 @@
 //! The gate-owned facade for everything `gate/dispatch_*` needs from outside
 //! `gate/` (TASK-b6b1278890774ef993d2ebc327862470-013).
 //!
-//! Dispatch authority names no unprotected crate code directly: each external
+//! `gate/dispatch_*` names no unprotected crate code directly: each external
 //! item it uses comes through here. Code whose behaviour feeds a dispatch
 //! decision (role-name canonicalisation, the requirement-store lookup, the
-//! `/proc` namespace probe) is implemented here, on the protected floor; its
-//! historical paths (`kernel`, `lib_part2`, `lib_part3`) delegate to it and
-//! `agent_registry` uses the probe from here. What stays outside `gate/` is
-//! pinned by name: the data-only [`CiState`] and the drive ledger's
-//! [`ActionRow`], [`Outcome`] and [`emit_action`] audit sink, which hands
-//! nothing back to the gate.
+//! `/proc` namespace probe, the drive ledger's row and audit sink) is
+//! implemented on the floor, here or in `gate/dispatch_types.rs`. What the
+//! facade, and the gate modules `gate/dispatch_*` call, still invoke outside
+//! `gate/` is listed by path in [`FACADE_EXTERNAL_LEAVES`].
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 
@@ -184,14 +182,148 @@ impl PidNamespaceProbe {
     }
 }
 
-// ── Pinned items outside the gate ───────────────────────────────────────────
+// ── Drive ledger ────────────────────────────────────────────────────────────
 
-/// CI state the flow ship selector matches on. A data-only enum: the gate
-/// calls none of its code.
+/// The data the facade hands the gate, defined on the floor.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
-pub(crate) use crate::forge::CiState;
+pub(crate) use super::dispatch_types::{ActionRow, CiState, Outcome};
 
-/// The drive ledger's row, outcome and audit sink. [`emit_action`] returns
-/// nothing to the gate, so no edit behind it can change a dispatch decision.
+/// Ledger one `MandateDriveAction` row. Best-effort.
+// trace:STORY-1700 | trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+pub(crate) fn emit_action(root: &std::path::Path, mandate_id: &str, actor: &str, row: &ActionRow) {
+    let mut event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MandateDriveAction {
+            mandate_id: mandate_id.into(),
+            actor: actor.into(),
+            lane: row.lane.clone(),
+            subject: row.subject.clone(),
+            action: row.action.clone(),
+            outcome: row.outcome.as_str().into(),
+            why: row.why.clone(),
+        },
+    );
+    if actor == "session" {
+        event.seat = crate::events::active_seat();
+    }
+    crate::events::emit(root, &event);
+}
+
+// ── Leaves outside the gate ─────────────────────────────────────────────────
+
+/// Every path outside `gate/` that this facade, or a gate module that
+/// `gate/dispatch_*` names, still reaches, with why it stays there. The
+/// story_1888 ratchet fails on an unlisted path and on a stale entry, so
+/// the list only shrinks unless a human merges a change to this file.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
-pub(crate) use crate::mandate_drive::{emit_action, ActionRow, Outcome};
+#[cfg(test)]
+pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
+    // ── this facade ──
+    (
+        "aida_core::liveness::process_start_identity",
+        "sibling-crate process start probe",
+    ),
+    ("aida_core::RequirementsStore", "sibling-crate store type"),
+    (
+        "aida_core::store_locate::detect_distributed_store_from",
+        "sibling-crate store discovery",
+    ),
+    ("aida_core::GitBackend::new", "sibling-crate store backend"),
+    (
+        "aida_core::DatabaseBackend::load",
+        "sibling-crate store backend",
+    ),
+    (
+        "aida_core::resolve_requirements_path_in",
+        "sibling-crate legacy store path",
+    ),
+    ("aida_core::Storage::new", "sibling-crate legacy store"),
+    ("crate::events::Event::new", "audit event shape; write-only"),
+    (
+        "crate::events::EventKind::MandateDriveAction",
+        "audit event shape; write-only",
+    ),
+    (
+        "crate::events::active_seat",
+        "audit event seat label; write-only",
+    ),
+    ("crate::events::emit", "audit event sink; returns nothing"),
+    // ── gate modules gate/dispatch_* names (one hop) ──
+    // TASK-b6b1278890774ef993d2ebc327862470-024 brings these behind the
+    // facade or onto the floor.
+    ("crate::aida_home_dir", "home-directory path lookup"),
+    (
+        "crate::current_user_id",
+        "operator identity for loading mandates and grants",
+    ),
+    (
+        "crate::history::git_show_blob",
+        "reads the committed gate config blob",
+    ),
+    ("crate::DoctorFinding", "doctor report row; output only"),
+    (
+        "crate::authority_stderr_is_terminal",
+        "human-at-terminal probe",
+    ),
+    (
+        "crate::authority_stdin_is_terminal",
+        "human-at-terminal probe",
+    ),
+    (
+        "crate::authority_stdout_is_terminal",
+        "human-at-terminal probe",
+    ),
+    (
+        "crate::detect_distributed_store_from",
+        "store discovery for grant scoping",
+    ),
+    ("crate::drain_caps::parse_duration", "grant TTL parser"),
+    ("crate::find_project_root", "project root for seat display"),
+    (
+        "crate::grant_keyring::InstallError",
+        "grant key store error type",
+    ),
+    (
+        "crate::grant_keyring::KeyRead::Held",
+        "grant key store read result",
+    ),
+    ("crate::grant_keyring::available", "grant key store probe"),
+    ("crate::grant_keyring::install", "grant key store write"),
+    (
+        "crate::grant_keyring::install_to_parent",
+        "grant key store write",
+    ),
+    ("crate::grant_keyring::invalidate", "grant key store revoke"),
+    ("crate::grant_keyring::read", "grant key store read"),
+    (
+        "crate::orchestrator::OrchestratorContext::Orchestrated",
+        "orchestrator context variant",
+    ),
+    ("crate::orchestrator::detect", "orchestrator context probe"),
+    (
+        "crate::current_branch_at",
+        "git branch lookup for verdict scope",
+    ),
+    (
+        "crate::git_arg_guard::END_OF_OPTIONS",
+        "git argument separator constant",
+    ),
+    ("crate::git_arg_guard::is_hex_sha", "sha shape check"),
+    (
+        "crate::main_worktree_root_from",
+        "main worktree lookup for the verdict record",
+    ),
+    (
+        "crate::verdict_tip_relation",
+        "git ancestry check for verdict freshness",
+    ),
+    (
+        "crate::role::current_role_instance_is_companion",
+        "companion-session probe",
+    ),
+    (
+        "crate::store_sync::aida_store_setting",
+        "store setting lookup",
+    ),
+];

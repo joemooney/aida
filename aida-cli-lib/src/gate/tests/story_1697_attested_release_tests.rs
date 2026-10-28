@@ -244,7 +244,7 @@ impl Case {
                 .into_iter()
                 .filter(|(_, _, r)| {
                     r.action == "release-rework-hold"
-                        && r.outcome == crate::mandate_drive::Outcome::Refused
+                        && r.outcome == crate::gate::dispatch_types::Outcome::Refused
                         && r.why.as_deref().is_some_and(|w| w.contains("gh down"))
                 })
                 .count();
@@ -271,7 +271,7 @@ impl Case {
                     actor == "session"
                         && r.action == "release-rework-hold"
                         && r.lane == format!("pr:{PR}")
-                        && r.outcome == crate::mandate_drive::Outcome::Done
+                        && r.outcome == crate::gate::dispatch_types::Outcome::Done
                 })
                 .collect();
             assert_eq!(released.len(), usize::from(under.is_some()), "{rows:?}");

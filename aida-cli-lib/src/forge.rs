@@ -571,15 +571,10 @@ pub enum CheckRegistration {
     NoCi,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CiState {
-    /// No CI configured / no forge — drain treats like `lifecycle:no-ci-wait`.
-    None,
-    Pending,
-    Running,
-    Success,
-    Failed,
-}
+/// Lives on the floor (the gate matches on it); re-exported here for the
+/// forge's callers (TASK-b6b1278890774ef993d2ebc327862470-013).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+use crate::gate::dispatch_types::CiState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CiStatus {
