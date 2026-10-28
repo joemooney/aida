@@ -1,0 +1,33 @@
+id: 01a184aa-642b-7591-9be7-f60037b9cf73
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-070
+title: 'Review PR-3072: [AI:claude] fix(mailbox): unlink a partial file when a fallback write fails (TASK-b6b1278890774ef993d2ebc327862470-082)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/source-id-fallback-unlink`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3072>
+  - Branch: `fix/source-id-fallback-unlink` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-082
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3072` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T22:38:41.707739483Z
+modified_at: 2026-10-28T22:38:41.707739483Z
+req_type: Story
+filed_at:
+  code_sha: ce1df94975bf1c6b046306cf341be247cb5b3269
+  branch: fix/source-id-fallback-unlink
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b00dbdfa8ba
+  vendor: claude
+  session: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
