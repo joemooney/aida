@@ -18,6 +18,7 @@ use crate::stakeholder_role::StakeholderAction;
 pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::session_misc_cmd::BG_FETCH,
     &crate::requirements_cli::ADD,
+    &crate::adoption_cmd::ADOPTION,
     &crate::advisor_cmd_root::ADVISOR,
     &crate::agent_launch::AGENT,
     &crate::user_alias::ALIAS,

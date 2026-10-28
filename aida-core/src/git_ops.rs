@@ -6440,6 +6440,79 @@ fn backup_and_replace_hook(
         .with_context(|| format!("replacing {}", path.display()))
 }
 
+/// What [`remove_shipped_aida_hooks`] removed, or would remove in a dry
+/// run, and left in place.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HookRemoval {
+    pub removed: Vec<PathBuf>,
+    /// `(hook, why)` for each AIDA-looking hook left in place.
+    pub kept: Vec<(PathBuf, String)>,
+}
+
+/// Remove the git hooks AIDA installed in this repository's own hooks
+/// directory, and only those it can prove are its own: a regular file whose
+/// body is this build's shipped hook for that name. An edited or
+/// other-version AIDA hook, a symlink and a custom hook are left alone
+/// (the first two are reported). AIDA installs a hook only where none
+/// existed, so there is no earlier binding to restore. A `core.hooksPath`
+/// outside the git directory may be shared or tracked, so nothing there is
+/// removed.
+// trace:STORY-1741 | ai:claude
+pub fn remove_shipped_aida_hooks(repo: &Path, dry_run: bool) -> Result<HookRemoval> {
+    let dir = hooks_dir(repo)?;
+    let mut report = HookRemoval::default();
+    let outside = hooks_dir_outside_git_dir(repo, &dir).is_some();
+    for (name, _) in SHIPPED_HOOKS {
+        let path = dir.join(name);
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("inspecting the `{name}` hook {}", path.display()))
+            }
+        };
+        if meta.file_type().is_symlink() {
+            report
+                .kept
+                .push((path, "a symlink, which is never followed".into()));
+            continue;
+        }
+        if !meta.is_file() {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        match classify_hook(name, &body) {
+            HookKind::Custom => continue,
+            HookKind::OtherAidaGenerated => {
+                report.kept.push((
+                    path,
+                    "AIDA-generated but not this build's hook (edited, or another version)".into(),
+                ));
+                continue;
+            }
+            HookKind::Shipped if outside => {
+                report.kept.push((
+                    path,
+                    "core.hooksPath is outside the git directory, so it may be shared or \
+                     tracked"
+                        .into(),
+                ));
+                continue;
+            }
+            HookKind::Shipped => {}
+        }
+        if !dry_run {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("removing the `{name}` hook {}", path.display()))?;
+        }
+        report.removed.push(path);
+    }
+    Ok(report)
+}
+
 #[cfg(unix)]
 fn is_executable(meta: &std::fs::Metadata) -> bool {
     use std::os::unix::fs::PermissionsExt;
@@ -9891,6 +9964,69 @@ mod tests {
         // hook (metadata follows the link and reports NotFound).
         std::fs::remove_file(&template_copy).unwrap();
         ensure_store_hooks_supported(&repo).expect("dangling symlink hooks are skipped");
+    }
+
+    /// Uninstall removes only hooks that are byte-for-byte this build's
+    /// shipped hook; an edited AIDA hook, a custom hook and a symlink stay.
+    // trace:STORY-1741 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn story_1741_uninstall_removes_only_owned_shipped_hooks() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("p");
+        home_fixture_init(&repo).unwrap();
+        let hooks = repo.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let wrapped = |name: &str, key: &str| {
+            crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                crate::templates::EMBEDDED_TEMPLATES[key],
+            )
+        };
+        let shipped = wrapped("pre-commit", "hooks/aida-pre-commit.sh");
+        let edited = format!(
+            "{}\necho mine\n",
+            wrapped("commit-msg", "hooks/aida-commit-msg").trim_end()
+        );
+        std::fs::write(hooks.join("pre-commit"), &shipped).unwrap();
+        std::fs::write(hooks.join("commit-msg"), &edited).unwrap();
+        std::fs::write(hooks.join("post-commit"), "#!/bin/sh\necho custom\n").unwrap();
+        let elsewhere = dir.path().join("their-hook");
+        std::fs::write(&elsewhere, &shipped).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, hooks.join("post-merge")).unwrap();
+
+        let planned = remove_shipped_aida_hooks(&repo, true).unwrap();
+        assert_eq!(planned.removed, [hooks.join("pre-commit")]);
+        assert!(
+            hooks.join("pre-commit").exists(),
+            "a dry run removes nothing"
+        );
+
+        let report = remove_shipped_aida_hooks(&repo, false).unwrap();
+        assert_eq!(report, planned);
+        assert!(!hooks.join("pre-commit").exists());
+        assert_eq!(
+            std::fs::read_to_string(hooks.join("commit-msg")).unwrap(),
+            edited
+        );
+        assert!(hooks.join("post-commit").exists());
+        assert!(elsewhere.exists() && hooks.join("post-merge").is_symlink());
+        let kept: Vec<&Path> = report.kept.iter().map(|(p, _)| p.as_path()).collect();
+        assert!(
+            kept.contains(&hooks.join("commit-msg").as_path()),
+            "{kept:?}"
+        );
+        assert!(
+            kept.contains(&hooks.join("post-merge").as_path()),
+            "{kept:?}"
+        );
+        assert_eq!(
+            remove_shipped_aida_hooks(&repo, false)
+                .unwrap()
+                .removed
+                .len(),
+            0
+        );
     }
 
     /// BUG-1977: two stale generated hooks are refused together, naming the

@@ -4375,6 +4375,15 @@ pub(crate) fn handle_init_distributed_worktree(
         }
     }
 
+    // An adopted clone takes its settings and guidance from the shared
+    // plane, so init must not write `.aida/config.toml`, `.gitignore` or
+    // scaffolding: a config written here before the first projection would
+    // be kept as a local file and keep the plane's settings out for good.
+    // trace:STORY-1741 | ai:claude
+    if adopted_init_route(&cwd)? {
+        return handle_init_adopted(&cwd, worktree_dir, branch_name, node_name);
+    }
+
     // BUG-446: refuse to initialize over a workspace-of-projects. A fresh
     // `aida init` (no `.aida/config.toml` yet) whose directory contains nested,
     // non-submodule git repos would capture the whole tree as untracked entries
@@ -5121,6 +5130,99 @@ fn maybe_scaffold_codex_prompts_on_init(project_root: &std::path::Path) {
     }
 }
 
+/// Whether `aida init` in `cwd` must take the adopted-clone bootstrap.
+/// Refuses when the clone shows adoption evidence but its plane cannot be
+/// read: writing product files is never the fallback.
+// trace:STORY-1741 | ai:claude
+fn adopted_init_route(cwd: &std::path::Path) -> Result<bool> {
+    use aida_core::adoption_projection::{adoption_state, AdoptionState};
+    match adoption_state(cwd) {
+        AdoptionState::NotAdopted => Ok(false),
+        AdoptionState::Adopted => Ok(true),
+        AdoptionState::Unknown(error) => anyhow::bail!(
+            "This clone looks adopted from a shared AIDA plane, but the plane could not be \
+             read ({error}). Fix the adoption locator or the aida-store refs, then run \
+             `aida init` again; nothing was written."
+        ),
+    }
+}
+
+/// `aida init` in an adopted clone: attach the store worktree when the
+/// clone has an aida-store branch, keep it ignored through
+/// `.git/info/exclude`, project the plane before anything else can create
+/// `.aida/config.toml`, then set up the node identity. Writes no tracked
+/// or trackable product file: no config, `.gitignore` or scaffolding.
+// trace:STORY-1741 | ai:claude
+fn handle_init_adopted(
+    cwd: &std::path::Path,
+    worktree_dir: &str,
+    branch_name: &str,
+    node_name: Option<&str>,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    println!(
+        "{} This clone is adopted from a shared AIDA plane; setting it up without product files...",
+        "".cyan().bold()
+    );
+    git_ops::ensure_aida_runtime_excluded(cwd)?;
+    let attached = cwd.join(worktree_dir);
+    let store_path = if attached.exists() || git_ops::local_branch_exists(cwd, branch_name) {
+        Some(git_ops::create_store_worktree(
+            cwd,
+            worktree_dir,
+            branch_name,
+        )?)
+    } else if git_ops::remote_branch_exists(cwd, "origin", branch_name) {
+        Some(crate::store_sync::try_attach_store_worktree(cwd)?)
+    } else {
+        None
+    };
+    if let Some(store) = &store_path {
+        let git_name =
+            git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
+        let git_email =
+            git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
+        git_ops::configure_user(store, &git_name, &git_email)?;
+        println!("  {} store worktree at {}", "Done".green(), worktree_dir);
+    }
+
+    project_adopted_clone(cwd)?;
+
+    let Some(store_path) = store_path else {
+        println!(
+            "  {} no aida-store branch in this clone, so no requirement store was attached",
+            "Note:".dimmed()
+        );
+        return Ok(());
+    };
+    let work_binding = aida_core::work_binding::bootstrap(&store_path)?;
+    finish_clone_node_setup(&store_path, work_binding, node_name)?;
+    // Node setup commits to the store branch, which is the conventional
+    // plane, so project the revision it left. trace:STORY-1741 | ai:claude
+    project_adopted_clone(cwd)
+}
+
+/// Refresh the adopted clone's projection and report it; a kept local
+/// config is named, since it keeps the plane's settings out.
+// trace:STORY-1741 | ai:claude
+fn project_adopted_clone(cwd: &std::path::Path) -> Result<()> {
+    let Some(outcome) = aida_core::adoption_projection::sync(cwd)? else {
+        anyhow::bail!("The adoption plane disappeared during init; run `aida init` again");
+    };
+    if outcome.written {
+        println!(
+            "  {} projected adoption plane revision {}",
+            "Done".green(),
+            outcome.commit
+        );
+    }
+    if let Some(kept) = outcome.config_kept {
+        eprintln!("  {} {}.", "Note:".yellow().bold(), kept.note());
+    }
+    Ok(())
+}
+
 /// Bootstrap an AIDA clone: the user just `git clone`d a repo whose origin
 /// already has the `aida-store` orphan branch, and they're running `aida init`
 /// to set the project up locally. We fetch the orphan, attach a worktree,
@@ -5279,6 +5381,20 @@ fn handle_init_post_clone(
         // trace:BUG-570 | ai:claude
         !commit_scaffold,
     )?;
+
+    finish_clone_node_setup(&store_path, work_binding, node_name)
+}
+
+/// The node-identity tail of a clone bootstrap: a WORK binding needs no
+/// node id; otherwise offer to acquire one and claim the first ID blocks.
+/// Writes only the store, never the product tree.
+// trace:EPIC-1-052 Phase 4 trace:STORY-1741 | ai:claude
+fn finish_clone_node_setup(
+    store_path: &std::path::Path,
+    work_binding: Option<aida_core::work_binding::WorkBinding>,
+    node_name: Option<&str>,
+) -> Result<()> {
+    use aida_core::git_ops;
 
     // trace:BUG-2017 | ai:codex
     if let Some(binding) = work_binding {
@@ -5455,6 +5571,16 @@ pub(crate) fn handle_init_distributed_sibling(
     use aida_core::git_ops;
 
     let cwd = std::env::current_dir()?;
+    // Sibling init writes `.aida/config.toml` and scaffolding; an adopted
+    // clone names a sibling plane in its adoption locator instead.
+    // trace:STORY-1741 | ai:claude
+    if adopted_init_route(&cwd)? {
+        anyhow::bail!(
+            "This clone is adopted from a shared AIDA plane, so `aida init --sibling` would \
+             write product files; refused. Run `aida init` without --sibling or --store-path; \
+             a sibling plane is named in the adoption locator."
+        );
+    }
     let aida_dir = cwd.join(".aida");
     let footprint = resolve_init_footprint(&cwd, footprint)?;
     // BUG-608/STORY-676: the store is a separate repo at an explicit relative (or
