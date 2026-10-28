@@ -82764,5 +82764,33 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6446
+- id: 01a18416-02c1-7683-90fa-f01beb43a2d2
+  target_id: 01a18415-faea-7672-9d47-bdd5b4a0b49b
+  author: aida
+  node_id: '1'
+  lamport: 6447
+  timestamp: 2026-10-28T19:56:37.441073630Z
+  kind: !Create
+    title: 'Review PR-3061: [AI:claude] fix(mailbox): STORY-1843 D1 follow-ups - an unresolvable worktree fails closed (Refs STORY-1843)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-d1-followups`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3061>
+      - Branch: `story-1843-d1-followups` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-1843
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3061` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6447
 node_id: '1'
