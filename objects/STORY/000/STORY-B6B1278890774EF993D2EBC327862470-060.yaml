@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T17:25:19.536594249Z
-modified_at: 2026-10-28T17:25:19.536594249Z
+modified_at: 2026-10-28T17:25:27.251609937Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1836d-fb6c-72a3-b624-bb740d2ca5e9
+  created_at: 2026-10-28T17:25:27.251606451Z
+  created_by: joe
+history:
+- id: 01a1838b-a8c3-7bb2-b7d2-a04e47c594d6
+  author: joe
+  timestamp: 2026-10-28T17:25:30.435108969Z
+  session_id: 26a75e58-2f12-4ec7-ae30-593fda2e8d05
+  changes: []
 filed_at:
   code_sha: c13575c473e00b0490923bd6c23b0934ae96e4b9
   branch: fix/dispatch-lease-scan
