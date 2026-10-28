@@ -1319,6 +1319,23 @@ pub(crate) fn exit_unsupported_on_git_backend() -> ! {
     std::process::exit(1);
 }
 
+/// Arms BUG-681's fast-fail cache ladder for one `show` dispatch and restores
+/// the prior mode on drop, early returns included.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+struct ShowFastFail(bool);
+
+impl ShowFastFail {
+    fn arm() -> Self {
+        Self(aida_core::db::set_fast_fail_cache(true))
+    }
+}
+
+impl Drop for ShowFastFail {
+    fn drop(&mut self) {
+        aida_core::db::set_fast_fail_cache(self.0);
+    }
+}
+
 pub(crate) fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
@@ -1358,6 +1375,14 @@ pub(crate) fn handle_git_backend_command(
     if command.name() == "show" {
         crate::usage::arm_phases();
     }
+    // BUG-b6b1278890774ef993d2ebc327862470-008: every cache wait in `show`
+    // (open, lookup, the advisory notice) uses BUG-681's short fast-fail
+    // ladder, so behind a concurrent writer each one degrades — committed
+    // snapshot, targeted YAML read, skipped notice — instead of spending
+    // the 3 s read allowance per wait and stacking past ADR-53's 5 s
+    // ceiling. Restored when this handler returns.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let _show_fast_fail = (command.name() == "show").then(ShowFastFail::arm);
     let open_phase = crate::usage::phase("open");
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
@@ -1399,6 +1424,25 @@ pub(crate) fn handle_git_backend_command(
             // Cache momentarily locked — the advisory notice degrades to empty.
             return Ok(());
         }
+        // BUG-b6b1278890774ef993d2ebc327862470-008: the open's refresh cannot
+        // run inside show's zero read budget — a writer holds the lock it
+        // needs, or a pending migration makes the snapshot unservable (which
+        // used to end `show` silently with no output). `show` reads the spec
+        // from authoritative YAML anyway, so it degrades to the committed
+        // snapshot; its reads then take their own degrade paths.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+        Err(e)
+            if _show_fast_fail.is_some()
+                && (aida_core::db::is_cache_lock_error(&e)
+                    || e.chain().any(|c| {
+                        c.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>()
+                    })) =>
+        {
+            let inner =
+                aida_core::GitBackend::new(store_path)?.with_dispenser(load_dispenser(store_path)?);
+            aida_core::CachedGitBackend::with_inner_cache_snapshot(inner, &cache_path)
+                .map_err(|_| e)?
+        }
         Err(e) => return Err(e),
     };
     drop(open_phase);
@@ -1423,17 +1467,12 @@ pub(crate) fn handle_git_backend_command(
         // trace:BUG-2221 | ai:claude
         let _notice_phase = crate::usage::phase("notice");
         // BUG-b6b1278890774ef993d2ebc327862470-008: the notice is advisory
-        // and skips itself on any cache error, so on `show` it reads with the
-        // short fast-fail ladder — behind a concurrent writer it degrades to
-        // no notice (re-checked next command) instead of blocking the read.
+        // and skips itself on any cache error; on `show` it reads under the
+        // fast-fail ladder armed above, so behind a concurrent writer it
+        // degrades to no notice (re-checked next command) instead of blocking.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
-        let prev_fast_fail =
-            (command.name() == "show").then(|| aida_core::db::set_fast_fail_cache(true));
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
-        if let Some(prev) = prev_fast_fail {
-            aida_core::db::set_fast_fail_cache(prev);
-        }
     }
 
     // STORY-640: team identity hygiene. In a TEAM context (a roster with >1

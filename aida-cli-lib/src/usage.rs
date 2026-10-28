@@ -483,6 +483,8 @@ pub fn schedule_invocation_source(argv: &[String]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
     #[test]
     fn residual_names_the_unmeasured_remainder_of_top_level_phases() {
@@ -507,8 +509,6 @@ mod tests {
         // An unarmed command records no phases at all.
         assert!(with_residual(Vec::new(), 1_000).is_empty());
     }
-
-    use super::*;
 
     // BUG-1993: a repeated phase accumulates into its first entry, so the
     // order is first-seen order. (The armed/unarmed global is exercised
