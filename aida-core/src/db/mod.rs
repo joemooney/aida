@@ -38,7 +38,7 @@ mod yaml_backend;
 #[cfg(feature = "native")]
 pub use cache::{
     cache_lock_info_path, compute_blocked, compute_degrees, edge_weight, expected_cache_status,
-    fast_fail_cache_enabled, is_cache_corruption_error, prime_cache_sidecars,
+    fast_fail_cache_enabled, is_cache_corruption_error, is_cache_lock_error, prime_cache_sidecars,
     prune_quarantined_cache_files, quarantine_cache_files, read_cache_lock_info,
     set_fast_fail_cache, sort_summaries_natural_id, status_divergences, tag_cache_corruption,
     ArchiveFilter, Cache, CacheCorruption, CacheLockInfo, DeferFilter, Degrees, ListFilter,

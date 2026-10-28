@@ -53,10 +53,10 @@ use crate::gate::dispatch_ledger::{
 };
 use crate::gate::dispatch_lock::{acquire_dispatch_lock, activate_lock_as_human, TICK_LOCK_FILE};
 use crate::gate::dispatch_reviewer_hold::remove_reviewer_worktree_preserving_hold;
+use crate::gate::dispatch_types::Outcome;
 use crate::gate::mandate;
 use crate::gate::mandate::{MandateState, Scope};
 use crate::gate::seat_authority;
-use crate::mandate_drive::Outcome;
 
 // Paths and private file I/O live on the protected floor with the gate code
 // that trusts them (STORY-1889).

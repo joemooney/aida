@@ -6206,7 +6206,12 @@ fn run_show(
                             // Share the fallback index across relationships and blockers.
                             // trace:BUG-1678 | ai:codex
                             let read_target = backend.requirement_reader();
+                            // BUG-b6b1278890774ef993d2ebc327862470-008: the role
+                            // activity write is file I/O that ran unmeasured.
+                            // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+                            let activity_phase = crate::usage::phase("activity");
                             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
+                            drop(activity_phase);
                             // STORY-632: deterministic local graph-centrality, read from
                             // the cache (recomputed on rebuild from the relationship
                             // graph; never stored in YAML). trace:STORY-632 | ai:claude
@@ -6722,6 +6727,11 @@ fn run_show(
                                     }
                                 }
                                 println!("{}", lines.join("\n"));
+                                // BUG-b6b1278890774ef993d2ebc327862470-008: the TOON
+                                // tail (relationship and blocker reads, printing) is
+                                // the `render` phase, as on the JSON surface.
+                                // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+                                let _render_phase = crate::usage::phase("render");
 
                                 // Relationships as a uniform TOON table (rel,id,title).
                                 // Unlike the human card's presentation buckets, the

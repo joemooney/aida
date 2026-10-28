@@ -683,7 +683,7 @@ pub(crate) fn resolve_commit_authority(
 
     let project_root = project_root_for_store_root(store_root);
     if let GrantCheck::Valid(grant) = grant_check(&project_root) {
-        let seat = crate::canonical_role_name(&grant.seat);
+        let seat = crate::gate::dispatch_deps::canonical_role_name(&grant.seat);
         if seat == "advisor" {
             let grant_prefix: String = grant.id.chars().take(8).collect();
             return Some(CommitAuthority::Grant { seat, grant_prefix });
@@ -853,7 +853,7 @@ fn own_process_token() -> Option<String> {
 /// identity cannot be read (a binding without one could never match).
 // trace:BUG-1934 | ai:claude
 fn pid_binding_token(pid: u32) -> Option<String> {
-    let start = crate::process_probe::process_start_identity(pid)?;
+    let start = aida_core::liveness::process_start_identity(pid)?;
     Some(crate::gate::review_authority::process_token(
         "proc",
         pid,
@@ -1102,12 +1102,12 @@ pub(crate) enum RoleDisplay {
 // trace:BUG-1924 | ai:claude
 pub(crate) fn classify_role_display(label: Option<&str>, grant_seat: Option<&str>) -> RoleDisplay {
     if let Some(seat) = grant_seat.map(str::trim).filter(|s| !s.is_empty()) {
-        return RoleDisplay::Held(crate::canonical_role_name(seat));
+        return RoleDisplay::Held(crate::gate::dispatch_deps::canonical_role_name(seat));
     }
     match label.map(str::trim).filter(|s| !s.is_empty()) {
         None => RoleDisplay::Default,
         Some(label) => {
-            let role = crate::canonical_role_name(label);
+            let role = crate::gate::dispatch_deps::canonical_role_name(label);
             // The implementer baseline and the lower-privilege stakeholder
             // personas confer nothing a grant would gate, so the label is
             // already the truth for them.
@@ -1184,7 +1184,7 @@ pub(crate) fn session_grant_lookup() -> GrantLookup {
             GrantLookup::Unresolved(reason)
         }
         GrantCheck::Valid(grant) => {
-            let seat = crate::canonical_role_name(&grant.seat);
+            let seat = crate::gate::dispatch_deps::canonical_role_name(&grant.seat);
             let mut expires_at = grant.expires_at;
             if let Some(parent_id) = grant.parent_grant_id.as_deref() {
                 match read_grant(parent_id) {
@@ -1216,7 +1216,7 @@ fn display_grant_lookup() -> GrantLookup {
     if grant.revoked_at.is_some() {
         return GrantLookup::Unresolved("session grant was revoked".to_string());
     }
-    let seat = crate::canonical_role_name(&grant.seat);
+    let seat = crate::gate::dispatch_deps::canonical_role_name(&grant.seat);
     if matches!(seat.as_str(), "implementer" | "guest" | "requester") {
         return GrantLookup::Baseline;
     }
@@ -1296,7 +1296,7 @@ fn notice_grant_from_check(
         },
         _ => return Ok(None),
     };
-    let seat = crate::canonical_role_name(&seat);
+    let seat = crate::gate::dispatch_deps::canonical_role_name(&seat);
     if matches!(seat.as_str(), "implementer" | "guest" | "requester") {
         return Ok(None);
     }
@@ -1415,7 +1415,7 @@ pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> St
     let seat = label
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| crate::canonical_role_name(&s.to_ascii_lowercase()))
+        .map(|s| crate::gate::dispatch_deps::canonical_role_name(&s.to_ascii_lowercase()))
         .unwrap_or_else(|| "<seat>".to_string());
     format!(
         "Not launching: this session's seat grant cannot be used ({reason}). Re-enter the seat at a terminal, then start again: {}",
@@ -1839,7 +1839,7 @@ fn probe_bind_target(pid: u32) -> Option<BindTarget> {
             pid,
             name: proc.name().to_string(),
             cmd: proc.cmd().to_vec(),
-            start: crate::process_probe::process_start_identity(pid),
+            start: aida_core::liveness::process_start_identity(pid),
         },
         uid,
     })
@@ -2030,7 +2030,7 @@ pub(crate) fn is_baseline_seat(seat: &str) -> bool {
 // trace:BUG-1934 | ai:claude
 // trace:STORY-1888 | ai:claude
 pub(crate) fn bg_seat_refusal(role: &str) -> Result<()> {
-    let seat = crate::canonical_role_name(role);
+    let seat = crate::gate::dispatch_deps::canonical_role_name(role);
     if is_baseline_seat(&seat) {
         return Ok(());
     }

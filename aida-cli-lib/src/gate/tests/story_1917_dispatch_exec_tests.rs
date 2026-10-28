@@ -3726,7 +3726,7 @@ fn task_2344_recovery_index_writer_respects_reader_bounds() {
 // trace:STORY-1917 | ai:claude
 #[test]
 fn story_1917_proc_view_refusal_covers_namespaces_and_hidepid() {
-    use crate::agent_registry::PidNamespaceProbe;
+    use crate::gate::dispatch_deps::PidNamespaceProbe;
     let host = PidNamespaceProbe {
         self_ns: Some(4026531836),
         pid1_ns: Some(4026531836),
@@ -3878,7 +3878,7 @@ fn story_1917_activate_lock_refuses_without_a_direct_human_at_a_tty() {
 // trace:STORY-1917 | ai:claude
 #[test]
 fn story_1917_activate_lock_refuses_when_proc_cannot_see_other_processes() {
-    use crate::agent_registry::PidNamespaceProbe;
+    use crate::gate::dispatch_deps::PidNamespaceProbe;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     let _serial = Q1_HOOK_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     struct Reset;

@@ -2853,7 +2853,10 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         if let Err(error) = &ci_result {
             red_detail = Some(format!("{error:#}"));
         }
-        let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
+        let ci_failed = matches!(
+            ci_result,
+            Ok(crate::gate::dispatch_types::CiState::Failed) | Err(_)
+        );
         // STORY-1480: the ship's CI wait reached a terminal verdict — emit
         // the same CiTerminal the drain's CI phase emits (empty run_uuid;
         // specs credited from the branch name), covering interactive ships.
@@ -3669,7 +3672,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &main_worktree,
                 &cover.id,
                 pr_number,
-                crate::mandate_drive::Outcome::Done,
+                crate::gate::dispatch_types::Outcome::Done,
                 None,
             );
         }
@@ -6068,7 +6071,7 @@ pub(crate) fn ledger_mandate_ship_failure(
             root,
             &cover.id,
             pr,
-            crate::mandate_drive::Outcome::Refused,
+            crate::gate::dispatch_types::Outcome::Refused,
             Some(why.to_string()),
         );
     }

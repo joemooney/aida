@@ -1549,7 +1549,8 @@ impl TrainForge for LiveTrainForge<'_> {
     }
 
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict> {
-        use crate::forge::{CheckRegistration, CiState};
+        use crate::forge::CheckRegistration;
+        use crate::gate::dispatch_types::CiState;
         self.dispatch_check()?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
