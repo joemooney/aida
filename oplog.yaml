@@ -79812,5 +79812,33 @@ operations:
   timestamp: 2026-10-28T03:04:12.236491648Z
   kind: !SetStatus
     status: Completed
-clock: 6215
+- id: 01a18086-39c1-74e1-b163-592fce120b27
+  target_id: 01a18086-30fc-75b1-add7-8703afd15097
+  author: aida
+  node_id: '1'
+  lamport: 6216
+  timestamp: 2026-10-28T03:20:42.689843731Z
+  kind: !Create
+    title: 'Review PR-3002: [AI:claude] feat(mailbox): C3x canonical publication permit and guarded store removal (Refs STORY-1843)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-c3x`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3002>
+      - Branch: `story-1843-c3x` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-1843
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3002` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6216
 node_id: '1'
