@@ -436,6 +436,12 @@ pub(crate) fn handle_statusline_command(
             parts.push(format!("sess:{}", label).yellow().bold().to_string());
         }
     }
+    // STORY-1843 C2: this session's end was refused to keep its tree's mail
+    // (lease stamped `ending_retained_at`): it is not active work, so say so.
+    // trace:STORY-1843 | ai:claude
+    if let Some(segment) = lease.as_ref().and_then(ending_retained_segment) {
+        parts.push(segment.red().bold().to_string());
+    }
     // wt:<name> segment — emitted only when the session worktree's
     // directory name diverges from the scope-derived slug. `aida session
     // start` auto-names worktrees `<repo>-<slug>`, so the common case
@@ -1064,6 +1070,13 @@ pub(crate) fn derive_session_branch_suffix(scope: &str, branch: &str) -> String 
         }
     }
     format!("@{}", branch)
+}
+
+/// STORY-1843 C2: the statusline segment for a session whose end was refused
+/// to keep its mail; `None` for every other lease.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn ending_retained_segment(lease: &SessionLease) -> Option<String> {
+    crate::leases::is_ending_retained(lease).then(|| "end-refused:mail-kept".to_string())
 }
 
 // trace:TASK-60 | ai:claude

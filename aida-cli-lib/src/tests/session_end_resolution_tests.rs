@@ -32,6 +32,8 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     }

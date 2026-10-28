@@ -529,7 +529,7 @@ const INITIAL_PID_NAMESPACE_INODE: u64 = 0xEFFF_FFFC;
 /// link (a kernel without pid namespaces, or a test's fake `/proc`) gives no
 /// signal, so the scan proceeds.
 // trace:BUG-1947 | ai:claude
-fn separate_pid_namespace(proc_root: &Path, self_pid: u32) -> Option<String> {
+pub(crate) fn separate_pid_namespace(proc_root: &Path, self_pid: u32) -> Option<String> {
     let link =
         std::fs::read_link(proc_root.join(self_pid.to_string()).join("ns").join("pid")).ok()?;
     let inode: u64 = link

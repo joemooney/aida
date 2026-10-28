@@ -110,13 +110,15 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
 
         eprintln!("  Archived tip {} to {}", sha, archive_ref);
 
-        // Remove worktree + branch
-        Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args(["worktree", "remove", "--force", target.to_str().unwrap()])
-            .output()
-            .context("Failed to remove worktree")?;
+        // Remove worktree + branch. The tree's mail is retired first; a
+        // refused retirement keeps the tree and its branch.
+        // trace:STORY-1843 | ai:claude
+        if let Err(e) =
+            crate::mail_retention::remove_worktree(&project_root, &target, true, "worktree dismiss")
+        {
+            eprintln!("  Skipping: {e:#}");
+            continue;
+        }
 
         // trace:BUG-2211 | ai:claude
         aida_core::git_ops::output_healing_config_lock(

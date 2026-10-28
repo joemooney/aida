@@ -32,6 +32,8 @@ fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     }

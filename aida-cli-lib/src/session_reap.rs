@@ -366,6 +366,12 @@ pub(crate) struct ReapRow {
     /// What the execution leg did. `None` on a scan-only / dry run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outcome: Option<String>,
+    /// STORY-1843 C2: an earlier end of this session was refused to keep its
+    /// tree's mail (the lease is stamped `ending_retained_at`). A reap
+    /// retries that end; the reason says so.
+    // trace:STORY-1843 | ai:claude
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ending_retained: bool,
 }
 
 /// One finished-but-live session the pass will NOTIFY (FR-284 NOTIFY slice). A
@@ -940,10 +946,11 @@ pub(crate) fn scan_reapable_with(
                 worktree: lease.worktree_path.display().to_string(),
                 branch: lease.branch.clone(),
                 verdict: verdict_label,
-                reason,
+                reason: ending_retained_note(lease, reason),
                 spec_finished: finished.contains(&lease.scope.to_ascii_uppercase()),
                 branch_tip: None,
                 outcome: None,
+                ending_retained: crate::leases::is_ending_retained(lease),
             };
             match verdict {
                 ProtectedLeaseVerdict::Release(_) => report.releasable.push(row),
@@ -1038,10 +1045,11 @@ pub(crate) fn scan_reapable_with(
                 ReapVerdict::Reap(_) => "reap",
                 ReapVerdict::Skip(_) => "skip",
             },
-            reason: verdict.reason().to_string(),
+            reason: ending_retained_note(lease, verdict.reason().to_string()),
             spec_finished: spec_finished || review_pr_terminal,
             branch_tip,
             outcome: None,
+            ending_retained: crate::leases::is_ending_retained(lease),
         };
         // FR-284 NOTIFY: a finished + merged session whose process is STILL
         // ALIVE is the interactive near-miss — not reapable (it owns its cwd),
@@ -1113,7 +1121,7 @@ fn commits_outside_origin(project_root: &std::path::Path, tip: &str) -> Option<u
 /// removal itself goes through the shared teardown (pre-destroy cargo-clean hook
 /// + worktree-pool deregistration) that the worktree-GC heal uses.
 // trace:TASK-1177 | ai:claude
-fn reap_one(
+pub(crate) fn reap_one(
     project_root: &std::path::Path,
     lease: &SessionLease,
     checked_tip: Option<&str>,
@@ -1193,6 +1201,20 @@ fn reap_one_with_clear_hooks(
             // worktree, and branch. trace:BUG-1947 | ai:claude
             if let Some(in_use) = e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>() {
                 return format!("skipped — worktree {}", in_use.summary());
+            }
+            // Its mail could not be retired: the session is kept, ending-
+            // retained, with its grant revoked. trace:STORY-1843 | ai:claude
+            if let Some(refusal) =
+                e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+            {
+                crate::mail_retention::keep_ending_retained(
+                    &crate::lease_path(project_root, &lease.id),
+                    refusal,
+                );
+                return format!(
+                    "skipped — {}",
+                    crate::mail_retention::refusal_lines(refusal).join("; ")
+                );
             }
             return format!(
                 "failed — could not remove worktree {}",
@@ -1349,11 +1371,28 @@ fn scan_clone_lease(
             ReapVerdict::Reap(_) => "reap",
             ReapVerdict::Skip(_) => "skip",
         },
-        reason: verdict.reason().to_string(),
+        reason: ending_retained_note(lease, verdict.reason().to_string()),
         spec_finished,
         branch_tip,
         outcome: None,
+        ending_retained: crate::leases::is_ending_retained(lease),
     }
+}
+
+/// STORY-1843 C2: lead a reap row's reason with the refused end, so an
+/// ending-retained session never reads as ordinary in-flight work.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn ending_retained_note(lease: &SessionLease, reason: String) -> String {
+    if !crate::leases::is_ending_retained(lease) {
+        return reason;
+    }
+    format!(
+        "ending-retained (an earlier end was refused: {}); {reason}",
+        lease
+            .ending_retained_reason
+            .as_deref()
+            .unwrap_or("its mail could not be retained")
+    )
 }
 
 /// Reap ONE seat clone: [`crate::seat_clone::destroy`] re-probes it, keeps it
@@ -1371,23 +1410,59 @@ pub(crate) fn reap_one_clone(
     };
     // trace:TASK-2110 | ai:claude
     let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
-    match crate::seat_clone::destroy_with_shipped(
+    // The clone's mail is retired first: a refusal keeps the session,
+    // ending-retained with its grant revoked, as the worktree path does.
+    // trace:STORY-1843 | ai:claude
+    let retirement = match crate::mail_retention::retire_tree(
+        project_root,
+        &lease.worktree_path,
+        true,
+        "reap",
+    ) {
+        Ok(retirement) => retirement,
+        Err(refusal) => {
+            crate::mail_retention::keep_ending_retained(
+                &crate::lease_path(project_root, &lease.id),
+                &refusal,
+            );
+            return format!(
+                "skipped — {}",
+                crate::mail_retention::refusal_lines(&refusal).join("; ")
+            );
+        }
+    };
+    match crate::seat_clone::destroy_retained(
         project_root,
         &lease.worktree_path,
         crate::seat_clone::DestroyMode::KeepUnshipped,
         Some(tip),
         &shipped,
+        retirement,
     ) {
         Ok(crate::seat_clone::Destroyed::Removed { .. }) => {
             release_lease_files(project_root, &lease.id);
             "reaped — seat clone removed, base pin released, lease released".to_string()
         }
-        Ok(crate::seat_clone::Destroyed::Kept { reason, salvage }) => format!(
-            "skipped — seat clone kept: {reason}{}",
-            salvage
-                .map(|p| format!(" (salvage patch: {})", p.display()))
-                .unwrap_or_default()
-        ),
+        Ok(crate::seat_clone::Destroyed::Kept {
+            reason,
+            salvage,
+            retention,
+        }) => {
+            // A retention refusal takes the recovery-ownership ending.
+            // trace:STORY-1843 | ai:claude
+            if let Some(refusal) = &retention {
+                crate::mail_retention::keep_ending_retained(
+                    &crate::lease_path(project_root, &lease.id),
+                    refusal,
+                );
+            }
+            format!(
+                "skipped — seat clone kept: {reason}{}",
+                salvage
+                    .map(|p| format!(" (salvage patch: {})", p.display()))
+                    .unwrap_or_default()
+            )
+        }
         Err(error) => format!("failed — {error:#}"),
     }
 }

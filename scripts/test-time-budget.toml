@@ -43,6 +43,7 @@ default_limit = 10
 "aida-cli::bug_2201_outside_project_reviewer denied_reviewer_error_names_the_denied_calls" = 20  # max 9.8s, 6.2s-9.8s over 4 CI runs (main 40274006513, 40276227100, 40280943193; PR-2949 40328850083, a slow window both tests shared), x2 rounded; trace:STORY-1843 | ai:claude
 "aida-cli::story_1843_pr3_blackbox story_1843_pr3_claude_to_agy_next_turn" = 25  # measured 7.6-10.1s in CI 2026-10-25/26 (PR-2924, PR-2933, train PR-2961); x2.5 for shard load
 "aida-cli::bug_2205_session_end_pushed_index session_end_treats_a_staged_index_equal_to_a_pushed_commit_as_clean" = 20  # max 10.2s, 7.4s-10.2s over 3 CI runs, x2 rounded; trace:TASK-2353 | ai:claude
+"aida-cli::story_1843_c2_session_end_retention a_refused_session_end_ends_nothing_and_a_retry_ends_it" = 30  # two session ends + start, 10.1s locally (agent profile), x3 for CI debug/shard load; trace:STORY-1843 | ai:claude
 "aida-cli::story_1644_list_sort_cap list_sort_and_agent_cap_follow_story_1644" = 40  # max 17.9s, median 13.5s over 7 runs
 "aida-cli-lib task_1507_history_cache_tests::task_1507_interleaved_merge_every_cut_matches_walk_exactly" = 35  # max 17.5s, median 14.5s over 7 runs
 "aida-cli::bug_2187_reviewer_record_identity scrubbed_headless_reviewer_records_but_implementer_shell_refuses" = 35  # measured 16.84s on the loaded agent profile (real reviewer launch + recorder subprocesses), x2 rounded up; trace:BUG-2187 | ai:claude

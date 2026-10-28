@@ -52,6 +52,8 @@ fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         driver: None,
         child_grant_id: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
     }
 }
 

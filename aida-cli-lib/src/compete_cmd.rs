@@ -687,10 +687,16 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
     // the record is the learning); the merged winner branch is deleted too. ──
     for r in results.iter().filter(|r| !r.branch.is_empty()) {
         let dir = compete_worktree_dir(&project_root, &r.branch);
-        let _ = std::process::Command::new("git")
-            .args(["worktree", "remove", "--force", &dir.to_string_lossy()])
-            .current_dir(&project_root)
-            .output();
+        // The arm's mail is retired first; a refusal keeps its worktree and
+        // branch. trace:STORY-1843 | ai:claude
+        if dir.exists() {
+            if let Err(e) =
+                crate::mail_retention::remove_worktree(&project_root, &dir, true, "compete cleanup")
+            {
+                println!("  kept `{}`: {e:#}", r.branch);
+                continue;
+            }
+        }
         let flag = if r.branch == winner_branch {
             "-d"
         } else {
@@ -874,11 +880,12 @@ fn run_compete_arm(
     let worktree_dir = compete_worktree_dir(project_root, branch);
     let worktree_str = worktree_dir.to_string_lossy().to_string();
 
-    // Fresh start: drop any stale worktree/branch from a prior compete run.
-    let _ = std::process::Command::new("git")
-        .args(["worktree", "remove", "--force", &worktree_str])
-        .current_dir(project_root)
-        .output();
+    // Fresh start: drop any stale worktree/branch from a prior compete run,
+    // retiring its mail first. trace:STORY-1843 | ai:claude
+    if worktree_dir.exists() {
+        crate::mail_retention::remove_worktree(project_root, &worktree_dir, true, "compete reuse")
+            .with_context(|| format!("clearing the stale compete worktree {worktree_str}"))?;
+    }
     let _ = std::process::Command::new("git")
         .args(["worktree", "prune"])
         .current_dir(project_root)

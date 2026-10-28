@@ -221,6 +221,23 @@ pub(crate) fn handle_mailbox_command(
             let report = mailbox_migration::report(project_root, store_root)?;
             mailbox_migration::print_report(&report, *json || crate::output_format_is_json())
         }
+        // trace:STORY-1843 | ai:claude
+        MailboxCommand::Retention { command } => match command {
+            self::mailbox_cmd_args::RetentionCommand::Activate { dry_run, json } => {
+                let json = *json || crate::output_format_is_json();
+                if *dry_run {
+                    return print_retention_report(project_root, json);
+                }
+                if !crate::gate::role_authority::has_integrity_floor_authority() {
+                    anyhow::bail!(
+                        "recording mail retention activation runs only for a human operator at \
+                         an interactive terminal; agents can run `{}`",
+                        aida_core::mailbox_lifecycle::ACTIVATION_COMMAND
+                    );
+                }
+                record_retention_activation(project_root, json)
+            }
+        },
         MailboxCommand::Latency { recipient, json } => {
             let (rows, note) = latency_rows(
                 project_root,
@@ -993,6 +1010,110 @@ fn read_send_body(
     }
 }
 
+/// `aida mailbox retention activate --dry-run`: the read-only QC1 report.
+// trace:STORY-1843 | ai:claude
+#[cfg(unix)]
+fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let report = aida_core::mailbox_lifecycle::activation::dry_run_report(project_root);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    println!("Mail retention activation (dry run; nothing is recorded)");
+    for line in retention_record_lines(&report) {
+        println!("  {line}");
+    }
+    if report.hosts.is_empty() {
+        println!("  no AIDA mail writers are running");
+    }
+    for host in &report.hosts {
+        let verdict = match &host.verdict {
+            aida_core::mailbox_lifecycle::activation::HostVerdict::Admitting => {
+                "takes a write permit".to_string()
+            }
+            aida_core::mailbox_lifecycle::activation::HostVerdict::Unverified { why } => {
+                format!("not known to take a write permit: {why}")
+            }
+        };
+        println!("  pid {:>7}  {}  ({verdict})", host.pid, host.command);
+    }
+    if let Some(why) = &report.scan_incomplete {
+        println!("  the process scan is incomplete: {why}");
+    }
+    if report.would_record {
+        println!("Every running mail writer takes a write permit; activation would be recorded.");
+    } else {
+        println!(
+            "Not every mail writer is known to take a write permit; activation would NOT be \
+             recorded. Restart the listed processes on this build, then re-run."
+        );
+    }
+    Ok(())
+}
+
+/// The report's lines about the recorded activation. A record made by
+/// another source build is named as such, so an operator who already
+/// activated knows to activate again after a promote or rollback (R3-F4).
+// trace:STORY-1843 | ai:claude
+#[cfg(unix)]
+pub(crate) fn retention_record_lines(
+    report: &aida_core::mailbox_lifecycle::activation::ActivationReport,
+) -> Vec<String> {
+    let this = report
+        .this_build
+        .as_deref()
+        .unwrap_or("a build that names no source");
+    match (&report.recorded_by_other_build, report.recorded) {
+        (_, true) => vec![format!("recorded activation: yes (by this build, {this})")],
+        (Some(other), false) => vec![
+            format!(
+                "recorded activation: no (one is recorded, by a different build: {other}; \
+                 this is {this})"
+            ),
+            "re-run `aida mailbox retention activate` with this build to record it again"
+                .to_string(),
+        ],
+        (None, false) => vec!["recorded activation: no".to_string()],
+    }
+}
+
+#[cfg(not(unix))]
+fn print_retention_report(_project_root: &std::path::Path, _json: bool) -> Result<()> {
+    anyhow::bail!("mail retention is only available on Unix")
+}
+
+/// `aida mailbox retention activate`: re-run the report and record the
+/// activation only when it shows every writer taking a permit. The caller
+/// checked for a human at a terminal.
+// trace:STORY-1843 | ai:claude
+#[cfg(unix)]
+fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let report = aida_core::mailbox_lifecycle::activation::record(project_root)
+        .map_err(|e| anyhow::anyhow!("mail retention activation could not be recorded: {e}"))?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else if report.recorded {
+        println!(
+            "Mail retention activation recorded: every running mail writer takes a write permit."
+        );
+    }
+    if !report.recorded {
+        if !json {
+            print_retention_report(project_root, false)?;
+        }
+        anyhow::bail!(
+            "mail retention activation was NOT recorded: not every mail writer is known to take \
+             a write permit"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn record_retention_activation(_project_root: &std::path::Path, _json: bool) -> Result<()> {
+    anyhow::bail!("mail retention is only available on Unix")
+}
+
 /// What `aida mailbox gc --phantoms` did: counts plus one line per message.
 // trace:TASK-1766 | ai:claude
 #[derive(Debug, Default)]
@@ -1322,6 +1443,39 @@ mod tests {
     use super::*;
     use crate::cli::{Cli, Command, MailboxCommand};
     use clap::Parser;
+
+    /// Recording the activation is for a human at a terminal: a caller whose
+    /// stdin is not a TTY (an agent) is refused before anything is scanned or
+    /// written, and pointed at the dry run.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn retention_activate_refuses_a_caller_without_a_terminal() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: dir.path().to_path_buf(),
+            stdin_is_terminal: false,
+            stdout_is_terminal: false,
+            stderr_is_terminal: false,
+        }));
+        let cmd = MailboxCommand::Retention {
+            command: RetentionCommand::Activate {
+                dry_run: false,
+                json: false,
+            },
+        };
+        let result = handle_mailbox_command(&cmd, &store);
+        crate::test_ambient::replace(outer);
+        let err = result
+            .expect_err("a non-TTY caller cannot record")
+            .to_string();
+        assert!(err.contains("human operator"), "{err}");
+        assert!(
+            err.contains(aida_core::mailbox_lifecycle::ACTIVATION_COMMAND),
+            "{err}"
+        );
+    }
 
     // Send tests need actual recipients now that unknown names and empty roles refuse.
     // trace:STORY-1843 | ai:codex
@@ -2770,6 +2924,7 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
                     | MailboxCommand::WakeSnapshot { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
+                    | MailboxCommand::Retention { .. }
             )
         ) {
             SA::Read
