@@ -1,0 +1,33 @@
+id: 01a183ba-f11f-7a11-94b0-c61a5be48004
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-063
+title: 'Review PR-3056: [AI:claude] fix(mailbox): era-marker drop re-validates; leftover report tests (TASK-b6b1278890774ef993d2ebc327862470-059)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/mailbox-era-marker-followups`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3056>
+  - Branch: `fix/mailbox-era-marker-followups` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-059
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3056` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T18:17:09.151198348Z
+modified_at: 2026-10-28T18:17:09.151198348Z
+req_type: Story
+filed_at:
+  code_sha: 9e63e7c6364060bfe01ca6b62674ce4001f1208b
+  branch: fix/mailbox-era-marker-followups
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f3cda469f7b
+  vendor: claude
+  session: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
