@@ -79899,5 +79899,31 @@ operations:
     req_type: Spike
     status: Draft
     priority: Medium
-clock: 6221
+- id: 01a180e8-1b3f-7ec2-80c6-6c72676b0c8e
+  target_id: 01a180e8-1413-7992-b067-7694b81c3175
+  author: aida
+  node_id: '1'
+  lamport: 6222
+  timestamp: 2026-10-28T05:07:37.407668721Z
+  kind: !Create
+    title: 'Review PR-3005: [AI:claude] feat(adoption): migration inventory, owned uninstall, CI bootstrap and adopted init (STORY-1741)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1741-s3`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3005>
+      - Branch: `story-1741-s3` → `main`
+
+      ## Covers
+
+      - STORY-1741
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3005` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6222
 node_id: '1'
