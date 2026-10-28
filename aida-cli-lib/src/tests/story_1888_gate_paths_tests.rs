@@ -2061,46 +2061,73 @@ fn mounts(file: &str, mod_rs: bool, text: &str) -> Vec<Mount> {
 /// The files each top-level out-of-line `mod name;` in a crate-root source
 /// may load from. An allowlisted module is scanned as `name.rs`, so any
 /// `#[path]` here (`#[path = "forge2.rs"] mod forge;`) would let the gate's
-/// `crate::name` resolve to an unscanned file; an inline `mod name { .. }`
-/// is not reported at all.
+/// `crate::name` resolve to an unscanned file. A top-level inline
+/// `mod name { .. }` is reported as `["<inline>"]`, so a cfg-gated inline
+/// twin of a plain mount (`#[cfg(not(test))] mod forge { .. }`) is seen.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
+    let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
+    let inline = file
+        .items
+        .iter()
+        .filter(|item| matches!(item, syn::Item::Mod(m) if m.content.is_some() && m.ident == name));
     mounts("lib.rs", true, text)
         .into_iter()
         .filter(|m| m.depth == 1 && m.name == name)
         .map(|m| m.candidates.into_iter().map(|(c, _)| c).collect())
+        .chain(inline.map(|_| vec!["<inline>".to_string()]))
         .collect()
 }
 
 /// What a crate-root source puts in the textual macro scope of every
 /// module declared after it: each `#[macro_use]` module (bare or under
-/// `cfg_attr`) as `mod x`, and each top-level `macro_rules!` by name. A
-/// `#[macro_use] mod util;` or root `macro_rules! format` shadows the
-/// prelude macro `gate/dispatch_*` calls bare, so its expansion runs
-/// unscanned code inside the gate.
+/// `cfg_attr`, on the item or as an inner `#![macro_use]` in any file
+/// `load` returns for a top-level `mod x;`) as `mod x`, and each top-level
+/// `macro_rules!` by name. A `#[macro_use] mod util;` or root
+/// `macro_rules! format` shadows the prelude macro `gate/dispatch_*` calls
+/// bare, so its expansion runs unscanned code inside the gate.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
-fn root_textual_macros(text: &str) -> (Vec<String>, Vec<String>) {
+fn root_textual_macros(
+    text: &str,
+    load: &dyn Fn(&str) -> Option<String>,
+) -> (Vec<String>, Vec<String>) {
     let macro_use = regex::Regex::new(r"\bmacro_use\b").unwrap();
+    let widens = |attrs: &[syn::Attribute]| {
+        attrs.iter().any(|a| {
+            a.path().is_ident("macro_use")
+                || matches!(&a.meta, syn::Meta::List(l)
+                    if a.path().is_ident("cfg_attr")
+                        && macro_use.is_match(&l.tokens.to_string()))
+        })
+    };
     let file = syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"));
     let (mut mods, mut rules) = (Vec::new(), Vec::new());
     for item in &file.items {
         match item {
-            syn::Item::Mod(m)
-                if m.attrs.iter().any(|a| {
-                    a.path().is_ident("macro_use")
-                        || matches!(&a.meta, syn::Meta::List(l)
-                            if a.path().is_ident("cfg_attr")
-                                && macro_use.is_match(&l.tokens.to_string()))
-                }) =>
-            {
-                mods.push(format!("mod {}", m.ident));
-            }
+            syn::Item::Mod(m) if widens(&m.attrs) => mods.push(format!("mod {}", m.ident)),
             syn::Item::Macro(m) if m.mac.path.is_ident("macro_rules") => {
                 if let Some(ident) = &m.ident {
                     rules.push(ident.to_string().trim_start_matches("r#").to_string());
                 }
             }
             _ => {}
+        }
+    }
+    // An out-of-line module's own file can widen the scope from inside.
+    for mount in mounts("lib.rs", true, text) {
+        let named = format!("mod {}", mount.name);
+        if mount.depth != 1 || mods.contains(&named) {
+            continue;
+        }
+        let inner = mount.candidates.iter().any(|(candidate, _)| {
+            load(candidate).is_some_and(|body| {
+                let parsed = syn::parse_file(&body)
+                    .unwrap_or_else(|e| panic!("{candidate} must parse: {e}"));
+                widens(&parsed.attrs)
+            })
+        });
+        if inner {
+            mods.push(named);
         }
     }
     (mods, rules)
@@ -2575,7 +2602,8 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
         .collect();
     let mut shadows = Vec::new();
     for root in &root_files {
-        let (mods, rules) = root_textual_macros(&read(root));
+        let (mods, rules) =
+            root_textual_macros(&read(root), &|f| std::fs::read_to_string(src.join(f)).ok());
         shadows.extend(mods.iter().map(|m| format!("  {root}: #[macro_use] {m}")));
         shadows.extend(
             rules
@@ -2770,6 +2798,8 @@ fn root_module_mount_detection_sees_redirected_modules() {
         "#[cfg_attr(unix, path = \"forge2.rs\")] mod forge;",
         "#[cfg_attr(all(), cfg_attr(all(), path = \"forge2.rs\"))] mod forge;",
         "mod forge;\n#[cfg(windows)]\n#[path = \"forge2.rs\"]\nmod forge;",
+        "mod forge { pub fn f() {} }",
+        "#[cfg(test)]\nmod forge;\n#[cfg(not(test))]\nmod forge { pub use crate::x::*; }",
     ] {
         let found = root_module_mounts(src, "forge");
         assert!(
@@ -2777,10 +2807,10 @@ fn root_module_mount_detection_sees_redirected_modules() {
             "`{src}` mounts forge from another file unseen: {found:?}"
         );
     }
-    // Inline, nested or absent: nothing loads forge.rs as `crate::forge`.
+    // Nested or absent: nothing mounts `crate::forge`.
     for src in [
-        "mod forge { pub fn f() {} }",
         "mod a { mod forge; }",
+        "mod a { mod forge { pub fn f() {} } }",
         "mod forge_profiles;",
         "",
     ] {
@@ -2792,6 +2822,7 @@ fn root_module_mount_detection_sees_redirected_modules() {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
 #[test]
 fn root_textual_macro_detection_sees_evasive_forms() {
+    let none = |_: &str| None;
     for src in [
         "#[macro_use] mod util;",
         "#[macro_use]\npub(crate) mod util;",
@@ -2800,7 +2831,7 @@ fn root_textual_macro_detection_sees_evasive_forms() {
         "#[macro_use] mod util { macro_rules! format { () => {} } }",
         "#[cfg(test)]\n#[macro_use]\nmod util;",
     ] {
-        assert_eq!(root_textual_macros(src).0, vec!["mod util"], "{src}");
+        assert_eq!(root_textual_macros(src, &none).0, vec!["mod util"], "{src}");
     }
     for (src, want) in [
         ("macro_rules! format { () => {} }", "format"),
@@ -2810,7 +2841,7 @@ fn root_textual_macro_detection_sees_evasive_forms() {
         ),
         ("macro_rules! r#bail { () => {} }", "bail"),
     ] {
-        assert_eq!(root_textual_macros(src).1, vec![want], "{src}");
+        assert_eq!(root_textual_macros(src, &none).1, vec![want], "{src}");
     }
     for src in [
         "mod util;",
@@ -2818,8 +2849,39 @@ fn root_textual_macro_detection_sees_evasive_forms() {
         "fn f() { macro_rules! format { () => {} } }",
         "#[allow(unused_macros)] mod util;",
     ] {
-        let (mods, rules) = root_textual_macros(src);
+        let (mods, rules) = root_textual_macros(src, &none);
         assert!(mods.is_empty() && rules.is_empty(), "{src}");
+    }
+    // An inner `#![macro_use]` in the module's own file widens it too,
+    // wherever rustc would load that file from.
+    for (src, file, body) in [
+        (
+            "mod util;",
+            "util.rs",
+            "#![macro_use]\nmacro_rules! format { () => {} }",
+        ),
+        ("mod util;", "util/mod.rs", "#![cfg_attr(all(), macro_use)]"),
+        ("#[path = \"u2.rs\"] mod util;", "u2.rs", "#![macro_use]"),
+        ("#[cfg(test)]\nmod util;", "util.rs", "#![macro_use]"),
+    ] {
+        let load = |f: &str| (f == file).then(|| body.to_string());
+        assert_eq!(root_textual_macros(src, &load).0, vec!["mod util"], "{src}");
+    }
+    for (src, file, body) in [
+        (
+            "mod util;",
+            "util.rs",
+            "#![allow(unused_macros)]\nmacro_rules! format { () => {} }",
+        ),
+        ("mod util;", "other.rs", "#![macro_use]"),
+        ("mod util;", "util.rs", "#[macro_use]\nmod inner;"),
+        ("mod a { mod util; }", "a/util.rs", "#![macro_use]"),
+    ] {
+        let load = |f: &str| (f == file).then(|| body.to_string());
+        assert!(
+            root_textual_macros(src, &load).0.is_empty(),
+            "{src} + {file}"
+        );
     }
     let names = bare_macro_names(
         "fn f() { let _ = format!(\"{}\", matches!(x, Some(_))); bail! {\"x\"}; \
