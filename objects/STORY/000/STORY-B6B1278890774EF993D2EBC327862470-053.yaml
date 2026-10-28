@@ -16,12 +16,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3038` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T13:39:32.065742351Z
-modified_at: 2026-10-28T13:39:45.052330380Z
+modified_at: 2026-10-28T16:05:29.629384039Z
 req_type: Story
 relationships:
 - rel_type:
@@ -29,12 +29,25 @@ relationships:
   target_id: 01a1828e-eb16-7fb0-bcbe-7851304d6891
   created_at: 2026-10-28T13:39:45.052327205Z
   created_by: joe
+comments:
+- id: 01a18342-679d-7202-b4c1-c36c46a9f571
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3038 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-28T16:05:29.629381364Z
+  modified_at: 2026-10-28T16:05:29.629381364Z
 history:
 - id: 01a182bc-ff21-7250-a10a-a2962cd79333
   author: joe
   timestamp: 2026-10-28T13:39:46.593154394Z
   session_id: c03bd132-63a9-4ff8-ab54-32753d194f9c
   changes: []
+- id: 01a18342-679d-7202-b4c1-c352d5e939db
+  author: aida-auto-bump
+  timestamp: 2026-10-28T16:05:29.629371187Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 57166b44eaa0e978db9a650e4df1a8c92ad77730
   branch: chore/reflow-root-item-macros-doc
@@ -43,3 +56,7 @@ filed_at:
   aida_build_sha: 7335d1de322
   vendor: claude
   session: c03bd132-63a9-4ff8-ab54-32753d194f9c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T16:05:29.629366444Z
+  completion_sha: 01344b788fe2e3b2aeda58a12b3239924c93b6d6
