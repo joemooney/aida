@@ -79766,5 +79766,23 @@ operations:
   timestamp: 2026-10-28T02:10:37.807832911Z
   kind: !SetStatus
     status: Completed
-clock: 6211
+- id: 01a18046-43a2-7ca2-adb2-71fdb833f5ed
+  target_id: 01a18046-389e-7a83-9ac1-b7d0538317dc
+  author: aida
+  node_id: '1'
+  lamport: 6212
+  timestamp: 2026-10-28T02:10:50.914146967Z
+  kind: !Create
+    title: 'Non-blocking (minor, outside diff): scan_rust_test_file (criteria.rs ~829) clos…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (minor, outside diff): scan_rust_test_file (criteria.rs ~829) closes a test at 'next == 0 && line_no > start' without a body-started check, so a Rust test whose header spans lines with no brace (e.g. a where-clause line before '{') is cut at the second line; same shape TASK-016 fixed for extract_fn_source/scan_braced_test_file — gate on braces.opened().
+
+      PR: #2998
+      Reviewed sha: 947505178cff5ee7dd3e7c5b57e9db626e497eb4
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6212
 node_id: '1'

@@ -1,0 +1,30 @@
+id: 01a18046-389e-7a83-9ac1-b7d0538317dc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-022
+title: 'Non-blocking (minor, outside diff): scan_rust_test_file (criteria.rs ~829) clos…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor, outside diff): scan_rust_test_file (criteria.rs ~829) closes a test at 'next == 0 && line_no > start' without a body-started check, so a Rust test whose header spans lines with no brace (e.g. a where-clause line before '{') is cut at the second line; same shape TASK-016 fixed for extract_fn_source/scan_braced_test_file — gate on braces.opened().
+
+  PR: #2998
+  Reviewed sha: 947505178cff5ee7dd3e7c5b57e9db626e497eb4
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T02:10:48.094043684Z
+modified_at: 2026-10-28T02:10:48.094043684Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-016
+- finding-hash:3dec7bfa
+- from-review:PR-2998
+- kind:carried-forward
+filed_at:
+  code_sha: 0150c5a2c49e616b06e272cddce112838349e860
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a35bc40b89
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
