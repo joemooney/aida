@@ -7,12 +7,12 @@ description: |-
   1. Steady cost: every show that computes content linkage spends 2.6-3.2 s in phase linkage.content (04:46:59 4151ms, 04:47:07 7452ms, 04:47:12 4902ms, 04:47:17 5198ms, 04:47:22 5199ms), while the plain linkage phase is 120-370 ms. That alone exceeds the 1 s budget on every such call.
   2. Contention burst 04:46:14-04:47:22Z (session start + concurrent agents): statusline 52523 ms, brief list 33317/53922 ms, awaiting 7285 ms; show 34821 ms with open=3333 notice=10881 linkage=2956, show 30965 ms with lookup=7954 and ~21 s not attributed to any phase, show 10932 ms lookup=7452. Phases do not sum to the total, so some wait is unmeasured.
   Acceptance: (a) linkage.content is bounded/cached so show stays under 1 s on a healthy cache (add a phase-budget test or bench); (b) every wait in show (notice, open, lookup) is bounded by the ADR-53 ceiling and degrades rather than blocks behind a concurrent writer; (c) the unattributed time is attributed to a named phase; (d) evidence: 24h guard window back within tolerance with no ceiling breach. Prior art: BUG-1480, BUG-1606, BUG-1674, BUG-1801, BUG-1956, BUG-2221.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T07:26:15.429931663Z
-modified_at: 2026-10-28T09:34:04.475363199Z
+modified_at: 2026-10-28T09:49:01.786230465Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -58,6 +58,21 @@ history:
   timestamp: 2026-10-28T09:34:05.453749281Z
   session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
   changes: []
+- id: 01a181e9-bdbe-7783-99f3-0cc1d950d3be
+  author: aida-auto-bump
+  timestamp: 2026-10-28T09:49:01.758442655Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a181e9-bdda-7290-982d-51ba92d574e3
+  timestamp: 2026-10-28T09:49:01.786217310Z
+  agent: aida
+  commit_sha: 407de9fd81c73ce6e4ded70ab4682fa9fff06119
+  summary: 'All four acceptance items are met (a: 500 ms show trace budget; b: open/lookup/notice degrade behind a held writer, proven by an integration test; c: preflight/guard/activity/close/exit/render phases plus a computed residual; d: post-merge per the advisor ruling). CI is green at 5221e6c. The three findings are non-blocking follow-ups.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 4e961089c95bb7d6d89043aabfb31d5e6d58ea53
@@ -67,11 +82,7 @@ filed_at:
   aida_build_sha: e33bf322340
   vendor: claude
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Phase attribution (c) and the show-only 500ms trace budget (a) are sound and CI is green except the pending gates job, but acceptance (b) is only partly met (open/lookup not bounded, notice degrade untested), (d) is post-merge evidence, and the closing trailer would complete the bug with no follow-up spec filed.
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-008 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-28T08:28:35.828235476Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T09:49:01.758437750Z
+  completion_sha: 407de9fd81c73ce6e4ded70ab4682fa9fff06119
