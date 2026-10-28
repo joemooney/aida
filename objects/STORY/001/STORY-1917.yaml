@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-28T11:26:55.872990954Z
+modified_at: 2026-10-28T13:18:17.376184424Z
 req_type: Story
 relationships:
 - rel_type:
@@ -756,6 +756,12 @@ comments:
   content: 'DEMO EVIDENCE (advisor, 2026-10-28 04:27 MST). Step 1: dispatch-tick schedule job landed (#3008, 3db38fc9). Step 0 preflight: live binary e33bf322 (after slice 4''s 1b5806bce2), and no .aida/dispatch, so activate-lock is not needed. Step 2 PASS: ''aida dispatch request impl --name demo-noscope ...'' was refused with "active mandate 94c6f906-a557-42ed-98d1-91923c55ec2f does not cover `dispatch`; stop it and start one with `aida mandate start --ship-held --scope dispatch` (or `--drive`)". aida dispatch list shows ''No dispatch requests.'' MandateDriveAction row 2026-10-28 11:26:48Z: lane dispatch:impl, outcome refused, under 94c6f906. Remaining: operator steps 3-4 (dispatch mandate + serve), then advisor steps 5-7 and operator steps 8-9.'
   created_at: 2026-10-28T11:26:55.872990954Z
   modified_at: 2026-10-28T11:26:55.872990954Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+- id: 01a182a9-5320-70b2-afb3-c5599798e395
+  author: joe
+  content: 'DEMO EVIDENCE step 3-5 (2026-10-28 06:20 MST). Step 3: the operator minted mandate f27d5a3c-77b1-469e-ab75-9ac64518916f, covering ship-held and dispatch. Step 4: the operator started ''aida dispatch serve'', bound advisor grant d9c8b792. Step 5 PASS, all refused at request time with nothing queued: flow 0 -> ''invalid PR number `0`: must be between 1 and 999999''; bogus 1 -> ''unrecognized subcommand bogus''; impl --name ../x -> ''invalid lane name `../x`: cannot start with ./- or contain ..''; dispatch list -> No dispatch requests. Next: step 6 (flow on a READY unprotected PR not authored by the advisor; the STORY-1843 D1/D2 PRs qualify when up), then step 7 (take + impl via the tick, with serve stopped).'
+  created_at: 2026-10-28T13:18:17.376184424Z
+  modified_at: 2026-10-28T13:18:17.376184424Z
   session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
