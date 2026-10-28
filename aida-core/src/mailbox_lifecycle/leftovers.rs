@@ -188,20 +188,21 @@ fn scan_era_markers(
     }
 }
 
-/// A pre-record marker body: the bare admin name of a linked worktree, a
-/// single path component (non-empty, at most 255 bytes, no `/` or NUL) that
-/// cannot be a fragment of a JSON record (no brace or quote). Anything else
-/// is a torn or foreign body and is undecidable.
+/// A pre-record marker body: the bare admin name. Empty is the main
+/// checkout's; any other is a linked worktree's, a single path component (at
+/// most 255 bytes, no `/` or NUL) that cannot be a fragment of a JSON record
+/// (no brace or quote). Anything else is a torn or foreign body and is
+/// undecidable.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
 fn bare_admin_name(bytes: &[u8]) -> Option<&str> {
     let name = std::str::from_utf8(bytes).ok()?;
-    let valid = !name.is_empty()
-        && name.len() <= 255
+    let component = name.len() <= 255
         && name != "."
         && name != ".."
         && !name
             .chars()
             .any(|c| matches!(c, '/' | '\0' | '{' | '}' | '"'));
+    let valid = name.is_empty() || component;
     valid.then_some(name)
 }
 

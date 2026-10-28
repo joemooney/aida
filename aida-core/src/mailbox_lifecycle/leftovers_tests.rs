@@ -225,7 +225,7 @@ fn a_torn_era_marker_aside_is_reported_and_kept() {
     let era = anchor.join(NONCE_ERA_DIR);
     ensure_dir(&era, true).unwrap();
     let mut asides = Vec::new();
-    for (i, body) in [&b"{\"admin\":\"wt\",\"admin_d"[..], b"", b"a/b", b"x\0y"]
+    for (i, body) in [&b"{\"admin\":\"wt\",\"admin_d"[..], b"a/b", b"x\0y", b".."]
         .into_iter()
         .enumerate()
     {
@@ -286,4 +286,41 @@ fn era_marker_writes_are_atomic_and_temps_reaped() {
     assert!(temp.is_file());
     assert!(scan_at(dir.path(), true, later()).reapable.contains(&temp));
     assert!(!temp.exists());
+}
+
+/// An empty pre-record body is the main checkout's admin name, whose entry
+/// is the common Git dir: its aside is settled as before, never reported
+/// corrupt. Lost, it is linked back; beside a standing marker, removed.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+#[test]
+fn a_main_checkout_pre_record_aside_is_settled_not_corrupt() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let put = |name: &str, bytes: &[u8]| {
+        let path = era.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+        path
+    };
+    let lost = put(".m.drop.1", b"");
+    let redundant = put(".k.drop.2", b"");
+    let kept = put("k", b"standing");
+
+    let reaped = scan_at(dir.path(), true, later());
+    assert!(reaped.corrupt.is_empty(), "{reaped:?}");
+    assert_eq!(reaped.reapable, [redundant.clone(), lost.clone()]);
+    assert!(!lost.exists() && !redundant.exists());
+    assert_eq!(
+        std::fs::read(era.join("m")).unwrap(),
+        b"",
+        "the lost main-checkout marker is linked back"
+    );
+    assert_eq!(
+        std::fs::read(&kept).unwrap(),
+        b"standing",
+        "a standing marker stays"
+    );
 }
