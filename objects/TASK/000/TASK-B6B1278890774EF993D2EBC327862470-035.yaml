@@ -8,12 +8,12 @@ description: |-
 
   PR: #3005
   Reviewed sha: 9059829f7e6a87c2b6b65f6815d5360ba23cfd85
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T11:23:05.337713113Z
-modified_at: 2026-10-28T11:25:23.585133238Z
+modified_at: 2026-10-28T12:29:36.502332224Z
 req_type: Task
 tags:
 - carried-from:STORY-1741
@@ -29,6 +29,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1827c-c171-71f0-a09b-96466c012ebc
+  author: aida-auto-bump
+  timestamp: 2026-10-28T12:29:36.497464519Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1827c-c176-78a2-93ad-e5ea9f0e9210
+  timestamp: 2026-10-28T12:29:36.502329552Z
+  agent: aida
+  commit_sha: a1fa3e7cbc9bb0eb20494dd4738f73a26c296c71
+  summary: '035: re-init-in-projected-clone black-box test restored with calibrated 25s budget; CI green at head'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: b535e12d57703cc905424bb6875b357b5f66b4dc
@@ -38,3 +53,7 @@ filed_at:
   aida_build_sha: 75d12e4354f
   vendor: claude
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T12:29:36.497460119Z
+  completion_sha: a1fa3e7cbc9bb0eb20494dd4738f73a26c296c71
