@@ -423,3 +423,60 @@ fn a_row_with_no_recorded_start_never_binds_by_pid_alone() {
     };
     assert!(SessionBindingFacts::verify(&recycled, &claude).is_ok());
 }
+
+/// F1 (STORY-1843 D1): a reservation gives a row its recipient UUID only
+/// when it names that row or one of its native sessions.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn reservation_recipient_requires_the_row_or_its_session() {
+    let tmp = tempfile::tempdir().unwrap();
+    let agents = tmp.path();
+    std::fs::create_dir_all(agents.join("handles")).unwrap();
+    let uuid = "0a1b2c3d-0000-4000-8000-00000000abcd";
+    let write = |body: &str| std::fs::write(agents.join("handles/rev-a.toml"), body).unwrap();
+    let base = format!(
+        "handle = \"rev-a\"\nrecipient_id = \"{uuid}\"\nagent_type = \"codex\"\nreserved_at = \"2026-10-28T00:00:00Z\"\n"
+    );
+
+    write(&format!(
+        "{base}registry_id = \"row-other\"\nnative_session_id = \"sess-other\"\n"
+    ));
+    assert_eq!(
+        reservation_recipient(agents, "rev-a", "row-1", &["sess-1"]),
+        None
+    );
+
+    write(&format!("{base}registry_id = \"row-1\"\n"));
+    assert_eq!(
+        reservation_recipient(agents, "rev-a", "row-1", &[]).map(|r| r.as_str().to_string()),
+        Some(uuid.to_string())
+    );
+    write(&format!("{base}native_session_id = \"sess-1\"\n"));
+    assert!(reservation_recipient(agents, "rev-a", "row-1", &["sess-1"]).is_some());
+    assert_eq!(
+        reservation_recipient(agents, "rev-a", "row-1", &["sess-2"]),
+        None
+    );
+
+    // Neither field set, a malformed UUID, a wrong handle or a symlink: None.
+    write(&base);
+    assert_eq!(reservation_recipient(agents, "rev-a", "row-1", &[""]), None);
+    write(&format!(
+        "handle = \"rev-a\"\nrecipient_id = \"not-a-uuid\"\nregistry_id = \"row-1\"\n"
+    ));
+    assert_eq!(reservation_recipient(agents, "rev-a", "row-1", &[]), None);
+    write(&format!(
+        "{}registry_id = \"row-1\"\n",
+        base.replace("\"rev-a\"", "\"rev-b\"")
+    ));
+    assert_eq!(reservation_recipient(agents, "rev-a", "row-1", &[]), None);
+    std::fs::write(
+        agents.join("real.toml"),
+        format!("{base}registry_id = \"row-1\"\n"),
+    )
+    .unwrap();
+    std::fs::remove_file(agents.join("handles/rev-a.toml")).unwrap();
+    std::os::unix::fs::symlink(agents.join("real.toml"), agents.join("handles/rev-a.toml"))
+        .unwrap();
+    assert_eq!(reservation_recipient(agents, "rev-a", "row-1", &[]), None);
+}

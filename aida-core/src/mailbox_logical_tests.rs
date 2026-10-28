@@ -413,7 +413,17 @@ fn story1843_unsafe_or_partial_sources_are_typed_incomplete() {
             &SourceStatus::Error(code),
             "{case}"
         );
-        assert_eq!(ids(&s), vec!["main-ok"], "{case}");
+        // Healthy-source mail is still served from the partial view, except
+        // when the failed source's `.deliveries/` itself cannot be read (a
+        // symlinked mailbox is never followed): it may hold the sidecar of
+        // any role message, so sidecar-less role mail fails closed
+        // (STORY-1843 D1 ruling F2).
+        let served: &[&str] = if case == "symlink-dir" {
+            &[]
+        } else {
+            &["main-ok"]
+        };
+        assert_eq!(ids(&s), served, "{case}");
         assert!(!s.complete(), "{case}");
         assert_eq!(s.caught_up(), None, "{case}");
         let missing = snap(&r.main, Some(&r.store), Query::ExactId("hidden".into()));

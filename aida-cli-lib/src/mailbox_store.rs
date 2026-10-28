@@ -51,11 +51,21 @@ fn write_message_in(dir: &Path, msg: &Message, _admitted: &CanonicalPermit) -> R
 /// writer so the CLI and the REST server share one implementation.
 /// trace:STORY-650 | ai:claude
 pub(crate) fn write_message(project_root: &Path, msg: &Message) -> Result<()> {
+    write_message_with_deliveries(project_root, msg, None)
+}
+
+/// [`write_message`] with the message's delivery sidecar (slice D1).
+// trace:STORY-1843 | ai:claude
+pub(crate) fn write_message_with_deliveries(
+    project_root: &Path,
+    msg: &Message,
+    deliveries: Option<&aida_core::mailbox_delivery::DeliverySidecar>,
+) -> Result<()> {
     // Include both the actual target and the OS reason even in the CLI's
     // outermost error display, which does not always print anyhow's chain.
     // trace:BUG-2218 | ai:codex
     let path = mailbox_dir(project_root).join(format!("{}.json", sanitize_id(&msg.id)));
-    aida_core::mailbox::write_local_message(project_root, msg)
+    aida_core::mailbox::write_local_message_with_deliveries(project_root, msg, deliveries)
         .map_err(|e| anyhow::anyhow!("writing message {}: {e}", path.display()))
 }
 

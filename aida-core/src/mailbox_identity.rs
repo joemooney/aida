@@ -17,6 +17,8 @@
 //! own process and store, never from a raw `--agent` value.
 // trace:STORY-1843 | ai:claude
 
+use crate::mailbox_delivery::RecipientUuid;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
@@ -263,6 +265,9 @@ pub enum BindingRefusal {
 pub struct SessionBindingFacts {
     handle: String,
     vendor: String,
+    /// The handle reservation's recipient UUID, when the reservation names
+    /// this row (slice D1). `None`: a UUID-less reader.
+    recipient: Option<RecipientUuid>,
 }
 
 impl SessionBindingFacts {
@@ -295,11 +300,28 @@ impl SessionBindingFacts {
         if !(by_session || by_claude_pid || is_self_or_ancestor(&parsed)) {
             return Err(BindingRefusal::NotThisProcess);
         }
-        Ok(Self { handle, vendor })
+        let sessions: Vec<&str> = [&parsed.claude_session_id, &parsed.native_session_id]
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        let recipient = row
+            .parent()
+            .and_then(|agents| reservation_recipient(agents, &handle, &parsed.id, &sessions));
+        Ok(Self {
+            handle,
+            vendor,
+            recipient,
+        })
     }
 
     pub fn handle(&self) -> &str {
         &self.handle
+    }
+
+    /// The recipient UUID this binding owns, when its reservation names it.
+    pub fn recipient(&self) -> Option<&RecipientUuid> {
+        self.recipient.as_ref()
     }
 
     #[cfg(test)]
@@ -307,8 +329,51 @@ impl SessionBindingFacts {
         Self {
             handle: handle.to_string(),
             vendor: vendor.to_string(),
+            recipient: None,
         }
     }
+}
+
+/// The handle reservation as the identity policy reads it.
+#[derive(Deserialize)]
+struct ReservationRow {
+    handle: String,
+    recipient_id: String,
+    #[serde(default)]
+    native_session_id: Option<String>,
+    #[serde(default)]
+    registry_id: Option<String>,
+}
+
+/// The recipient UUID the reservation of `handle` (under `agents_dir`'s
+/// `handles/`) gives the registry row `row_id`: only when the reservation
+/// names that row, or one of the row's native sessions (`sessions`). A
+/// reservation naming neither, a missing, unreadable or malformed one, or a
+/// non-UUID `recipient_id` yields `None`, never a UUID. Bounded, no-follow.
+// trace:STORY-1843 | ai:claude
+pub fn reservation_recipient(
+    agents_dir: &Path,
+    handle: &str,
+    row_id: &str,
+    sessions: &[&str],
+) -> Option<RecipientUuid> {
+    if !valid_handle(handle) {
+        return None;
+    }
+    let path = agents_dir.join("handles").join(format!("{handle}.toml"));
+    let body = read_bounded_regular(&path)?;
+    let r: ReservationRow = toml::from_str(&body).ok()?;
+    if r.handle != handle {
+        return None;
+    }
+    let by_row = r.registry_id.as_deref() == Some(row_id);
+    let by_session = r
+        .native_session_id
+        .as_deref()
+        .is_some_and(|sid| !sid.trim().is_empty() && sessions.contains(&sid));
+    (by_row || by_session)
+        .then(|| RecipientUuid::parse(&r.recipient_id))
+        .flatten()
 }
 
 /// Longest handle registry rows are allocated under.
@@ -485,6 +550,7 @@ impl SessionBinding {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MailIdentityFacts {
     own_handle: Option<String>,
+    own_recipient: Option<RecipientUuid>,
     own_vendor: Option<String>,
     user: String,
     /// The user is an intentional person in the people catalog. Only
@@ -506,10 +572,10 @@ impl MailIdentityFacts {
         catalog: &PeopleCatalogView,
         env: IdentityEnv,
     ) -> Self {
-        let (own_handle, own_vendor, unverified) = match binding {
-            SessionBinding::Bound(b) => (Some(b.handle), Some(b.vendor), false),
-            SessionBinding::Unbound => (None, None, false),
-            SessionBinding::Unverified(_) => (None, None, true),
+        let (own_handle, own_vendor, own_recipient, unverified) = match binding {
+            SessionBinding::Bound(b) => (Some(b.handle), Some(b.vendor), b.recipient, false),
+            SessionBinding::Unbound => (None, None, None, false),
+            SessionBinding::Unverified(_) => (None, None, None, true),
         };
         let user_is_known_person = (unverified
             || own_handle
@@ -518,6 +584,7 @@ impl MailIdentityFacts {
             && catalog.contains(&env.user);
         Self {
             own_handle,
+            own_recipient,
             own_vendor,
             user: env.user,
             user_is_known_person,
@@ -538,6 +605,11 @@ impl MailIdentityFacts {
         self.own_handle.as_deref()
     }
 
+    /// The bound session's recipient UUID, when its reservation names it.
+    pub fn own_recipient(&self) -> Option<&RecipientUuid> {
+        self.own_recipient.as_ref()
+    }
+
     pub fn user(&self) -> &str {
         &self.user
     }
@@ -545,6 +617,13 @@ impl MailIdentityFacts {
     /// The raw session role.
     pub fn role(&self) -> Option<&str> {
         self.role.as_deref()
+    }
+
+    /// Test-only: these facts with a recipient UUID.
+    #[cfg(test)]
+    pub(crate) fn with_recipient(mut self, recipient: RecipientUuid) -> Self {
+        self.own_recipient = Some(recipient);
+        self
     }
 
     /// Test-only facts.
@@ -561,6 +640,7 @@ impl MailIdentityFacts {
     ) -> Self {
         Self {
             own_handle: own_handle.map(str::to_string),
+            own_recipient: None,
             own_vendor: own_vendor.map(str::to_string),
             user: user.to_string(),
             user_is_known_person,

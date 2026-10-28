@@ -2948,7 +2948,20 @@ impl<'a> McpServer<'a> {
             from_role,
             relayed_from,
         };
-        crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
+        // A role send records its send-time cohort, as on the CLI.
+        // trace:STORY-1843 | ai:claude
+        let (deliveries, delivery_warnings) = match &resolution {
+            Some(r) => crate::mailbox_resolver::delivery_sidecar(r, &id, msg.timestamp, false)
+                .map_err(|e| e.to_string())?,
+            None => (None, Vec::new()),
+        };
+        crate::mailbox_store::write_message_with_deliveries(
+            &self.project_root,
+            &msg,
+            deliveries.as_ref(),
+        )
+        .map_err(|e| e.to_string())?;
+        routing_warnings.extend(delivery_warnings);
         if let Some(note) = resolution.and_then(|r| r.reader_notice) {
             routing_warnings.push(note);
         }
@@ -2999,11 +3012,13 @@ impl<'a> McpServer<'a> {
             },
         };
         let store_root = self.project_root.join(".aida-store");
-        let view = crate::mailbox_view::read_own_mail(
+        // An explicit read takes queued role mail. trace:STORY-1843 | ai:claude
+        let view = crate::mailbox_view::read_own_mail_binding(
             &self.project_root,
             &store_root,
             &audience,
             &crate::mailbox_view::explicit_limits(),
+            crate::mailbox_view::BindWait::Explicit,
         );
         let shown: Vec<&aida_core::mailbox_logical::SnapshotRecord> = view
             .records()
@@ -10998,7 +11013,7 @@ mod tests {
         let server = mk_server(dir.path());
         // The role and private name need a real live reader under the shared resolver.
         // trace:STORY-1843 | ai:codex
-        crate::agent_registry::register_existing_agent(
+        let entry = crate::agent_registry::register_existing_agent(
             dir.path(),
             "claude",
             std::process::id(),
@@ -11009,6 +11024,7 @@ mod tests {
             None,
         )
         .unwrap();
+        crate::mailbox_resolver::reserve_test_reader(dir.path(), &entry);
         server
             .tool_send_message(&json!({ "to": "ADVISOR", "body": "upper", "from": "codex" }))
             .unwrap();

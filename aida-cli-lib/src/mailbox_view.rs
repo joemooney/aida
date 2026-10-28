@@ -202,6 +202,96 @@ pub(crate) fn read_own_mail(
     view
 }
 
+/// How long a reader may spend binding queued role deliveries. The whole
+/// pass shares ONE deadline. The per-turn notice gets 50 ms in total and
+/// stops at the first busy lock or error, so it never holds up a turn. An
+/// explicit read waits each bind up to the Lifecycle lock's bounded try, but
+/// the pass is still capped. Status, statusline and TUI views never bind.
+// trace:STORY-1843 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BindWait {
+    Explicit,
+    Notice,
+}
+
+impl BindWait {
+    /// The deadline for the whole binding pass.
+    pub(crate) fn total(self) -> std::time::Duration {
+        match self {
+            BindWait::Explicit => 2 * aida_core::mailbox_lifecycle::LIFECYCLE_LOCK_TIMEOUT,
+            BindWait::Notice => std::time::Duration::from_millis(50),
+        }
+    }
+
+    /// The most one bind may wait on its lock.
+    fn per_call(self) -> std::time::Duration {
+        match self {
+            BindWait::Explicit => aida_core::mailbox_lifecycle::LIFECYCLE_LOCK_TIMEOUT,
+            BindWait::Notice => self.total(),
+        }
+    }
+}
+
+/// [`read_own_mail`] for a reader that takes queued role deliveries (slice
+/// D1): every queued delivery this reader is eligible for is bound to its
+/// recipient UUID once (the first binder wins; the rest see its binding),
+/// then the view is read again. The pass shares one deadline
+/// ([`BindWait::total`]). A busy lock or lifecycle refusal ends the pass, as
+/// does any error in a notice; what was not bound is retried on the next
+/// read (a debug line under `AIDA_DEBUG` says so).
+// trace:STORY-1843 | ai:claude
+pub(crate) fn read_own_mail_binding(
+    project_root: &Path,
+    store_root: &Path,
+    audience: &ResolvedAudience,
+    limits: &ReadLimits,
+    wait: BindWait,
+) -> OwnMail {
+    use aida_core::mailbox_delivery::{bind_queued_delivery, BindError};
+    let (taken, view) = snapshot_view(project_root, store_root, audience, &Query::Inbox, limits);
+    let (Some((ctx, snapshot)), Some(own)) = (taken, audience.recipient()) else {
+        return view;
+    };
+    if snapshot.pending_deliveries.is_empty() {
+        return view;
+    }
+    let deadline = Instant::now() + wait.total();
+    let mut changed = false;
+    for pending in &snapshot.pending_deliveries {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let outcome = bind_queued_delivery(
+            ctx.repository().map(|r| r.path()),
+            ctx.requested_checkout().path(),
+            &pending.delivery_id,
+            own,
+            || own_audience_in(project_root).recipient() == Some(own),
+            wait.per_call().min(remaining),
+        );
+        match outcome {
+            Ok(_) => changed = true,
+            Err(e) => {
+                if std::env::var_os("AIDA_DEBUG").is_some() {
+                    eprintln!("debug: queued role mail not taken this time: {e}");
+                }
+                let lock_or_lifecycle = match &e {
+                    BindError::Lifecycle(_) | BindError::NotOwned => true,
+                    BindError::Io(io) => io.kind() == std::io::ErrorKind::WouldBlock,
+                };
+                if wait == BindWait::Notice || lock_or_lifecycle {
+                    break;
+                }
+            }
+        }
+    }
+    if !changed {
+        return view;
+    }
+    read_own_mail(project_root, store_root, audience, limits)
+}
+
 /// One snapshot for `query`, with the context it was taken in (`None` when
 /// the checkout could not be resolved; the view is then typed partial).
 fn snapshot_view(
@@ -521,6 +611,40 @@ pub(crate) fn bound_facts(handle: &str, vendor: &str) -> crate::MailIdentityFact
             "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\n",
             std::process::id(),
             aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
+        ),
+    )
+    .unwrap();
+    let env = IdentityEnv::observed();
+    let binding = crate::session_binding_from_row(Some(&row), &env);
+    crate::MailIdentityFacts::observed(binding, &PeopleCatalogView::default(), env)
+}
+
+/// [`bound_facts`] whose handle reservation names the scratch row, so the
+/// facts carry `recipient` (slice D1). Test-only; the caller controls the env.
+// trace:STORY-1843 | ai:claude
+#[cfg(test)]
+pub(crate) fn bound_facts_with_recipient(
+    handle: &str,
+    vendor: &str,
+    recipient: &str,
+) -> crate::MailIdentityFacts {
+    use aida_core::mailbox_identity::{IdentityEnv, PeopleCatalogView};
+    let dir = tempfile::tempdir().unwrap();
+    let row = dir.path().join("test-row.toml");
+    std::fs::write(
+        &row,
+        format!(
+            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\n",
+            std::process::id(),
+            aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join("handles")).unwrap();
+    std::fs::write(
+        dir.path().join("handles").join(format!("{handle}.toml")),
+        format!(
+            "handle = \"{handle}\"\nrecipient_id = \"{recipient}\"\nregistry_id = \"test-row\"\n"
         ),
     )
     .unwrap();

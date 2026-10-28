@@ -291,6 +291,7 @@ pub(crate) fn handle_mailbox_command(
             intent,
             relayed_from,
             allow_second_person,
+            queue_for_role,
         } => {
             // Resolve before any message write; historical registry rows are not readers.
             // trace:STORY-1843 | ai:codex
@@ -305,7 +306,7 @@ pub(crate) fn handle_mailbox_command(
                 for warning in directory.warnings() {
                     eprintln!("{warning}");
                 }
-                Some(directory.resolve(target)?)
+                Some(directory.resolve_send(target, *queue_for_role)?)
             };
             let recipient = resolution
                 .as_ref()
@@ -328,6 +329,20 @@ pub(crate) fn handle_mailbox_command(
             // trace:BUG-1592 | ai:claude
             let from_role = crate::resolve_mail_sender_role();
             let id = uuid::Uuid::new_v4().to_string();
+            // A role send records its send-time cohort beside the message.
+            // trace:STORY-1843 | ai:claude
+            let (deliveries, delivery_warnings) = match &resolution {
+                Some(r) => crate::mailbox_resolver::delivery_sidecar(
+                    r,
+                    &id,
+                    chrono::Utc::now().timestamp_millis(),
+                    true,
+                )?,
+                None => (None, Vec::new()),
+            };
+            for warning in &delivery_warnings {
+                eprintln!("{warning}");
+            }
             let body = read_send_body(body.as_deref(), body_file.as_deref(), *stdin)?;
             // BUG-557: a reply must attach to the ORIGINAL message's thread, not
             // open a new one. Precedence: an explicit `--thread` wins; else
@@ -428,7 +443,7 @@ pub(crate) fn handle_mailbox_command(
                 from_role,
                 relayed_from,
             };
-            mailbox_store::write_message(project_root, &msg)?;
+            mailbox_store::write_message_with_deliveries(project_root, &msg, deliveries.as_ref())?;
             // STORY-1226: the event fast-path for `on = ["MailReceived"]`
             // schedule jobs (mailbox-triage). Best-effort, never fails the send.
             // trace:STORY-1226 | ai:claude
@@ -530,11 +545,13 @@ pub(crate) fn handle_mailbox_command(
                     }
                 },
             };
-            let view = crate::mailbox_view::read_own_mail(
+            // An explicit read takes queued role mail. trace:STORY-1843 | ai:claude
+            let view = crate::mailbox_view::read_own_mail_binding(
                 project_root,
                 store_root,
                 &audience,
                 &crate::mailbox_view::explicit_limits(),
+                crate::mailbox_view::BindWait::Explicit,
             );
             let inbox = select_inbox_rows(view.records(), *archived, *unread, *recent_read_tail);
             let who_label = audience.keys().collect::<Vec<_>>().join(" + ");
@@ -660,11 +677,13 @@ pub(crate) fn handle_mailbox_command(
                     ),
                 },
             };
-            let view = crate::mailbox_view::read_own_mail(
+            // The per-turn notice tries briefly to take queued role mail and never waits. trace:STORY-1843 | ai:claude
+            let view = crate::mailbox_view::read_own_mail_binding(
                 project_root,
                 store_root,
                 &audience,
                 &crate::mailbox_view::passive_limits(),
+                crate::mailbox_view::BindWait::Notice,
             );
             let identities: Vec<String> = audience.keys().map(str::to_string).collect();
             let cap = cap.unwrap_or(aida_core::mailbox::NOTICE_DEFAULT_CAP);
@@ -1540,7 +1559,7 @@ mod tests {
             ("claude", "agy-reviewer-task1522", "reviewer"),
             ("antigravity", "antigravity-implementer-1", "implementer"),
         ] {
-            crate::agent_registry::register_existing_agent(
+            let entry = crate::agent_registry::register_existing_agent(
                 project,
                 vendor,
                 std::process::id(),
@@ -1551,6 +1570,7 @@ mod tests {
                 None,
             )
             .unwrap();
+            crate::mailbox_resolver::reserve_test_reader(project, &entry);
         }
     }
 
@@ -1617,6 +1637,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
 
         let ambiguous = handle_mailbox_command(&send("0fa629d6"), &store).unwrap_err();
@@ -1778,6 +1799,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         }
     }
 
@@ -1849,6 +1871,7 @@ mod tests {
         entry.pid = u32::MAX; // Cannot be observed by the local PID probe.
         entry.pid_namespace = Some(namespace ^ 1);
         crate::agent_registry::write_entry(project.path(), &entry).unwrap();
+        crate::mailbox_resolver::reserve_test_reader(project.path(), &entry);
         let directory =
             crate::mailbox_resolver::RecipientDirectory::load(project.path(), &store).unwrap();
         for target in ["advisor", "codex", "foreign-reader"] {
@@ -1896,6 +1919,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
 
         let error = handle_mailbox_command(&command, &store)
@@ -1937,6 +1961,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
 
         let error = handle_mailbox_command(&command, &store)
@@ -1982,6 +2007,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
         handle_mailbox_command(&command, &store).expect("valid reply target must succeed");
 
@@ -2024,6 +2050,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
 
         handle_mailbox_command(&command, &store).unwrap();
@@ -2293,6 +2320,7 @@ mod tests {
             intent,
             relayed_from: relayed_from.map(str::to_string),
             allow_second_person: allow,
+            queue_for_role: false,
         }
     }
 
@@ -2375,6 +2403,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         }
     }
 

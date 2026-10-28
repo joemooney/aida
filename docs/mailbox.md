@@ -242,6 +242,57 @@ only delivered mail is acknowledged, and the regression test
 that a reader killed mid-print acknowledges nothing. The
 `aida-tui` mail scope remains a non-marking peek.
 
+## Mail to a role: who gets it
+
+`aida mailbox send --to <role>` delivers to the role's readers **as they are
+when you send** (STORY-1843 slice D1). The send prints the readers it found.
+Beside the message, in the same mailbox, it records one delivery per reader
+that has a recipient UUID (the UUID behind the reader's handle). The message
+file itself is unchanged.
+
+- **Only the readers named at send see it.** A session that takes the role
+  later, or a new session under the same handle (after `/clear`, say, which
+  gets a new UUID), does not.
+- **Each reader acknowledges it for itself.** One reader reading it does not
+  mark it read for the others: the receipt is recorded under that reader's
+  UUID, never under the shared role inbox, and an old role read watermark
+  never counts as that reader's read.
+- **A reader with no recipient UUID is left out and named** in a warning
+  (`<name> has no recipient UUID and will not receive this; address it by
+  handle`). If that leaves no reader, the send is refused, as a send to a
+  role with no reader is.
+- **`--queue-for-role`**: when the role has no reader (or none of its
+  readers has a recipient UUID), the send is refused unless you pass this
+  flag. With it, the message waits, and the first
+  eligible reader whose `aida mailbox inbox`, MCP `read_inbox` or per-turn
+  notice sees it takes it, exactly once. The other readers of the role never
+  see it. The per-turn notice spends at most 50 ms on this in total and stops
+  at the first busy lock, so it never holds up a turn; if it cannot take the
+  message now, it tries again next turn. MCP `send_message` has no queue
+  option: there a role with no reader is refused. The statusline,
+  `aida status` and the TUI never take queued mail.
+
+Mail sent before this, mail to a handle, a person or a vendor group, and
+broadcasts are unchanged: a role message with no delivery record is read
+through the shared role inbox as before. One exception: if a live
+worktree's delivery records cannot be read (a corrupt or unsafe file, a
+symlinked mailbox, a read that ran out of time), they may belong to any role
+message, so role messages without a delivery record are hidden from that
+view until a clean read, rather than shown to the whole role. A worktree
+whose other mail fails to read but whose delivery records read cleanly, a
+deleted or prunable worktree, and an unusable canonical store hide nothing.
+Mail to a vendor group is never hidden this way.
+
+**Known limitation: a canonical-only clone.** The delivery records stay in
+the sending worktree's mailbox. When that worktree is retired they move with
+its mail into the private retained copy, and every read still takes them
+from there, so a copy of the message elsewhere in this repository (the
+canonical store, another worktree) stays visible only to its cohort. Syncing to the canonical store (`aida mailbox sync`) does not
+publish them, so reader UUIDs never go into the shared store. A clone that
+sees only the canonical copy of a role message therefore treats it as
+ordinary role mail: every reader of the role there sees it and the role
+inbox acknowledges it.
+
 ## Cross-vendor: MCP equivalents
 
 Any MCP-speaking agent (Codex, Cursor, etc.) participates through two MCP tools:
@@ -267,6 +318,8 @@ So a long-running advisor leaving a note an implementer reads tomorrow, or a Cod
 ## Current limitations
 
 These are known gaps (tracked for the master to triage):
+
+- **Role delivery records are not synced.** A clone that sees only the canonical store treats a role message as ordinary role mail (see "Mail to a role: who gets it").
 
 - **Intent on the notice surface + read-mail skill.** `aida mailbox inbox` and the `read_inbox` MCP tool surface a message's `intent`, but folding it into the unread *notice* surface (`aida mailbox notice`) and the read-mail skill's interpret step is still pending — TASK-790.
 
