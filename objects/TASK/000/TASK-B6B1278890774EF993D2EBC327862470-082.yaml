@@ -10,7 +10,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T22:15:54.207767843Z
-modified_at: 2026-10-28T22:38:52.660712693Z
+modified_at: 2026-10-28T22:55:31.435869955Z
 req_type: Task
 tags:
 - from-review:PR-3069
@@ -20,6 +20,13 @@ relationships:
   target_id: 01a184aa-642b-7591-9be7-f60037b9cf73
   created_at: 2026-10-28T22:38:52.660709649Z
   created_by: joe
+comments:
+- id: 01a184b9-cc6b-7c02-b1aa-840112f543ae
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 15:56 MST on the #3072 non-blocking findings: ACCEPTED LIMITATION, no follow-up task. The concurrent-writer race exists only on the create_new fallback, used when a filesystem supports neither RENAME_NOREPLACE nor hard links (some CIFS/SMB mounts). ADR-72 scopes AIDA to Linux local filesystems, which have both, so that path is best-effort, and the race fails closed (the reader sees Unsafe, which is retriable), never aliased. The cosmetic test-assertion gap is accepted too. This closes the mailbox-lifecycle review chain (#3043 -> #3047 -> #3056 -> #3058 -> #3062 -> #3065 -> #3069 -> #3072).'
+  created_at: 2026-10-28T22:55:31.435869955Z
+  modified_at: 2026-10-28T22:55:31.435869955Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a18495-a7dc-74b2-8606-6d193d709021
   author: joe
