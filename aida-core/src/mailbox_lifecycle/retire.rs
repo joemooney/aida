@@ -409,7 +409,7 @@ fn prepare_mailbox(mailbox: &Path) -> Result<Option<RetireOutcome>> {
             None,
         ))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir_all(mailbox)?;
+            super::create_mailbox_dir(mailbox)?; // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
             Ok(None)
         }
         Err(e) => Err(e.into()),
@@ -559,7 +559,7 @@ pub(crate) fn verify_quiet(
             if meta.file_type().is_dir() && meta.dev() == entry.dev && meta.ino() == entry.ino => {}
         _ => return changed("the mailbox directory was replaced"),
     }
-    let late: Vec<String> = sorted_entries(&entry.mailbox)?
+    let late: Vec<String> = mailbox_entries(&entry.mailbox)?
         .into_iter()
         .map(|(name, _, _)| name)
         .collect();
@@ -646,7 +646,7 @@ fn drive(mut entry: JournalEntry, opts: &RetireOptions) -> Result<RetireOutcome>
                     }
                 };
                 if let Some(reason) = unactivated {
-                    if holds_bytes(&entry.mailbox)? || holds_bytes(&data)? {
+                    if mailbox_holds_bytes(&entry.mailbox)? || holds_bytes(&data)? {
                         return abort(entry, reason);
                     }
                 }
@@ -797,7 +797,7 @@ fn preserve(
     }
     let same_fs = !opts.force_copy && std::fs::metadata(&data)?.dev() == entry.dev;
     let mut moved = 0usize;
-    if let Err(reason) = move_tree(&entry.mailbox, &data, same_fs, &mut moved)? {
+    if let Err(reason) = move_tree(&entry.mailbox, &data, true, same_fs, &mut moved)? {
         return Ok(Err(reason));
     }
     let mut files = Vec::new();
@@ -819,17 +819,24 @@ fn preserve(
     Ok(Ok(()))
 }
 
+/// `root` is the mailbox itself, whose creation nonce stays with it.
 fn move_tree(
     src: &Path,
     dst: &Path,
+    root: bool,
     same_fs: bool,
     moved: &mut usize,
 ) -> Result<std::result::Result<(), RefusalReason>> {
-    for (name, path, meta) in sorted_entries(src)? {
+    let entries = if root {
+        mailbox_entries(src)?
+    } else {
+        sorted_entries(src)?
+    };
+    for (name, path, meta) in entries {
         let target = dst.join(&name);
         if meta.file_type().is_dir() {
             ensure_dir(&target, true)?;
-            if let Err(reason) = move_tree(&path, &target, same_fs, moved)? {
+            if let Err(reason) = move_tree(&path, &target, false, same_fs, moved)? {
                 return Ok(Err(reason));
             }
             // A writer that took no permit may have added an entry here after
@@ -1021,7 +1028,7 @@ fn final_check(entry: &mut JournalEntry) -> Result<std::result::Result<(), Refus
             if meta.file_type().is_dir() && meta.dev() == entry.dev && meta.ino() == entry.ino => {}
         _ => return changed("the mailbox directory was replaced".into()),
     }
-    let late: Vec<String> = sorted_entries(&entry.mailbox)?
+    let late: Vec<String> = mailbox_entries(&entry.mailbox)?
         .into_iter()
         .map(|(name, _, _)| name)
         .collect();
@@ -1071,7 +1078,7 @@ pub(super) fn abort(mut entry: JournalEntry, reason: RefusalReason) -> Result<Re
 fn finish_abort(entry: &JournalEntry) -> Result<()> {
     let data = entry.retained_dir().join("data");
     if data.is_dir() {
-        std::fs::create_dir_all(&entry.mailbox)?;
+        super::create_mailbox_dir(&entry.mailbox)?; // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
         restore_tree(&data, &entry.mailbox)?;
     }
     let held = lock(&entry.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
@@ -1411,6 +1418,29 @@ fn sorted_entries(dir: &Path) -> Result<Vec<Entry>> {
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(out)
+}
+
+/// Entries of the mailbox root, without its creation nonce: that names this
+/// directory's creation, is never mail, and is never moved, counted or
+/// restored.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn mailbox_entries(mailbox: &Path) -> Result<Vec<Entry>> {
+    let mut entries = sorted_entries(mailbox)?;
+    entries.retain(|(name, _, meta)| !super::is_source_id(name, meta));
+    Ok(entries)
+}
+
+/// [`holds_bytes`] for the mailbox root, which may hold its creation nonce.
+fn mailbox_holds_bytes(mailbox: &Path) -> Result<bool> {
+    for (name, path, meta) in mailbox_entries(mailbox)? {
+        if stale_staging(&name, &path, &meta)? {
+            continue;
+        }
+        if !meta.file_type().is_dir() || holds_bytes(&path)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Does `dir` hold anything but directories? Any file counts as mail,

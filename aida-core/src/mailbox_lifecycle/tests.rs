@@ -121,6 +121,10 @@ pub(super) fn files_under(dir: &Path) -> Vec<String> {
         };
         for item in read {
             let path = item.unwrap().path();
+            // The creation nonce is not mail.
+            if dir == root && path.file_name() == Some(SOURCE_ID_FILE.as_ref()) {
+                continue;
+            }
             if path.is_dir() {
                 walk(root, &path, out);
             } else {
@@ -1345,4 +1349,149 @@ fn an_anchor_without_an_index_indexes_its_unfinished_journal_once() {
         "the migrated index adopts it"
     );
     assert!(anchor.join("pending").is_dir());
+}
+
+// ── BUG-011: source identity is per mailbox-directory creation ──────────────
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn two_creations_on_one_injected_inode_get_distinct_keys() {
+    let dir = tempfile::tempdir().unwrap();
+    let mailbox = dir.path().join(".aida").join("mailbox");
+    let mut nonces = Vec::new();
+    for _ in 0..2 {
+        create_mailbox_dir(&mailbox).unwrap();
+        nonces.push(
+            read_source_id(&mailbox)
+                .unwrap()
+                .expect("minted at creation"),
+        );
+        std::fs::remove_dir_all(&mailbox).unwrap();
+    }
+    // The same (dev, ino) for both, as when a freed inode is handed back.
+    let common = Path::new("/repo/.git");
+    let key = |nonce: &str| source_key(common, "wt", 7, 42, Some(nonce));
+    assert_ne!(key(&nonces[0]), key(&nonces[1]));
+    assert_ne!(key(&nonces[0]), source_key(common, "wt", 7, 42, None));
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_legacy_mailbox_without_a_nonce_keeps_its_key() {
+    let dir = repo();
+    std::fs::create_dir_all(mailbox(dir.path())).unwrap();
+    let meta = std::fs::metadata(mailbox(dir.path())).unwrap();
+    let resolved = source(dir.path());
+    let common = std::fs::canonicalize(dir.path().join(".git")).unwrap();
+    let mut h = Sha256::new();
+    h.update(common.as_os_str().as_encoded_bytes());
+    h.update([0]);
+    h.update([0]);
+    h.update(format!("{}:{}", meta.dev(), meta.ino()).as_bytes());
+    assert_eq!(resolved.key, hex(&h.finalize()), "the pre-nonce key");
+    assert!(!mailbox(dir.path()).join(SOURCE_ID_FILE).exists());
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_written_mailbox_is_born_with_a_private_nonce_that_is_never_mail() {
+    let dir = repo();
+    write_local_message(dir.path(), &message("m1")).unwrap();
+    let id = mailbox(dir.path()).join(SOURCE_ID_FILE);
+    let meta = std::fs::symlink_metadata(&id).unwrap();
+    assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+    assert_eq!(files_under(&mailbox(dir.path())), ["m1.json"]);
+    let listed = crate::mailbox::read_local_messages(dir.path()).unwrap();
+    assert_eq!(listed.len(), 1);
+    // A second creation attempt keeps the directory and its nonce.
+    let before = std::fs::read(&id).unwrap();
+    create_mailbox_dir(&mailbox(dir.path())).unwrap();
+    assert_eq!(std::fs::read(&id).unwrap(), before);
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_malformed_or_unreadable_nonce_fails_closed() {
+    let dir = repo();
+    write_local_message(dir.path(), &message("m1")).unwrap();
+    let id = mailbox(dir.path()).join(SOURCE_ID_FILE);
+    std::fs::remove_file(&id).unwrap();
+    std::fs::write(&id, "not-a-nonce\n").unwrap();
+    assert!(matches!(
+        resolve_source(dir.path()),
+        Err(LifecycleError::Unsafe { .. })
+    ));
+    std::fs::remove_file(&id).unwrap();
+    std::os::unix::fs::symlink("/dev/null", &id).unwrap();
+    assert!(matches!(
+        resolve_source(dir.path()),
+        Err(LifecycleError::Unsafe { .. })
+    ));
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn retirement_leaves_the_nonce_with_its_mailbox() {
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    let id = mailbox(dir.path()).join(SOURCE_ID_FILE);
+    assert!(id.is_file(), "the first write minted it");
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (_, retained) = retired(outcome);
+    assert_eq!(files_under(&retained.join("data")), SEEDED);
+    assert!(!retained.join("data").join(SOURCE_ID_FILE).exists());
+    assert!(id.is_file(), "it stays with the generation it names");
+}
+
+/// A creator that loses the race keeps the directory already there and
+/// leaves no staging behind.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_creator_that_loses_the_race_keeps_the_existing_mailbox() {
+    let dir = tempfile::tempdir().unwrap();
+    let mailbox = dir.path().join(".aida").join("mailbox");
+    let winner = mailbox.clone();
+    BEFORE_PLACE
+        .with(|h| *h.borrow_mut() = Some(Box::new(move || std::fs::create_dir(&winner).unwrap())));
+    create_mailbox_dir(&mailbox).unwrap();
+    assert!(mailbox.is_dir());
+    assert!(
+        !mailbox.join(SOURCE_ID_FILE).exists(),
+        "the winner was kept, not replaced"
+    );
+    let left: Vec<_> = std::fs::read_dir(dir.path().join(".aida"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(left, ["mailbox"], "no staging left behind");
+}
+
+/// Without a no-replace rename the nonce era is recorded first, so a
+/// resolver in the window before the nonce lands refuses instead of keying
+/// the new directory as legacy.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn without_noreplace_the_window_before_the_nonce_fails_closed() {
+    let dir = repo();
+    let root = dir.path().to_path_buf();
+    let in_window = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let seen = in_window.clone();
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(true));
+    IN_PLACE_WINDOW.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move || {
+            *seen.borrow_mut() = Some(resolve_source(&root));
+        }))
+    });
+    let created = create_mailbox_dir(&mailbox(dir.path()));
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(false));
+    created.unwrap();
+    let window = in_window.borrow_mut().take().expect("the window ran");
+    assert!(
+        matches!(window, Err(LifecycleError::Unsafe { .. })),
+        "{window:?}"
+    );
+    assert!(mailbox(dir.path()).join(SOURCE_ID_FILE).is_file());
+    let resolved = resolve_source(dir.path()).unwrap().expect("anchored");
+    assert_eq!(resolved.mailbox, mailbox(dir.path()));
 }

@@ -1850,6 +1850,13 @@ fn bug_2218_sandbox_mailbox_is_writable_but_sensitive_state_is_not() {
     );
     crate::contained_boundary::prepare_mailbox(&main).unwrap();
     assert!(main.join(".aida/mailbox").is_dir(), "primed before launch");
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+    assert!(
+        main.join(".aida/mailbox")
+            .join(aida_core::mailbox_lifecycle::SOURCE_ID_FILE)
+            .is_file(),
+        "born with its creation nonce"
+    );
     let settings: serde_json::Value =
         serde_json::from_str(&crate::session::contained_settings_json_with_store(
             &[],
