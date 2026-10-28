@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T11:28:28.354335125Z
+modified_at: 2026-10-28T13:01:08.897891498Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1213,6 +1213,18 @@ comments:
   created_at: 2026-10-28T11:28:28.354335125Z
   modified_at: 2026-10-28T11:28:28.354335125Z
   session_id: 92161e7c-5e11-4371-9329-47aec3cf7f04
+- id: 01a18299-a1a1-7271-b5a4-9786aed89a4d
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-28 06:05 MST on the FINAL ACCEPTANCE INVENTORY sketch (D/E).
+    Q1: DeliveryRecord is a sidecar per message (message JSON stays immutable), and the B logical view reconciles it.
+    Q2: --queue-for-role binds once, on the first eligible reader's next snapshot, under the recipient lifecycle generation. A two-reader race must bind exactly one.
+    Q3: D1 (delivery ownership/cohorts/per-UUID receipts) and D2 (relay-mail bind/child-bind/end/reuse, AIDA side) are two Refs PRs, implemented IN PARALLEL in separate lanes. Each is STRICT: the lane runs the area's integration test binaries for mailbox/relay plus LIGHT, and gets a separate reviewer. The D2 lane owns relay_mail.rs/relay_mail_args.rs and the command_registry entry. The D1 lane owns delivery records, the send/queue path and the anchor key change. If both need a shared type, D1 defines it, and D2 rebases onto D1's PR branch rather than duplicating it.
+    Q4: deferred to the advisor until D2's CLI contract is fixed. The advisor will then assess aida-relay STORY-122 for derisking (shell fixtures with stub vendors make it testable unattended) or keep it operator-guided.
+    E: the conformance matrix plus a separate STRICT review is the completing PR, after D1, D2 and D3.
+  created_at: 2026-10-28T13:01:08.897891498Z
+  modified_at: 2026-10-28T13:01:08.897891498Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
