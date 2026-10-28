@@ -1,0 +1,35 @@
+id: 01a181a8-b426-72c2-8b98-fceaa6fe1437
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-042
+title: 'Review PR-3015: [AI:claude] feat(mailbox): B2c post-flush explicit ACK and common-Git receipt anchor (Refs STORY-1843)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-b2c`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3015>
+  - Branch: `story-1843-b2c` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1843
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3015` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T08:37:59.462439645Z
+modified_at: 2026-10-28T08:37:59.462439645Z
+req_type: Story
+filed_at:
+  code_sha: 1561fd26567b8c0df316efb4cd350fc45b9a933b
+  branch: story-1843-b2c
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b49cf1b8fa6
+  vendor: claude
+  session: 15c1ef2e-e902-4e79-a9eb-6758b4234253
