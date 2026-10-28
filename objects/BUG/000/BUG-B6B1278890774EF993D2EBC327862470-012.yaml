@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-012
 title: 'dispatch impl/take refuse every launch: occupancy scan parses .activity.toml/.manifest.toml companions as session leases'
 description: |
   Every `aida dispatch request impl|take` launch is refused on this repo. dispatch.rs (~line 1900, the worktree occupancy check) reads EVERY `*.toml` in `.aida/sessions/` as a SessionLease and returns "unknown occupant: malformed session lease" when parsing fails. The `<id>.activity.toml` and `<id>.manifest.toml` companions (158 activity sidecars here) never parse as leases. Evidence: STORY-1917 demo step 7, request 15d8853b (impl demo-lane), executed by the scheduler tick and refused with "cannot launch impl lane `demo-lane` (STORY-1917): unknown occupant: malformed session lease /home/joe/ai/aida/.aida/sessions/01a12b1c7882.activity.toml". leases.rs already has the correct rule: `is_session_lease_file` (STORY-1429/BUG-114). Acceptance: the dispatch occupancy scan filters with `leases::is_session_lease_file`, so companions and staging files are skipped. A real lease that is unreadable or malformed still fails closed. Regression test: a sessions dir holding an activity.toml and a manifest.toml next to a valid lease admits, and a corrupt `<id>.toml` refuses. Grep for any other `.aida/sessions` scanner with the same `extension() == "toml"` pattern and fix it the same way.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T16:53:05.516401446Z
-modified_at: 2026-10-28T17:35:36.803104207Z
+modified_at: 2026-10-28T17:46:07.764980172Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -48,6 +48,15 @@ history:
   timestamp: 2026-10-28T17:35:38.368102677Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1839e-8a14-7fb0-a279-ab0d75c8faf7
+  author: aida-orchestrator
+  timestamp: 2026-10-28T17:46:07.764997418Z
+  session_id: 01a18395f9aa
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 27937702c6575a5f42828f06cd4dba5c9eb82c48
   branch: main
@@ -56,3 +65,11 @@ filed_at:
   aida_build_sha: 679d4187bad
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Dispatch fix matches the spec and its regression tests, but switching worktree_lock.rs to is_session_lease_file hides lock-only entries whose path contains a dot; CI lib-1 is red on two runs at this head while the base commit was green.
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-012 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-28T17:46:07.764980172Z
