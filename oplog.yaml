@@ -82510,5 +82510,22 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6426
+- id: 01a183cf-2e32-7521-a490-582ecea8f6c0
+  target_id: 01a183cf-26e5-71d2-bce0-d17f6ed7a691
+  author: aida
+  node_id: '1'
+  lamport: 6427
+  timestamp: 2026-10-28T18:39:15.506711345Z
+  kind: !Create
+    title: 'PR-3056 follow-ups: era-marker drop must never leave the marker absent (fail-open window), NotFound-safe cleanup, gc aside handling + test'
+    description: |
+      Non-blocking findings from the APPROVED review of PR #3056 (TASK-b6b1278890774ef993d2ebc327862470-059) at 9e63e7c63640. All in aida-core/src/mailbox_lifecycle. ADVISOR RULING: replace rename-aside with a design that never leaves the marker path absent. Validate staleness, then remove the marker only if its (dev,ino) still matches what was judged stale (open it O_NOFOLLOW, fstat, compare, then unlink by name and re-stat; on a mismatch keep it). If that's impossible without a window, hold the Lifecycle lock for the drop. Treat NotFound on cleanup as success. gc never removes an aside younger than 10 minutes; it restores or reports a fresh aside. Add the leftovers_tests case.
+      - [minor] mod.rs:647 drop_stale_era_marker: remove_file(&aside)? fails on NotFound. A concurrent aida agent gc (leftovers.rs:150-153 removes stale dot-prefixed asides without an age gate) can delete an in-flight resolver's stale aside, so source_nonce returns Err and the mailbox write fails spuriously. Treat NotFound as success there.
+      - [minor] mod.rs:634-645: while a fresh marker is renamed aside and before it is hard-linked back, the marker path is absent. A concurrent resolver then sees no era, so a nonce-less mailbox (e.g. inside create_mailbox_dir_in_place's mkdir->nonce window, mod.rs:860-866) is keyed as legacy instead of refused. This is the fail-open the marker exists to prevent. Narrow (needs 3 concurrent actors after an admin-entry recreation); consider serialising the drop under the mailbox lock, or document the res
+      - [minor] crash safety: a crash between rename and link-back of a FRESH marker loses the marker (fail open), and leftovers.rs only reaps stale asides, so a fresh aside is neither restored to its marker name nor reported. Have gc link a non-stale aside back when the marker is absent, or report it.
+      - [minor] test gap: the gc aside branch in leftovers.rs:146-157 (remove a stale .<marker>.drop.<id>, leave a fresh one) has no test, though the PR body claims gc removes stale side copies left by a crash. Add a leftovers_tests case.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 6427
 node_id: '1'
