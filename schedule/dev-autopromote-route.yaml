@@ -5,3 +5,9 @@ last_by:
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
   vendor: claude
 result: done
+due_since: 2026-10-28T12:16:43.530790581Z
+due_reason: on CronJobFailed:dev-autopromote
+due_failure:
+  trip_id: dev-autopromote@2026-10-28T12:04:13.563140194Z
+  job: dev-autopromote
+  error: 'exit 1: build of b535e12d57703cc905424bb6875b357b5f66b4dc failed; log /home/joe/.aida/dev-autopromote/20261028T114125Z-b535e12d5770.log; tail:    Compiling aida-core v0.16.0 (/home/joe/ai/aida/aida-core) |    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-tui v0.16.0 (/home/joe/ai/aida/aida-tui) |    Compiling aida-generate-types v0.16.0 (/home/joe/ai/aida/aida-generate-types) |    Compiling aida v0.16.0 (/home/joe/ai/aida/aida-crate) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 7m 48s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha b535e12d577, but HEAD is 42070fbece09cfca8f00042931b573300d85f0f9." | help: aida --version'
