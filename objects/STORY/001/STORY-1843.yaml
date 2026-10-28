@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T13:04:43.783898299Z
+modified_at: 2026-10-28T13:24:20.175339755Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1280,6 +1280,29 @@ comments:
   created_at: 2026-10-28T13:04:43.783898299Z
   modified_at: 2026-10-28T13:04:43.783898299Z
   session_id: d99d686c-1214-4400-b0a3-9d2423e186aa
+- id: 01a182ae-dc4f-7510-bba3-1ee51ccb76e2
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-28 06:30 MST on the D1 SKETCH (comment 93) and the D2 SKETCH (comment 92). Both lanes are unblocked. Implement now.
+
+    D1 (all five recommendations APPROVED, with conditions):
+    - F1 APPROVED. SessionBindingFacts::verify reads the handle reservation (bounded, no-follow) and accepts recipient_id only on a registry_id or native_session_id match. Otherwise the reader is UUID-less. RecipientUuid is an opaque core newtype in aida-core::mailbox_delivery, with no public string constructor outside a parse that validates its form. D1 owns RecipientUuid and DeliveryRecord; D2 reuses them. Required test: a reservation whose ids match neither field yields None and never a UUID.
+    - F2 APPROVED. A cohort message is visible only to the UUIDs in its snapshot. UUID-less live role readers are left out and named in the send warning. A cohort that ends up empty refuses as today. Messages without a sidecar keep the legacy semantics unchanged.
+    - F3 APPROVED. The binding is a create-new (O_EXCL) file in the private lifecycle anchor, written under the Lifecycle lock alone, after re-checking reservation -> UUID. The local-only project path follows the same rule. The two-reader race test must use real threads (or processes) and assert exactly one binding.
+    - F4 APPROVED, with one condition: the per-turn notice bind must be non-blocking. Use try-lock with a short deadline, and on contention or error skip it silently (debug line) and retry next turn. The notice hook must never wait on the Lifecycle lock. The TUI, status and statusline stay pure.
+    - F5 APPROVED. No change to canonical publication: reader UUIDs do not go into the public orphan store. Document the gap (a canonical-only clone sees a cohort message as legacy role mail) in docs/mailbox.md, and list it in E's conformance matrix as a known limitation. Do not file a follow-up spec.
+    - D1 does NOT call relay reconciliation from send (see D2 Q2).
+
+    D2:
+    - Q1: option (b). Ship D2a NOW in parallel with D1: probe, bind, child-bind, end/terminal generation, reconcile_relay_runs, and gap acceptance. Store the run UUID in the same representation HandleReservation.recipient_id already uses; do not invent a second UUID type. D2b (outbox keyed on the original DeliveryRecord, exact unread count for reuse, provenance-linked handover) rebases onto D1 once D1's PR is up and adopts RecipientUuid there. (c) is REJECTED, for the reason the sketch gives.
+    - Q2 APPROVED. D2a exports relay_mail::reconcile_relay_runs(root): bounded, read-mostly, taking the namespace lock only for a conclusively dead controller. Unknown is never retired. D2a calls it from start and maintenance. D2b adds the send-path call after rebasing onto D1.
+    - Q3 APPROVED: .aida/agents/relay-runs/ under handles::lock_namespace.
+    - Q4 APPROVED: paused = accepting, no new state.
+
+    All three PRs (D1, D2a, D2b) are Refs STORY-1843 and STRICT: LIGHT plus the mailbox/relay integration test binaries, and a separate reviewer each. Mail or comment READY with the PR number.
+  created_at: 2026-10-28T13:24:20.175339755Z
+  modified_at: 2026-10-28T13:24:20.175339755Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
