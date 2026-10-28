@@ -402,8 +402,9 @@ pub(crate) fn wait_for_ship_ci(
     hold_label_present: bool,
     timeout: Option<Duration>,
     poll_interval: Duration,
-) -> anyhow::Result<crate::forge::CiState> {
-    use crate::forge::{CheckRegistration, CiState, CiTarget, ForgeKind};
+) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
+    use crate::forge::{CheckRegistration, CiTarget, ForgeKind};
+    use crate::gate::dispatch_types::CiState;
     use crate::gate::ship::ShipRefusal;
     let started = Instant::now();
     let cfg = read_ci_gate_config(project_root);
@@ -612,7 +613,7 @@ mod tests {
             vec![row("Build", "CI", "pass")],
         );
         assert!(
-            matches!(green, Ok(crate::forge::CiState::Success)),
+            matches!(green, Ok(crate::gate::dispatch_types::CiState::Success)),
             "{green:?}"
         );
         assert_eq!((reads, polls), (1, 1));
@@ -978,7 +979,10 @@ mod tests {
         fn ci_probe_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::CiProbeResult> {
             unimplemented!()
         }
-        fn watch_ci(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<crate::forge::CiState> {
+        fn watch_ci(
+            &self,
+            _: &crate::forge::ChangeRef,
+        ) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
             unimplemented!()
         }
         fn stream_ci_for_branch(

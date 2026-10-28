@@ -340,18 +340,15 @@ mod task_1239_picker_tests {
 #[path = "tests/sh_single_quote_tests.rs"]
 mod sh_single_quote_tests;
 
-/// The canonical first-class route target for "a human is required" — the
-/// escalation-cascade terminus (implementer → advisor → human). `aida queue add
-/// --for human` files a spec explicitly into the human-attention set, and
-/// `aida list human` unions those explicitly-routed specs with the
-/// status/tag-derived membership. trace:TASK-747 | ai:claude
-pub(crate) const HUMAN_ROUTE: &str = "human";
+/// The canonical first-class route target for "a human is required" (gate-owned
+/// with [`canonical_role_name`]).
+// trace:TASK-747 | ai:claude
+pub(crate) const HUMAN_ROUTE: &str = crate::gate::dispatch_deps::HUMAN_ROUTE;
 
-/// Is this `--for <role>` value the `human` route target? Case-insensitive so
-/// `--for Human` and `--for HUMAN` are accepted as the same first-class route.
-/// trace:TASK-747 | ai:claude
+/// Is this `--for <role>` value the `human` route target? Case-insensitive.
+// trace:TASK-747 | ai:claude
 pub(crate) fn is_human_route(raw: &str) -> bool {
-    raw.eq_ignore_ascii_case(HUMAN_ROUTE)
+    crate::gate::dispatch_deps::is_human_route(raw)
 }
 
 /// Collect the spec IDs (uppercased, stable order) of every OPEN requirement

@@ -44,7 +44,8 @@
 //! for a terminal result — a later push (or a manual re-run) refreshes it.
 // trace:TASK-1424 | ai:claude
 
-use crate::forge::{CiState, CiStatus, ForgeKind};
+use crate::forge::{CiStatus, ForgeKind};
+use crate::gate::dispatch_types::CiState;
 use crate::merge_hold::{resolve_pinned_repo, PinnedRepo};
 use std::path::Path;
 use std::process::Command;
