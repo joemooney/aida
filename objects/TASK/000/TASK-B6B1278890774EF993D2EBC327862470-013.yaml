@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-27T21:57:41.072663506Z
-modified_at: 2026-10-28T04:36:23.304845240Z
+modified_at: 2026-10-28T07:20:26.403196417Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-010
@@ -43,6 +43,17 @@ comments:
   created_at: 2026-10-28T01:50:45.935059642Z
   modified_at: 2026-10-28T01:50:45.935059642Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a18161-b423-70c0-9ed0-a31aeb33419a
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-28 00:10 MST on PR-3004 review (changes requested at 6c7acd3):
+    F1 (pinned-by-name leaves): conform to the 18:55 ruling, no self-ruling. Plain data types the facade hands the gate (forge::CiState, mandate_drive::ActionRow, Outcome) move into gate/ (e.g. gate/dispatch_types.rs) with their trivial impls; the old modules re-export them for existing callers. emit_action's body moves into gate/ the same way (mandate_drive re-exports). The regress stops at an explicit, bounded list: a shrink-only FACADE_EXTERNAL_LEAVES const in gate/dispatch_deps.rs naming (path, reason) for each remaining outside callee the facade still invokes (e.g. crate::events::emit, aida_core calls). The ratchet fails on any facade call to an outside fn not in that list, and on any stale entry. Because the list lives under gate/, growing it needs a human merge. That is the 'protect the leaf' clause made checkable without protecting hot files.
+    F2 (other gate modules reach unprotected definers): out of 013's scope, which is gate/dispatch_*. In this PR: (a) correct the ratchet doc/test names so they claim only what they check (dispatch_* -> outside only via dispatch_deps.rs); (b) since dispatch_* calls into other gate modules, the ratchet must follow crate::gate::<m> references from dispatch_* one hop and require those modules' outside references to also be in the facade or FACADE_EXTERNAL_LEAVES. Moving seat_authority's process_probe call to aida_core to match dispatch_auth.rs is in scope. A follow-up task covers extending the same facade rule to every gate/ module.
+    F3: add the re-export negative case (protected gate module 'pub(crate) use crate::forge::X', then crate::gate::m::X from dispatch_*).
+    Local gate: LIGHT.
+  created_at: 2026-10-28T07:20:26.403196417Z
+  modified_at: 2026-10-28T07:20:26.403196417Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a18001-e9f8-7af3-b001-6061d3080791
   author: joe
