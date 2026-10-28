@@ -547,7 +547,15 @@ fn source_nonce(
         if let Some(hook) = BEFORE_ERA_DROP.with(|h| h.borrow_mut().take()) {
             hook(&marker);
         }
-        drop_stale_era_marker(anchor, &marker, &dir);
+        // A drop that could not take the lock leaves the marker; a
+        // nonce-less mailbox then gets the lock's own (retriable) error, not
+        // the recovery for a lost nonce.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+        if let Err(locked) = drop_stale_era_marker(anchor, &marker, &dir) {
+            if read_source_id(mailbox)?.is_none() {
+                return Err(locked);
+            }
+        }
     }
     match read_source_id(mailbox)? {
         Some(nonce) => {
@@ -589,7 +597,7 @@ pub(crate) struct EraMarker {
 /// the main checkout, `<common>/worktrees/<admin>` for a linked worktree,
 /// the clone root for a seat clone.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
-fn admin_dir(common: &Path, admin: &str) -> PathBuf {
+pub(crate) fn admin_dir(common: &Path, admin: &str) -> PathBuf {
     if admin.is_empty() {
         common.to_path_buf()
     } else if let Some(root) = admin.strip_prefix("seat-clone:") {
@@ -624,20 +632,23 @@ pub(crate) fn era_marker_stale(marker: &Path, admin_dir: &Path) -> bool {
 /// `admin_dir`, judged again under the Lifecycle lock. The marker path is
 /// never absent while a fresh marker exists: every drop runs under the lock,
 /// and a marker is only ever created where none is, so the file judged here
-/// is the file unlinked. Returns whether it was removed. When the lock
+/// is the file unlinked. `Ok` says whether it was removed. When the lock
 /// cannot be taken (busy, or a Store lock is held) the marker is kept, which
-/// fails closed: a nonce-less mailbox there keeps refusing.
+/// fails closed, and the lock's error is returned for the caller to surface.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-067 | ai:claude
-pub(crate) fn drop_stale_era_marker(anchor: &Path, marker: &Path, admin_dir: &Path) -> bool {
-    let Ok(_held) = lock(anchor, LIFECYCLE_LOCK_TIMEOUT) else {
-        return false;
-    };
+// trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+pub(crate) fn drop_stale_era_marker(
+    anchor: &Path,
+    marker: &Path,
+    admin_dir: &Path,
+) -> Result<bool> {
+    let _held = lock(anchor, LIFECYCLE_LOCK_TIMEOUT)?;
     if !era_marker_stale(marker, admin_dir) {
-        return false;
+        return Ok(false);
     }
     match std::fs::remove_file(marker) {
-        Ok(()) => true,
-        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
+        Ok(()) => Ok(true),
+        Err(e) => Ok(e.kind() == std::io::ErrorKind::NotFound),
     }
 }
 
