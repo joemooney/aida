@@ -82587,5 +82587,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6432
+- id: 01a183dc-e506-7f12-8646-83c2e6bcec68
+  target_id: 01a183dc-dde0-7f01-aba0-8ce68c79b0dd
+  author: aida
+  node_id: '1'
+  lamport: 6433
+  timestamp: 2026-10-28T18:54:14.278176615Z
+  kind: !Create
+    title: '[minor] crash safety: a crash between rename and link-back of a FRESH marker lo…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor] crash safety: a crash between rename and link-back of a FRESH marker loses the marker (fail open), and leftovers.rs only reaps stale asides, so a fresh aside is neither restored to its marker name nor reported. Have gc link a non-stale aside back when the marker is absent, or report it.
+
+      PR: #3056
+      Reviewed sha: 9e63e7c6364060bfe01ca6b62674ce4001f1208b
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6433
 node_id: '1'
