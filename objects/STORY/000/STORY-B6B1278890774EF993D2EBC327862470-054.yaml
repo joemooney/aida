@@ -18,12 +18,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3040` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T14:02:54.183854710Z
-modified_at: 2026-10-28T14:03:09.492288662Z
+modified_at: 2026-10-28T16:23:10.709476664Z
 req_type: Story
 relationships:
 - rel_type:
@@ -31,12 +31,25 @@ relationships:
   target_id: 01a15037-319b-7e92-850d-affbbac2a99d
   created_at: 2026-10-28T14:03:09.492284668Z
   created_by: joe
+comments:
+- id: 01a18352-9875-7fa2-b2e7-e3797093b4a9
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3040 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-28T16:23:10.709475135Z
+  modified_at: 2026-10-28T16:23:10.709475135Z
 history:
 - id: 01a182d2-6d33-7312-979b-f3d1b470a1be
   author: joe
   timestamp: 2026-10-28T14:03:11.027890491Z
   session_id: 7dc90a99-20d4-4ec0-82c6-004f54adfe0a
   changes: []
+- id: 01a18352-9875-7fa2-b2e7-e361e2362da2
+  author: aida-auto-bump
+  timestamp: 2026-10-28T16:23:10.709437318Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: c6c33cc1a6683ad45f3d9bfea513465b7fdafa56
   branch: story-1843-d2-relay-mail
@@ -45,3 +58,7 @@ filed_at:
   aida_build_sha: 7335d1de322
   vendor: claude
   session: 7dc90a99-20d4-4ec0-82c6-004f54adfe0a
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T16:23:10.709432540Z
+  completion_sha: 27937702c6575a5f42828f06cd4dba5c9eb82c48
