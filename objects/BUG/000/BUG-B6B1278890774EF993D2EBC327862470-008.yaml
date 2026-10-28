@@ -1,0 +1,24 @@
+id: 01a18167-0785-7182-8c73-371c9daf93c0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-008
+title: aida show breaches the 5s ceiling again on live e33bf32 (34.8s worst; linkage.content costs ~3s per call; contention burst stalls notice/lookup)
+description: |-
+  performance-guard trip 2026-10-28 (24h window): show over 1s budget on 39/162 calls (24%, tolerance 10%), worst 34821 ms, ceiling 5000 ms breached. Binary e33bf32234 (after BUG-2221).
+  Evidence from ~/.aida/usage.jsonl phases:
+  1. Steady cost: every show that computes content linkage spends 2.6-3.2 s in phase linkage.content (04:46:59 4151ms, 04:47:07 7452ms, 04:47:12 4902ms, 04:47:17 5198ms, 04:47:22 5199ms), while the plain linkage phase is 120-370 ms. That alone exceeds the 1 s budget on every such call.
+  2. Contention burst 04:46:14-04:47:22Z (session start + concurrent agents): statusline 52523 ms, brief list 33317/53922 ms, awaiting 7285 ms; show 34821 ms with open=3333 notice=10881 linkage=2956, show 30965 ms with lookup=7954 and ~21 s not attributed to any phase, show 10932 ms lookup=7452. Phases do not sum to the total, so some wait is unmeasured.
+  Acceptance: (a) linkage.content is bounded/cached so show stays under 1 s on a healthy cache (add a phase-budget test or bench); (b) every wait in show (notice, open, lookup) is bounded by the ADR-53 ceiling and degrades rather than blocks behind a concurrent writer; (c) the unattributed time is attributed to a named phase; (d) evidence: 24h guard window back within tolerance with no ceiling breach. Prior art: BUG-1480, BUG-1606, BUG-1674, BUG-1801, BUG-1956, BUG-2221.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T07:26:15.429931663Z
+modified_at: 2026-10-28T07:26:15.429931663Z
+req_type: Bug
+filed_at:
+  code_sha: 4e961089c95bb7d6d89043aabfb31d5e6d58ea53
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33bf322340
+  vendor: claude
+  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
