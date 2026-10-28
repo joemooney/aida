@@ -22,8 +22,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T01:48:11.865261162Z
-modified_at: 2026-10-28T01:48:11.865261162Z
+modified_at: 2026-10-28T01:48:21.749449337Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a17f5e-93fa-7581-9b68-fc188c97e0e7
+  created_at: 2026-10-28T01:48:21.749445809Z
+  created_by: joe
+history:
+- id: 01a18031-b98c-7a72-a54a-9e2ecbede776
+  author: joe
+  timestamp: 2026-10-28T01:48:24.844886547Z
+  session_id: 7e6ce215-5fbf-4d7d-b5b9-bd1abde3e2e8
+  changes: []
 filed_at:
   code_sha: 51fa3b7be632196c8e247328ec7a05997de11ac8
   branch: fix/gate-ratchet-followups-2
