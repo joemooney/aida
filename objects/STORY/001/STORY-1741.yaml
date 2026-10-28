@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-28T09:20:01.505838437Z
+modified_at: 2026-10-28T09:53:46.925002382Z
 req_type: Story
 tags:
 - portable-intake
@@ -290,6 +290,12 @@ history:
   session_id: 01a181ccfafb
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a181ee-1b0f-76d1-b2e0-dce501bee32f
+  author: joe
+  timestamp: 2026-10-28T09:53:47.791536678Z
+  session_id: 01a181eb54f1
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
@@ -302,7 +308,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 2 at e9a8a4e: F1-F6 from round 1 fixed with tests, but the migration inventory still proposes removing generated .aida/discipline/*.md guidance that kept files reference (ac676d62 partial); all 8 criteria are tested but none carries a criterion trace. CI queued at review.'
+  detail: 'Round 3: G1-G4 from round 2 are fixed with tests and all 8 STORY-1741 criteria are verified and traced, but CI is red at 6b106a9 in two lanes the PR introduced at e9a8a4e (f1e665e was green): CLI-manual drift guard and Test time budget.'
   recovery_hint: address the review findings, move STORY-1741 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-28T09:20:01.505838437Z
+  shelved_at: 2026-10-28T09:53:46.925002382Z
