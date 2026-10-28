@@ -4343,7 +4343,6 @@ pub(crate) fn handle_init_distributed_worktree(
     let worktree_dir = ".aida-store";
     let branch_name = "aida-store";
     let explicit_footprint = footprint;
-    let footprint = resolve_init_footprint(&cwd, footprint)?;
 
     // STORY-552: complete the onboarding funnel at the FRONT. A new user in a
     // fresh folder who hasn't run `git init` shouldn't have to learn the recipe
@@ -4380,9 +4379,13 @@ pub(crate) fn handle_init_distributed_worktree(
     // scaffolding: a config written here before the first projection would
     // be kept as a local file and keep the plane's settings out for good.
     // trace:STORY-1741 | ai:claude
-    if adopted_init_route(&cwd)? {
+    // The adopted check runs before the footprint is resolved, so an
+    // adopted clone is never asked the Setup style question whose answer
+    // handle_init_adopted would ignore. trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
+    let Some(footprint) = distributed_init_footprint(&cwd, footprint, resolve_init_footprint)?
+    else {
         return handle_init_adopted(&cwd, worktree_dir, branch_name, node_name);
-    }
+    };
 
     // BUG-446: refuse to initialize over a workspace-of-projects. A fresh
     // `aida init` (no `.aida/config.toml` yet) whose directory contains nested,
@@ -5160,6 +5163,24 @@ fn adopted_init_route(cwd: &std::path::Path) -> Result<bool> {
              `aida init` again; nothing was written."
         ),
     }
+}
+
+/// The footprint a distributed init uses, or `None` for an adopted clone,
+/// which takes its settings from the plane. `resolve` (which may prompt at
+/// a TTY) is only called for a clone that is not adopted.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
+fn distributed_init_footprint(
+    cwd: &std::path::Path,
+    explicit: Option<crate::cli::InitFootprint>,
+    resolve: impl FnOnce(
+        &std::path::Path,
+        Option<crate::cli::InitFootprint>,
+    ) -> Result<crate::cli::InitFootprint>,
+) -> Result<Option<crate::cli::InitFootprint>> {
+    if adopted_init_route(cwd)? {
+        return Ok(None);
+    }
+    resolve(cwd, explicit).map(Some)
 }
 
 /// `aida init` in an adopted clone: attach the store worktree when the
@@ -6893,7 +6914,14 @@ fn run_init(
     // from a project-scoped command, so report it explicitly. Non-fatal:
     // a hiccup writing global state must not abort an otherwise-successful
     // init. trace:TASK-638 | ai:claude
-    let init_footprint = self::resolve_init_footprint(&statusline_project_root(), *footprint)?;
+    // A projected (adopted) clone was never asked the Setup style question;
+    // don't ask it here either. trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
+    let init_root = statusline_project_root();
+    let init_footprint = self::resolve_init_footprint(
+        &init_root,
+        footprint.or(aida_core::adoption_projection::is_projected(&init_root)
+            .then_some(cli::InitFootprint::Full)),
+    )?;
     if !*no_roles && init_footprint == cli::InitFootprint::Full {
         match scaffold_starter_roles(&statusline_project_root()) {
             Ok((created, skipped)) => {
@@ -7195,5 +7223,40 @@ mod task_1981_publication_tests {
             _ => panic!("unreachable initial remote must remain deferred"),
         }
         assert_eq!(git_ops::head_sha(&fixture.store).unwrap(), captured);
+    }
+}
+
+#[cfg(test)]
+mod task_036_adopted_init_footprint_tests {
+    use super::distributed_init_footprint;
+    use crate::cli::InitFootprint;
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-036 | ai:claude
+    #[test]
+    fn an_adopted_clone_never_reaches_the_setup_style_prompt() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
+        let manifest = tmp.path().join(aida_core::adoption_projection::MANIFEST);
+        std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+        std::fs::write(&manifest, "").unwrap();
+
+        let got = distributed_init_footprint(tmp.path(), None, |_, _| {
+            panic!("the Setup style prompt path was reached in an adopted clone")
+        })
+        .unwrap();
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn a_plain_repo_still_resolves_its_footprint() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        aida_core::git_ops::init(tmp.path()).unwrap();
+
+        let got = distributed_init_footprint(tmp.path(), None, |_, explicit| {
+            assert_eq!(explicit, None);
+            Ok(InitFootprint::Minimal)
+        })
+        .unwrap();
+        assert_eq!(got, Some(InitFootprint::Minimal));
     }
 }
