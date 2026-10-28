@@ -2,12 +2,12 @@ id: 01a182ab-725e-7d82-a16f-fbdd8e0a4143
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-010
 title: 'mailbox retention activate refuses identical builds at two paths: writer build identity compares exe path, not build SHA'
 description: '2026-10-28 06:20 operator dry-runs: with the dev shell (AIDA_DEV_BIN=target/agent) and with ~/.local/share/aida/live/aida, each run flags the processes on the OTHER path as ''not known to take a write permit: it runs a different build than this one''. Both binaries report ''aida 0.16.0 (built 2026-10-28 05:43:26, sha a1fa3e7cbc9)''; live is the promoted copy of target/agent/aida (aida dev build). Writers: queue work, mcp-serve and dispatch serve run target/agent/aida; cron schedule tick and shift tick run ~/.local/bin/aida -> live. Activation can therefore never be recorded on a dev host while any agent or cron tick runs. Acceptance: writer build identity is decided by an embedded build identity (sha plus a build id or content hash), not exe path/inode; identical builds at different paths admit, and genuinely different builds still refuse. Regression test with two copies of one binary. Blocks the STORY-1843 operator-only retention activation.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T13:20:36.446157191Z
-modified_at: 2026-10-28T13:54:03.979992173Z
+modified_at: 2026-10-28T13:55:13.518566418Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -42,6 +42,20 @@ history:
   timestamp: 2026-10-28T13:54:05.024936553Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a182cb-23ea-7460-aa33-532c890985fc
+  author: aida-auto-bump
+  timestamp: 2026-10-28T13:55:13.514368581Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a182cb-23ee-7741-b244-0aec70e93bc1
+  timestamp: 2026-10-28T13:55:13.518562796Z
+  agent: aida
+  commit_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
+  summary: Writer build identity now admits byte-identical copies (same inode, else equal SHA-256 of the exe) and refuses different bytes or an unreadable digest; regression test covers two copies of one binary; PR CI green at head.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 7335d1de3222f0710ff32f394a196a064eef7130
@@ -51,3 +65,7 @@ filed_at:
   aida_build_sha: a1fa3e7cbc9
   vendor: claude
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T13:55:13.514364582Z
+  completion_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
