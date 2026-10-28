@@ -35,10 +35,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-28T03:44:47.052353800Z
+modified_at: 2026-10-28T05:07:46.730727409Z
 req_type: Story
 tags:
 - portable-intake
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a180e8-1413-7992-b067-7694b81c3175
+  created_at: 2026-10-28T05:07:46.730724084Z
+  created_by: joe
 comments:
 - id: 01a16ed5-3a9d-7e01-8590-eddc7b79e117
   author: joe
@@ -264,6 +270,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a180e8-460d-7ef1-8066-19401bf3ad93
+  author: joe
+  timestamp: 2026-10-28T05:07:48.365288371Z
+  session_id: 9cc2bb58-fd6f-4259-b78c-4af914893ff6
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
