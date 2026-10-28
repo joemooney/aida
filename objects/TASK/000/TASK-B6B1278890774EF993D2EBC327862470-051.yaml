@@ -6,12 +6,12 @@ description: |-
 
   non-blocking (minor, untested-path): fill_digests_reads_only_writers_on_another_file only exercises the unreadable /proc/<pid>/exe branch (pid u32::MAX). No test covers a foreign-file writer whose /proc exe is readable and digested, for example a view at std::process::id() with a different exe_id, asserting exe_digest == digest_file(/proc/self/exe) and that the second host on the same id reuses the cache.
   Reviewed sha: b6f9c1895b9d1c94fd4afa2853077fbd0122c808
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T13:55:33.246196687Z
-modified_at: 2026-10-28T16:07:29.584100773Z
+modified_at: 2026-10-28T16:26:05.517703611Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-010
@@ -53,6 +53,15 @@ history:
   timestamp: 2026-10-28T16:07:33.786378934Z
   session_id: 9adeed50-bc94-4d8d-907f-37a9081985e8
   changes: []
+- id: 01a18355-434d-7b10-881f-8aa1a5af44a8
+  author: aida-orchestrator
+  timestamp: 2026-10-28T16:26:05.517725612Z
+  session_id: 01a183459c2b
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
   branch: main
@@ -60,3 +69,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 7335d1de322
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Test covers both ACs (readable foreign writer digest + cache reuse) but runs ~30 s in debug and fails CI's Test time budget gate
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-051 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-28T16:26:05.517703611Z
