@@ -177,6 +177,43 @@ fn discover_with_roots(start: &Path, temp_roots: &[PathBuf]) -> Result<Option<Pl
     Ok(plane)
 }
 
+/// After [`discover`] refused: whether the clone carries adoption
+/// evidence, so the refusal is a discovery failure rather than a plain
+/// non-adopted clone. Evidence is a locator file in the Git common
+/// directory (whatever its state) or an `adoption/` entry on any candidate
+/// store ref. A conventional store that shares product history, or remotes
+/// that disagree, with no namespace anywhere, is not evidence. Errors mean
+/// the question could not be answered; callers fail closed.
+// trace:STORY-1741 | ai:claude
+pub fn shows_adoption(start: &Path) -> Result<bool> {
+    let Some(top) = nearest_repo(start)? else {
+        return Ok(false);
+    };
+    let common = crate::allocation_authority::common_dir(&top)?;
+    match std::fs::symlink_metadata(common.join(LOCATOR_FILE)) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        _ => return Ok(true),
+    }
+    let candidates = git(
+        &top,
+        &[
+            "for-each-ref",
+            "--format=%(objectname)",
+            STORE_REF,
+            "refs/remotes/*/aida-store",
+        ],
+    )?;
+    for commit in candidates.lines().filter(|line| !line.is_empty()) {
+        if !git(&top, &["ls-tree", commit, "--", "adoption"])?
+            .trim()
+            .is_empty()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// The plane is an orphan: it shares no commit with the product's `HEAD`.
 /// A locator naming a product branch (or a store grown out of product
 /// history) refuses rather than reading settings off a code branch.

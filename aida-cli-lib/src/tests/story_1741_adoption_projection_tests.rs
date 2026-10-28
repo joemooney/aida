@@ -568,3 +568,37 @@ fn scaffolding_refuses_when_the_plane_cannot_be_discovered() {
     assert!(!top.join("AGENTS.md").exists() && !top.join(".aida").exists());
     assert!(!top.join(".mcp.json").exists() && !top.join(".codex").exists());
 }
+
+/// A non-adopted clone whose `aida-store` was made with `git branch` (so it
+/// shares product history) is not adopted: discovery refuses that store,
+/// but with no adoption namespace anywhere scaffold apply and the
+/// `init --refresh` pack refresh both write as before.
+#[test]
+fn scaffolding_writes_in_a_plain_clone_with_a_non_orphan_store() {
+    use crate::cli::ScaffoldCommand;
+    let tmp = tempfile::tempdir().unwrap();
+    let top = tmp.path().join("p");
+    std::fs::create_dir_all(&top).unwrap();
+    git(&top, &["init", "-q", "-b", "main"], None);
+    git(&top, &["config", "user.email", "t@example.invalid"], None);
+    git(&top, &["config", "user.name", "t"], None);
+    std::fs::write(top.join("README.md"), "product\n").unwrap();
+    git(&top, &["add", "README.md"], None);
+    git(&top, &["commit", "-q", "-m", "product"], None);
+    git(&top, &["branch", "aida-store"], None);
+    let top = top.canonicalize().unwrap();
+    assert!(aida_core::adoption_plane::discover(&top).is_err());
+    assert!(!aida_core::adoption_projection::is_adopted(&top));
+
+    let storage = crate::Storage::new(tmp.path().join("store.yaml"));
+    let db = tmp.path().join("cache.db");
+    let apply = ScaffoldCommand::Apply {
+        project_root: Some(top.clone()),
+        force: true,
+        dry_run: false,
+        prune: false,
+    };
+    crate::scaffold_cmd::handle_scaffold_command(&apply, &storage, &db).unwrap();
+    crate::scaffold_refresh::refresh_agent_packs_at(&top, None, None).unwrap();
+    assert!(top.join(".claude").exists() || top.join("AGENTS.md").exists());
+}

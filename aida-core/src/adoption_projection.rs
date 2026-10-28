@@ -106,7 +106,8 @@ pub struct Outcome {
 /// How a worktree's projection relates to its plane.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
-    /// No plane, or a plane without an adoption namespace.
+    /// No plane, a plane without an adoption namespace, or a discovery
+    /// refusal with no adoption evidence anywhere.
     NotAdopted,
     /// Adopted, but never projected into this worktree.
     NotProjected { plane: String },
@@ -431,13 +432,15 @@ pub fn is_projected(project_root: &Path) -> bool {
 /// What discovery says about the clone holding `project_root`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AdoptionState {
-    /// No plane, or a plane without an adoption namespace.
+    /// No plane, a plane without an adoption namespace, or a discovery
+    /// refusal with no adoption evidence anywhere.
     NotAdopted,
     /// Projected here, or the plane carries an adoption namespace (one
     /// that does not parse counts too).
     Adopted,
-    /// The plane could not be discovered (a malformed or non-600 locator, a
-    /// locator ref that does not resolve, remotes that disagree, ...). The
+    /// The plane could not be discovered and the clone carries adoption
+    /// evidence (a malformed or non-600 locator, a locator ref that does not
+    /// resolve, remotes that disagree where one carries a namespace, ...). The
     /// guards treat this as adopted: uncertainty refuses rather than falling
     /// back to product-file mutation.
     Unknown(String),
@@ -458,7 +461,12 @@ pub fn adoption_state(project_root: &Path) -> AdoptionState {
             Ok(None) => AdoptionState::NotAdopted,
             _ => AdoptionState::Adopted,
         },
-        Err(e) => AdoptionState::Unknown(format!("{e:#}")),
+        // A refusal with no adoption evidence (a non-orphan store, remotes
+        // that disagree, nothing adopted on either) is a plain clone.
+        Err(e) => match adoption_plane::shows_adoption(project_root) {
+            Ok(false) => AdoptionState::NotAdopted,
+            _ => AdoptionState::Unknown(format!("{e:#}")),
+        },
     }
 }
 

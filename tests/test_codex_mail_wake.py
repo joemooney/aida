@@ -660,6 +660,15 @@ class WatcherTests(unittest.TestCase):
                 wake.own_health_job(self.health_args(), self.root)
             self.assertEqual(config.read_text(), '[agents]\nvendor="claude"\n')
             self.assertFalse((directory / "codex-mail-health.json").exists())
+        # A symlinked manifest naming no config refuses rather than being followed.
+        real = self.root / "elsewhere.toml"
+        real.write_text('version=1\ncommit="c"\nschema=1\ngenerator="g"\n[files]\n')
+        manifest.unlink()
+        manifest.symlink_to(real)
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(self.health_args(), self.root)
+        self.assertEqual(config.read_text(), '[agents]\nvendor="claude"\n')
+        manifest.unlink()
         # A projection that kept a local config does not own it.
         manifest.write_text('version=1\ncommit="c"\nschema=1\ngenerator="g"\n[files]\n')
         wake.own_health_job(self.health_args(), self.root)

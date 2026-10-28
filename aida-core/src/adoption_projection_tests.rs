@@ -747,3 +747,50 @@ fn ensure_real_dir_tolerates_a_concurrent_creator() {
     }
     assert!(root.join(".aida").is_dir());
 }
+
+/// Fail closed on adoption evidence, not on any discovery refusal: a
+/// non-orphan store or disagreeing remotes with no `adoption/` namespace
+/// anywhere is a plain clone, while the same refusal with a namespace on a
+/// candidate stays unknown.
+#[test]
+fn a_refusal_without_adoption_evidence_is_not_adopted() {
+    let tmp = tempfile::tempdir().unwrap();
+    // `git branch aida-store`: a store grown out of product history.
+    let top = product(&tmp.path().join("branch"));
+    git_out(&top, &["branch", "aida-store"]);
+    assert!(crate::adoption_plane::discover(&top).is_err());
+    assert_eq!(adoption_state(&top), AdoptionState::NotAdopted);
+    crate::scaffolding::refuse_in_adopted_worktree(&top).unwrap();
+
+    // Disagreeing remotes, neither carrying a namespace.
+    let top = product(&tmp.path().join("remotes"));
+    let tree = git_in(&top, &["mktree"], "");
+    let a = git_out(&top, &["commit-tree", &tree, "-m", "a"]);
+    let b = git_out(&top, &["commit-tree", &tree, "-m", "b"]);
+    git_out(&top, &["update-ref", "refs/remotes/a/aida-store", &a]);
+    git_out(&top, &["update-ref", "refs/remotes/b/aida-store", &b]);
+    assert!(crate::adoption_plane::discover(&top).is_err());
+    assert_eq!(adoption_state(&top), AdoptionState::NotAdopted);
+
+    // A non-orphan store that does carry a namespace stays unknown.
+    let top = product(&tmp.path().join("evidence"));
+    let blob = git_in(&top, &["hash-object", "-w", "--stdin"], V1);
+    git_out(
+        &top,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("100644,{blob},adoption/settings.toml"),
+        ],
+    );
+    let tree = git_out(&top, &["write-tree"]);
+    git_out(&top, &["read-tree", "HEAD"]);
+    let commit = git_out(&top, &["commit-tree", &tree, "-p", "HEAD", "-m", "plane"]);
+    git_out(&top, &["update-ref", STORE_REF, &commit]);
+    let AdoptionState::Unknown(error) = adoption_state(&top) else {
+        panic!("{:?}", adoption_state(&top));
+    };
+    assert!(error.contains("shares history"), "{error}");
+    assert!(crate::scaffolding::refuse_in_adopted_worktree(&top).is_err());
+}
