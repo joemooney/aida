@@ -1138,6 +1138,14 @@ pub(crate) fn retention_leftover_lines(
             )
         })
         .collect();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+    lines.extend(leftovers.corrupt.iter().map(|aside| {
+        format!(
+            "damaged era-marker aside: {} could not be read as a marker; inspect it and \
+             remove it by hand",
+            aside.display()
+        )
+    }));
     if !leftovers.reapable.is_empty() {
         lines.push(format!(
             "{} leftover(s) from mailbox creation or reuse; `aida agent gc` removes them",

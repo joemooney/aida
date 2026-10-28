@@ -59,6 +59,7 @@ fn empty_tombs_are_reaped_and_tombs_holding_mail_only_reported() {
         Leftovers {
             stranded_tombs: vec![full.clone()],
             reapable: vec![empty.clone()],
+            corrupt: Vec::new(),
         }
     );
     assert!(empty.is_dir(), "a report removes nothing");
@@ -194,9 +195,9 @@ fn pre_record_drop_asides_are_judged_by_admin_name() {
             .unwrap();
         path
     };
-    // The main checkout's admin name is empty and its entry is the common
-    // Git dir, which exists; "gone" names no worktree.
-    let lost = put(".m.drop.1", b"");
+    // "wt" names a worktree admin entry that exists; "gone" names none.
+    std::fs::create_dir_all(dir.path().join(".git").join("worktrees").join("wt")).unwrap();
+    let lost = put(".m.drop.1", b"wt");
     let stale = put(".g.drop.2", b"gone");
 
     assert_eq!(
@@ -207,8 +208,119 @@ fn pre_record_drop_asides_are_judged_by_admin_name() {
     assert!(!lost.exists() && !stale.exists());
     assert_eq!(
         std::fs::read(era.join("m")).unwrap(),
-        b"",
+        b"wt",
         "the lost pre-record marker is linked back"
     );
     assert!(!era.join("g").exists(), "a stale one is never restored");
+}
+
+/// A torn record aside (a partial JSON body) or any body that cannot be a
+/// bare admin name is undecidable: reported as corrupt, never removed or
+/// restored, however old.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+#[test]
+fn a_torn_era_marker_aside_is_reported_and_kept() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let mut asides = Vec::new();
+    for (i, body) in [&b"{\"admin\":\"wt\",\"admin_d"[..], b"a/b", b"x\0y", b".."]
+        .into_iter()
+        .enumerate()
+    {
+        let path = era.join(format!(".t{i}.drop.{i}"));
+        std::fs::write(&path, body).unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+        asides.push(path);
+    }
+    let reaped = scan_at(dir.path(), true, later());
+    assert_eq!(reaped.corrupt, asides);
+    assert!(reaped.reapable.is_empty(), "{reaped:?}");
+    for (i, aside) in asides.iter().enumerate() {
+        assert!(aside.is_file(), "kept: {}", aside.display());
+        assert!(!era.join(format!("t{i}")).exists(), "never restored");
+    }
+}
+
+/// An era marker is written whole or not at all, create-new; a crashed
+/// writer's temp file is reaped once old.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+#[test]
+fn era_marker_writes_are_atomic_and_temps_reaped() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let marker = era.join("m");
+    write_source_id(&marker, b"first").unwrap();
+    let again = write_source_id(&marker, b"second").unwrap_err();
+    assert_eq!(again.kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(std::fs::read(&marker).unwrap(), b"first");
+    let names = |d: &Path| -> Vec<String> {
+        std::fs::read_dir(d)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(ID_TEMP_PREFIX))
+            .collect()
+    };
+    assert!(names(&anchor).is_empty(), "no temp left behind");
+    // Without a no-replace rename it is linked in instead.
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(true));
+    let linked = write_source_id(&era.join("n"), b"linked");
+    let refused = write_source_id(&marker, b"third");
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(false));
+    linked.unwrap();
+    assert_eq!(
+        refused.unwrap_err().kind(),
+        std::io::ErrorKind::AlreadyExists
+    );
+    assert_eq!(std::fs::read(era.join("n")).unwrap(), b"linked");
+    assert_eq!(std::fs::metadata(era.join("n")).unwrap().nlink(), 1);
+    assert!(names(&anchor).is_empty(), "no temp left behind");
+    // A crashed writer's temp: kept while young, reaped once old.
+    let temp = anchor.join(format!("{ID_TEMP_PREFIX}dead.tmp"));
+    std::fs::write(&temp, b"{").unwrap();
+    scan_at(dir.path(), true, SystemTime::now());
+    assert!(temp.is_file());
+    assert!(scan_at(dir.path(), true, later()).reapable.contains(&temp));
+    assert!(!temp.exists());
+}
+
+/// An empty pre-record body is the main checkout's admin name, whose entry
+/// is the common Git dir: its aside is settled as before, never reported
+/// corrupt. Lost, it is linked back; beside a standing marker, removed.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+#[test]
+fn a_main_checkout_pre_record_aside_is_settled_not_corrupt() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let put = |name: &str, bytes: &[u8]| {
+        let path = era.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+        path
+    };
+    let lost = put(".m.drop.1", b"");
+    let redundant = put(".k.drop.2", b"");
+    let kept = put("k", b"standing");
+
+    let reaped = scan_at(dir.path(), true, later());
+    assert!(reaped.corrupt.is_empty(), "{reaped:?}");
+    assert_eq!(reaped.reapable, [redundant.clone(), lost.clone()]);
+    assert!(!lost.exists() && !redundant.exists());
+    assert_eq!(
+        std::fs::read(era.join("m")).unwrap(),
+        b"",
+        "the lost main-checkout marker is linked back"
+    );
+    assert_eq!(
+        std::fs::read(&kept).unwrap(),
+        b"standing",
+        "a standing marker stays"
+    );
 }

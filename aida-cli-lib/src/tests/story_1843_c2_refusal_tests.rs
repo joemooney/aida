@@ -664,6 +664,7 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
             "/w/.aida/.mailbox-tomb-b".into(),
             "/w/.aida/.mailbox.creating.c".into(),
         ],
+        ..Default::default()
     };
     let report = crate::mailbox_cmd::retention_leftover_lines(&leftovers);
     assert_eq!(report.len(), 2, "{report:?}");
@@ -685,6 +686,21 @@ fn leftovers_render_in_the_retention_report_and_agent_gc() {
     assert!(
         gc[2].starts_with("Mailbox tomb kept: /w/.aida/.mailbox-tomb-a"),
         "{gc:?}"
+    );
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+    let torn = Leftovers {
+        corrupt: vec!["/a/nonce-era/.x.drop.1".into()],
+        ..Default::default()
+    };
+    let lines = crate::mailbox_cmd::retention_leftover_lines(&torn);
+    assert!(
+        lines[0].starts_with("damaged era-marker aside: /a/nonce-era/.x.drop.1"),
+        "{lines:?}"
+    );
+    let gc_torn = crate::agent_registry_root::gc_leftover_lines(&torn, false);
+    assert!(
+        gc_torn[0].starts_with("Mailbox era-marker aside kept: /a/nonce-era/.x.drop.1"),
+        "{gc_torn:?}"
     );
     let reaped = crate::agent_registry_root::gc_leftover_lines(&leftovers, false);
     assert_eq!(
