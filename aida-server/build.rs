@@ -13,5 +13,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .type_attribute(".", "#[serde(rename_all = \"camelCase\")]")
         .compile_fds(fds)?;
+    // The same git stamps as the aida CLI, so a mail retention activation
+    // recorded by one is honoured by the other. trace:STORY-1843 | ai:claude
+    emit_git_stamps();
     Ok(())
 }
+
+include!("../aida-cli-lib/build_git_stamp.rs");

@@ -6815,6 +6815,18 @@ fn heal_doctor_merged_agent_worktree(
                 detail: Some(format!("worktree {} — NOT removed", in_use.summary())),
             });
         }
+        // Its mail could not be retired: keep it. trace:STORY-1843 | ai:claude
+        if let Some(refusal) =
+            e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+        {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "skipped".to_string(),
+                detail: Some(crate::mail_retention::refusal_lines(refusal).join("; ")),
+            });
+        }
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -8217,9 +8229,15 @@ pub(crate) fn heal_doctor_orphan_worktree(
     );
     // A live process inside the tree: keep it and say who holds it.
     // trace:BUG-1947 | ai:claude
+    // A tree whose mail could not be retired is kept the same way.
+    // trace:STORY-1843 | ai:claude
     let in_use = teardown.as_ref().err().and_then(|e| {
         e.downcast_ref::<aida_core::worktree_holders::WorktreeInUse>()
             .map(|u| u.summary())
+            .or_else(|| {
+                e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+                    .map(|r| crate::mail_retention::refusal_lines(r).join("; "))
+            })
     });
     let status = match (&teardown, &in_use) {
         (Ok(_), _) => "healed",

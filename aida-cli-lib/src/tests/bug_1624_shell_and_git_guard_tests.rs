@@ -120,6 +120,8 @@ fn bug_1624_stacks_json_cascade_refuses_a_malformed_record() {
             manual_enter_at: None,
             interrupted_at: None,
             interrupted_reason: None,
+            ending_retained_at: None,
+            ending_retained_reason: None,
             driver: None,
             child_grant_id: None,
         };

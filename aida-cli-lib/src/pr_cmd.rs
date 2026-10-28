@@ -445,6 +445,98 @@ pub(crate) enum PrRebaseMode {
     Interactive,
 }
 
+/// Remove `aida pr rebase`'s temp worktree through the mail-retention guard;
+/// a mail-less tree takes the fast path. The final quiet check runs right
+/// before the destructive step, so nothing is ever deleted unfenced (R3-F3):
+///
+/// - a registered tree goes through `git worktree remove --force`, unlocked
+///   first (a locked leftover, R4-F3);
+/// - a directory Git no longer knows as a worktree (an interrupted run, a
+///   prune) is deleted with `remove_dir_all`, inside the same fence. One with
+///   no mail source of its own goes as on main; one with a `.aida/` cannot be
+///   fenced (no anchor) and is kept with its mail.
+///
+/// A refusal or failure keeps the tree and says how to clear it
+/// ([`REBASE_LEFTOVER_RECOVERY`]).
+// trace:STORY-1843 | ai:claude
+pub(crate) fn remove_rebase_worktree(
+    project_root: &std::path::Path,
+    wt_path: &std::path::Path,
+) -> Result<()> {
+    use aida_core::mailbox_lifecycle::guard;
+    let reason = "pr rebase temp worktree";
+    let registered = {
+        let target = wt_path
+            .canonicalize()
+            .unwrap_or_else(|_| wt_path.to_path_buf());
+        aida_core::git_ops::list_worktree_paths(project_root)
+            .iter()
+            .any(|p| p.canonicalize().unwrap_or_else(|_| p.clone()) == target)
+    };
+    let retirement = guard::retire_checkout(wt_path, reason)?;
+    if registered {
+        guard::remove_retired(
+            wt_path,
+            retirement,
+            || {
+                let _ = aida_core::git_ops::host_git_command(project_root)
+                    .args(["worktree", "unlock", "--"])
+                    .arg(wt_path)
+                    .output();
+                aida_core::git_ops::remove_worktree_unguarded(project_root, wt_path, true)
+            },
+            guard::Retirement::complete,
+        )
+    } else {
+        guard::remove_retired(
+            wt_path,
+            retirement,
+            || {
+                std::fs::remove_dir_all(wt_path)
+                    .with_context(|| format!("remove the leftover {}", wt_path.display()))
+            },
+            guard::Retirement::complete,
+        )
+    }
+}
+
+/// How to clear a rebase temp tree [`remove_rebase_worktree`] kept: its
+/// `.aida/` holds that tree's mail, and once it is moved out the tree owns no
+/// mail source, so the next run removes it.
+pub(crate) const REBASE_LEFTOVER_RECOVERY: &str =
+    "move its `.aida/` directory (it holds that tree's mail) somewhere safe; the next \
+     `aida pr rebase` then removes the tree";
+
+/// The temp worktree path for this run. A leftover from an earlier run is
+/// removed through the guard; when it has to be kept (it holds mail, or
+/// cannot be fenced), this run uses a fresh sibling path instead, so a kept
+/// leftover never blocks later rebases (R4-F3).
+// trace:STORY-1843 | ai:claude
+pub(crate) fn rebase_worktree_for_run(
+    project_root: &std::path::Path,
+    n: u64,
+) -> std::path::PathBuf {
+    let wt_path = crate::pr_rebase::temp_worktree_path(project_root, n);
+    if !wt_path.exists() {
+        return wt_path;
+    }
+    let Err(e) = remove_rebase_worktree(project_root, &wt_path) else {
+        return wt_path;
+    };
+    eprintln!(
+        "warning: a previous rebase left {}, and it was kept ({e:#}); to clear it, {}",
+        wt_path.display(),
+        REBASE_LEFTOVER_RECOVERY
+    );
+    let mut name = wt_path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!("-{}", std::process::id()));
+    let fresh = wt_path.with_file_name(name);
+    if fresh.exists() {
+        let _ = remove_rebase_worktree(project_root, &fresh);
+    }
+    fresh
+}
+
 /// Preserve the actionable refusal text after the disposable rebase worktree
 /// is removed. Best-effort: cleanup must still happen if logging fails.
 // trace:BUG-1218 | ai:codex
@@ -521,7 +613,7 @@ pub(crate) fn pr_rebase_handler(
 ) -> Result<()> {
     use pr_rebase::{
         cross_fork_refusal, default_smoke_check, manual_recipe, read_pr_rebase_config,
-        resolve_smoke_check, temp_worktree_path,
+        resolve_smoke_check,
     };
 
     let mode = if check {
@@ -622,22 +714,9 @@ pub(crate) fn pr_rebase_handler(
     }
 
     // ---- Step 5: create the temp worktree on the PR branch. ----
-    let wt_path = temp_worktree_path(&project_root, n);
-    if wt_path.exists() {
-        // Leftover from a previous interrupted run. Remove --force so
-        // we don't strand the next attempt.
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args([
-                "worktree",
-                "remove",
-                "--force",
-                wt_path.to_str().unwrap_or(""),
-            ])
-            .status();
-        let _ = std::fs::remove_dir_all(&wt_path);
-    }
+    // A leftover from a previous interrupted run is removed behind the
+    // mail-retention guard, or kept and stepped around. trace:STORY-1843 | ai:claude
+    let wt_path = rebase_worktree_for_run(&project_root, n);
     if let Some(parent) = wt_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -667,17 +746,13 @@ pub(crate) fn pr_rebase_handler(
     .with_context(|| format!("prepare submodules in PR worktree {}", wt_path.display()))?;
 
     let cleanup_worktree = || {
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args([
-                "worktree",
-                "remove",
-                "--force",
-                wt_path.to_str().unwrap_or(""),
-            ])
-            .status();
-        let _ = std::fs::remove_dir_all(&wt_path);
+        if let Err(e) = remove_rebase_worktree(&project_root, &wt_path) {
+            eprintln!(
+                "warning: kept the rebase worktree {}: {e:#}; to clear it, {}",
+                wt_path.display(),
+                REBASE_LEFTOVER_RECOVERY
+            );
+        }
     };
 
     // ---- Step 5b (TASK-1080): stale-stack-record guard for --onto-parent. ----

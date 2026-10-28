@@ -2365,6 +2365,9 @@ pub(crate) fn build_running_work(
                     pid_alive,
                     l.interrupted_at.is_some(),
                 );
+                // trace:STORY-1843 | ai:claude
+                let ds =
+                    dispatch_health_ps::apply_ending_retained(ds, l.ending_retained_at.is_some());
                 let hint = dispatch_health_ps::next_command_hint_with_untracked(
                     ds,
                     &l.worktree_path,
@@ -3257,6 +3260,12 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                         dispatch_health_ps::DispatchState::AwaitingIntegration => (
                             crate::glyph(crate::glyphs::Glyph::Info),
                             d.state.label().cyan(),
+                        ),
+                        // STORY-1843 C2: a refused end — kept, not active,
+                        // not cleaned up. trace:STORY-1843 | ai:claude
+                        dispatch_health_ps::DispatchState::EndingRetained => (
+                            crate::glyph(crate::glyphs::Glyph::Warning),
+                            d.state.label().yellow().bold(),
                         ),
                         dispatch_health_ps::DispatchState::Moving => unreachable!(
                             "hint is None for Moving — see dispatch_health_ps::next_command_hint"

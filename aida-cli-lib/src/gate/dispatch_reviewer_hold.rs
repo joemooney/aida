@@ -24,12 +24,22 @@ pub(crate) fn remove_reviewer_worktree_preserving_hold(
     pr_scope: &str,
 ) -> Result<()> {
     preserve_reviewer_worktree_hold(main_worktree, rev_wt, pr_scope)?;
-    let out = aida_core::git_ops::host_git_command(main_worktree)
-        .args(["worktree", "remove", "--force"])
-        .arg(rev_wt)
-        .output()
-        .with_context(|| format!("failed to run git worktree remove on {}", rev_wt.display()))?;
-    if !out.status.success() && rev_wt.exists() {
+    // The reviewer's mail is retired first; a refused retirement keeps the
+    // tree and fails the cleanup. trace:STORY-1843 | ai:claude
+    let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_retained(
+        main_worktree,
+        rev_wt,
+        true,
+        "reviewer cleanup",
+    );
+    if let Err(e) = &removed {
+        if e.downcast_ref::<aida_core::mailbox_lifecycle::guard::RetentionRefusal>()
+            .is_some()
+        {
+            bail!("refusing to clean up reviewer worktree: {e:#}");
+        }
+    }
+    if removed.is_err() && rev_wt.exists() {
         let _ = aida_core::git_ops::host_git_command(main_worktree)
             .args(["worktree", "prune"])
             .output();

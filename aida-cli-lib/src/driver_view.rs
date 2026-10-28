@@ -308,7 +308,8 @@ pub(crate) fn apply_overlay(
 
 /// Lift a vouched-for dead-pid row to live. Only `stalled` / `unknown` — the
 /// readings that would wrongly say "nothing is working this" — are cleared.
-/// Salvageable, awaiting-agent, stopped and awaiting-integration rows keep
+/// Salvageable, awaiting-agent, stopped, awaiting-integration and
+/// ending-retained rows keep
 /// their dispatch reading AND their own lease state untouched; a moving row
 /// keeps its reading and is only marked live.
 // trace:STORY-1653 | ai:claude
@@ -320,7 +321,13 @@ pub(crate) fn lift_dead_row(row: &mut PsRow) {
             row.state = LeaseState::Live;
             row.dispatch = None;
         }
-        Some(D::Salvageable | D::AwaitingAgent | D::Stopped | D::AwaitingIntegration) => {}
+        Some(
+            D::Salvageable
+            | D::AwaitingAgent
+            | D::Stopped
+            | D::AwaitingIntegration
+            | D::EndingRetained,
+        ) => {}
     }
 }
 
@@ -551,6 +558,8 @@ mod tests {
             manual_enter_at: None,
             interrupted_at: None,
             interrupted_reason: None,
+            ending_retained_at: None,
+            ending_retained_reason: None,
             driver: driver.map(String::from),
             child_grant_id: None,
         }

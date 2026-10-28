@@ -1961,11 +1961,18 @@ pub(crate) fn prepare_graded_review(
         &policy,
     )
     .map_err(|e| auto_complete::PhaseFailure::new(format!("graded review failed closed: {e:#}")));
-    let _ = std::process::Command::new("git")
-        .current_dir(project_root)
-        .args(["worktree", "remove", "--force"])
-        .arg(&checkout)
-        .status();
+    // Retire the checkout's mail first; a refusal keeps it. trace:STORY-1843 | ai:claude
+    if let Err(e) = crate::mail_retention::remove_worktree(
+        project_root,
+        &checkout,
+        true,
+        "graded review checkout",
+    ) {
+        eprintln!(
+            "warning: kept the graded review checkout {}: {e:#}",
+            checkout.display()
+        );
+    }
     let verdict = result?;
     let path = project_root
         .join(".aida")
