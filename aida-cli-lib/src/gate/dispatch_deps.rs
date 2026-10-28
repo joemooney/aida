@@ -6,8 +6,8 @@
 //! decision (role-name canonicalisation, the requirement-store lookup, the
 //! `/proc` namespace probe, the drive ledger's row and audit sink) is
 //! implemented on the floor, here or in `gate/dispatch_types.rs`. What the
-//! facade, and the gate modules `gate/dispatch_*` call, still invoke outside
-//! `gate/` is listed by path in [`FACADE_EXTERNAL_LEAVES`].
+//! facade, and the gate's decision kernels, still invoke outside `gate/` is
+//! listed by path in [`FACADE_EXTERNAL_LEAVES`].
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 
@@ -212,11 +212,12 @@ pub(crate) fn emit_action(root: &std::path::Path, mandate_id: &str, actor: &str,
 
 // ── Leaves outside the gate ─────────────────────────────────────────────────
 
-/// Every path outside `gate/` that this facade, or a gate module that
-/// `gate/dispatch_*` names, still reaches, with why it stays there. The
+/// Every path outside `gate/` that this facade, or a decision-kernel gate
+/// module, still reaches, with why it stays there. The orchestrating gate
+/// modules' reach is frozen in `gate::orchestrator_leaves` instead. The
 /// story_1888 ratchet fails on an unlisted path and on a stale entry, so
 /// the list only shrinks unless a human merges a change to this file.
-// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
     // ── this facade ──
@@ -249,30 +250,11 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "audit event seat label; write-only",
     ),
     ("crate::events::emit", "audit event sink; returns nothing"),
-    // ── gate modules gate/dispatch_* names (one hop) ──
-    // TASK-b6b1278890774ef993d2ebc327862470-024 brings these behind the
-    // facade or onto the floor.
-    ("crate::aida_home_dir", "home-directory path lookup"),
-    (
-        "crate::current_user_id",
-        "operator identity for loading mandates and grants",
-    ),
-    (
-        "crate::history::git_show_blob",
-        "reads the committed gate config blob",
-    ),
+    // ── decision-kernel gate modules (TASK-b6b1278890774ef993d2ebc327862470-024) ──
     ("crate::DoctorFinding", "doctor report row; output only"),
     (
-        "crate::authority_stderr_is_terminal",
-        "human-at-terminal probe",
-    ),
-    (
-        "crate::authority_stdin_is_terminal",
-        "human-at-terminal probe",
-    ),
-    (
-        "crate::authority_stdout_is_terminal",
-        "human-at-terminal probe",
+        "crate::coordination::hostname",
+        "host label on the review marker",
     ),
     (
         "crate::detect_distributed_store_from",
@@ -280,6 +262,8 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
     ),
     ("crate::drain_caps::parse_duration", "grant TTL parser"),
     ("crate::find_project_root", "project root for seat display"),
+    ("crate::glyph", "status glyph; output only"),
+    ("crate::glyphs::Glyph::Warning", "status glyph; output only"),
     (
         "crate::grant_keyring::InstallError",
         "grant key store error type",
@@ -297,33 +281,67 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
     ("crate::grant_keyring::invalidate", "grant key store revoke"),
     ("crate::grant_keyring::read", "grant key store read"),
     (
-        "crate::orchestrator::OrchestratorContext::Orchestrated",
-        "orchestrator context variant",
+        "crate::history::git_show_blob",
+        "reads the committed gate config blob",
     ),
-    ("crate::orchestrator::detect", "orchestrator context probe"),
+    ("crate::home_dir", "home-directory lookup (test-hermetic)"),
     (
-        "crate::current_branch_at",
-        "git branch lookup for verdict scope",
+        "crate::is_aida_repo",
+        "solo-review challenge applies to the AIDA repo",
     ),
+    ("crate::is_terminal_status_str", "spec status vocabulary"),
     (
-        "crate::git_arg_guard::END_OF_OPTIONS",
-        "git argument separator constant",
+        "crate::leases::SessionLease",
+        "lease record in the stale-lease refusal text",
     ),
-    ("crate::git_arg_guard::is_hex_sha", "sha shape check"),
     (
         "crate::main_worktree_root_from",
         "main worktree lookup for the verdict record",
     ),
     (
-        "crate::verdict_tip_relation",
-        "git ancestry check for verdict freshness",
+        "crate::mandate_drive::SESSION_ENV",
+        "drive session environment variable name",
+    ),
+    (
+        "crate::orchestrator::OrchestratorContext::Orchestrated",
+        "orchestrator context variant",
+    ),
+    ("crate::orchestrator::detect", "orchestrator context probe"),
+    (
+        "crate::pr_cmd::pr_ship_hold_root",
+        "hold root for the drive tick",
     ),
     (
         "crate::role::current_role_instance_is_companion",
         "companion-session probe",
     ),
     (
+        "crate::role::effective_role_with_roster",
+        "effective role for seat authority",
+    ),
+    (
         "crate::store_sync::aida_store_setting",
         "store setting lookup",
+    ),
+    (
+        "crate::test_ambient::stderr_is_terminal",
+        "test-only terminal seam",
+    ),
+    (
+        "crate::test_ambient::stdin_is_terminal",
+        "test-only terminal seam",
+    ),
+    (
+        "crate::test_ambient::stdout_is_terminal",
+        "test-only terminal seam",
+    ),
+    ("crate::test_home::assert_hermetic", "test-only home guard"),
+    (
+        "crate::trusted_config::read_trusted_config_toml_local",
+        "trusted local config for the solo-review challenge",
+    ),
+    (
+        "crate::worktree_gc::find_main_worktree_root",
+        "main worktree lookup for the orchestrator probe",
     ),
 ];

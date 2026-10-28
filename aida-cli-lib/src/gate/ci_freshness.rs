@@ -3,7 +3,7 @@
 // mandate-gate
 
 use crate::pr_cmd::{fetch_ship_refs, pr_ship_target_branch};
-use crate::*;
+use crate::{pr_stale_check_warning, StaleCheckWarning};
 
 /// The stale-definition gate's own predicate: PR `pr_number`'s base branch
 /// and the staleness warning its ship branch carries against it. A warning

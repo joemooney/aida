@@ -2,6 +2,9 @@
 //! the hold decisions (STORY-1889, moved from `merge_hold.rs`).
 // trace:STORY-1889 | ai:claude
 use super::*;
+use crate::merge_hold::{
+    sync_label_command, sync_label_with, ClearedLabel, PinnedRepo, HOLD_LABEL, HOLD_RECORDED_LABEL,
+};
 
 // STORY-1165: the label mirror must route to the right forge CLI — gh for
 // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.

@@ -2549,8 +2549,9 @@ fn gate_dispatch_one_hop_sees_outside_reach_in_named_gate_modules() {
 /// and those modules name is in the facade's `FACADE_EXTERNAL_LEAVES`, and
 /// every entry there is still used, so the list can only shrink without a
 /// human merge. This checks direct reach from `gate/dispatch_*` and one hop
-/// into the gate modules it names; it does not follow a leaf's own body, nor
-/// gate modules further away (TASK-b6b1278890774ef993d2ebc327862470-024).
+/// into the gate modules it names; it does not follow a leaf's own body. The
+/// decision kernels' entries count as used here too; their own rule is
+/// [`gate_kernels_reach_outside_only_through_listed_leaves`].
 // trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 #[test]
@@ -2572,6 +2573,10 @@ fn gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves() {
     let (hop_bad, mut used) = gate_dispatch_one_hop(&sources, gate_module_source, &leaves);
     bad.extend(hop_bad);
     used.extend(outside_paths(&facade.1, true));
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+    for (_, text) in gate_kernel_sources() {
+        used.extend(outside_paths(&text, false));
+    }
     let mut seen = std::collections::BTreeSet::new();
     let duplicate: Vec<&str> = leaves
         .iter()
@@ -2620,4 +2625,296 @@ fn all_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
             out.push(path);
         }
     }
+}
+
+// ── Every gate module (TASK-b6b1278890774ef993d2ebc327862470-024) ──────────
+
+/// The gate's decision kernels: modules that decide, and reach outside
+/// `gate/` only through a gate path, `aida_core` or a
+/// `FACADE_EXTERNAL_LEAVES` entry. Every other non-`dispatch_*` gate module
+/// is an orchestrator with a frozen inventory in `gate::orchestrator_leaves`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+const GATE_KERNELS: &[&str] = &[
+    "branch_policy.rs",
+    "fleet_lanes.rs",
+    "kernel_deps.rs",
+    "mandate.rs",
+    "mandate_drive.rs",
+    "mandate_gates.rs",
+    "mandate_traces.rs",
+    "mod.rs",
+    "operator_hold.rs",
+    "orchestrator_leaves.rs",
+    "relay_launch.rs",
+    "review_author.rs",
+    "review_marker.rs",
+    "review_verdict.rs",
+    "role_authority.rs",
+    "seat_authority.rs",
+    "solo_review.rs",
+];
+
+/// Every `gate/*.rs` source, by file name.
+fn gate_sources() -> Vec<(String, String)> {
+    let gate_dir = workspace_root().join("aida-cli-lib/src/gate");
+    let mut out: Vec<(String, String)> = std::fs::read_dir(&gate_dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".rs"))
+        .map(|n| {
+            let text = std::fs::read_to_string(gate_dir.join(&n)).unwrap();
+            (n, text)
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+fn gate_kernel_sources() -> Vec<(String, String)> {
+    gate_sources()
+        .into_iter()
+        .filter(|(n, _)| GATE_KERNELS.contains(&n.as_str()))
+        .collect()
+}
+
+/// The orchestrators' frozen inventories, by module file.
+fn orchestrator_inventory() -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
+    crate::gate::orchestrator_leaves::ORCHESTRATOR_OUTSIDE_PATHS
+        .iter()
+        .map(|(m, why, paths)| (*m, *why, paths.to_vec()))
+        .collect()
+}
+
+/// The glob imports in `text` (a gate file) that reach outside `gate/`: a
+/// glob of the crate root or of any root module, however spelled.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+fn outside_globs(text: &str) -> Vec<String> {
+    outside_paths(text, false)
+        .into_iter()
+        .filter(|p| p.ends_with("::*"))
+        .collect()
+}
+
+/// Where a decision kernel reaches outside `gate/` past `leaves`: every
+/// outside crate path it names (direct, through an import, re-exported or
+/// handed over whole) must be listed.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+fn kernel_outside_reach(text: &str, leaves: &[&str]) -> Vec<String> {
+    outside_paths(text, false)
+        .into_iter()
+        .filter(|p| !leaves.contains(&p.as_str()))
+        .collect()
+}
+
+/// How an orchestrator's outside reach differs from its frozen list: paths
+/// it names that are not listed (`new`), and listed paths it no longer names
+/// (`stale`).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+fn orchestrator_drift(text: &str, frozen: &[&str]) -> Vec<String> {
+    let named = outside_paths(text, false);
+    let mut out: Vec<String> = named
+        .iter()
+        .filter(|p| !frozen.contains(&p.as_str()))
+        .map(|p| format!("new {p}"))
+        .collect();
+    out.extend(
+        frozen
+            .iter()
+            .filter(|f| !named.iter().any(|n| n == *f))
+            .map(|f| format!("stale {f}")),
+    );
+    out
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[test]
+fn every_gate_module_is_a_dispatch_module_a_kernel_or_an_orchestrator() {
+    let inventory = orchestrator_inventory();
+    let orchestrators: Vec<&str> = inventory.iter().map(|(m, _, _)| *m).collect();
+    let names: Vec<String> = gate_sources().into_iter().map(|(n, _)| n).collect();
+    let mut bad = Vec::new();
+    for n in &names {
+        let classes = [
+            n.starts_with("dispatch_"),
+            GATE_KERNELS.contains(&n.as_str()),
+            orchestrators.contains(&n.as_str()),
+        ]
+        .iter()
+        .filter(|c| **c)
+        .count();
+        if classes != 1 {
+            bad.push(format!("  gate/{n}: in {classes} classes"));
+        }
+    }
+    for listed in GATE_KERNELS.iter().chain(&orchestrators) {
+        if !names.iter().any(|n| n == listed) {
+            bad.push(format!("  gate/{listed}: listed but missing"));
+        }
+    }
+    for (m, why, _) in &inventory {
+        if why.trim().is_empty() {
+            bad.push(format!("  gate/{m}: orchestrator without a reason"));
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "every gate module is exactly one of gate/dispatch_*, a decision kernel \
+         (GATE_KERNELS) or an orchestrator (gate::orchestrator_leaves):\n{}",
+        bad.join("\n")
+    );
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[test]
+fn no_gate_module_glob_imports_outside_the_gate() {
+    let bad: Vec<String> = gate_sources()
+        .into_iter()
+        .flat_map(|(name, text)| {
+            outside_globs(&text)
+                .into_iter()
+                .map(move |g| format!("  gate/{name}: {g}"))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "gate modules glob-import code from outside `gate/`:\n{}\nName each \
+         item: a glob hides which outside code the gate runs.",
+        bad.join("\n")
+    );
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[test]
+fn gate_kernels_reach_outside_only_through_listed_leaves() {
+    let leaves = facade_leaves();
+    let bad: Vec<String> = gate_kernel_sources()
+        .into_iter()
+        .flat_map(|(name, text)| {
+            kernel_outside_reach(&text, &leaves)
+                .into_iter()
+                .map(move |p| format!("  gate/{name}: {p}"))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "a decision-kernel gate module reaches outside `gate/` past the \
+         listed leaves:\n{}\nIf it feeds a gate decision, implement it on the \
+         floor (`gate/kernel_deps.rs`); a leaf that must stay outside goes in \
+         `FACADE_EXTERNAL_LEAVES` with its reason.",
+        bad.join("\n")
+    );
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[test]
+fn gate_orchestrators_reach_outside_only_through_their_frozen_inventory() {
+    let sources = gate_sources();
+    let mut bad = Vec::new();
+    for (m, _, frozen) in orchestrator_inventory() {
+        let Some((_, text)) = sources.iter().find(|(n, _)| n == m) else {
+            continue;
+        };
+        let mut seen = std::collections::BTreeSet::new();
+        bad.extend(
+            frozen
+                .iter()
+                .filter(|p| !seen.insert(**p))
+                .map(|p| format!("  gate/{m}: duplicate {p}")),
+        );
+        bad.extend(
+            orchestrator_drift(text, &frozen)
+                .into_iter()
+                .map(|d| format!("  gate/{m}: {d}")),
+        );
+    }
+    assert!(
+        bad.is_empty(),
+        "an orchestrating gate module's outside reach drifted from its frozen \
+         inventory in `gate/orchestrator_leaves.rs`:\n{}\nRemove stale entries. \
+         A new outside path needs a human merge of that file; prefer reaching \
+         it through a gate module instead.",
+        bad.join("\n")
+    );
+}
+
+// Each refusal form per module class: a new outside path, a glob, a
+// re-export, and the two-hop spellings (an import, an alias of the root).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[test]
+fn every_gate_module_class_refuses_new_outside_reach() {
+    let leaves = &["crate::grant_keyring::read"];
+    let frozen = &["crate::forge::forge_for"];
+    let refused = [
+        // A new outside path.
+        "fn f() { crate::forge::resolve_forge_kind(r); }",
+        "fn f() -> crate::forge::ChangeRef { todo!() }",
+        // A re-export under a gate path.
+        "pub(crate) use crate::forge::ChangeRef;",
+        "pub(crate) use super::super::forge::ChangeRef;",
+        // Two hops: through an import, or the root handed over.
+        "use crate::grant_keyring;\nfn f() { grant_keyring::wipe(); }",
+        "use crate::forge;\nfn f() { forge::resolve_forge_kind(r); }",
+        "use crate as c;\nfn f() { c::grant_keyring::read(); }",
+        "use super::super as c;",
+        "extern crate self as me;",
+        // A glob of outside code.
+        "use crate::*;",
+        "use crate::forge::*;",
+    ];
+    for src in refused {
+        assert!(
+            !kernel_outside_reach(src, leaves).is_empty(),
+            "kernel: `{src}` must be refused"
+        );
+        assert!(
+            orchestrator_drift(src, frozen)
+                .iter()
+                .any(|d| d.starts_with("new ")),
+            "orchestrator: `{src}` must be refused"
+        );
+    }
+    for src in [
+        "use crate::*;",
+        "use super::super::*;",
+        "use crate::merge_hold::*;",
+        "mod mh { pub(super) use crate::merge_hold::*; }",
+        "fn f() { use crate::forge::*; }",
+    ] {
+        assert!(
+            !outside_globs(src).is_empty(),
+            "glob: `{src}` must be refused"
+        );
+    }
+    for src in [
+        "use super::*;",
+        "mod tests { use super::*; }",
+        "mod mh { pub(super) use crate::gate::merge_hold_core::*; }",
+        "use crate::gate::kernel_deps::*;",
+        "use std::path::*;",
+    ] {
+        assert_eq!(outside_globs(src), Vec::<String>::new(), "glob: {src}");
+    }
+    for src in [
+        "fn f() { crate::grant_keyring::read(); }",
+        "use crate::grant_keyring::read;",
+        "fn f() { crate::gate::kernel_deps::current_user_id(None); }",
+        "use super::kernel_deps::is_hex_sha;",
+        "fn f() { aida_core::liveness::pid_is_alive(1); }",
+        "pub(crate) fn f() {}",
+    ] {
+        assert_eq!(
+            kernel_outside_reach(src, leaves),
+            Vec::<String>::new(),
+            "kernel: {src}"
+        );
+    }
+    assert_eq!(
+        orchestrator_drift("fn f() { crate::forge::forge_for(r); }", frozen),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        orchestrator_drift("fn f() {}", frozen),
+        vec!["stale crate::forge::forge_for".to_string()]
+    );
 }
