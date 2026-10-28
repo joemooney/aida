@@ -81998,5 +81998,13 @@ operations:
   timestamp: 2026-10-28T16:53:25.058433894Z
   kind: !SetStatus
     status: Approved
-clock: 6386
+- id: 01a1836f-1d37-7d43-ba28-2b143afd099e
+  target_id: 01a18342-c02b-7153-a3ae-396516a11b40
+  author: aida
+  node_id: '1'
+  lamport: 6387
+  timestamp: 2026-10-28T16:54:19.703341534Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6387
 node_id: '1'
