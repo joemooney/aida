@@ -2,12 +2,12 @@ id: 01a18056-a598-7f60-a8a6-647bf0845bf9
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-023
 title: 'Gate ratchet: assert crate::gate and crate::dispatch mount plainly from lib.rs'
 description: Follow-up from PR-2999 review (non-blocking). The GATE_DISPATCH_ROOT_ALLOWLIST entries gate and dispatch (file "") get no mount check in gate_dispatch_reaches_the_crate_only_through_allowlisted_names, so `#[path = "elsewhere/mod.rs"] mod gate;` in lib.rs would point crate::gate away from the gate/ dir that gate_dispatch_sources() scans. Assert both mount as a plain `mod gate;` / `mod dispatch;` via root_module_mounts (aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs), with no inline twin.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T02:28:44.568519001Z
-modified_at: 2026-10-28T11:28:20.404520688Z
+modified_at: 2026-10-28T12:49:07.984042091Z
 req_type: Task
 comments:
 - id: 01a18215-e58c-7993-a496-fb8a065e2ed7
@@ -31,6 +31,20 @@ history:
   session_id: 01a182418445
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a1828e-a18b-7263-8b92-b47d2a7b5494
+  author: aida-auto-bump
+  timestamp: 2026-10-28T12:49:07.979212763Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1828e-a190-7f82-8871-2f16b685e0f9
+  timestamp: 2026-10-28T12:49:07.984037682Z
+  agent: aida
+  commit_sha: 6488c041c27974682823d2b09c7f680aee94b777
+  summary: 'All three covered tasks (-014, -015, -023) meet acceptance, and the round-3 blocker is fixed: shadows_root_item_macro now runs a word-boundary byte prefilter and then a proc_macro2 lex (still failing closed when lexing fails) instead of a full syn parse. CI run 40683244802 at 3c459a9 is green on every lane, including lib-1''s Test time budget. merge-hold-gate fails only because the PR touches protected gate tests, so the operator merges it.'
+  review_verdict: approved
 filed_at:
   code_sha: 508f108abb3792e554b4b0c69421a99bba828c2a
   branch: fix/gate-ratchet-followups-2
@@ -39,11 +53,7 @@ filed_at:
   aida_build_sha: a35bc40b89
   vendor: claude
   session: 7222384d-e6b3-4ef6-8c68-70e221731c0a
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Acceptance met for -014/-015/-023 (bare-mount ruling implemented with named-attribute refusals and all four ruled negative cases), but CI lib-1 ''Test time budget'' is red since 45cd34b: the syn-based shadow guard parses all ~33MB of aida-cli-lib/src in an unbudgeted test'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-023 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-28T11:28:20.404520688Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T12:49:07.979208216Z
+  completion_sha: 6488c041c27974682823d2b09c7f680aee94b777
