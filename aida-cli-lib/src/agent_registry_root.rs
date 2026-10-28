@@ -222,6 +222,14 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
     // trace:STORY-1843 | ai:codex
     let archived = crate::agent_handle::collect_retired_reservations(&project_root, dry_run)?;
     let archived_rows = agent_registry::archive_ended_entries(&project_root, dry_run)?;
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+    #[cfg(unix)]
+    {
+        let leftovers = aida_core::mailbox_lifecycle::leftovers::scan(&project_root, !dry_run);
+        for line in gc_leftover_lines(&leftovers, dry_run) {
+            println!("{line}");
+        }
+    }
     if archived_rows > 0 {
         println!(
             "Agent registry history: {} {archived_rows} ended records.",
@@ -287,6 +295,30 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// `aida agent gc`'s lines for mailbox leftovers: what it removed (or would)
+/// and each tomb it keeps because it holds mail.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
+#[cfg(unix)]
+pub(crate) fn gc_leftover_lines(
+    leftovers: &aida_core::mailbox_lifecycle::leftovers::Leftovers,
+    dry_run: bool,
+) -> Vec<String> {
+    let verb = if dry_run { "would remove" } else { "removed" };
+    let removed = leftovers
+        .reapable
+        .iter()
+        .map(|path| format!("Mailbox leftover: {verb} {}", path.display()));
+    let kept = leftovers.stranded_tombs.iter().map(|tomb| {
+        format!(
+            "Mailbox tomb kept: {} holds entries written after a retirement; move them out by \
+             hand",
+            tomb.display()
+        )
+    });
+    removed.chain(kept).collect()
 }
 
 // trace:TASK-542 | ai:antigravity

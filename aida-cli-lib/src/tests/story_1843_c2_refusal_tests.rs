@@ -633,6 +633,7 @@ fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
         hosts: Vec::new(),
         scan_incomplete: None,
         would_record: true,
+        leftovers: Default::default(),
     };
     let other =
         crate::mailbox_cmd::retention_record_lines(&report(false, Some("0.16.0+0ld"))).join("\n");
@@ -649,4 +650,45 @@ fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
         ["recorded activation: no"]
     );
     assert!(crate::mailbox_cmd::retention_record_lines(&report(true, None))[0].contains("yes"));
+}
+
+/// The retention dry run and `aida agent gc` render mailbox leftovers.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
+#[cfg(unix)]
+#[test]
+fn leftovers_render_in_the_retention_report_and_agent_gc() {
+    use aida_core::mailbox_lifecycle::leftovers::Leftovers;
+    let leftovers = Leftovers {
+        stranded_tombs: vec!["/w/.aida/.mailbox-tomb-a".into()],
+        reapable: vec![
+            "/w/.aida/.mailbox-tomb-b".into(),
+            "/w/.aida/.mailbox.creating.c".into(),
+        ],
+    };
+    let report = crate::mailbox_cmd::retention_leftover_lines(&leftovers);
+    assert_eq!(report.len(), 2, "{report:?}");
+    assert!(
+        report[0].starts_with("stranded mail: /w/.aida/.mailbox-tomb-a holds entries"),
+        "{report:?}"
+    );
+    assert!(report[1].starts_with("2 leftover(s)"), "{report:?}");
+    assert!(crate::mailbox_cmd::retention_leftover_lines(&Leftovers::default()).is_empty());
+
+    let gc = crate::agent_registry_root::gc_leftover_lines(&leftovers, true);
+    assert_eq!(
+        gc[..2],
+        [
+            "Mailbox leftover: would remove /w/.aida/.mailbox-tomb-b",
+            "Mailbox leftover: would remove /w/.aida/.mailbox.creating.c",
+        ]
+    );
+    assert!(
+        gc[2].starts_with("Mailbox tomb kept: /w/.aida/.mailbox-tomb-a"),
+        "{gc:?}"
+    );
+    let reaped = crate::agent_registry_root::gc_leftover_lines(&leftovers, false);
+    assert_eq!(
+        reaped[0],
+        "Mailbox leftover: removed /w/.aida/.mailbox-tomb-b"
+    );
 }
