@@ -364,9 +364,14 @@ impl ReadEvidence {
         }
     }
 
-    /// Whether `key` has a receipt for `msg` in any product worktree.
+    /// Whether `key` has a receipt for `msg` in any product worktree or the
+    /// receipt anchor (an anchored ACK of legacy mail carries no read time).
     pub(crate) fn receipted(&self, key: &str, msg: &Message) -> bool {
-        self.receipt_at(key, msg).is_some()
+        matches!(
+            self.receipts.lookup(key, &msg.id),
+            aida_core::mailbox_logical::ReceiptLookup::Read { .. }
+                | aida_core::mailbox_logical::ReceiptLookup::ReadUntimed
+        )
     }
 
     fn watermarked(&self, key: &str, msg: &Message) -> bool {
