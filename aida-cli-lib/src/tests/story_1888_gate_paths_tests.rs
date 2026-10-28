@@ -2185,13 +2185,15 @@ fn root_item_macros(file: &syn::File, parts: &[String]) -> Vec<String> {
 /// lets the crate root invoke bare: a `#[macro_export] macro_rules!
 /// include` (or `pub(crate) use m as include;` reached by a root glob)
 /// would shadow the builtin and run its own expansion at the root. Read
-/// from syn's items and use trees, plus the raw tokens of every macro body
-/// (which may define either), so comments between tokens hide nothing. An
-/// unparsable source fails closed.
+/// from the source's raw tokens, macro bodies and use trees included, as
+/// `macro_rules ! name` or `as name`, so comments between tokens hide
+/// nothing (and a cast `x as include` fails closed too). Every syn item
+/// that defines or renames either name lexes to one of those two shapes,
+/// so tokens alone suffice and the ~33MB crate is lexed, not parsed. An
+/// unlexable source fails closed.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 fn shadows_root_item_macro(text: &str) -> bool {
     use syn::ext::IdentExt;
-    use syn::visit::Visit;
     fn shadowed(ident: &proc_macro2::Ident) -> bool {
         matches!(
             ident.unraw().to_string().as_str(),
@@ -2214,27 +2216,29 @@ fn shadows_root_item_macro(text: &str) -> bool {
             _ => false,
         })
     }
-    #[derive(Default)]
-    struct Shadow(bool);
-    impl<'ast> Visit<'ast> for Shadow {
-        fn visit_item_macro(&mut self, m: &'ast syn::ItemMacro) {
-            self.0 |= m.mac.path.is_ident("macro_rules") && m.ident.as_ref().is_some_and(shadowed);
-            syn::visit::visit_item_macro(self, m);
-        }
-        fn visit_use_rename(&mut self, r: &'ast syn::UseRename) {
-            self.0 |= shadowed(&r.rename);
-        }
-        fn visit_macro(&mut self, m: &'ast syn::Macro) {
-            self.0 |= in_tokens(m.tokens.clone());
-            syn::visit::visit_macro(self, m);
-        }
+    if !may_shadow_root_item_macro(text) {
+        return false;
     }
-    let Ok(file) = syn::parse_file(text) else {
-        return true;
-    };
-    let mut shadow = Shadow::default();
-    shadow.visit_file(&file);
-    shadow.0
+    text.parse::<proc_macro2::TokenStream>()
+        .map_or(true, in_tokens)
+}
+
+/// Whether `text` could name `include` or `thread_local` at all: any
+/// definition or rename spells the identifier (raw `r#include` too) in the
+/// raw bytes, and no comment can split an identifier, so a source where
+/// neither occurs between ASCII non-identifier bytes is skipped unlexed.
+/// A non-ASCII neighbour counts as a boundary, which only lets more files
+/// through.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn may_shadow_root_item_macro(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    ["include", "thread_local"].iter().any(|name| {
+        text.match_indices(name).any(|(at, _)| {
+            let end = at + name.len();
+            (at == 0 || !ident(bytes[at - 1])) && bytes.get(end).map_or(true, |&b| !ident(b))
+        })
+    })
 }
 
 /// The macros a source invokes by a bare name (`format!`, not
@@ -3250,7 +3254,14 @@ fn root_macro_detection_sees_hidden_mounts_and_bindings() {
         "macro_rules! gen { () => { macro_rules! /**/ include { () => {} } } }",
         "fn f() { macro_rules!/**/include { () => {} } }",
     ] {
+        assert!(may_shadow_root_item_macro(text), "prefilter skips {text}");
         assert!(shadows_root_item_macro(text), "{text}");
+    }
+    for text in [
+        "use std::include_str as inc;\nconst INCLUDED: u8 = 0;",
+        "fn r#includes() {} // thread_locals",
+    ] {
+        assert!(!may_shadow_root_item_macro(text), "prefilter keeps {text}");
     }
     for text in [
         "include!(\"lib_part1.rs\");",
