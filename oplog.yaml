@@ -81633,5 +81633,21 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6354
+- id: 01a182f6-dffb-7ac3-8a11-37de88e00184
+  target_id: 01a182e7-665f-7a51-9dfb-2cf67a27791e
+  author: aida
+  node_id: '1'
+  lamport: 6355
+  timestamp: 2026-10-28T14:42:59.707717644Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a182f6-e0bb-7d00-8b37-e5f736e5afb2
+  target_id: 01a182e7-665f-7a51-9dfb-2cf67a27791e
+  author: aida
+  node_id: '1'
+  lamport: 6356
+  timestamp: 2026-10-28T14:42:59.899054179Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 6356
 node_id: '1'
