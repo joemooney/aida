@@ -82336,5 +82336,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6414
+- id: 01a183aa-51f0-7801-9643-8618c08803db
+  target_id: 01a183aa-4ab6-7110-bd2c-f63229d99cf2
+  author: aida
+  node_id: '1'
+  lamport: 6415
+  timestamp: 2026-10-28T17:58:59.824544879Z
+  kind: !Create
+    title: 'minor: untested surfaces. No test asserts that the Stranded refusal (guard.rs:9…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-052, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor: untested surfaces. No test asserts that the Stranded refusal (guard.rs:93-104) names the tomb path, that dry_run_report (activation.rs:205) carries leftovers, or that retention_leftover_lines and the agent gc leftover output (mailbox_cmd.rs:1102-1127, agent_registry_root.rs:218-236) render them.
+
+      PR: #3047
+      Reviewed sha: b15cd18f6b6859bdd0fbeefba0fd1c6e9f21e63c
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6415
 node_id: '1'
