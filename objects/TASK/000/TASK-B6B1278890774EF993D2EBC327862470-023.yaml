@@ -7,7 +7,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T02:28:44.568519001Z
-modified_at: 2026-10-28T10:37:15.532278237Z
+modified_at: 2026-10-28T11:28:20.404520688Z
 req_type: Task
 comments:
 - id: 01a18215-e58c-7993-a496-fb8a065e2ed7
@@ -25,6 +25,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18244-ad3c-7571-888c-533a96b3a93f
+  author: joe
+  timestamp: 2026-10-28T11:28:21.308140084Z
+  session_id: 01a182418445
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 508f108abb3792e554b4b0c69421a99bba828c2a
   branch: fix/gate-ratchet-followups-2
@@ -33,3 +39,11 @@ filed_at:
   aida_build_sha: a35bc40b89
   vendor: claude
   session: 7222384d-e6b3-4ef6-8c68-70e221731c0a
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Acceptance met for -014/-015/-023 (bare-mount ruling implemented with named-attribute refusals and all four ruled negative cases), but CI lib-1 ''Test time budget'' is red since 45cd34b: the syn-based shadow guard parses all ~33MB of aida-cli-lib/src in an unbudgeted test'
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-023 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-28T11:28:20.404520688Z
