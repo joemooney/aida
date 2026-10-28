@@ -285,6 +285,15 @@ pub(crate) fn plan_end_notices(project_root: &Path, run: &RelayRun) -> Result<No
         &ReadLimits::explicit_read(),
     );
     let mut items = Vec::new();
+    // With the receipt anchor unreadable, read mail looks unread: nothing
+    // is planned until the anchor reads, rather than telling senders that
+    // read mail was never read. trace:STORY-1843 | ai:claude
+    if found.receipts_unknown {
+        return Ok(NoticePlan {
+            items,
+            complete: false,
+        });
+    }
     // A delivery that is itself an end notice is never reported back.
     for d in found.unread.into_iter().filter(|d| !d.notice) {
         for destination in destinations(project_root, &run.label, &d) {

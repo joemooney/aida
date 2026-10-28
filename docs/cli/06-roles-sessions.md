@@ -373,7 +373,7 @@ A new run can take an ended run's label. If the ended run left mail unread, `bin
 
 The count is taken only by `bind`, after it has checked the controller and its run lock, and only for the ended run that holds the label's reservation. It is read without holding the handle namespace lock; `bind` then re-checks under that lock that the same run still holds the label, and refuses if it changed. No run capability is involved: the new run's capability is minted only by this bind. It reports counts, never message contents. `bind` refuses the label whichever choice is given in two cases: the ended run's mail could not be fully counted, or the label has unread mail sent with no delivery record (written before relay delivery records, or by a writer that bypasses them). Mail of that second kind is readable by whoever holds the label, so the new run would read it. Choose a new label instead.
 
-A worktree that is missing or prunable never makes the count incomplete; only a live worktree whose mailbox could not be read, or a worktree list that could not be completed, does.
+A worktree that is missing or prunable never makes the count incomplete. A live worktree whose mailbox could not be read, a worktree list that could not be completed, or read receipts that could not be read do. While read receipts cannot be read, mail already read would look unread, so no end notice is recorded and nothing is handed over until they can be read again.
 
 A session or launch that takes an ended run's label by name (`-n <label>`) cannot make that choice, so it is refused the way a `bind` with no choice is: when the ended run has any unread mail, or its mail could not be fully counted. With no unread mail the name is free.
 
