@@ -2,12 +2,12 @@ id: 01a18162-4ea4-7571-b40e-c81896044e05
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-024
 title: 'Gate facade rule for every gate/ module: protected gate modules reach outside gate/ only via a facade or FACADE_EXTERNAL_LEAVES'
 description: 'Follow-up from PR-3004 review F2 (advisor ruling 2026-10-28 on TASK-b6b1278890774ef993d2ebc327862470-013). gate/seat_authority.rs, gate/review_verdict.rs and other protected gate modules call unprotected crate definers whose bodies feed authority: crate::current_user_id (seat_authority.rs:721), crate::grant_keyring::read (765), crate::process_probe::process_start_identity (856), kernel.rs crate::canonical_role_name (686,1105,1110,1187,1219), review_verdict -> crate::verdict_tip_relation/current_branch_at. Extend the TASK-013 facade + shrink-only FACADE_EXTERNAL_LEAVES ratchet from gate/dispatch_* to every module under gate/, moving small definers into gate/ (old paths re-export) or listing them as bounded leaves with reasons. Never protect whole hot files (forge.rs, lib_part3.rs). Negative tests for direct, two-hop and re-export forms. No behaviour change; refusal-string inventory unchanged.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T07:21:05.956361193Z
-modified_at: 2026-10-28T11:12:18.194610044Z
+modified_at: 2026-10-28T11:45:08.207642421Z
 req_type: Task
 relationships:
 - rel_type:
@@ -68,6 +68,20 @@ history:
   timestamp: 2026-10-28T11:12:19.800443073Z
   session_id: 6df68e51-f913-41a4-bf07-7cb9c1bab568
   changes: []
+- id: 01a18254-0a68-71e0-92e7-60a6b7507135
+  author: aida-auto-bump
+  timestamp: 2026-10-28T11:45:08.200215657Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a18254-0a6f-7341-899b-e60236743b8a
+  timestamp: 2026-10-28T11:45:08.207634948Z
+  agent: aida
+  commit_sha: 42070fbece09cfca8f00042931b573300d85f0f9
+  summary: 'All ruling items met: six globs spelled out + glob ratchet; 12 ruled kernels under the facade rule with floor moves in gate/kernel_deps.rs (old paths delegate, gate callers use the floor); 8 orchestrators frozen in gate/orchestrator_leaves.rs (new/stale/duplicate fail); classification + negative tests for direct, two-hop, re-export and glob forms; no behaviour change by diff inspection; CI green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 4e961089c95bb7d6d89043aabfb31d5e6d58ea53
@@ -77,3 +91,7 @@ filed_at:
   aida_build_sha: e33bf322340
   vendor: claude
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T11:45:08.200210646Z
+  completion_sha: 42070fbece09cfca8f00042931b573300d85f0f9
