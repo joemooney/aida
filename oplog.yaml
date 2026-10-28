@@ -80294,5 +80294,23 @@ operations:
   timestamp: 2026-10-28T09:22:09.733613950Z
   kind: !SetStatus
     status: Completed
-clock: 6248
+- id: 01a181d1-3e8b-7c90-bdce-ea8a38f4145c
+  target_id: 01a181d1-371b-72f2-8a43-57ab9ecd3a42
+  author: aida
+  node_id: '1'
+  lamport: 6249
+  timestamp: 2026-10-28T09:22:16.331929394Z
+  kind: !Create
+    title: '(cosmetic, non-blocking) Doc comments claim re-exports that do not exist: forge…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (cosmetic, non-blocking) Doc comments claim re-exports that do not exist: forge.rs:574-575 ('re-exported here for the forge's callers'), mandate_drive.rs:36-38 ('re-exported for this module's callers') and gate/dispatch_types.rs:4-5 ('forge and mandate_drive re-export them for their existing callers'). All three are private 'use' imports; callers import from crate::gate::dispatch_types directly, as the commit message says (no_unprotected_file_reexports_gate_items would refuse a real re-export). Reword them to 'imported from the floor'.
+
+      PR: #3004
+      Reviewed sha: 24bccdddd37140afbe56f9f9a4e589d6154aa5e7
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6249
 node_id: '1'

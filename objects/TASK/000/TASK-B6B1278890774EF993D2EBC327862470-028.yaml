@@ -1,0 +1,29 @@
+id: 01a181d1-371b-72f2-8a43-57ab9ecd3a42
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-028
+title: '(cosmetic, non-blocking) Doc comments claim re-exports that do not exist: forge…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (cosmetic, non-blocking) Doc comments claim re-exports that do not exist: forge.rs:574-575 ('re-exported here for the forge's callers'), mandate_drive.rs:36-38 ('re-exported for this module's callers') and gate/dispatch_types.rs:4-5 ('forge and mandate_drive re-export them for their existing callers'). All three are private 'use' imports; callers import from crate::gate::dispatch_types directly, as the commit message says (no_unprotected_file_reexports_gate_items would refuse a real re-export). Reword them to 'imported from the floor'.
+
+  PR: #3004
+  Reviewed sha: 24bccdddd37140afbe56f9f9a4e589d6154aa5e7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T09:22:14.427988121Z
+modified_at: 2026-10-28T09:22:14.427988121Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-013
+- finding-hash:a7e9d6ee
+- from-review:PR-3004
+- kind:carried-forward
+filed_at:
+  code_sha: a92022ef3335e4934d2c8d3f96467b206729df8d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 859f808dc7e
+  vendor: claude
