@@ -115,22 +115,45 @@ fn text(out: &Output) -> String {
     )
 }
 
-/// A stub relay controller: an idle child process, plus its run lock held
-/// exclusively (by this test process) with the child's pid on the first
+/// A stub relay controller: an idle child process that holds its run lock
+/// exclusively through an inherited descriptor (fd 9, as relay.sh's
+/// `exec 9>"$lock"; flock -x 9` does), with its pid on the file's first
 /// line. Both are in place before this returns, so nothing polls.
 struct Controller {
     child: Child,
-    _lock: std::fs::File,
 }
 
 impl Controller {
     fn start(lock: &Path) -> Self {
         use fs2::FileExt;
-        let child = Command::new("sleep").arg("300").spawn().unwrap();
+        use std::os::unix::io::AsRawFd;
+        use std::os::unix::process::CommandExt;
         let mut file = std::fs::File::create(lock).unwrap();
-        writeln!(file, "{}", child.id()).unwrap();
         file.lock_exclusive().unwrap();
-        Self { child, _lock: file }
+        let fd = file.as_raw_fd();
+        let mut cmd = Command::new("sleep");
+        cmd.arg("300");
+        // SAFETY: dup2 and fcntl are async-signal-safe; the duplicate clears
+        // close-on-exec in the child only.
+        unsafe {
+            cmd.pre_exec(move || {
+                // dup2 onto itself is a no-op that keeps close-on-exec,
+                // so fd 9 clears the flag instead.
+                let ok = if fd == 9 {
+                    libc::fcntl(9, libc::F_SETFD, 0) == 0
+                } else {
+                    libc::dup2(fd, 9) >= 0
+                };
+                if !ok {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let child = cmd.spawn().unwrap();
+        writeln!(file, "{}", child.id()).unwrap();
+        // This process's descriptor closes; the child's keeps the lock.
+        Self { child }
     }
 
     fn pid(&self) -> String {
@@ -180,6 +203,12 @@ fn story_1843_relay_mail_lifetime_through_the_cli() {
     let probe = fx.json(&["relay-mail", "probe", "--json"]);
     let protocol = probe["protocol"].as_str().unwrap().to_string();
     assert_eq!(protocol, "aida-relay-mail/1");
+    assert_eq!(probe["terminal_reconcile"], true);
+    assert!(probe["ops"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|op| op == "reuse"));
 
     let lock = fx.root.join("relay.lock");
     let controller = Controller::start(&lock);
@@ -305,10 +334,54 @@ fn story_1843_relay_mail_lifetime_through_the_cli() {
     assert_eq!(again["recorded_now"], false);
     assert_eq!(again["reason"], "exit");
     assert!(!fx.send("relay-fx", "after-end").status.success());
+    // An end notice to the advisor is still owed (this project has no
+    // advisor reader), so the ended run stays a live record until it is
+    // delivered; only then is it archived.
     assert!(fx
         .root
-        .join(format!(".aida/agents/relay-runs/ended/{run}.json"))
+        .join(format!(".aida/agents/relay-runs/{run}.json"))
         .exists());
+
+    // Reusing the label: the ended run still has its gap mail unread, so a
+    // bind without a choice refuses with the exact count; --handover binds.
+    let reuse_args = |extra: &[&'static str]| {
+        let mut args = vec![
+            "relay-mail",
+            "bind",
+            "--label",
+            "relay-fx",
+            "--controller-pid",
+            pid.as_str(),
+            "--run-lock",
+            lock_arg,
+            "--protocol",
+            protocol.as_str(),
+            "--json",
+        ];
+        args.extend_from_slice(extra);
+        args.into_iter().map(str::to_string).collect::<Vec<_>>()
+    };
+    let refused = fx.aida(
+        &reuse_args(&[])
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    );
+    assert!(!refused.status.success(), "{}", text(&refused));
+    assert!(
+        text(&refused).contains("which has 1 unread message;"),
+        "{}",
+        text(&refused)
+    );
+    let reused = fx.json(
+        &reuse_args(&["--handover"])
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    );
+    assert_ne!(reused["run"], run.as_str());
+    assert_eq!(reused["reuse"]["previous_run"], run.as_str());
+    assert_eq!(reused["reuse"]["handed_over"], 1);
     controller.kill();
 
     // Crash path: a controller killed without `end` is ended by maintenance.
@@ -332,9 +405,11 @@ fn story_1843_relay_mail_lifetime_through_the_cli() {
     let capability2 = bound2["capability"].as_str().unwrap().to_string();
     assert!(fx.send("relay-crash", "gap").status.success());
     crashed.kill();
+    // The send path reconciles before it resolves: the refused send records
+    // the crash, and maintenance afterwards has nothing left to end.
     assert!(!fx.send("relay-crash", "dead-controller").status.success());
     let gc = fx.aida_ok(&["agent", "gc"]);
-    assert!(gc.contains("Relay runs: recorded the end of 1 run"), "{gc}");
+    assert!(!gc.contains("Relay runs: recorded"), "{gc}");
     let after = fx.aida_stdin(&["relay-mail", "child-bind", "--run", &run2], &capability2);
     assert!(!after.status.success());
     assert!(text(&after).contains("ended"), "{}", text(&after));

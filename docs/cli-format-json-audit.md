@@ -725,4 +725,5 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida relay-mail probe` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida relay-mail bind` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida relay-mail child-bind` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida relay-mail outbox` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida relay-mail end` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |

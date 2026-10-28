@@ -44,6 +44,14 @@ pub enum RelayMailCommand {
         /// The relay mail protocol the caller requires (see `probe`).
         #[clap(long)]
         protocol: String,
+        /// Reusing an ended run's label: leave that run's unread mail with
+        /// it. The new run does not see it.
+        #[clap(long, conflicts_with = "handover")]
+        leave_with_old: bool,
+        /// Reusing an ended run's label: let the new run read that run's
+        /// unread mail too. Nothing is moved, renamed or acknowledged.
+        #[clap(long)]
+        handover: bool,
         /// Print JSON.
         #[clap(long)]
         json: bool,
@@ -64,6 +72,17 @@ pub enum RelayMailCommand {
         /// instead of stdin. Never pass the capability itself as an argument.
         #[clap(long)]
         cap_file: Option<PathBuf>,
+        /// Print JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// List relay end notices: who is told that an ended run left their
+    /// mail unread, and whether that notice is delivered or still pending.
+    Outbox {
+        /// Only this run.
+        #[clap(long)]
+        run: Option<String>,
         /// Print JSON.
         #[clap(long)]
         json: bool,

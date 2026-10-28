@@ -210,6 +210,20 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
             Ok(_) => {}
             Err(e) => eprintln!("warning: relay run reconciliation skipped: {e:#}"),
         }
+        match crate::relay_mail::outbox::settle_ended_runs(&project_root) {
+            Ok(notices) => {
+                if notices.delivered + notices.pending > 0 {
+                    println!(
+                        "Relay end notices: delivered {}, pending {}.",
+                        notices.delivered, notices.pending
+                    );
+                }
+                for skipped in &notices.skipped {
+                    eprintln!("warning: {skipped}");
+                }
+            }
+            Err(e) => eprintln!("warning: relay end notices stay pending: {e:#}"),
+        }
     }
     // Retention work belongs to explicit maintenance, never a turn hook.
     // trace:STORY-1843 | ai:codex
@@ -543,6 +557,7 @@ pub(crate) fn agent_register(
             registry_id: Some(&registry_id),
             launch_token: None,
             launcher: false,
+            ended_relay_cleared: None,
         },
     )?;
     let name = Some(reservation.handle.clone());

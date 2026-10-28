@@ -26,8 +26,10 @@
 //! reconciliation needs no capability: it only retires a controller that is
 //! conclusively gone.
 //!
-//! Open run records live in `relay-runs/`; ended ones are archived to
-//! `relay-runs/ended/`, so only open runs count against the record budget.
+//! Live run records live in `relay-runs/`: open runs, and ended runs whose
+//! end notices are still owed. Once every notice is inserted and delivered
+//! the run is archived to `relay-runs/ended/` with its outbox, so ended runs
+//! stop counting against the record budget.
 // trace:STORY-1843 | ai:claude
 
 use crate::agent_handle::{self, HandleRequest};
@@ -41,18 +43,25 @@ use std::path::{Path, PathBuf};
 pub(crate) mod relay_mail_args;
 pub(crate) use relay_mail_args::*;
 
+// trace:STORY-1843 | ai:claude
+#[path = "relay_mail_outbox.rs"]
+pub(crate) mod outbox;
+
+// trace:STORY-1843 | ai:claude
+#[path = "relay_mail_reuse.rs"]
+pub(crate) mod reuse;
+
 /// The relay mail protocol this binary speaks. A relay compares it exactly;
 /// a different version refuses before anything is reserved.
 pub(crate) const PROTOCOL: &str = "aida-relay-mail/1";
 
-/// Operations the protocol offers, as `probe` reports them.
-const OPERATIONS: &[&str] = &["probe", "bind", "child-bind", "end"];
-
-/// Behaviours the protocol guarantees, as `probe` reports them.
-const FEATURES: &[&str] = &["gap-acceptance", "terminal-reconcile"];
+/// Operations the protocol offers, as `probe` reports them (`ops`).
+/// `reuse` is `bind`'s `--leave-with-old` / `--handover` choice for an ended
+/// run's label.
+const OPERATIONS: &[&str] = &["probe", "bind", "child-bind", "end", "reuse", "outbox"];
 
 const MAX_RUN_RECORD_BYTES: u64 = 65536;
-/// Open run records read per pass. Ended runs are archived outside it.
+/// Live run records read per pass. Archived runs are outside it.
 const MAX_OPEN_RUN_RECORDS: usize = 1024;
 /// Random bytes in a run capability.
 const CAPABILITY_BYTES: usize = 32;
@@ -140,6 +149,10 @@ pub(crate) struct RelayRun {
     pub(crate) children: Vec<ChildBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) terminal: Option<Terminal>,
+    /// A complete pass after the end inserted every end notice owed.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) notices_settled: bool,
 }
 
 /// Whether a run's controller is alive, as this process can see it.
@@ -185,7 +198,7 @@ fn canonical_run_id(raw: &str) -> Result<String> {
     Ok(canonical)
 }
 
-/// Where ended run records are archived, outside the open-record budget.
+/// Where retired run records are archived, outside the live-record budget.
 pub(crate) fn ended_runs_dir(project_root: &Path) -> PathBuf {
     runs_dir(project_root).join("ended")
 }
@@ -209,9 +222,9 @@ fn read_run_at(path: &Path, run_id: &str) -> Result<Option<RelayRun>> {
     Ok(Some(run))
 }
 
-/// A run record, open or ended. The ended archive wins: an end is written
-/// there before the open record is removed, so a crash between the two
-/// leaves the end authoritative.
+/// A run record, live or archived. The archive wins: a run is archived
+/// before its live record is removed, so a crash between the two leaves the
+/// archived copy authoritative.
 pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<RelayRun>> {
     let run_id = canonical_run_id(run_id)?;
     if let Some(run) = read_run_at(&ended_run_path(project_root, &run_id), &run_id)? {
@@ -220,65 +233,116 @@ pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<Relay
     read_run_at(&run_path(project_root, &run_id), &run_id)
 }
 
-/// Write a run record: an open run to `relay-runs/`, an ended one to the
-/// archive, removing its open record afterwards.
-fn write_run(project_root: &Path, run: &RelayRun) -> Result<()> {
-    let dir = if run.terminal.is_some() {
-        ended_runs_dir(project_root)
+/// Write a run record in place: to the archive once the run is archived,
+/// to `relay-runs/` otherwise.
+/// A rewrite keeps the record's original modification time, so the oldest
+/// run sorts first however often it changes (see [`list_runs`]).
+pub(crate) fn write_run(project_root: &Path, run: &RelayRun) -> Result<()> {
+    let archived = ended_run_path(project_root, &run.run_id);
+    let path = if archived.exists() {
+        archived
     } else {
-        runs_dir(project_root)
+        run_path(project_root, &run.run_id)
     };
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("creating relay run directory {}", dir.display()))?;
-    let body = serde_json::to_string_pretty(run).context("serialising relay run")?;
-    let path = dir.join(format!("{}.json", run.run_id));
-    aida_core::write_atomic(&path, body.as_bytes())
-        .with_context(|| format!("writing relay run record {}", path.display()))?;
-    if run.terminal.is_some() {
-        let open = run_path(project_root, &run.run_id);
-        match std::fs::remove_file(&open) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                return Err(e).with_context(|| format!("removing {}", open.display()));
-            }
-        }
+    let first_written = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+    write_run_at(&path, run)?;
+    if let Some(time) = first_written {
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .and_then(|f| f.set_modified(time))
+            .with_context(|| format!("keeping the age of {}", path.display()))?;
     }
     Ok(())
 }
 
-/// Every readable open run record, bounded in count. Only `.json` files
-/// count; the `ended/` archive and stray entries are skipped uncounted.
-/// Unreadable records are skipped: they own nothing, and the label they
-/// named stays governed by its handle reservation.
-fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
+fn write_run_at(path: &Path, run: &RelayRun) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("creating relay run directory {}", dir.display()))?;
+    }
+    let body = serde_json::to_string_pretty(run).context("serialising relay run")?;
+    aida_core::write_atomic(path, body.as_bytes())
+        .with_context(|| format!("writing relay run record {}", path.display()))
+}
+
+/// Move an ended run whose notices are settled out of the live records:
+/// its per-run directory (the outbox) first, then its record, then the live
+/// record is removed. Call with the namespace lock held.
+pub(crate) fn archive_run(project_root: &Path, run: &RelayRun) -> Result<()> {
+    if run.terminal.is_none() || !run.notices_settled {
+        bail!("relay run {} is not settled; it stays live", run.run_id);
+    }
+    let live_dir = runs_dir(project_root).join(&run.run_id);
+    if live_dir.is_dir() {
+        let archived_dir = ended_runs_dir(project_root).join(&run.run_id);
+        std::fs::create_dir_all(ended_runs_dir(project_root))?;
+        std::fs::rename(&live_dir, &archived_dir)
+            .with_context(|| format!("archiving {}", live_dir.display()))?;
+    }
+    write_run_at(&ended_run_path(project_root, &run.run_id), run)?;
+    let live = run_path(project_root, &run.run_id);
+    match std::fs::remove_file(&live) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("removing {}", live.display())),
+    }
+}
+
+/// Directory entries scanned for live run records in one pass.
+const MAX_SCANNED_RUN_ENTRIES: usize = 8 * MAX_OPEN_RUN_RECORDS;
+
+/// Live run record names (open, or ended with notices owed) with their
+/// modification times, and how many there are. Only `.json` files count;
+/// directories (the `ended/` archive, per-run outboxes) and stray entries
+/// are skipped uncounted. The scan itself is bounded.
+fn scan_live_records(project_root: &Path) -> Result<Vec<(std::time::SystemTime, String)>> {
     let entries = match std::fs::read_dir(runs_dir(project_root)) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e).context("reading relay run records"),
     };
-    let mut runs = Vec::new();
-    let mut counted = 0usize;
-    for entry in entries {
+    let mut found = Vec::new();
+    for entry in entries.take(MAX_SCANNED_RUN_ENTRIES) {
         let entry = entry?;
-        if !entry.file_type().is_ok_and(|t| t.is_file()) {
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
             continue;
         }
         let name = entry.file_name();
         let Some(stem) = name.to_str().and_then(|name| name.strip_suffix(".json")) else {
             continue;
         };
-        counted += 1;
-        if counted > MAX_OPEN_RUN_RECORDS {
-            bail!("open relay run budget exceeded ({MAX_OPEN_RUN_RECORDS} records)");
+        // An archived copy shadows a leftover live record.
+        if ended_run_path(project_root, stem).exists() {
+            continue;
         }
-        // An ended archive entry shadows a leftover open record.
-        if let Ok(Some(run)) = load_run(project_root, stem) {
-            if run.terminal.is_none() {
-                runs.push(run);
-            }
-        }
+        let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+        found.push((modified, stem.to_string()));
     }
+    Ok(found)
+}
+
+/// How many live run records there are, as far as one bounded scan sees.
+pub(crate) fn live_run_count(project_root: &Path) -> Result<usize> {
+    Ok(scan_live_records(project_root)?.len())
+}
+
+/// Readable live run records, oldest run first (a record keeps its first
+/// modification time across rewrites), at most
+/// [`MAX_OPEN_RUN_RECORDS`] of them. Past the limit the newest are left out
+/// rather than failing, so reconciliation can still end dead runs and bring
+/// the count back under it. Unreadable records are skipped: they own
+/// nothing, and the label they named stays governed by its handle
+/// reservation.
+fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
+    let mut found = scan_live_records(project_root)?;
+    found.sort();
+    let mut runs: Vec<RelayRun> = found
+        .into_iter()
+        .take(MAX_OPEN_RUN_RECORDS)
+        .filter_map(|(_, stem)| load_run(project_root, &stem).ok().flatten())
+        .collect();
     runs.sort_by(|a, b| a.run_id.cmp(&b.run_id));
     Ok(runs)
 }
@@ -474,6 +538,17 @@ fn run_lock_evidence(path: &Path, controller_pid: u32) -> Result<RunLockEvidence
         Err(e) if e.kind() == fs2::lock_contended_error().kind() => {}
         Err(e) => return Err(e).context("probing run lock"),
     }
+    // Someone holds the lock; it must be the named controller.
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if !controller_holds_lock(controller_pid, meta.dev(), meta.ino())? {
+            bail!(
+                "run lock {} is held, but not by controller pid {controller_pid}",
+                path.display()
+            );
+        }
+    }
     #[cfg(unix)]
     let identity = {
         use std::os::unix::fs::MetadataExt;
@@ -485,6 +560,47 @@ fn run_lock_evidence(path: &Path, controller_pid: u32) -> Result<RunLockEvidence
         path: path.to_path_buf(),
         identity,
     })
+}
+
+/// File descriptors of the controller inspected for its run lock.
+#[cfg(target_os = "linux")]
+const MAX_CONTROLLER_FDS: usize = 4096;
+
+/// Whether `pid` holds an exclusive `flock` on the file `dev`:`ino` through
+/// one of its own descriptors. The kernel lists a lock in
+/// `/proc/<pid>/fdinfo/<fd>` only for the open file description that holds
+/// it, so a lock taken by another process (or by a helper that has exited,
+/// as `flock -x 9` in a shell does) is attributed to every process sharing
+/// that description, and to no other. `/proc/locks` and `F_GETLK` are not
+/// used: they report the pid that took a `flock`, not the holder.
+#[cfg(target_os = "linux")]
+fn controller_holds_lock(pid: u32, dev: u64, ino: u64) -> Result<bool> {
+    use std::io::Read;
+    use std::os::unix::fs::MetadataExt;
+    let fd_dir = PathBuf::from(format!("/proc/{pid}/fd"));
+    let entries = std::fs::read_dir(&fd_dir)
+        .with_context(|| format!("cannot inspect relay controller process {pid}'s files"))?;
+    for entry in entries.take(MAX_CONTROLLER_FDS) {
+        let Ok(entry) = entry else { continue };
+        // The fd link resolves to the open file itself.
+        let Ok(meta) = std::fs::metadata(entry.path()) else {
+            continue;
+        };
+        if meta.dev() != dev || meta.ino() != ino {
+            continue;
+        }
+        let info_path = PathBuf::from(format!("/proc/{pid}/fdinfo")).join(entry.file_name());
+        let mut info = String::new();
+        if let Ok(file) = std::fs::File::open(&info_path) {
+            file.take(16384).read_to_string(&mut info).ok();
+        }
+        if info.lines().any(|line| {
+            line.starts_with("lock:") && line.contains("FLOCK") && line.contains("WRITE")
+        }) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// The open run that holds `reservation`'s label, if any: a run record for
@@ -503,6 +619,17 @@ pub(crate) fn run_holding(
         .then_some(run.run_id)
 }
 
+/// Whether `reservation` names a relay run whose end is recorded.
+pub(crate) fn run_ended(
+    project_root: &Path,
+    reservation: &agent_handle::HandleReservation,
+) -> bool {
+    load_run(project_root, &reservation.recipient_id)
+        .ok()
+        .flatten()
+        .is_some_and(|run| run.terminal.is_some() && run.label == reservation.handle)
+}
+
 /// Runs that accept mail to their label now: open, not provably dead, and
 /// still the owner of their label's reservation.
 pub(crate) fn accepting_runs(project_root: &Path) -> (Vec<AcceptingRun>, Vec<String>) {
@@ -515,6 +642,12 @@ pub(crate) fn accepting_runs(project_root: &Path) -> (Vec<AcceptingRun>, Vec<Str
             )
         }
     };
+    let mut warnings = Vec::new();
+    if live_run_count(project_root).unwrap_or(0) > MAX_OPEN_RUN_RECORDS {
+        warnings.push(format!(
+            "warning: more than {MAX_OPEN_RUN_RECORDS} live relay runs; only the oldest are considered"
+        ));
+    }
     let accepting = runs
         .into_iter()
         .filter(|run| run.terminal.is_none())
@@ -533,7 +666,7 @@ pub(crate) fn accepting_runs(project_root: &Path) -> (Vec<AcceptingRun>, Vec<Str
             })
         })
         .collect();
-    (accepting, Vec::new())
+    (accepting, warnings)
 }
 
 fn record_terminal(run: &mut RelayRun, reason: TerminalReason, now: DateTime<Utc>) {
@@ -564,8 +697,20 @@ pub(crate) fn reconcile_relay_runs(project_root: &Path) -> Result<ReconcileRepor
     if dead.is_empty() {
         return Ok(report);
     }
-    let _lock = agent_handle::lock_namespace(project_root)?;
-    for run_id in dead {
+    // The undelivered mail is read before the lock; its end notices are
+    // inserted in the same critical section that records the end.
+    // trace:STORY-1843 | ai:claude
+    let plans: Vec<_> = dead
+        .iter()
+        .map(|run_id| {
+            load_run(project_root, run_id)
+                .ok()
+                .flatten()
+                .and_then(|run| outbox::plan_end_notices(project_root, &run).ok())
+        })
+        .collect();
+    let lock = agent_handle::lock_namespace(project_root)?;
+    for (run_id, plan) in dead.into_iter().zip(plans) {
         let Some(mut run) = load_run(project_root, &run_id)? else {
             continue;
         };
@@ -576,6 +721,9 @@ pub(crate) fn reconcile_relay_runs(project_root: &Path) -> Result<ReconcileRepor
         }
         record_terminal(&mut run, TerminalReason::Crash, Utc::now());
         write_run(project_root, &run)?;
+        if let Some(plan) = plan {
+            outbox::insert_planned(project_root, &run, &plan, &lock)?;
+        }
         report.ended.push(run_id);
     }
     Ok(report)
@@ -590,15 +738,40 @@ pub(crate) struct BindOutcome {
     /// The run capability, printed once. The controller keeps it for
     /// `child-bind` and `end` and never exports it to a child.
     pub(crate) capability: String,
+    /// Set when the label belonged to an ended run: what happened to that
+    /// run's unread mail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reuse: Option<reuse::ReuseReport>,
 }
 
-/// Reserve `label` for a new run owned by `controller_pid`.
+/// Reserve `label` for a new run owned by `controller_pid`. A label an
+/// ended run held is refused while that run has unread mail.
 pub(crate) fn bind(
     project_root: &Path,
     label: &str,
     controller_pid: u32,
     run_lock: &Path,
     protocol: &str,
+) -> Result<BindOutcome> {
+    bind_reusing(
+        project_root,
+        label,
+        controller_pid,
+        run_lock,
+        protocol,
+        None,
+    )
+}
+
+/// [`bind`], with the choice for an ended run's unread mail when the label
+/// is reused.
+pub(crate) fn bind_reusing(
+    project_root: &Path,
+    label: &str,
+    controller_pid: u32,
+    run_lock: &Path,
+    protocol: &str,
+    choice: Option<reuse::ReuseChoice>,
 ) -> Result<BindOutcome> {
     // The capability check comes before anything is observed or reserved.
     if protocol != PROTOCOL {
@@ -613,52 +786,75 @@ pub(crate) fn bind(
     if let Err(e) = reconcile_relay_runs(project_root) {
         eprintln!("warning: relay run reconciliation skipped: {e:#}");
     }
+    // trace:STORY-1843 | ai:claude
+    match outbox::settle_ended_runs(project_root) {
+        Ok(report) => {
+            for skipped in &report.skipped {
+                eprintln!("warning: {skipped}");
+            }
+        }
+        Err(e) => eprintln!("warning: relay end notices stay pending: {e:#}"),
+    }
     let controller = controller_evidence(controller_pid)?;
     let run_lock = run_lock_evidence(run_lock, controller_pid)?;
-    let lock = agent_handle::lock_namespace(project_root)?;
-    if let Some(existing) = agent_handle::checked_reservation(project_root, label)? {
-        if let Some(holder) = run_holding(project_root, &existing) {
-            bail!("relay label `{label}` is in use by relay run {holder}");
+    // The caller proved the controller and its run lock. An ended run's
+    // unread mail is counted now, with no lock held; the reservation it was
+    // counted for is re-checked under the namespace lock below.
+    // trace:STORY-1843 | ai:claude
+    let plan = reuse::plan_reuse(project_root, label, choice)?;
+    let capability = new_capability()?;
+    let capability_sha256 = capability_digest(&capability);
+    let (run, plan) = {
+        let lock = agent_handle::lock_namespace(project_root)?;
+        if let Some(existing) = agent_handle::checked_reservation(project_root, label)? {
+            if let Some(holder) = run_holding(project_root, &existing) {
+                bail!("relay label `{label}` is in use by relay run {holder}");
+            }
         }
-        // Mail is keyed by the label, so a new run under an earlier run's
-        // label would read that run's unread mail. Reuse needs an explicit
-        // leave-with-old or handover choice, which this protocol version
-        // does not offer.
-        let earlier_run = std::iter::once(&existing.recipient_id)
-            .chain(existing.previous_recipients.iter())
-            .find(|id| load_run(project_root, id).ok().flatten().is_some());
-        if let Some(previous) = earlier_run {
+        // The limit is checked under the lock, so concurrent binds cannot
+        // pass it together.
+        let live = live_run_count(project_root)?;
+        if live >= MAX_OPEN_RUN_RECORDS {
             bail!(
-                "relay label `{label}` belonged to relay run {previous}; reusing a relay label is not supported yet, choose a new label"
+                "relay run limit reached: {live} live relay runs (the limit is {MAX_OPEN_RUN_RECORDS}); end runs that are finished, or run `aida agent gc` to end runs whose controller is gone"
             );
         }
-    }
-    let req = HandleRequest {
-        agent_type: "relay",
-        explicit: Some(label),
-        ..Default::default()
+        // The decision above was about the run that held the label then.
+        let previous = reuse::ended_run_of_label(project_root, label)?.map(|r| r.run_id);
+        if previous.as_deref() != plan.as_ref().map(|p| p.previous.as_str()) {
+            bail!("relay label `{label}` changed while it was checked; retry the bind");
+        }
+        let req = HandleRequest {
+            agent_type: "relay",
+            explicit: Some(label),
+            ..Default::default()
+        };
+        let reservation = agent_handle::reserve_handle_locked(project_root, &req, &lock)?;
+        let run = RelayRun {
+            protocol: PROTOCOL.to_string(),
+            run_id: canonical_run_id(&reservation.recipient_id)?,
+            label: reservation.handle.clone(),
+            controller,
+            run_lock,
+            capability_sha256,
+            bound_at: Utc::now(),
+            generation: 1,
+            children: Vec::new(),
+            terminal: None,
+            notices_settled: false,
+        };
+        write_run(project_root, &run)?;
+        (run, plan)
     };
-    let capability = new_capability()?;
-    let reservation = agent_handle::reserve_handle_locked(project_root, &req, &lock)?;
-    let run = RelayRun {
-        protocol: PROTOCOL.to_string(),
-        run_id: canonical_run_id(&reservation.recipient_id)?,
-        label: reservation.handle.clone(),
-        controller,
-        run_lock,
-        capability_sha256: capability_digest(&capability),
-        bound_at: Utc::now(),
-        generation: 1,
-        children: Vec::new(),
-        terminal: None,
-    };
-    write_run(project_root, &run)?;
+    // Handovers take the mailbox lifecycle lock: after the namespace lock.
+    let reuse = plan.map(|plan| reuse::apply_reuse(project_root, plan, &run.run_id));
     Ok(BindOutcome {
         run: run.run_id,
         label: run.label,
         protocol: run.protocol,
         generation: run.generation,
         capability,
+        reuse,
     })
 }
 
@@ -762,6 +958,9 @@ pub(crate) struct EndOutcome {
     pub(crate) reason: TerminalReason,
     /// False when an earlier `end` or reconciliation already recorded it.
     pub(crate) recorded_now: bool,
+    /// End notices inserted and delivered by this call's maintenance pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) notices: Option<outbox::SettleReport>,
 }
 
 /// Record the run's terminal generation once. A repeat reports the
@@ -774,16 +973,40 @@ pub(crate) fn end(
     reason: TerminalReason,
 ) -> Result<EndOutcome> {
     let run_id = canonical_run_id(run_id)?;
-    let _lock = agent_handle::lock_namespace(project_root)?;
-    let Some(mut run) = load_run(project_root, &run_id)? else {
-        bail!("unknown relay run {run_id}");
+    // The run's undelivered mail is read before the lock, so its end
+    // notices are inserted with the terminal record. trace:STORY-1843 | ai:claude
+    let plan = load_run(project_root, &run_id)?
+        .filter(|run| run.terminal.is_none() && verify_capability(run, capability).is_ok())
+        .map(|run| outbox::plan_end_notices(project_root, &run))
+        .transpose()
+        .unwrap_or_else(|e| {
+            eprintln!("warning: relay end notices deferred to maintenance: {e:#}");
+            None
+        });
+    let (run, recorded_now) = {
+        let lock = agent_handle::lock_namespace(project_root)?;
+        let Some(mut run) = load_run(project_root, &run_id)? else {
+            bail!("unknown relay run {run_id}");
+        };
+        verify_capability(&run, capability)?;
+        let recorded_now = run.terminal.is_none();
+        if recorded_now {
+            record_terminal(&mut run, reason, Utc::now());
+            write_run(project_root, &run)?;
+            if let Some(plan) = &plan {
+                outbox::insert_planned(project_root, &run, plan, &lock)?;
+            }
+        }
+        (run, recorded_now)
     };
-    verify_capability(&run, capability)?;
-    let recorded_now = run.terminal.is_none();
-    if recorded_now {
-        record_terminal(&mut run, reason, Utc::now());
-        write_run(project_root, &run)?;
-    }
+    // With no lock held: catch up any notice the plan missed and deliver.
+    let notices = match outbox::settle_ended_runs(project_root) {
+        Ok(report) => Some(report),
+        Err(e) => {
+            eprintln!("warning: relay end notices stay pending: {e:#}");
+            None
+        }
+    };
     let terminal = run.terminal.as_ref().expect("terminal recorded");
     Ok(EndOutcome {
         run: run.run_id.clone(),
@@ -791,6 +1014,7 @@ pub(crate) fn end(
         terminal_generation: terminal.generation,
         reason: terminal.reason,
         recorded_now,
+        notices,
     })
 }
 
@@ -811,13 +1035,13 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
             if *json {
                 print_json(&serde_json::json!({
                     "protocol": PROTOCOL,
-                    "operations": OPERATIONS,
-                    "features": FEATURES,
+                    "ops": OPERATIONS,
+                    "terminal_reconcile": true,
                 }))
             } else {
                 println!("{PROTOCOL}");
-                println!("operations: {}", OPERATIONS.join(", "));
-                println!("features: {}", FEATURES.join(", "));
+                println!("ops: {}", OPERATIONS.join(", "));
+                println!("terminal_reconcile: true");
                 Ok(())
             }
         }
@@ -826,14 +1050,39 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
             controller_pid,
             run_lock,
             protocol,
+            leave_with_old,
+            handover,
             json,
         } => {
-            let out = bind(&project_root()?, label, *controller_pid, run_lock, protocol)?;
+            let choice = match (*leave_with_old, *handover) {
+                (true, _) => Some(reuse::ReuseChoice::LeaveWithOld),
+                (_, true) => Some(reuse::ReuseChoice::Handover),
+                _ => None,
+            };
+            let out = bind_reusing(
+                &project_root()?,
+                label,
+                *controller_pid,
+                run_lock,
+                protocol,
+                choice,
+            )?;
+            if let Some(reuse) = &out.reuse {
+                for error in &reuse.handover_errors {
+                    eprintln!("warning: handover not written, the mail stays with the earlier run: {error}");
+                }
+            }
             if *json {
                 print_json(&out)
             } else {
                 println!("{}", out.run);
                 println!("{}", out.capability);
+                if let Some(reuse) = &out.reuse {
+                    eprintln!(
+                        "Reused the label of relay run {}: {} unread, {} handed over.",
+                        reuse.previous_run, reuse.unread, reuse.handed_over
+                    );
+                }
                 Ok(())
             }
         }
@@ -862,6 +1111,48 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
                 }
                 Ok(())
             }
+        }
+        RelayMailCommand::Outbox { run, json } => {
+            let root = project_root()?;
+            let runs: Vec<String> = match run {
+                Some(run) => vec![canonical_run_id(run)?],
+                None => list_runs(&root)?.into_iter().map(|r| r.run_id).collect(),
+            };
+            let mut entries = Vec::new();
+            for run in runs {
+                let listing = outbox::read_outbox(&root, &run)?;
+                for skipped in &listing.unreadable {
+                    eprintln!("warning: {skipped}");
+                }
+                entries.extend(listing.entries);
+            }
+            if *json {
+                return print_json(&entries);
+            }
+            if entries.is_empty() {
+                println!("No relay end notices.");
+            }
+            for e in &entries {
+                let state = match &e.state {
+                    outbox::NoticeState::Pending {
+                        attempts,
+                        last_error,
+                    } => format!(
+                        "pending ({attempts} attempt{}){}",
+                        if *attempts == 1 { "" } else { "s" },
+                        last_error
+                            .as_deref()
+                            .map(|err| format!(": {err}"))
+                            .unwrap_or_default()
+                    ),
+                    outbox::NoticeState::Delivered { .. } => "delivered".to_string(),
+                };
+                println!(
+                    "{} {} -> {} about {}: {state}",
+                    e.label, e.terminal_generation, e.destination.address, e.message_id
+                );
+            }
+            Ok(())
         }
         RelayMailCommand::End {
             run,
@@ -916,6 +1207,50 @@ pub(crate) static RELAY_MAIL: crate::command_registry::CommandReg =
         run: crate::command_registry::Handler::Early(run_relay_mail),
     };
 
+/// Test support: a stub relay controller. A `sleep` child that holds an
+/// exclusive lock on `path` through an inherited descriptor (fd 9, the
+/// relay.sh shape), with its pid on the file's first line. Ready on return.
+#[cfg(test)]
+pub(crate) fn spawn_lock_holder(path: &Path) -> std::process::Child {
+    use fs2::FileExt;
+    use std::io::Write;
+    use std::os::unix::io::AsRawFd;
+    use std::os::unix::process::CommandExt;
+    let mut file = std::fs::File::create(path).unwrap();
+    file.lock_exclusive().unwrap();
+    let fd = file.as_raw_fd();
+    let mut cmd = std::process::Command::new("sleep");
+    cmd.arg("300");
+    // SAFETY: dup2 and fcntl are async-signal-safe; the duplicate clears close-on-exec
+    // in the child only.
+    unsafe {
+        cmd.pre_exec(move || {
+            // dup2 onto itself is a no-op that keeps close-on-exec,
+            // so fd 9 clears the flag instead.
+            let ok = if fd == 9 {
+                libc::fcntl(9, libc::F_SETFD, 0) == 0
+            } else {
+                libc::dup2(fd, 9) >= 0
+            };
+            if !ok {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let child = cmd.spawn().unwrap();
+    writeln!(file, "{}", child.id()).unwrap();
+    child
+}
+
 #[cfg(test)]
 #[path = "tests/story_1843_relay_lifetime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/story_1843_relay_outbox_tests.rs"]
+mod outbox_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1843_relay_reuse_tests.rs"]
+mod reuse_tests;
