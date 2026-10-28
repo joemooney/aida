@@ -213,14 +213,14 @@ fn assign_to_self_sends_no_notification() {
     if me != target_self {
         send_notification(&store_path, me, target_self, "self".to_string());
     }
-    let after_self = std::fs::read_dir(&mailbox).map(|d| d.count()).unwrap_or(0);
+    let after_self = json_count(&mailbox);
     assert_eq!(after_self, 0, "assign-to-self writes no mailbox message");
 
     // Assign to someone else → exactly one message lands.
     if me != target_other {
         send_notification(&store_path, me, target_other, "hello bob".to_string());
     }
-    let after_other = std::fs::read_dir(&mailbox).map(|d| d.count()).unwrap_or(0);
+    let after_other = json_count(&mailbox);
     assert_eq!(after_other, 1, "assigning to another user sends one notice");
 
     let _ = std::fs::remove_dir_all(&tmp);
@@ -1470,4 +1470,16 @@ fn send_notification_trims_the_recipient() {
         local[0].to,
         aida_core::mailbox::Recipient::Agent("advisor".into())
     );
+}
+
+/// Messages in a mailbox directory (its creation nonce is not one).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn json_count(mailbox: &std::path::Path) -> usize {
+    std::fs::read_dir(mailbox)
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+                .count()
+        })
+        .unwrap_or(0)
 }

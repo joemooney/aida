@@ -1443,3 +1443,26 @@ fn retirement_leaves_the_nonce_with_its_mailbox() {
     assert!(!retained.join("data").join(SOURCE_ID_FILE).exists());
     assert!(id.is_file(), "it stays with the generation it names");
 }
+
+/// A creator that loses the race keeps the directory already there and
+/// leaves no staging behind.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_creator_that_loses_the_race_keeps_the_existing_mailbox() {
+    let dir = tempfile::tempdir().unwrap();
+    let mailbox = dir.path().join(".aida").join("mailbox");
+    let winner = mailbox.clone();
+    BEFORE_PLACE
+        .with(|h| *h.borrow_mut() = Some(Box::new(move || std::fs::create_dir(&winner).unwrap())));
+    create_mailbox_dir(&mailbox).unwrap();
+    assert!(mailbox.is_dir());
+    assert!(
+        !mailbox.join(SOURCE_ID_FILE).exists(),
+        "the winner was kept, not replaced"
+    );
+    let left: Vec<_> = std::fs::read_dir(dir.path().join(".aida"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(left, ["mailbox"], "no staging left behind");
+}

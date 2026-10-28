@@ -4419,6 +4419,8 @@ ttl_secs = 1800
         let files: Vec<_> = std::fs::read_dir(&mailbox)
             .expect("mailbox dir exists")
             .flatten()
+            // The creation nonce is not mail. trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+            .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
             .map(|e| std::fs::read_to_string(e.path()).unwrap())
             .collect();
         assert_eq!(files.len(), 1, "exactly one mailbox message written");

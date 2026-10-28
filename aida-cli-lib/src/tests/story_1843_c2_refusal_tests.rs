@@ -61,6 +61,9 @@ fn mail_in(tree: &Path) -> Vec<String> {
             d.flatten()
                 .filter(|e| e.path().is_file())
                 .map(|e| e.file_name().to_string_lossy().into_owned())
+                // The creation nonce is not mail.
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+                .filter(|name| name != aida_core::mailbox_lifecycle::SOURCE_ID_FILE)
                 .collect()
         })
         .unwrap_or_default();
