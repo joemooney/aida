@@ -1351,18 +1351,25 @@ fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
     let preserve = remove
         .find("preserve_reviewer_worktree_hold(main_worktree, rev_wt, pr_scope)?;")
         .expect("the removal preserves the hold and stops on failure");
+    // STORY-1843 C2: the removal goes through the mail-retention guard,
+    // which retires the reviewer's mail before `git worktree remove`.
+    let removal = "aida_core::mailbox_lifecycle::guard::remove_worktree_retained(";
     let git_remove = remove
-        .find("\"worktree\", \"remove\"")
-        .expect("the removal runs git worktree remove");
+        .find(removal)
+        .expect("the removal runs the guarded git worktree remove");
     assert!(
         preserve < git_remove,
-        "the merge-hold is preserved before `git worktree remove`"
+        "the merge-hold is preserved before the worktree is removed"
     );
     assert_eq!(
-        hold.matches("\"worktree\", \"remove\"").count(),
+        hold.matches(removal).count(),
         1,
         "gate/dispatch_reviewer_hold.rs removes a worktree only in \
          `remove_reviewer_worktree_preserving_hold`"
+    );
+    assert!(
+        !hold.contains("\"worktree\", \"remove\""),
+        "gate/dispatch_reviewer_hold.rs runs no raw `git worktree remove`"
     );
 
     // The reaper only writes what the gate's `dead_claims` released; it never

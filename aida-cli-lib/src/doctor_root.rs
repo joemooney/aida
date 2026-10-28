@@ -930,7 +930,11 @@ pub(crate) fn collect_doctor_findings_at(
             detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
             PrLookup::Found(_)
         );
-        if matches!(state, LeaseState::Stale) || pid_dead || branch_merged {
+        // STORY-1843 C2: a session whose end was refused to keep its mail is
+        // reported as ending-retained, never as live or cleaned up; the heal
+        // retries the end. trace:STORY-1843 | ai:claude
+        let ending_retained = crate::leases::is_ending_retained(lease);
+        if matches!(state, LeaseState::Stale) || pid_dead || branch_merged || ending_retained {
             push(DoctorFinding {
                 category: "stale-leases".to_string(),
                 id: lease.id.clone(),
@@ -939,7 +943,16 @@ pub(crate) fn collect_doctor_findings_at(
                     lease.id,
                     lease.scope,
                     lease.branch,
-                    if !worktree_exists {
+                    if ending_retained {
+                        format!(
+                            "ending-retained: its end was refused ({}); the tree and lease are \
+                             kept",
+                            lease
+                                .ending_retained_reason
+                                .as_deref()
+                                .unwrap_or("its mail could not be retained")
+                        )
+                    } else if !worktree_exists {
                         "worktree missing".to_string()
                     } else if pid_dead {
                         "creator pid dead".to_string()

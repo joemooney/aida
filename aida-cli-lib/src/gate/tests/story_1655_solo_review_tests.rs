@@ -225,6 +225,8 @@ fn record_author_lease(root: &Path) {
         driver: None,
         child_grant_id: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
     };
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(AUTHOR_SESSION))]);
     crate::gate::review_authority::record_authoring_lease(root, &lease);

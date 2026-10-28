@@ -59,8 +59,26 @@ pub(crate) fn ensure_integrator_checkout(project_root: &Path) -> Result<PathBuf>
             .find(|e| e.lease_holder.as_deref() == Some(INTEGRATOR_LEASE_SCOPE) && e.path.is_dir())
         {
             let base_ref = aida_core::git_ops::furthest_ahead_default_ref(project_root)?;
-            aida_core::git_ops::reset_worktree_to(&entry.path, &base_ref)
-                .with_context(|| format!("reset integrator worktree {}", entry.path.display()))?;
+            // Reuse: retire the previous run's mail first; a refusal keeps the
+            // tree as it is. trace:STORY-1843 | ai:claude
+            let retirement = aida_core::mailbox_lifecycle::guard::retire_checkout(
+                &entry.path,
+                "integrator reuse",
+            )
+            .map_err(|refusal| {
+                anyhow::anyhow!("refusing to reuse the integrator worktree: {refusal}")
+            })?;
+            // The quiet re-check runs right before the reset. trace:STORY-1843 | ai:claude
+            aida_core::mailbox_lifecycle::guard::remove_retired(
+                &entry.path,
+                retirement,
+                || {
+                    aida_core::git_ops::reset_worktree_to(&entry.path, &base_ref).with_context(
+                        || format!("reset integrator worktree {}", entry.path.display()),
+                    )
+                },
+                aida_core::mailbox_lifecycle::guard::Retirement::complete_reuse,
+            )?;
             aida_core::git_ops::init_submodules_or_warn(
                 &entry.path,
                 crate::worktree_config_init_submodules(project_root),

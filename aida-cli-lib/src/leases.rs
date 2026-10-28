@@ -185,6 +185,20 @@ pub(crate) struct SessionLease {
     // trace:TASK-1518 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) interrupted_reason: Option<String>,
+    /// STORY-1843 C2: stamped when the session's end, reap or heal was
+    /// refused because the tree's mail could not be retired. The tree, lease,
+    /// claim and manifest are kept and the child grant is revoked; the
+    /// session reads as `ending-retained`, never as active work and never as
+    /// cleaned up, until a retried end succeeds. Written as a generic TOML
+    /// key by `mail_retention`, and kept by every typed lease rewrite.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ending_retained_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Why the retention refused. Informational; readers key on
+    /// `ending_retained_at`.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ending_retained_reason: Option<String>,
     /// The driver this lease's session works for (`relay:<run>`, ...), read
     /// from `AIDA_RELAY_RUN` / `AIDA_DRIVER` when the lease was minted. Lets
     /// a lease whose own process is gone read as driven while its driver is
@@ -335,6 +349,8 @@ pub(crate) fn session_harness_worktree_register(
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
     };
@@ -628,7 +644,17 @@ pub(crate) fn lease_blocks_agent_dispatch(lease: &SessionLease) -> bool {
 
 // trace:BUG-2002 | ai:codex
 pub(crate) fn lease_visible_in_default_listing(lease: &SessionLease, state: LeaseState) -> bool {
-    !matches!(state, LeaseState::Stale) || lease_blocks_agent_dispatch(lease)
+    !matches!(state, LeaseState::Stale)
+        || lease_blocks_agent_dispatch(lease)
+        || lease.ending_retained_at.is_some()
+}
+
+/// STORY-1843 C2: a lease whose end was refused to keep its tree's mail is
+/// shown as `ending-retained`, not by its process liveness: it is neither
+/// active work nor cleaned up.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn is_ending_retained(lease: &SessionLease) -> bool {
+    lease.ending_retained_at.is_some()
 }
 
 // The actual listing and its tests share the default/--all selection boundary.
@@ -2479,6 +2505,9 @@ pub(crate) fn leases_json_rows(
                 "pid": pid,
                 // trace:BUG-2197 | ai:claude
                 "owner_unknown": lease_owner_unknown(l, *pid),
+                // trace:STORY-1843 | ai:claude
+                "ending_retained_at": l.ending_retained_at.map(|t| t.to_rfc3339()),
+                "ending_retained_reason": l.ending_retained_reason,
                 "drain": lease_drain_xref(&l.scope, drain),
             })
         })
@@ -2808,6 +2837,12 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         );
         let label = format!("{} {}", state.glyph(), state.label());
         let colored = match state {
+            _ if is_ending_retained(l) => format!(
+                "{} ending-retained",
+                crate::glyph(crate::glyphs::Glyph::Warning)
+            )
+            .yellow()
+            .bold(),
             LeaseState::Live => label.green(),
             LeaseState::Dormant => label.cyan(),
             LeaseState::Stale => label.yellow(),
@@ -2835,6 +2870,20 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
                     " ".repeat(15)
                 )
                 .dimmed()
+            );
+        }
+        // trace:STORY-1843 | ai:claude
+        if is_ending_retained(l) {
+            println!(
+                "{}",
+                format!(
+                    "{}! session end refused: {} — the tree, lease and claim are kept; retry `aida session end`",
+                    " ".repeat(15),
+                    l.ending_retained_reason
+                        .as_deref()
+                        .unwrap_or("its mail could not be retained")
+                )
+                .yellow()
             );
         }
         // STORY-301: annotate the lease the orchestrator is currently driving.
@@ -3064,11 +3113,31 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
             );
             false
         };
-        return match crate::seat_clone::destroy(
+        // The clone's mail is retired first, as for a worktree: a refusal
+        // takes the recovery-ownership ending (grant revoked, lease stamped
+        // ending-retained) and keeps the clone. trace:STORY-1843 | ai:claude
+        let retirement = match crate::mail_retention::retire_tree(
+            project_root,
+            &lease.worktree_path,
+            true,
+            "lease cleanup",
+        ) {
+            Ok(retirement) => retirement,
+            Err(refusal) => {
+                crate::mail_retention::keep_ending_retained(
+                    &lease_path(project_root, &lease.id),
+                    &refusal,
+                );
+                return kept(crate::mail_retention::refusal_lines(&refusal).join("; "));
+            }
+        };
+        return match crate::seat_clone::destroy_retained(
             project_root,
             &lease.worktree_path,
             crate::seat_clone::DestroyMode::SalvageUnshipped,
             None,
+            &[],
+            retirement,
         ) {
             Ok(crate::seat_clone::Destroyed::Removed { salvage }) => {
                 if let Some(patch) = salvage {
@@ -3077,7 +3146,19 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
                 crate::session_reap::release_lease_files(project_root, &lease.id);
                 true
             }
-            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => kept(reason),
+            Ok(crate::seat_clone::Destroyed::Kept {
+                reason, retention, ..
+            }) => {
+                // R3-F1: a refusal after the retirement committed keeps the
+                // lease for recovery ownership, stamped. trace:STORY-1843 | ai:claude
+                if let Some(refusal) = &retention {
+                    crate::mail_retention::keep_ending_retained(
+                        &lease_path(project_root, &lease.id),
+                        refusal,
+                    );
+                }
+                kept(reason)
+            }
             Err(error) => kept(format!("{error:#}")),
         };
     }
@@ -3087,6 +3168,34 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // BUG-56's pattern in `session_end`.
     let lease_file_via_symlink = lease_path(project_root, &lease.id);
     let canonical_lease = lease_file_via_symlink.canonicalize().ok();
+
+    // Retire the tree's mail before anything that ends the session. A
+    // refusal keeps the tree, lease and manifest; the grant is still revoked.
+    // trace:STORY-1843 | ai:claude
+    let retirement = match crate::mail_retention::retire_tree(
+        project_root,
+        &lease.worktree_path,
+        false,
+        "lease cleanup",
+    ) {
+        Ok(retirement) => retirement,
+        Err(refusal) => {
+            crate::mail_retention::keep_ending_retained(
+                canonical_lease
+                    .as_deref()
+                    .unwrap_or(&lease_file_via_symlink),
+                &refusal,
+            );
+            for line in crate::mail_retention::refusal_lines(&refusal) {
+                eprintln!(
+                    "  {} kept session {}: {line}",
+                    "Warning:".yellow().bold(),
+                    &lease.id[..lease.id.len().min(8)],
+                );
+            }
+            return false;
+        }
+    };
 
     // Aggregate the session's activity log into project-level role activity
     // before we delete the log — same ordering as `session_end`.
@@ -3118,10 +3227,67 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         }
     }
 
-    // Lease file first — once gone the session no longer counts as active.
+    // `git worktree remove --force` — `--force` because the dirty-tree
+    // refusal in `session_end` is gated by interactive prompts; an
+    // escalation cleanup never had a chance to commit, so we just remove.
+    // The retired source completes, or reopens if the removal failed.
+    // R3-F1: the lease, manifest and activity log go only once the guarded
+    // removal succeeded, so a refusal after the retirement committed keeps
+    // them for recovery ownership. trace:STORY-1843 | ai:claude
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    crate::mail_retention::before_guarded_removal();
+    let had_retirement = retirement.is_some();
+    let removed = aida_core::mailbox_lifecycle::guard::remove_worktree_with(
+        project_root,
+        &lease.worktree_path,
+        true,
+        retirement,
+    );
+    if let Err(e) = &removed {
+        // R4-F1: a retired tree whose removal failed for any reason keeps its
+        // lease, manifest and activity log, as a late refusal does.
+        // trace:STORY-1843 | ai:claude
+        let failed = (crate::mail_retention::retention_refusal(e).is_none() && had_retirement)
+            .then(|| {
+                crate::mail_retention::failed_step_refusal(
+                    &lease.worktree_path,
+                    format!("the worktree could not be removed: {e:#}"),
+                )
+            });
+        if let Some(refusal) = crate::mail_retention::retention_refusal(e).or(failed.as_ref()) {
+            #[cfg(unix)]
+            if let Err(err) =
+                crate::worktree_gc::link_worktree_runtime_state(project_root, &lease.worktree_path)
+            {
+                eprintln!("  warning: the worktree's runtime links could not be restored: {err}");
+            }
+            crate::mail_retention::keep_ending_retained(lease_target, refusal);
+            let lines = if failed.is_some() {
+                crate::mail_retention::failed_step_lines(refusal, "aida session end")
+            } else {
+                crate::mail_retention::late_refusal_lines(refusal, "aida session end")
+            };
+            for line in lines.into_iter().filter(|l| !l.is_empty()) {
+                eprintln!(
+                    "  {} kept session {}: {line}",
+                    "Warning:".yellow().bold(),
+                    &lease.id[..lease.id.len().min(8)],
+                );
+            }
+            return false;
+        }
+        // R3-F2: never a raw `git worktree remove`; a tree with no mail
+        // source of its own is ended as before.
+        eprintln!(
+            "  {} could not remove worktree {} ({e:#}); it was left in place",
+            "Warning:".yellow().bold(),
+            lease.worktree_path.display(),
+        );
+    }
+
+    // Then the lease file — once gone the session no longer counts as active.
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
@@ -3138,31 +3304,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         let _ = std::fs::remove_file(&activity_target);
     }
 
-    // `git worktree remove --force` — `--force` because the dirty-tree
-    // refusal in `session_end` is gated by interactive prompts; an
-    // escalation cleanup never had a chance to commit, so we just remove.
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args([
-            "worktree",
-            "remove",
-            "--force",
-            "--", // trace:BUG-1622 | ai:claude
-            lease.worktree_path.to_str().unwrap_or_default(),
-        ])
-        .output();
-    let removed = matches!(&res, Ok(o) if o.status.success());
-    if !removed {
-        eprintln!(
-            "  {} could not remove worktree {} — remove manually with \
-             `git worktree remove --force {}`",
-            "Warning:".yellow().bold(),
-            lease.worktree_path.display(),
-            lease.worktree_path.display(),
-        );
-    }
-    removed
+    removed.is_ok()
 }
 
 /// TASK-358: on a triage that takes a spec out of `NeedsAttention`, find any

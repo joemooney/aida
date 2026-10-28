@@ -443,6 +443,8 @@ mod integrate_checkout;
 mod integrate_view;
 mod intent;
 mod internal_cmd;
+// Retire a tree's mail before it is removed or reused. trace:STORY-1843 | ai:claude
+mod mail_retention;
 mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1843 | ai:claude

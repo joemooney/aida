@@ -191,6 +191,40 @@ fn lease_clone_root(body: &str) -> Option<PathBuf> {
     (root.is_absolute() && root.parent().is_some()).then_some(root)
 }
 
+/// The main checkout a writer inside the seat clone at `clone_root` binds its
+/// mail source to: the marker's `main`, trusted only when the clone's `.git`
+/// is a real directory, its alternates borrow that main's objects, and a
+/// `clone` lease in that main names this root (the agreement the CLI's
+/// `seat_clone::main_for` requires). `None` when any of it disagrees.
+// trace:STORY-1843 | ai:claude
+pub fn clone_writer_main(clone_root: &Path) -> Option<PathBuf> {
+    #[derive(serde::Deserialize)]
+    struct Marker {
+        main: PathBuf,
+    }
+    let clone_root = clone_root.canonicalize().ok()?;
+    if !has_real_git_dir(&clone_root) {
+        return None;
+    }
+    let marker: Marker =
+        toml::from_str(&read_regular_file(&clone_root.join(MARKER_RELATIVE))?).ok()?;
+    let main = marker.main.canonicalize().ok()?;
+    if !is_real_dir(&main.join(".git")) || main.starts_with(&clone_root) {
+        return None;
+    }
+    let alternates = read_regular_file(&clone_root.join(".git/objects/info/alternates"))?;
+    let first = alternates.lines().map(str::trim).find(|l| !l.is_empty())?;
+    if Path::new(first).canonicalize().ok()?
+        != main.join(".git").join("objects").canonicalize().ok()?
+    {
+        return None;
+    }
+    clone_lease_roots(&main)
+        .iter()
+        .any(|root| root.canonicalize().is_ok_and(|r| r == clone_root))
+        .then_some(main)
+}
+
 /// The nearest ancestor of `start` (itself included) named `aida-seat-*` or
 /// holding a marker entry of any type.
 fn clone_by_name_or_marker(start: &Path) -> Option<PathBuf> {

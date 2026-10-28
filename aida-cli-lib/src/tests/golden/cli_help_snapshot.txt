@@ -4480,6 +4480,7 @@ Usage: aida mailbox [OPTIONS] <COMMAND>
 Commands:
   wake-snapshot  Read bounded unread message IDs without bodies or acknowledgement
   migrate        Preview legacy mailbox reconciliation before recipient migration
+  retention      Mail retention: check whether worktree mail can be retired safely
   latency        Show mailbox read latency for the active identity (or an explicit recipient)
   send           Send a message to another agent, or `--broadcast` to all
   inbox          Show your inbox: mail addressed to this session's own inboxes (its handle or user,
@@ -4557,6 +4558,59 @@ Options:
 
       --json
           Print the reconciliation report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox retention
+Mail retention: check whether worktree mail can be retired safely
+
+Usage: aida mailbox retention [OPTIONS] <COMMAND>
+
+Commands:
+  activate  Report whether every AIDA process on this machine that can write mail takes a write
+            permit, and record that it does. A worktree whose mailbox holds mail is kept on removal
+            or reset until that is recorded. Recording runs only for a human operator at an
+            interactive terminal, and only when the report shows every running mail writer taking a
+            permit
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox retention activate
+Report whether every AIDA process on this machine that can write mail takes a write permit, and
+record that it does. A worktree whose mailbox holds mail is kept on removal or reset until that is
+recorded. Recording runs only for a human operator at an interactive terminal, and only when the
+report shows every running mail writer taking a permit
+
+Usage: aida mailbox retention activate [OPTIONS]
+
+Options:
+      --dry-run
+          Report only; record nothing
+
+      --json
+          Print the report as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -29258,6 +29312,59 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Print the reconciliation report as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "retention"
+    ],
+    "about": "Mail retention: check whether worktree mail can be retired safely",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "retention",
+      "activate"
+    ],
+    "about": "Report whether every AIDA process on this machine that can write mail takes a write permit, and record that it does. A worktree whose mailbox holds mail is kept on removal or reset until that is recorded. Recording runs only for a human operator at an interactive terminal, and only when the report shows every running mail writer taking a permit",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report only; record nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the report as JSON"
       }
     ],
     "hidden": false

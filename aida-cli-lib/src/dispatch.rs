@@ -2440,17 +2440,35 @@ pub(crate) fn prepare_lane_worktree(
     };
 
     if wt_path.exists() {
-        let out = aida_core::git_ops::host_git_command(wt_path)
-            .args(["checkout", "-B", branch, &resolved_start])
-            .output()
-            .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))?;
-        if !out.status.success() {
-            bail!(
-                "git checkout -B {branch} {resolved_start} in {} failed: {}",
-                wt_path.display(),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
+        // Reuse: retire the previous occupant's mail so the next one never
+        // sees it; a refusal keeps the tree as it is. trace:STORY-1843 | ai:claude
+        let retirement =
+            aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse")
+                .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
+        // The quiet re-check runs right before the checkout. trace:STORY-1843 | ai:claude
+        let checkout = || {
+            aida_core::git_ops::host_git_command(wt_path)
+                .args(["checkout", "-B", branch, &resolved_start])
+                .output()
+                .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))
+                .and_then(|out| {
+                    if out.status.success() {
+                        Ok(())
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "git checkout -B {branch} {resolved_start} in {} failed: {}",
+                            wt_path.display(),
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ))
+                    }
+                })
+        };
+        aida_core::mailbox_lifecycle::guard::remove_retired(
+            wt_path,
+            retirement,
+            checkout,
+            aida_core::mailbox_lifecycle::guard::Retirement::complete_reuse,
+        )?;
     } else {
         let out = aida_core::git_ops::host_git_command(main_worktree)
             .args(["worktree", "add", "-B", branch])

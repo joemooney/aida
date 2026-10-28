@@ -44,6 +44,8 @@ fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
         // trace:TASK-1518 | ai:codex — preserve this fixture's uninterrupted lease.
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     }

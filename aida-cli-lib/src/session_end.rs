@@ -1653,90 +1653,64 @@ pub(crate) fn session_end(
         }
     }
 
-    if let Some(work) = &session_end_unshipped_work {
-        record_session_end_unshipped_work(&project_root, work);
+    // STORY-1843 C2: retire the tree's mail BEFORE anything that ends the
+    // session (punt record, role activity merge, grant, lease delete). A
+    // refusal ends nothing: the lease (stamped ending-retained), claim,
+    // manifest and tree stay, the runtime links are put back, and only the
+    // child grant is revoked. The BUG-1988 cleanup tail does not run.
+    // trace:STORY-1843 | ai:claude
+    let mut retirement = None;
+    if tears_down_worktree {
+        match crate::mail_retention::retire_tree(
+            &project_root,
+            &target.worktree_path,
+            is_clone,
+            "session end",
+        ) {
+            Ok(retired) => retirement = retired,
+            Err(refusal) => {
+                #[cfg(unix)]
+                if !is_clone {
+                    if let Err(err) = crate::worktree_gc::link_worktree_runtime_state(
+                        &project_root,
+                        &target.worktree_path,
+                    ) {
+                        eprintln!(
+                            "warning: the worktree's runtime links could not be restored: {err}"
+                        );
+                    }
+                }
+                crate::mail_retention::keep_ending_retained(
+                    canonical_lease
+                        .as_deref()
+                        .unwrap_or(&lease_file_via_symlink),
+                    &refusal,
+                );
+                anyhow::bail!(
+                    "{}\n\nThe session was NOT ended: its lease is kept (marked ending-retained, \
+                     its grant revoked) and its worktree was not removed or reset. Retry \
+                     `aida session end` once the cause is fixed.",
+                    crate::mail_retention::refusal_lines(&refusal).join("\n")
+                );
+            }
+        }
     }
 
-    // STORY-56: flatten the session's activity log into each
-    // participating role's project-level activity stream BEFORE we delete
-    // the lease — once the lease is gone the activity file is orphaned.
-    // For each role, take the newest entry per spec_id from the session
-    // log, merge into the project role's `activity` (newest first, dedupe
-    // by spec_id, truncate to ACTIVITY_MAX) so post-session views like
-    // `aida role show` still surface what was worked on under the closed
-    // session. trace:STORY-56 | ai:claude
-    aggregate_session_activity_into_roles(&project_root, &target.id);
     let activity_file = session_activity_path(&project_root, &target.id);
     let canonical_activity = activity_file.canonicalize().ok();
     let activity_target: std::path::PathBuf = canonical_activity
         .clone()
         .unwrap_or_else(|| activity_file.clone());
 
-    // Delete the lease file BEFORE removing the worktree. The canonical
-    // path resolved above points at the parent's sessions dir, so the
-    // unlink succeeds regardless of whether the worktree's symlink chain
-    // is still intact. Reporting is honest: success printed only on
-    // actual success; missing file is a quiet no-op (already-released
-    // lease from a previous partial run is fine); other errors warn so
-    // the user can clean up manually instead of trusting a stale check mark.
-    // trace:BUG-56 | ai:claude
+    // R3-F1: the lease is resolved here but deleted only AFTER the guarded
+    // removal/return below succeeds. The final quiet check before that step
+    // can still refuse after the retirement committed (mail landed since),
+    // and recovery ownership then needs the lease, claim and manifest kept;
+    // a seat clone's writers also verify their binding through this lease.
+    // trace:STORY-1843 trace:BUG-56 | ai:claude
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
-    // BUG-2139: a headless child's grant ends with its lease.
-    // trace:BUG-2139 | ai:claude
-    crate::session::revoke_lease_child_grant(lease_target);
-    match std::fs::remove_file(lease_target) {
-        Ok(_) => eprintln!(
-            "{} lease deleted",
-            crate::glyph(crate::glyphs::Glyph::Check).green()
-        ),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // Already gone — keep quiet.
-        }
-        Err(e) => {
-            eprintln!(
-                "{} could not delete lease at {}: {} — remove manually",
-                "Warning:".yellow().bold(),
-                lease_target.display(),
-                e
-            );
-        }
-    }
-
-    // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
-    // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`
-    // alongside the session lease; without this, `session end` released the
-    // session lease but left the mcp-claim behind, so the spec kept surfacing
-    // as stale running work long after the worktree was gone (TASK-702's claim
-    // lingered 24 days). Best-effort + NotFound-quiet, mirroring the lease
-    // unlink above. trace:BUG-694 | ai:claude
-    let mcp_claim = mcp::mcp_claim_path(&leases_dir(&project_root), &target.scope);
-    match std::fs::remove_file(&mcp_claim) {
-        Ok(_) => eprintln!(
-            "{} mcp-claim reaped ({})",
-            crate::glyph(crate::glyphs::Glyph::Check).green(),
-            target.scope
-        ),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // No MCP claim for this scope — the common case. Quiet.
-        }
-        Err(e) => {
-            eprintln!(
-                "{} could not reap mcp-claim {}: {} — remove manually",
-                "Warning:".yellow().bold(),
-                mcp_claim.display(),
-                e
-            );
-        }
-    }
-
-    // BUG-1988: the mcp-claim reap deliberately stays BEFORE the remove/return
-    // (it is a local unlink, so it does not widen the recheck window): the
-    // claim file sits in the sessions dir and parses as a lease, so leaving
-    // it in place would make the BUG-483 peer check below treat this
-    // session's own MCP claim as a peer sharing the tree and skip the
-    // removal. trace:BUG-1988 | ai:claude
 
     // TASK-68: detect whether the user's shell was sitting inside the
     // worktree we're about to nuke. We capture cwd BEFORE we chdir away
@@ -1768,11 +1742,11 @@ pub(crate) fn session_end(
     // registered lease shares this same `worktree_path`. `aida agent new`
     // can land two sessions in one worktree (BUG-416); force-removing it
     // out from under the peer strands them (TASK-0396 cross-worktree
-    // fingerprint hazard + BUG-108 `(deleted)` cwd). The target lease was
-    // already deleted above, so the live lease set is peers-only, but we
-    // still filter by id for robustness. Be conservative: any peer ⇒ skip
+    // fingerprint hazard + BUG-108 `(deleted)` cwd). The target lease is
+    // still on disk here (it is deleted below, after the removal), so the
+    // peer check filters it out by id. Be conservative: any peer ⇒ skip
     // the removal entirely (leaving a worktree is recoverable; deleting a
-    // shared one is not). We still ended THIS lease/registry entry above.
+    // shared one is not). THIS lease/registry entry is still ended below.
     // trace:BUG-483 | ai:claude
     // BUG-1991: a claim the reap above could not remove is still ours.
     let remaining_leases = without_own_claim(&list_leases(&project_root), own_claim_id.as_deref());
@@ -1791,16 +1765,26 @@ pub(crate) fn session_end(
     let mut returned_to_pool = false;
     // trace:TASK-2053 | ai:claude
     let mut clone_kept = false;
+    // A retention refusal from the step below (R3-F1). trace:STORY-1843 | ai:claude
+    let mut late_refusal: Option<aida_core::mailbox_lifecycle::guard::RetentionRefusal> = None;
+    // R4-F1: a retired tree whose removal, clone destroy or pool return failed
+    // for any other reason. Its mail was reopened into the tree, so recovery
+    // ownership keeps the lease, claim and manifest exactly as for a late
+    // refusal; the retry is `aida session end`, which re-runs the guarded step.
+    // trace:STORY-1843 | ai:claude
+    let had_retirement = retirement.is_some();
+    let mut failed_step: Option<String> = None;
+    crate::mail_retention::before_guarded_removal();
     if !has_worktree {
-        // BUG-734: worktree-less lease — the record is gone; nothing on disk
-        // to remove or return. trace:BUG-734 | ai:claude
+        // BUG-734: worktree-less lease — the record is removed below; nothing
+        // on disk to remove or return. trace:BUG-734 | ai:claude
         eprintln!(
             "{} no worktree attached to this session — lease record removed; nothing on disk to clean up",
             "→".dimmed()
         );
     } else if let Some(peer) = shared_peer {
-        // Skip the removal; this lease/registry entry is already gone, so the
-        // session has ended — we just leave the shared worktree standing.
+        // Skip the removal; this lease/registry entry is removed below, so the
+        // session ends — we just leave the shared worktree standing.
         eprintln!(
             "{} worktree {} is shared by lease {} ({}) — ending this session but leaving the shared worktree in place",
             "→".dimmed(),
@@ -1816,11 +1800,13 @@ pub(crate) fn session_end(
             "run `aida worktree dismiss {}` once it is readable",
             target.worktree_path.display()
         );
-        match crate::seat_clone::destroy(
+        let left_in_place = match crate::seat_clone::destroy_retained(
             &project_root,
             &target.worktree_path,
             crate::seat_clone::DestroyMode::SalvageUnshipped,
             None,
+            &[],
+            retirement.take(),
         ) {
             Ok(crate::seat_clone::Destroyed::Removed { salvage }) => {
                 if let Some(path) = salvage {
@@ -1834,19 +1820,34 @@ pub(crate) fn session_end(
                     "{} seat clone removed and its base pin released",
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
+                None
+            }
+            Ok(crate::seat_clone::Destroyed::Kept {
+                retention: Some(refusal),
+                ..
+            }) => {
+                late_refusal = Some(refusal);
+                None
             }
             Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
-                clone_kept = true;
-                eprintln!(
-                    "{} seat clone {} left in place: {reason}; {dismiss_hint}",
-                    "Warning:".yellow().bold(),
-                    target.worktree_path.display()
-                )
+                Some(("the seat clone was kept", reason))
             }
-            Err(error) => {
+            Err(error) => Some(("the seat clone could not be removed", format!("{error:#}"))),
+        };
+        // R5-F2: only a clone that holds mail again after its retirement
+        // reopened keeps the session. A persistent cause (submodules, an
+        // unreadable state) would otherwise wedge every retried end; a clone
+        // with no mail is left in place and the session ends, as before C2.
+        // trace:STORY-1843 | ai:claude
+        if let Some((step, detail)) = left_in_place {
+            if had_retirement
+                && aida_core::mailbox_lifecycle::guard::checkout_holds_mail(&target.worktree_path)
+            {
+                failed_step = Some(format!("{step}: {detail}"));
+            } else {
                 clone_kept = true;
                 eprintln!(
-                    "{} seat clone {} left in place: {error:#}; {dismiss_hint}",
+                    "{} seat clone {} left in place: {detail}; {dismiss_hint}",
                     "Warning:".yellow().bold(),
                     target.worktree_path.display()
                 )
@@ -1856,7 +1857,11 @@ pub(crate) fn session_end(
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
     {
         // TASK-985: returning a pooled tree is the default; `--remove` opts out.
-        match aida_core::worktree_pool::return_to_pool(&project_root, &target.worktree_path) {
+        match aida_core::worktree_pool::return_to_pool_with(
+            &project_root,
+            &target.worktree_path,
+            retirement.take(),
+        ) {
             Ok(_) => {
                 returned_to_pool = true;
                 eprintln!(
@@ -1864,32 +1869,34 @@ pub(crate) fn session_end(
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
             }
-            Err(e) => eprintln!(
-                "{} could not return worktree to the pool: {} — left in place",
-                "Warning:".yellow().bold(),
-                e
-            ),
+            Err(e) => match crate::mail_retention::retention_refusal(&e) {
+                Some(refusal) => late_refusal = Some(refusal.clone()),
+                None if had_retirement => {
+                    failed_step = Some(format!(
+                        "the worktree could not be returned to the pool: {e:#}"
+                    ))
+                }
+                None => eprintln!(
+                    "{} could not return worktree to the pool: {} — left in place",
+                    "Warning:".yellow().bold(),
+                    e
+                ),
+            },
         }
     } else {
         // BUG-67: always pass `--force`. We've already gated on the dirty
         // check above, so by this point the only non-clean state is
         // gitignored (target/, .aida/cache.db, etc.) — which git still
         // refuses to remove without `--force`. trace:BUG-67 | ai:claude
-        let res = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args([
-                "worktree",
-                "remove",
-                "--force",
-                "--", // trace:BUG-1622 | ai:claude
-                target.worktree_path.to_str().unwrap_or_default(),
-            ])
-            .output();
-        match res {
-            Ok(o) if o.status.success() => {
-                let _ = std::io::stderr().write_all(&o.stdout);
-                let _ = std::io::stderr().write_all(&o.stderr);
+        // The retired source completes, or reopens if the removal failed.
+        // trace:STORY-1843 | ai:claude
+        match aida_core::mailbox_lifecycle::guard::remove_worktree_with(
+            &project_root,
+            &target.worktree_path,
+            true,
+            retirement.take(),
+        ) {
+            Ok(()) => {
                 eprintln!(
                     "{} worktree removed",
                     crate::glyph(crate::glyphs::Glyph::Check).green()
@@ -1898,22 +1905,138 @@ pub(crate) fn session_end(
                     remove_session_cargo_target_dir(path, &target.worktree_path);
                 }
             }
-            Ok(o) => {
-                let _ = std::io::stderr().write_all(&o.stdout);
-                let _ = std::io::stderr().write_all(&o.stderr);
-                eprintln!(
-                    "{} `git worktree remove` failed; you may need to run it manually with --force",
-                    "Warning:".yellow().bold()
-                );
-            }
-            Err(_) => {
-                eprintln!(
-                    "{} `git worktree remove` failed to spawn; you may need to run it manually",
-                    "Warning:".yellow().bold()
-                );
-            }
+            Err(e) => match crate::mail_retention::retention_refusal(&e) {
+                Some(refusal) => late_refusal = Some(refusal.clone()),
+                None if had_retirement => {
+                    failed_step = Some(format!("the worktree could not be removed: {e:#}"))
+                }
+                // R3-F2: never a raw `git worktree remove --force`, which
+                // would delete mail with no fence; a tree with no mail source
+                // of its own is ended as before.
+                None => eprintln!(
+                    "{} the worktree could not be removed ({e:#}); it was left in place. \
+                     Retry `aida session end` once the cause is fixed",
+                    "Warning:".yellow().bold(),
+                ),
+            },
         }
     }
+    // A retirement no branch consumed (the tree was left in place) reopens.
+    // trace:STORY-1843 | ai:claude
+    crate::mail_retention::reopen_quietly(retirement);
+    // R3-F1: the final quiet check refused after the retirement committed:
+    // mail landed in the tree since (a late writer, a hook, a clone writer).
+    // The tree is kept, its mail reopened, and the session does NOT end: the
+    // lease (stamped ending-retained, grant revoked), claim and manifest stay
+    // for recovery ownership, and nothing below runs.
+    // trace:STORY-1843 | ai:claude
+    let kept = match (late_refusal, failed_step) {
+        (Some(refusal), _) => Some((
+            crate::mail_retention::late_refusal_lines(&refusal, "aida session end"),
+            refusal,
+        )),
+        (None, Some(failure)) => {
+            let refusal =
+                crate::mail_retention::failed_step_refusal(&target.worktree_path, failure);
+            Some((
+                crate::mail_retention::failed_step_lines(&refusal, "aida session end"),
+                refusal,
+            ))
+        }
+        (None, None) => None,
+    };
+    if let Some((lines, refusal)) = kept {
+        #[cfg(unix)]
+        if !is_clone {
+            if let Err(err) = crate::worktree_gc::link_worktree_runtime_state(
+                &project_root,
+                &target.worktree_path,
+            ) {
+                eprintln!("warning: the worktree's runtime links could not be restored: {err}");
+            }
+        }
+        crate::mail_retention::keep_ending_retained(lease_target, &refusal);
+        anyhow::bail!("{}", lines.join("\n"));
+    }
+
+    // R4-F2: the punt record and the role activity merge run only once the
+    // session really ends, after every refusal above: a kept session never
+    // claims it ended, and a retried end appends no second record.
+    // trace:STORY-1843 | ai:claude
+    if let Some(work) = &session_end_unshipped_work {
+        record_session_end_unshipped_work(&project_root, work);
+    }
+
+    // STORY-56: flatten the session's activity log into each
+    // participating role's project-level activity stream BEFORE we delete
+    // the lease — once the lease is gone the activity file is orphaned.
+    // For each role, take the newest entry per spec_id from the session
+    // log, merge into the project role's `activity` (newest first, dedupe
+    // by spec_id, truncate to ACTIVITY_MAX) so post-session views like
+    // `aida role show` still surface what was worked on under the closed
+    // session. trace:STORY-56 | ai:claude
+    aggregate_session_activity_into_roles(&project_root, &target.id);
+
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
+
+    // Delete the lease file now that the tree is removed, returned or kept
+    // for a reason that is not a retention refusal. The canonical path
+    // resolved above points at the parent's sessions dir, so the unlink
+    // succeeds although the worktree (and its symlink chain) is gone.
+    // Reporting is honest: success printed only on actual success; missing
+    // file is a quiet no-op (already-released lease from a previous partial
+    // run is fine); other errors warn so the user can clean up manually
+    // instead of trusting a stale check mark.
+    // trace:BUG-56 | ai:claude
+    match std::fs::remove_file(lease_target) {
+        Ok(_) => eprintln!(
+            "{} lease deleted",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Already gone — keep quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not delete lease at {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                lease_target.display(),
+                e
+            );
+        }
+    }
+
+    // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
+    // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`
+    // alongside the session lease; without this, `session end` released the
+    // session lease but left the mcp-claim behind, so the spec kept surfacing
+    // as stale running work long after the worktree was gone (TASK-702's claim
+    // lingered 24 days). Best-effort + NotFound-quiet, mirroring the lease
+    // unlink above. trace:BUG-694 | ai:claude
+    // It runs after the removal, so the BUG-483 peer check above sees this
+    // session's own MCP claim; `without_own_claim` (BUG-1991) excludes it.
+    let mcp_claim = mcp::mcp_claim_path(&leases_dir(&project_root), &target.scope);
+    match std::fs::remove_file(&mcp_claim) {
+        Ok(_) => eprintln!(
+            "{} mcp-claim reaped ({})",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            target.scope
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // No MCP claim for this scope — the common case. Quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not reap mcp-claim {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                mcp_claim.display(),
+                e
+            );
+        }
+    }
+
     // BUG-1988: the steps below used to run between the final holder recheck
     // and the remove/return above. They are moved here so that window holds
     // only local filesystem steps and the salvage diff: `release_claim` in

@@ -353,14 +353,10 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
         // clean and unlocked and refuses otherwise — a second guard on top of
         // our predicate. On refusal we SKIP (never force) and report.
         // trace:BUG-614 | ai:claude
-        let res = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args(["worktree", "remove"])
-            .arg(path)
-            .output();
-        match res {
-            Ok(o) if o.status.success() => {
+        // The tree's mail is retired first; a refused retirement keeps it.
+        // trace:STORY-1843 | ai:claude
+        match crate::mail_retention::remove_worktree(&project_root, path, false, "worktree gc") {
+            Ok(()) => {
                 removed += 1;
                 println!(
                     "  {} removed {}",
@@ -368,23 +364,12 @@ pub(crate) fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
                     path.display()
                 );
             }
-            Ok(o) => {
-                skipped += 1;
-                let err = String::from_utf8_lossy(&o.stderr);
-                println!(
-                    "  {} git refused to remove {} — kept (not forced): {}",
-                    "skip".yellow(),
-                    path.display(),
-                    err.trim()
-                );
-            }
             Err(e) => {
                 skipped += 1;
                 println!(
-                    "  {} could not spawn git for {} — kept: {}",
+                    "  {} {} was not removed — kept (not forced): {e:#}",
                     "skip".yellow(),
                     path.display(),
-                    e
                 );
             }
         }
