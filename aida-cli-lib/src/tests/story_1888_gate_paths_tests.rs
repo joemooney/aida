@@ -1969,18 +1969,19 @@ fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
-/// [`root_module_mounts`] over a parsed source, each mount with whether it
-/// may be left out of non-test builds. That fails closed: only a mount with
-/// no `cfg`, or none but `cfg(not(test))`, counts as compiled outside tests,
-/// so `cfg(any(test))`, `cfg(all(test))` or `cfg(unix)` all count as
-/// possibly test-only.
+/// [`root_module_mounts`] over a parsed source, each mount with every
+/// outer attribute on it but doc comments. Any such attribute can change
+/// where, or whether, rustc loads the module (`cfg`, `cfg_attr(not(test),
+/// cfg(any()))`, `path`, `macro_use`, ...), so an allowlisted mount carries
+/// none: there is no per-attribute reading to get wrong.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
-fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<(Vec<String>, bool)> {
-    let gated = |attrs: &[syn::Attribute]| {
-        attrs.iter().any(|a| {
-            a.path().is_ident("cfg")
-                && !matches!(&a.meta, syn::Meta::List(l) if l.tokens.to_string() == "not (test)")
-        })
+fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<(Vec<String>, Vec<String>)> {
+    let attrs = |attrs: &[syn::Attribute]| -> Vec<String> {
+        attrs
+            .iter()
+            .filter(|a| !a.path().is_ident("doc"))
+            .map(attr_text)
+            .collect()
     };
     let mods = |out_of_line: bool| {
         file.items.iter().filter_map(move |item| match item {
@@ -1994,19 +1995,84 @@ fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<(Vec<String>, bool
         .zip(mods(true))
         .map(|(m, item)| {
             let candidates = m.candidates.into_iter().map(|(c, _)| c).collect();
-            (candidates, m.test || gated(&item.attrs))
+            (candidates, attrs(&item.attrs))
         })
-        .chain(mods(false).map(|_| (vec!["<inline>".to_string()], false)))
+        .chain(mods(false).map(|item| (vec!["<inline>".to_string()], attrs(&item.attrs))))
         .collect()
 }
 
-/// Whether the crate-root mounts of `name` are all a plain `mod name;` and
-/// at least one is compiled outside tests. A `#[cfg(test)]`-only mount
-/// leaves the non-test `crate::name` to something unscanned.
+/// An attribute as written, enough to name it in a refusal.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
-fn mounts_plainly(found: &[(Vec<String>, bool)], name: &str) -> bool {
+fn attr_text(a: &syn::Attribute) -> String {
+    let path = a
+        .path()
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    match &a.meta {
+        syn::Meta::Path(_) => format!("#[{path}]"),
+        syn::Meta::List(l) => format!("#[{path}({})]", l.tokens),
+        syn::Meta::NameValue(_) => format!("#[{path} = ..]"),
+    }
+}
+
+/// Why the crate-root mounts of `name` are not exactly one bare
+/// `mod name;` loading `name.rs` or `name/mod.rs`, or `None` when they are.
+/// Fails closed: a missing mount, a second mount, an inline body, a
+/// `#[path]` target or any attribute but a doc comment is refused.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn mount_not_bare(found: &[(Vec<String>, Vec<String>)], name: &str) -> Option<String> {
     let plain = [format!("{name}.rs"), format!("{name}/mod.rs")];
-    found.iter().all(|(c, _)| *c == plain) && found.iter().any(|(_, test)| !test)
+    match found {
+        [] => Some(format!("no top-level `mod {name};`")),
+        [(_, attrs)] if !attrs.is_empty() => Some(format!(
+            "`mod {name};` carries {}; only doc comments are allowed",
+            attrs.join(" ")
+        )),
+        [(candidates, _)] if *candidates != plain => {
+            Some(format!("`mod {name}` loads {candidates:?}, not {plain:?}"))
+        }
+        [_] => None,
+        _ => Some(format!("{} mounts of `{name}`: {found:?}", found.len())),
+    }
+}
+
+/// The names a crate-root source binds besides its modules: each `use`
+/// leaf or rename (a `self` leaf binds its parent) and each `extern crate`
+/// (under its alias when renamed). A root binding of an allowlisted name
+/// could stand in for its mount if a future cfg gap dropped the `mod`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn root_bindings(file: &syn::File) -> Vec<String> {
+    fn tree(prefix: Option<&syn::Ident>, t: &syn::UseTree, out: &mut Vec<String>) {
+        match t {
+            syn::UseTree::Path(p) => tree(Some(&p.ident), &p.tree, out),
+            syn::UseTree::Name(n) if n.ident == "self" => {
+                out.extend(prefix.map(|p| p.to_string()));
+            }
+            syn::UseTree::Name(n) => out.push(n.ident.to_string()),
+            syn::UseTree::Rename(r) => out.push(r.rename.to_string()),
+            syn::UseTree::Group(g) => g.items.iter().for_each(|i| tree(prefix, i, out)),
+            syn::UseTree::Glob(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    for item in &file.items {
+        match item {
+            syn::Item::Use(u) => tree(None, &u.tree, &mut out),
+            syn::Item::ExternCrate(e) => out.push(
+                e.rename
+                    .as_ref()
+                    .map_or(&e.ident, |(_, alias)| alias)
+                    .to_string(),
+            ),
+            _ => {}
+        }
+    }
+    out.into_iter()
+        .map(|n| n.trim_start_matches("r#").to_string())
+        .collect()
 }
 
 /// What a crate-root source puts in the textual macro scope of every
@@ -2949,18 +3015,29 @@ fn crate_root_mounts_the_gate_plainly_and_hides_no_macros() {
         .collect();
 
     // `gate` and `dispatch` are scanned as `gate/` and `dispatch.rs`, so the
-    // root mounts them from there: no `#[path]`, no inline body, and not
-    // only under `cfg(test)`.
+    // root mounts each from there as a bare `mod name;` and binds the name
+    // no other way.
     for name in GATE_DISPATCH_ROOT_ALLOWLIST {
-        let found: Vec<(Vec<String>, bool)> = roots
+        let found: Vec<(Vec<String>, Vec<String>)> = roots
             .iter()
             .flat_map(|(_, parsed)| root_module_mounts_in(parsed, name))
             .collect();
+        if let Some(why) = mount_not_bare(&found, name) {
+            panic!(
+                "the crate root must mount allowlisted `{name}` as one bare \
+                 `mod {name};` (doc comments only) loading {name}.rs or \
+                 {name}/mod.rs: {why}"
+            );
+        }
+        let binders: Vec<&String> = roots
+            .iter()
+            .filter(|(_, parsed)| root_bindings(parsed).iter().any(|b| b == name))
+            .map(|(root, _)| *root)
+            .collect();
         assert!(
-            mounts_plainly(&found, name),
-            "the crate root must mount allowlisted `{name}` as a plain, \
-             non-test `mod {name};` loading {name}.rs or {name}/mod.rs, \
-             found (candidates, cfg(test)) {found:?}"
+            binders.is_empty(),
+            "{binders:?} bind allowlisted `{name}` at the crate root by `use` or \
+             `extern crate`; only its bare `mod {name};` may"
         );
     }
 
@@ -3044,30 +3121,62 @@ fn root_module_mount_detection_sees_redirected_modules() {
             "`{src}` mounts forge from another file unseen: {found:?}"
         );
     }
-    // Only a plain mount compiled outside tests counts.
+    // Only one bare `mod forge;` counts; every other attribute fails closed
+    // and is named.
     // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
-    let plainly =
-        |src: &str| mounts_plainly(&root_module_mounts_in(&parse_source(src), "forge"), "forge");
+    let not_bare =
+        |src: &str| mount_not_bare(&root_module_mounts_in(&parse_source(src), "forge"), "forge");
     for src in [
         "mod forge;",
-        "#[cfg(not(test))]\nmod forge;",
-        "#[cfg(test)]\nmod forge;\nmod forge;",
+        "pub(crate) mod forge;",
+        "/// The forge.\nmod forge;",
+        "#[doc = \"The forge.\"]\n#[doc(hidden)]\nmod forge;",
     ] {
-        assert!(plainly(src), "{src}");
+        assert_eq!(not_bare(src), None, "{src}");
     }
-    for src in [
-        "#[cfg(test)]\nmod forge;",
-        "#[cfg(test)]\npub(crate) mod forge;",
-        "#[cfg(test)]\nmod forge;\n#[path = \"forge2.rs\"] mod forge;",
-        "",
-        // Fail closed: any other cfg may leave the non-test build without it.
-        "#[cfg(any(test))]\nmod forge;",
-        "#[cfg(all(test))]\nmod forge;",
-        "#[cfg(any(test, test))]\nmod forge;",
-        "#[cfg(unix)]\nmod forge;",
-        "#![cfg(test)]\nmod forge;",
+    for (src, named) in [
+        ("#[cfg_attr(not(test), cfg(any()))]\nmod forge;", "cfg_attr"),
+        (
+            "#[cfg_attr(all(), path = \"forge.rs\")]\nmod forge;",
+            "cfg_attr",
+        ),
+        ("#[cfg(test)]\nmod forge;", "#[cfg(test)]"),
+        ("#[cfg(not(test))]\nmod forge;", "#[cfg(not (test))]"),
+        ("#[cfg(unix)]\nmod forge;", "#[cfg(unix)]"),
+        ("#[allow(dead_code)]\nmod forge;", "#[allow(dead_code)]"),
+        ("#[macro_use]\nmod forge;", "#[macro_use]"),
+        (
+            "/// Doc.\n#[cfg_attr(test, doc = \"x\")]\nmod forge;",
+            "cfg_attr",
+        ),
+        ("#[path = \"forge.rs\"]\nmod forge;", "#[path = ..]"),
+        ("#[cfg(test)]\nmod forge;\nmod forge;", "2 mounts"),
+        ("mod forge { pub fn f() {} }", "<inline>"),
+        ("#![cfg(test)]\nmod forge;", "no top-level"),
+        ("", "no top-level"),
     ] {
-        assert!(!plainly(src), "{src}");
+        let why = not_bare(src).unwrap_or_else(|| panic!("`{src}` passed as bare"));
+        assert!(why.contains(named), "`{src}`: {why}");
+    }
+    // Any root `use` or `extern crate` that binds the name is seen.
+    for src in [
+        "use crate::shadow as forge;",
+        "pub(crate) use crate::x::{y, forge};",
+        "use crate::x::forge::{self};",
+        "extern crate forge;",
+        "extern crate core as forge;",
+        "use crate::x::r#forge;",
+    ] {
+        assert!(
+            root_bindings(&parse_source(src)).contains(&"forge".to_string()),
+            "{src}"
+        );
+    }
+    for src in ["use crate::forge::f;", "use crate::forge::*;", "mod forge;"] {
+        assert!(
+            !root_bindings(&parse_source(src)).contains(&"forge".to_string()),
+            "{src}"
+        );
     }
     // Nested or absent: nothing mounts `crate::forge`.
     for src in [
