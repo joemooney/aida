@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T16:12:18.578568481Z
+modified_at: 2026-10-28T17:21:07.198148660Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1840,6 +1840,12 @@ history:
   session_id: 01a1833b55a5
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a18387-a898-7563-9c70-38dcd2cc4382
+  author: joe
+  timestamp: 2026-10-28T17:21:08.248150084Z
+  session_id: 01a18384e49c
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
@@ -1853,7 +1859,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'D1 round 3: the round-2 code fixes are in and every D1 ruling criterion (F1-F5) has code plus a traced test, but CI is red at head: lib-0 fails (third head in a row) and rest newly fails, while both are green on main and other branches. There is also one F2 fail-open path.'
+  detail: 'Round 4: r3 fixes present, but the new F2 fail-closed gate hides all legacy role and agent-type mail whenever any source errors, including missing or prunable worktrees (9 on the live repo now); CI pending at head'
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-28T16:12:18.578568481Z
+  shelved_at: 2026-10-28T17:21:07.198148660Z
