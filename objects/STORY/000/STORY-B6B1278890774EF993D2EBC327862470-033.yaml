@@ -1,0 +1,19 @@
+id: 01a1802d-2136-77b2-894b-8bbc5ca9934b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-033
+title: 'Review PR-2998: [AI:claude] fix(trace): brace scanner follow-ups (TASK-b6b1278890774ef993d2ebc327862470-016, TASK-b6b1278890774ef993d2ebc327862470-017, TASK-b6b1278890774ef993d2ebc327862470-018)'
+description: Hand-filed review story.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T01:43:23.702490481Z
+modified_at: 2026-10-28T01:43:23.702490481Z
+req_type: Story
+filed_at:
+  code_sha: a35bc40b8929a58c0555c853821d5e25b91d5fe6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a35bc40b89
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
