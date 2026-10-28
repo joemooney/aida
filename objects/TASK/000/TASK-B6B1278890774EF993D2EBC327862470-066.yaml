@@ -1,0 +1,30 @@
+id: 01a183ca-cadb-7723-b8ec-4ff9ea439baf
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-066
+title: 'note: acceptance names leases::is_session_lease_file; implementation uses new l…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  note: acceptance names leases::is_session_lease_file; implementation uses new leases::is_lease_companion so dotted lock-*.toml and mcp-claim.* entries stay readable (justified in 08c719342ae). Intent (companions/staging skipped, real lease fails closed) is met.
+
+  PR: #3052
+  Reviewed sha: 08c719342aed2fd370e8e1a92e49966b40da638b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T18:34:27.931210287Z
+modified_at: 2026-10-28T18:34:27.931210287Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-012
+- finding-hash:1ceb400d
+- from-review:PR-3052
+- kind:carried-forward
+filed_at:
+  code_sha: aecc4311ee4f4f5b648ef2a0f07b9fdcf3d52004
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f3cda469f7b
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968

@@ -82492,5 +82492,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6425
+- id: 01a183ca-d244-7060-8527-c367ba3adaf8
+  target_id: 01a183ca-cadb-7723-b8ec-4ff9ea439baf
+  author: aida
+  node_id: '1'
+  lamport: 6426
+  timestamp: 2026-10-28T18:34:29.828511723Z
+  kind: !Create
+    title: 'note: acceptance names leases::is_session_lease_file; implementation uses new l…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      note: acceptance names leases::is_session_lease_file; implementation uses new leases::is_lease_companion so dotted lock-*.toml and mcp-claim.* entries stay readable (justified in 08c719342ae). Intent (companions/staging skipped, real lease fails closed) is met.
+
+      PR: #3052
+      Reviewed sha: 08c719342aed2fd370e8e1a92e49966b40da638b
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6426
 node_id: '1'
