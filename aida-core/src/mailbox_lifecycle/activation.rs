@@ -178,8 +178,9 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
             exe_id: (m.dev(), m.ino()),
             digest: None,
         });
-    let (mut processes, incomplete) = scan_proc(Path::new("/proc"), std::process::id());
-    let me = me.map(|me| fill_digests(&mut processes, me, Path::new("/proc/self/exe")));
+    let proc = Path::new("/proc");
+    let (mut processes, incomplete) = scan_proc(proc, std::process::id());
+    let me = me.map(|me| fill_digests(proc, &mut processes, me, &proc.join("self/exe")));
     let state = super::resolve_source(project_root)
         .ok()
         .flatten()
@@ -245,17 +246,19 @@ pub(crate) fn record_at(
 }
 
 /// Digest the executables of writer hosts that run a file other than this
-/// process's `me` (read from `self_exe`), each distinct file once, so a
+/// process's `me` (read from `self_exe`; writers from `proc`), each distinct
+/// file once, so a
 /// byte-identical copy at another path is recognised as this build. Nothing
 /// is read when every writer shares this process's file. An unreadable file
 /// keeps no digest, which [`classify`] reports as unidentified (fail closed).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn fill_digests(
+    proc: &Path,
     processes: &mut [ProcessView],
     mut me: BuildIdentity,
     self_exe: &Path,
 ) -> BuildIdentity {
-    let mut digests: HashMap<(u64, u64), Option<String>> = HashMap::new();
+    let mut digests: HashMap<(u64, u64), String> = HashMap::new();
     for p in processes.iter_mut() {
         let Some(id) = p.exe_id else { continue };
         let writer = p.exe.as_deref().is_some_and(|exe| {
@@ -271,13 +274,11 @@ fn fill_digests(
         if me.digest.is_none() {
             me.digest = digest_file(self_exe);
         }
-        let exe_link = Path::new("/proc").join(p.pid.to_string()).join("exe");
+        let exe_link = proc.join(p.pid.to_string()).join("exe");
         p.exe_digest = match digests.get(&id) {
-            Some(digest) => digest.clone(),
-            None => match digest_writer(&exe_link, id) {
-                Some(digest) => digests.entry(id).or_insert(digest).clone(),
-                None => None,
-            },
+            Some(digest) => Some(digest.clone()),
+            None => digest_writer(&exe_link, id)
+                .map(|digest| digests.entry(id).or_insert(digest).clone()),
         };
     }
     me
@@ -286,18 +287,16 @@ fn fill_digests(
 /// Digest the writer executable at `exe_link` only when the opened file is
 /// still the `expected` (dev, ino) the scan recorded. A pid reused between
 /// the scan and this read names another file: that is `None` (unknown, fail
-/// closed), never a digest attributed to — or cached for — `expected`. The
-/// outer `None` means "do not cache"; an unreadable file is `Some(None)`.
+/// closed), never a digest attributed to `expected`. Only a digest is
+/// cached, so an unreadable host never hides a later readable one.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-050 | ai:claude
-fn digest_writer(exe_link: &Path, expected: (u64, u64)) -> Option<Option<String>> {
-    let Ok(mut file) = std::fs::File::open(exe_link) else {
-        return Some(None);
-    };
+fn digest_writer(exe_link: &Path, expected: (u64, u64)) -> Option<String> {
+    let mut file = std::fs::File::open(exe_link).ok()?;
     let meta = file.metadata().ok()?;
     if (meta.dev(), meta.ino()) != expected {
         return None;
     }
-    Some(hash_reader(&mut file))
+    hash_reader(&mut file)
 }
 
 /// SHA-256 of a file's bytes, hex-encoded, or `None` when it cannot be read.
@@ -523,11 +522,24 @@ mod tests {
         ];
         let self_exe = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(self_exe.path(), b"build-a").unwrap();
-        let me = fill_digests(&mut procs, me, self_exe.path());
+        let empty_proc = tempfile::tempdir().unwrap();
+        let me = fill_digests(empty_proc.path(), &mut procs, me, self_exe.path());
         assert_eq!(me.digest, digest_file(self_exe.path()));
         assert_eq!(procs[0].exe_digest, None, "this process's own file");
         assert_eq!(procs[1].exe_digest, None, "no such process: unreadable");
         assert_eq!(procs[2].exe_digest, None, "not a writer");
+    }
+
+    /// A `/proc` whose `<pid>/exe` links to a small writer binary, with its
+    /// (dev, ino) as the scan would record it.
+    fn proc_with_writer(pid: u32) -> (tempfile::TempDir, PathBuf, (u64, u64)) {
+        let proc = tempfile::tempdir().unwrap();
+        let exe = proc.path().join("aida");
+        std::fs::write(&exe, b"build-a").unwrap();
+        std::fs::create_dir(proc.path().join(pid.to_string())).unwrap();
+        std::os::unix::fs::symlink(&exe, proc.path().join(pid.to_string()).join("exe")).unwrap();
+        let m = std::fs::metadata(&exe).unwrap();
+        (proc, exe, (m.dev(), m.ino()))
     }
 
     /// A readable foreign writer is digested once per exe_id and the cache
@@ -535,35 +547,35 @@ mod tests {
     /// recorded file (reused) is unknown and leaves nothing cached.
     // trace:TASK-b6b1278890774ef993d2ebc327862470-050 | ai:claude
     // trace:TASK-b6b1278890774ef993d2ebc327862470-051 | ai:claude
-    #[cfg(target_os = "linux")]
     #[test]
     fn fill_digests_verifies_the_exe_identity_and_reuses_the_cache() {
-        let self_exe = Path::new("/proc/self/exe");
-        let m = std::fs::metadata(self_exe).unwrap();
-        let real = (m.dev(), m.ino());
-        let wrong = (real.0, real.1.wrapping_add(1));
-        let pid = std::process::id();
-        let self_copy = tempfile::NamedTempFile::new().unwrap();
-
+        let (proc, exe, id) = proc_with_writer(5);
+        let wrong = (id.0, id.1.wrapping_add(1));
         let mut procs = vec![
-            view(pid, "/x/aida", wrong),
-            view(pid, "/x/aida", real),
-            view(u32::MAX, "/x/aida", real),
+            view(5, "/x/aida", wrong),
+            view(5, "/x/aida", id),
+            view(6, "/x/aida", id),
         ];
-        fill_digests(&mut procs, ident((1, 10)), self_copy.path());
-        assert_eq!(procs[0].exe_digest, None, "a reused pid: unknown");
-        let expected = digest_file(self_exe);
+        fill_digests(proc.path(), &mut procs, ident((1, 10)), &exe);
+        let expected = digest_file(&exe);
         assert!(expected.is_some());
+        assert_eq!(procs[0].exe_digest, None, "a reused pid: unknown");
         assert_eq!(procs[1].exe_digest, expected);
-        assert_eq!(
-            procs[2].exe_digest, expected,
-            "unreadable, served from cache"
-        );
+        assert_eq!(procs[2].exe_digest, expected, "pid 6 unreadable: cached");
+        let link = proc.path().join("5/exe");
+        assert_eq!(digest_writer(&link, wrong), None);
+    }
 
-        // A mismatch is "do not cache", unlike an unreadable file.
-        assert_eq!(digest_writer(self_exe, wrong), None, "never cached");
-        assert_eq!(digest_writer(Path::new("/proc/0/exe"), real), Some(None));
-        assert_eq!(digest_writer(self_exe, real), Some(expected));
+    /// Only a digest is cached: an unreadable first host on an exe_id does
+    /// not leave a readable second host on it unidentified.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-050 | ai:claude
+    #[test]
+    fn an_unreadable_host_does_not_hide_a_readable_one_on_the_same_id() {
+        let (proc, exe, id) = proc_with_writer(5);
+        let mut procs = vec![view(6, "/x/aida", id), view(5, "/x/aida", id)];
+        fill_digests(proc.path(), &mut procs, ident((1, 10)), &exe);
+        assert_eq!(procs[0].exe_digest, None, "pid 6 unreadable");
+        assert_eq!(procs[1].exe_digest, digest_file(&exe));
     }
 
     fn fake_proc(self_pid: u32, ns: &str) -> tempfile::TempDir {
