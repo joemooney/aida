@@ -21,3 +21,10 @@
   added_at: 2026-10-27T22:25:52.932636949Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1802d-2136-77b2-894b-8bbc5ca9934b
+  position: 55000
+  added_by: joe
+  added_at: 2026-10-28T01:43:45.255948869Z
+  for_role: reviewer
+  added_by_machine: imac
