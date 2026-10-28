@@ -9,7 +9,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T14:26:05.535197008Z
-modified_at: 2026-10-28T15:02:58.061576549Z
+modified_at: 2026-10-28T15:22:51.225082427Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -48,6 +48,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1831b-612b-7673-a093-47087acfb222
+  author: joe
+  timestamp: 2026-10-28T15:22:52.075896983Z
+  session_id: 01a183187157
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
   branch: main
@@ -60,7 +66,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Nonce design is right and most acceptance is met (per-creation key, legacy key kept, malformed/symlinked nonce fails closed, injected-inode test), but the reuse path opens a fence-bypass window, a missing nonce is never fail-closed as the acceptance requires, and one mailbox creator still makes nonce-less dirs.
+  detail: 'Round 2: all six round-1 findings fixed and every acceptance criterion has a test, but rename_noreplace has no fallback, so a mailbox can no longer be created on filesystems without RENAME_NOREPLACE (a regression). PR CI was still queued at the head.'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-011 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-28T15:02:58.061576549Z
+  shelved_at: 2026-10-28T15:22:51.225082427Z
