@@ -1,0 +1,29 @@
+id: 01a1828f-1b4a-7a03-aad3-cf9f83166dfa
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-048
+title: (cosmetic, non-blocking) The PR body still names only -014/-015 and never menti…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-023, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (cosmetic, non-blocking) The PR body still names only -014/-015 and never mentions TASK-...-023 (bare gate/dispatch mounts, doc-comments-only ruling). Its local evidence ('46 passed') predates the current head.
+
+  PR: #2999
+  Reviewed sha: 3c459a93c7fdb6392faea0e8322bf5790d56628d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T12:49:39.146039424Z
+modified_at: 2026-10-28T12:49:39.146039424Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-023
+- finding-hash:ea26e9e6
+- from-review:PR-2999
+- kind:carried-forward
+filed_at:
+  code_sha: 6488c041c27974682823d2b09c7f680aee94b777
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a1fa3e7cbc9
+  vendor: claude
