@@ -607,6 +607,7 @@ fn scaffolding_writes_in_a_plain_clone_with_a_non_orphan_store() {
 /// clone, and runs as before in a plain one.
 #[test]
 fn product_writing_init_modes_refuse_in_an_adopted_clone() {
+    // trace:STORY-1741.ac752fd0 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let (top, _) = adopted(&tmp.path().join("p"), SETTINGS);
     for flag in ["--minimal", "--centralized", "--sibling", "--store-path"] {

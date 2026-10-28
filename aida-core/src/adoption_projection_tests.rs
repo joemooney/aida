@@ -127,6 +127,8 @@ fn load_at(top: &Path, commit: &str) -> Adoption {
 
 #[test]
 fn a_projection_feeds_readers_without_touching_the_product_tree() {
+    // trace:STORY-1741.acd975e1 | ai:claude
+    // trace:STORY-1741.ac6b1be3 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     // A pre-dirty product tree stays exactly as dirty.
@@ -177,6 +179,7 @@ fn a_projection_feeds_readers_without_touching_the_product_tree() {
 
 #[test]
 fn a_refresh_is_deterministic_and_replaces_only_owned_outputs() {
+    // trace:STORY-1741.acd975e1 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     publish(&top, V1);
@@ -797,6 +800,7 @@ fn a_refusal_without_adoption_evidence_is_not_adopted() {
 
 #[test]
 fn uninstall_removes_owned_outputs_keeps_edits_and_leaves_the_product_alone() {
+    // trace:STORY-1741.ac7e5256 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     std::fs::write(top.join("README.md"), "pre-dirty\n").unwrap();
@@ -835,6 +839,7 @@ fn uninstall_removes_owned_outputs_keeps_edits_and_leaves_the_product_alone() {
 
 #[test]
 fn uninstall_after_an_interrupted_refresh_removes_pending_outputs() {
+    // trace:STORY-1741.ac7e5256 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     publish(&top, V1);
@@ -858,6 +863,7 @@ fn uninstall_after_an_interrupted_refresh_removes_pending_outputs() {
 
 #[test]
 fn bootstrap_projects_only_the_selected_revision() {
+    // trace:STORY-1741.ac591cd7 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     let old = publish(&top, V1);
@@ -886,6 +892,7 @@ fn bootstrap_projects_only_the_selected_revision() {
 
 #[test]
 fn bootstrap_refuses_when_a_local_config_keeps_the_settings_out() {
+    // trace:STORY-1741.ac591cd7 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     let commit = publish(&top, V1);
@@ -897,6 +904,7 @@ fn bootstrap_refuses_when_a_local_config_keeps_the_settings_out() {
 
 #[test]
 fn bootstrap_refuses_a_clone_with_no_plane() {
+    // trace:STORY-1741.ac591cd7 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     let err = bootstrap(&top, &"a".repeat(40)).unwrap_err().to_string();

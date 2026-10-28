@@ -63,6 +63,7 @@ hook = "rm -rf /"
 
 #[test]
 fn the_inventory_classifies_tracked_scaffolding_and_writes_nothing() {
+    // trace:STORY-1741.ac676d62 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = repo(&tmp.path().join("p"));
     let expected = generated(&top);
@@ -251,14 +252,17 @@ fn product_files_are_not_inventoried() {
 
 #[test]
 fn byte_identical_generated_guidance_is_removable() {
+    // trace:STORY-1741.ac676d62 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = repo(&tmp.path().join("p"));
     let expected = generated(&top);
+    // A docs/agents guide nothing else in this tree cites.
     let (guide, body) = expected
         .iter()
-        .find(|(path, _)| plane_guidance(path))
-        .expect("this build generates .aida guidance");
+        .find(|(path, _)| path.starts_with("docs/agents/") && plane_guidance(path))
+        .expect("this build generates docs/agents guidance");
     put(&top, guide, body);
+    put(&top, "src/main.rs", "fn main() {}\n");
     git(&top, &["add", "-A"]);
     git(&top, &["commit", "-q", "-m", "guidance"]);
 
@@ -266,4 +270,56 @@ fn byte_identical_generated_guidance_is_removable() {
     let entry = inv.entries.iter().find(|e| &e.path == guide).unwrap();
     assert_eq!(entry.class, Class::Generated);
     assert_eq!(inv.removable().collect::<Vec<_>>(), vec![guide.as_str()]);
+}
+
+#[test]
+fn generated_discipline_readme_is_never_removable() {
+    // trace:STORY-1741.ac676d62 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = repo(&tmp.path().join("p"));
+    let readme = ".aida/discipline/README.md";
+    // The pack AIDA ships, byte for byte, whichever route writes it.
+    let body = generated(&top)
+        .get(readme)
+        .cloned()
+        .or_else(|| {
+            crate::templates::EMBEDDED_TEMPLATES
+                .get(readme)
+                .map(|b| b.to_string())
+        })
+        .expect("this build ships the discipline README");
+    put(&top, readme, &body);
+    git(&top, &["add", "-A"]);
+    git(&top, &["commit", "-q", "-m", "discipline"]);
+
+    let inv = inventory(&top).unwrap();
+    let entry = inv.entries.iter().find(|e| e.path == readme).unwrap();
+    assert_ne!(entry.proposal, Proposal::Remove, "{}", entry.detail);
+    assert_eq!(inv.removable().count(), 0, "{:?}", inv.entries);
+}
+
+#[test]
+fn generated_guidance_a_kept_file_cites_is_not_removable() {
+    // trace:STORY-1741.ac676d62 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = repo(&tmp.path().join("p"));
+    let expected = generated(&top);
+    let (guide, body) = expected
+        .iter()
+        .find(|(path, _)| path.starts_with("docs/agents/") && plane_guidance(path))
+        .expect("this build generates docs/agents guidance");
+    put(&top, guide, body);
+    put(
+        &top,
+        "AGENTS.md",
+        &format!("# Agents\nRead `{guide}` first.\n"),
+    );
+    git(&top, &["add", "-A"]);
+    git(&top, &["commit", "-q", "-m", "cited guidance"]);
+
+    let inv = inventory(&top).unwrap();
+    let entry = inv.entries.iter().find(|e| &e.path == guide).unwrap();
+    assert_eq!(entry.proposal, Proposal::Keep);
+    assert!(entry.detail.contains("AGENTS.md"), "{}", entry.detail);
+    assert_eq!(inv.removable().count(), 0, "{:?}", inv.entries);
 }

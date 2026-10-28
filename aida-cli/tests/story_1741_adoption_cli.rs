@@ -125,6 +125,8 @@ fn product_snapshot(top: &Path) -> String {
 
 #[test]
 fn init_in_a_fresh_clone_projects_the_plane_and_writes_no_product_file() {
+    // trace:STORY-1741.ac752fd0 | ai:claude
+    // trace:STORY-1741.ac6b1be3 | ai:claude
     let tmp = tempfile::TempDir::new().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     let (home, clone, plane) = cloned_adopted_project(&base);
@@ -170,6 +172,9 @@ fn init_in_a_fresh_clone_projects_the_plane_and_writes_no_product_file() {
 
 #[test]
 fn inventory_uninstall_and_ci_bootstrap_leave_the_product_untouched() {
+    // trace:STORY-1741.ac676d62 | ai:claude
+    // trace:STORY-1741.ac7e5256 | ai:claude
+    // trace:STORY-1741.ac591cd7 | ai:claude
     let tmp = tempfile::TempDir::new().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     let (home, clone, plane) = cloned_adopted_project(&base);
@@ -227,6 +232,7 @@ fn inventory_uninstall_and_ci_bootstrap_leave_the_product_untouched() {
 
 #[test]
 fn init_refuses_and_writes_nothing_when_the_plane_cannot_be_read() {
+    // trace:STORY-1741.ac1ebcce | ai:claude
     use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::TempDir::new().unwrap();
     let base = tmp.path().canonicalize().unwrap();
@@ -245,4 +251,25 @@ fn init_refuses_and_writes_nothing_when_the_plane_cannot_be_read() {
     );
     assert_eq!(product_snapshot(&clone), before);
     assert!(!clone.join(".aida").exists() && !clone.join(".aida-store").exists());
+}
+
+#[test]
+fn product_writing_init_modes_refuse_through_the_cli_in_an_adopted_clone() {
+    // trace:STORY-1741.ac752fd0 | ai:claude
+    let tmp = tempfile::TempDir::new().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let (home, clone, _) = cloned_adopted_project(&base);
+    let before = product_snapshot(&clone);
+
+    for flag in ["--minimal", "--centralized"] {
+        let out = aida(&home, &clone, &["init", flag]);
+        assert!(!out.status.success(), "{flag}: {}", text(&out));
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains(&format!("aida init {flag}")),
+            "{flag}: {}",
+            text(&out)
+        );
+        assert_eq!(product_snapshot(&clone), before, "{flag}: {}", text(&out));
+        assert!(!clone.join(".aida").exists(), "{flag}: {}", text(&out));
+    }
 }

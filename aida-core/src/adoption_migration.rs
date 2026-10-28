@@ -8,10 +8,13 @@
 //! object. Removal stays a separate, reviewed product change; the inventory
 //! only proposes it. A file is proposed for removal only when it is
 //! non-executable guidance the plane can deliver to agent launches
-//! (generated Markdown such as `docs/agents/*.md`) and its committed bytes
-//! are exactly what this build generates, so an AIDA header alone (copied
-//! or spoofed) never makes a file removable. Hooks, commands, skills, harness settings and the
-//! Codex/Antigravity artifacts are executable configuration: the plane never
+//! (generated Markdown outside the harness directories and the discipline
+//! pack, such as `docs/agents/*.md`), its committed bytes are exactly what
+//! this build generates (so an AIDA header alone, copied or spoofed, never
+//! makes a file removable), and no tracked file that stays cites it. The
+//! `.aida/discipline/` pack is always kept: the scaffolded `CLAUDE.md`
+//! imports it and AIDA commands and skills read it. Hooks, commands,
+//! skills, harness settings and the Codex/Antigravity artifacts are executable configuration: the plane never
 //! carries them (they stay under config-trust), so they are always kept.
 //! Authored or mixed instruction files (`AGENTS.md`, `CLAUDE.md`), seed
 //! starters such as `README.md`, and `.gitignore` are product content. A
@@ -174,11 +177,82 @@ pub fn inventory(project_root: &Path) -> Result<Inventory> {
         };
         entries.push(entry);
     }
+    keep_cited_guidance(&root, &commit, &mut entries)?;
     Ok(Inventory {
         commit: Some(commit),
         entries,
         config,
     })
+}
+
+/// Remove is only for guidance no kept file references: a removal candidate
+/// cited by any tracked file that stays (by full path, or by bare name from
+/// its own directory) is kept. Repeats until stable, since a newly kept
+/// candidate's own citations then count.
+fn keep_cited_guidance(root: &Path, commit: &str, entries: &mut [Entry]) -> Result<()> {
+    loop {
+        let removable: Vec<String> = entries
+            .iter()
+            .filter(|e| e.proposal == Proposal::Remove)
+            .map(|e| e.path.clone())
+            .collect();
+        let mut changed = false;
+        for path in &removable {
+            let citer = citing_files(root, commit, path)?
+                .into_iter()
+                .find(|f| f != path && !removable.contains(f));
+            if let Some(citer) = citer {
+                let e = entries
+                    .iter_mut()
+                    .find(|e| &e.path == path)
+                    .expect("listed");
+                e.proposal = Proposal::Keep;
+                e.detail = format!(
+                    "generated guidance cited by {citer}, which stays; removing it would \
+                     break that reference"
+                );
+                changed = true;
+            }
+        }
+        if !changed {
+            return Ok(());
+        }
+    }
+}
+
+/// Tracked files at `commit` that mention `path`, or its bare name from
+/// within its own directory.
+fn citing_files(root: &Path, commit: &str, path: &str) -> Result<Vec<String>> {
+    let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+    let mut out = grep_files(root, commit, path, None)?;
+    out.extend(grep_files(
+        root,
+        commit,
+        name,
+        Some(dir).filter(|d| !d.is_empty()),
+    )?);
+    Ok(out)
+}
+
+fn grep_files(root: &Path, commit: &str, needle: &str, dir: Option<&str>) -> Result<Vec<String>> {
+    let mut cmd = crate::git_ops::host_git_command(root);
+    cmd.args(["grep", "-l", "-I", "-F", "-e", needle, commit, "--"]);
+    cmd.arg(dir.map_or_else(|| ".".to_string(), |d| format!("{d}/")));
+    let out = cmd.output().context("Failed to run git grep")?;
+    // Exit 1 is "no match"; anything else is a failure.
+    match out.status.code() {
+        Some(0) => {}
+        Some(1) => return Ok(Vec::new()),
+        _ => bail!(
+            "git grep failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+    }
+    let prefix = format!("{commit}:");
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.strip_prefix(&prefix).unwrap_or(l).to_string())
+        .collect())
 }
 
 /// This build's scaffold output, by path. Read-only: the preview only
@@ -244,6 +318,14 @@ const EXECUTABLE_KEPT: &str = "executable harness configuration (hook, command, 
      harness settings); the adoption plane carries only inert settings and guidance, so it \
      stays on the product branch under config-trust";
 
+/// The discipline pack. The scaffolded `CLAUDE.md` imports its README and
+/// AIDA commands and skills cite its files, often by bare name or by
+/// directory, so the whole pack is kept rather than computed per file.
+const DISCIPLINE: &str = ".aida/discipline/";
+
+const DISCIPLINE_KEPT: &str = "discipline pack: the CLAUDE.md import and AIDA commands and skills \
+     read these files directly, so it stays on the product branch";
+
 /// `None` when the file carries nothing of AIDA's (a product-only
 /// `.gitignore`).
 fn classify(path: &str, text: &str, expected: Option<&str>) -> Option<Entry> {
@@ -297,6 +379,9 @@ fn classify(path: &str, text: &str, expected: Option<&str>) -> Option<Entry> {
         return entry(class, Proposal::Keep, EXECUTABLE_KEPT);
     }
     match class {
+        Class::Generated if path.starts_with(DISCIPLINE) => {
+            entry(class, Proposal::Keep, DISCIPLINE_KEPT)
+        }
         Class::Generated if plane_guidance(path) => entry(
             class,
             Proposal::Remove,

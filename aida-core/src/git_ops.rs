@@ -10029,6 +10029,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn story_1741_uninstall_removes_only_owned_shipped_hooks() {
+        // trace:STORY-1741.ac7e5256 | ai:claude
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("p");
         home_fixture_init(&repo).unwrap();
