@@ -13,7 +13,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T09:49:20.342181567Z
-modified_at: 2026-10-28T12:16:48.794974794Z
+modified_at: 2026-10-28T13:58:57.682987095Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-008
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a18250-3dfe-7911-8d40-2f3a05c3f86e
   created_at: 2026-10-28T11:41:16.000720002Z
   created_by: joe
+comments:
+- id: 01a182ce-8f92-7251-b5de-4369b093f8bf
+  author: joe
+  content: 'ADVISOR 2026-10-28 07:00 MST, performance-guard trip performance-guard@2026-10-28T13:42:37Z (show: 40/178 over 1000 ms, worst 34821 ms). Ruling: this is NOT a new regression, and the budget is unchanged (ADR-53 forbids tuning it to a measurement). Breakdown by binary over the 24h window (~/.aida/usage.jsonl): the pre-fix build e33bf32234 (04:30-07:25Z) accounts for 15 of the 40 over-budget calls and the 34821/30965/10932 ms outliers (lookup ~7.5-8 s and linkage.content ~3 s, the fallback scan this task fixed; plus one notice=10.9 s under the 04:46Z advisor burst). Post-fix builds a1fa3e7cbc and 7335d1de32: 6 calls, max 620 ms. The pre-fix samples age out of the window by ~2026-10-29 07:25Z, and the gate should then go green. If it trips again with post-#3027 samples over the ceiling, file a bug against the notice phase.'
+  created_at: 2026-10-28T13:58:57.682987095Z
+  modified_at: 2026-10-28T13:58:57.682987095Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a18241-bc9f-7c22-9335-865207df9b64
   author: joe
