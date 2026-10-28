@@ -1199,7 +1199,7 @@ fn sanitize_id(id: &str) -> String {
 pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Result<()> {
     let dir = local_mailbox_dir(project_root);
     mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
-    std::fs::create_dir_all(&dir)?;
+    ensure_local_mailbox_dir(project_root)?;
     let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
     let json = serde_json::to_string_pretty(msg)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -1218,6 +1218,18 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
         let _ = permit.complete();
     }
     Ok(())
+}
+
+/// Create the LOCAL mailbox directory if it is absent. Where mail retention
+/// runs, a new directory is born with its creation nonce, so a mailbox
+/// recreated on a reused inode is a new source.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub fn ensure_local_mailbox_dir(project_root: &Path) -> std::io::Result<()> {
+    let dir = local_mailbox_dir(project_root);
+    #[cfg(all(unix, feature = "native"))]
+    return crate::mailbox_lifecycle::create_mailbox_dir(&dir);
+    #[cfg(not(all(unix, feature = "native")))]
+    std::fs::create_dir_all(&dir)
 }
 
 /// Read every message in the LOCAL layer (`<project_root>/.aida/mailbox/`).

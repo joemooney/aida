@@ -793,3 +793,113 @@ fn an_activation_recorded_by_another_build_is_not_honoured() {
         }
     );
 }
+
+// ── BUG-011: reuse never shows the mailbox without its nonce ────────────────
+
+/// A late entry that lands once the mailbox is in its tombstone sends the
+/// directory back with the same nonce bytes, so the reopened source is the
+/// one it resolves to.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_late_entry_in_the_tombstone_returns_the_mailbox_with_its_nonce() {
+    let (_dir, wt) = repo_with_worktree();
+    seed_mail(&wt);
+    activate(&wt);
+    let old = source(&wt);
+    let id = mailbox(&wt).join(SOURCE_ID_FILE);
+    let nonce = std::fs::read(&id).unwrap();
+    let retirement = retire_checkout(&wt, "test").unwrap().expect("retired");
+    super::guard::AFTER_TOMB.with(|h| {
+        *h.borrow_mut() = Some(Box::new(|tomb: &Path| {
+            assert!(
+                tomb.join(SOURCE_ID_FILE).is_file(),
+                "the nonce moved with it"
+            );
+            std::fs::write(tomb.join("late.json"), "{}").unwrap();
+        }))
+    });
+    let err = retirement.complete_reuse().unwrap_err();
+    assert!(err.to_string().contains("not empty"), "{err}");
+    assert_eq!(
+        std::fs::read(&id).unwrap(),
+        nonce,
+        "the nonce bytes survive"
+    );
+    assert!(files_under(&mailbox(&wt)).contains(&"late.json".to_string()));
+    assert_eq!(source(&wt).key, old.key);
+    assert_open(&wt);
+}
+
+/// A late entry whose path was taken by a new mailbox meanwhile is never
+/// merged into it: the error names both paths and the entry stays put.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_late_entry_never_merges_into_a_new_mailbox() {
+    let (_dir, wt) = repo_with_worktree();
+    seed_mail(&wt);
+    activate(&wt);
+    let retirement = retire_checkout(&wt, "test").unwrap().expect("retired");
+    let tomb_seen = std::rc::Rc::new(std::cell::RefCell::new(PathBuf::new()));
+    let seen = tomb_seen.clone();
+    let path = mailbox(&wt);
+    super::guard::AFTER_TOMB.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |tomb: &Path| {
+            std::fs::write(tomb.join("late.json"), "{}").unwrap();
+            create_mailbox_dir(&path).unwrap();
+            *seen.borrow_mut() = tomb.to_path_buf();
+        }))
+    });
+    let err = retirement.complete_reuse().unwrap_err();
+    let tomb = tomb_seen.borrow().clone();
+    let text = err.to_string();
+    assert!(text.contains(&tomb.display().to_string()), "{text}");
+    assert!(text.contains(&mailbox(&wt).display().to_string()), "{text}");
+    assert!(tomb.join("late.json").is_file(), "the late entry stays");
+    assert!(files_under(&mailbox(&wt)).is_empty(), "nothing merged");
+}
+
+/// A mailbox whose checkout has carried a nonce and lost it fails closed.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_lost_nonce_in_the_nonce_era_fails_closed() {
+    let (_dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("m1")).unwrap();
+    resolve_source(&wt).unwrap().expect("anchored");
+    std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    let err = resolve_source(&wt).unwrap_err();
+    assert!(matches!(err, LifecycleError::Unsafe { .. }), "{err}");
+}
+
+/// Without the era marker a nonce-less mailbox is legacy.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn a_nonce_less_mailbox_before_the_era_is_legacy() {
+    let (_dir, wt) = repo_with_worktree();
+    std::fs::create_dir_all(mailbox(&wt)).unwrap();
+    let anchored = resolve_source(&wt).unwrap().expect("anchored");
+    assert!(!anchored.anchor.join(NONCE_ERA_DIR).exists());
+}
+
+/// Without a no-replace rename the reuse is refused, never a replacing
+/// rename; the mailbox keeps its nonce and its source reopens.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+#[test]
+fn without_noreplace_the_reuse_is_refused_in_place() {
+    let (_dir, wt) = repo_with_worktree();
+    seed_mail(&wt);
+    activate(&wt);
+    let old = source(&wt);
+    let nonce = std::fs::read(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    let retirement = retire_checkout(&wt, "test").unwrap().expect("retired");
+    super::NOREPLACE_UNSUPPORTED.with(|f| f.set(true));
+    let reused = retirement.complete_reuse();
+    super::NOREPLACE_UNSUPPORTED.with(|f| f.set(false));
+    let err = reused.unwrap_err();
+    assert!(err.to_string().contains("without replacing"), "{err}");
+    assert_eq!(
+        std::fs::read(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap(),
+        nonce
+    );
+    assert_eq!(source(&wt).key, old.key);
+    assert_open(&wt);
+}
