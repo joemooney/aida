@@ -2149,9 +2149,9 @@ fn root_textual_macros_in(
 /// `include!` of one of `parts` and `thread_local!`. syn sees only the
 /// unexpanded call, so `crate::m!();` expanding to `#[path = "gate2.rs"]
 /// mod gate;` would remount an allowlisted module past
-/// [`root_module_mounts`]; its tokens need not name it, and its definition may sit in any module, so
-/// every other invocation is refused. `macro_rules!` definitions expand
-/// nothing themselves.
+/// [`root_module_mounts`]; its tokens need not name it, and its definition
+/// may sit in any module, so every other invocation is refused.
+/// `macro_rules!` definitions expand nothing themselves.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 fn root_item_macros(file: &syn::File, parts: &[String]) -> Vec<String> {
     file.items
