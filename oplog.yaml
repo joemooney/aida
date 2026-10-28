@@ -80756,5 +80756,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6284
+- id: 01a18240-1491-7d42-9463-ce25c95f3297
+  target_id: 01a18240-0d15-7df1-9c3e-8bd58d04fa9b
+  author: aida
+  node_id: '1'
+  lamport: 6285
+  timestamp: 2026-10-28T11:23:20.081047664Z
+  kind: !Create
+    title: 'cosmetic: aida-core/src/db/cached_git_backend.rs:332 — the incomplete-scan warn…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-029, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      cosmetic: aida-core/src/db/cached_git_backend.rs:332 — the incomplete-scan warning blames 'another process is updating the cache', but the fallback fires on any id_candidates error, not only lock contention.
+
+      PR: #3022
+      Reviewed sha: 8bb8dbc8df9edad1ac1db7c254780cc7070985c3
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6285
 node_id: '1'
