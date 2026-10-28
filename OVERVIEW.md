@@ -412,6 +412,9 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 - **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
 <!-- trace:TASK-1604 | ai:codex -->
 
+**Adoption without product files.** The same branch can carry an `adoption/` namespace of shared, non-executable settings and guidance. Each worktree projects one pinned revision into git-ignored `.aida/` (config, guidance and an ownership manifest), excluded through `.git/info/exclude`; config readers and `aida agent` launches consume the projection, and scaffold and config writers refuse to touch product files in an adopted clone. `aida init` in an adopted clone projects instead of scaffolding. `aida adoption` covers status, refresh, a revision-pinned CI bootstrap, a dry-run migration inventory for tracked scaffolding, and an ownership-checked uninstall. Executable configuration stays under config-trust. See [`aida adoption`](docs/cli/07-project-setup.md#aida-adoption).
+<!-- trace:STORY-1741 | ai:claude -->
+
 The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 
 Store commits run only AIDA's shipped pre-commit, commit-msg, prepare-commit-msg,

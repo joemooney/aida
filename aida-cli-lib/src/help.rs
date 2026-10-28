@@ -133,6 +133,11 @@ pub(crate) fn command_groups() -> &'static [(&'static str, &'static [(&'static s
             "Project setup & maintenance",
             &[
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
+                // trace:STORY-1741 | ai:claude
+                (
+                    "adoption",
+                    "Adopt AIDA from the shared plane without product files",
+                ),
                 ("config", "ID configuration (prefixes, formats, etc.)"),
                 ("type", "Requirement-type management"),
                 ("feature", "Feature management"),

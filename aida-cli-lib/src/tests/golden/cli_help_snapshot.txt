@@ -421,6 +421,9 @@ Commands:
   commands      List every command and subcommand as grep-able one-line rows
   skill         Stock and local skill tooling
   alias         Discoverable registry of AIDA's built-in shortcuts
+  adoption      Adopt AIDA without product-branch files: shared settings and guidance live in
+                `adoption/` on the aida-store branch and are projected into this worktree's
+                git-ignored `.aida/`
   fleet         Fleet operations over relay runs and lanes
   dispatch      Queue and inspect typed dispatch requests (`flow`, `review`, `take`, `impl`,
                 `train`) from a sandboxed advisor seat for unsandboxed execution
@@ -24723,6 +24726,135 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida adoption
+Adopt AIDA without product-branch files: shared settings and guidance live in `adoption/` on the
+aida-store branch and are projected into this worktree's git-ignored `.aida/`
+
+Usage: aida adoption [OPTIONS] <COMMAND>
+
+Commands:
+  status     Show which plane revision this worktree's projection holds
+  refresh    Project the current plane revision into this worktree
+  bootstrap  For CI and agent environments: project the plane only if it is at exactly `--revision`,
+             then verify the projection before use
+  inventory  Dry-run migration: list the AIDA files tracked on the product branch, what can move to
+             the plane, and what could be removed. Writes nothing
+  uninstall  Remove this worktree's projection and the AIDA git hooks this build installed. Keeps
+             the store, the plane and every product file
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida adoption status
+Show which plane revision this worktree's projection holds
+
+Usage: aida adoption status [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida adoption refresh
+Project the current plane revision into this worktree
+
+Usage: aida adoption refresh [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida adoption bootstrap
+For CI and agent environments: project the plane only if it is at exactly `--revision`, then verify
+the projection before use
+
+Usage: aida adoption bootstrap [OPTIONS] --revision <COMMIT>
+
+Options:
+      --revision <COMMIT>
+          The full commit id of the plane revision that was reviewed
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida adoption inventory
+Dry-run migration: list the AIDA files tracked on the product branch, what can move to the plane,
+and what could be removed. Writes nothing
+
+Usage: aida adoption inventory [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida adoption uninstall
+Remove this worktree's projection and the AIDA git hooks this build installed. Keeps the store, the
+plane and every product file
+
+Usage: aida adoption uninstall [OPTIONS]
+
+Options:
+      --dry-run
+          Show what would be removed without removing anything
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida fleet
 Fleet operations over relay runs and lanes.
 
@@ -25233,6 +25365,7 @@ Roles & sessions
   driver         Relay / drain / agent driver registry
 Project setup & maintenance
   scaffold       Scaffolding management (skills, hooks, MCP)
+  adoption       Adopt AIDA from the shared plane without product files
   config         ID configuration (prefixes, formats, etc.)
   type           Requirement-type management
   feature        Feature management
@@ -49011,6 +49144,141 @@ Working on aida itself
         "name": "project",
         "takes_value": false,
         "help": "Remove from the project store (`.aida/aliases.toml`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "adoption"
+    ],
+    "about": "Adopt AIDA without product-branch files: shared settings and guidance live in `adoption/` on the aida-store branch and are projected into this worktree's git-ignored `.aida/`",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "adoption",
+      "status"
+    ],
+    "about": "Show which plane revision this worktree's projection holds",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "adoption",
+      "refresh"
+    ],
+    "about": "Project the current plane revision into this worktree",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "adoption",
+      "bootstrap"
+    ],
+    "about": "For CI and agent environments: project the plane only if it is at exactly `--revision`, then verify the projection before use",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "revision",
+        "takes_value": true,
+        "help": "The full commit id of the plane revision that was reviewed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "adoption",
+      "inventory"
+    ],
+    "about": "Dry-run migration: list the AIDA files tracked on the product branch, what can move to the plane, and what could be removed. Writes nothing",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "adoption",
+      "uninstall"
+    ],
+    "about": "Remove this worktree's projection and the AIDA git hooks this build installed. Keeps the store, the plane and every product file",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Show what would be removed without removing anything"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
