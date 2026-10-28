@@ -4,10 +4,9 @@
 //! name more crate code than a decision kernel may. Each lists every path
 //! outside `gate/` it names today, `aida_core` paths included
 //! (TASK-b6b1278890774ef993d2ebc327862470-041), with one reason for the
-//! module. The
-//! story_1888 ratchet fails on a path missing from its list and on an entry
-//! nothing names, so a list only shrinks unless a human merges a change to
-//! this file.
+//! module. The story_1888 ratchet fails on a path missing from its list and
+//! on an entry nothing names, so a list only shrinks unless a human merges a
+//! change to this file.
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 // trace:TASK-b6b1278890774ef993d2ebc327862470-041 | ai:claude
