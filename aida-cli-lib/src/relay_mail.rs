@@ -26,8 +26,10 @@
 //! reconciliation needs no capability: it only retires a controller that is
 //! conclusively gone.
 //!
-//! Open run records live in `relay-runs/`; ended ones are archived to
-//! `relay-runs/ended/`, so only open runs count against the record budget.
+//! Live run records live in `relay-runs/`: open runs, and ended runs whose
+//! end notices are still owed. Once every notice is inserted and delivered
+//! the run is archived to `relay-runs/ended/` with its outbox, so ended runs
+//! stop counting against the record budget.
 // trace:STORY-1843 | ai:claude
 
 use crate::agent_handle::{self, HandleRequest};
@@ -56,7 +58,7 @@ const OPERATIONS: &[&str] = &["probe", "bind", "child-bind", "end", "outbox"];
 const FEATURES: &[&str] = &["gap-acceptance", "terminal-reconcile", "end-notices"];
 
 const MAX_RUN_RECORD_BYTES: u64 = 65536;
-/// Open run records read per pass. Ended runs are archived outside it.
+/// Live run records read per pass. Archived runs are outside it.
 const MAX_OPEN_RUN_RECORDS: usize = 1024;
 /// Random bytes in a run capability.
 const CAPABILITY_BYTES: usize = 32;
@@ -193,7 +195,7 @@ fn canonical_run_id(raw: &str) -> Result<String> {
     Ok(canonical)
 }
 
-/// Where ended run records are archived, outside the open-record budget.
+/// Where retired run records are archived, outside the live-record budget.
 pub(crate) fn ended_runs_dir(project_root: &Path) -> PathBuf {
     runs_dir(project_root).join("ended")
 }
@@ -217,9 +219,9 @@ fn read_run_at(path: &Path, run_id: &str) -> Result<Option<RelayRun>> {
     Ok(Some(run))
 }
 
-/// A run record, open or ended. The ended archive wins: an end is written
-/// there before the open record is removed, so a crash between the two
-/// leaves the end authoritative.
+/// A run record, live or archived. The archive wins: a run is archived
+/// before its live record is removed, so a crash between the two leaves the
+/// archived copy authoritative.
 pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<RelayRun>> {
     let run_id = canonical_run_id(run_id)?;
     if let Some(run) = read_run_at(&ended_run_path(project_root, &run_id), &run_id)? {
@@ -228,35 +230,54 @@ pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<Relay
     read_run_at(&run_path(project_root, &run_id), &run_id)
 }
 
-/// Write a run record: an open run to `relay-runs/`, an ended one to the
-/// archive, removing its open record afterwards.
-fn write_run(project_root: &Path, run: &RelayRun) -> Result<()> {
-    let dir = if run.terminal.is_some() {
-        ended_runs_dir(project_root)
+/// Write a run record in place: to the archive once the run is archived,
+/// to `relay-runs/` otherwise.
+pub(crate) fn write_run(project_root: &Path, run: &RelayRun) -> Result<()> {
+    let archived = ended_run_path(project_root, &run.run_id);
+    let path = if archived.exists() {
+        archived
     } else {
-        runs_dir(project_root)
+        run_path(project_root, &run.run_id)
     };
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("creating relay run directory {}", dir.display()))?;
-    let body = serde_json::to_string_pretty(run).context("serialising relay run")?;
-    let path = dir.join(format!("{}.json", run.run_id));
-    aida_core::write_atomic(&path, body.as_bytes())
-        .with_context(|| format!("writing relay run record {}", path.display()))?;
-    if run.terminal.is_some() {
-        let open = run_path(project_root, &run.run_id);
-        match std::fs::remove_file(&open) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                return Err(e).with_context(|| format!("removing {}", open.display()));
-            }
-        }
-    }
-    Ok(())
+    write_run_at(&path, run)
 }
 
-/// Every readable open run record, bounded in count. Only `.json` files
-/// count; the `ended/` archive and stray entries are skipped uncounted.
+fn write_run_at(path: &Path, run: &RelayRun) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("creating relay run directory {}", dir.display()))?;
+    }
+    let body = serde_json::to_string_pretty(run).context("serialising relay run")?;
+    aida_core::write_atomic(path, body.as_bytes())
+        .with_context(|| format!("writing relay run record {}", path.display()))
+}
+
+/// Move an ended run whose notices are settled out of the live records:
+/// its per-run directory (the outbox) first, then its record, then the live
+/// record is removed. Call with the namespace lock held.
+pub(crate) fn archive_run(project_root: &Path, run: &RelayRun) -> Result<()> {
+    if run.terminal.is_none() || !run.notices_settled {
+        bail!("relay run {} is not settled; it stays live", run.run_id);
+    }
+    let live_dir = runs_dir(project_root).join(&run.run_id);
+    if live_dir.is_dir() {
+        let archived_dir = ended_runs_dir(project_root).join(&run.run_id);
+        std::fs::create_dir_all(ended_runs_dir(project_root))?;
+        std::fs::rename(&live_dir, &archived_dir)
+            .with_context(|| format!("archiving {}", live_dir.display()))?;
+    }
+    write_run_at(&ended_run_path(project_root, &run.run_id), run)?;
+    let live = run_path(project_root, &run.run_id);
+    match std::fs::remove_file(&live) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("removing {}", live.display())),
+    }
+}
+
+/// Every readable live run record (open, or ended with notices owed),
+/// bounded in count. Only `.json` files count; directories (the `ended/`
+/// archive, per-run outboxes) and stray entries are skipped uncounted.
 /// Unreadable records are skipped: they own nothing, and the label they
 /// named stays governed by its handle reservation.
 fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
@@ -278,11 +299,11 @@ fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
         };
         counted += 1;
         if counted > MAX_OPEN_RUN_RECORDS {
-            bail!("open relay run budget exceeded ({MAX_OPEN_RUN_RECORDS} records)");
+            bail!("live relay run budget exceeded ({MAX_OPEN_RUN_RECORDS} records)");
         }
-        // An ended archive entry shadows a leftover open record.
-        if let Ok(Some(run)) = load_run(project_root, stem) {
-            if run.terminal.is_none() {
+        // An archived copy shadows a leftover live record.
+        if !ended_run_path(project_root, stem).exists() {
+            if let Ok(Some(run)) = load_run(project_root, stem) {
                 runs.push(run);
             }
         }

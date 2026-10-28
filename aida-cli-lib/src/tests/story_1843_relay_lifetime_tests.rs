@@ -305,6 +305,7 @@ fn synthetic_run(template: &RelayRun, ended: bool) -> RelayRun {
         reason: TerminalReason::Exit,
         at: Utc::now(),
     });
+    run.notices_settled = ended;
     run
 }
 
@@ -314,7 +315,7 @@ fn ended_runs_and_stray_entries_do_not_count_against_the_open_run_budget() {
     let (out, _lock) = bind_live(tmp.path(), "relay-a");
     let template = load_run(tmp.path(), &out.run).unwrap().unwrap();
     for _ in 0..MAX_OPEN_RUN_RECORDS + 8 {
-        write_run(tmp.path(), &synthetic_run(&template, true)).unwrap();
+        archive_run(tmp.path(), &synthetic_run(&template, true)).unwrap();
     }
     for n in 0..8 {
         std::fs::write(runs_dir(tmp.path()).join(format!("stray-{n}.tmp")), "x").unwrap();
@@ -331,7 +332,7 @@ fn ended_runs_and_stray_entries_do_not_count_against_the_open_run_budget() {
     // One more open record is over it: listing refuses, gap acceptance warns.
     write_run(tmp.path(), &synthetic_run(&template, false)).unwrap();
     let err = list_runs(tmp.path()).unwrap_err().to_string();
-    assert!(err.contains("open relay run budget"), "{err}");
+    assert!(err.contains("live relay run budget"), "{err}");
     let (accepting, warnings) = accepting_runs(tmp.path());
     assert!(accepting.is_empty());
     assert_eq!(warnings.len(), 1, "{warnings:?}");

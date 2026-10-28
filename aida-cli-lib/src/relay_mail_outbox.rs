@@ -112,7 +112,13 @@ fn outbox_key(run: &str, generation: u64, delivery: &str, intent: &str) -> Strin
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// A run's outbox: beside its live record, or in the archive once the run
+/// is archived (nothing is written there after that).
 fn outbox_dir(project_root: &Path, run_id: &str) -> PathBuf {
+    let archived = ended_runs_dir(project_root).join(run_id);
+    if archived.is_dir() {
+        return archived.join(OUTBOX_DIR);
+    }
     runs_dir(project_root).join(run_id).join(OUTBOX_DIR)
 }
 
@@ -345,6 +351,8 @@ pub(crate) struct SettleReport {
     pub(crate) partial_runs: usize,
     pub(crate) delivered: usize,
     pub(crate) pending: usize,
+    /// Settled runs moved out of the live records.
+    pub(crate) archived: usize,
 }
 
 /// Maintenance for ended runs: insert any end notice not yet inserted
@@ -372,7 +380,40 @@ pub(crate) fn settle_ended_runs(project_root: &Path) -> Result<SettleReport> {
     let delivered = deliver_pending_notices(project_root)?;
     report.delivered = delivered.delivered;
     report.pending = delivered.pending;
+    report.archived = archive_settled_runs(project_root)?;
     Ok(report)
+}
+
+/// Archive every ended run whose notices are all inserted and delivered,
+/// so it stops counting against the live-record budget. A run with a
+/// pending notice stays live and is retried by the next maintenance pass.
+fn archive_settled_runs(project_root: &Path) -> Result<usize> {
+    let mut archived = 0;
+    for run in list_runs(project_root)?
+        .into_iter()
+        .filter(|r| r.terminal.is_some() && r.notices_settled)
+    {
+        if list_entries(project_root, &run.run_id)?
+            .iter()
+            .any(OutboxEntry::pending)
+        {
+            continue;
+        }
+        let _lock = agent_handle::lock_namespace(project_root)?;
+        let Some(current) = load_run(project_root, &run.run_id)? else {
+            continue;
+        };
+        if !(current.terminal.is_some() && current.notices_settled)
+            || list_entries(project_root, &run.run_id)?
+                .iter()
+                .any(OutboxEntry::pending)
+        {
+            continue;
+        }
+        archive_run(project_root, &current)?;
+        archived += 1;
+    }
+    Ok(archived)
 }
 
 #[derive(Debug, Default, Serialize)]

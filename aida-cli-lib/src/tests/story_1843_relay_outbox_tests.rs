@@ -170,6 +170,10 @@ fn ending_a_run_tells_each_sender_once_and_never_bounces_a_bounce() {
             last_error: Some(_)
         }
     ));
+    // A run with a notice still owed stays live, outbox and all.
+    assert_eq!(report.archived, 0);
+    assert!(runs_dir(project).join(format!("{run}.json")).exists());
+    assert!(!ended_runs_dir(project).join(&run).exists());
 
     let notice = local_messages(project)
         .into_iter()
@@ -214,7 +218,13 @@ fn an_advisor_who_sent_the_mail_is_told_once() {
     reader(project, "advisor-one", "advisor");
     let (run, cap, _lock) = bind_live(project, "relay-a");
     send(project, "m1", "advisor-one", "relay-a");
-    end(project, &run, &cap, TerminalReason::Exit).unwrap();
+    let ended = end(project, &run, &cap, TerminalReason::Exit).unwrap();
+    // Every notice delivered: the run and its outbox leave the live records,
+    // and the archived outbox still reads.
+    assert_eq!(ended.notices.unwrap().archived, 1);
+    assert!(!runs_dir(project).join(format!("{run}.json")).exists());
+    assert!(!runs_dir(project).join(&run).exists());
+    assert!(ended_runs_dir(project).join(format!("{run}.json")).exists());
     let entries = outbox::list_entries(project, &run).unwrap();
     assert_eq!(entries.len(), 2);
     for e in &entries {
