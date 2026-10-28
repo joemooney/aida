@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T11:23:26.696551268Z
-modified_at: 2026-10-28T11:23:26.696551268Z
+modified_at: 2026-10-28T11:25:01.889242509Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-030
 - finding-hash:769493dd
 - from-review:PR-3022
 - kind:carried-forward
+comments:
+- id: 01a18241-a241-7ed0-8dec-a72a2c5625f3
+  author: joe
+  content: 'ADVISOR: duplicate of TASK-b6b1278890774ef993d2ebc327862470-038 (same finding carried forward twice).'
+  created_at: 2026-10-28T11:25:01.889242509Z
+  modified_at: 2026-10-28T11:25:01.889242509Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 filed_at:
   code_sha: b535e12d57703cc905424bb6875b357b5f66b4dc
   branch: main
