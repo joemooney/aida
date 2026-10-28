@@ -445,3 +445,16 @@ block_primary_commits = true
 # requires every CI lane. A test pins it to .github/workflows/ci.yml.
 [review_watch]
 required_checks = ["Build (ubuntu-latest)"]
+
+# STORY-1917: execute pending `take` and `impl` dispatch requests outside any
+# agent sandbox. `while` gates the 2-minute cadence: the tick runs (and the
+# schedule ledger is written) only while a mandate covering `dispatch` is
+# active and requests are pending, so with no dispatch mandate it never runs.
+# `review`, `flow`, and `train` remain Pending (`waiting for serve`).
+# trace:STORY-1917 | ai:agy
+[[schedule.jobs]]
+name = "dispatch-tick"
+command = "dispatch tick"
+every = "2m"
+while = "mandate.dispatch_active == true && dispatch.pending > 0"
+enabled = true
