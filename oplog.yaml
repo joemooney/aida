@@ -81023,5 +81023,32 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 6305
+- id: 01a1825b-f5dc-7db2-9f30-cac70b6f4e87
+  target_id: 01a1825b-e4a2-7500-a901-a7adc88671b3
+  author: aida
+  node_id: '1'
+  lamport: 6306
+  timestamp: 2026-10-28T11:53:47.228034801Z
+  kind: !Create
+    title: 'Review PR-3029: [AI:claude] fix(init): never ask an adopted clone the Setup style question; cover re-init (TASK-b6b1278890774ef993d2ebc327862470-035 TASK-b6b1278890774ef993d2ebc327862470-036)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/adopted-init-followups`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3029>
+      - Branch: `fix/adopted-init-followups` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-035
+      - TASK-b6b1278890774ef993d2ebc327862470-036
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3029` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6306
 node_id: '1'
