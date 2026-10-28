@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T17:47:31.166738557Z
+modified_at: 2026-10-28T19:55:13.731876310Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1858,6 +1858,12 @@ history:
   session_id: 01a1839a72dd
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a18414-c635-7b03-aba5-7d3aa2b792b7
+  author: joe
+  timestamp: 2026-10-28T19:55:16.405270786Z
+  session_id: 01a184111309
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
@@ -1871,7 +1877,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 5: the round-4 narrowing is correct for missing or prunable worktrees, a refused store and role-only keys, but F2 still fails open when the worktree inventory fails or runs over budget (reproduced). CI at head is still queued.'
+  detail: 'D2b F1/F2/F4/F6 and the #3040 follow-ups are implemented and tested, but the relay unread count treats missing or prunable worktrees as incomplete. On any repo with one (the live repo has 6), label reuse always refuses and ended runs never archive. Send-path reconcile also mutates state during the read-only migration preview. CI at the head was still running.'
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-28T17:47:31.166738557Z
+  shelved_at: 2026-10-28T19:55:13.731876310Z
