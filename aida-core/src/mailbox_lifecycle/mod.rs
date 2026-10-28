@@ -778,6 +778,10 @@ pub(crate) fn noreplace_unsupported(e: &std::io::Error) -> bool {
 
 #[cfg(test)]
 thread_local! {
+    /// [`write_source_id`] steps that fail as `EIO` while listed:
+    /// `write-temp`, `write-final`, `remove-temp`, `sync-dir`.
+    pub(crate) static SOURCE_ID_FAULTS: std::cell::RefCell<Vec<&'static str>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     /// Makes [`hard_link`] fail as on a filesystem without hard links.
     pub(crate) static LINK_UNSUPPORTED: std::cell::Cell<bool> =
         const { std::cell::Cell::new(false) };
@@ -929,14 +933,17 @@ fn write_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let warn = |what: String, e: std::io::Error| {
         eprintln!("warning: {} was written, but {what}: {e}", path.display());
     };
-    match std::fs::remove_file(&temp) {
+    match source_id_fault("remove-temp").and_then(|()| std::fs::remove_file(&temp)) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => warn(
             format!("its temp file {} was not removed", temp.display()),
             e,
         ),
         _ => {}
     }
-    let sync = |d: &Path| File::open(d).and_then(|f| f.sync_all());
+    let sync = |d: &Path| {
+        source_id_fault("sync-dir")?;
+        File::open(d).and_then(|f| f.sync_all())
+    };
     if let Err(e) = sync(dir) {
         warn(format!("{} was not synced", dir.display()), e);
     }
@@ -952,7 +959,7 @@ fn write_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// [`write_source_id`]. `temp` may be left for the caller to remove.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
 fn place_source_id(temp: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    write_new_synced(temp, bytes)?;
+    write_new_synced(temp, bytes, "write-temp")?;
     let exists = || {
         std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
@@ -965,7 +972,7 @@ fn place_source_id(temp: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(exists()),
             Err(e) if link_unsupported(&e) => {
                 let _ = std::fs::remove_file(temp);
-                write_new_synced(path, bytes)
+                write_new_synced(path, bytes, "write-final")
             }
             other => other,
         },
@@ -973,16 +980,37 @@ fn place_source_id(temp: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()
     }
 }
 
-/// Write `bytes` to a new file at `path`, mode 0600, synced.
-fn write_new_synced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+/// Write `bytes` to a new file at `path`, mode 0600, synced. A file this
+/// call created but could not fill and sync (ENOSPC, EIO) is unlinked
+/// before the error returns, so no partial file is left to be taken for a
+/// written one. `point` names the write for fault injection in tests.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-082 | ai:claude
+fn write_new_synced(path: &Path, bytes: &[u8], point: &'static str) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
         .open(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
+    let filled = source_id_fault(point)
+        .and_then(|()| file.write_all(bytes))
+        .and_then(|()| file.sync_all());
+    if filled.is_err() {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+    }
+    filled
+}
+
+/// Fail as `EIO` at `point` when a test armed it (see `SOURCE_ID_FAULTS`);
+/// always `Ok` outside tests.
+fn source_id_fault(point: &'static str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if SOURCE_ID_FAULTS.with(|f| f.borrow().contains(&point)) {
+        return Err(std::io::Error::from_raw_os_error(libc::EIO));
+    }
+    let _ = point;
+    Ok(())
 }
 
 /// [`std::fs::hard_link`], which a test can make fail as on a filesystem
