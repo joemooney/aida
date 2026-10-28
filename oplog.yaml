@@ -79872,5 +79872,32 @@ operations:
   timestamp: 2026-10-28T04:36:24.479761900Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6220
+- id: 01a180d5-0668-73d2-bc11-1ff9ce7ba15e
+  target_id: 01a180d4-e3a4-7211-af5a-14b5c9329c05
+  author: aida
+  node_id: '1'
+  lamport: 6221
+  timestamp: 2026-10-28T04:46:46.888603110Z
+  kind: !Create
+    title: Evaluate splitting aida-core (or proprietary core crate) into a private repo with public-repo GitHub Actions CI
+    description: |
+      ## Context
+      Explored architectural options for keeping a core library (`aida-core` or a dedicated proprietary crate) in a private GitHub repository while keeping the rest of AIDA (`aida-cli`, `aida-cli-lib`, `aida-tui`, `aida-server`, etc.) in a public repository that runs GitHub Actions CI.
+
+      ## Options Discussed
+      1. **Full `aida-core` Private Repo**:
+         - Checked out into `./aida-core` during public CI via `actions/checkout@v4` with a fine-grained read-only token (`AIDA_CORE_READ_TOKEN`), or referenced as a Cargo git dependency using `git config url.insteadOf`.
+         - External users cannot `cargo build` from source without private repo read access, though pre-built binaries from CI remain distributable.
+      2. **Open-Core Split**:
+         - Keep public traits/models/interfaces in public `aida-core` so external users and `--no-default-features` builds compile from source, while isolating proprietary logic in an optional private crate pulled during CI.
+
+      ## Key Constraints & Risks to Resolve
+      - **Public CI Logs**: Public repo Actions logs are world-readable; compiler error snippets or panic backtraces inside the private crate can appear in CI logs unless sensitive tests run in the private repo via `repository_dispatch`.
+      - **Fork PRs**: External fork PRs do not receive `secrets.AIDA_CORE_READ_TOKEN` on standard `pull_request` events.
+      - **Coordinated Cross-Repo Changes**: Atomic workspace PRs across `aida-core` and `aida-cli-lib` become two-repo changes unless branch-matching or staging is automated.
+      - **Git History Scrubbing**: Making the existing repo public requires `git filter-repo` or a clean snapshot push so historical `aida-core` commits are not exposed in git history.
+    req_type: Spike
+    status: Draft
+    priority: Medium
+clock: 6221
 node_id: '1'

@@ -1,0 +1,34 @@
+id: 01a180d4-e3a4-7211-af5a-14b5c9329c05
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-001
+title: Evaluate splitting aida-core (or proprietary core crate) into a private repo with public-repo GitHub Actions CI
+description: |
+  ## Context
+  Explored architectural options for keeping a core library (`aida-core` or a dedicated proprietary crate) in a private GitHub repository while keeping the rest of AIDA (`aida-cli`, `aida-cli-lib`, `aida-tui`, `aida-server`, etc.) in a public repository that runs GitHub Actions CI.
+
+  ## Options Discussed
+  1. **Full `aida-core` Private Repo**:
+     - Checked out into `./aida-core` during public CI via `actions/checkout@v4` with a fine-grained read-only token (`AIDA_CORE_READ_TOKEN`), or referenced as a Cargo git dependency using `git config url.insteadOf`.
+     - External users cannot `cargo build` from source without private repo read access, though pre-built binaries from CI remain distributable.
+  2. **Open-Core Split**:
+     - Keep public traits/models/interfaces in public `aida-core` so external users and `--no-default-features` builds compile from source, while isolating proprietary logic in an optional private crate pulled during CI.
+
+  ## Key Constraints & Risks to Resolve
+  - **Public CI Logs**: Public repo Actions logs are world-readable; compiler error snippets or panic backtraces inside the private crate can appear in CI logs unless sensitive tests run in the private repo via `repository_dispatch`.
+  - **Fork PRs**: External fork PRs do not receive `secrets.AIDA_CORE_READ_TOKEN` on standard `pull_request` events.
+  - **Coordinated Cross-Repo Changes**: Atomic workspace PRs across `aida-core` and `aida-cli-lib` become two-repo changes unless branch-matching or staging is automated.
+  - **Git History Scrubbing**: Making the existing repo public requires `git filter-repo` or a clean snapshot push so historical `aida-core` commits are not exposed in git history.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T04:46:37.988787088Z
+modified_at: 2026-10-28T04:46:37.988787088Z
+req_type: Spike
+filed_at:
+  code_sha: e33bf3223400b1d450246eb55ff75134a0e317f1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33bf322340
+  vendor: antigravity
+human_only: true
