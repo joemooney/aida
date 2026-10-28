@@ -15,7 +15,10 @@
 //! are created. An empty `records` list means nothing on its own — callers use
 //! [`LogicalSnapshot::caught_up`], which is `None` unless every source was
 //! fully observed. Retention of mail from retired worktrees is not
-//! established here (signed slice C), and ACK is signed slice B2.
+//! established here (signed slice C). Explicit per-ID receipts are read from
+//! the sources and from the private receipt anchor under the common Git
+//! directory; the post-flush ACK that writes the anchor is
+//! `mailbox_lifecycle::ack` (slice B2c).
 //!
 //! Source-local write paths (digest, archive/retract/delete, migration,
 //! lifecycle) keep using the explicit per-source readers in
@@ -408,8 +411,9 @@ pub enum SourceStatus {
 
 /// The pinned mailbox directory a source was read from, and its observation
 /// cut. This is current-source identity only, not a retention generation
-/// (signed slice C): a later ACK plan can refuse when the directory was
-/// replaced (`dev`/`ino`) or its entries changed (`mtime_ns`) since the cut.
+/// (signed slice C): an ACK plan refuses when the directory was replaced
+/// (`dev`/`ino`) or a planned message's bytes changed since the cut; an
+/// unrelated arrival (which moves `mtime_ns`) does not refuse it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceIdentity {
     pub dev: u64,
@@ -434,11 +438,29 @@ pub struct Provenance {
     pub fingerprint: String,
 }
 
+/// Where an explicit per-ID receipt was found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AckOrigin {
+    /// A local source's `.read-receipts/` (index into
+    /// [`LogicalSnapshot::sources`]).
+    Source(usize),
+    /// The private receipt ledger under the verified common Git directory
+    /// (slice B2c). It outlives every source, so removing a worktree never
+    /// resurrects mail acknowledged there. `legacy`: the ACK resolved mail
+    /// covered only by a legacy watermark, so its time is when it was
+    /// acknowledged, not a read latency (TASK-1271).
+    Anchor { legacy: bool },
+}
+
 /// Read evidence for one visible record, for the key it is addressed to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadEvidence {
-    /// An explicit per-ID receipt in a local source.
-    Acknowledged { source: usize, key: String, at: i64 },
+    /// An explicit per-ID receipt in a local source or the receipt anchor.
+    Acknowledged {
+        origin: AckOrigin,
+        key: String,
+        at: i64,
+    },
     /// Covered only by a legacy timestamp watermark in a local source that
     /// physically holds this ID. Compatibility evidence: not proof the ID was
     /// present when the watermark was set, and carries no read time.
@@ -478,6 +500,9 @@ pub struct LogicalSnapshot {
     pub retention: RetentionCoverage,
     /// For [`Query::ExactId`]: `Some(false)` only when coverage is complete.
     pub exact_found: Option<bool>,
+    /// The receipt anchor could not be read for some key: acknowledgements
+    /// recorded there may be missing, so the view is partial.
+    pub anchor_error: Option<SourceErrorCode>,
 }
 
 impl LogicalSnapshot {
@@ -485,6 +510,7 @@ impl LogicalSnapshot {
     /// every receipt lookup was fully observed.
     pub fn complete(&self) -> bool {
         self.inventory_error.is_none()
+            && self.anchor_error.is_none()
             && !matches!(self.canonical, CanonicalCoverage::Refused(_))
             && self
                 .sources
@@ -526,6 +552,29 @@ impl LogicalSnapshot {
                 .iter()
                 .all(|r| r.message.archived || matches!(r.read, ReadEvidence::Acknowledged { .. }))
         })
+    }
+
+    /// Whether an explicit ACK may be planned from this snapshot: every
+    /// source and the receipt anchor were fully observed and no replicas
+    /// disagree. A local-only (non-Git) project, whose one source is all
+    /// there is, also qualifies. A partial view never advances an
+    /// acknowledgement (signoff 48 B): an unread sibling may hold a newer
+    /// state of a displayed message.
+    // trace:STORY-1843 | ai:claude
+    pub fn ack_eligible(&self) -> bool {
+        let local_only = self.inventory_error == Some(SourceErrorCode::NotAGitCheckout);
+        (self.inventory_error.is_none() || local_only)
+            && self.anchor_error.is_none()
+            && match self.canonical {
+                CanonicalCoverage::Refused(SourceErrorCode::NotAGitCheckout) => local_only,
+                CanonicalCoverage::Refused(_) => false,
+                _ => true,
+            }
+            && self
+                .sources
+                .iter()
+                .all(|s| !matches!(s.status, SourceStatus::Error(_)))
+            && self.conflicts.is_empty()
     }
 }
 
@@ -588,6 +637,7 @@ pub fn logical_snapshot(
         .collect();
 
     let mut receipts = ReceiptCache::default();
+    let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
     let mut out_records = Vec::with_capacity(records.len());
     for (mut message, provenance) in records {
         let read = read_evidence(
@@ -598,6 +648,7 @@ pub fn logical_snapshot(
             audience,
             &mut sources,
             &mut receipts,
+            &mut anchor,
             &mut budget,
         );
         if message.retracted {
@@ -620,6 +671,7 @@ pub fn logical_snapshot(
         canonical: ctx.canonical.clone(),
         retention: RetentionCoverage::Unestablished,
         exact_found: None,
+        anchor_error: anchor.error,
     };
     if let Query::ExactId(id) = query {
         let found = snapshot.records.iter().any(|r| &r.message.id == id)
@@ -635,6 +687,9 @@ pub fn logical_snapshot(
 pub enum ReceiptLookup {
     /// Some local source holds a receipt; `at` is its read time (epoch ms).
     Read { at: i64 },
+    /// The receipt anchor holds an explicit ACK that resolved a legacy
+    /// watermark: read, at an unknown time.
+    ReadUntimed,
     /// Every source answered and none holds a receipt.
     NotFound,
     /// At least one source could not answer (a worktree the inventory could
@@ -661,6 +716,15 @@ pub struct ReceiptInspector {
     inventory_complete: bool,
     deadline: Instant,
     key_dirs: RefCell<HashMap<(usize, String), KeyDir>>,
+    /// The verified common Git directory whose receipt anchor is consulted
+    /// first; `None` for a local-only context.
+    anchor: Option<PathBuf>,
+    /// Each key's anchor ledger, read once; `None` when it could not be read
+    /// (or the deadline or byte budget ran out first).
+    ledgers: RefCell<HashMap<String, Option<ReceiptLedger>>>,
+    /// Ledger bytes still allowed: what the inventory left of
+    /// `limits.max_total_bytes`, shared by every key's ledger read.
+    ledger_bytes_left: Cell<u64>,
     partial: Cell<bool>,
 }
 
@@ -694,6 +758,9 @@ impl ReceiptInspector {
             inventory_complete,
             deadline: limits.deadline,
             key_dirs: RefCell::default(),
+            anchor: ctx.repository.as_ref().map(|r| r.path().to_path_buf()),
+            ledgers: RefCell::default(),
+            ledger_bytes_left: Cell::new(budget.bytes_left),
             partial: Cell::new(!inventory_complete),
         }
     }
@@ -706,6 +773,9 @@ impl ReceiptInspector {
             inventory_complete: false,
             deadline: Instant::now(),
             key_dirs: RefCell::default(),
+            anchor: None,
+            ledgers: RefCell::default(),
+            ledger_bytes_left: Cell::new(0),
             partial: Cell::new(true),
         }
     }
@@ -724,9 +794,38 @@ impl ReceiptInspector {
             // Writers never name a receipt after an unsafe ID.
             return ReceiptLookup::NotFound;
         }
+        // The receipt anchor first (slice B2c): it outlives every source.
+        // An unreadable ledger, or one the deadline or byte budget (signoff
+        // 60 #6) left unread, leaves the answer to the local sources, but
+        // their silence is then Unknown, never NotFound.
+        let mut anchor_unknown = false;
+        if let Some(common) = &self.anchor {
+            let mut ledgers = self.ledgers.borrow_mut();
+            let ledger = ledgers.entry(key.to_string()).or_insert_with(|| {
+                if Instant::now() >= self.deadline {
+                    return None;
+                }
+                let (ledger, len) = read_ledger_sized(common, key).ok()?.unwrap_or_default();
+                let left = self.ledger_bytes_left.get().checked_sub(len as u64)?;
+                self.ledger_bytes_left.set(left);
+                Some(ledger)
+            });
+            match ledger {
+                Some(ledger) => {
+                    if let Some(at) = ledger.receipts.get(id) {
+                        return if ledger.legacy.contains(id) {
+                            ReceiptLookup::ReadUntimed
+                        } else {
+                            ReceiptLookup::Read { at: *at }
+                        };
+                    }
+                }
+                None => anchor_unknown = true,
+            }
+        }
         let key = sanitize_key(key);
         let name = format!("{id}.txt");
-        let mut unknown = !self.inventory_complete;
+        let mut unknown = anchor_unknown || !self.inventory_complete;
         let mut key_dirs = self.key_dirs.borrow_mut();
         for (index, root) in self.roots.iter().enumerate() {
             let Some(root) = root else {
@@ -1581,9 +1680,12 @@ fn key_evidence(
     })
 }
 
-/// Exact per-ID lookups only (no receipt directory scan). An explicit
-/// receipt in any LOCAL source for a key the message is addressed to is
-/// acknowledgement. A LOCAL watermark counts only for IDs physically present
+/// Exact per-ID lookups only (no receipt directory scan). The receipt
+/// anchor acknowledges a message only when EVERY key it is addressed to
+/// holds its receipt there: one key's ledger alone is a partly published
+/// ACK (each key's ledger has its own rename), so the message is shown again
+/// and the next ACK plans the missing keys. An explicit receipt in any LOCAL
+/// source for a key the message is addressed to is acknowledgement. A LOCAL watermark counts only for IDs physically present
 /// in that same source, and only as legacy compatibility evidence.
 /// Unreadable receipt evidence, or a deadline reached mid-lookup, marks that
 /// source as errored.
@@ -1596,9 +1698,27 @@ fn read_evidence(
     audience: &ResolvedAudience,
     sources: &mut [SourceReport],
     cache: &mut ReceiptCache,
+    anchor: &mut AnchorEvidence,
     budget: &mut Budget,
 ) -> ReadEvidence {
     let keys = audience.matching_keys(message);
+    let mut anchored = None;
+    let mut every_key = !keys.is_empty();
+    for key in &keys {
+        match anchor.lookup(key, &message.id, budget) {
+            Some(hit) => {
+                anchored.get_or_insert((*key, hit));
+            }
+            None => every_key = false,
+        }
+    }
+    if let (true, Some((key, (at, legacy)))) = (every_key, anchored) {
+        return ReadEvidence::Acknowledged {
+            origin: AckOrigin::Anchor { legacy },
+            key: key.to_string(),
+            at,
+        };
+    }
     let holders: BTreeSet<usize> = provenance.iter().map(|p| p.source).collect();
     let mut legacy = None;
     for (index, source) in observed.iter().enumerate().take(local_count) {
@@ -1623,7 +1743,7 @@ fn read_evidence(
                 match receipt_at(dir, &message.id, budget) {
                     Ok(Some(at)) => {
                         return ReadEvidence::Acknowledged {
-                            source: index,
+                            origin: AckOrigin::Source(index),
                             key: key.to_string(),
                             at,
                         }
@@ -1686,6 +1806,160 @@ fn watermark(
             parse_millis(&bytes).map(Some)
         }
     }
+}
+
+// ── The receipt anchor ──────────────────────────────────────────────────────
+
+/// Where the receipt ledgers live, below the verified common Git directory:
+/// inside the mail-lifecycle anchor, so they share its ownership, mode and
+/// no-follow rules and outlive every worktree.
+pub const RECEIPT_ANCHOR_PATH: [&str; 3] = ["aida", "mail-lifecycle", "receipts"];
+/// Byte cap on one key's ledger.
+pub const RECEIPT_LEDGER_CAP: u64 = 4 << 20;
+/// Entry cap on one key's ledger. A full ledger refuses new receipts; it is
+/// never pruned to make room (signoff 60 #5).
+pub const RECEIPT_LEDGER_MAX_ENTRIES: usize = 32_768;
+/// Ledger schema version.
+pub const RECEIPT_LEDGER_SCHEMA: u32 = 1;
+
+/// One recipient key's explicit per-ID receipts: message ID to the epoch
+/// millis of the ACK that recorded it. Written only by the post-flush ACK
+/// (`mailbox_lifecycle::ack`), under Lifecycle then Receipt.
+// trace:STORY-1843 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReceiptLedger {
+    pub schema: u32,
+    pub key: String,
+    pub receipts: BTreeMap<String, i64>,
+    /// IDs in `receipts` whose ACK resolved a legacy watermark: acknowledged,
+    /// but their real read time is unknown.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub legacy: BTreeSet<String>,
+}
+
+impl ReceiptLedger {
+    /// Parse and validate a ledger read for `key`: the schema, the key it
+    /// names, the entry cap and every ID's shape.
+    pub fn parse(bytes: &[u8], key: &str) -> Result<Self, SourceErrorCode> {
+        let ledger: Self =
+            serde_json::from_slice(bytes).map_err(|_| SourceErrorCode::CorruptReceipt)?;
+        if ledger.schema != RECEIPT_LEDGER_SCHEMA
+            || ledger.key != key
+            || ledger.receipts.len() > RECEIPT_LEDGER_MAX_ENTRIES
+            || !ledger.receipts.keys().all(|id| safe_id(id))
+            || !ledger
+                .legacy
+                .iter()
+                .all(|id| ledger.receipts.contains_key(id))
+        {
+            return Err(SourceErrorCode::CorruptReceipt);
+        }
+        Ok(ledger)
+    }
+}
+
+/// The ledger file name for `key`: a digest, so no identity spelling can
+/// collide with another or escape the directory.
+pub fn receipt_ledger_name(key: &str) -> String {
+    format!("{}.json", fingerprint(key.as_bytes()))
+}
+
+/// Read `key`'s ledger under `common`, no-follow and bounded. `Ok(None)`
+/// when no ledger (or no anchor) exists yet.
+// trace:STORY-1843 | ai:claude
+pub fn read_receipt_ledger(
+    common: &Path,
+    key: &str,
+) -> Result<Option<ReceiptLedger>, SourceErrorCode> {
+    Ok(read_ledger_sized(common, key)?.map(|(ledger, _)| ledger))
+}
+
+/// [`read_receipt_ledger`] plus the ledger's size in bytes.
+fn read_ledger_sized(
+    common: &Path,
+    key: &str,
+) -> Result<Option<(ReceiptLedger, usize)>, SourceErrorCode> {
+    let mut dir = PinnedDir::open_root(common)?;
+    for component in RECEIPT_ANCHOR_PATH {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(None),
+        }
+    }
+    let name = receipt_ledger_name(key);
+    match dir.read_file(OsStr::new(&name), RECEIPT_LEDGER_CAP)? {
+        None => Ok(None),
+        Some(bytes) => ReceiptLedger::parse(&bytes, key).map(|l| Some((l, bytes.len()))),
+    }
+}
+
+/// The receipt anchor as one snapshot sees it: each key's ledger read once.
+struct AnchorEvidence {
+    common: Option<PathBuf>,
+    ledgers: HashMap<String, Option<ReceiptLedger>>,
+    error: Option<SourceErrorCode>,
+}
+
+impl AnchorEvidence {
+    fn new(common: Option<&Path>) -> Self {
+        Self {
+            common: common.map(Path::to_path_buf),
+            ledgers: HashMap::new(),
+            error: None,
+        }
+    }
+
+    /// `key`'s anchored receipt for `id` and whether it resolved a legacy
+    /// watermark. A ledger that cannot be read records the error (the
+    /// snapshot is then partial) and answers `None`.
+    fn lookup(&mut self, key: &str, id: &str, budget: &mut Budget) -> Option<(i64, bool)> {
+        let common = self.common.as_deref()?;
+        if !self.ledgers.contains_key(key) {
+            let read = if budget.expired() {
+                Err(SourceErrorCode::OverBudget)
+            } else {
+                read_ledger_sized(common, key).and_then(|read| {
+                    budget.take(read.as_ref().map_or(0, |(_, len)| *len))?;
+                    Ok(read.map(|(ledger, _)| ledger))
+                })
+            };
+            let ledger = read.unwrap_or_else(|code| {
+                self.error.get_or_insert(code);
+                None
+            });
+            self.ledgers.insert(key.to_string(), ledger);
+        }
+        let ledger = self.ledgers.get(key)?.as_ref()?;
+        let at = *ledger.receipts.get(id)?;
+        Some((at, ledger.legacy.contains(id)))
+    }
+}
+
+/// Re-read one replica for an ACK commit: the fingerprint of message `id`'s
+/// file under `root/<components…>` and the identity of the directory that
+/// holds it. `Ok(None)` when the file (or the directory) is gone. Read-only,
+/// no-follow and bounded, like every snapshot read.
+// trace:STORY-1843 | ai:claude
+pub fn replica_fingerprint(
+    root: &Path,
+    components: &[&str],
+    id: &str,
+) -> Result<Option<(String, u64, u64)>, SourceErrorCode> {
+    if !safe_id(id) {
+        return Err(SourceErrorCode::CorruptMessage);
+    }
+    let mut dir = PinnedDir::open_root(root)?;
+    for component in components {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(None),
+        }
+    }
+    let meta = dir.metadata()?;
+    let name = format!("{id}.json");
+    Ok(dir
+        .read_file(OsStr::new(&name), 1024 * 1024)?
+        .map(|bytes| (fingerprint(&bytes), meta.dev(), meta.ino())))
 }
 
 #[cfg(test)]

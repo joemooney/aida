@@ -170,6 +170,11 @@ fn view_read_latency_ms(view: &crate::mailbox_view::OwnMail, who: &str) -> Optio
         .records()
         .iter()
         .filter_map(|r| match &r.read {
+            // An ACK that resolved a legacy watermark has no read time.
+            aida_core::mailbox_logical::ReadEvidence::Acknowledged {
+                origin: aida_core::mailbox_logical::AckOrigin::Anchor { legacy: true },
+                ..
+            } => None,
             aida_core::mailbox_logical::ReadEvidence::Acknowledged { key, at, .. }
                 if key.eq_ignore_ascii_case(who) =>
             {
@@ -560,29 +565,27 @@ pub(crate) fn handle_mailbox_command(
                 }
                 return Ok(());
             }
-            // Reading marks what it displays seen (STORY-539) — UNLESS
+            // Reading acknowledges what it displays (STORY-539) — UNLESS
             // `--peek`, which surfaces without consuming (STORY-585 #1/#4).
             //
-            // This write happens BEFORE any output below, header included.
-            // BUG-1482: established mechanism — `install_sigpipe_handler`
-            // (BUG-99) restores SIGPIPE's default disposition at startup so
-            // `aida ... | head -N` exits with the classic "downstream closed,
-            // terminate quietly" semantics instead of Rust's default
-            // ignore-and-panic-on-EPIPE behavior. That means a write in the
-            // print loop below can end the process via the SIGPIPE signal
-            // itself, mid-loop, with no unwind — so any watermark write
-            // placed AFTER printing (the old order) never ran for a reader
-            // that closed early (`| head`). Doing the write first means every
-            // message this call is about to *display* is already recorded as
-            // seen before the first byte of it reaches a pipe that might
-            // close. trace:BUG-1482 | ai:claude
-            //
-            // STORY-1843 B2b: the marks are per-ID receipts for exactly the
-            // displayed unread messages (wherever they live); the legacy
-            // watermark is never advanced (ruling 76 Q3). trace:STORY-1843 | ai:claude
-            if !*archived && !*peek {
-                crate::mailbox_view::mark_displayed(project_root, view.audience(), &inbox)?;
-            }
+            // STORY-1843 B2c, the explicit successor to BUG-1482's
+            // write-before-print marking: plan the ACK of exactly the
+            // displayed records now (nothing is written), print and flush,
+            // and commit only after the flush succeeded. A reader that
+            // closes the pipe early (`aida mailbox inbox | head`) ends this
+            // process through SIGPIPE (BUG-99's default disposition) before
+            // the commit, so mail it never received stays unread and is
+            // shown again: a possible duplicate read beats silent loss. A
+            // partial view plans no ACK and says so.
+            // trace:BUG-1482 trace:STORY-1843 | ai:claude
+            let (plan, ack_note) = if *archived || *peek {
+                (None, None)
+            } else {
+                match crate::mailbox_view::plan_ack(&view, &inbox) {
+                    Ok(plan) => (plan, None),
+                    Err(e) => (None, Some(format!("not marked read: {e}"))),
+                }
+            };
             let header = if *archived {
                 "Archived for"
             } else if *unread {
@@ -616,6 +619,22 @@ pub(crate) fn handle_mailbox_command(
                     "{}",
                     "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
                 );
+            }
+            if let Some(note) = &ack_note {
+                println!("  {}", note.yellow());
+            }
+            anyhow::Context::context(
+                std::io::Write::flush(&mut std::io::stdout()),
+                "writing the inbox",
+            )?;
+            if let Some(plan) = plan {
+                // Authority is re-resolved after the flush, before any lock.
+                let current = crate::mailbox_view::own_audience();
+                crate::mailbox_view::commit_ack(project_root, plan, &current).map_err(|e| {
+                    anyhow::anyhow!(
+                        "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
+                    )
+                })?;
             }
             Ok(())
         }
@@ -2071,27 +2090,32 @@ mod tests {
         }
     }
 
-    // BUG-1482: a downstream reader that closes the pipe early (the reported
-    // case was `aida mailbox inbox | head`) must not leave the read-watermark
-    // stuck behind messages that were actually DISPLAYED. The established
-    // mechanism: `install_sigpipe_handler` (BUG-99) restores SIGPIPE's
-    // default disposition at binary startup so a write against a pipe whose
-    // reader is gone kills the process via the signal itself — mid-loop, with
-    // nothing placed AFTER the print loop ever running.
+    // BUG-1482 successor (STORY-1843 B2c, signoff 60 #3). BUG-1482 made an
+    // inbox read whose downstream reader closed the pipe early (`aida
+    // mailbox inbox | head`) still mark everything it was about to display,
+    // by writing the marks BEFORE printing. The explicit successor marks
+    // only what was actually delivered: the ACK is planned before output and
+    // committed after a successful flush, so a reader that closes early
+    // leaves the undelivered mail unread, to be shown again (a possible
+    // duplicate read beats silent loss).
+    //
+    // The established mechanism is unchanged: `install_sigpipe_handler`
+    // (BUG-99) restores SIGPIPE's default disposition at binary startup, so a
+    // write against a pipe whose reader is gone kills the process via the
+    // signal itself, mid-loop, before the post-flush commit can run.
     //
     // That termination genuinely ends the process, so this cannot be a plain
     // in-process unit test; it re-execs this same test binary as a "worker"
     // that installs the same default SIGPIPE disposition and drives the real
     // `handle_mailbox_command` print path, while this test plays `head`'s
-    // role: read exactly one line of the worker's stdout, then drop the pipe.
-    // The second message's giant body guarantees the worker is still writing
-    // (blocked on the OS pipe buffer, typically 64KiB) when that happens, so
-    // it is killed mid-print rather than finishing cleanly — reproducing the
-    // reported defect's actual failure shape, not a proxy for it.
-    // trace:BUG-1482 | ai:claude
+    // role: read through the inbox header, then drop the pipe. The second
+    // message's giant body guarantees the worker is still writing (blocked on
+    // the OS pipe buffer, typically 64KiB) when that happens, so it is killed
+    // mid-print rather than finishing cleanly.
+    // trace:BUG-1482 trace:STORY-1843 | ai:claude
     #[cfg(unix)]
     #[test]
-    fn piped_inbox_read_marks_displayed_even_when_stdout_closes_early() {
+    fn piped_inbox_closed_early_acknowledges_nothing_undelivered() {
         if std::env::var("AIDA_BUG_1482_WORKER").is_ok() {
             let project_root = std::path::PathBuf::from(
                 std::env::var("AIDA_BUG_1482_PROJECT").expect("worker needs a project dir"),
@@ -2139,7 +2163,7 @@ mod tests {
         let mut child = std::process::Command::new(exe)
             // `--exact` matches on the FULLY QUALIFIED test name libtest
             // prints, not the bare function name.
-            .arg("mailbox_cmd::tests::piped_inbox_read_marks_displayed_even_when_stdout_closes_early")
+            .arg("mailbox_cmd::tests::piped_inbox_closed_early_acknowledges_nothing_undelivered")
             .arg("--exact")
             .arg("--nocapture")
             .env("AIDA_BUG_1482_WORKER", "1")
@@ -2197,13 +2221,12 @@ mod tests {
             "worker should die specifically from SIGPIPE (the BUG-99 mechanism), got: {status:?}"
         );
 
-        // STORY-1843 (ruling 76 Q3): the marks are per-ID receipts for the
-        // displayed messages, never a legacy watermark.
+        // The worker died before its post-flush commit: nothing it was about
+        // to show is acknowledged, and no legacy watermark moved.
         let receipts = mailbox_store::read_receipts(project.path(), "bob");
         assert!(
-            receipts.contains_key("aaaaaaaa-1111") && receipts.contains_key("bbbbbbbb-2222"),
-            "every DISPLAYED message must be marked even though the worker died \
-             mid-print from the closed pipe: {receipts:?}"
+            receipts.is_empty(),
+            "mail the reader never received must stay unread: {receipts:?}"
         );
         assert_eq!(mailbox_store::read_watermark(project.path(), "bob"), None);
     }
