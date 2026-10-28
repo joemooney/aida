@@ -7,8 +7,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T02:28:44.568519001Z
-modified_at: 2026-10-28T07:21:22.466585012Z
+modified_at: 2026-10-28T10:37:15.532278237Z
 req_type: Task
+comments:
+- id: 01a18215-e58c-7993-a496-fb8a065e2ed7
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 03:40 MST (PR-2999 round 3, cfg_attr evasion): end the attribute arms race by failing closed. Every GATE_DISPATCH_ROOT_ALLOWLIST mount (incl. gate, dispatch) must be a bare ''mod name;'' whose ONLY permitted attributes are doc comments (#[doc]/ ///). Any other outer attribute (cfg, cfg_attr, path, macro_use, allow, etc.) fails the ratchet with a message naming the attribute. Remove the per-attribute cfg(test) logic this supersedes. Negative cases: cfg_attr(not(test), cfg(any())), cfg_attr(all(), path=...), plain cfg(test), allow(...).'
+  created_at: 2026-10-28T10:37:15.532278237Z
+  modified_at: 2026-10-28T10:37:15.532278237Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a18162-8f22-70d1-b61a-2e3e2863bb87
   author: joe
