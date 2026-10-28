@@ -253,16 +253,13 @@ fn a_crashed_run_gets_its_notices_at_reconciliation_and_they_deliver_at_maintena
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path();
     reader(project, "sender-x", "implementer");
-    let mut controller = std::process::Command::new("sleep")
-        .arg("30")
-        .spawn()
-        .unwrap();
-    let lock = held_lock(project, "crash.lock", controller.id());
+    let lock_path = project.join("crash.lock");
+    let mut controller = spawn_lock_holder(&lock_path);
     let run = bind(
         project,
         "relay-crash",
         controller.id(),
-        &lock.path,
+        &lock_path,
         PROTOCOL,
     )
     .unwrap()

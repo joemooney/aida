@@ -115,22 +115,38 @@ fn text(out: &Output) -> String {
     )
 }
 
-/// A stub relay controller: an idle child process, plus its run lock held
-/// exclusively (by this test process) with the child's pid on the first
+/// A stub relay controller: an idle child process that holds its run lock
+/// exclusively through an inherited descriptor (fd 9, as relay.sh's
+/// `exec 9>"$lock"; flock -x 9` does), with its pid on the file's first
 /// line. Both are in place before this returns, so nothing polls.
 struct Controller {
     child: Child,
-    _lock: std::fs::File,
 }
 
 impl Controller {
     fn start(lock: &Path) -> Self {
         use fs2::FileExt;
-        let child = Command::new("sleep").arg("300").spawn().unwrap();
+        use std::os::unix::io::AsRawFd;
+        use std::os::unix::process::CommandExt;
         let mut file = std::fs::File::create(lock).unwrap();
-        writeln!(file, "{}", child.id()).unwrap();
         file.lock_exclusive().unwrap();
-        Self { child, _lock: file }
+        let fd = file.as_raw_fd();
+        let mut cmd = Command::new("sleep");
+        cmd.arg("300");
+        // SAFETY: dup2 is async-signal-safe; the duplicate clears
+        // close-on-exec in the child only.
+        unsafe {
+            cmd.pre_exec(move || {
+                if libc::dup2(fd, 9) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let child = cmd.spawn().unwrap();
+        writeln!(file, "{}", child.id()).unwrap();
+        // This process's descriptor closes; the child's keeps the lock.
+        Self { child }
     }
 
     fn pid(&self) -> String {
@@ -180,6 +196,12 @@ fn story_1843_relay_mail_lifetime_through_the_cli() {
     let probe = fx.json(&["relay-mail", "probe", "--json"]);
     let protocol = probe["protocol"].as_str().unwrap().to_string();
     assert_eq!(protocol, "aida-relay-mail/1");
+    assert_eq!(probe["terminal_reconcile"], true);
+    assert!(probe["ops"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|op| op == "reuse"));
 
     let lock = fx.root.join("relay.lock");
     let controller = Controller::start(&lock);

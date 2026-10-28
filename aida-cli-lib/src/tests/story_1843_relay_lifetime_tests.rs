@@ -36,12 +36,9 @@ fn bind_live(project: &Path, label: &str) -> (BindOutcome, HeldLock) {
 
 /// A controller that has exited and been reaped: its PID is free.
 fn dead_controller_run(project: &Path, label: &str) -> String {
-    let mut child = std::process::Command::new("sleep")
-        .arg("30")
-        .spawn()
-        .unwrap();
-    let lock = held_lock(project, &format!("{label}.lock"), child.id());
-    let out = bind(project, label, child.id(), &lock.path, PROTOCOL).unwrap();
+    let path = project.join(format!("{label}.lock"));
+    let mut child = spawn_lock_holder(&path);
+    let out = bind(project, label, child.id(), &path, PROTOCOL).unwrap();
     child.kill().unwrap();
     child.wait().unwrap();
     out.run
@@ -90,7 +87,43 @@ fn bind_requires_the_controller_to_hold_its_run_lock() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("not controller pid"), "{err}");
+    // The lock is held, and names a live process, but that process does not
+    // hold it: this one does.
+    let mut bystander = std::process::Command::new("sleep")
+        .arg("300")
+        .spawn()
+        .unwrap();
+    let borrowed = held_lock(tmp.path(), "borrowed.lock", bystander.id());
+    let err = bind(
+        tmp.path(),
+        "relay-a",
+        bystander.id(),
+        &borrowed.path,
+        PROTOCOL,
+    )
+    .unwrap_err()
+    .to_string();
+    bystander.kill().unwrap();
+    bystander.wait().unwrap();
+    assert!(err.contains("held, but not by controller pid"), "{err}");
     assert!(load_reservation(tmp.path(), "relay-a").is_none());
+}
+
+#[test]
+fn a_controller_holding_its_lock_through_an_inherited_descriptor_binds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("inherited.lock");
+    let mut controller = spawn_lock_holder(&path);
+    let out = bind(tmp.path(), "relay-a", controller.id(), &path, PROTOCOL);
+    controller.kill().unwrap();
+    controller.wait().unwrap();
+    assert_eq!(
+        load_run(tmp.path(), &out.unwrap().run)
+            .unwrap()
+            .unwrap()
+            .label,
+        "relay-a"
+    );
 }
 
 #[test]
@@ -309,33 +342,70 @@ fn synthetic_run(template: &RelayRun, ended: bool) -> RelayRun {
     run
 }
 
+/// Backdate a live run record so it sorts among the oldest.
+fn backdate(project: &Path, run_id: &str, secs: u64) {
+    std::fs::File::options()
+        .write(true)
+        .open(run_path(project, run_id))
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+        .unwrap();
+}
+
 #[test]
-fn ended_runs_and_stray_entries_do_not_count_against_the_open_run_budget() {
+fn bind_refuses_at_the_live_run_limit_and_readers_past_it_see_the_oldest() {
     let tmp = tempfile::tempdir().unwrap();
     let (out, _lock) = bind_live(tmp.path(), "relay-a");
+    backdate(tmp.path(), &out.run, 1);
     let template = load_run(tmp.path(), &out.run).unwrap().unwrap();
+    // Archived runs and stray entries never count.
     for _ in 0..MAX_OPEN_RUN_RECORDS + 8 {
         archive_run(tmp.path(), &synthetic_run(&template, true)).unwrap();
     }
     for n in 0..8 {
         std::fs::write(runs_dir(tmp.path()).join(format!("stray-{n}.tmp")), "x").unwrap();
     }
-    // The cliff: open records up to the budget, the live run included.
     for _ in 1..MAX_OPEN_RUN_RECORDS {
         write_run(tmp.path(), &synthetic_run(&template, false)).unwrap();
     }
-    assert_eq!(list_runs(tmp.path()).unwrap().len(), MAX_OPEN_RUN_RECORDS);
+    assert_eq!(live_run_count(tmp.path()).unwrap(), MAX_OPEN_RUN_RECORDS);
     let (accepting, warnings) = accepting_runs(tmp.path());
     assert!(warnings.is_empty(), "{warnings:?}");
     assert!(accepting.iter().any(|r| r.run_id == out.run));
-    reconcile_relay_runs(tmp.path()).unwrap();
-    // One more open record is over it: listing refuses, gap acceptance warns.
+
+    // At the limit a new bind refuses and reserves nothing.
+    let lock_b = held_lock(tmp.path(), "relay-b.lock", me());
+    let err = bind(tmp.path(), "relay-b", me(), &lock_b.path, PROTOCOL)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("relay run limit reached"), "{err}");
+    assert!(load_reservation(tmp.path(), "relay-b").is_none());
+
+    // Past it (records written by hand), readers take the oldest records
+    // instead of failing: gap acceptance still finds the oldest live run,
+    // with a warning, and reconciliation still ends an old dead run.
     write_run(tmp.path(), &synthetic_run(&template, false)).unwrap();
-    let err = list_runs(tmp.path()).unwrap_err().to_string();
-    assert!(err.contains("live relay run budget"), "{err}");
+    let mut dead = synthetic_run(&template, false);
+    dead.controller.start_identity = "linux-starttime:1".to_string();
+    write_run(tmp.path(), &dead).unwrap();
+    backdate(tmp.path(), &dead.run_id, 2);
+    assert_eq!(
+        live_run_count(tmp.path()).unwrap(),
+        MAX_OPEN_RUN_RECORDS + 2
+    );
+    let listed = list_runs(tmp.path()).unwrap();
+    assert_eq!(listed.len(), MAX_OPEN_RUN_RECORDS);
+    assert!(listed.iter().any(|r| r.run_id == dead.run_id));
     let (accepting, warnings) = accepting_runs(tmp.path());
-    assert!(accepting.is_empty());
+    assert!(accepting.iter().any(|r| r.run_id == out.run));
     assert_eq!(warnings.len(), 1, "{warnings:?}");
+    let report = reconcile_relay_runs(tmp.path()).unwrap();
+    assert_eq!(report.ended, vec![dead.run_id.clone()]);
+    outbox::settle_ended_runs(tmp.path()).unwrap();
+    assert_eq!(
+        live_run_count(tmp.path()).unwrap(),
+        MAX_OPEN_RUN_RECORDS + 1
+    );
 }
 
 #[test]
