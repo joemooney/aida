@@ -171,3 +171,31 @@ fn publish_for_sync_honors_the_opt_out() {
     autosync_env.reset("1");
     assert!(mailbox_autosync_enabled(proj.path()));
 }
+
+// trace:STORY-1843 | ai:claude — the digest admits its canonical publication
+// before the store lock, takes no Lifecycle lock inside the store-writer
+// transaction, and its permit row is gone once the transaction returns.
+#[test]
+fn digest_admits_before_the_store_lock_and_clears_its_permit() {
+    let (proj, store_root) = project_with_store();
+    aida_core::git_ops::init(proj.path()).unwrap();
+    mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
+
+    let (n, classes) = aida_core::mailbox_lifecycle::observe_lock_classes(|| {
+        digest_mailbox_to_canonical(&store_root, proj.path()).unwrap()
+    });
+    assert_eq!(n, 1);
+    assert!(
+        classes.contains(&"lifecycle"),
+        "the publication was admitted: {classes:?}"
+    );
+    assert!(
+        !classes.contains(&aida_core::mailbox_lifecycle::UNDER_LIFECYCLE),
+        "{classes:?}"
+    );
+    assert_eq!(
+        aida_core::mailbox_lifecycle::live_canonical_publications(proj.path()).unwrap(),
+        0,
+        "the canonical permit row clears after the store lock is released"
+    );
+}

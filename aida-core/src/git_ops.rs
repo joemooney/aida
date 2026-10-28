@@ -3261,12 +3261,69 @@ pub fn create_store_worktree(
 }
 
 /// Remove a store worktree and optionally delete the branch.
+///
+/// This is the one destructive entry for committed canonical mail, so it
+/// refuses while a canonical publication admitted under `repo_root`'s anchor
+/// is still live, or while the store's `mailbox/` holds untracked or
+/// uncommitted files: those bytes exist nowhere else. Both checks and the
+/// removal run under the store write lock, which every canonical mailbox
+/// write holds, so no publication lands between the check and the removal.
+// trace:STORY-1843 | ai:claude
 pub fn remove_store_worktree(repo_root: &Path, worktree_dir: &str) -> Result<()> {
     let worktree_path = repo_root.join(worktree_dir);
-    if worktree_path.exists() {
-        git(repo_root, &["worktree", "remove", "--force", worktree_dir])?;
+    if !worktree_path.exists() {
+        return Ok(());
     }
+    let _store = crate::db::acquire_store_write_lock(&worktree_path)?;
+    let live = crate::mailbox_lifecycle::live_canonical_publications(repo_root)
+        .context("cannot read the mail publication records; the store worktree was kept")?;
+    if live > 0 {
+        anyhow::bail!(
+            "refusing to remove the store worktree {}: {live} mailbox publication(s) are still writing to it; retry once they finish",
+            worktree_path.display()
+        );
+    }
+    let unsaved = canonical_mailbox_unsaved(&worktree_path)?;
+    if !unsaved.is_empty() {
+        anyhow::bail!(
+            "refusing to remove the store worktree {}: its mailbox holds mail that is not committed ({}); commit it with `aida mailbox sync` or `aida push`, then retry",
+            worktree_path.display(),
+            unsaved.join(", ")
+        );
+    }
+    git(repo_root, &["worktree", "remove", "--force", worktree_dir])?;
     Ok(())
+}
+
+/// Paths under the store's canonical `mailbox/` that are untracked or differ
+/// from the committed tree (ignored files included). A status Git cannot
+/// produce is an error, never an empty list.
+// trace:STORY-1843 | ai:claude
+fn canonical_mailbox_unsaved(store_root: &Path) -> Result<Vec<String>> {
+    let status = git(
+        store_root,
+        &[
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignored=matching",
+            "--",
+            "mailbox",
+        ],
+    )?;
+    if !status.success {
+        anyhow::bail!(
+            "cannot read the store mailbox status; the store worktree was kept: {}",
+            status.stderr.trim()
+        );
+    }
+    Ok(status
+        .stdout
+        .lines()
+        // `XY path`; the output may arrive with its leading space trimmed.
+        .filter_map(|line| line.trim_start().split_once(char::is_whitespace))
+        .map(|(_, path)| path.trim_start().to_string())
+        .collect())
 }
 
 /// Check if a worktree exists for the given directory.
