@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T13:37:03.761454841Z
-modified_at: 2026-10-28T13:37:03.761454841Z
+modified_at: 2026-10-28T13:37:11.865613702Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a182ab-725e-7d82-a16f-fbdd8e0a4143
+  created_at: 2026-10-28T13:37:11.865610213Z
+  created_by: joe
+history:
+- id: 01a182ba-a903-7dd2-b324-b6763a786310
+  author: joe
+  timestamp: 2026-10-28T13:37:13.475488213Z
+  session_id: 4a6b4364-10d0-41b4-afaf-bd83911bef66
+  changes: []
 filed_at:
   code_sha: b6f9c1895b9d1c94fd4afa2853077fbd0122c808
   branch: fix/retention-build-identity
