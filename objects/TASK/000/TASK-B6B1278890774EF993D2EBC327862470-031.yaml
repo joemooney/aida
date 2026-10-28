@@ -1,0 +1,30 @@
+id: 01a181ea-0656-70e0-88ae-f3cc7dee85c2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-031
+title: 'cosmetic (non-blocking): acceptance (a) asks that show stay under 1 s on a heal…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): acceptance (a) asks that show stay under 1 s on a healthy cache. The evidence is a const check (SHOW_TRACE_SCAN_BUDGET <= 500 ms, trace.rs:4016) and linkage.content < 2 s, not an end-to-end show-duration budget test.
+
+  PR: #3012
+  Reviewed sha: 5221e6c8957a7fdd4fe140ac6d249a0386cf16eb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T09:49:20.342181567Z
+modified_at: 2026-10-28T09:49:20.342181567Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-008
+- finding-hash:f1f22c92
+- from-review:PR-3012
+- kind:carried-forward
+filed_at:
+  code_sha: 407de9fd81c73ce6e4ded70ab4682fa9fff06119
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 859f808dc7e
+  vendor: claude
+  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d

@@ -80364,5 +80364,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6253
+- id: 01a181ea-0d9c-7542-9376-06eccf65002e
+  target_id: 01a181ea-0656-70e0-88ae-f3cc7dee85c2
+  author: aida
+  node_id: '1'
+  lamport: 6254
+  timestamp: 2026-10-28T09:49:22.204199310Z
+  kind: !Create
+    title: 'cosmetic (non-blocking): acceptance (a) asks that show stay under 1 s on a heal…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      cosmetic (non-blocking): acceptance (a) asks that show stay under 1 s on a healthy cache. The evidence is a const check (SHOW_TRACE_SCAN_BUDGET <= 500 ms, trace.rs:4016) and linkage.content < 2 s, not an end-to-end show-duration budget test.
+
+      PR: #3012
+      Reviewed sha: 5221e6c8957a7fdd4fe140ac6d249a0386cf16eb
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6254
 node_id: '1'
