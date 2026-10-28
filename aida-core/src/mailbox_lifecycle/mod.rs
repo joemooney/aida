@@ -52,6 +52,8 @@ pub mod guard;
 pub(crate) mod retire;
 
 #[cfg(test)]
+mod canonical_tests;
+#[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
 mod tests;
@@ -983,23 +985,27 @@ impl Drop for LocalPermit {
 /// with [`LifecycleError::SourceRetiring`] when the source is fenced or
 /// retired. The mailbox directory must already exist.
 pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
-    let admitted = admit(project_root);
+    admit_as(project_root, PermitKind::Local)
+}
+
+fn admit_as(project_root: &Path, kind: PermitKind) -> Result<Option<LocalPermit>> {
+    let admitted = admit(project_root, kind);
     if admitted.is_err() {
         forget_anchor(project_root);
     }
     admitted
 }
 
-fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
+fn admit(project_root: &Path, kind: PermitKind) -> Result<Option<LocalPermit>> {
     // Git runs here, before any lock.
     let Some(source) = writer_source(project_root)? else {
         return Ok(None);
     };
-    match admit_resolved(&source)? {
+    match admit_resolved(&source, kind)? {
         Ok(permit) => Ok(Some(permit)),
         // A retirement whose driver is gone (it died, or its destructive step
         // never ran) is reopened once, then admission retries.
-        Err(op_id) if retire::reopen_abandoned(&source, &op_id)? => admit_resolved(&source)?
+        Err(op_id) if retire::reopen_abandoned(&source, &op_id)? => admit_resolved(&source, kind)?
             .map(Some)
             .map_err(|op_id| LifecycleError::SourceRetiring { op_id }),
         Err(op_id) => Err(LifecycleError::SourceRetiring { op_id }),
@@ -1025,7 +1031,10 @@ fn writer_source(project_root: &Path) -> Result<Option<Source>> {
 /// Admit under a short Lifecycle hold. A fenced source refuses with
 /// `SourceRetiring`; a retired one returns `Ok(Err(op_id))` so the caller can
 /// try to reopen it if its retirement was abandoned.
-fn admit_resolved(source: &Source) -> Result<std::result::Result<LocalPermit, String>> {
+fn admit_resolved(
+    source: &Source,
+    kind: PermitKind,
+) -> Result<std::result::Result<LocalPermit, String>> {
     let probe = ProbeSource::system();
     let holder = this_process();
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
@@ -1050,7 +1059,7 @@ fn admit_resolved(source: &Source) -> Result<std::result::Result<LocalPermit, St
     let permit_id = uuid::Uuid::new_v4().to_string();
     record.permits.push(Permit {
         permit_id: permit_id.clone(),
-        kind: PermitKind::Local,
+        kind,
         holder,
         generation: record.generation,
     });
@@ -1120,4 +1129,147 @@ fn release_permit(anchor: &Path, key: &str, permit_id: &str) -> Result<()> {
         store_permits(anchor, &record, &held)?;
     }
     Ok(())
+}
+
+// ── Canonical publication admission ─────────────────────────────────────────
+
+thread_local! {
+    /// Canonical permit rows dropped while this thread held a Store write
+    /// lock. Releasing one takes Lifecycle, which never starts inside a
+    /// Store-held region, so they wait for the outermost Store guard.
+    static DEFERRED: RefCell<Vec<LocalPermit>> = const { RefCell::new(Vec::new()) };
+}
+
+/// An admitted canonical publication: the local mail a sync or digest is
+/// about to copy into the orphan store. Taken **before** the Store write lock
+/// and moved into its closure; every canonical mailbox write takes
+/// `&CanonicalPermit`, so a canonical write without admission does not
+/// compile.
+///
+/// The permit is a `Canonical` row in the permits of the local source it
+/// reads from, stamped with that source's generation. It is not a held lock:
+/// nothing is held across the store transaction's Git or hook work, and
+/// retiring that source waits for the row to clear (or refuses on its
+/// bounded timeout). A permit dropped inside a Store-held region is released
+/// when the outermost Store guard drops.
+///
+/// `row` is `None` on the degraded path (no anchor, no local mailbox), where
+/// the publication runs exactly as it did before admission existed.
+#[must_use = "a permit row stays until the permit drops"]
+#[derive(Debug)]
+pub struct CanonicalPermit {
+    row: Option<LocalPermit>,
+}
+
+impl CanonicalPermit {
+    /// Whether retirement of the local source waits for this publication.
+    pub fn is_admitted(&self) -> bool {
+        self.row.is_some()
+    }
+}
+
+impl Drop for CanonicalPermit {
+    fn drop(&mut self) {
+        let Some(row) = self.row.take() else {
+            return;
+        };
+        if crate::db::any_store_write_lock_held() {
+            DEFERRED.with(|d| d.borrow_mut().push(row));
+        }
+        // Otherwise `row` drops here and releases its permit row.
+    }
+}
+
+/// Release the canonical permit rows this thread deferred while it held a
+/// Store write lock. Called by the outermost Store guard after it unlocks.
+pub fn release_deferred_permits() {
+    if crate::db::any_store_write_lock_held() || lifecycle_lock_held() {
+        return;
+    }
+    let rows = DEFERRED.with(|d| std::mem::take(&mut *d.borrow_mut()));
+    drop(rows);
+}
+
+/// Admit a canonical publication of the local mail of the checkout at
+/// `project_root` (the store's parent checkout). Call it before taking the
+/// Store write lock: under one it refuses as a lock-order violation.
+///
+/// Refuses with [`LifecycleError::SourceRetiring`] when that local source is
+/// fenced or retired, so a retiring checkout's mail is preserved rather than
+/// published from under the barrier. Any other lifecycle failure warns once
+/// and admits uncovered, the same policy as [`cover_local_write`].
+pub fn admit_canonical_publication(project_root: &Path) -> std::io::Result<CanonicalPermit> {
+    if crate::db::any_store_write_lock_held() || lifecycle_lock_held() {
+        return Err(LifecycleError::LockOrder(
+            "a canonical publication is admitted before the Store write lock, never under it",
+        )
+        .into());
+    }
+    // No local mailbox: there is nothing to publish from and no source to
+    // retire, so there is nothing for a permit to cover.
+    if !crate::mailbox::local_mailbox_dir(project_root).is_dir() {
+        return Ok(CanonicalPermit { row: None });
+    }
+    match admit_as(project_root, PermitKind::Canonical) {
+        Ok(row) => Ok(CanonicalPermit { row }),
+        Err(e @ (LifecycleError::SourceRetiring { .. } | LifecycleError::LockOrder(_))) => {
+            Err(e.into())
+        }
+        Err(e) => {
+            static WARNED: AtomicBool = AtomicBool::new(false);
+            if !WARNED.swap(true, Ordering::Relaxed) {
+                eprintln!(
+                    "warning: mail retention is not established for {}; publishing without it: {e}",
+                    project_root.display()
+                );
+            }
+            Ok(CanonicalPermit { row: None })
+        }
+    }
+}
+
+/// How many canonical publications admitted under the anchor of the checkout
+/// at `project_root` have not finished. A row whose writer is proven dead
+/// does not count; a row of unknown liveness does (unknown means refuse).
+/// `0` when the checkout has no anchor.
+///
+/// Reads the source records without the Lifecycle lock (each is replaced by
+/// an atomic rename), so it may run inside a Store-held region. An unreadable
+/// or corrupt record is an error, never zero.
+pub fn live_canonical_publications(project_root: &Path) -> std::io::Result<usize> {
+    let Some(anchored) = locate_anchor(project_root)? else {
+        return Ok(0);
+    };
+    let dir = anchored.anchor.join(SOURCES_DIR);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e),
+    };
+    let probe = ProbeSource::system();
+    let mut live = 0usize;
+    for entry in entries {
+        let path = entry?.path();
+        let is_record = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.ends_with(".json") && !n.starts_with('.'));
+        if !is_record {
+            continue;
+        }
+        let Some(record) = read_json::<SourceRecord>(&path)? else {
+            continue;
+        };
+        live += record
+            .permits
+            .iter()
+            .filter(|p| p.kind == PermitKind::Canonical)
+            .filter(|p| {
+                !p.holder
+                    .as_ref()
+                    .is_some_and(|h| matches!(probe.probe(h), Probe::Dead(_)))
+            })
+            .count();
+    }
+    Ok(live)
 }

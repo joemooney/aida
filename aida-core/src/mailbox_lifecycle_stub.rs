@@ -11,6 +11,28 @@ pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate --dry-run"
 /// Activation is never consulted off Unix.
 pub fn set_source_build(_version: &str, _git_sha: &str, _dirty: bool) {}
 
+/// Off Unix a canonical publication is never admitted: nothing retires.
+#[derive(Debug)]
+pub struct CanonicalPermit(());
+
+impl CanonicalPermit {
+    pub fn is_admitted(&self) -> bool {
+        false
+    }
+}
+
+pub fn admit_canonical_publication(
+    _project_root: &std::path::Path,
+) -> std::io::Result<CanonicalPermit> {
+    Ok(CanonicalPermit(()))
+}
+
+pub fn release_deferred_permits() {}
+
+pub fn live_canonical_publications(_project_root: &std::path::Path) -> std::io::Result<usize> {
+    Ok(0)
+}
+
 pub mod guard {
     use std::path::Path;
 
