@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T13:02:52.254808136Z
+modified_at: 2026-10-28T13:04:43.783898299Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1249,6 +1249,37 @@ comments:
   created_at: 2026-10-28T13:02:52.254808136Z
   modified_at: 2026-10-28T13:02:52.254808136Z
   session_id: 7dc90a99-20d4-4ec0-82c6-004f54adfe0a
+- id: 01a1829c-e907-73b2-8d38-1cd68554bb57
+  author: joe
+  content: |
+    D1 SKETCH (claude implementer lane, 2026-10-28; origin/main 6488c041c27). Design-only; no code, branch commits or PR. The lane stopped because the rulings (90 D1, 91 Q1-Q3, and 2 C1, 47 D, 48 #4, 60 #1/#5, 63 #6, 76 Q1, 87) leave the five forks below open. Each has a recommendation. An advisor ruling on F1-F5 unblocks the lane. F1 decides the shared type that D2 rebases onto.
+
+    Source facts behind the forks:
+    - Reader UUID: `HandleReservation.recipient_id` (aida-cli-lib/src/agent_handle.rs:80) is in `.aida/agents/handles/<handle>.toml`. Core identity (`SessionBindingFacts`, aida-core/src/mailbox_identity.rs:263) carries only handle and vendor. `ResolvedAudience` (mailbox_logical.rs:222) has private/human/shared string keys and no UUID. B2c anchor keys are these strings (ack.rs prepare/commit, `audience.matching_keys`).
+    - Canonical publication (`store_push_pull.rs:633/715`, `digest_snapshot_to_canonical`) publishes only parsed top-level `Message` files. A `.deliveries/` sidecar beside the message never reaches the store.
+    - "Recipient lifecycle generation" exists in code only as the C per-SOURCE lifecycle record (mailbox_lifecycle/mod.rs). A per-recipient generation is the D2 relay-run concept in 47 D, and D2 is not built yet.
+
+    F1. How the reader proves its UUID (an identity-authority change in core, the area 60 #1 and 76 Q1 govern).
+    Recommendation: `SessionBindingFacts::verify` additionally reads the handle's reservation (bounded, no-follow, the same main-checkout handles dir). It accepts `recipient_id` only when the reservation's `registry_id` equals the verified row id, or its `native_session_id` equals the row's. `MailIdentityFacts` gains `own_recipient: Option<RecipientUuid>` (an opaque core newtype with no public string constructor; a test-only fixture). `ResolvedAudience` gains `recipient()`. Otherwise the UUID is None and the reader is "UUID-less". D1 defines `RecipientUuid` and `DeliveryRecord` in aida-core::mailbox_delivery; D2 reuses them.
+
+    F2. Visibility of a cohort message (to = role string, sidecar present).
+    Recommendation, following C1 "snapshot at send, print the same names" and "never queue for a future cohort": the message is visible ONLY to readers whose UUID is in its reader set. A role holder that joined after the send, or a different UUID for the same handle after /clear, does not see it. At send, a live or unverified role reader WITHOUT a UUID is left out of the cohort and named in a warning ("<name> has no recipient UUID and will not receive this; address it by handle"). If that leaves zero readers, the send refuses as today. A message with no sidecar keeps today's shared role-key semantics unchanged (no inferred ownership).
+
+    F3. Where the --queue-for-role binding is written and what "under the recipient lifecycle generation" means for an ordinary handle.
+    Recommendation: the pending DeliveryRecord sits beside the message in the sender's source (Q1). The binding is a separate create-new file in the private anchor, `<common-git>/aida/mail-lifecycle/deliveries/<sha256(delivery_id)>.json`, holding {delivery_id, recipient_uuid, bound_at}. It is written under the Lifecycle lock (Lifecycle, then nothing else; no Receipt, Store, Seat or Pool lock), and only after re-checking that the binder's reservation still maps handle to the same UUID. O_EXCL makes a two-reader race bind exactly one. One anchor per repository means replicas in several sources still bind once. A local-only (non-Git) project binds into `.aida/mailbox/.deliveries/` with the same create-new rule. "Recipient lifecycle generation" in D1 is therefore the reservation UUID itself, since a new session gets a new UUID. D2 may later replace it with the run generation.
+
+    F4. Which snapshots may bind (Q2 says "next snapshot", but every snapshot today is pure and passive notices never write).
+    Recommendation: binding is one explicit step the CLI adapter runs before its own-audience snapshot, for explicit reads (`mailbox inbox`, MCP read_inbox) AND the per-turn notice. Otherwise a queued message never surfaces to a reader that does not run an explicit read. `logical_snapshot` stays pure; it reports unbound pending deliveries that match the audience's shared role keys, and the adapter binds them and retakes the snapshot. The TUI and status/statusline stay pure and never bind. A notice-hook bind failure is silent (a debug line) and retried next turn.
+
+    F5. Sidecars do not reach the canonical store.
+    Recommendation: D1 does NOT change canonical publication (STORY-1742 / C permit territory). The logical view reads `.deliveries/` in every local source and unions records by message_id. A record in a retired source survives through C retention. Accepted, documented gap: a clone that sees only the canonical replica sees a cohort message as legacy role mail. The alternative is publishing sidecars inside the existing permit-admitted digest. That needs a ruling because it widens what the public orphan store carries (reader UUIDs).
+
+    Unchanged from 90 D1 / 91 once F1-F5 are ruled. `DeliveryRecord {delivery_id, message_id, recipient_uuid: Option, cohort: Option<RoleCohort{role, snapshot_at, reader_uuids}>, queued_for_role, run_uuid: Option}` is a sidecar per message (`.aida/mailbox/.deliveries/<message_id>.json`, written with the existing `cover_local_write` admission BEFORE the message file), so a message is never visible without its record. Receipts for cohort deliveries use the anchor key `uuid:<recipient_uuid>`; existing string keys are unchanged, and a shared role watermark never becomes a UUID ACK. `mailbox send <role>` gains `--queue-for-role`, which writes one pending record only when there are zero readers. Tests: zero/one/many cohort, queued-once race (two readers, threads), independent receipts, late joiner and UUID-less reader per F2, legacy message unchanged, plus mailbox integration binaries. About 700 lines.
+
+    BLOCKED-SKETCH.
+  created_at: 2026-10-28T13:04:43.783898299Z
+  modified_at: 2026-10-28T13:04:43.783898299Z
+  session_id: d99d686c-1214-4400-b0a3-9d2423e186aa
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
