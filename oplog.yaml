@@ -80056,5 +80056,19 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6232
+- id: 01a1816f-0a42-7413-9493-380e8082a1c7
+  target_id: 01a1816f-0060-70f3-a963-fb62c52e8933
+  author: aida
+  node_id: '1'
+  lamport: 6233
+  timestamp: 2026-10-28T07:35:00.418973121Z
+  kind: !Create
+    title: 'Reviewer launcher refuses PRs that touch only tracked .aida/ files: intermediate-only check honours the local info/exclude'
+    description: |-
+      PR-3008 (.aida/config.toml only) was refused: 'changes only intermediate/generated files'. pr_cmd.rs git_path_is_ignored runs git check-ignore -q --no-index, which (deliberately, TASK-480) reports tracked files that match an ignore rule. But it also honours $GIT_COMMON_DIR/info/exclude, a per-clone local file; on this host it contains /.aida/ and /.aida/* while the repo tracks .aida/config.toml, .aida/discipline/** and standing orders. So any .aida/-only PR (protected config, discipline docs) cannot be reviewed without AIDA_ALLOW_INTERMEDIATE_ONLY.
+      Acceptance: for a TRACKED path, only committed ignore rules (.gitignore files in the tree, core.excludesFile excluded too) classify it as intermediate; local info/exclude and global excludes never do. Untracked paths keep today's behaviour. Regression test: a temp repo with info/exclude '/.aida/' and a tracked .aida/config.toml diff classifies Clean; a tracked target/x.o with committed .gitignore 'target/' still classifies IntermediateOnly.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6233
 node_id: '1'
