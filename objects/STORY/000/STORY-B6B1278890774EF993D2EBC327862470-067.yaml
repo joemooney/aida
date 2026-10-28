@@ -1,0 +1,33 @@
+id: 01a18456-9964-7aa2-9c68-5d29d35b1719
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-067
+title: 'Review PR-3065: [AI:claude] fix(mailbox): torn era-marker asides are kept and reported; atomic write_source_id (TASK-b6b1278890774ef993d2ebc327862470-075)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/era-aside-torn-body`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3065>
+  - Branch: `fix/era-aside-torn-body` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-075
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3065` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T21:07:10.308916099Z
+modified_at: 2026-10-28T21:07:10.308916099Z
+req_type: Story
+filed_at:
+  code_sha: cff5bfce4d4d388035f521d77519f19ebb371f61
+  branch: fix/era-aside-torn-body
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f0694f4d36
+  vendor: claude
+  session: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
