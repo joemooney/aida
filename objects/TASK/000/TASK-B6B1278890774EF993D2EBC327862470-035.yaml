@@ -1,0 +1,30 @@
+id: 01a1823f-daf9-75c0-895a-d4d7a51df6a0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-035
+title: 'N1 (minor, non-blocking): 9059829 deleted the second ''aida init'' from init_in_a…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1741, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  N1 (minor, non-blocking): 9059829 deleted the second 'aida init' from init_in_a_fresh_clone_projects_the_plane_and_writes_no_product_file (aida-cli/tests/story_1741_adoption_cli.rs:~163). No test now covers re-running init in an already-projected adopted clone (adoption_state -> Adopted via is_projected), which still takes the adopted route and leaves the product snapshot unchanged. Restore it as its own test, or add a calibrated scripts/test-time-budget.toml entry.
+
+  PR: #3005
+  Reviewed sha: 9059829f7e6a87c2b6b65f6815d5360ba23cfd85
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T11:23:05.337713113Z
+modified_at: 2026-10-28T11:23:05.337713113Z
+req_type: Task
+tags:
+- carried-from:STORY-1741
+- finding-hash:ed0bb3b3
+- from-review:PR-3005
+- kind:carried-forward
+filed_at:
+  code_sha: b535e12d57703cc905424bb6875b357b5f66b4dc
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 75d12e4354f
+  vendor: claude
+  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
