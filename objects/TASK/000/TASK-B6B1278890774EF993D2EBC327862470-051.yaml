@@ -6,18 +6,27 @@ description: |-
 
   non-blocking (minor, untested-path): fill_digests_reads_only_writers_on_another_file only exercises the unreadable /proc/<pid>/exe branch (pid u32::MAX). No test covers a foreign-file writer whose /proc exe is readable and digested, for example a view at std::process::id() with a different exe_id, asserting exe_digest == digest_file(/proc/self/exe) and that the second host on the same id reuses the cache.
   Reviewed sha: b6f9c1895b9d1c94fd4afa2853077fbd0122c808
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T13:55:33.246196687Z
-modified_at: 2026-10-28T13:55:33.246196687Z
+modified_at: 2026-10-28T15:50:31.816286652Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-010
 - finding-hash:7bbc19ce
 - from-review:BUG-B6B1278890774EF993D2EBC327862470-010
 - kind:carried-forward
+history:
+- id: 01a18334-b488-7503-881c-85b3a4a5344f
+  author: joe
+  timestamp: 2026-10-28T15:50:31.816282136Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
   branch: main
