@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T18:34:22.899037085Z
-modified_at: 2026-10-28T23:18:04.865141760Z
+modified_at: 2026-10-28T23:18:08.645456962Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-012
 - finding-hash:d517b1ed
 - from-review:PR-3052
 - kind:carried-forward
+comments:
+- id: 01a184ce-8205-70a1-a8c2-db92cbf1efc6
+  author: joe
+  content: 'ADVISOR: fixed in the same PR as TASK-b6b1278890774ef993d2ebc327862470-064.'
+  created_at: 2026-10-28T23:18:08.645456962Z
+  modified_at: 2026-10-28T23:18:08.645456962Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a184ce-7341-7d23-abee-9e356b34f79d
   author: joe
