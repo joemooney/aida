@@ -1,0 +1,33 @@
+id: 01a182bc-c661-7202-bb2b-d5bd162e4879
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-053
+title: 'Review PR-3038: [AI:claude] docs(test): reflow root_item_macros doc comment (TASK-b6b1278890774ef993d2ebc327862470-045)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `chore/reflow-root-item-macros-doc`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3038>
+  - Branch: `chore/reflow-root-item-macros-doc` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-045
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3038` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T13:39:32.065742351Z
+modified_at: 2026-10-28T13:39:32.065742351Z
+req_type: Story
+filed_at:
+  code_sha: 57166b44eaa0e978db9a650e4df1a8c92ad77730
+  branch: chore/reflow-root-item-macros-doc
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7335d1de322
+  vendor: claude
+  session: c03bd132-63a9-4ff8-ab54-32753d194f9c
