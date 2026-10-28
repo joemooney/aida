@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-28T18:58:50.479375576Z
+modified_at: 2026-10-28T21:17:27.240083534Z
 req_type: Story
 relationships:
 - rel_type:
@@ -801,6 +801,12 @@ comments:
     Under f27d5a3c: dispatch:flow PR #3037 queued then done (shipped); dispatch:impl demo-lane queued, refused (BUG-012), resubmitted, done; dispatch:take PR #3049 queued then done; the step-5 malformed-input refusals. Under 94c6f906: the step-2 dispatch:impl refused (no dispatch scope). Remaining: step 9 (refusal after mandate stop), which runs last because it ends the ship-held mandate.
   created_at: 2026-10-28T18:58:50.479375576Z
   modified_at: 2026-10-28T18:58:50.479375576Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a18460-0348-70a2-a415-3728848f741c
+  author: joe
+  content: 'DEMO EVIDENCE step 9 PASS, with one deviation (advisor, 2026-10-28 14:18 MST). The runbook expects the operator to TTY-stop the mandate. ''aida mandate stop'' from the operator''s loop was refused (''a mandate can only be stopped by a human at an interactive terminal''), which is correct by design, and no TTY stop happened before mandate f27d5a3c expired at 21:17:04Z. Run after the mandate ended: ''aida dispatch request review 3065'' -> error: "mandate f27d5a3c-77b1-469e-ab75-9ac64518916f expired at 2026-10-28T21:17:04Z; start a new one with `aida mandate start --ship-held --scope dispatch`". dispatch list shows nothing new queued. The stopped-mandate wording of the same refusal is covered hermetically by mandate_stopped_expired_human_gates_or_grant_revoked_at_execution_time_refuses_and_mails_advisor. SUMMARY: steps 1-9 all pass (steps 2, 5-9 evidence above). The live run surfaced and fixed BUG-b6b1278890774ef993d2ebc327862470-012 (dispatch occupancy scan, #3052). STORY-1917 acceptance is met; completing.'
+  created_at: 2026-10-28T21:17:27.240083534Z
+  modified_at: 2026-10-28T21:17:27.240083534Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
