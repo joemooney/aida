@@ -6837,31 +6837,6 @@ pub(crate) fn classify_intermediate_only_with_gitignore(
     })
 }
 
-/// `git check-ignore --no-index <path>` — exit 0 ⇒ ignored. We pass
-/// `--no-index` so a path that is *tracked* but matches an ignore rule
-/// still reports its ignore status (we OR this with the generated-path
-/// heuristic; a tracked-but-ignored build output is exactly the
-/// intermediate case we want to catch). A tracked path is judged only by
-/// the in-tree `.gitignore` files: the per-clone `info/exclude` and
-/// the global `core.excludesFile` are local preferences and never make a
-/// committed file "intermediate". Untracked paths honour every ignore
-/// source, as before. Any spawn/other error ⇒ treat as not-ignored (fail
-/// open).
-// trace:TASK-480 | ai:claude
-// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
-pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
-    if git_path_is_tracked(project_root, path) {
-        return git_indexed_path_is_ignored_by_tree_rules(project_root, path);
-    }
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["check-ignore", "-q", "--no-index", "--", path])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
 /// Whether `path` is in the index of `project_root`.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 fn git_path_is_tracked(project_root: &std::path::Path, path: &str) -> bool {
@@ -6909,7 +6884,10 @@ fn git_indexed_path_is_ignored_by_tree_rules(project_root: &std::path::Path, pat
 /// `core.excludesFile` matches an ancestor directory of such a path, that
 /// local source is reported and the path reads as not-ignored (fail open).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
-fn git_path_is_ignored_by_tree_rules(project_root: &std::path::Path, path: &str) -> bool {
+pub(crate) fn git_path_is_ignored_by_tree_rules(
+    project_root: &std::path::Path,
+    path: &str,
+) -> bool {
     if git_path_is_tracked(project_root, path) {
         return git_indexed_path_is_ignored_by_tree_rules(project_root, path);
     }
