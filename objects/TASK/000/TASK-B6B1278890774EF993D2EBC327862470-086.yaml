@@ -1,0 +1,30 @@
+id: 01a184c8-4aa0-7292-8593-2c09f2b8a458
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-086
+title: '[cosmetic, non-blocking] leftovers_tests.rs post_placement_failures_warn_and_re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-082, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic, non-blocking] leftovers_tests.rs post_placement_failures_warn_and_return_ok asserts Ok and the file contents but not that a warning was emitted; the warn branch's output is still verified by inspection only.
+
+  PR: #3072
+  Reviewed sha: ce1df94975bf1c6b046306cf341be247cb5b3269
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T23:11:21.248068505Z
+modified_at: 2026-10-28T23:11:21.248068505Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-082
+- finding-hash:8ba1f531
+- from-review:PR-3072
+- kind:carried-forward
+filed_at:
+  code_sha: 8767e9accd8493c9bcab6bf474930e56abe34f73
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 872aae84a7a
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
