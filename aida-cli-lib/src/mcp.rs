@@ -685,14 +685,14 @@ fn list_leases(project_root: &Path) -> Vec<LightLease> {
     let mut out = Vec::new();
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+        // Leases only: companions and staging files share the directory.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+        if !p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(crate::leases::is_session_lease_file)
+        {
             continue;
-        }
-        // Skip activity / manifest sidecar files — they share the directory.
-        if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-            if name.contains(".activity.") || name.contains(".manifest.") {
-                continue;
-            }
         }
         if let Ok(content) = std::fs::read_to_string(&p) {
             if let Ok(lease) = toml::from_str::<LightLease>(&content) {
@@ -3802,13 +3802,14 @@ impl<'a> McpServer<'a> {
         let mut found: Option<(PathBuf, LightLease)> = None;
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+            // Leases only: companions and staging files share the directory.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+            if !p
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_session_lease_file)
+            {
                 continue;
-            }
-            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-                if name.contains(".activity.") || name.contains(".manifest.") {
-                    continue;
-                }
             }
             if let Ok(body) = std::fs::read_to_string(&p) {
                 if let Ok(l) = toml::from_str::<LightLease>(&body) {

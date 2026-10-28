@@ -441,7 +441,13 @@ pub(crate) fn adopt_spec_lease_for_subagent(
     let entries = std::fs::read_dir(leases_dir(project_root)).ok()?;
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+        // Leases only: companions and staging files share the directory.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+        if !path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(crate::leases::is_session_lease_file)
+        {
             continue;
         }
         let Ok(body) = std::fs::read_to_string(&path) else {

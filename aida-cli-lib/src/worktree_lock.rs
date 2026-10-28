@@ -56,7 +56,13 @@ fn find_lease_file_for_worktree(project_root: &Path, target_canonical: &str) -> 
     let entries = std::fs::read_dir(&dir).ok()?;
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+        // Leases only: companions and staging files share the directory.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+        if !p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(crate::leases::is_session_lease_file)
+        {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(&p) else {
@@ -207,7 +213,13 @@ pub(crate) fn list_locks(project_root: &Path) -> Vec<LockedWorktree> {
     };
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+        // Leases only: companions and staging files share the directory.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+        if !p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(crate::leases::is_session_lease_file)
+        {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(&p) else {
