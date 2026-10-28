@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-28T14:07:16.047293022Z
+modified_at: 2026-10-28T18:45:01.421839507Z
 req_type: Story
 relationships:
 - rel_type:
@@ -768,6 +768,12 @@ comments:
   content: 'DEMO EVIDENCE step 6 PASS (advisor, 2026-10-28 07:07 MST). PR #3037 (BUG-b6b1278890774ef993d2ebc327862470-010; touches only aida-core/src/mailbox_lifecycle/activation.rs; author: the impl-bug-010 lane, not the advisor) was approved by an independent reviewer at b6f9c1895b9d with CI green. ''aida dispatch request flow 3037'' -> ''queued: 744174e5-62c0-4f57-b491-b6bb1e5aa07f (flow PR #3037 — pending (waiting for serve))''. dispatch list showed pending -> running (pid 2553473) -> done. dispatch show 744174e5: status done, mandate_id f27d5a3c-77b1-469e-ab75-9ac64518916f, grant_prefix 418aa563, started 13:54:09Z, finished 14:06:48Z, summary ''shipped PR #3037''. gh pr view 3037: MERGED, merge commit 679d4187baddf94613e00f6ac9c90874a1cbf8d8. No operator command was issued. Next: step 7 (take + impl via the tick, with serve stopped).'
   created_at: 2026-10-28T14:07:16.047293022Z
   modified_at: 2026-10-28T14:07:16.047293022Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a183d4-756d-72c3-bcf1-6b476864239e
+  author: joe
+  content: 'DEMO EVIDENCE step 7 (impl half) PASS (advisor, 2026-10-28 11:45 MST). Serve was stopped at 09:41 via the operator''s loop (kill -INT 2373290); serve is stopped now. The first attempt, request 15d8853b (16:42Z), WAS executed by the scheduler tick but refused ''unknown occupant: malformed session lease .../01a12b1c7882.activity.toml''. That''s a real defect: BUG-b6b1278890774ef993d2ebc327862470-012, fixed in #3052 (merged as aecc4311). The live binary was rebuilt at aecc4311 via the operator''s loop. Resubmitted: ''aida dispatch request impl --name demo-lane --branch demo/lane --spec STORY-1917 --brief .aida/advisor-shell/briefs/demo-lane.md --vendor claude'' -> ''queued: 36f88db4-6dd8-42b1-9802-82f63254a7c7 (impl demo-lane (STORY-1917) — pending)'', with no ''waiting for serve''. dispatch show 36f88db4: status done, mandate_id f27d5a3c-77b1-469e-ab75-9ac64518916f, started 18:44:34Z, finished 18:44:44Z, summary ''launched impl demo-lane (STORY-1917) in /home/joe/ai/aida-worktrees/demo-lane''. dispatch-tick row: dispatch-tick substrate * every 2m while mandate.dispatch_active == true && dispatch.pending > 0 due 2026-10-28T18:42:32.538498516+00:00 2026-10-28T18:44:32.538498516+00:00 aida dispatch tick. Remaining for step 7: the take request.'
+  created_at: 2026-10-28T18:45:01.421839507Z
+  modified_at: 2026-10-28T18:45:01.421839507Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
