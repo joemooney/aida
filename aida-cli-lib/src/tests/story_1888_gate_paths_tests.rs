@@ -1712,11 +1712,12 @@ impl Reach {
         cur.clear();
     }
 
+    /// A path in code. A leading `::` names an extern crate
+    /// (`::aida_core::x` is `aida_core::x`), so it is noted the same way.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-053 | ai:claude
     fn path(&mut self, p: &syn::Path) {
-        if p.leading_colon.is_none() {
-            let segs: Vec<String> = p.segments.iter().map(|s| s.ident.to_string()).collect();
-            self.note(&segs, false, false);
-        }
+        let segs: Vec<String> = p.segments.iter().map(|s| s.ident.to_string()).collect();
+        self.note(&segs, false, false);
     }
 }
 
@@ -1734,6 +1735,16 @@ impl<'ast> syn::visit::Visit<'ast> for Reach {
                 glob: false,
                 whole: true,
                 rename: e.rename.as_ref().map(|(_, r)| r.to_string()),
+            });
+        } else if let Some((_, rename)) = &e.rename {
+            // `extern crate aida_core as x;` hands the crate over whole
+            // under `x`, like `use aida_core as x;`.
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-053 | ai:claude
+            self.unrooted.push(Named {
+                segs: vec![e.ident.to_string()],
+                glob: false,
+                whole: true,
+                rename: Some(rename.to_string()),
             });
         }
     }
@@ -3472,8 +3483,9 @@ fn all_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// The gate's decision kernels: modules that decide, and reach outside
 /// `gate/` only through a gate path or a `FACADE_EXTERNAL_LEAVES` entry
-/// (`aida_core` paths included: `aida-core/` is not gate-protected). Every other non-`dispatch_*` gate module
-/// is an orchestrator with a frozen inventory in `gate::orchestrator_leaves`.
+/// (`aida_core` paths included: `aida-core/` is not gate-protected). Every
+/// other non-`dispatch_*` gate module is an orchestrator with a frozen
+/// inventory in `gate::orchestrator_leaves`.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 const GATE_KERNELS: &[&str] = &[
     "branch_policy.rs",
@@ -3712,6 +3724,11 @@ fn every_gate_module_class_refuses_new_outside_reach() {
         "fn f() { aida_core::liveness::pid_is_alive(1); }",
         "use aida_core::liveness;\nfn f() { liveness::pid_is_alive(1); }",
         "use aida_core::team::TeamRoster;",
+        // A leading `::` or an `extern crate` alias of the sibling crate
+        // (TASK-b6b1278890774ef993d2ebc327862470-053).
+        "fn f() { ::aida_core::liveness::pid_is_alive(1); }",
+        "fn f() -> ::aida_core::team::TeamRoster { todo!() }",
+        "extern crate aida_core as core2;\nfn f() { core2::liveness::pid_is_alive(1); }",
     ];
     for src in refused {
         assert!(
@@ -3752,6 +3769,7 @@ fn every_gate_module_class_refuses_new_outside_reach() {
         "fn f() { crate::gate::kernel_deps::current_user_id(None); }",
         "use super::kernel_deps::is_hex_sha;",
         "fn f() { aida_core::team::canonical_role(s); }",
+        "fn f() { ::aida_core::team::canonical_role(s); }",
         "pub(crate) fn f() {}",
     ] {
         assert_eq!(
