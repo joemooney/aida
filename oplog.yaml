@@ -82665,5 +82665,20 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6437
+- id: 01a183f1-f499-7322-a2ee-4b3b5344cb45
+  target_id: 01a183f1-edf6-7d91-bd88-d2fd5b58d2e0
+  author: aida
+  node_id: '1'
+  lamport: 6438
+  timestamp: 2026-10-28T19:17:14.521911471Z
+  kind: !Create
+    title: 'PR-3058 follow-ups: judge pre-record era-marker drop asides; retriable/lock-naming refusal when the era drop cannot take the Lifecycle lock'
+    description: |
+      Non-blocking findings from the APPROVED review of PR #3058 (TASK-b6b1278890774ef993d2ebc327862470-067) at a93c4aa63879. Fix both, with a test each.
+      - [minor, non-blocking] leftovers.rs scan_era_markers: the non-JSON 'continue' runs before aside_marker(), so drop asides of pre-record markers (body = raw admin name) are never restored, reported or reaped. A lost fresh one stays lost (narrow fail-open from a PR-3056-build crash). Judge them with admin_dir(common, admin), or report them.
+      - [minor, non-blocking] mod.rs source_nonce: when the drop can't take the Lifecycle lock (busy or Store lock held), a nonce-less mailbox gets the Unsafe refusal telling the operator to mv the mailbox aside, yet a retry succeeds once the lock frees. Make it retriable or name the lock contention.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6438
 node_id: '1'
