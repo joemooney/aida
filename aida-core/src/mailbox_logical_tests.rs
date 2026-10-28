@@ -220,9 +220,7 @@ fn story1843_context_keeps_requested_checkout_and_refuses_foreign_store() {
         &Query::Inbox,
         &ReadLimits::explicit_read(),
     );
-    // The refused store could hold a delivery sidecar, so sidecar-less role
-    // mail is not served from this partial view (STORY-1843 D1 ruling F2).
-    assert!(ids(&s).is_empty());
+    assert_eq!(ids(&s), vec!["pool-local"]);
     assert!(!s.complete());
     assert_eq!(s.caught_up(), None);
 
@@ -415,9 +413,17 @@ fn story1843_unsafe_or_partial_sources_are_typed_incomplete() {
             &SourceStatus::Error(code),
             "{case}"
         );
-        // An errored source could hold a delivery sidecar, so sidecar-less
-        // role mail is gated for this partial view (STORY-1843 D1 ruling F2).
-        assert!(ids(&s).is_empty(), "{case}");
+        // Healthy-source mail is still served from the partial view, except
+        // when the failed source's `.deliveries/` itself cannot be read (a
+        // symlinked mailbox is never followed): it may hold the sidecar of
+        // any role message, so sidecar-less role mail fails closed
+        // (STORY-1843 D1 ruling F2).
+        let served: &[&str] = if case == "symlink-dir" {
+            &[]
+        } else {
+            &["main-ok"]
+        };
+        assert_eq!(ids(&s), served, "{case}");
         assert!(!s.complete(), "{case}");
         assert_eq!(s.caught_up(), None, "{case}");
         let missing = snap(&r.main, Some(&r.store), Query::ExactId("hidden".into()));

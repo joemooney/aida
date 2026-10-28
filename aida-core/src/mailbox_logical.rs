@@ -227,6 +227,9 @@ pub struct ResolvedAudience {
     private: Vec<String>,
     human: Vec<String>,
     shared: Vec<String>,
+    /// The `shared` keys that are roles, not vendor groups (slice D1): only
+    /// role mail can carry a delivery sidecar.
+    roles: Vec<String>,
     /// The verified session's recipient UUID (slice D1): the only key a
     /// role-cohort delivery is visible and acknowledged under.
     recipient: Option<RecipientUuid>,
@@ -250,9 +253,12 @@ impl ResolvedAudience {
                 return Err("audience key is not a bounded mailbox identity".into());
             }
         }
+        // Callers of this constructor name roles only; `from_facts` splits
+        // the vendor group out.
         Ok(Self {
             private,
             human,
+            roles: shared.clone(),
             shared,
             recipient: None,
         })
@@ -283,6 +289,12 @@ impl ResolvedAudience {
         let mut audience = Self::from_identity_policy(private, human, shared)
             .expect("every key was checked as a bounded mailbox identity");
         audience.recipient = facts.own_recipient().cloned();
+        let role = facts
+            .role()
+            .map(|raw| crate::mailbox_identity::effective_role(Some(raw)).0);
+        audience
+            .roles
+            .retain(|k| role.as_deref().is_some_and(|r| r == k));
         audience
     }
 
@@ -316,6 +328,12 @@ impl ResolvedAudience {
         &self.shared
     }
 
+    /// The shared keys that are roles (never a vendor group).
+    // trace:STORY-1843 | ai:claude
+    pub fn role_keys(&self) -> &[String] {
+        &self.roles
+    }
+
     /// Every key, private first.
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.private
@@ -340,6 +358,7 @@ impl ResolvedAudience {
             private: pick(&self.private),
             human: pick(&self.human),
             shared: pick(&self.shared),
+            roles: pick(&self.roles),
             recipient: self.recipient.clone(),
         };
         let any = narrowed.keys().next().is_some();
@@ -646,11 +665,26 @@ pub fn logical_snapshot(
     let (roots, inventory_error) = inventory(ctx, &mut budget);
     let mut sources = Vec::new();
     let mut observed: Vec<Option<ObservedSource>> = Vec::new();
+    // A live source (inventory found its worktree present, not prunable)
+    // whose read failed, so its `.deliveries/` went unread: it may hold the
+    // sidecar of any role message, since a message carries no origin
+    // (ruling F2, narrowed). A missing or prunable worktree's files are gone
+    // or retained (the retained lookup covers them), and the canonical store
+    // never carries sidecars (F5), so neither counts.
+    // trace:STORY-1843 | ai:claude
+    let mut unsighted = false;
+    let mut salvaged: Vec<DeliverySidecar> = Vec::new();
     for root in roots {
         let (path, result) = match root {
             Err((path, code)) => (path, Err(code)),
             Ok(path) => {
                 let result = read_source(&path, &[".aida", "mailbox"], &mut budget);
+                if result.is_err() {
+                    match read_source_deliveries(&path, &[".aida", "mailbox"], &mut budget) {
+                        Ok(sidecars) => salvaged.extend(sidecars),
+                        Err(_) => unsighted = true,
+                    }
+                }
                 (path, result)
             }
         };
@@ -682,16 +716,10 @@ pub fn logical_snapshot(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    // A message carries no origin, so any source this snapshot could not
-    // read cleanly may hold the sidecar of any role message (ruling F2).
-    let unsighted = inventory_error.is_some_and(|c| c != SourceErrorCode::NotAGitCheckout)
-        || matches!(&ctx.canonical, CanonicalCoverage::Refused(c) if *c != SourceErrorCode::NotAGitCheckout)
-        || sources
-            .iter()
-            .any(|s| matches!(s.status, SourceStatus::Error(_)));
     let (delivered, pending_deliveries, delivery_conflicts) = delivery_gates(
         ctx,
         &observed,
+        salvaged,
         unsighted,
         audience,
         &mut anchor,
@@ -1485,6 +1513,25 @@ fn fingerprint(bytes: &[u8]) -> String {
 
 /// Read every top-level `*.json` message under `root/<components…>`.
 /// `Ok(None)` when the mailbox directory (or an ancestor) does not exist.
+/// The sidecars of a source whose full read failed: its `.deliveries/`
+/// read on its own, no-follow and budgeted. An absent mailbox or
+/// `.deliveries/` holds none. `Err`: they could not be read (ruling F2).
+// trace:STORY-1843 | ai:claude
+fn read_source_deliveries(
+    root: &Path,
+    components: &[&str],
+    budget: &mut Budget,
+) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+    let mut dir = PinnedDir::open_root(root)?;
+    for component in components.iter().copied().chain([DELIVERIES_DIR]) {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(Vec::new()),
+        }
+    }
+    read_sidecars(&dir, budget)
+}
+
 fn read_source(
     root: &Path,
     components: &[&str],
@@ -1576,15 +1623,19 @@ enum DeliveryGate {
 /// offers nothing to bind, without making the whole view partial. Only a
 /// retained area that cannot be opened at all is a view-wide anchor error.
 ///
-/// Fail closed (ruling F2): when `unsighted` (a source that could hold a
-/// sidecar was not read cleanly, so the snapshot is already partial), a role
-/// message with no sidecar found anywhere has unknown ownership and is
+/// `salvaged`: the sidecars of live sources whose message read failed but
+/// whose `.deliveries/` was read on its own.
+///
+/// Fail closed (ruling F2): when `unsighted` (a live source's `.deliveries/`
+/// could not be read, so the snapshot is already partial), a
+/// role message with no sidecar found anywhere has unknown ownership and is
 /// hidden from every reader of this snapshot, never served as legacy role
-/// mail. Legacy applies only when every source was read cleanly.
+/// mail. Vendor-group mail never carries a sidecar and is never gated.
 // trace:STORY-1843 | ai:claude
 fn delivery_gates(
     ctx: &MailboxContext,
     observed: &[Option<ObservedSource>],
+    salvaged: Vec<DeliverySidecar>,
     unsighted: bool,
     audience: &ResolvedAudience,
     anchor: &mut AnchorEvidence,
@@ -1598,6 +1649,12 @@ fn delivery_gates(
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
     let mut role_addressed: BTreeSet<&str> = BTreeSet::new();
+    for sidecar in salvaged {
+        sidecars
+            .entry(sidecar.message_id.clone())
+            .or_default()
+            .push(sidecar);
+    }
     for source in observed.iter().flatten() {
         for sidecar in &source.deliveries {
             sidecars
@@ -1620,7 +1677,7 @@ fn delivery_gates(
             }
             if keys
                 .iter()
-                .any(|k| audience.shared_keys().iter().any(|s| s == k))
+                .any(|k| audience.role_keys().iter().any(|s| s == k))
             {
                 role_addressed.insert(&m.message.id);
             }
