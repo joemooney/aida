@@ -76,6 +76,52 @@ fn classify_with_gitignore_refuses_heuristic_target_dir() {
     ));
 }
 
+// --- BUG-b6b1278890774ef993d2ebc327862470-009: local excludes never classify tracked paths ---
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
+fn committed_repo(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path();
+    git(repo, &["init", "-q"]);
+    git(repo, &["config", "user.email", "aida@example.test"]);
+    git(repo, &["config", "user.name", "AIDA Test"]);
+    for (path, body) in files {
+        let full = repo.join(path);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(full, body).unwrap();
+    }
+    git(repo, &["add", "-f", "."]);
+    git(repo, &["commit", "-q", "-m", "base"]);
+    tmp
+}
+
+#[test]
+fn tracked_path_matching_only_local_info_exclude_classifies_clean() {
+    let tmp = committed_repo(&[(".aida/config.toml", "x = 1\n")]);
+    let repo = tmp.path();
+    std::fs::write(repo.join(".git/info/exclude"), "/.aida/\n/.aida/*\n").unwrap();
+
+    assert!(!git_path_is_ignored(repo, ".aida/config.toml"));
+    assert_eq!(
+        classify_intermediate_only_with_gitignore(repo, &[".aida/config.toml".to_string()]),
+        pr_rebase::IntermediateOnlyOutcome::Clean
+    );
+    // Untracked paths keep honouring the local exclude.
+    assert!(git_path_is_ignored(repo, ".aida/scratch.toml"));
+}
+
+#[test]
+fn tracked_path_matching_committed_gitignore_stays_intermediate_only() {
+    let tmp = committed_repo(&[(".gitignore", "target/\n"), ("target/x.o", "obj\n")]);
+    let repo = tmp.path();
+
+    assert!(git_path_is_ignored(repo, "target/x.o"));
+    assert!(matches!(
+        classify_intermediate_only_with_gitignore(repo, &["target/x.o".to_string()]),
+        pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { .. }
+    ));
+}
+
 #[cfg(unix)]
 fn fake_gh(dir: &std::path::Path, head_oid: &str) -> std::path::PathBuf {
     let path = dir.join("gh");
