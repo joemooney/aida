@@ -311,7 +311,15 @@ pub(crate) fn gc_leftover_lines(
             tomb.display()
         )
     });
-    removed.chain(kept).collect()
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+    let damaged = leftovers.corrupt.iter().map(|aside| {
+        format!(
+            "Mailbox era-marker aside kept: {} could not be read as a marker; inspect it and \
+             remove it by hand",
+            aside.display()
+        )
+    });
+    removed.chain(kept).chain(damaged).collect()
 }
 
 // trace:TASK-542 | ai:antigravity
