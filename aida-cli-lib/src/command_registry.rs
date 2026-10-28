@@ -126,6 +126,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::regen::REGEN,
     &crate::relationship_cmd::REL,
     &crate::rel_def_cmd::REL_DEF,
+    &crate::relay_mail::RELAY_MAIL,
     &crate::upgrade_release::RELEASE,
     &crate::remote_cmd::REMOTE,
     &crate::report_cmd::REPORT,
