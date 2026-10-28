@@ -82728,5 +82728,23 @@ operations:
   timestamp: 2026-10-28T19:55:22.284661925Z
   kind: !SetStatus
     status: Completed
-clock: 6444
+- id: 01a18415-10c2-7bd3-88cc-865921ab3c7b
+  target_id: 01a18415-0972-7083-aa6a-50da59c8bd3a
+  author: aida
+  node_id: '1'
+  lamport: 6445
+  timestamp: 2026-10-28T19:55:35.490110598Z
+  kind: !Create
+    title: '[minor, non-blocking] leftovers.rs scan_era_markers: the non-JSON ''continue'' ru…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor, non-blocking] leftovers.rs scan_era_markers: the non-JSON 'continue' runs before aside_marker(), so drop asides of pre-record markers (body = raw admin name) are never restored, reported or reaped. A lost fresh one stays lost (narrow fail-open from a PR-3056-build crash). Judge them with admin_dir(common, admin), or report them.
+
+      PR: #3058
+      Reviewed sha: a93c4aa6387997d2dca334025be1be9cba6f80f1
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6445
 node_id: '1'
