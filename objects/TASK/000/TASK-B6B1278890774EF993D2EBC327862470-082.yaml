@@ -1,0 +1,24 @@
+id: 01a18495-865f-7781-ad54-024ff63f82a3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-082
+title: 'PR-3069 follow-ups: unlink partial file on fallback write failure; fault-injection tests for post-placement warnings'
+description: |
+  Non-blocking findings from the APPROVED review of PR #3069 (TASK-b6b1278890774ef993d2ebc327862470-078) at 1b2b235a3dd4. Fix: on the create_new fallback, if write_all/sync_all fails, unlink the final-name file before returning Err (it was created by this call, so removing it is safe). Add fault-injection tests (a seam) for that and for the warn-not-Err post-placement branches.
+  - [minor, non-blocking] mod.rs write_new_synced on the no-rename/no-link fallback path: if write_all/sync_all fails after create_new (e.g. ENOSPC/EIO), the partial or empty file stays at the final name. Later write_source_id calls get AlreadyExists, and mark_nonce_era treats that as Ok, so the torn marker/nonce persists. The doc comment mentions only a crash. Suggest removing path on write/sync error in the fallback.
+  - [cosmetic, non-blocking] The post-placement warn-not-Err branches (temp remove, dir fsync) have no fault-injection test; verified by inspection only.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T22:15:54.207767843Z
+modified_at: 2026-10-28T22:15:54.207767843Z
+req_type: Task
+tags:
+- from-review:PR-3069
+filed_at:
+  code_sha: 283eefbb554a1ca0c8bbc7ee04aa2ea4d45286e3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b00dbdfa8ba
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
