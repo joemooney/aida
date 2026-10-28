@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-28T18:57:33.817361348Z
+modified_at: 2026-10-28T18:58:50.479375576Z
 req_type: Story
 relationships:
 - rel_type:
@@ -780,6 +780,27 @@ comments:
   content: 'DEMO EVIDENCE step 7 PASS (advisor, 2026-10-28 11:58 MST), take half, with serve still stopped. ''aida dispatch request take 3049 --branch story-1843-d2b-relay --spec STORY-1843 --brief .aida/advisor-shell/briefs/take-3049.md'' -> ''queued: 8f24584e-95e7-4523-a198-ec14f6368ee3 (take PR #3049 — pending)''. The scheduler tick executed it: dispatch show 8f24584e status done, started 18:56:51Z, finished 18:57:02Z, summary ''launched take PR #3049 in /home/joe/ai/aida-worktrees/s1843d2''. Together with impl 36f88db4 (18:44Z, demo-lane), both take and impl were executed by the tick, not serve. Next: step 8 (operator ledger), then step 9.'
   created_at: 2026-10-28T18:57:33.817361348Z
   modified_at: 2026-10-28T18:57:33.817361348Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a183e1-1bef-7a71-8710-c6eb2e14f263
+  author: joe
+  content: |-
+    DEMO EVIDENCE step 8 PASS (2026-10-28 11:58 MST; run by the operator's loop 2: 'aida history --kind MandateDriveAction --since 8h | grep -E "f27d5a3c|94c6f906"'). Rows (time, mandate, lane, subject, action, outcome):
+    2026-10-28 18:57:03Z  -  f27d5a3c "lane":"dispatch:take","subject":"PR #3049","action":"take","outcome":"done
+    2026-10-28 18:45:16Z  -  f27d5a3c "lane":"dispatch:take","subject":"PR #3049","action":"take","outcome":"routed
+    2026-10-28 18:44:45Z  -  f27d5a3c "lane":"dispatch:impl","subject":"demo-lane (STORY-1917)","action":"impl","outcome":"done
+    2026-10-28 18:40:20Z  -  f27d5a3c "lane":"dispatch:impl","subject":"demo-lane (STORY-1917)","action":"impl","outcome":"routed
+    2026-10-28 16:52:04Z  -  f27d5a3c "lane":"dispatch:impl","subject":"demo-lane (STORY-1917)","action":"impl","outcome":"refused
+    2026-10-28 16:42:09Z  -  f27d5a3c "lane":"dispatch:impl","subject":"demo-lane (STORY-1917)","action":"impl","outcome":"routed
+    2026-10-28 16:04:36Z  -  f27d5a3c "lane":"dispatch:flow","subject":"PR #3040","action":"flow","outcome":"skipped
+    2026-10-28 16:03:56Z  -  f27d5a3c "lane":"dispatch:flow","subject":"PR #3040","action":"flow","outcome":"routed
+    2026-10-28 14:06:49Z  -  f27d5a3c "lane":"dispatch:flow","subject":"PR #3037","action":"flow","outcome":"done
+    2026-10-28 13:54:07Z  -  f27d5a3c "lane":"dispatch:flow","subject":"PR #3037","action":"flow","outcome":"routed
+    2026-10-28 13:18:09Z  -  f27d5a3c "lane":"dispatch:impl","subject":"../x (NOPE-1)","action":"impl","outcome":"refused
+    2026-10-28 13:18:09Z  -  f27d5a3c "lane":"dispatch:flow","subject":"PR #0","action":"flow","outcome":"refused
+    2026-10-28 11:26:48Z  -  94c6f906 "lane":"dispatch:impl","subject":"demo-noscope (TASK-B6B1278890774EF993D2EBC327862470-031)","action":"impl","outcome":"refused
+    Under f27d5a3c: dispatch:flow PR #3037 queued then done (shipped); dispatch:impl demo-lane queued, refused (BUG-012), resubmitted, done; dispatch:take PR #3049 queued then done; the step-5 malformed-input refusals. Under 94c6f906: the step-2 dispatch:impl refused (no dispatch scope). Remaining: step 9 (refusal after mandate stop), which runs last because it ends the ship-held mandate.
+  created_at: 2026-10-28T18:58:50.479375576Z
+  modified_at: 2026-10-28T18:58:50.479375576Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
