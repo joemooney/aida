@@ -547,7 +547,7 @@ fn source_nonce(
         if let Some(hook) = BEFORE_ERA_DROP.with(|h| h.borrow_mut().take()) {
             hook(&marker);
         }
-        drop_stale_era_marker(&marker, &dir)?;
+        drop_stale_era_marker(anchor, &marker, &dir);
     }
     match read_source_id(mailbox)? {
         Some(nonce) => {
@@ -620,32 +620,25 @@ pub(crate) fn era_marker_stale(marker: &Path, admin_dir: &Path) -> bool {
     }
 }
 
-/// Remove the nonce-era marker at `marker`, judged stale against
-/// `admin_dir`. Absent is fine. Another resolver may have dropped it and
-/// written a fresh one since the judgement, so the marker is renamed aside
-/// and judged again there: a stale one is removed, a fresh one is linked
-/// back (never over a marker written meanwhile, which then stands).
-// trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
-pub(crate) fn drop_stale_era_marker(marker: &Path, admin_dir: &Path) -> Result<()> {
-    let name = marker
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let aside = marker.with_file_name(format!(".{name}.drop.{}", uuid::Uuid::new_v4().simple()));
-    match std::fs::rename(marker, &aside) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
+/// Remove the nonce-era marker at `marker` if it is stale against
+/// `admin_dir`, judged again under the Lifecycle lock. The marker path is
+/// never absent while a fresh marker exists: every drop runs under the lock,
+/// and a marker is only ever created where none is, so the file judged here
+/// is the file unlinked. Returns whether it was removed. When the lock
+/// cannot be taken (busy, or a Store lock is held) the marker is kept, which
+/// fails closed: a nonce-less mailbox there keeps refusing.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-067 | ai:claude
+pub(crate) fn drop_stale_era_marker(anchor: &Path, marker: &Path, admin_dir: &Path) -> bool {
+    let Ok(_held) = lock(anchor, LIFECYCLE_LOCK_TIMEOUT) else {
+        return false;
+    };
+    if !era_marker_stale(marker, admin_dir) {
+        return false;
     }
-    if !era_marker_stale(&aside, admin_dir) {
-        match std::fs::hard_link(&aside, marker) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(e.into()),
-        }
+    match std::fs::remove_file(marker) {
+        Ok(()) => true,
+        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
     }
-    std::fs::remove_file(&aside)?;
-    Ok(())
 }
 
 /// `<anchor>/nonce-era/<sha256(common, admin)>`.

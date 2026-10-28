@@ -115,3 +115,64 @@ fn the_retention_dry_run_reports_stranded_tombs() {
     let report = super::activation::dry_run_report(dir.path());
     assert_eq!(report.leftovers.stranded_tombs, [full]);
 }
+
+/// A drop aside an earlier build left is touched only once old: a stale one
+/// is removed, a fresh one is linked back when its marker is gone, and is
+/// removed beside a marker that stands.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-067 | ai:claude
+#[test]
+fn old_drop_asides_are_settled_and_young_ones_left() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let git = std::fs::canonicalize(dir.path().join(".git")).unwrap();
+    let meta = std::fs::metadata(&git).unwrap();
+    let fresh = serde_json::to_vec(&EraMarker {
+        admin: String::new(),
+        admin_dir: git.clone(),
+        dev: meta.dev(),
+        ino: meta.ino(),
+    })
+    .unwrap();
+    let stale = serde_json::to_vec(&EraMarker {
+        admin: "gone".into(),
+        admin_dir: git.join("worktrees").join("gone"),
+        dev: 1,
+        ino: 2,
+    })
+    .unwrap();
+    let put = |name: &str, bytes: &[u8]| {
+        let path = era.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+        path
+    };
+    let stale_aside = put(".s.drop.1", &stale);
+    let lost_aside = put(".l.drop.2", &fresh);
+    let kept_aside = put(".k.drop.3", &fresh);
+    let kept = put("k", b"{}");
+
+    let young = scan_at(dir.path(), true, SystemTime::now());
+    assert!(young.reapable.is_empty(), "{young:?}");
+    assert!(stale_aside.is_file() && lost_aside.is_file() && kept_aside.is_file());
+
+    let mut reaped = scan_at(dir.path(), true, later()).reapable;
+    reaped.sort();
+    let mut want = vec![kept_aside.clone(), lost_aside.clone(), stale_aside.clone()];
+    want.sort();
+    assert_eq!(reaped, want);
+    assert!(!stale_aside.exists() && !lost_aside.exists() && !kept_aside.exists());
+    assert!(!era.join("s").exists(), "a stale aside is never restored");
+    assert_eq!(
+        std::fs::read(era.join("l")).unwrap(),
+        fresh,
+        "a fresh aside whose marker was lost is linked back"
+    );
+    assert_eq!(
+        std::fs::read(&kept).unwrap(),
+        b"{}",
+        "a standing marker stays"
+    );
+}
