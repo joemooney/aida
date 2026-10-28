@@ -8,12 +8,12 @@ description: |-
 
   PR: #3036
   Reviewed sha: 6588b3a632cefc924a47500fdfe857632596db57
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T16:05:48.239313819Z
-modified_at: 2026-10-28T17:59:45.869189006Z
+modified_at: 2026-10-28T18:13:49.253587766Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-041
@@ -69,6 +69,20 @@ history:
   timestamp: 2026-10-28T17:59:46.707385958Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a183b7-e441-7f33-b0fd-d4788e50737f
+  author: aida-auto-bump
+  timestamp: 2026-10-28T18:13:49.249008458Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a183b7-e445-7c40-a41f-daaf3a1427c6
+  timestamp: 2026-10-28T18:13:49.253584428Z
+  agent: aida
+  commit_sha: 283822947d3bf4622436ff3364d30c7378882a85
+  summary: 'Reach scanner now notes leading-:: paths and extern-crate aliases of aida_core (3 new refused cases + 1 allowed case in every_gate_module_class_refuses_new_outside_reach, each discriminating vs the old code); both ragged doc comments rewrapped <=100 cols; CI run 40736754755 all 7 jobs green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 01344b788fe2e3b2aeda58a12b3239924c93b6d6
@@ -77,3 +91,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 679d4187bad
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T18:13:49.249003771Z
+  completion_sha: 283822947d3bf4622436ff3364d30c7378882a85
