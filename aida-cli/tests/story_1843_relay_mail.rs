@@ -305,10 +305,54 @@ fn story_1843_relay_mail_lifetime_through_the_cli() {
     assert_eq!(again["recorded_now"], false);
     assert_eq!(again["reason"], "exit");
     assert!(!fx.send("relay-fx", "after-end").status.success());
+    // An end notice to the advisor is still owed (this project has no
+    // advisor reader), so the ended run stays a live record until it is
+    // delivered; only then is it archived.
     assert!(fx
         .root
-        .join(format!(".aida/agents/relay-runs/ended/{run}.json"))
+        .join(format!(".aida/agents/relay-runs/{run}.json"))
         .exists());
+
+    // Reusing the label: the ended run still has its gap mail unread, so a
+    // bind without a choice refuses with the exact count; --handover binds.
+    let reuse_args = |extra: &[&'static str]| {
+        let mut args = vec![
+            "relay-mail",
+            "bind",
+            "--label",
+            "relay-fx",
+            "--controller-pid",
+            pid.as_str(),
+            "--run-lock",
+            lock_arg,
+            "--protocol",
+            protocol.as_str(),
+            "--json",
+        ];
+        args.extend_from_slice(extra);
+        args.into_iter().map(str::to_string).collect::<Vec<_>>()
+    };
+    let refused = fx.aida(
+        &reuse_args(&[])
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    );
+    assert!(!refused.status.success(), "{}", text(&refused));
+    assert!(
+        text(&refused).contains("which has 1 unread message;"),
+        "{}",
+        text(&refused)
+    );
+    let reused = fx.json(
+        &reuse_args(&["--handover"])
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    );
+    assert_ne!(reused["run"], run.as_str());
+    assert_eq!(reused["reuse"]["previous_run"], run.as_str());
+    assert_eq!(reused["reuse"]["handed_over"], 1);
     controller.kill();
 
     // Crash path: a controller killed without `end` is ended by maintenance.
@@ -332,9 +376,11 @@ fn story_1843_relay_mail_lifetime_through_the_cli() {
     let capability2 = bound2["capability"].as_str().unwrap().to_string();
     assert!(fx.send("relay-crash", "gap").status.success());
     crashed.kill();
+    // The send path reconciles before it resolves: the refused send records
+    // the crash, and maintenance afterwards has nothing left to end.
     assert!(!fx.send("relay-crash", "dead-controller").status.success());
     let gc = fx.aida_ok(&["agent", "gc"]);
-    assert!(gc.contains("Relay runs: recorded the end of 1 run"), "{gc}");
+    assert!(!gc.contains("Relay runs: recorded"), "{gc}");
     let after = fx.aida_stdin(&["relay-mail", "child-bind", "--run", &run2], &capability2);
     assert!(!after.status.success());
     assert!(text(&after).contains("ended"), "{}", text(&after));

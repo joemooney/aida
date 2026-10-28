@@ -47,6 +47,10 @@ pub(crate) use relay_mail_args::*;
 #[path = "relay_mail_outbox.rs"]
 pub(crate) mod outbox;
 
+// trace:STORY-1843 | ai:claude
+#[path = "relay_mail_reuse.rs"]
+pub(crate) mod reuse;
+
 /// The relay mail protocol this binary speaks. A relay compares it exactly;
 /// a different version refuses before anything is reserved.
 pub(crate) const PROTOCOL: &str = "aida-relay-mail/1";
@@ -532,6 +536,17 @@ pub(crate) fn run_holding(
         .then_some(run.run_id)
 }
 
+/// Whether `reservation` names a relay run whose end is recorded.
+pub(crate) fn run_ended(
+    project_root: &Path,
+    reservation: &agent_handle::HandleReservation,
+) -> bool {
+    load_run(project_root, &reservation.recipient_id)
+        .ok()
+        .flatten()
+        .is_some_and(|run| run.terminal.is_some() && run.label == reservation.handle)
+}
+
 /// Runs that accept mail to their label now: open, not provably dead, and
 /// still the owner of their label's reservation.
 pub(crate) fn accepting_runs(project_root: &Path) -> (Vec<AcceptingRun>, Vec<String>) {
@@ -634,15 +649,40 @@ pub(crate) struct BindOutcome {
     /// The run capability, printed once. The controller keeps it for
     /// `child-bind` and `end` and never exports it to a child.
     pub(crate) capability: String,
+    /// Set when the label belonged to an ended run: what happened to that
+    /// run's unread mail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reuse: Option<reuse::ReuseReport>,
 }
 
-/// Reserve `label` for a new run owned by `controller_pid`.
+/// Reserve `label` for a new run owned by `controller_pid`. A label an
+/// ended run held is refused while that run has unread mail.
 pub(crate) fn bind(
     project_root: &Path,
     label: &str,
     controller_pid: u32,
     run_lock: &Path,
     protocol: &str,
+) -> Result<BindOutcome> {
+    bind_reusing(
+        project_root,
+        label,
+        controller_pid,
+        run_lock,
+        protocol,
+        None,
+    )
+}
+
+/// [`bind`], with the choice for an ended run's unread mail when the label
+/// is reused.
+pub(crate) fn bind_reusing(
+    project_root: &Path,
+    label: &str,
+    controller_pid: u32,
+    run_lock: &Path,
+    protocol: &str,
+    choice: Option<reuse::ReuseChoice>,
 ) -> Result<BindOutcome> {
     // The capability check comes before anything is observed or reserved.
     if protocol != PROTOCOL {
@@ -663,51 +703,55 @@ pub(crate) fn bind(
     }
     let controller = controller_evidence(controller_pid)?;
     let run_lock = run_lock_evidence(run_lock, controller_pid)?;
-    let lock = agent_handle::lock_namespace(project_root)?;
-    if let Some(existing) = agent_handle::checked_reservation(project_root, label)? {
-        if let Some(holder) = run_holding(project_root, &existing) {
-            bail!("relay label `{label}` is in use by relay run {holder}");
-        }
-        // Mail is keyed by the label, so a new run under an earlier run's
-        // label would read that run's unread mail. Reuse needs an explicit
-        // leave-with-old or handover choice, which this protocol version
-        // does not offer.
-        let earlier_run = std::iter::once(&existing.recipient_id)
-            .chain(existing.previous_recipients.iter())
-            .find(|id| load_run(project_root, id).ok().flatten().is_some());
-        if let Some(previous) = earlier_run {
-            bail!(
-                "relay label `{label}` belonged to relay run {previous}; reusing a relay label is not supported yet, choose a new label"
-            );
-        }
-    }
-    let req = HandleRequest {
-        agent_type: "relay",
-        explicit: Some(label),
-        ..Default::default()
-    };
+    // The caller proved the controller and its run lock; the new run's
+    // capability is minted now, and an ended run's unread mail is counted
+    // only against it, with no lock held. trace:STORY-1843 | ai:claude
     let capability = new_capability()?;
-    let reservation = agent_handle::reserve_handle_locked(project_root, &req, &lock)?;
-    let run = RelayRun {
-        protocol: PROTOCOL.to_string(),
-        run_id: canonical_run_id(&reservation.recipient_id)?,
-        label: reservation.handle.clone(),
-        controller,
-        run_lock,
-        capability_sha256: capability_digest(&capability),
-        bound_at: Utc::now(),
-        generation: 1,
-        children: Vec::new(),
-        terminal: None,
-        notices_settled: false,
+    let capability_sha256 = capability_digest(&capability);
+    let plan = reuse::plan_reuse(project_root, label, &capability_sha256, &capability, choice)?;
+    let (run, plan) = {
+        let lock = agent_handle::lock_namespace(project_root)?;
+        if let Some(existing) = agent_handle::checked_reservation(project_root, label)? {
+            if let Some(holder) = run_holding(project_root, &existing) {
+                bail!("relay label `{label}` is in use by relay run {holder}");
+            }
+        }
+        // The decision above was about the run that held the label then.
+        let previous = reuse::ended_run_of_label(project_root, label)?.map(|r| r.run_id);
+        if previous.as_deref() != plan.as_ref().map(|p| p.previous.as_str()) {
+            bail!("relay label `{label}` changed while it was checked; retry the bind");
+        }
+        let req = HandleRequest {
+            agent_type: "relay",
+            explicit: Some(label),
+            ..Default::default()
+        };
+        let reservation = agent_handle::reserve_handle_locked(project_root, &req, &lock)?;
+        let run = RelayRun {
+            protocol: PROTOCOL.to_string(),
+            run_id: canonical_run_id(&reservation.recipient_id)?,
+            label: reservation.handle.clone(),
+            controller,
+            run_lock,
+            capability_sha256,
+            bound_at: Utc::now(),
+            generation: 1,
+            children: Vec::new(),
+            terminal: None,
+            notices_settled: false,
+        };
+        write_run(project_root, &run)?;
+        (run, plan)
     };
-    write_run(project_root, &run)?;
+    // Handovers take the mailbox lifecycle lock: after the namespace lock.
+    let reuse = plan.map(|plan| reuse::apply_reuse(project_root, plan, &run.run_id));
     Ok(BindOutcome {
         run: run.run_id,
         label: run.label,
         protocol: run.protocol,
         generation: run.generation,
         capability,
+        reuse,
     })
 }
 
@@ -903,14 +947,39 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
             controller_pid,
             run_lock,
             protocol,
+            leave_with_old,
+            handover,
             json,
         } => {
-            let out = bind(&project_root()?, label, *controller_pid, run_lock, protocol)?;
+            let choice = match (*leave_with_old, *handover) {
+                (true, _) => Some(reuse::ReuseChoice::LeaveWithOld),
+                (_, true) => Some(reuse::ReuseChoice::Handover),
+                _ => None,
+            };
+            let out = bind_reusing(
+                &project_root()?,
+                label,
+                *controller_pid,
+                run_lock,
+                protocol,
+                choice,
+            )?;
+            if let Some(reuse) = &out.reuse {
+                for error in &reuse.handover_errors {
+                    eprintln!("warning: handover not written, the mail stays with the earlier run: {error}");
+                }
+            }
             if *json {
                 print_json(&out)
             } else {
                 println!("{}", out.run);
                 println!("{}", out.capability);
+                if let Some(reuse) = &out.reuse {
+                    eprintln!(
+                        "Reused the label of relay run {}: {} unread, {} handed over.",
+                        reuse.previous_run, reuse.unread, reuse.handed_over
+                    );
+                }
                 Ok(())
             }
         }
@@ -1038,3 +1107,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/story_1843_relay_outbox_tests.rs"]
 mod outbox_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1843_relay_reuse_tests.rs"]
+mod reuse_tests;

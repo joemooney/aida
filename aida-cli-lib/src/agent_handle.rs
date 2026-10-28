@@ -433,6 +433,12 @@ fn other_live_holder(
     if let Some(run) = crate::relay_mail::run_holding(project_root, r) {
         return Some(format!("relay run {run}"));
     }
+    // An ended run's reservation holds nothing itself; a child session still
+    // running under the label is a registry holder, checked above. Reusing
+    // the label is gated by `relay-mail bind`'s unread-mail choice.
+    if crate::relay_mail::run_ended(project_root, r) {
+        return None;
+    }
     if now.signed_duration_since(r.reserved_at)
         > chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS)
     {

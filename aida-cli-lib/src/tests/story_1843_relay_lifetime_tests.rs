@@ -406,20 +406,20 @@ fn a_reused_controller_pid_is_dead() {
 }
 
 #[test]
-fn an_ended_runs_label_is_not_reused_without_a_handover_choice() {
+fn an_ended_runs_label_with_no_unread_mail_is_reused_by_a_new_run() {
     let tmp = tempfile::tempdir().unwrap();
     let (out, lock) = bind_live(tmp.path(), "relay-a");
     end(tmp.path(), &out.run, &out.capability, TerminalReason::Stop).unwrap();
-    let err = bind(tmp.path(), "relay-a", me(), &lock.path, PROTOCOL)
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("reusing a relay label"), "{err}");
+    let again = bind(tmp.path(), "relay-a", me(), &lock.path, PROTOCOL).unwrap();
+    assert_ne!(again.run, out.run);
+    let reuse = again.reuse.unwrap();
     assert_eq!(
-        load_reservation(tmp.path(), "relay-a")
-            .unwrap()
-            .recipient_id,
-        out.run
+        (reuse.previous_run.as_str(), reuse.unread),
+        (out.run.as_str(), 0)
     );
+    let r = load_reservation(tmp.path(), "relay-a").unwrap();
+    assert_eq!(r.recipient_id, again.run);
+    assert_eq!(r.previous_recipients, vec![out.run]);
 }
 
 #[test]
