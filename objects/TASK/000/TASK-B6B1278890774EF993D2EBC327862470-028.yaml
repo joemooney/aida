@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T09:22:14.427988121Z
-modified_at: 2026-10-28T09:22:14.427988121Z
+modified_at: 2026-10-28T09:50:37.312627151Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-013
 - finding-hash:a7e9d6ee
 - from-review:PR-3004
 - kind:carried-forward
+comments:
+- id: 01a181eb-3300-7013-9bc5-c400371efe84
+  author: joe
+  content: 'ADVISOR: folded into TASK-b6b1278890774ef993d2ebc327862470-024 (same gate files; avoids a conflicting parallel edit).'
+  created_at: 2026-10-28T09:50:37.312627151Z
+  modified_at: 2026-10-28T09:50:37.312627151Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 filed_at:
   code_sha: a92022ef3335e4934d2c8d3f96467b206729df8d
   branch: main
