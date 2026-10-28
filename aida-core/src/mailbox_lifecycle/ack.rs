@@ -41,8 +41,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::mailbox_logical::{
-    read_receipt_ledger, receipt_ledger_name, replica_fingerprint, LogicalSnapshot, ReadEvidence,
-    ReceiptLedger, ResolvedAudience, SnapshotRecord, SourceKind, RECEIPT_LEDGER_CAP,
+    read_receipt_ledger, receipt_keys, receipt_ledger_name, replica_fingerprint, LogicalSnapshot,
+    ReadEvidence, ReceiptLedger, ResolvedAudience, SnapshotRecord, SourceKind, RECEIPT_LEDGER_CAP,
     RECEIPT_LEDGER_MAX_ENTRIES, RECEIPT_LEDGER_SCHEMA,
 };
 
@@ -241,23 +241,25 @@ impl AckPlan {
             entries: Vec::new(),
         };
         let mut by_snapshot_index: BTreeMap<usize, usize> = BTreeMap::new();
-        let mut keys_seen: std::collections::BTreeSet<&str> = Default::default();
+        let mut keys_seen: std::collections::BTreeSet<String> = Default::default();
         let mut ledgers: BTreeMap<String, Option<ReceiptLedger>> = BTreeMap::new();
         for record in wanted {
-            let mut keys = audience.matching_keys(&record.message);
-            keys_seen.extend(keys.iter().copied());
+            // A cohort delivery is acknowledged under the reader's own UUID
+            // key only (slice D1). trace:STORY-1843 | ai:claude
+            let mut keys = receipt_keys(audience, record);
+            keys_seen.extend(keys.iter().cloned());
             if keys_seen.len() > MAX_PLAN_KEYS {
                 return Err(AckError::TooLarge);
             }
             if let Some(common) = common {
                 let mut missing = Vec::with_capacity(keys.len());
                 for key in keys {
-                    if !ledgers.contains_key(key) {
+                    if !ledgers.contains_key(&key) {
                         let ledger =
-                            read_receipt_ledger(common, key).map_err(|_| AckError::Partial)?;
-                        ledgers.insert(key.to_string(), ledger);
+                            read_receipt_ledger(common, &key).map_err(|_| AckError::Partial)?;
+                        ledgers.insert(key.clone(), ledger);
                     }
-                    let held = ledgers[key]
+                    let held = ledgers[&key]
                         .as_ref()
                         .is_some_and(|l| l.receipts.contains_key(&record.message.id));
                     if !held {
@@ -288,7 +290,7 @@ impl AckPlan {
             plan.entries.push(PlannedAck {
                 id: record.message.id.clone(),
                 legacy: matches!(record.read, ReadEvidence::LegacyWatermark { .. }),
-                keys: keys.into_iter().map(str::to_string).collect(),
+                keys,
                 replicas,
             });
         }
@@ -373,10 +375,7 @@ impl AckPlan {
             .filter(|e| e.legacy)
             .map(|e| e.id.clone())
             .collect();
-        if by_key
-            .keys()
-            .any(|key| !current.keys().any(|k| k == key.as_str()))
-        {
+        if by_key.keys().any(|key| !current.holds_key(key)) {
             return Err(AckError::Authority);
         }
         let Some(common) = &self.common else {

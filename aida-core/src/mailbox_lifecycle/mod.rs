@@ -458,7 +458,7 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn ensure_anchor(common: &Path) -> Result<PathBuf> {
+pub(crate) fn ensure_anchor(common: &Path) -> Result<PathBuf> {
     let parent = common.join(ANCHOR_PARENT);
     ensure_dir(&parent, false)?;
     let anchor = parent.join(ANCHOR_DIR);

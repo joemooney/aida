@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 pub(crate) struct RecipientDirectory {
+    project: std::path::PathBuf,
     agents: Vec<AgentRegistryEntry>,
     roles: BTreeMap<String, String>,
     people: HashMap<String, String>,
@@ -20,6 +21,72 @@ pub(crate) struct RecipientDirectory {
 pub(crate) struct ResolvedRecipient {
     pub(crate) address: String,
     pub(crate) reader_notice: Option<String>,
+    /// For a role address: the send-time reader snapshot (slice D1).
+    pub(crate) cohort: Option<CohortReaders>,
+}
+
+/// The live and unverified readers of a role at send, split by whether
+/// each has a recipient UUID. `queued`: zero readers and the sender asked
+/// for `--queue-for-role`.
+// trace:STORY-1843 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct CohortReaders {
+    pub(crate) role: String,
+    pub(crate) readers: Vec<aida_core::mailbox_delivery::RecipientUuid>,
+    pub(crate) uuidless: Vec<String>,
+    pub(crate) queued: bool,
+}
+
+/// The delivery sidecar for `resolved` (slice D1) and the warnings to
+/// print. A role cohort gets one record per reader UUID; readers with no
+/// UUID are left out and named. A cohort left with no reader refuses as
+/// a zero-reader send does, unless the send was queued for the role, which
+/// writes one pending record. Other addresses get no sidecar.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn delivery_sidecar(
+    resolved: &ResolvedRecipient,
+    message_id: &str,
+    now_ms: i64,
+) -> Result<(
+    Option<aida_core::mailbox_delivery::DeliverySidecar>,
+    Vec<String>,
+)> {
+    use aida_core::mailbox_delivery::DeliverySidecar;
+    let Some(cohort) = &resolved.cohort else {
+        return Ok((None, Vec::new()));
+    };
+    if cohort.queued {
+        return Ok((
+            Some(DeliverySidecar::queued(message_id, &cohort.role, now_ms)),
+            vec![format!(
+                "queued for '{}': the first eligible reader to check its mail takes it",
+                cohort.role
+            )],
+        ));
+    }
+    if cohort.readers.is_empty() {
+        bail!(
+            "send refused: '{}' has 0 readers with a recipient UUID ({} has none); address a reader by handle, or pass --queue-for-role",
+            cohort.role,
+            cohort.uuidless.join(", ")
+        );
+    }
+    let warnings = cohort
+        .uuidless
+        .iter()
+        .map(|label| {
+            format!("warning: {label} has no recipient UUID and will not receive this; address it by handle")
+        })
+        .collect();
+    Ok((
+        Some(DeliverySidecar::cohort(
+            message_id,
+            &cohort.role,
+            now_ms,
+            &cohort.readers,
+        )),
+        warnings,
+    ))
 }
 
 // Unknown liveness is usable only while its heartbeat remains recent.
@@ -160,6 +227,7 @@ impl RecipientDirectory {
             &aida_core::team::TeamRoster::load(store).entries(),
         );
         Ok(Self {
+            project: project.to_path_buf(),
             agents,
             roles,
             people,
@@ -197,14 +265,49 @@ impl RecipientDirectory {
     }
 
     pub(crate) fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
-        self.resolve_with_context(target, false)
+        self.resolve_with_context(target, false, false)
+    }
+
+    /// [`Self::resolve`] for a send that may queue for a role with no
+    /// reader (`--queue-for-role`). Queuing applies only to a role.
+    // trace:STORY-1843 | ai:claude
+    pub(crate) fn resolve_send(
+        &self,
+        target: &str,
+        queue_for_role: bool,
+    ) -> Result<ResolvedRecipient> {
+        self.resolve_with_context(target, false, queue_for_role)
     }
 
     pub(crate) fn resolve_mention(&self, target: &str) -> Result<ResolvedRecipient> {
-        self.resolve_with_context(target, true)
+        self.resolve_with_context(target, true, false)
     }
 
-    fn resolve_with_context(&self, target: &str, mention: bool) -> Result<ResolvedRecipient> {
+    /// The recipient UUID a reader's handle reservation gives its row.
+    fn reader_uuid(
+        &self,
+        entry: &AgentRegistryEntry,
+    ) -> Option<aida_core::mailbox_delivery::RecipientUuid> {
+        let handle = entry.name.as_deref()?.trim();
+        let sessions: Vec<&str> = [&entry.claude_session_id, &entry.native_session_id]
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        aida_core::mailbox_identity::reservation_recipient(
+            &agent_registry::agents_dir(&self.project),
+            handle,
+            &entry.id,
+            &sessions,
+        )
+    }
+
+    fn resolve_with_context(
+        &self,
+        target: &str,
+        mention: bool,
+        queue_for_role: bool,
+    ) -> Result<ResolvedRecipient> {
         let escape = self.refusal_hint(mention);
         let target = target.trim();
         if let Some(why) = aida_core::mailbox::recipient_id_rejection(target) {
@@ -218,6 +321,7 @@ impl RecipientDirectory {
                 .map(|person| ResolvedRecipient {
                     address: person.clone(),
                     reader_notice: None,
+                    cohort: None,
                 })
                 .ok_or_else(|| anyhow::anyhow!("send refused: unknown person '{name}'; {escape}"));
         }
@@ -256,10 +360,17 @@ impl RecipientDirectory {
             bail!("send refused: ambiguous recipient '{target}' names more than one recipient kind; {escape}");
         }
         if let Some(person) = person {
+            if queue_for_role {
+                bail!("send refused: --queue-for-role applies only to a role address");
+            }
             return Ok(ResolvedRecipient {
                 address: person.clone(),
                 reader_notice: None,
+                cohort: None,
             });
+        }
+        if queue_for_role && role.is_none() {
+            bail!("send refused: --queue-for-role applies only to a role address, not '{target}'");
         }
         if role.is_some() || vendor.is_some() {
             // Live readers sort ahead of unverified ones so the five-name cap
@@ -290,9 +401,47 @@ impl RecipientDirectory {
                 })
                 .collect();
             let address = role.cloned().unwrap_or_else(|| vendor.unwrap().to_string());
+            if readers.is_empty() && queue_for_role {
+                return Ok(ResolvedRecipient {
+                    address: address.clone(),
+                    reader_notice: None,
+                    cohort: Some(CohortReaders {
+                        role: address,
+                        queued: true,
+                        ..Default::default()
+                    }),
+                });
+            }
             if readers.is_empty() {
                 bail!("send refused: '{address}' has 0 live readers; {escape}");
             }
+            // The send-time cohort of a role: the same readers the notice
+            // names, split by recipient UUID. trace:STORY-1843 | ai:claude
+            let cohort = role.map(|role| {
+                let mut cohort = CohortReaders {
+                    role: role.clone(),
+                    ..Default::default()
+                };
+                for a in self.agents.iter().filter(|a| {
+                    self.reader_may_exist(a)
+                        && a.role
+                            .as_deref()
+                            .is_some_and(|r| r.eq_ignore_ascii_case(role))
+                }) {
+                    match self.reader_uuid(a) {
+                        Some(uuid) => cohort.readers.push(uuid),
+                        None => cohort.uuidless.push(
+                            a.name
+                                .as_deref()
+                                .map(|name| format!("{name} ({})", a.id))
+                                .unwrap_or_else(|| a.id.clone()),
+                        ),
+                    }
+                }
+                cohort.readers.sort();
+                cohort.readers.dedup();
+                cohort
+            });
             let live_count = readers.values().filter(|live| **live).count();
             let unknown = readers.len() - live_count;
             let mut live_labels = Vec::new();
@@ -327,6 +476,7 @@ impl RecipientDirectory {
             };
             return Ok(ResolvedRecipient {
                 address,
+                cohort,
                 reader_notice: Some(format!(
                     "{warning}{live_count} live, {unknown} unverified: {}",
                     lists.join("; ")
@@ -364,7 +514,7 @@ impl RecipientDirectory {
                 {
                     bail!("send refused: ambiguous inbox '{name}' for '{target}'; {escape}");
                 }
-                Ok(ResolvedRecipient { address: name.to_string(), reader_notice: self.unknown_ids.contains(&agent.id).then(||
+                Ok(ResolvedRecipient { address: name.to_string(), cohort: None, reader_notice: self.unknown_ids.contains(&agent.id).then(||
                     "warning: reader liveness unknown (PID namespace unobservable); delivering to durable inbox".to_string()) })
             }
             [] if !named.is_empty() => {
@@ -374,6 +524,25 @@ impl RecipientDirectory {
             _ => bail!("send refused: ambiguous live recipient '{target}'; {escape}"),
         }
     }
+}
+
+/// Give a test registry row a handle reservation that names it, so the
+/// row's reader has a recipient UUID (slice D1). Test-only.
+// trace:STORY-1843 | ai:claude
+#[cfg(test)]
+pub(crate) fn reserve_test_reader(project: &Path, entry: &AgentRegistryEntry) {
+    let handle = entry.name.as_deref().expect("a test reader has a handle");
+    let dir = agent_registry::agents_dir(project).join("handles");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{handle}.toml")),
+        format!(
+            "handle = '{handle}'\nrecipient_id = '{}'\nregistry_id = '{}'\n",
+            uuid::Uuid::new_v4(),
+            entry.id
+        ),
+    )
+    .unwrap();
 }
 
 #[cfg(test)]
@@ -794,6 +963,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
         assert!(
             crate::mailbox_cmd::handle_mailbox_command(&command("typo-worker"), &store).is_err()
@@ -851,6 +1021,7 @@ mod tests {
             intent: "fyi".into(),
             relayed_from: None,
             allow_second_person: false,
+            queue_for_role: false,
         };
         let error = crate::mailbox_cmd::handle_mailbox_command(&send, &store).unwrap_err();
         let chain = format!("{error:#}");
@@ -1076,5 +1247,146 @@ mod tests {
             // The ID must not bypass the same reserved-inbox protection.
             assert!(directory.resolve("codex-reserved").is_err());
         }
+    }
+
+    // STORY-1843 D1: a role send records one delivery per reader UUID,
+    // names a UUID-less reader, and queues only on request.
+    fn reserve(project: &Path, handle: &str, registry_id: &str, uuid: &str) {
+        let dir = agent_registry::agents_dir(project).join("handles");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{handle}.toml")),
+            format!(
+                "handle = '{handle}'\nrecipient_id = '{uuid}'\nagent_type = 'codex'\nreserved_at = '2026-10-28T00:00:00Z'\nregistry_id = '{registry_id}'\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    fn role_send(target: &str, queue_for_role: bool) -> crate::cli::MailboxCommand {
+        crate::cli::MailboxCommand::Send {
+            to: Some(target.into()),
+            broadcast: false,
+            body: Some("cohort probe".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: None,
+            from: Some("sender".into()),
+            urgent: false,
+            intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
+            queue_for_role,
+        }
+    }
+
+    fn sidecars(project: &Path) -> Vec<aida_core::mailbox_delivery::DeliverySidecar> {
+        let dir = crate::mailbox_store::mailbox_dir(project).join(".deliveries");
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        entries
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|x| x == "json"))
+            .map(|p| {
+                let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
+                aida_core::mailbox_delivery::DeliverySidecar::parse(
+                    &std::fs::read(&p).unwrap(),
+                    &stem,
+                )
+                .unwrap()
+            })
+            .collect()
+    }
+
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn story1843_d1_role_send_records_the_uuid_cohort_and_names_uuidless_readers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        let a = "00000000-0000-4000-8000-00000000000a";
+        let b = "00000000-0000-4000-8000-00000000000b";
+        registry(tmp.path(), "row-a", "rev-a", "reviewer", false);
+        registry(tmp.path(), "row-b", "rev-b", "reviewer", false);
+        registry(tmp.path(), "row-old", "rev-old", "reviewer", false);
+        reserve(tmp.path(), "rev-a", "row-a", a);
+        reserve(tmp.path(), "rev-b", "row-b", b);
+        // A reservation naming another row confers no UUID.
+        reserve(
+            tmp.path(),
+            "rev-old",
+            "row-elsewhere",
+            "00000000-0000-4000-8000-00000000000c",
+        );
+
+        let d = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let resolved = d.resolve("reviewer").unwrap();
+        let cohort = resolved.cohort.as_ref().unwrap();
+        let uuids: Vec<&str> = cohort.readers.iter().map(|u| u.as_str()).collect();
+        assert_eq!(uuids, [a, b]);
+        assert_eq!(cohort.uuidless, ["rev-old (row-old)"]);
+        let (sidecar, warnings) = delivery_sidecar(&resolved, "m1", 7).unwrap();
+        let sidecar = sidecar.unwrap();
+        assert_eq!(sidecar.deliveries.len(), 2);
+        assert!(sidecar
+            .deliveries
+            .iter()
+            .all(|r| !r.queued_for_role && r.cohort.as_ref().unwrap().reader_uuids.len() == 2));
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].contains("rev-old (row-old) has no recipient UUID"),
+            "{warnings:?}"
+        );
+        // A handle send and a vendor send carry no cohort.
+        assert!(d.resolve("rev-a").unwrap().cohort.is_none());
+        assert!(d.resolve("codex").unwrap().cohort.is_none());
+
+        crate::mailbox_cmd::handle_mailbox_command(&role_send("reviewer", false), &store).unwrap();
+        let written = sidecars(tmp.path());
+        assert_eq!(written.len(), 1);
+        let messages = crate::mailbox_store::read_local_messages(tmp.path()).unwrap();
+        assert_eq!(messages.len(), 1, "the sidecar is not read as a message");
+        assert_eq!(written[0].message_id, messages[0].id);
+    }
+
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn story1843_d1_empty_cohort_refuses_unless_queued_for_a_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        // Only a UUID-less reader: the cohort is empty, so the send refuses.
+        registry(tmp.path(), "row-old", "rev-old", "reviewer", false);
+        let err = crate::mailbox_cmd::handle_mailbox_command(&role_send("reviewer", false), &store)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("0 readers with a recipient UUID"), "{err}");
+        assert!(crate::mailbox_store::read_local_messages(tmp.path())
+            .unwrap()
+            .is_empty());
+
+        // No reader at all: refused by default, one pending record when queued.
+        let err =
+            crate::mailbox_cmd::handle_mailbox_command(&role_send("implementer", false), &store)
+                .unwrap_err()
+                .to_string();
+        assert!(err.contains("0 live readers"), "{err}");
+        crate::mailbox_cmd::handle_mailbox_command(&role_send("implementer", true), &store)
+            .unwrap();
+        let written = sidecars(tmp.path());
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].deliveries.len(), 1);
+        assert!(written[0].deliveries[0].queued_for_role);
+        assert!(written[0].deliveries[0].recipient_uuid.is_none());
+
+        // Queuing applies only to a role.
+        registry(tmp.path(), "row-h", "handle-x", "implementer", false);
+        assert!(
+            crate::mailbox_cmd::handle_mailbox_command(&role_send("handle-x", true), &store)
+                .unwrap_err()
+                .to_string()
+                .contains("applies only to a role")
+        );
     }
 }

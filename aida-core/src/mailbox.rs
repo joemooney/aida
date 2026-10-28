@@ -1197,6 +1197,23 @@ fn sanitize_id(id: &str) -> String {
 /// written atomically and named by id. Append-only: ids are unique, so this
 /// never clobbers an existing message. trace:STORY-650 | ai:claude
 pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Result<()> {
+    write_local_message_with_deliveries(project_root, msg, None)
+}
+
+/// [`write_local_message`] plus the message's delivery sidecar (slice D1),
+/// written first under the same admission so the message is never visible
+/// without its ownership. A sidecar for another message is refused.
+// trace:STORY-1843 | ai:claude
+pub fn write_local_message_with_deliveries(
+    project_root: &Path,
+    msg: &Message,
+    deliveries: Option<&crate::mailbox_delivery::DeliverySidecar>,
+) -> std::io::Result<()> {
+    if deliveries.is_some_and(|d| d.message_id != msg.id) {
+        return Err(std::io::Error::other(
+            "delivery sidecar names a different message",
+        ));
+    }
     let dir = local_mailbox_dir(project_root);
     mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
     std::fs::create_dir_all(&dir)?;
@@ -1210,6 +1227,9 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
     // trace:STORY-1843 | ai:claude
     #[cfg(all(unix, feature = "native"))]
     let coverage = crate::mailbox_lifecycle::cover_local_write(project_root)?;
+    if let Some(sidecar) = deliveries {
+        crate::mailbox_delivery::write_sidecar(project_root, sidecar)?;
+    }
     crate::write_atomic(&path, json.as_bytes())?;
     // The message is written; a row left behind is reaped once this process
     // is proven dead, so a failed release must not report the write failed.
