@@ -81050,5 +81050,31 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6306
+- id: 01a18261-4454-7c11-b6f7-f02b5d319f07
+  target_id: 01a18261-3dd1-7962-a87b-cbe0a1603791
+  author: aida
+  node_id: '1'
+  lamport: 6307
+  timestamp: 2026-10-28T11:59:34.996384878Z
+  kind: !Create
+    title: 'Review PR-3030: [AI:claude] docs(gate): scope the floor-import wording to callers outside gate/ (TASK-b6b1278890774ef993d2ebc327862470-032)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/gate-callers-wording`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3030>
+      - Branch: `docs/gate-callers-wording` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-032
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3030` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6307
 node_id: '1'
