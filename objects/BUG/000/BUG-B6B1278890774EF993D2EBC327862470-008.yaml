@@ -12,8 +12,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T07:26:15.429931663Z
-modified_at: 2026-10-28T07:26:39.578731606Z
+modified_at: 2026-10-28T08:16:31.439328380Z
 req_type: Bug
+comments:
+- id: 01a18195-0ccf-7de1-8d36-bb052180a2d5
+  author: joe
+  content: 'Implementer note (PR to follow). Root cause of (a): linkage.content only runs on --format json / human card (TOON uses the cheap linkage line). Warm, the ~50 MB tree walks in ~55-60 ms (reproduced); the 2.6-3.2 s entries are the walk running to its 3 s LINKAGE_TRACE_SCAN_BUDGET under cold or contended page cache during the 04:46-04:47Z burst. Fix: show-only 500 ms trace budget (degrades to the existing partial note). (c): new phases preflight/guard/activity/close/exit/TOON render plus a computed residual so top-level phases sum to duration_ms. (b) partial: the advisory notice now uses the fast-fail cache ladder on show. Not done here: open and lookup under IO contention (not ladder waits; ladder sleeps are already capped at 3 s by BUG-1956) would need a degrade path such as a direct canonical object read bypassing the cache. That is a design change; I''m leaving it as a follow-up. The new phases should show where the residual 21 s actually went before anyone designs it. (d) needs the 24h guard window after merge.'
+  created_at: 2026-10-28T08:16:31.439328380Z
+  modified_at: 2026-10-28T08:16:31.439328380Z
+  session_id: b16d1137-069f-4b8e-8593-11fb7a993f05
 history:
 - id: 01a18167-65da-77f1-bcfd-b188482de5bd
   author: joe
