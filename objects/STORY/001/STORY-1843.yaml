@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T14:12:54.621377560Z
+modified_at: 2026-10-28T14:38:07.036091394Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1303,6 +1303,44 @@ comments:
   created_at: 2026-10-28T13:24:20.175339755Z
   modified_at: 2026-10-28T13:24:20.175339755Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a182f2-68bc-7ec1-b6a5-50ff51a29a0a
+  author: joe
+  content: |
+    ## D2b SKETCH (STORY-1843 D2b, relay outbox / reuse / handover), claude, 2026-10-28
+
+    Result: **BLOCKED-SKETCH.** No code and no branch commits yet. Read against D1 #3042 (821a39d1511) and D2a #3040 (c6c33cc1a66, rework in progress). The rulings fix the outbox key, the headless-reuse rule, and the "no rename, no auto-ACK" rule for handover. They do not settle six forks that D1's actual shape exposes. Each fork below has a recommendation.
+
+    Source facts:
+    - D1 writes a sidecar only for role sends (`DeliverySidecar::cohort` / `queued`). Mail sent by handle to a relay label has **no DeliveryRecord**, so today the outbox key "original DeliveryRecord" does not exist for relay mail.
+    - D1's view gates a message by its sidecar: `Owned(uuid)` only when the reader's verified `recipient` owns a record. A message ID whose sidecar replicas disagree becomes a conflict and is hidden. Sidecars live only in the writer's local source.
+    - `ResolvedAudience` has only `from_facts` (a verified session) and a crate-private policy constructor. Per 60 #1 there is no string-to-authority constructor.
+    - `Message` has no kind or notice marker. `DeliveryRecord` has `run_uuid` but no provenance field.
+
+    **F1. Relay-label sends get a DeliveryRecord.** Recommendation: when the resolver resolves to an open relay run, the send path writes a one-record sidecar `{recipient_uuid: run, run_uuid: Some(run), cohort: None}`. The run's children already carry the run UUID (D2a child-bind keeps `recipient_id`), so D1's view shows them the message and receipts go to `uuid:<run>`. This applies to every resolver-based writer (CLI send, MCP send, mentions) through one helper. Label mail written without a sidecar (pre-D2b, or by a writer that bypasses the resolver) stays legacy, readable by whoever holds the spelling. That is why F3 must count it and refuse to hand it over.
+
+    **F2. Handover representation (needs a D1 type extension).** Options: (a) append records to the original sidecar in its own source. This is a cross-source write into another checkout's mailbox, so it falls under C's admitted-writer barrier. (b) A separate additive file kind, `.deliveries/handover/<message-id>.<new-run>.json`, in the relay's local source. D1's view merges it as an extra owner, and the original sidecar stays immutable. (c) Forward copies as new messages, which duplicates bodies under new IDs. **Recommend (b).** It needs one additive optional field on D1's `DeliveryRecord`: `handover_of: Option<String>` (the original delivery_id), plus a small merge in `delivery_gates`. Old-run receipts stay intact, and the new run acknowledges under its own UUID.
+
+    **F3. Authority for the old run's exact unread count.** The new controller does not hold the old run's identity, and the snapshot API cannot build an audience for it. Recommendation: a core count-only inspection, `relay_run_unread(ctx, run: RecipientUuid, label) -> UnreadCount { owned, legacy_label, partial }`. It exposes counts only, never IDs or bodies. It is reachable only from `relay-mail bind/reuse` under the handle namespace lock, for a label whose reservation names that run. A partial or over-budget snapshot counts as "unknown": a headless caller then refuses, as if unread > 0.
+
+    **F4. Bounce marker.** Options: an additive `Message` field (an immutable-message schema change), a subject convention (fragile), or a sidecar marker. **Recommend the sidecar marker:** each notice's DeliveryRecord gets `notice_of: Option<String>` (the original delivery_id), a second additive D1 field. "Never bounce a bounce" then means: an original delivery whose sidecar record has `notice_of` set produces no notice.
+
+    **F5. Notice destinations.** Recommendation:
+    - The sender is resolved at insertion through its handle reservation to a UUID, and the notice is delivered as a sidecar-owned message to that UUID.
+    - A sender that is a person, or UUID-less, is delivered by its human inbox name with no sidecar.
+    - A sender with no valid live audience keeps a stable intent key `(run, gen, delivery, "sender:<from>")` and stays pending, per 48 Q3.
+    - The advisor goes through D1's role path. Zero live advisors leaves the notice pending; it is never queued for the role implicitly.
+    - Coincident sender and advisor destinations are deduplicated.
+    - Notices contain the subject only, never the body, and never another recipient's details.
+
+    **F6. Outbox write protocol and lock order.** Recommendation:
+    - Outbox entries go in `.aida/agents/relay-runs/<run>/outbox/<sha256(key)>.json`, inserted under `handles::lock_namespace` in the same critical section that records the terminal generation, whether by `end` or by reconcile.
+    - Delivery happens after the namespace lock is released, using D1's ordinary local writer (which takes C's coverage). Each entry is then marked delivered under the namespace lock with a compare-and-set.
+    - Retries come from the send path, from `agent gc`, and from the next bind. No lock is held across the mailbox write, and Lifecycle is never taken under the namespace lock.
+
+    **Asks:** approve F1-F6. F2 and F4 add two optional fields to D1's `DeliveryRecord`. Should D2b add them on top of #3042, or should D1 add them in its rework round? F3 adds a new core read-only inspection entry point under 60 #1.
+  created_at: 2026-10-28T14:38:07.036091394Z
+  modified_at: 2026-10-28T14:38:07.036091394Z
+  session_id: 7dc90a99-20d4-4ec0-82c6-004f54adfe0a
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
