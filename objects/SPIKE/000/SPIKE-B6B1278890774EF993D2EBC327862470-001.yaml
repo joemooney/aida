@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T04:46:37.988787088Z
-modified_at: 2026-10-28T07:32:28.165517495Z
+modified_at: 2026-10-28T07:34:07.515576598Z
 req_type: Spike
 relationships:
 - rel_type:
@@ -43,6 +43,12 @@ comments:
   created_at: 2026-10-28T07:29:33.873566432Z
   modified_at: 2026-10-28T07:29:33.873566432Z
   session_id: 447e7763-4579-4f68-843b-46721f8b1f1b
+- id: 01a1816e-3b9b-7781-8bd0-cfae75b04237
+  author: joe
+  content: 'Write-up moved to the spike-protocol path: docs/spikes/2026-10-28-private-core-split.md (PR #3007), replacing docs/plans/2026-10-28-private-core-split-spike.md.'
+  created_at: 2026-10-28T07:34:07.515576598Z
+  modified_at: 2026-10-28T07:34:07.515576598Z
+  session_id: 78fe9345-aa56-4586-a449-2f7130615ba6
 history:
 - id: 01a18162-cacb-74c1-95d2-f4119339b737
   author: joe
