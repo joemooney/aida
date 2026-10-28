@@ -765,13 +765,17 @@ fn head_is_unborn(repo: &Path) -> bool {
 /// judged against an empty baseline that no sync applies
 /// ([`ConflictScope::InHead`]: a sync that shares it at the merge base admits
 /// it). A dispute both passes find is reported once, as introduced. An
-/// unborn `HEAD` holds no claims and is not a gap.
+/// unborn `HEAD` holds no claims and is not a gap; with an unborn `HEAD` the
+/// incoming tips are what the first sync lands in `HEAD`, so their own trees
+/// are judged against the empty baseline instead (a lone incoming tip is a
+/// sync's own baseline, which would otherwise hide its in-tree conflicts).
 // trace:BUG-2017 | ai:claude
 pub fn audit(repo: &Path, incoming: &[String]) -> ConflictReport {
     let local = (!head_is_unborn(repo)).then_some("HEAD");
     let mut report = match local {
         Some(head) => collect_with(repo, Some(head), &[], false),
-        None => ConflictReport::default(),
+        None if incoming.is_empty() => ConflictReport::default(),
+        None => collect_with(repo, None, incoming, false),
     };
     for c in &mut report.conflicts {
         c.scope = ConflictScope::InHead;

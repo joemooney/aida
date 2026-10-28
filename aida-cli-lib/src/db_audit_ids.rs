@@ -169,9 +169,9 @@ pub(crate) fn repair_plan(audit: &Audit) -> Vec<&'static str> {
         .any(|c| c.kind == ConflictKind::DisplayId && c.scope == ConflictScope::InHead)
     {
         plan.push(
-            "For display IDs already claimed twice inside HEAD, use the existing collision \
-             repair: `aida db check --collisions` lists them and `--repair` re-gates the \
-             later claimant.",
+            "For display IDs already claimed twice inside HEAD, `aida db check --collisions` \
+             lists every claimant (matching IDs case-insensitively, as this audit does): \
+             keep one and give each other claimant a new display ID by hand.",
         );
     }
     if has(ConflictKind::GlobalRange) {

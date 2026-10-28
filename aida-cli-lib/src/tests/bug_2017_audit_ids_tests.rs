@@ -466,3 +466,45 @@ fn bug_2017_audit_ids_unborn_store_is_clean_not_incomplete() {
     assert_eq!(exit_code(&report), 0);
     assert!(render_human(&report).starts_with("Allocation claims audit: clean"));
 }
+
+#[test]
+fn bug_2017_audit_ids_unborn_head_reports_conflicts_inside_a_lone_incoming_tip() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("store");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "aida-store"]);
+    git(&repo, &["config", "user.name", "Generic"]);
+    git(&repo, &["config", "user.email", "generic@aida.invalid"]);
+    git(&repo, &["config", "commit.gpgsign", "false"]);
+    git(&repo, &["checkout", "-q", "-b", "incoming"]);
+    claim(&repo, "FR-2");
+    claim_at(&repo, "FR-2", "FR-3");
+    commit(&repo, "two claimants in the incoming tree");
+    git(&repo, &["checkout", "-q", "--orphan", "aida-store"]);
+    git(&repo, &["rm", "-rq", "--cached", "."]);
+    std::fs::remove_dir_all(repo.join("objects")).unwrap();
+
+    let report = audit(&repo, &["incoming".to_string()]);
+    assert!(report.is_complete(), "{report}");
+    let display: Vec<_> = report
+        .conflicts
+        .iter()
+        .filter(|c| c.kind == ConflictKind::DisplayId)
+        .collect();
+    assert_eq!(display.len(), 1, "{report}");
+    // A first sync admits it, and then it sits inside HEAD.
+    assert_eq!(display[0].scope, ConflictScope::InHead);
+    assert_eq!(exit_code(&report), 2);
+}
+
+#[test]
+fn bug_2017_check_collisions_matches_display_ids_case_insensitively() {
+    let mut lower = Requirement::new("a".into(), "b".into());
+    lower.spec_id = Some("fr-5".into());
+    let mut upper = Requirement::new("c".into(), "d".into());
+    upper.spec_id = Some("FR-5".into());
+    upper.agreed_id = Some("Fr-5".into());
+    let claims = crate::db_block::short_id_claims(&[lower.clone(), upper.clone()]);
+    assert_eq!(claims.len(), 1, "{claims:?}");
+    assert_eq!(claims["FR-5"], vec![lower.id, upper.id]);
+}
