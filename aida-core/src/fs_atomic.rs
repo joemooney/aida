@@ -95,6 +95,19 @@ pub fn write_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<(
     Ok(())
 }
 
+/// [`write_atomic`] for a config file: the one writer every `.aida/`
+/// config edit goes through. In an adopted worktree it refuses a file the
+/// adoption projection owns (or may own, behind an unreadable manifest),
+/// so an edit never overwrites shared policy; elsewhere it is
+/// [`write_atomic`].
+// trace:STORY-1741 | ai:claude
+pub fn write_config_atomic(path: &Path, content: impl AsRef<[u8]>) -> std::io::Result<()> {
+    #[cfg(all(unix, feature = "native"))]
+    crate::adoption_projection::refuse_owned_write(path)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{e:#}")))?;
+    write_atomic(path, content)
+}
+
 /// `.gitignore` patterns that hide [`write_atomic`] staging files inside a
 /// git requirements store.
 ///

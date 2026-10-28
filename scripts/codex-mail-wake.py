@@ -529,9 +529,45 @@ def global_health_namespace(owned, aida):
             os.close(fd)
 
 
+# trace:STORY-1741 | ai:claude
+def refuse_adoption_owned_config(project):
+    """An adoption projection owns .aida/config.toml: editing it would withhold
+    the shared guidance and make the next refresh refuse. Fails closed on a
+    manifest that cannot be read."""
+    import tomllib
+    descriptors = []
+    try:
+        # No-follow at every component: a symlinked manifest could name no
+        # config while the real one owns it.
+        parent = os.open(project, os.O_RDONLY | os.O_DIRECTORY)
+        descriptors.append(parent)
+        for name in (".aida", "adoption"):
+            parent = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=parent)
+            descriptors.append(parent)
+        fd = os.open("manifest.toml", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+        descriptors.append(fd)
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise Refusal("adoption manifest is not a regular file; it may own .aida/config.toml")
+        with os.fdopen(fd, "rb", closefd=False) as source:
+            data = tomllib.loads(source.read(LIMIT + 1).decode())
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError, UnicodeError) as error:
+        raise Refusal("adoption manifest unreadable; it may own .aida/config.toml") from error
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+    owned = [data.get(table, {}) for table in ("files", "pending")]
+    if any(not isinstance(table, dict) or ".aida/config.toml" in table for table in owned):
+        raise Refusal(".aida/config.toml is generated from the shared adoption plane; "
+                      "register the health job in ~/.aida/config.toml instead")
+
+
 def own_health_job(args, project, remove=False, check_only=False):
     """Edit only the exact owned block under a permanent project install lock."""
     import tomllib
+    refuse_adoption_owned_config(project)
     directory = project / ".aida"
     if not check_only:
         directory.mkdir(exist_ok=True)
