@@ -1,0 +1,30 @@
+id: 01a1847e-9f24-74e1-93d7-5a92b57c4056
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-079
+title: '[minor, non-blocking] Tests do not cover several bare_admin_name rejection bran…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-075, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor, non-blocking] Tests do not cover several bare_admin_name rejection branches: a body over 255 bytes, a quote-only or brace-only fragment without a slash, and '.'. They also do not cover the reap of a write_source_id temp left in <checkout>/.aida by a crashed mailbox mint. Only the anchor-side temp is exercised (leftovers_tests.rs era_marker_writes_are_atomic_and_temps_reaped).
+
+  PR: #3065
+  Reviewed sha: 2e3d79d01356acf468ae99b0a4a8cc22f7323c1f
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T21:50:53.220784126Z
+modified_at: 2026-10-28T21:50:53.220784126Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-075
+- finding-hash:b666fc2b
+- from-review:PR-3065
+- kind:carried-forward
+filed_at:
+  code_sha: 283eefbb554a1ca0c8bbc7ee04aa2ea4d45286e3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6f0694f4d36
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968

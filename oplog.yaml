@@ -83018,5 +83018,23 @@ operations:
   timestamp: 2026-10-28T21:50:48.511472523Z
   kind: !SetStatus
     status: Completed
-clock: 6467
+- id: 01a1847e-a69c-7760-8500-225ec455718d
+  target_id: 01a1847e-9f24-74e1-93d7-5a92b57c4056
+  author: aida
+  node_id: '1'
+  lamport: 6468
+  timestamp: 2026-10-28T21:50:55.132664799Z
+  kind: !Create
+    title: '[minor, non-blocking] Tests do not cover several bare_admin_name rejection bran…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-075, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor, non-blocking] Tests do not cover several bare_admin_name rejection branches: a body over 255 bytes, a quote-only or brace-only fragment without a slash, and '.'. They also do not cover the reap of a write_source_id temp left in <checkout>/.aida by a crashed mailbox mint. Only the anchor-side temp is exercised (leftovers_tests.rs era_marker_writes_are_atomic_and_temps_reaped).
+
+      PR: #3065
+      Reviewed sha: 2e3d79d01356acf468ae99b0a4a8cc22f7323c1f
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6468
 node_id: '1'
