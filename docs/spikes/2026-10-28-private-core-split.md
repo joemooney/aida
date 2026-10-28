@@ -254,7 +254,8 @@ proprietary capability**. The spike does not name one, and nothing in
 `aida-core/src` is obviously separable today. Candidates, if any exist, would
 be a narrow algorithmic layer such as advisor and routing heuristics
 (`dispatch_routing`, `pickability` scoring, `analytics`) or hosted-service
-integrations (`integrations/`, `transport_private`). A carve-out of that size
+integrations (`integrations/`, and `transport_policy` with its private
+`transport_private.rs` submodule). A carve-out of that size
 looks like this:
 
 1. A public `aida-core` that keeps the models, storage, git and coordination
@@ -310,7 +311,8 @@ logs, breaks fork CI, and does not let users build from source.
 A cheap step that keeps option C open without committing to it: move
 `aida-core/templates/` into its own crate or directory (it is public by
 nature), so any future carve-out does not have to untangle 245 template
-files and 11 embed sites first. That is worth filing as a separate story
+files and 17 embed sites (6 production in `aida-core`, 1 production and
+10 test in `aida-cli-lib`) first. That is worth filing as a separate story
 only if C becomes likely.
 
 ## 7. Decision the operator must make
