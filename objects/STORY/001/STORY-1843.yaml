@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T11:25:40.435052157Z
+modified_at: 2026-10-28T11:25:44.077932538Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1135,6 +1135,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: B2c is well built and CI is green at 1561fd2, but signoff 60 #4/#8 require tests that are missing (CLI post-flush commit-failure exit; conflicting-replica view plans no ACK), and the per-key multi-rename ledger publication departs from 60 #5 ''one atomic publication'' without a recorded advisor ruling while docs claim all-or-nothing.. No triage reason was given.'
   created_at: 2026-10-28T11:25:40.435049189Z
   modified_at: 2026-10-28T11:25:40.435049189Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+- id: 01a18242-470d-7e53-9006-f9a518aff34d
+  author: joe
+  content: 'ADVISOR triage 2026-10-28 04:30: B2c (#3015) landed approved at cbc1a7b; the shelf reason (round-1 verdict) is resolved. Back to approved; next step is an acceptance inventory against every signed criterion to determine what (if anything) remains.'
+  created_at: 2026-10-28T11:25:44.077932538Z
+  modified_at: 2026-10-28T11:25:44.077932538Z
   session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
