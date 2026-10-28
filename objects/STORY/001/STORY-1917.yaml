@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-27T17:12:37.500260718Z
+modified_at: 2026-10-28T11:26:55.872990954Z
 req_type: Story
 relationships:
 - rel_type:
@@ -751,6 +751,12 @@ comments:
   created_at: 2026-10-27T17:12:37.500260718Z
   modified_at: 2026-10-27T17:12:37.500260718Z
   session_id: b3592ff1-9a9a-42b2-bada-31c38955f1d9
+- id: 01a18243-5f80-7582-aba7-b1b59b3181ce
+  author: joe
+  content: 'DEMO EVIDENCE (advisor, 2026-10-28 04:27 MST). Step 1: dispatch-tick schedule job landed (#3008, 3db38fc9). Step 0 preflight: live binary e33bf322 (after slice 4''s 1b5806bce2), and no .aida/dispatch, so activate-lock is not needed. Step 2 PASS: ''aida dispatch request impl --name demo-noscope ...'' was refused with "active mandate 94c6f906-a557-42ed-98d1-91923c55ec2f does not cover `dispatch`; stop it and start one with `aida mandate start --ship-held --scope dispatch` (or `--drive`)". aida dispatch list shows ''No dispatch requests.'' MandateDriveAction row 2026-10-28 11:26:48Z: lane dispatch:impl, outcome refused, under 94c6f906. Remaining: operator steps 3-4 (dispatch mandate + serve), then advisor steps 5-7 and operator steps 8-9.'
+  created_at: 2026-10-28T11:26:55.872990954Z
+  modified_at: 2026-10-28T11:26:55.872990954Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
