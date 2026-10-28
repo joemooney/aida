@@ -5,6 +5,7 @@
 // trace:STORY-1706 | ai:claude
 
 use super::*;
+use crate::gate::dispatch_types::{ActionRow, Outcome};
 use crate::gate::relay_launch::{self as rl, RestartLine};
 use crate::mandate_drive::*;
 use anyhow::Result;

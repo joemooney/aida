@@ -247,8 +247,14 @@ type TestFlowTrainHook = Box<dyn FnMut(&[u64], &DispatchExecutionContext) -> Res
 #[cfg(test)]
 /// Stands in for the forge CI wait only: the state it returns still goes
 /// through [`ci_state_is_green`], so a test cannot skip the green check.
-type TestFlowWaitCiHook =
-    Box<dyn FnMut(&Path, u64, &DispatchExecutionContext, bool) -> Result<crate::forge::CiState>>;
+type TestFlowWaitCiHook = Box<
+    dyn FnMut(
+        &Path,
+        u64,
+        &DispatchExecutionContext,
+        bool,
+    ) -> Result<crate::gate::dispatch_types::CiState>,
+>;
 
 #[cfg(test)]
 std::thread_local! {

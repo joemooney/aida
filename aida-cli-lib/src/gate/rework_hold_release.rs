@@ -895,22 +895,22 @@ fn auto_release_with(
     if let Some(id) = &release.mandate {
         let (outcome, why) = match &released {
             Ok(()) => (
-                crate::mandate_drive::Outcome::Done,
+                crate::gate::dispatch_types::Outcome::Done,
                 format!(
                     "rework hold released on the approval {}",
                     release.verdict.path()
                 ),
             ),
             Err(e) => (
-                crate::mandate_drive::Outcome::Refused,
+                crate::gate::dispatch_types::Outcome::Refused,
                 format!("rework hold release failed: {e:#}"),
             ),
         };
-        crate::mandate_drive::emit_action(
+        crate::gate::dispatch_deps::emit_action(
             root,
             id,
             "session",
-            &crate::mandate_drive::ActionRow::new(
+            &crate::gate::dispatch_types::ActionRow::new(
                 &format!("pr:{}", hold.pr),
                 &format!("PR #{}", hold.pr),
                 "release-rework-hold",
