@@ -365,6 +365,13 @@ A relay run is one mail recipient for its whole life. Its label is the handle ot
 Mail to the label is accepted between sessions while the run is open and its controller is alive, including while the relay is paused. If the controller's process cannot be observed from the sending shell (another PID namespace), the mail is still delivered, with a warning. After the end is recorded, mail to the label is refused unless a live session still holds it. A controller that dies without calling `end` (a crash or `kill -9`) is ended by the next `relay-mail bind` or host-side `aida agent gc`, once its process is provably gone: the machine rebooted, the pid is free, or the pid belongs to another process. A run whose controller cannot be observed is never ended this way. This crash path needs no capability, because it only ends runs whose controller is provably gone. If relay reconciliation fails, `aida agent gc` prints a warning and continues with the rest of its maintenance.
 
 An ended run's label is not reused yet: `bind` refuses it, so choose a new label. The run's unread mail stays under the old label.
+
+Mail sent to a relay label while its run is open belongs to that run. The message is unchanged, and a delivery record beside it names the run. Every session of the run reads that mail and acknowledges it as the run. A later run under the same label does not see it. This applies to `aida mailbox send`, the MCP send tool and comment mentions.
+
+When a run ends with mail its sessions never read, that mail stays with the run: it is not deleted, renamed or marked read. The sender of each unread message gets a notice, as a reply in the same thread. The notice names the ended run and the message's subject, never its body. The advisor role also gets one notice per unread message, without the subject. A sender who is also the only advisor reader is told once. A notice that reached a relay which then ended is never reported back.
+
+Each notice is recorded once in the run's outbox, however often the end is recorded or retried. If a sender cannot be reached now (its session ended, or its handle now belongs to someone else), or no advisor with a recipient id is live, the notice stays pending. The next `relay-mail end`, `relay-mail bind` or `aida agent gc` retries it. `aida relay-mail outbox [--run <ID>] [--json]` lists each notice and whether it was delivered or is pending, with the last error. Sending mail ends a run whose controller is provably gone and records its notices, but delivers none of them.
+<!-- trace:STORY-1843 | ai:claude -->
 <!-- trace:STORY-1843 | ai:claude -->
 
 ### `aida driver`
