@@ -81523,5 +81523,21 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6347
+- id: 01a182cb-7819-7593-b430-8f1be19ec544
+  target_id: 01a182cb-70fe-7c63-87ef-2ab4f066c9ab
+  author: aida
+  node_id: '1'
+  lamport: 6348
+  timestamp: 2026-10-28T13:55:35.065286209Z
+  kind: !Create
+    title: 'non-blocking (minor, untested-path): fill_digests_reads_only_writers_on_another…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-010, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      non-blocking (minor, untested-path): fill_digests_reads_only_writers_on_another_file only exercises the unreadable /proc/<pid>/exe branch (pid u32::MAX). No test covers a foreign-file writer whose /proc exe is readable and digested, for example a view at std::process::id() with a different exe_id, asserting exe_digest == digest_file(/proc/self/exe) and that the second host on the same id reuses the cache.
+      Reviewed sha: b6f9c1895b9d1c94fd4afa2853077fbd0122c808
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6348
 node_id: '1'
