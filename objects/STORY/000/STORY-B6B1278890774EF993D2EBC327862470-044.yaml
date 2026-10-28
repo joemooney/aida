@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T09:58:50.240371011Z
-modified_at: 2026-10-28T09:58:50.240371011Z
+modified_at: 2026-10-28T09:59:03.442454745Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a181d1-371b-72f2-8a43-57ab9ecd3a42
+  created_at: 2026-10-28T09:59:03.442451621Z
+  created_by: joe
+history:
+- id: 01a181f3-0374-7632-89b4-8d6759558cff
+  author: joe
+  timestamp: 2026-10-28T09:59:09.428555943Z
+  session_id: 6df68e51-f913-41a4-bf07-7cb9c1bab568
+  changes: []
 filed_at:
   code_sha: e3fec82ea230fd3f382b64c45a68a3e9aa54ae6a
   branch: fix/doc-reexport-claims
