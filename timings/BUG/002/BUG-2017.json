@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2017",
+  "publishes": [
+    {
+      "at": "2026-10-28T03:04:16.980289888Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T17:49:29.588447453Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T04:47:02.785058430Z",
+      "spec": "BUG-2017",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T08:55:57.147754819Z",
+      "spec": "BUG-2017",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2919,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "c25b9bd3855226fdb40371affef506479c127ba6"
+      }
+    },
+    {
+      "ts": "2026-10-25T08:55:58.024125707Z",
+      "spec": "BUG-2017",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "codex2 independent slice1 review: P1 batch alias admission can persist metadata/first object before refusing; exact-head Build failed. Parent remains non-completing across all3 signed slices.",
+        "recovery_hint": "address the review findings, move BUG-2017 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T11:12:01.571350477Z",
+      "spec": "BUG-2017",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2919,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "766bbcbc4c726118d625002f04583111b3fdbaed"
+      }
+    },
+    {
+      "ts": "2026-10-25T11:12:03.015571348Z",
+      "spec": "BUG-2017",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "codex2 STRICT: F1 batch ownership resolved. F2 exact-head contracts/Build red; F3 cold WORK init remains an unmerged bootstrap/activation dependency. Full signed3slice scope retained.",
+        "recovery_hint": "address the review findings, move BUG-2017 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T14:04:11.439546776Z",
+      "spec": "BUG-2017",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2919,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "eff2bcaa5f6d791ec2cc30885f69de3aad5f51fb"
+      }
+    },
+    {
+      "ts": "2026-10-25T14:04:13.788068429Z",
+      "spec": "BUG-2017",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "codex2 independent bounded full S1+S2 sufficiency: F5 resolved; F4 legacy binding/provider validation and F6 native preservation assertions remain unchanged/incomplete. Actual REST/contracts CI failed; main integration absent (2 behind a01, merge-base3cbb). Not sufficient for approval; advisor round2 judgment, no autonomous third cycle. Evidence /tmp/codex2-pr2919-eff2-review.txt. Holds/S3 retained.",
+        "recovery_hint": "address the review findings, move BUG-2017 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:32:20.595613461Z",
+      "spec": "BUG-2017",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2919,
+        "verdict": "APPROVED",
+        "reviewed_sha": "22bc8fa65dc49dad227151e5b13022645ca71a28"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:46:19.931164647Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-25T15:50:13.666568789Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:50:13.843560154Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-27T09:37:11.875921262Z",
+      "spec": "BUG-2017",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2017",
+        "branch": "bug-2017-s3i",
+        "first_seen": "2026-10-27T09:37:11.875848857+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T16:38:01.339695576Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:08:17.203227558Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:08:17.264996244Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T00:55:13.748989916Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T00:55:13.808613694Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T02:08:32.404075453Z",
+      "spec": "BUG-2017",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2017",
+        "branch": "bug-2017-s3ii",
+        "first_seen": "2026-10-28T02:08:32.403998997+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T03:03:51.599396839Z",
+      "spec": "BUG-2017",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2994
+      }
+    },
+    {
+      "ts": "2026-10-28T03:04:16.753884630Z",
+      "spec": "BUG-2017",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "da69af7628a679e665e2e6399185d7dc6d182220",
+        "pr": 2994,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
