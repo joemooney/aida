@@ -312,6 +312,21 @@ An invalid or unreadable individual agent record produces a warning while other 
 The report's fingerprint covers mailbox and read-state content; recipient liveness is sampled advisory information. Historical shared group watermarks cannot reconstruct private acknowledgements. The command does not assign recipient UUIDs, acknowledge mail, rewrite messages or enable a new layout. Write-mode migration is unavailable pending advisor review of the real-store report and compatibility policy.
 <!-- trace:STORY-1843 | ai:codex -->
 
+#### Mail retention when a worktree goes
+
+Removing, resetting or reusing a worktree first moves its local mailbox (messages, read receipts and watermarks) into a private retention area under the repository's Git directory. This applies to `aida session end`, pool return and reuse, `aida worktree pool destroy`, `aida worktree gc` and `dismiss`, reaps and doctor heals, and seat-clone teardown. The next occupant of a reused tree starts with an empty mailbox. Retained mail is kept, not acknowledged or archived.
+
+If the mail cannot be retained safely, the worktree is kept. In that case the session is not ended: its lease, claim and manifest stay, and the lease is marked `ending_retained_at`. Only its grant is revoked. `aida ps`, `aida session list` and the doctor show such a session as `ending-retained`, neither active nor cleaned up. Retry once the cause is fixed.
+
+A worktree whose mail cannot be fenced is always kept, even when its mailbox looks empty: a seat clone with no verified host binding to its main checkout, or a worktree outside any Git repository the host can verify.
+
+A worktree whose mailbox holds mail is kept until an operator records that every AIDA process on the machine that can write mail takes a write permit. Run `aida mailbox retention activate --dry-run` to see where that stands; add `--json` for the report. It lists each running `aida` and `aida-server` process and whether it runs this build. The report is incomplete, and nothing can be recorded, when it runs inside a container's pid namespace or cannot read a process's command line. When the report shows every writer taking a permit, run `aida mailbox retention activate` from an interactive terminal to record it. The command re-runs the scan and refuses for agents. A worktree with an empty mailbox is not affected.
+
+The record names the source build that made it: the version and git commit that `aida` and `aida-server` built from the same checkout share. Both honour it, and so does the same source built and promoted again. A build from a different commit (after an upgrade or `aida dev rollback`) does not: the report then says the activation was recorded by a different build, and the refusal names both builds. Run `aida mailbox retention activate` again with the new build.
+
+The mail is checked once more right before the worktree is removed or reset. If something wrote to it after it was retired, the worktree is kept, that mail stays in place, and the session is not ended, exactly as above. Neither `aida session end` nor the automatic cleanups suggest removing such a worktree with a raw `git worktree remove --force`, which would delete that mail. Use `aida worktree dismiss <path>`, which runs the same check.
+<!-- trace:STORY-1843 | ai:claude -->
+
 #### Mailbox layout upgrade order
 
 The recipient-UUID mailbox layout replaces each legacy mailbox directory (`.aida/mailbox/` and the store's `mailbox/`) with a small manifest file. The file starts with `# aida-mailbox-layout-manifest` and names the new layout. The legacy directory is archived beside it, and the original paths of its unresolved addresses stay readable. A binary older than the manifest fails at that path: creating or listing a directory there is an error, so it exits nonzero without writing. A binary that knows the marker refuses with "migrated to layout N … Upgrade aida on this clone first". Neither can silently write mail that the new layout would never read.

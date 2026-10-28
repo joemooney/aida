@@ -183,6 +183,8 @@ pub fn main_entry() {
     // PATH resolution closes that seam for every spawn site at once.
     export_coordinating_bin_env();
     register_filing_identity();
+    // trace:STORY-1843 | ai:claude
+    register_source_build();
     // STORY-122: per-invocation telemetry. Wraps run() so every CLI
     // entry point gets recorded with cmd shape + duration + exit code.
     // Local-only; opt-out via `[telemetry] enabled = false` or

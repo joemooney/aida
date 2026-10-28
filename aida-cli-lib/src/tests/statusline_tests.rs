@@ -5579,6 +5579,8 @@ fn entry_scope_session_match_decision_table() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     };
@@ -6024,6 +6026,8 @@ fn parent_project_root_for_session_returns_recorded_parent() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
     };

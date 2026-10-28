@@ -28,9 +28,9 @@
 //! a regular file owned by this uid with one link and under a size cap.
 //! Symlinks, hardlinks and FIFOs are refused.
 //!
-//! In C1 nothing in production fences a source, so admission never refuses
-//! and mail delivery is unchanged; `retire` has no production caller until
-//! C2.
+//! Every destructive or reuse entry (worktree removal, pool reset, return
+//! and destroy, session end, seat-clone teardown) retires the source first
+//! through [`guard`], and keeps its tree when retirement refuses (C2).
 //!
 //! Hardening applies to what AIDA creates and owns: the anchor directories
 //! (0700) and their files (0600), whatever the umask. The common Git
@@ -47,8 +47,12 @@
 //!
 //! trace:STORY-1843 | ai:claude
 
+pub mod activation;
+pub mod guard;
 pub(crate) mod retire;
 
+#[cfg(test)]
+mod guard_tests;
 #[cfg(test)]
 mod tests;
 
@@ -71,21 +75,18 @@ use crate::process_probe::{Probe, ProbeSource, ProcessIdentity};
 /// means something is wrong; the caller retries rather than blocks.
 pub const LIFECYCLE_LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// The operator command that records every writer host on the machine as
-/// admitting (QC1). A mail-bearing source refuses retirement until it has
-/// run; the command ships first as a dry-run report.
-pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate";
+/// The operator command that reports whether every writer host on the
+/// machine is admitting (QC1). A mail-bearing source refuses retirement until
+/// an activation is recorded; the same command without `--dry-run` records
+/// it, for a human operator at a terminal only.
+pub const ACTIVATION_COMMAND: &str = "aida mailbox retention activate --dry-run";
 
 /// Directory under the common Git dir that holds the anchor.
 const ANCHOR_PARENT: &str = "aida";
 const ANCHOR_DIR: &str = "mail-lifecycle";
 const LOCK_FILE: &str = "lifecycle.lock";
 const GENERATION_FILE: &str = "generation.json";
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read only by retirement until C2")
-)]
-const ACTIVATION_FILE: &str = "activation.json";
+pub(crate) const ACTIVATION_FILE: &str = "activation.json";
 pub(crate) const SOURCES_DIR: &str = "sources";
 pub(crate) const RETAINED_DIR: &str = "retained";
 pub(crate) const JOURNAL_DIR: &str = "journal";
@@ -354,6 +355,35 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
         key,
         mailbox,
         admin: anchored.admin,
+        dev: meta.dev(),
+        ino: meta.ino(),
+    }))
+}
+
+/// Resolve a seat clone's mail source under `main`'s anchor. The clone's
+/// own Git is never asked (host Git refuses to run there); the caller has
+/// verified the host-recorded binding, and the key is derived from it: main's
+/// common Git dir, the clone root, and the clone mailbox's device and inode.
+pub(crate) fn resolve_clone_source(main: &Path, clone_root: &Path) -> Result<Option<Source>> {
+    let Some(anchored) = locate_anchor(main)? else {
+        return Ok(None);
+    };
+    let clone_root = std::fs::canonicalize(clone_root)?;
+    let admin = format!("seat-clone:{}", clone_root.display());
+    let mailbox = crate::mailbox::local_mailbox_dir(&clone_root);
+    let meta = std::fs::symlink_metadata(&mailbox)?;
+    if !meta.file_type().is_dir() {
+        return Err(LifecycleError::Unsafe {
+            path: mailbox,
+            why: "the mailbox is not a real directory".into(),
+        });
+    }
+    let key = source_key(&anchored.common, &admin, meta.dev(), meta.ino());
+    Ok(Some(Source {
+        anchor: anchored.anchor,
+        key,
+        mailbox,
+        admin,
         dev: meta.dev(),
         ino: meta.ino(),
     }))
@@ -639,16 +669,27 @@ pub fn lifecycle_lock_held() -> bool {
 /// pool lock, a seat permit). None of them may start inside a Lifecycle
 /// hold: the Lifecycle lock is a leaf.
 pub fn enter_lock_class(class: &'static str) {
+    let violation = lifecycle_lock_held();
     debug_assert!(
-        !lifecycle_lock_held(),
+        !violation,
         "lock-order violation: {class} entered while the mailbox lifecycle lock is held"
     );
     OBSERVED.with(|o| {
         if let Some(seen) = o.borrow_mut().as_mut() {
+            // Recorded in every build, so an optimized test run still sees
+            // the violation the debug assertion would have raised.
+            if violation {
+                seen.push(UNDER_LIFECYCLE);
+            }
             seen.push(class);
         }
     });
 }
+
+/// Pushed by the observer right before a class entered while the Lifecycle
+/// lock was held: a lock-order violation.
+#[doc(hidden)]
+pub const UNDER_LIFECYCLE: &str = "under-lifecycle";
 
 /// Run `f` and return the lock classes this thread entered meanwhile, in
 /// order (test seam, same role as `store_write_lock_contended_for`).
@@ -805,10 +846,6 @@ fn store_permits(anchor: &Path, record: &SourceRecord, _held: &LifecycleGuard) -
 }
 
 /// Remove the record for `key`. Lifecycle held.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "called only by retirement until C2")
-)]
 pub(crate) fn delete_record(anchor: &Path, key: &str, _held: &LifecycleGuard) -> Result<()> {
     let path = record_path(anchor, key);
     match std::fs::remove_file(&path) {
@@ -825,17 +862,88 @@ pub struct Activation {
     pub schema: u32,
     pub all_writer_hosts_admitting: bool,
     pub recorded_at: String,
+    /// The source build that recorded it ([`source_build`]): the version and
+    /// git SHA that `aida` and `aida-server` built from one checkout share.
+    /// `None` in a record written before records named their source build
+    /// (those named an executable's inode), which no build honours.
+    #[serde(default)]
+    pub source_build: Option<String>,
 }
 
-/// Has an operator recorded that every writer host is admitting? Nothing in
-/// C1 writes the record, so this is false in production.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "called only by retirement until C2")
-)]
+static SOURCE_BUILD: OnceLock<String> = OnceLock::new();
+
+/// The identity of a build of `version` at `git_sha`, or `None` when the SHA
+/// is unknown or the tree had uncommitted changes (`dirty`): a build that
+/// cannot name its exact source never honours or records an activation.
+/// R4-F5: two dirty builds of one SHA can differ in their local edits (one
+/// may drop admission), so a shared `-dirty` identity would let one honour
+/// the other's record, the R2-F6 rollback hazard.
+// trace:STORY-1843 | ai:claude
+pub fn source_build_id(version: &str, git_sha: &str, dirty: bool) -> Option<String> {
+    let sha = git_sha.trim();
+    if dirty || sha.is_empty() || sha == "unknown" {
+        return None;
+    }
+    Some(format!("{version}+{sha}"))
+}
+
+/// Name this process's source build, once, at startup. Each binary that can
+/// retire mail calls it with its own build stamps; a process that never
+/// does has no source build and honours no activation (fail closed).
+// trace:STORY-1843 | ai:claude
+pub fn set_source_build(version: &str, git_sha: &str, dirty: bool) {
+    if let Some(id) = source_build_id(version, git_sha, dirty) {
+        let _ = SOURCE_BUILD.set(id);
+    }
+}
+
+/// This process's source build, as [`set_source_build`] named it.
+pub fn source_build() -> Option<&'static str> {
+    SOURCE_BUILD.get().map(String::as_str)
+}
+
+/// Whether an activation is recorded under an anchor, for this build.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActivationState {
+    /// Nothing is recorded.
+    Absent,
+    /// Recorded by this source build.
+    Current,
+    /// Recorded by another source build (`None`: one that named none), so
+    /// this build must record its own. `this` is this build's identity.
+    OtherBuild {
+        recorded: Option<String>,
+        this: Option<String>,
+    },
+}
+
+/// The activation recorded under `anchor`, judged against this process's
+/// source build. A record made from another source (an older binary after
+/// `aida dev rollback`, or a newer one) does not count: that build must
+/// record its own. `aida-server` and a re-promoted build of the same source
+/// share the identity, so they honour it.
+// trace:STORY-1843 | ai:claude
+pub fn activation_state(anchor: &Path) -> Result<ActivationState> {
+    let Some(record) = read_json::<Activation>(&anchor.join(ACTIVATION_FILE))? else {
+        return Ok(ActivationState::Absent);
+    };
+    if !record.all_writer_hosts_admitting {
+        return Ok(ActivationState::Absent);
+    }
+    let this = source_build();
+    Ok(match (&record.source_build, this) {
+        (Some(recorded), Some(this)) if recorded == this => ActivationState::Current,
+        _ => ActivationState::OtherBuild {
+            recorded: record.source_build,
+            this: this.map(str::to_string),
+        },
+    })
+}
+
+/// Has an operator recorded, with this source build, that every writer host
+/// is admitting ([`activation::record`])?
 pub(crate) fn activated(anchor: &Path) -> Result<bool> {
-    Ok(read_json::<Activation>(&anchor.join(ACTIVATION_FILE))?
-        .is_some_and(|a| a.all_writer_hosts_admitting))
+    Ok(activation_state(anchor)? == ActivationState::Current)
 }
 
 // ── Local writer admission ──────────────────────────────────────────────────
@@ -884,20 +992,52 @@ pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
 
 fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
     // Git runs here, before any lock.
-    let Some(source) = resolve_source(project_root)? else {
+    let Some(source) = writer_source(project_root)? else {
         return Ok(None);
     };
+    match admit_resolved(&source)? {
+        Ok(permit) => Ok(Some(permit)),
+        // A retirement whose driver is gone (it died, or its destructive step
+        // never ran) is reopened once, then admission retries.
+        Err(op_id) if retire::reopen_abandoned(&source, &op_id)? => admit_resolved(&source)?
+            .map(Some)
+            .map_err(|op_id| LifecycleError::SourceRetiring { op_id }),
+        Err(op_id) => Err(LifecycleError::SourceRetiring { op_id }),
+    }
+}
+
+/// The source a writer at `project_root` takes its permit under. Inside a
+/// seat clone (whose own Git is never asked) that is the clone's source under
+/// its main checkout's anchor, through the clone binding, so the fence the
+/// clone's teardown takes there is honoured. A clone with no verifiable
+/// binding has no anchor.
+// trace:STORY-1843 | ai:claude
+fn writer_source(project_root: &Path) -> Result<Option<Source>> {
+    match crate::seat_clone_detect::seat_clone_root(project_root) {
+        Some(clone_root) => match crate::seat_clone_detect::clone_writer_main(&clone_root) {
+            Some(main) => resolve_clone_source(&main, &clone_root),
+            None => Ok(None),
+        },
+        None => resolve_source(project_root),
+    }
+}
+
+/// Admit under a short Lifecycle hold. A fenced source refuses with
+/// `SourceRetiring`; a retired one returns `Ok(Err(op_id))` so the caller can
+/// try to reopen it if its retirement was abandoned.
+fn admit_resolved(source: &Source) -> Result<std::result::Result<LocalPermit, String>> {
     let probe = ProbeSource::system();
     let holder = this_process();
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
-    let mut record = load_or_create(&source, &held)?;
+    let mut record = load_or_create(source, &held)?;
     match &record.state {
         SourceState::Open => {}
-        SourceState::Fenced { op_id, .. } | SourceState::Retired { op_id, .. } => {
+        SourceState::Fenced { op_id, .. } => {
             return Err(LifecycleError::SourceRetiring {
                 op_id: op_id.clone(),
             })
         }
+        SourceState::Retired { op_id, .. } => return Ok(Err(op_id.clone())),
     }
     // Reap rows whose writer is proven dead (killed mid-write, or a release
     // that failed twice), so an open source's record never grows to the cap.
@@ -916,9 +1056,9 @@ fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
     });
     store_permits(&source.anchor, &record, &held)?;
     drop(held);
-    Ok(Some(LocalPermit {
-        anchor: source.anchor,
-        key: source.key,
+    Ok(Ok(LocalPermit {
+        anchor: source.anchor.clone(),
+        key: source.key.clone(),
         permit_id,
         done: false,
     }))

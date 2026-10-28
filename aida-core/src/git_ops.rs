@@ -4296,8 +4296,27 @@ pub fn worktree_head_sha(worktree_path: &Path) -> Option<String> {
 /// Remove a worktree by absolute path. `force` adds `--force` (discards a
 /// dirty tree). The pool's `destroy` path calls this only after classifying
 /// and salvaging; `return` never calls it (the directory persists).
-// trace:STORY-714 trace:TASK-0396 | ai:claude
+///
+/// The worktree's mail source is retired first; a refused retirement fails
+/// the removal and keeps the tree (STORY-1843 C2).
+// trace:STORY-714 trace:TASK-0396 trace:STORY-1843 | ai:claude
 pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -> Result<()> {
+    crate::mailbox_lifecycle::guard::remove_worktree_retained(
+        repo_root,
+        worktree_path,
+        force,
+        "worktree removal",
+    )
+}
+
+/// `git worktree remove` with no mail retirement. Only the retention guard
+/// calls it, after it retired the source.
+// trace:STORY-1843 | ai:claude
+pub fn remove_worktree_unguarded(
+    repo_root: &Path,
+    worktree_path: &Path,
+    force: bool,
+) -> Result<()> {
     let path_str = worktree_path.to_string_lossy();
     let mut args: Vec<&str> = vec!["worktree", "remove"];
     // `--` below keeps a dash-led path a path. trace:BUG-1622 | ai:claude

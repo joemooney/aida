@@ -424,6 +424,23 @@ pub(crate) fn create(
     })
 }
 
+/// Retire the mail of a clone this process is still creating, before it is
+/// removed. No lease exists yet, so there is no host-recorded binding to
+/// look up; the binding is this process's own: it cloned `dest` from `main`
+/// moments ago, and no seat has run in it. The clone is fenced under main's
+/// anchor like any bound clone, so a refusal (or a `main` that cannot be
+/// resolved) keeps it; it is never removed unfenced because it looks empty
+/// (C SKETCH section 5).
+// trace:STORY-1843 | ai:claude
+fn retire_unfinished_clone(
+    main: &Path,
+    dest: &Path,
+    reason: &str,
+) -> aida_core::mailbox_lifecycle::guard::Gate {
+    let main = main.canonicalize().ok();
+    aida_core::mailbox_lifecycle::guard::retire_clone_checkout(main.as_deref(), dest, reason)
+}
+
 /// Preserve origin-failure eligibility only after removing both allocations.
 // trace:TASK-2300 | ai:codex
 fn cleanup_failed_clone(
@@ -433,7 +450,19 @@ fn cleanup_failed_clone(
     error: anyhow::Error,
 ) -> anyhow::Error {
     if dest.exists() {
-        if let Err(cleanup) = std::fs::remove_dir_all(dest) {
+        // Fenced under main's anchor through the creator's own binding (see
+        // `retire_unfinished_clone`). trace:STORY-1843 | ai:claude
+        let retirement = match retire_unfinished_clone(main, dest, "failed clone") {
+            Ok(retirement) => retirement,
+            Err(kept) => return refusal(dest, anyhow::anyhow!("{error:#}; {kept}")),
+        };
+        // The quiet re-check runs right before the removal. trace:STORY-1843 | ai:claude
+        if let Err(cleanup) = aida_core::mailbox_lifecycle::guard::remove_retired(
+            dest,
+            retirement,
+            || std::fs::remove_dir_all(dest).map_err(anyhow::Error::from),
+            aida_core::mailbox_lifecycle::guard::Retirement::complete,
+        ) {
             return refusal(
                 dest,
                 anyhow::anyhow!("{error:#}; clone cleanup failed: {cleanup}"),
@@ -634,7 +663,24 @@ impl Drop for CloneCleanupGuard {
         if !self.armed {
             return;
         }
-        if let Err(error) = std::fs::remove_dir_all(&self.clone) {
+        // trace:STORY-1843 | ai:claude
+        let retirement = match retire_unfinished_clone(&self.main, &self.clone, "unfinished clone")
+        {
+            Ok(retirement) => retirement,
+            Err(kept) => {
+                eprintln!(
+                    "kept the unfinished seat clone {}: {kept}",
+                    self.clone.display()
+                );
+                return;
+            }
+        };
+        if let Err(error) = aida_core::mailbox_lifecycle::guard::remove_retired(
+            &self.clone,
+            retirement,
+            || std::fs::remove_dir_all(&self.clone).map_err(anyhow::Error::from),
+            aida_core::mailbox_lifecycle::guard::Retirement::complete,
+        ) {
             eprintln!(
                 "could not remove the unfinished seat clone {}: {error}",
                 self.clone.display()
@@ -1782,6 +1828,9 @@ pub(crate) enum Destroyed {
     Kept {
         reason: String,
         salvage: Option<PathBuf>,
+        /// The mail-retention refusal that kept it, if that was the reason:
+        /// the caller then keeps the lease for recovery ownership (R3-F1).
+        retention: Option<aida_core::mailbox_lifecycle::guard::RetentionRefusal>,
     },
 }
 
@@ -1817,6 +1866,38 @@ pub(crate) fn destroy_with_shipped(
     expect_head: Option<&str>,
     shipped: &[String],
 ) -> Result<Destroyed> {
+    destroy_retained(main, clone, mode, expect_head, shipped, None)
+}
+
+/// [`destroy_with_shipped`] for a caller that already retired the clone's
+/// mail (`session end` retires before it deletes the lease the binding
+/// needs). With `retired == None` the clone is retired here, through the
+/// verified host binding, right before the removal; a refusal keeps it.
+/// Every path that keeps the clone reopens the retirement.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn destroy_retained(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+    retired: Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+) -> Result<Destroyed> {
+    let mut retired = retired;
+    let outcome = destroy_inner(main, clone, mode, expect_head, shipped, &mut retired);
+    // Anything not consumed by the removal was kept: reopen it.
+    crate::mail_retention::reopen_quietly(retired);
+    outcome
+}
+
+fn destroy_inner(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+    retired: &mut Option<aida_core::mailbox_lifecycle::guard::Retirement>,
+) -> Result<Destroyed> {
     if !is_seat_clone_location(main, clone) {
         anyhow::bail!(
             "{} is not a seat clone of {} (it must be an `{CLONE_DIR_PREFIX}*` directory in the \
@@ -1833,12 +1914,14 @@ pub(crate) fn destroy_with_shipped(
                 return Ok(Destroyed::Kept {
                     reason: format!("its state could not be read ({why}), so it is kept"),
                     salvage: None,
+                    retention: None,
                 })
             }
             Probe::HasSubmodules(reason) => {
                 return Ok(Destroyed::Kept {
                     reason,
                     salvage: None,
+                    retention: None,
                 })
             }
         };
@@ -1847,6 +1930,7 @@ pub(crate) fn destroy_with_shipped(
                 return Ok(Destroyed::Kept {
                     reason: "its HEAD moved since the scan".to_string(),
                     salvage: None,
+                    retention: None,
                 });
             }
         }
@@ -1860,6 +1944,7 @@ pub(crate) fn destroy_with_shipped(
                     return Ok(Destroyed::Kept {
                         reason: format!("{error:#}"),
                         salvage: None,
+                        retention: None,
                     })
                 }
             }
@@ -1867,6 +1952,7 @@ pub(crate) fn destroy_with_shipped(
                 return Ok(Destroyed::Kept {
                     reason: unshipped_reason(&facts),
                     salvage: salvaged,
+                    retention: None,
                 });
             }
         }
@@ -1881,11 +1967,48 @@ pub(crate) fn destroy_with_shipped(
                 return Ok(Destroyed::Kept {
                     reason: format!("it is in use: {in_use}"),
                     salvage: salvaged,
+                    retention: None,
                 });
             }
         }
-        std::fs::remove_dir_all(clone)
-            .with_context(|| format!("remove the seat clone {}", clone.display()))?;
+        // Retire the clone's mail into main's anchor before the removal.
+        // trace:STORY-1843 | ai:claude
+        let retirement = match retired.take() {
+            Some(retirement) => Some(retirement),
+            None => {
+                match crate::mail_retention::retire_tree(main, clone, true, "seat clone teardown") {
+                    Ok(retirement) => retirement,
+                    Err(refusal) => {
+                        return Ok(Destroyed::Kept {
+                            reason: crate::mail_retention::refusal_lines(&refusal).join("; "),
+                            salvage: salvaged,
+                            retention: Some(refusal),
+                        })
+                    }
+                }
+            }
+        };
+        // Re-verified right before the removal: mail that landed since the
+        // commit keeps the clone. trace:STORY-1843 | ai:claude
+        let removed = aida_core::mailbox_lifecycle::guard::remove_retired(
+            clone,
+            retirement,
+            || {
+                std::fs::remove_dir_all(clone)
+                    .with_context(|| format!("remove the seat clone {}", clone.display()))
+            },
+            aida_core::mailbox_lifecycle::guard::Retirement::complete,
+        );
+        if let Err(error) = removed {
+            if let Some(refusal) = crate::mail_retention::retention_refusal(&error) {
+                return Ok(Destroyed::Kept {
+                    reason: crate::mail_retention::refusal_lines(refusal).join("; "),
+                    salvage: salvaged,
+                    retention: Some(refusal.clone()),
+                });
+            }
+            return Err(error);
+        }
     }
     let name = clone.file_name().context("a seat clone has a name")?;
     let target = main.join("target").join("worktrees").join(name);
@@ -2021,3 +2144,7 @@ mod s4b_seat_trees_tests;
 #[cfg(test)]
 #[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
 mod orphan_reentry_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
+mod retention_tests;

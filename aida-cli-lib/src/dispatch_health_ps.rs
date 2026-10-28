@@ -90,6 +90,14 @@ pub(crate) enum DispatchState {
     /// re-implements it. Carries an informational note and no command.
     // trace:BUG-1681 | ai:claude
     AwaitingIntegration,
+    /// The session's end (or reap, or heal) was refused because the tree's
+    /// mail could not be retired, and the lease is stamped
+    /// `ending_retained_at`. The tree, lease, claim and manifest are kept and
+    /// the child grant is revoked: this is neither active work nor a cleaned
+    /// up session, whatever the process and tree look like. The next step is
+    /// to fix the cause and retry the end.
+    // trace:STORY-1843 | ai:claude
+    EndingRetained,
 }
 
 impl DispatchState {
@@ -107,7 +115,21 @@ impl DispatchState {
             DispatchState::Stopped => "stopped",
             // trace:BUG-1681 | ai:claude
             DispatchState::AwaitingIntegration => "awaiting-integration",
+            // trace:STORY-1843 | ai:claude
+            DispatchState::EndingRetained => "ending-retained",
         }
+    }
+}
+
+/// STORY-1843 C2: a lease stamped `ending_retained_at` reads
+/// [`DispatchState::EndingRetained`] whatever else was observed, so a refused
+/// end never shows as moving, stalled or stopped work. Pure.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn apply_ending_retained(state: DispatchState, ending_retained: bool) -> DispatchState {
+    if ending_retained {
+        DispatchState::EndingRetained
+    } else {
+        state
     }
 }
 
@@ -1051,6 +1073,15 @@ pub(crate) fn next_command_hint_with_untracked(
         // (every non-Moving state explains itself) without inventing a PR.
         // trace:BUG-1681 | ai:claude
         DispatchState::AwaitingIntegration => Some(integration_hint(None)),
+        // STORY-1843 C2: the end was refused to keep the tree's mail.
+        // trace:STORY-1843 | ai:claude
+        // The cause is the lease's recorded reason (activation is only one of
+        // them), so the hint names where to read it, not a fix.
+        DispatchState::EndingRetained => Some(format!(
+            "session end refused: the mail in {wt} could not be retained, so the tree, lease and \
+             claim are kept and its grant is revoked — `aida session end` prints the cause; fix \
+             it, then retry"
+        )),
         DispatchState::Unknown => Some(format!(
             "liveness unknown — no pid recorded for {wt} (branch {branch}, last commit \"{last_commit}\"); \
              an agent may still be working here — verify before any cleanup"

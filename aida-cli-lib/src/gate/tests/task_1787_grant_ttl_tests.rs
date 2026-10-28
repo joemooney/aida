@@ -566,6 +566,8 @@ fn test_session_show_displays_grant_ttl() {
         manual_enter_at: None,
         interrupted_at: None,
         interrupted_reason: None,
+        ending_retained_at: None,
+        ending_retained_reason: None,
         driver: None,
         // trace:BUG-2165 | ai:codex
         child_grant_id: None,

@@ -2,8 +2,8 @@
 //! trace:STORY-1843 | ai:claude
 
 use super::retire::{
-    complete_retirement, retire_source, CopyFault, JournalEntry, Manifest, Phase, Point,
-    RefusalReason, RetireOptions, RetireOutcome, COPY_FAULT, CRASH_AT, HOOK_AT,
+    complete_retirement, retire_source, retire_source_claimed, CopyFault, JournalEntry, Manifest,
+    Phase, Point, RefusalReason, RetireOptions, RetireOutcome, COPY_FAULT, CRASH_AT, HOOK_AT,
 };
 use super::*;
 use crate::mailbox::{
@@ -13,7 +13,7 @@ use crate::process_probe::fixture::FakeProc;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
-fn repo() -> TempDir {
+pub(super) fn repo() -> TempDir {
     let dir = tempfile::tempdir().unwrap();
     let out = crate::test_git::git_command()
         .args(["init", "-q"])
@@ -24,7 +24,7 @@ fn repo() -> TempDir {
     dir
 }
 
-fn message(id: &str) -> Message {
+pub(super) fn message(id: &str) -> Message {
     Message {
         subject: None,
         id: id.to_string(),
@@ -45,7 +45,7 @@ fn message(id: &str) -> Message {
     }
 }
 
-fn mailbox(root: &Path) -> PathBuf {
+pub(super) fn mailbox(root: &Path) -> PathBuf {
     local_mailbox_dir(root)
 }
 
@@ -53,14 +53,14 @@ fn ensure_mailbox(root: &Path) {
     std::fs::create_dir_all(mailbox(root)).unwrap();
 }
 
-fn source(root: &Path) -> Source {
+pub(super) fn source(root: &Path) -> Source {
     ensure_mailbox(root);
     resolve_source(root)
         .unwrap()
         .expect("a git checkout has an anchor")
 }
 
-fn record(root: &Path) -> SourceRecord {
+pub(super) fn record(root: &Path) -> SourceRecord {
     let source = source(root);
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
     load_or_create(&source, &held).unwrap()
@@ -74,7 +74,13 @@ fn edit_record(root: &Path, f: impl FnOnce(&mut SourceRecord)) {
     store_record(&source.anchor, &record, &held).unwrap();
 }
 
-fn activate(root: &Path) {
+/// Name this test process's source build, as each binary does at startup.
+pub(super) fn test_source_build() -> String {
+    set_source_build("0.0.0", "test", false);
+    source_build().expect("named").to_string()
+}
+
+pub(super) fn activate(root: &Path) {
     let anchor = source(root).anchor;
     write_json(
         &anchor.join(ACTIVATION_FILE),
@@ -82,13 +88,14 @@ fn activate(root: &Path) {
             schema: SCHEMA,
             all_writer_hosts_admitting: true,
             recorded_at: "2026-10-26T00:00:00Z".into(),
+            source_build: Some(test_source_build()),
         },
     )
     .unwrap();
 }
 
 /// Messages plus a watermark and a receipt, as a real mailbox holds them.
-fn seed_mail(root: &Path) {
+pub(super) fn seed_mail(root: &Path) {
     write_local_message(root, &message("m1")).unwrap();
     write_local_message(root, &message("m2")).unwrap();
     let read = mailbox(root).join(".read");
@@ -99,7 +106,7 @@ fn seed_mail(root: &Path) {
     std::fs::write(receipts.join("m1.txt"), "2").unwrap();
 }
 
-const SEEDED: [&str; 4] = [
+pub(super) const SEEDED: [&str; 4] = [
     ".read-receipts/bob/m1.txt",
     ".read/bob.txt",
     "m1.json",
@@ -107,7 +114,7 @@ const SEEDED: [&str; 4] = [
 ];
 
 /// Relative paths of every file under `dir`, sorted.
-fn files_under(dir: &Path) -> Vec<String> {
+pub(super) fn files_under(dir: &Path) -> Vec<String> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
         let Ok(read) = std::fs::read_dir(dir) else {
             return;
@@ -166,14 +173,49 @@ fn journal(ticket: &super::retire::RetirementTicket) -> JournalEntry {
     .unwrap()
 }
 
-fn assert_retiring(root: &Path) {
+/// A finished operation's journal entry is deleted, and its key is no longer
+/// indexed as pending (F6).
+fn assert_pruned(ticket: &super::retire::RetirementTicket) {
+    let path = ticket
+        .anchor
+        .join(JOURNAL_DIR)
+        .join(format!("{}.json", ticket.op_id));
+    assert!(
+        !path.exists(),
+        "finished journal {} is pruned",
+        path.display()
+    );
+    let pending = ticket.anchor.join("pending");
+    let indexed: Vec<String> = std::fs::read_dir(&pending)
+        .map(|d| {
+            d.flatten()
+                .map(|e| std::fs::read_to_string(e.path()).unwrap_or_default())
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        indexed.iter().all(|i| !i.contains(&ticket.op_id)),
+        "{indexed:?}"
+    );
+}
+
+/// Retire and keep the retirement claim, as a caller about to destroy the
+/// checkout does: while it is held, admission cannot reopen the source.
+fn retire_held(
+    root: &Path,
+    opts: &RetireOptions,
+) -> (RetireOutcome, Option<super::retire::RetirementClaim>) {
+    retire_source_claimed(root, opts).unwrap()
+}
+
+pub(super) fn assert_retiring(root: &Path) {
     match admit_local_write(root) {
         Err(LifecycleError::SourceRetiring { .. }) => {}
         other => panic!("expected SourceRetiring, got {other:?}"),
     }
 }
 
-fn assert_open(root: &Path) {
+pub(super) fn assert_open(root: &Path) {
     let permit = admit_local_write(root).unwrap().expect("admitted");
     permit.complete().unwrap();
     assert_eq!(record(root).state, SourceState::Open);
@@ -524,7 +566,8 @@ fn a_failed_release_keeps_the_row_for_drop_to_retry() {
 fn an_empty_source_retires_and_completes_after_removal() {
     let dir = repo();
     ensure_mailbox(dir.path());
-    let (ticket, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (ticket, retained) = retired(outcome);
     assert_retiring(dir.path());
     let manifest: Manifest = read_json(&retained.join("manifest.json")).unwrap().unwrap();
     assert_eq!(manifest.count, 0);
@@ -534,16 +577,17 @@ fn an_empty_source_retires_and_completes_after_removal() {
         Err(LifecycleError::NotRemoved { .. })
     ));
     std::fs::remove_dir_all(dir.path().join(".aida")).unwrap();
+    let key = journal(&ticket).key;
     complete_retirement(&ticket).unwrap();
-    assert_eq!(journal(&ticket).phase, Phase::Finalized);
-    assert!(!record_path(&ticket.anchor, &journal(&ticket).key).exists());
-    complete_retirement(&ticket).unwrap();
+    assert_pruned(&ticket);
+    assert!(!record_path(&ticket.anchor, &key).exists());
 }
 
 #[test]
 fn an_absent_mailbox_is_created_so_it_can_be_fenced() {
     let dir = repo();
-    let (_, _) = retired(retire_source(dir.path(), &opts()).unwrap());
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    retired(outcome);
     assert!(mailbox(dir.path()).is_dir());
     assert_retiring(dir.path());
 }
@@ -889,7 +933,8 @@ fn crash_then_replay(at: Point) {
     if at != Point::Journal(Phase::Fenced) {
         assert_retiring(dir.path());
     }
-    let (ticket, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (ticket, retained) = retired(outcome);
     assert_eq!(files_under(&retained.join("data")), SEEDED, "{at:?}");
     assert_eq!(files_under(&mailbox(dir.path())), Vec::<String>::new());
     assert_eq!(journal(&ticket).phase, Phase::Committed);
@@ -936,7 +981,7 @@ fn a_crash_after_removed_finishes_on_the_next_completion() {
     assert_eq!(journal(&ticket).phase, Phase::Removed);
     assert!(record_path(&ticket.anchor, &key).exists());
     complete_retirement(&ticket).unwrap();
-    assert_eq!(journal(&ticket).phase, Phase::Finalized);
+    assert_pruned(&ticket);
     assert!(!record_path(&ticket.anchor, &key).exists());
 }
 
@@ -1055,7 +1100,8 @@ fn a_second_driver_refuses_while_the_first_holds_the_claim() {
             }),
         ))
     });
-    let (ticket, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    let (outcome, claim) = retire_held(dir.path(), &opts());
+    let (ticket, retained) = retired(outcome);
     let (reason, kept) = refusal(second.borrow_mut().take().expect("B ran"));
     assert_eq!(reason, RefusalReason::RetiringElsewhere);
     assert_eq!(kept, None);
@@ -1065,12 +1111,13 @@ fn a_second_driver_refuses_while_the_first_holds_the_claim() {
     assert_eq!(files_under(&mailbox(dir.path())), Vec::<String>::new());
     assert_retiring(dir.path());
     // A later driver adopts the committed operation instead of aborting it.
+    drop(claim);
     let (again, _) = retired(retire_source(dir.path(), &opts()).unwrap());
     assert_eq!(again, ticket);
     assert_eq!(journal(&ticket).phase, Phase::Committed);
     std::fs::remove_dir_all(dir.path().join(".aida")).unwrap();
     complete_retirement(&ticket).unwrap();
-    assert_eq!(journal(&ticket).phase, Phase::Finalized);
+    assert_pruned(&ticket);
 }
 
 #[test]
@@ -1213,4 +1260,89 @@ fn a_staging_file_alone_does_not_make_a_source_mail_bearing() {
     // Not activated: only real bytes would refuse.
     let (_, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
     assert_eq!(files_under(&retained.join("data")), Vec::<String>::new());
+}
+
+// ── Journal bound (F6) ──────────────────────────────────────────────────────
+
+fn journal_files(root: &Path) -> usize {
+    std::fs::read_dir(source(root).anchor.join(JOURNAL_DIR))
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".json"))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+#[test]
+fn finished_operations_leave_no_journal_behind() {
+    let dir = repo();
+    seed_mail(dir.path());
+    // Refused (no activation) three times: each Aborted entry is pruned.
+    for _ in 0..3 {
+        let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
+        assert_eq!(reason, RefusalReason::MailBearingBeforeActivation);
+    }
+    assert_eq!(journal_files(dir.path()), 0, "aborted entries are pruned");
+    // Retired then reopened: the Reopened entry is pruned too.
+    activate(dir.path());
+    let (outcome, claim) = retire_held(dir.path(), &opts());
+    let (ticket, _) = retired(outcome);
+    assert_eq!(
+        journal_files(dir.path()),
+        1,
+        "a live retirement keeps its entry"
+    );
+    super::retire::reopen_retirement(&ticket).unwrap();
+    drop(claim);
+    assert_pruned(&ticket);
+    assert_eq!(journal_files(dir.path()), 0);
+    assert_eq!(files_under(&mailbox(dir.path())), SEEDED);
+}
+
+#[test]
+fn a_damaged_journal_of_another_operation_does_not_fail_this_retirement() {
+    // F6: the pending index is read per key, so one unreadable entry is not
+    // a repo-wide fail-closed.
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    let journal_dir = source(dir.path()).anchor.join(JOURNAL_DIR);
+    std::fs::write(
+        journal_dir.join("00000000-0000-0000-0000-000000000000.json"),
+        b"{ not json",
+    )
+    .unwrap();
+    // The one-time migration of an index-less anchor reads every entry and
+    // fails closed on a damaged one; an indexed anchor never reads it.
+    std::os::unix::fs::DirBuilderExt::mode(&mut std::fs::DirBuilder::new(), 0o700)
+        .create(source(dir.path()).anchor.join("pending"))
+        .unwrap();
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (_, retained) = retired(outcome);
+    assert_eq!(files_under(&retained.join("data")), SEEDED);
+}
+
+#[test]
+fn an_anchor_without_an_index_indexes_its_unfinished_journal_once() {
+    // An anchor written before the index: crash right after the Fenced
+    // journal write, then drop the index as an older build never wrote it.
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    CRASH_AT.with(|c| c.set(Some(Point::Journal(Phase::Fenced))));
+    let crashed = retire_source(dir.path(), &opts());
+    CRASH_AT.with(|c| c.set(None));
+    assert!(matches!(crashed, Err(LifecycleError::InjectedCrash(_))));
+    let anchor = source(dir.path()).anchor;
+    std::fs::remove_dir_all(anchor.join("pending")).unwrap();
+    let interrupted = only_journal(dir.path());
+
+    let (outcome, _claim) = retire_held(dir.path(), &opts());
+    let (ticket, _) = retired(outcome);
+    assert_eq!(
+        ticket.op_id, interrupted.op_id,
+        "the migrated index adopts it"
+    );
+    assert!(anchor.join("pending").is_dir());
 }
