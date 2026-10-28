@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T11:25:44.077932538Z
+modified_at: 2026-10-28T11:28:28.354335125Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1142,6 +1142,77 @@ comments:
   created_at: 2026-10-28T11:25:44.077932538Z
   modified_at: 2026-10-28T11:25:44.077932538Z
   session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+- id: 01a18244-c8c2-7af3-b8f4-31cebd38ab2c
+  author: joe
+  content: |
+    ## STORY-1843 FINAL ACCEPTANCE INVENTORY (claude, 2026-10-28; verified against origin/main b535e12d577 by reading code and tests, not PR bodies)
+
+    Result: **NOT COMPLETE. BLOCKED-SKETCH.** All five code criteria in the description are implemented and traced (`aida criteria STORY-1843`: untested none). Signed slice D (C1 role cohorts plus relay lifetime) has no code on main, so signed slice E cannot be done yet either. Per 2 C2, 48 Q1/#6, 60 #8, 63 #8 and 86, the parent cannot complete before D, E and the verified aida-relay STORY-122 integration. No completing PR was opened.
+
+    ### A. Description acceptance criteria -> main
+    | Criterion | Commit(s) on main | Covering tests (traced) | Status |
+    |---|---|---|---|
+    | aca8ca0d handle at session start, registered by SessionStart (claude/codex/agy) | f19b73debfc (#2864), 94124569c9b (#2909) | agent_handle.rs 14 traced tests (1301..1958) | DONE |
+    | aceb5213 statusline renders the handle for all 3 clients | f19b73debfc | agent_handle.rs:1446, 1600, 1800, 1857 | DONE |
+    | ac97b025 agent ls: all vendors, handle/role/spec/liveness, dead pruned or marked | f19b73debfc, b6aa5e87013 | agent_handle.rs:1620, agent_registry.rs:3957 | DONE |
+    | acfeb946 send <handle> delivers and the notice surfaces it; dead/unknown refused with a hint, no phantom inbox | 597ea98e771, #2808 line, b6aa5e87013 | mailbox_resolver.rs:704 `unknown_dead_and_zero_reader_recipients_refuse` (asserts no mailbox dir created), :780, agent_handle.rs:1537 | DONE |
+    | ac0eef56 Claude -> agy by handle, seen next turn (black-box, agy hook shape) | 94124569c9b, 84f0642f339 | aida-cli/tests/story_1843_pr3_blackbox.rs, codex_hooks.rs:698, agent_registry.rs:3118 | DONE |
+    | acf32e9f C3 write-mode migration | n/a (post-deployment) | n/a | OPERATOR-ONLY |
+
+    ### B. Signed obligations -> main
+    | Obligation | Commit | Test / evidence | Status |
+    |---|---|---|---|
+    | 2 C1 snapshot live role readers at send, print names, zero refuses with a hint | #2808 line | mailbox_resolver.rs `unknown_dead_and_zero_reader_recipients_refuse`, `multiple_readers_are_named_and_duplicate_names_refuse` | DONE |
+    | 2 C1 `--queue-for-role` assigned once to the first eligible reader | none | no flag on `mailbox send` (only `role_cmd.rs` uses that identifier, for an unrelated queue) | **MISSING (D)** |
+    | 2 C1 / 48 #4 each cohort reader gets its own per-UUID receipt | none | Message still addresses identity strings; no delivery or cohort record | **MISSING (D)** |
+    | 18 #1 / 2 C3 `aida mailbox migrate --dry-run` reconciliation report | b6aa5e87013 | mailbox_migration.rs `preview_refuses_*` | DONE |
+    | 18 #2 old-layout writer hits the manifest and fails nonzero without writing, plus upgrade-order doc | b6aa5e87013 | mailbox.rs:1933 `layout_manifest_refuses_legacy_writers_and_readers_without_writing`, mailbox_resolver.rs:818; docs/cli/06-roles-sessions.md "Mailbox layout upgrade order" | DONE |
+    | 18 #1c/#1d write-mode migration | n/a | operator-run | OPERATOR-ONLY |
+    | 41 (3) child inheriting AIDA_USER cannot read parent-private mail | 94124569c9b | agent_handle.rs `an_unregistered_payload_session_never_borrows_its_parents_handle`, `a_handle_spelling_a_seat_or_launch_name_confers_no_authority` | DONE |
+    | 41 (1) one cross-root logical inbox resolver | 06fa4fb01ee (B1), f34fd143233 (B2a), ab8c97933da (B2b) | `story1843_logical_inbox_conformance` (aida-core mailbox_logical_tests.rs) | DONE |
+    | 41 (2) worktree removal cannot strand sibling mail | 8ae30fc1685 (C1), a35bc40b892 (C2), 4e961089c95 (C3x) | mailbox_lifecycle/guard_tests.rs, aida-cli-lib tests/story_1843_c2_refusal_tests.rs | DONE |
+    | 48 A / TASK-2345, TASK-2346 | e4c2dd0575 (#2937), 011e33b65e | mailbox_identity_tests.rs | DONE |
+    | 48 #1 / 60 #5 private anchor, safe IO; 87 per-key convergent publication | 8ae30fc1685, b010bc35f63 | B2c `story1843_b2c_*` (13 tests, listed in comment 86) | DONE |
+    | 48 #2 / 60 #7 writer, destructive-entry and lock-order inventory | comments 61-63 | advisor disposition 63 | DONE |
+    | 60 #1 typed context and snapshot; audience before projection | 06fa4fb01ee, ab8c97933da | mailbox_logical_tests.rs | DONE |
+    | 60 #2 receipt evidence and legacy watermark rules | 06fa4fb01ee, f34fd143233, b010bc35f63 | `..._explicit_ack_resolves_a_legacy_watermark` | DONE |
+    | 60 #3 / #4 post-flush ACK, MCP response-scoped plan, honest outcome | b010bc35f63 | `mcp_read_inbox_ack_commits_only_after_its_own_response_is_flushed`, `piped_inbox_closed_early_acknowledges_nothing_undelivered` | DONE |
+    | 63 #1-#6 / 76 QC1-QC4 retention barrier, permits, clone binding, Lifecycle->Receipt order | 8ae30fc1685, a35bc40b892, 4e961089c95, b010bc35f63 | guard_tests.rs, story_1843_c2_refusal_tests.rs, `..._lock_order_is_lifecycle_then_receipt` | DONE |
+    | 81 D1 activation record command (operator-only, TTY) | a35bc40b892 | `aida mailbox retention activate [--dry-run]`; mail_retention.rs:303 | DONE |
+    | 0 / 2 relay: one UUID per run across rotations, gap queue, end/crash bounce outbox (exactly-once insertion, never bounce a bounce), label-reuse handover, capability gate | none | no relay_mail module; aida-relay STORY-122 is `approved`, 0 commits | **MISSING (D)** |
+    | 48 #5 / 60 #8 E: final conformance across every named adapter, plus a separate STRICT review | none | n/a | **MISSING (E)** |
+
+    ### OPERATOR-ONLY (agents never run these)
+    1. Retention activation: `aida mailbox retention activate --dry-run`. If the report shows every writer host admitting, run `aida mailbox retention activate` at a human TTY.
+    2. C3 write migration (rulings 18 #1b-#1d): `aida mailbox migrate --dry-run`. Then the advisor reviews the report SHA, and the operator runs write mode with the operator-authored cohort/divergent-ID input file. Write mode does not exist yet; it ships after D (18 "Write mode is a later PR").
+
+    ### SKETCH for the remainder (D then E). Design inside signed SKETCH v2 section D (47) and signoff 48; needs an advisor ruling on Q1-Q4 before code.
+    **D1, AIDA delivery ownership (Refs, STRICT, about 600-900 lines, too large for this lane).**
+    - Add an additive `DeliveryRecord { delivery_id, message_id, recipient_uuid, cohort: Option<RoleCohort{role, snapshot_at, reader_uuids}>, queued_for_role: bool, run_uuid: Option }`. It is stored beside the message in the same mailbox source and reconciled by the B logical view. Message IDs, to/from, threads, tombstones and historical receipts are untouched. Legacy addresses get no inferred ownership.
+    - `mailbox send <role>`: resolve the live cohort (existing resolver), write one DeliveryRecord per reader UUID, and print the same names. Zero readers refuses unless `--queue-for-role`, which writes one pending record. The first eligible reader's next snapshot binds it once, under the recipient lifecycle generation.
+    - Receipts become per-UUID in the B2c anchor (key = recipient UUID for cohort deliveries; existing string keys unchanged). Shared role watermarks never become private ACKs.
+    - Tests: zero/one/many cohort, queued-once race (two readers), independent receipts, legacy untouched.
+
+    **D2, relay lifetime, AIDA side (Refs, STRICT).**
+    - `aida relay-mail {bind, child-bind, end, reuse}` (relay_mail.rs plus relay_mail_args.rs, registered through command_registry). The run UUID is reserved under the common-root namespace lock and bound to controller PID/start/boot plus run-lock evidence (BUG-2212 liveness). Children reference it.
+    - Gap delivery is accepted while the controller is live or paused.
+    - Terminal generation is recorded once (traps are a fast path; send/start/maintenance reconciliation is the crash path).
+    - End-notice outbox key = (run UUID, terminal generation, original delivery, destination UUID). Stays pending/retryable; senders and the advisor are deduplicated; never bounce a bounce.
+    - Label reuse reports the exact unread count. Headless runs need an explicit `--leave-with-old` or `--handover`. Handover writes provenance-linked deliveries, never a rename or auto-ACK.
+    - A versioned capability probe refuses before reservation.
+
+    **D3, aida-relay STORY-122 (cross-repo, guided).** relay.sh calls bind/child-bind/end; driver capability probe; shell fixtures from 47 E (stub vendors, no Claude).
+
+    **E (completing, STORY-1843).** One conformance matrix across CLI, MCP, TUI, notice, status, watcher and relay (aida-cli/tests/story_1843_relay_conformance.rs), plus a separate STRICT review. The PR title carries (STORY-1843).
+
+    **Advisor questions:**
+    - Q1: Should DeliveryRecord live as a sidecar file per message, or as a field appended to the message JSON? Sidecar keeps the message immutable, and it is my recommendation.
+    - Q2: Should `--queue-for-role` bind on the first eligible reader's snapshot (recommended) or on the first explicit read?
+    - Q3: Should D1 and D2 ship as two PRs (recommended) or one?
+    - Q4: aida-relay STORY-122 is `guided`. Who drives it: an operator-guided lane, or a downgrade via /aida-derisk?
+  created_at: 2026-10-28T11:28:28.354335125Z
+  modified_at: 2026-10-28T11:28:28.354335125Z
+  session_id: 92161e7c-5e11-4371-9329-47aec3cf7f04
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
