@@ -776,3 +776,41 @@ fn story1843_b2c_inbox_acknowledges_after_flush_into_the_anchor() {
     let after = view_from(&r.main, &r.store, &audience);
     assert_eq!(ids(&after.unread()), vec!["main-new"]);
 }
+
+/// Signoff 60 #4: a commit that fails after the output was flushed exits
+/// non-zero with a message that says the mail was shown but not fully
+/// recorded, the mail stays unread, and running the read again records it.
+/// The failure here is a receipt lock another process holds past the
+/// bounded wait.
+#[test]
+fn story1843_b2c_inbox_commit_failure_exits_non_zero_and_a_retry_records() {
+    let audience = operator();
+    let _env = operator_env();
+    let r = mail_repo();
+    // A first read creates the receipt anchor and its lock file.
+    crate::mailbox_store::write_message(&r.main, &mail("first", "operator", 10, false)).unwrap();
+    run(&r.store, inbox_cmd()).unwrap();
+    crate::mailbox_store::write_message(&r.main, &mail("second", "operator", 20, false)).unwrap();
+
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(r.main.join(".git/aida/mail-lifecycle/receipts.lock"))
+        .unwrap();
+    fs2::FileExt::lock_exclusive(&lock).unwrap();
+    let err = run(&r.store, inbox_cmd()).unwrap_err();
+    fs2::FileExt::unlock(&lock).unwrap();
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("the mail above was shown, but recording it as read did not finish"),
+        "{text}"
+    );
+    assert!(text.contains("run `aida mailbox inbox` again"), "{text}");
+    assert_eq!(
+        ids(&view_from(&r.main, &r.store, &audience).unread()),
+        vec!["second"]
+    );
+
+    run(&r.store, inbox_cmd()).unwrap();
+    assert!(view_from(&r.main, &r.store, &audience).unread().is_empty());
+}

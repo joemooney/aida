@@ -199,14 +199,28 @@ them** (STORY-1843 slice B2c):
    was shown with, in a worktree that is not being retired, and that each
    inbox is still this session's; then it records one per-ID receipt per
    inbox in a private ledger under the repository's common Git directory
-   (`<git-common-dir>/aida/mail-lifecycle/receipts/`). Anything changed
-   refuses the whole commit and writes nothing; running the read again is
-   safe. Mail that arrived after the plan is never added to it.
+   (`<git-common-dir>/aida/mail-lifecycle/receipts/`). If any of those checks
+   fails, or a ledger is full, or a lock stays busy, the commit refuses
+   before writing anything. Mail that arrived after the plan is never added
+   to it.
+
+Each inbox (recipient key) has its own ledger, and each ledger is replaced by
+its own atomic rename, so recording is **idempotent and convergent rather
+than one atomic step**. A message addressed to several of your inboxes (a
+broadcast seen as both `advisor` and `joe`, say) counts as acknowledged only
+when every one of those ledgers holds it. If a write fails after one inbox's
+ledger was already replaced (a full disk, an I/O error), that inbox keeps the
+receipt, the others do not, and the command says the read was recorded for
+only some of its inboxes. The next read shows that message again and records
+it for exactly the inboxes still missing it; an inbox that already holds the
+receipt keeps its first acknowledgement time.
 
 If the output fails (a closed pipe: `aida mailbox inbox | head`), the process
 ends before the commit and the mail stays unread, to be shown again. A
 possible duplicate read is preferred over silently losing a message. A failed
-commit exits non-zero with `the mail above was shown but not marked read`.
+commit exits non-zero with `the mail above was shown, but recording it as
+read did not finish`; running `aida mailbox inbox` again shows whatever is
+still not recorded and records it.
 Delivery to a pipe or a client is not proof that a person or an agent read
 it; it is the strongest evidence a reader has.
 

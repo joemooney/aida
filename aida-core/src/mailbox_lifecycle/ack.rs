@@ -16,14 +16,20 @@
 //! by the caller before any lock; under the locks only read-only validation
 //! runs: each holding source is still `Open` at the planned generation, each
 //! replica still has the planned bytes, and every key's ledger has room.
-//! Anything changed refuses the whole commit and writes nothing, so a retry
-//! is safe and idempotent. An arrival after the plan was prepared is never
-//! added to it.
+//! A refusal there writes nothing. An arrival after the plan was prepared is
+//! never added to it.
 //!
 //! The anchor is `<common-git-dir>/aida/mail-lifecycle/receipts/`, one
 //! ledger per recipient key ([`crate::mailbox_logical::ReceiptLedger`]),
-//! each replaced by one atomic, durable rename. Existing per-ID receipts in
-//! the sources stay as inputs; nothing is imported, pruned or migrated.
+//! each replaced by its own atomic, durable rename. Publication is
+//! idempotent and convergent, not one atomic step (advisor ruling on signoff
+//! 60 #5): a write that fails after some keys' ledgers were renamed into
+//! place leaves those keys acknowledged and the others not, and the commit
+//! reports [`AckError::Incomplete`]. A message counts as acknowledged in the
+//! anchor only when every recipient key it matched holds its receipt, so
+//! the next read shows it again and plans exactly the keys still missing it.
+//! Existing per-ID receipts in the sources stay as inputs; nothing is
+//! imported, pruned or migrated.
 //!
 //! trace:STORY-1843 | ai:claude
 
@@ -35,9 +41,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::mailbox_logical::{
-    receipt_ledger_name, replica_fingerprint, LogicalSnapshot, ReadEvidence, ReceiptLedger,
-    ResolvedAudience, SnapshotRecord, SourceKind, RECEIPT_LEDGER_CAP, RECEIPT_LEDGER_MAX_ENTRIES,
-    RECEIPT_LEDGER_SCHEMA,
+    read_receipt_ledger, receipt_ledger_name, replica_fingerprint, LogicalSnapshot, ReadEvidence,
+    ReceiptLedger, ResolvedAudience, SnapshotRecord, SourceKind, RECEIPT_LEDGER_CAP,
+    RECEIPT_LEDGER_MAX_ENTRIES, RECEIPT_LEDGER_SCHEMA,
 };
 
 use super::{
@@ -76,6 +82,10 @@ pub enum AckError {
     LedgerFull,
     /// The lifecycle or receipt lock, or the anchor, refused.
     Lifecycle(LifecycleError),
+    /// Writing a ledger failed after at least one other key's ledger was
+    /// already published: those keys hold the receipts, the rest do not.
+    /// The next read shows the mail again and plans only the missing keys.
+    Incomplete(LifecycleError),
 }
 
 impl std::fmt::Display for AckError {
@@ -103,6 +113,9 @@ impl std::fmt::Display for AckError {
                 f.write_str("the mailbox lifecycle anchor is not usable")
             }
             AckError::Lifecycle(_) => f.write_str("the mailbox lifecycle anchor refused"),
+            AckError::Incomplete(_) => f.write_str(
+                "the read was recorded for only some of its inboxes; the next read shows that mail again and records the rest",
+            ),
         }
     }
 }
@@ -188,8 +201,12 @@ impl AckPlan {
     /// about to deliver in full. Only unread records and records covered by
     /// a legacy watermark alone are planned (an explicit ACK resolves the
     /// latter, signoff 60 #2); archived and retracted records are not.
+    /// Planning is per recipient key: a key whose anchor ledger already holds
+    /// a record's receipt (left by an earlier, partly published commit) is
+    /// not planned again, so a retry plans exactly the keys still missing it.
     /// `Ok(None)` when nothing needs acknowledging. Writes nothing; runs Git
-    /// (to name each source's lifecycle record) and takes no lock.
+    /// (to name each source's lifecycle record), reads the planned keys'
+    /// ledgers and takes no lock.
     // trace:STORY-1843 | ai:claude
     pub fn prepare(
         snapshot: &LogicalSnapshot,
@@ -225,12 +242,33 @@ impl AckPlan {
         };
         let mut by_snapshot_index: BTreeMap<usize, usize> = BTreeMap::new();
         let mut keys_seen: std::collections::BTreeSet<&str> = Default::default();
+        let mut ledgers: BTreeMap<String, Option<ReceiptLedger>> = BTreeMap::new();
         for record in wanted {
-            let keys = audience.matching_keys(&record.message);
+            let mut keys = audience.matching_keys(&record.message);
+            keys_seen.extend(keys.iter().copied());
+            if keys_seen.len() > MAX_PLAN_KEYS {
+                return Err(AckError::TooLarge);
+            }
+            if let Some(common) = common {
+                let mut missing = Vec::with_capacity(keys.len());
+                for key in keys {
+                    if !ledgers.contains_key(key) {
+                        let ledger =
+                            read_receipt_ledger(common, key).map_err(|_| AckError::Partial)?;
+                        ledgers.insert(key.to_string(), ledger);
+                    }
+                    let held = ledgers[key]
+                        .as_ref()
+                        .is_some_and(|l| l.receipts.contains_key(&record.message.id));
+                    if !held {
+                        missing.push(key);
+                    }
+                }
+                keys = missing;
+            }
             if keys.is_empty() {
                 continue;
             }
-            keys_seen.extend(keys.iter().copied());
             let mut replicas = Vec::new();
             for provenance in &record.provenance {
                 let index = match by_snapshot_index.get(&provenance.source) {
@@ -253,9 +291,6 @@ impl AckPlan {
                 keys: keys.into_iter().map(str::to_string).collect(),
                 replicas,
             });
-        }
-        if keys_seen.len() > MAX_PLAN_KEYS {
-            return Err(AckError::TooLarge);
         }
         Ok((!plan.entries.is_empty()).then_some(plan))
     }
@@ -324,8 +359,11 @@ impl AckPlan {
 
     /// Commit the plan, after the reader's output was flushed. `current` is
     /// the reader's audience re-resolved after the flush and before any
-    /// lock; every planned key must still be in it. Lifecycle then Receipt;
-    /// all-or-nothing on refusal.
+    /// lock; every planned key must still be in it. Lifecycle then Receipt.
+    /// A refusal before publication (authority, a retiring source, a changed
+    /// replica, a full ledger, a busy lock) writes nothing. Each key's ledger
+    /// is then published by its own rename; a failure after the first one is
+    /// [`AckError::Incomplete`], and the next read converges the rest.
     // trace:STORY-1843 | ai:claude
     pub fn commit(self, current: &ResolvedAudience) -> Result<AckCommitted, AckError> {
         let by_key = self.by_key();
@@ -404,8 +442,10 @@ impl AckPlan {
 
 /// Write every key's ledger. Each key's room is checked before anything is
 /// written, so a full ledger refuses with nothing published; each ledger is
-/// then replaced by one atomic durable rename, and an ID already recorded
-/// keeps its first ACK time (idempotent).
+/// then replaced by its own atomic durable rename, and an ID already
+/// recorded keeps its first ACK time (idempotent). The renames are not one
+/// atomic step: a write that fails after an earlier key's rename returns
+/// [`AckError::Incomplete`] with that key's receipts in place.
 fn publish(
     anchor: &Path,
     by_key: &BTreeMap<String, Vec<String>>,
@@ -457,10 +497,33 @@ fn publish(
         }
         updates.push((path, bytes));
     }
-    for (path, bytes) in updates {
-        write_durable(&path, &bytes)?;
+    for (written, (path, bytes)) in updates.into_iter().enumerate() {
+        write_ledger(&path, &bytes, written).map_err(|e| {
+            if written == 0 {
+                AckError::Lifecycle(e)
+            } else {
+                AckError::Incomplete(e)
+            }
+        })?;
     }
     Ok(())
+}
+
+/// One ledger's durable rename; the `written`-th write fails when a test
+/// asked for it.
+fn write_ledger(path: &Path, bytes: &[u8], written: usize) -> Result<(), LifecycleError> {
+    #[cfg(test)]
+    if FAIL_PUBLISH_AFTER.with(Cell::get) == Some(written) {
+        return Err(LifecycleError::InjectedCrash("a receipt ledger write"));
+    }
+    let _ = written;
+    write_durable(path, bytes)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Fail the ledger write after this many renames (tests only).
+    static FAIL_PUBLISH_AFTER: Cell<Option<usize>> = const { Cell::new(None) };
 }
 
 // ── The Receipt lock ────────────────────────────────────────────────────────

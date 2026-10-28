@@ -632,7 +632,7 @@ pub(crate) fn handle_mailbox_command(
                 let current = crate::mailbox_view::own_audience();
                 crate::mailbox_view::commit_ack(project_root, plan, &current).map_err(|e| {
                     anyhow::anyhow!(
-                        "the mail above was shown but not marked read: {e:#}; run `aida mailbox inbox` again to retry"
+                        "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
                     )
                 })?;
             }

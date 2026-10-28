@@ -719,8 +719,12 @@ pub struct ReceiptInspector {
     /// The verified common Git directory whose receipt anchor is consulted
     /// first; `None` for a local-only context.
     anchor: Option<PathBuf>,
-    /// Each key's anchor ledger, read once; `None` when it could not be read.
+    /// Each key's anchor ledger, read once; `None` when it could not be read
+    /// (or the deadline or byte budget ran out first).
     ledgers: RefCell<HashMap<String, Option<ReceiptLedger>>>,
+    /// Ledger bytes still allowed: what the inventory left of
+    /// `limits.max_total_bytes`, shared by every key's ledger read.
+    ledger_bytes_left: Cell<u64>,
     partial: Cell<bool>,
 }
 
@@ -756,6 +760,7 @@ impl ReceiptInspector {
             key_dirs: RefCell::default(),
             anchor: ctx.repository.as_ref().map(|r| r.path().to_path_buf()),
             ledgers: RefCell::default(),
+            ledger_bytes_left: Cell::new(budget.bytes_left),
             partial: Cell::new(!inventory_complete),
         }
     }
@@ -770,6 +775,7 @@ impl ReceiptInspector {
             key_dirs: RefCell::default(),
             anchor: None,
             ledgers: RefCell::default(),
+            ledger_bytes_left: Cell::new(0),
             partial: Cell::new(true),
         }
     }
@@ -789,18 +795,21 @@ impl ReceiptInspector {
             return ReceiptLookup::NotFound;
         }
         // The receipt anchor first (slice B2c): it outlives every source.
-        // An unreadable ledger leaves the answer to the local sources, but
+        // An unreadable ledger, or one the deadline or byte budget (signoff
+        // 60 #6) left unread, leaves the answer to the local sources, but
         // their silence is then Unknown, never NotFound.
         let mut anchor_unknown = false;
         if let Some(common) = &self.anchor {
             let mut ledgers = self.ledgers.borrow_mut();
-            let ledger =
-                ledgers.entry(key.to_string()).or_insert_with(|| {
-                    match read_receipt_ledger(common, key) {
-                        Ok(ledger) => Some(ledger.unwrap_or_default()),
-                        Err(_) => None,
-                    }
-                });
+            let ledger = ledgers.entry(key.to_string()).or_insert_with(|| {
+                if Instant::now() >= self.deadline {
+                    return None;
+                }
+                let (ledger, len) = read_ledger_sized(common, key).ok()?.unwrap_or_default();
+                let left = self.ledger_bytes_left.get().checked_sub(len as u64)?;
+                self.ledger_bytes_left.set(left);
+                Some(ledger)
+            });
             match ledger {
                 Some(ledger) => {
                     if let Some(at) = ledger.receipts.get(id) {
@@ -1671,9 +1680,12 @@ fn key_evidence(
     })
 }
 
-/// Exact per-ID lookups only (no receipt directory scan). An explicit
-/// receipt in any LOCAL source for a key the message is addressed to is
-/// acknowledgement. A LOCAL watermark counts only for IDs physically present
+/// Exact per-ID lookups only (no receipt directory scan). The receipt
+/// anchor acknowledges a message only when EVERY key it is addressed to
+/// holds its receipt there: one key's ledger alone is a partly published
+/// ACK (each key's ledger has its own rename), so the message is shown again
+/// and the next ACK plans the missing keys. An explicit receipt in any LOCAL
+/// source for a key the message is addressed to is acknowledgement. A LOCAL watermark counts only for IDs physically present
 /// in that same source, and only as legacy compatibility evidence.
 /// Unreadable receipt evidence, or a deadline reached mid-lookup, marks that
 /// source as errored.
@@ -1690,14 +1702,22 @@ fn read_evidence(
     budget: &mut Budget,
 ) -> ReadEvidence {
     let keys = audience.matching_keys(message);
+    let mut anchored = None;
+    let mut every_key = !keys.is_empty();
     for key in &keys {
-        if let Some((at, legacy)) = anchor.lookup(key, &message.id, budget) {
-            return ReadEvidence::Acknowledged {
-                origin: AckOrigin::Anchor { legacy },
-                key: key.to_string(),
-                at,
-            };
+        match anchor.lookup(key, &message.id, budget) {
+            Some(hit) => {
+                anchored.get_or_insert((*key, hit));
+            }
+            None => every_key = false,
         }
+    }
+    if let (true, Some((key, (at, legacy)))) = (every_key, anchored) {
+        return ReadEvidence::Acknowledged {
+            origin: AckOrigin::Anchor { legacy },
+            key: key.to_string(),
+            at,
+        };
     }
     let holders: BTreeSet<usize> = provenance.iter().map(|p| p.source).collect();
     let mut legacy = None;

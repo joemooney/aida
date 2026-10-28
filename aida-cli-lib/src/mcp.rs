@@ -377,7 +377,7 @@ fn deliver(out: &mut impl Write, mut response: JsonRpcResponse) -> io::Result<()
         let current = crate::mailbox_view::own_audience_in(&project_root);
         if let Err(e) = crate::mailbox_view::commit_ack(&project_root, plan, &current) {
             eprintln!(
-                "aida mcp: read_inbox mark_seen was not committed ({e:#}); the messages stay unread, call read_inbox with mark_seen again to retry"
+                "aida mcp: read_inbox mark_seen did not finish ({e:#}); call read_inbox with mark_seen again to show and record what is still unrecorded"
             );
         }
     }
