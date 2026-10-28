@@ -64,7 +64,7 @@ The most-used modules in `aida-cli-lib`: `git_ops` (811 references),
 So `aida-core` is not a small kernel behind a narrow interface. It is the
 lower half of one program, and the CLI calls into about 85 of its roughly 99
 public modules. These include free functions, concrete structs and
-`pub(crate)`-adjacent helpers, not traits.
+low-level helpers, not traits.
 
 ### 2.4 Change coupling (last 200 merged PRs)
 
@@ -89,10 +89,13 @@ change.
 
 `aida-core/templates/` (2.4 MB, 245 files) is the source of truth for skills,
 hooks, discipline docs and scaffolding. It is embedded in the binary and
-copied into users' repositories, so it is public by nature. Eleven
-`include_str!`/`include_dir!` sites and 23 source files in `aida-cli-lib`
-refer to it by path, and so do `make sync-templates`, `make check-templates`
-and the `.claude/` symlinks. Any split has to move templates out of the private
+copied into users' repositories, so it is public by nature. The production
+embeds are in `aida-core` itself: five in `aida-core/src/scaffolding/hooks.rs`
+and one in `aida-core/src/scaffolding/inventory.rs`. `aida-cli-lib` has 11
+`include_str!`/`include_dir!` template sites, but only one is production code
+(`src/cli.rs`); the other 10 are in tests. In all, 22 `aida-cli-lib/src` files
+refer to the templates path, and so do `make sync-templates`,
+`make check-templates` and the `.claude/` symlinks. Any split has to move templates out of the private
 crate first.
 
 ### 2.6 CI layout
