@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1741",
+  "publishes": [
+    {
+      "at": "2026-10-28T11:22:51.430443388Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T04:51:34.719349045Z",
+      "spec": "STORY-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:09:07.604491565Z",
+      "spec": "STORY-1741",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-27T18:59:28.755829225Z",
+      "spec": "STORY-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-28T00:55:18.535569483Z",
+      "spec": "STORY-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T00:55:18.610298719Z",
+      "spec": "STORY-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T03:47:14.358789236Z",
+      "spec": "STORY-1741",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1741",
+        "branch": "story-1741-s2",
+        "first_seen": "2026-10-28T03:47:14.358726486+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T05:07:31.351276164Z",
+      "spec": "STORY-1741",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 3005
+      }
+    },
+    {
+      "ts": "2026-10-28T11:22:11.690989504Z",
+      "spec": "STORY-1741",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3005
+      }
+    },
+    {
+      "ts": "2026-10-28T11:22:51.256716972Z",
+      "spec": "STORY-1741",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "889c7286299138295ef613152ba5e7f70d3c80f3",
+        "pr": 3005,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
