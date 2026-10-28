@@ -34,6 +34,36 @@ pub(crate) struct LockedWorktree {
     pub scope: String,
 }
 
+/// The lock-only entry [`acquire`] mints (`lock-<slug>.toml`) when no session
+/// lease covers the worktree. It carries none of a session lease's identity
+/// fields (`id`/`slug`/`owner`/`branch`/`hostname`), so readers that scan
+/// `.aida/sessions/` parse `lock-*` entries with [`parse_lock_only_entry`]
+/// rather than as a `SessionLease`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct LockOnlyEntry {
+    pub scope: String,
+    pub worktree_path: String,
+    pub started_at: String,
+    pub authorized_by: String,
+    /// Marks this as an entry `aida lock` itself minted (vs. a real session
+    /// lease we merely patched) — `release` deletes the whole file for these
+    /// instead of leaving an empty husk behind.
+    pub aida_lock_only: bool,
+}
+
+/// File-name prefix of the lock-only entries [`acquire`] writes.
+pub(crate) const LOCK_ONLY_PREFIX: &str = "lock-";
+
+/// Parse a `lock-*.toml` lock-only entry. Errors when the body is not a
+/// lock-only entry, so callers that must fail closed can refuse on it.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
+pub(crate) fn parse_lock_only_entry(body: &str) -> Result<LockOnlyEntry> {
+    let entry: LockOnlyEntry = toml::from_str(body).context("not an aida lock entry")?;
+    anyhow::ensure!(entry.aida_lock_only, "aida_lock_only is not set");
+    Ok(entry)
+}
+
 /// Best-effort canonicalization for comparison: a target that no longer
 /// exists (or never did) compares on its raw path instead of erroring —
 /// matching never silently "succeeds" via two different unresolved forms of
@@ -121,28 +151,16 @@ pub(crate) fn acquire(project_root: &Path, worktree: &Path, advisor: &str) -> Re
     let dir = aida_core::liveness::leases_dir(project_root);
     std::fs::create_dir_all(&dir)?;
     let slug = crate::coordination::sanitize_scope(&target_str);
-    let path = dir.join(format!("lock-{slug}.toml"));
+    let path = dir.join(format!("{LOCK_ONLY_PREFIX}{slug}.toml"));
 
-    let mut table = toml::map::Map::new();
-    table.insert(
-        "scope".to_string(),
-        toml::Value::String(format!("aida:lock:{slug}")),
-    );
-    table.insert("worktree_path".to_string(), toml::Value::String(target_str));
-    table.insert(
-        "started_at".to_string(),
-        toml::Value::String(chrono::Utc::now().to_rfc3339()),
-    );
-    table.insert(
-        "authorized_by".to_string(),
-        toml::Value::String(advisor.to_string()),
-    );
-    // Marks this as an entry `aida lock` itself minted (vs. a real session
-    // lease we merely patched) — `release` deletes the whole file for these
-    // instead of leaving an empty husk behind.
-    table.insert("aida_lock_only".to_string(), toml::Value::Boolean(true));
-
-    let out = toml::to_string_pretty(&toml::Value::Table(table))?;
+    let entry = LockOnlyEntry {
+        scope: format!("aida:lock:{slug}"),
+        worktree_path: target_str,
+        started_at: chrono::Utc::now().to_rfc3339(),
+        authorized_by: advisor.to_string(),
+        aida_lock_only: true,
+    };
+    let out = toml::to_string_pretty(&entry)?;
     aida_core::fs_atomic::write_atomic(&path, out)
         .with_context(|| format!("could not write lease {}", path.display()))?;
     Ok(path)
