@@ -324,32 +324,9 @@ pub(crate) fn branch_commits_ahead_default(
 /// Expanding both sides is what lets a short sha recorded in a review verdict
 /// be compared with a branch tip.
 // trace:BUG-775 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn resolve_commit_sha(repo: &std::path::Path, rev: &str) -> Option<String> {
-    let rev = rev.trim();
-    if rev.is_empty() {
-        return None;
-    }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args([
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            git_arg_guard::END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
-            &format!("{rev}^{{commit}}"),
-        ])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    crate::gate::kernel_deps::resolve_commit_sha(repo, rev)
 }
 
 /// TASK-1459: the head `aida review <SPEC>` marks its review-in-progress
@@ -380,28 +357,13 @@ pub(crate) fn review_marker_head_best_effort(
 /// `Some(true)` / `Some(false)` for the two clean answers, `None` when the
 /// probe itself could not run.
 // trace:BUG-775 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn is_ancestor_commit(
     repo: &std::path::Path,
     ancestor: &str,
     descendant: &str,
 ) -> Option<bool> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args([
-            "merge-base",
-            "--is-ancestor",
-            git_arg_guard::END_OF_OPTIONS,
-            ancestor,
-            descendant,
-        ]) // trace:BUG-1622 | ai:claude
-        .output()
-        .ok()?;
-    match out.status.code() {
-        Some(0) => Some(true),
-        Some(1) => Some(false),
-        _ => None,
-    }
+    crate::gate::kernel_deps::is_ancestor_commit(repo, ancestor, descendant)
 }
 
 /// Where the tip of `branch` (or HEAD when `branch` is `None`) sits relative
@@ -409,26 +371,13 @@ pub(crate) fn is_ancestor_commit(
 /// lives here; the decision itself is the pure
 /// `review_verdict::classify_tip_relation`.
 // trace:BUG-775 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn verdict_tip_relation(
     repo: &std::path::Path,
     branch: Option<&str>,
     reviewed_sha: Option<&str>,
 ) -> crate::gate::review_verdict::TipRelation {
-    let Some(reviewed_raw) = reviewed_sha else {
-        return crate::gate::review_verdict::TipRelation::Unknown;
-    };
-    let reviewed = resolve_commit_sha(repo, reviewed_raw);
-    let tip = resolve_commit_sha(repo, branch.unwrap_or("HEAD"))
-        .or_else(|| resolve_commit_sha(repo, "HEAD"));
-    let ancestry = match (reviewed.as_deref(), tip.as_deref()) {
-        (Some(a), Some(b)) => is_ancestor_commit(repo, a, b),
-        _ => None,
-    };
-    crate::gate::review_verdict::classify_tip_relation(
-        reviewed.as_deref(),
-        tip.as_deref(),
-        ancestry,
-    )
+    crate::gate::kernel_deps::verdict_tip_relation(repo, branch, reviewed_sha)
 }
 
 /// Resolve a branch's head LOCALLY, no forge call. `refs/remotes/origin/`

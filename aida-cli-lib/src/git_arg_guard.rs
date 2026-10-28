@@ -19,7 +19,8 @@ use anyhow::{bail, Result};
 
 /// Marks the end of git's options: every later argument is a revision or a
 /// path, even when it starts with `-`. Supported since git 2.24.
-pub(crate) const END_OF_OPTIONS: &str = "--end-of-options";
+/// Defined on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
+pub(crate) const END_OF_OPTIONS: &str = crate::gate::kernel_deps::END_OF_OPTIONS;
 
 /// Refuse a user-supplied git ref/revision/path that starts with `-`, which
 /// git would otherwise read as an option. `flag` names where the value came
@@ -43,8 +44,9 @@ pub(crate) fn is_option_like(value: &str) -> bool {
 /// True when `value` is an abbreviated or full commit ID: 7 to 64 hex
 /// digits (SHA-1 or SHA-256). A value read from the store, a commit trailer
 /// or a verdict must pass this before it becomes a git revision argument.
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn is_hex_sha(value: &str) -> bool {
-    (7..=64).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_hexdigit())
+    crate::gate::kernel_deps::is_hex_sha(value)
 }
 
 /// True when `name` is a branch name that may be spliced, unquoted, into a

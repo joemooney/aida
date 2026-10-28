@@ -6,8 +6,10 @@ use crate::pr_cmd::{
     append_ship_activity_line, commit_committed_at, log_ship_activity, normalized_spec_ids,
     pr_gate_subject,
 };
-use crate::*;
+use crate::{auto_complete, pr_ship};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::Result;
+use colored::Colorize;
 
 /// TASK-1448: the drain merge phase's approval-covers-head gate. `Err` is a
 /// shelvable, never-retried `StaleApproval` failure carrying the same

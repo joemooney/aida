@@ -496,7 +496,7 @@ pub(crate) fn live_ancestry() -> Vec<ProcEntry> {
             pid: cur.as_u32(),
             name: proc.name().to_string(),
             cmd: proc.cmd().to_vec(),
-            start: crate::process_probe::process_start_identity(cur.as_u32()),
+            start: aida_core::liveness::process_start_identity(cur.as_u32()),
         });
         let Some(parent) = proc.parent() else { break };
         if parent == sysinfo::Pid::from_u32(1) || parent == cur {
@@ -516,7 +516,7 @@ pub(crate) fn live_session_leader() -> Option<ProcEntry> {
         let pid = u32::try_from(sid).ok().filter(|p| *p > 1)?;
         Some(ProcEntry {
             pid,
-            start: crate::process_probe::process_start_identity(pid),
+            start: aida_core::liveness::process_start_identity(pid),
             ..ProcEntry::default()
         })
     }
@@ -765,7 +765,7 @@ pub(crate) fn bind_worker_env(command: &mut std::process::Command, lease_id: &st
 /// [`WORKER_SESSION_ENV`].
 // trace:BUG-1918 | ai:claude
 pub(crate) fn record_launched_worker(project_root: &Path, lease_id: &str, pid: u32) {
-    let start = crate::process_probe::process_start_identity(pid);
+    let start = aida_core::liveness::process_start_identity(pid);
     record_lease_identity(
         project_root,
         lease_id,
@@ -1071,7 +1071,7 @@ pub(crate) struct HumanReviewReceipt {
 }
 
 fn receipt_dir() -> Option<PathBuf> {
-    crate::aida_home_dir().map(|h| h.join(".aida").join(RECEIPT_DIR))
+    crate::gate::kernel_deps::aida_home_dir().map(|h| h.join(".aida").join(RECEIPT_DIR))
 }
 
 fn receipt_path(dir: &Path, id: &str) -> Option<PathBuf> {

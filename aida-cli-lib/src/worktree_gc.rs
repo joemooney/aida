@@ -871,20 +871,9 @@ pub(crate) fn forecast_rebase_onto(
 /// `None` if detached or git fails. trace:BUG-76 | ai:claude
 /// Refuses a seat clone (no git runs there; BUG-2169).
 // trace:TASK-2053 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn current_branch_at(path: &std::path::Path) -> Option<String> {
-    let o = aida_core::git_ops::host_git_command(path)
-        .args(["symbolic-ref", "--short", "HEAD"])
-        .output()
-        .ok()?;
-    if !o.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    crate::gate::kernel_deps::current_branch_at(path)
 }
 
 /// Pure predicate for the worktree-tangle spawn gate: would launching a fan-out

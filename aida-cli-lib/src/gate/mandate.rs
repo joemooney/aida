@@ -181,7 +181,8 @@ pub(crate) enum MandateState {
 /// `~/.aida/mandates`, through the hermetic-aware home lookup.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn mandate_dir() -> Result<PathBuf> {
-    let home = crate::aida_home_dir().context("cannot locate the user's home directory")?;
+    let home = crate::gate::kernel_deps::aida_home_dir()
+        .context("cannot locate the user's home directory")?;
     Ok(home.join(".aida").join(MANDATE_DIR))
 }
 
@@ -371,7 +372,7 @@ pub(crate) fn current_state_reporting(warn: bool) -> MandateState {
         return MandateState::None;
     };
     let now = Utc::now();
-    let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+    let (valid, warnings) = load_valid(&dir, &crate::gate::kernel_deps::current_user_id(None), now);
     if warn {
         for w in &warnings {
             eprintln!("  warning: {w}");

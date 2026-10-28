@@ -48,7 +48,7 @@ pub(crate) fn owner_alive(run_dir: &Path, status: &BTreeMap<String, String>) -> 
         .parse::<u32>()
         .ok()
         .filter(|pid| *pid > 0)?;
-    if !crate::process_probe::pid_is_alive(pid) {
+    if !aida_core::liveness::pid_is_alive(pid) {
         return Some(false);
     }
     // trace:BUG-2130 | ai:agy

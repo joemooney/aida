@@ -1090,7 +1090,7 @@ fn resolve_full_sha(project_root: &Path, raw: &str) -> Option<String> {
             "--verify",
             "--quiet",
             // trace:BUG-1622 | ai:claude
-            crate::git_arg_guard::END_OF_OPTIONS,
+            crate::gate::kernel_deps::END_OF_OPTIONS,
             &format!("{raw}^{{commit}}"),
         ])
         .output()
@@ -1264,7 +1264,7 @@ pub(crate) fn build_verdict_object(
         // trace:BUG-1622 | ai:claude
         .and_then(|s| {
             resolve_full_sha(project_root, s)
-                .or_else(|| crate::git_arg_guard::is_hex_sha(s).then(|| s.to_string()))
+                .or_else(|| crate::gate::kernel_deps::is_hex_sha(s).then(|| s.to_string()))
         });
     let reviewed_sha = reviewed_sha.as_deref();
     // STORY-1391: a finding that survives a round is evidence about the BRIEF,
@@ -2794,8 +2794,8 @@ pub(crate) fn evaluate_review_verdict_gate(
     // wiring must always ask it rather than pre-empting it.
     // trace:BUG-1466 | ai:claude
     // trace:BUG-1538 | ai:claude
-    let branch = crate::current_branch_at(project_root);
-    let relation = crate::verdict_tip_relation(
+    let branch = crate::gate::kernel_deps::current_branch_at(project_root);
+    let relation = crate::gate::kernel_deps::verdict_tip_relation(
         project_root,
         branch.as_deref(),
         verdict.reviewed_sha.as_deref(),

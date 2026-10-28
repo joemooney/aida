@@ -49,10 +49,11 @@ pub(crate) struct SeatGrant {
 }
 
 pub(crate) fn grant_dir() -> Result<PathBuf> {
-    // BUG-1642 discipline: never resolve the home directly — `crate::aida_home_dir`
+    // BUG-1642 discipline: never resolve the home directly — `crate::gate::kernel_deps::aida_home_dir`
     // honours `$AIDA_HOME` / `$HOME` overrides and is fenced to the hermetic
     // temp home under `cfg(test)`. trace:STORY-1473 | ai:claude
-    let home = crate::aida_home_dir().context("cannot locate the user's home directory")?;
+    let home = crate::gate::kernel_deps::aida_home_dir()
+        .context("cannot locate the user's home directory")?;
     Ok(home.join(".aida").join(GRANT_DIR))
 }
 
@@ -718,7 +719,12 @@ pub(crate) fn grant_check_at(project_root: &Path, now: DateTime<Utc>) -> GrantCh
     // BUG-1934: an env-presented grant must also be bound to this process.
     // trace:BUG-1934 | ai:claude
     with_presenter(
-        grant_check_for_at(project_root, &id, &crate::current_user_id(None), now),
+        grant_check_for_at(
+            project_root,
+            &id,
+            &crate::gate::kernel_deps::current_user_id(None),
+            now,
+        ),
         &presenter_tokens(),
     )
 }
@@ -1424,7 +1430,9 @@ pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> St
 }
 
 pub(crate) fn require_direct_tty() -> Result<()> {
-    if !(crate::authority_stdin_is_terminal() && crate::authority_stderr_is_terminal()) {
+    if !(crate::gate::kernel_deps::authority_stdin_is_terminal()
+        && crate::gate::kernel_deps::authority_stderr_is_terminal())
+    {
         bail!("role grants require a human at an interactive TTY; run `aida role enter` from your terminal");
     }
     Ok(())
@@ -1496,7 +1504,7 @@ pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
 /// The project value alone may only lower the 24h default's ceiling.
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn resolve_max_grant_hours(project_root: &Path) -> u32 {
-    let global_val = crate::aida_home_dir()
+    let global_val = crate::gate::kernel_deps::aida_home_dir()
         .map(|h| h.join(".aida").join("config.toml"))
         .as_deref()
         .and_then(read_max_grant_hours_file);
@@ -1628,7 +1636,7 @@ pub(crate) fn issue_direct(
     // Round 2: the eval text then carries that secret, so it is only ever
     // written to a pipe the shell eval's, never printed to the terminal.
     // trace:BUG-1934 | ai:claude
-    if key_secret.is_some() && crate::authority_stdout_is_terminal() {
+    if key_secret.is_some() && crate::gate::kernel_deps::authority_stdout_is_terminal() {
         bail!(
             "`aida role enter` prints shell code holding a one-time secret; run it as `eval \"$(aida role enter {seat})\"` (or through the aida shell helper) so it is never shown on the terminal"
         );
@@ -1646,7 +1654,7 @@ pub(crate) fn issue_direct(
         )?],
     };
     // trace:TASK-1594 | ai:claude
-    let subject = crate::current_user_id(None);
+    let subject = crate::gate::kernel_deps::current_user_id(None);
     let principal = subject.clone();
     let store = issuance_roster_store(project_root, &principal, seat)?;
     let allowed = aida_core::team::TeamRoster::load(&store)
@@ -1697,7 +1705,7 @@ pub(crate) fn issue_direct(
 pub(crate) fn adopt_key(id: &str, secret: &str) -> Result<()> {
     let secret = secret.trim();
     let grant = read_grant(id)?;
-    if grant.subject != crate::current_user_id(None) {
+    if grant.subject != crate::gate::kernel_deps::current_user_id(None) {
         bail!(
             "session grant {} was not issued to this user",
             &id[..8.min(id.len())]
