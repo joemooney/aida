@@ -427,6 +427,7 @@ Commands:
   fleet         Fleet operations over relay runs and lanes
   dispatch      Queue and inspect typed dispatch requests (`flow`, `review`, `take`, `impl`,
                 `train`) from a sandboxed advisor seat for unsandboxed execution
+  relay-mail    Relay mail lifetime: one recipient per relay run, across its sessions
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -25311,6 +25312,170 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida relay-mail
+Relay mail lifetime: one recipient per relay run, across its sessions.
+
+A relay controller binds its label once at start, binds each child session it launches to the same
+run, and records the run's end. Mail sent to the label between sessions is accepted while the
+controller is alive. These commands are the relay's plumbing; operators rarely run them.
+
+Usage: aida relay-mail [OPTIONS] <COMMAND>
+
+Commands:
+  probe       Print the relay mail protocol this binary speaks. A relay refuses to advertise its
+              label unless the protocol matches the one it needs
+  bind        Reserve the relay label for a new run. Prints the run id, then the run capability
+              (once; only its digest is stored). Run by the relay controller before it launches any
+              session. The controller keeps the capability private and never exports it to a child
+  child-bind  Bind the next child session to an existing run. With `--native-session`, that session
+              is bound now; without it, a launch token is printed for the child to present at its
+              own startup. The run capability is read from stdin unless `--cap-file` is given
+  end         Record the run's end once. Mail to the label is refused afterwards. The run capability
+              is read from stdin unless `--cap-file` is given
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida relay-mail probe
+Print the relay mail protocol this binary speaks. A relay refuses to advertise its label unless the
+protocol matches the one it needs
+
+Usage: aida relay-mail probe [OPTIONS]
+
+Options:
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida relay-mail bind
+Reserve the relay label for a new run. Prints the run id, then the run capability (once; only its
+digest is stored). Run by the relay controller before it launches any session. The controller keeps
+the capability private and never exports it to a child
+
+Usage: aida relay-mail bind [OPTIONS] --label <LABEL> --controller-pid <CONTROLLER_PID> --run-lock <RUN_LOCK> --protocol <PROTOCOL>
+
+Options:
+      --label <LABEL>
+          The relay label other agents address mail to
+
+      --controller-pid <CONTROLLER_PID>
+          The relay controller's process id
+
+      --run-lock <RUN_LOCK>
+          The relay's run lock file. The controller must hold it
+
+      --protocol <PROTOCOL>
+          The relay mail protocol the caller requires (see `probe`)
+
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida relay-mail child-bind
+Bind the next child session to an existing run. With `--native-session`, that session is bound now;
+without it, a launch token is printed for the child to present at its own startup. The run
+capability is read from stdin unless `--cap-file` is given
+
+Usage: aida relay-mail child-bind [OPTIONS] --run <RUN>
+
+Options:
+      --run <RUN>
+          The run id `bind` printed
+
+      --native-session <NATIVE_SESSION>
+          The child's native client session id, when known before launch
+
+      --cap-file <CAP_FILE>
+          Read the run capability from this file (mode 0600, owned by you) instead of stdin. Never
+          pass the capability itself as an argument
+
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida relay-mail end
+Record the run's end once. Mail to the label is refused afterwards. The run capability is read from
+stdin unless `--cap-file` is given
+
+Usage: aida relay-mail end [OPTIONS] --run <RUN>
+
+Options:
+      --run <RUN>
+          The run id `bind` printed
+
+      --cap-file <CAP_FILE>
+          Read the run capability from this file (mode 0600, owned by you) instead of stdin. Never
+          pass the capability itself as an argument
+
+      --reason <REASON>
+          Why the run ended
+
+          Possible values:
+          - stop:    Stopped by the operator or a signal
+          - exit:    The relay finished and exited
+          - blocked: The relay stopped waiting on a human
+          
+          [default: stop]
+
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== help all (command groups)
 Getting started
   why            Ask your code why it exists — the decision behind any line
@@ -49761,5 +49926,179 @@ Working on aida itself
       }
     ],
     "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "relay-mail"
+    ],
+    "about": "Relay mail lifetime: one recipient per relay run, across its sessions",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "relay-mail",
+      "probe"
+    ],
+    "about": "Print the relay mail protocol this binary speaks. A relay refuses to advertise its label unless the protocol matches the one it needs",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "relay-mail",
+      "bind"
+    ],
+    "about": "Reserve the relay label for a new run. Prints the run id, then the run capability (once; only its digest is stored). Run by the relay controller before it launches any session. The controller keeps the capability private and never exports it to a child",
+    "flags": [
+      {
+        "name": "controller-pid",
+        "takes_value": true,
+        "help": "The relay controller's process id"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      },
+      {
+        "name": "label",
+        "takes_value": true,
+        "help": "The relay label other agents address mail to"
+      },
+      {
+        "name": "protocol",
+        "takes_value": true,
+        "help": "The relay mail protocol the caller requires (see `probe`)"
+      },
+      {
+        "name": "run-lock",
+        "takes_value": true,
+        "help": "The relay's run lock file. The controller must hold it"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "relay-mail",
+      "child-bind"
+    ],
+    "about": "Bind the next child session to an existing run. With `--native-session`, that session is bound now; without it, a launch token is printed for the child to present at its own startup. The run capability is read from stdin unless `--cap-file` is given",
+    "flags": [
+      {
+        "name": "cap-file",
+        "takes_value": true,
+        "help": "Read the run capability from this file (mode 0600, owned by you) instead of stdin. Never pass the capability itself as an argument"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      },
+      {
+        "name": "native-session",
+        "takes_value": true,
+        "help": "The child's native client session id, when known before launch"
+      },
+      {
+        "name": "run",
+        "takes_value": true,
+        "help": "The run id `bind` printed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "relay-mail",
+      "end"
+    ],
+    "about": "Record the run's end once. Mail to the label is refused afterwards. The run capability is read from stdin unless `--cap-file` is given",
+    "flags": [
+      {
+        "name": "cap-file",
+        "takes_value": true,
+        "help": "Read the run capability from this file (mode 0600, owned by you) instead of stdin. Never pass the capability itself as an argument"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Why the run ended"
+      },
+      {
+        "name": "run",
+        "takes_value": true,
+        "help": "The run id `bind` printed"
+      }
+    ],
+    "hidden": false
   }
 ]

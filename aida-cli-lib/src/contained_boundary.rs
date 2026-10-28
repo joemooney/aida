@@ -164,7 +164,10 @@ pub(crate) fn contained_mailbox_write_paths(main: &Path) -> anyhow::Result<Vec<P
 // trace:BUG-2218 TASK-2328 | ai:codex
 pub(crate) fn prepare_mailbox(main: &Path) -> anyhow::Result<()> {
     for mailbox in contained_mailbox_write_paths(main)? {
-        std::fs::create_dir_all(&mailbox)
+        // Born with its creation nonce, like every other mailbox creator.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+        let root = mailbox.parent().and_then(Path::parent).unwrap_or(main);
+        aida_core::mailbox::ensure_local_mailbox_dir(root)
             .map_err(|e| anyhow::anyhow!("creating sandbox mailbox {}: {e}", mailbox.display()))?;
     }
     Ok(())

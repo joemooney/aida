@@ -222,6 +222,13 @@ pub(crate) fn read_watermark(project_root: &Path, agent: &str) -> Option<i64> {
 /// newer messages. trace:STORY-539 | ai:claude
 pub(crate) fn set_watermark(project_root: &Path, agent: &str, ts: i64) -> Result<()> {
     let dir = read_marker_dir(project_root);
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+    aida_core::mailbox::ensure_local_mailbox_dir(project_root).with_context(|| {
+        format!(
+            "creating mailbox dir {}",
+            mailbox_dir(project_root).display()
+        )
+    })?;
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating read-marker dir {}", dir.display()))?;
     let path = dir.join(format!("{}.txt", sanitize_id(agent)));
@@ -253,6 +260,7 @@ pub(crate) fn record_seen(project_root: &Path, agent: &str, message_ids: &[&str]
     let dir = mailbox_dir(project_root)
         .join(".read-receipts")
         .join(sanitize_id(agent));
+    aida_core::mailbox::ensure_local_mailbox_dir(project_root)?; // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     std::fs::create_dir_all(&dir)?;
     let now = chrono::Utc::now().timestamp_millis().to_string();
     for id in message_ids {

@@ -95,6 +95,15 @@ pub(crate) const ACTIVATION_FILE: &str = "activation.json";
 pub(crate) const SOURCES_DIR: &str = "sources";
 pub(crate) const RETAINED_DIR: &str = "retained";
 pub(crate) const JOURNAL_DIR: &str = "journal";
+/// The creation nonce inside a mailbox directory. It names this creation of
+/// the directory, is never mail, and leaves only with the directory.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub const SOURCE_ID_FILE: &str = ".source-id";
+/// `<anchor>/nonce-era/<sha256(common, admin)>`: present once a checkout's
+/// mailbox has carried a creation nonce, so a later mailbox there without
+/// one is refused instead of resolving to the bare legacy key.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub(crate) const NONCE_ERA_DIR: &str = "nonce-era";
 
 /// Size cap for any anchor record file.
 pub(crate) const RECORD_CAP: u64 = 1 << 20;
@@ -354,7 +363,19 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
             why: "the mailbox is not a directory".into(),
         });
     }
-    let key = source_key(&anchored.common, &anchored.admin, meta.dev(), meta.ino());
+    let nonce = source_nonce(
+        &anchored.anchor,
+        &anchored.common,
+        &anchored.admin,
+        &mailbox,
+    )?;
+    let key = source_key(
+        &anchored.common,
+        &anchored.admin,
+        meta.dev(),
+        meta.ino(),
+        nonce.as_deref(),
+    );
     Ok(Some(Source {
         anchor: anchored.anchor,
         key,
@@ -383,7 +404,14 @@ pub(crate) fn resolve_clone_source(main: &Path, clone_root: &Path) -> Result<Opt
             why: "the mailbox is not a real directory".into(),
         });
     }
-    let key = source_key(&anchored.common, &admin, meta.dev(), meta.ino());
+    let nonce = source_nonce(&anchored.anchor, &anchored.common, &admin, &mailbox)?;
+    let key = source_key(
+        &anchored.common,
+        &admin,
+        meta.dev(),
+        meta.ino(),
+        nonce.as_deref(),
+    );
     Ok(Some(Source {
         anchor: anchored.anchor,
         key,
@@ -442,16 +470,320 @@ fn locate_anchor(project_root: &Path) -> Result<Option<Anchored>> {
     }))
 }
 
-/// SHA-256 over the common Git dir, the worktree admin name and the mailbox
-/// directory's device and inode.
-fn source_key(common: &Path, admin: &str, dev: u64, ino: u64) -> String {
+/// SHA-256 over the common Git dir, the worktree admin name, the mailbox
+/// directory's device and inode and its creation nonce. A freed inode is
+/// often handed straight back, so device and inode alone let a recreated
+/// mailbox inherit the retired source's key; the nonce differs per creation.
+/// A legacy directory with no nonce keeps the key it always had.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn source_key(common: &Path, admin: &str, dev: u64, ino: u64, nonce: Option<&str>) -> String {
     let mut h = Sha256::new();
     h.update(common.as_os_str().as_encoded_bytes());
     h.update([0]);
     h.update(admin.as_bytes());
     h.update([0]);
     h.update(format!("{dev}:{ino}").as_bytes());
+    if let Some(nonce) = nonce {
+        h.update([0]);
+        h.update(nonce.as_bytes());
+    }
     hex(&h.finalize())
+}
+
+/// Hex digits in a creation nonce (128 bits).
+const SOURCE_ID_HEX_LEN: usize = 32;
+
+/// The creation nonce of the mailbox directory `mailbox`. `Ok(None)` for a
+/// legacy directory that has none. One that exists but cannot be read, is
+/// not a regular file of ours, or is malformed refuses as
+/// [`LifecycleError::Unsafe`]: guessing a key would alias another source.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub(crate) fn read_source_id(mailbox: &Path) -> Result<Option<String>> {
+    let path = mailbox.join(SOURCE_ID_FILE);
+    let unsafe_id = |why: String| LifecycleError::Unsafe {
+        path: path.clone(),
+        why,
+    };
+    let bytes = match read_checked_capped(&path, SOURCE_ID_HEX_LEN as u64 + 1) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return Ok(None),
+        Err(LifecycleError::Io(e)) => return Err(unsafe_id(format!("is unreadable: {e}"))),
+        Err(e) => return Err(e),
+    };
+    let text = std::str::from_utf8(&bytes).unwrap_or_default();
+    let nonce = text.strip_suffix('\n').unwrap_or(text);
+    if nonce.len() != SOURCE_ID_HEX_LEN
+        || !nonce
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(unsafe_id("is not a creation nonce".into()));
+    }
+    Ok(Some(nonce.to_string()))
+}
+
+/// The creation nonce of a checkout's mailbox, checked against the
+/// checkout's nonce era. A nonce marks the era; a mailbox without one in a
+/// checkout whose era has begun lost its nonce (deleted, or an older build
+/// moved it as mail) and refuses as [`LifecycleError::Unsafe`]. Without the
+/// marker a nonce-less mailbox is legacy and keeps its old key.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn source_nonce(
+    anchor: &Path,
+    common: &Path,
+    admin: &str,
+    mailbox: &Path,
+) -> Result<Option<String>> {
+    let marker = era_marker(anchor, common, admin);
+    match read_source_id(mailbox)? {
+        Some(nonce) => {
+            mark_nonce_era(&marker, admin)?;
+            Ok(Some(nonce))
+        }
+        None if std::fs::symlink_metadata(&marker).is_ok() => Err(LifecycleError::Unsafe {
+            path: mailbox.join(SOURCE_ID_FILE),
+            why: "is missing from a mailbox whose checkout has carried one; its source \
+                  cannot be told apart from an earlier one"
+                .into(),
+        }),
+        None => Ok(None),
+    }
+}
+
+/// `<anchor>/nonce-era/<sha256(common, admin)>`.
+fn era_marker(anchor: &Path, common: &Path, admin: &str) -> PathBuf {
+    let mut h = Sha256::new();
+    h.update(common.as_os_str().as_encoded_bytes());
+    h.update([0]);
+    h.update(admin.as_bytes());
+    anchor.join(NONCE_ERA_DIR).join(hex(&h.finalize()))
+}
+
+/// The nonce-era marker and admin name of the source whose mailbox lives at
+/// `<project_root>/.aida/mailbox`, resolved as [`writer_source`] does.
+/// `Ok(None)` when it has no anchor. Runs Git; never under the lock.
+fn era_marker_for(project_root: &Path) -> Result<Option<(PathBuf, String)>> {
+    let (anchored, admin) = match crate::seat_clone_detect::seat_clone_root(project_root) {
+        Some(clone_root) => {
+            let Some(main) = crate::seat_clone_detect::clone_writer_main(&clone_root) else {
+                return Ok(None);
+            };
+            let Some(anchored) = locate_anchor(&main)? else {
+                return Ok(None);
+            };
+            let clone_root = std::fs::canonicalize(clone_root)?;
+            (anchored, format!("seat-clone:{}", clone_root.display()))
+        }
+        None => {
+            let Some(anchored) = locate_anchor(project_root)? else {
+                return Ok(None);
+            };
+            let admin = anchored.admin.clone();
+            (anchored, admin)
+        }
+    };
+    let marker = era_marker(&anchored.anchor, &anchored.common, &admin);
+    Ok(Some((marker, admin)))
+}
+
+/// Record, create-new, that the checkout's mailbox has carried a nonce.
+fn mark_nonce_era(marker: &Path, admin: &str) -> Result<()> {
+    if std::fs::symlink_metadata(marker).is_ok() {
+        return Ok(());
+    }
+    if let Some(dir) = marker.parent() {
+        ensure_dir(dir, true)?;
+    }
+    match write_source_id(marker, admin.as_bytes()) {
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        other => Ok(other?),
+    }
+}
+
+/// Rename `from` to `to` unless `to` exists, atomically: `EEXIST` when it
+/// does. A plain rename silently replaces an empty directory.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub(crate) fn rename_noreplace(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let c = |p: &Path| {
+        CString::new(p.as_os_str().as_bytes())
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+    };
+    let (from, to) = (c(from)?, c(to)?);
+    #[cfg(test)]
+    if NOREPLACE_UNSUPPORTED.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
+    }
+    #[cfg(target_os = "linux")]
+    // SAFETY: both paths are NUL-terminated and outlive the call.
+    let rc = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    #[cfg(target_os = "macos")]
+    // SAFETY: both paths are NUL-terminated and outlive the call.
+    let rc = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let rc = {
+        // No atomic no-replace rename here: check, then rename.
+        if std::fs::symlink_metadata(std::ffi::OsStr::from_bytes(to.as_bytes())).is_ok() {
+            return Err(std::io::Error::from_raw_os_error(libc::EEXIST));
+        }
+        // SAFETY: both paths are NUL-terminated and outlive the call.
+        unsafe { libc::rename(from.as_ptr(), to.as_ptr()) }
+    };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// Does this rename error mean the filesystem cannot rename without
+/// replacing, rather than that the rename itself failed?
+pub(crate) fn noreplace_unsupported(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(libc::EINVAL | libc::ENOSYS | libc::ENOTSUP)
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Makes [`rename_noreplace`] fail as on a filesystem without it.
+    pub(crate) static NOREPLACE_UNSUPPORTED: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+    /// Runs between the in-place `mkdir` and its nonce.
+    pub(crate) static IN_PLACE_WINDOW: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+    /// Runs between staging a new mailbox and renaming it into place.
+    pub(crate) static BEFORE_PLACE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Create the mailbox directory `mailbox` if it is absent, born holding a
+/// fresh creation nonce: the directory and its `.source-id` are staged beside
+/// it and renamed into place, so no reader ever sees the new directory
+/// without its nonce. A directory that already exists (or that a concurrent
+/// creator renamed in first) is kept as it is. Where the filesystem cannot
+/// rename without replacing, see [`create_mailbox_dir_in_place`].
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
+    match std::fs::metadata(mailbox) {
+        Ok(meta) if meta.is_dir() => return Ok(()),
+        Ok(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} is not a directory", mailbox.display()),
+            ))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    let (Some(parent), Some(name)) = (mailbox.parent(), mailbox.file_name()) else {
+        return Err(std::io::Error::other(format!(
+            "{} has no parent directory",
+            mailbox.display()
+        )));
+    };
+    std::fs::create_dir_all(parent)?;
+    let staging = parent.join(format!(
+        ".{}.creating.{}",
+        name.to_string_lossy(),
+        uuid::Uuid::new_v4().simple()
+    ));
+    std::fs::create_dir(&staging)?;
+    let staged = mint_source_id(&staging).and_then(|()| {
+        #[cfg(test)]
+        if let Some(hook) = BEFORE_PLACE.with(|h| h.borrow_mut().take()) {
+            hook();
+        }
+        rename_noreplace(&staging, mailbox)
+    });
+    match staged {
+        Ok(()) => File::open(parent)?.sync_all(),
+        Err(e) => {
+            let _ = std::fs::remove_file(staging.join(SOURCE_ID_FILE));
+            let _ = std::fs::remove_dir(&staging);
+            if noreplace_unsupported(&e) {
+                return create_mailbox_dir_in_place(mailbox);
+            }
+            // EEXIST: another creator placed the mailbox first; keep it.
+            if e.raw_os_error() == Some(libc::EEXIST)
+                && std::fs::metadata(mailbox).is_ok_and(|m| m.is_dir())
+            {
+                Ok(())
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+/// [`create_mailbox_dir`] on a filesystem without a no-replace rename,
+/// ordered to fail closed: the checkout's nonce era is recorded first, then
+/// the directory is made in place and its nonce written. A resolver in the
+/// window between the two finds the era begun and no nonce, and refuses
+/// (retriably) instead of keying the directory as legacy.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn create_mailbox_dir_in_place(mailbox: &Path) -> std::io::Result<()> {
+    let root = mailbox.parent().and_then(Path::parent).unwrap_or(mailbox);
+    if let Some((marker, admin)) = era_marker_for(root)? {
+        mark_nonce_era(&marker, &admin)?;
+    }
+    match std::fs::create_dir(mailbox) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Ok(()),
+        Err(e) => return Err(e),
+    }
+    #[cfg(test)]
+    if let Some(hook) = IN_PLACE_WINDOW.with(|h| h.borrow_mut().take()) {
+        hook();
+    }
+    mint_source_id(mailbox)?;
+    match mailbox.parent() {
+        Some(parent) => File::open(parent)?.sync_all(),
+        None => Ok(()),
+    }
+}
+
+/// Write 128 random bits as `dir/.source-id`: create-new, mode 0600, synced.
+fn mint_source_id(dir: &Path) -> std::io::Result<()> {
+    let mut nonce = [0u8; SOURCE_ID_HEX_LEN / 2];
+    File::open("/dev/urandom")?.read_exact(&mut nonce)?;
+    write_source_id(
+        &dir.join(SOURCE_ID_FILE),
+        format!("{}\n", hex(&nonce)).as_bytes(),
+    )
+}
+
+/// Write a nonce (or era marker) file create-new, mode 0600, synced with
+/// its directory.
+fn write_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    match path.parent() {
+        Some(dir) => File::open(dir)?.sync_all(),
+        None => Ok(()),
+    }
+}
+
+/// Is this mailbox-root entry the creation nonce rather than mail?
+pub(crate) fn is_source_id(name: &str, meta: &std::fs::Metadata) -> bool {
+    name == SOURCE_ID_FILE && meta.file_type().is_file()
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {

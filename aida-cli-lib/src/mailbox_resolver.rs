@@ -14,6 +14,8 @@ pub(crate) struct RecipientDirectory {
     operator: Option<String>,
     live_ids: BTreeSet<String>,
     unknown_ids: BTreeSet<String>,
+    // trace:STORY-1843 | ai:claude
+    relay_runs: Vec<crate::relay_mail::AcceptingRun>,
     warnings: Vec<String>,
 }
 
@@ -233,6 +235,8 @@ impl RecipientDirectory {
         for role in crate::list_roles(project)? {
             roles.insert(role.name.to_lowercase(), role.name);
         }
+        let (relay_runs, relay_warnings) = crate::relay_mail::accepting_runs(project);
+        warnings.extend(relay_warnings);
         warnings.sort();
         let people = crate::known_mailbox_people(store);
         let operator = select_operator(
@@ -248,6 +252,7 @@ impl RecipientDirectory {
             operator,
             live_ids,
             unknown_ids,
+            relay_runs,
             warnings,
         })
     }
@@ -509,6 +514,29 @@ impl RecipientDirectory {
             });
         }
         let live: Vec<_> = named.iter().filter(|a| self.reader_may_exist(a)).collect();
+        // Between a relay's sessions its label has no live reader, but the
+        // run still owns it: the next session reads the mail.
+        // trace:STORY-1843 | ai:claude
+        if live.is_empty() && !catalog_address {
+            if let Some(run) = self
+                .relay_runs
+                .iter()
+                .find(|r| r.label.eq_ignore_ascii_case(target))
+            {
+                let notice = match run.liveness {
+                    crate::relay_mail::ControllerLiveness::Live => format!(
+                        "relay {} is between sessions; its next session reads this",
+                        run.label
+                    ),
+                    _ => "warning: relay controller liveness unknown (PID namespace unobservable); delivering to durable inbox".to_string(),
+                };
+                return Ok(ResolvedRecipient {
+                    address: run.label.clone(),
+                    reader_notice: Some(notice),
+                    cohort: None,
+                });
+            }
+        }
         match live.as_slice() {
             [agent] => {
                 let Some(name) = agent.name.as_deref().filter(|n| !n.trim().is_empty()) else {

@@ -7,10 +7,13 @@
 //! and writes `activation.json` only when the report would record. The CLI
 //! lets only a human operator at a terminal record.
 //!
-//! A host is *known to admit* when it runs the same executable file (device
-//! and inode) as the process producing the report, which is a build with
-//! admission. Any other build, a replaced (deleted) binary, or a process
-//! whose executable cannot be read is *unverified*. The record names the
+//! A host is *known to admit* when it runs the same build as the process
+//! producing the report, which is a build with admission: the same executable
+//! file (device and inode), or a byte-identical copy of it at another path
+//! (the same SHA-256 content digest), such as `target/agent/aida` and the
+//! `aida dev build` promoted copy under `~/.local/share/aida/live/`. Any
+//! other build, a replaced (deleted) binary, or a process whose executable
+//! cannot be read or digested is *unverified*. The record names the
 //! source build that wrote it (version and git SHA, shared by the `aida` and
 //! `aida-server` built from one checkout and by a re-promoted build of the
 //! same source), and only that source build honours it: after an upgrade or
@@ -19,6 +22,8 @@
 //! trace:STORY-1843 | ai:claude
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
@@ -34,7 +39,19 @@ pub struct ProcessView {
     pub exe: Option<String>,
     /// Device and inode of the executable the process runs.
     pub exe_id: Option<(u64, u64)>,
+    /// SHA-256 of the executable's bytes, filled only for writer hosts whose
+    /// file differs from this process's; `None` when unread or unreadable.
+    pub exe_digest: Option<String>,
     pub cmdline: Vec<String>,
+}
+
+/// The build this process runs, as [`classify`] compares writer hosts to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildIdentity {
+    /// Device and inode of this process's executable.
+    pub exe_id: (u64, u64),
+    /// SHA-256 of its bytes, or `None` when it could not be read.
+    pub digest: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -72,10 +89,25 @@ pub struct ActivationReport {
     pub would_record: bool,
 }
 
-/// Classify `processes` against this process's executable `me`. Pure.
+/// Whether `p` runs the build `me` runs: the same executable file, or a
+/// byte-identical copy at another path. `None` means unknown (the digest of
+/// either side could not be read), which refuses like a different build.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn same_build(p: &ProcessView, me: &BuildIdentity) -> Option<bool> {
+    let id = p.exe_id?;
+    if id == me.exe_id {
+        return Some(true);
+    }
+    match (&p.exe_digest, &me.digest) {
+        (Some(theirs), Some(mine)) => Some(theirs == mine),
+        _ => None,
+    }
+}
+
+/// Classify `processes` against this process's build `me`. Pure.
 pub fn classify(
     processes: &[ProcessView],
-    me: Option<(u64, u64)>,
+    me: Option<&BuildIdentity>,
     self_pid: u32,
     scan_incomplete: Option<String>,
     recorded: bool,
@@ -99,12 +131,12 @@ pub fn classify(
                 why: "it runs a binary that has since been replaced".into(),
             }
         } else {
-            match (p.exe_id, me) {
-                (Some(id), Some(me)) if id == me => HostVerdict::Admitting,
-                (Some(_), Some(_)) => HostVerdict::Unverified {
+            match me.and_then(|me| same_build(p, me)) {
+                Some(true) => HostVerdict::Admitting,
+                Some(false) => HostVerdict::Unverified {
                     why: "it runs a different build than this one".into(),
                 },
-                _ => HostVerdict::Unverified {
+                None => HostVerdict::Unverified {
                     why: "its executable could not be identified".into(),
                 },
             }
@@ -142,14 +174,24 @@ pub fn classify(
 pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     let me = std::fs::metadata("/proc/self/exe")
         .ok()
-        .map(|m| (m.dev(), m.ino()));
-    let (processes, incomplete) = scan_proc(Path::new("/proc"), std::process::id());
+        .map(|m| BuildIdentity {
+            exe_id: (m.dev(), m.ino()),
+            digest: None,
+        });
+    let (mut processes, incomplete) = scan_proc(Path::new("/proc"), std::process::id());
+    let me = me.map(|me| fill_digests(&mut processes, me, Path::new("/proc/self/exe")));
     let state = super::resolve_source(project_root)
         .ok()
         .flatten()
         .and_then(|source| super::activation_state(&source.anchor).ok());
     let recorded = state == Some(super::ActivationState::Current);
-    let mut report = classify(&processes, me, std::process::id(), incomplete, recorded);
+    let mut report = classify(
+        &processes,
+        me.as_ref(),
+        std::process::id(),
+        incomplete,
+        recorded,
+    );
     if let Some(super::ActivationState::OtherBuild { recorded, .. }) = state {
         report.recorded_by_other_build = Some(recorded.unwrap_or_else(|| "unnamed".into()));
     }
@@ -200,6 +242,50 @@ pub(crate) fn record_at(
     report.recorded = true;
     report.recorded_by_other_build = None;
     Ok(report)
+}
+
+/// Digest the executables of writer hosts that run a file other than this
+/// process's `me` (read from `self_exe`), each distinct file once, so a
+/// byte-identical copy at another path is recognised as this build. Nothing
+/// is read when every writer shares this process's file. An unreadable file
+/// keeps no digest, which [`classify`] reports as unidentified (fail closed).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn fill_digests(
+    processes: &mut [ProcessView],
+    mut me: BuildIdentity,
+    self_exe: &Path,
+) -> BuildIdentity {
+    let mut digests: HashMap<(u64, u64), Option<String>> = HashMap::new();
+    for p in processes.iter_mut() {
+        let Some(id) = p.exe_id else { continue };
+        let writer = p.exe.as_deref().is_some_and(|exe| {
+            !exe.ends_with(" (deleted)")
+                && Path::new(exe)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| WRITER_EXECUTABLES.contains(&n))
+        });
+        if !writer || id == me.exe_id {
+            continue;
+        }
+        if me.digest.is_none() {
+            me.digest = digest_file(self_exe);
+        }
+        let exe_link = Path::new("/proc").join(p.pid.to_string()).join("exe");
+        p.exe_digest = digests
+            .entry(id)
+            .or_insert_with(|| digest_file(&exe_link))
+            .clone();
+    }
+    me
+}
+
+/// SHA-256 of a file's bytes, hex-encoded, or `None` when it cannot be read.
+fn digest_file(path: &Path) -> Option<String> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher).ok()?;
+    Some(format!("{:x}", hasher.finalize()))
 }
 
 /// Read every `/proc/<pid>` this user can see. Unknown means refuse
@@ -284,6 +370,7 @@ fn scan_proc(proc: &Path, self_pid: u32) -> (Vec<ProcessView>, Option<String>) {
             pid,
             exe,
             exe_id,
+            exe_digest: None,
             cmdline,
         });
     }
@@ -304,20 +391,34 @@ mod tests {
             pid,
             exe: Some(exe.into()),
             exe_id: Some(id),
+            exe_digest: None,
             cmdline: vec![exe.into(), "mcp".into()],
+        }
+    }
+
+    fn ident(id: (u64, u64)) -> BuildIdentity {
+        BuildIdentity {
+            exe_id: id,
+            digest: None,
         }
     }
 
     #[test]
     fn hosts_on_this_build_admit_and_others_are_unverified() {
         let me = (1, 10);
+        let mut other = view(6, "/home/u/.local/bin/aida-server", (1, 11));
+        other.exe_digest = Some("b".into());
         let procs = vec![
             view(5, "/home/u/.local/bin/aida", me),
-            view(6, "/home/u/.local/bin/aida-server", (1, 11)),
+            other,
             view(7, "/home/u/.local/bin/aida (deleted)", me),
             view(8, "/usr/bin/bash", (1, 12)),
         ];
-        let report = classify(&procs, Some(me), 1, None, false);
+        let me = BuildIdentity {
+            exe_id: me,
+            digest: Some("a".into()),
+        };
+        let report = classify(&procs, Some(&me), 1, None, false);
         let verdicts: Vec<_> = report.hosts.iter().map(|h| (h.pid, &h.verdict)).collect();
         assert_eq!(verdicts.len(), 3, "bash is not a writer host");
         assert_eq!(verdicts[0], (5, &HostVerdict::Admitting));
@@ -329,6 +430,81 @@ mod tests {
         );
         assert!(!report.would_record);
         assert!(report.dry_run);
+    }
+
+    /// BUG-010: the dev build at `target/agent/aida` and its promoted copy
+    /// under `live/` are two files with one content; each admits the other.
+    /// A copy with different bytes is a different build, and a host whose
+    /// executable cannot be digested stays unidentified (F7: fail closed).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+    #[test]
+    fn identical_copies_at_two_paths_admit_and_different_bytes_refuse() {
+        let dir = tempfile::tempdir().unwrap();
+        let dev = dir.path().join("target/agent/aida");
+        let live = dir.path().join("live/aida");
+        let other = dir.path().join("other/aida");
+        for (path, bytes) in [
+            (&dev, b"build-a"),
+            (&live, b"build-a"),
+            (&other, b"build-b"),
+        ] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let ino = |p: &Path| {
+            let m = std::fs::metadata(p).unwrap();
+            (m.dev(), m.ino())
+        };
+        let me = BuildIdentity {
+            exe_id: ino(&dev),
+            digest: digest_file(&dev),
+        };
+        let host = |pid, path: &Path, digest| ProcessView {
+            exe_digest: digest,
+            ..view(pid, path.to_str().unwrap(), ino(path))
+        };
+        assert_ne!(me.exe_id, ino(&live), "two files, not one");
+
+        let procs = vec![
+            host(5, &live, digest_file(&live)),
+            host(6, &other, digest_file(&other)),
+            host(7, &live, None),
+        ];
+        let report = classify(&procs, Some(&me), 1, None, false);
+        let verdicts: Vec<_> = report.hosts.iter().map(|h| &h.verdict).collect();
+        assert_eq!(verdicts[0], &HostVerdict::Admitting, "an identical copy");
+        assert!(
+            matches!(verdicts[1], HostVerdict::Unverified { why } if why.contains("different build"))
+        );
+        assert!(
+            matches!(verdicts[2], HostVerdict::Unverified { why } if why.contains("could not be identified"))
+        );
+        assert!(!report.would_record);
+
+        let copy_only = classify(&procs[..1], Some(&me), 1, None, false);
+        assert!(copy_only.would_record, "{copy_only:?}");
+
+        // This process's own digest unknown: unknown, never admitted.
+        let blind = ident(me.exe_id);
+        let report = classify(&procs[..1], Some(&blind), 1, None, false);
+        assert!(!report.would_record);
+    }
+
+    #[test]
+    fn fill_digests_reads_only_writers_on_another_file() {
+        let me = ident((1, 10));
+        let mut procs = vec![
+            view(5, "/x/aida", (1, 10)),
+            view(u32::MAX, "/x/aida", (1, 11)),
+            view(7, "/usr/bin/bash", (1, 12)),
+        ];
+        let self_exe = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(self_exe.path(), b"build-a").unwrap();
+        let me = fill_digests(&mut procs, me, self_exe.path());
+        assert_eq!(me.digest, digest_file(self_exe.path()));
+        assert_eq!(procs[0].exe_digest, None, "this process's own file");
+        assert_eq!(procs[1].exe_digest, None, "no such process: unreadable");
+        assert_eq!(procs[2].exe_digest, None, "not a writer");
     }
 
     fn fake_proc(self_pid: u32, ns: &str) -> tempfile::TempDir {
@@ -349,8 +525,8 @@ mod tests {
         let (procs, incomplete) = scan_proc(proc.path(), 42);
         let why = incomplete.expect("a hidden namespace is incomplete");
         assert!(why.contains("pid namespace"), "{why}");
-        let me = procs[0].exe_id;
-        assert!(!classify(&procs, me, 42, Some(why), false).would_record);
+        let me = procs[0].exe_id.map(ident);
+        assert!(!classify(&procs, me.as_ref(), 42, Some(why), false).would_record);
 
         let host = fake_proc(42, "pid:[4026531836]");
         assert_eq!(scan_proc(host.path(), 42).1, None, "the host namespace");
@@ -379,13 +555,19 @@ mod tests {
     fn record_writes_the_activation_only_when_the_report_would_record() {
         super::super::set_source_build("0.0.0", "test", false);
         let anchor = tempfile::tempdir().unwrap();
-        let me = (1, 10);
-        let refused = classify(&[view(5, "/bin/aida", (1, 11))], Some(me), 1, None, false);
+        let me = ident((1, 10));
+        let refused = classify(&[view(5, "/bin/aida", (1, 11))], Some(&me), 1, None, false);
         let out = record_at(anchor.path(), refused, "t").unwrap();
         assert!(!out.recorded && !out.dry_run);
         assert!(!super::super::activated(anchor.path()).unwrap());
 
-        let admitted = classify(&[view(5, "/bin/aida", me)], Some(me), 1, None, false);
+        let admitted = classify(
+            &[view(5, "/bin/aida", me.exe_id)],
+            Some(&me),
+            1,
+            None,
+            false,
+        );
         let out = record_at(anchor.path(), admitted, "t").unwrap();
         assert!(out.recorded);
         assert!(super::super::activated(anchor.path()).unwrap());
@@ -432,8 +614,8 @@ mod tests {
     fn only_a_complete_scan_of_admitting_hosts_would_record() {
         let me = (1, 10);
         let procs = vec![view(5, "/bin/aida", me)];
-        assert!(classify(&procs, Some(me), 1, None, false).would_record);
-        assert!(!classify(&procs, Some(me), 1, Some("hidepid".into()), false).would_record);
+        assert!(classify(&procs, Some(&ident(me)), 1, None, false).would_record);
+        assert!(!classify(&procs, Some(&ident(me)), 1, Some("hidepid".into()), false).would_record);
         assert!(!classify(&procs, None, 1, None, false).would_record);
     }
 }
