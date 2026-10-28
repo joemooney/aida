@@ -87,6 +87,11 @@ pub struct ActivationReport {
     pub scan_incomplete: Option<String>,
     /// Every writer host is known to admit and the scan was complete.
     pub would_record: bool,
+    /// Mailbox tombs holding entries written after a retirement, and what
+    /// `aida agent gc` would reap (see [`super::leftovers`]).
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+    #[serde(default)]
+    pub leftovers: super::leftovers::Leftovers,
 }
 
 /// Whether `p` runs the build `me` runs: the same executable file, or a
@@ -166,6 +171,7 @@ pub fn classify(
         hosts,
         scan_incomplete,
         would_record,
+        leftovers: Default::default(),
     }
 }
 
@@ -196,6 +202,7 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     if let Some(super::ActivationState::OtherBuild { recorded, .. }) = state {
         report.recorded_by_other_build = Some(recorded.unwrap_or_else(|| "unnamed".into()));
     }
+    report.leftovers = super::leftovers::scan(project_root, false); // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
     report
 }
 
@@ -247,10 +254,10 @@ pub(crate) fn record_at(
 
 /// Digest the executables of writer hosts that run a file other than this
 /// process's `me` (read from `self_exe`; writers from `proc`), each distinct
-/// file once, so a
-/// byte-identical copy at another path is recognised as this build. Nothing
-/// is read when every writer shares this process's file. An unreadable file
-/// keeps no digest, which [`classify`] reports as unidentified (fail closed).
+/// file once, so a byte-identical copy at another path is recognised as this
+/// build. Nothing is read when every writer shares this process's file. An
+/// unreadable file keeps no digest, which [`classify`] reports as
+/// unidentified (fail closed).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn fill_digests(
     proc: &Path,

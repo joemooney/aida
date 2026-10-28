@@ -1059,6 +1059,9 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
     if let Some(why) = &report.scan_incomplete {
         println!("  the process scan is incomplete: {why}");
     }
+    for line in retention_leftover_lines(&report.leftovers) {
+        println!("  {line}");
+    }
     if report.would_record {
         println!("Every running mail writer takes a write permit; activation would be recorded.");
     } else {
@@ -1094,6 +1097,33 @@ pub(crate) fn retention_record_lines(
         ],
         (None, false) => vec!["recorded activation: no".to_string()],
     }
+}
+
+/// The report's lines about mailbox tombs and other creation/reuse
+/// leftovers. A tomb holding mail is never removed by AIDA.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+#[cfg(unix)]
+fn retention_leftover_lines(
+    leftovers: &aida_core::mailbox_lifecycle::leftovers::Leftovers,
+) -> Vec<String> {
+    let mut lines: Vec<String> = leftovers
+        .stranded_tombs
+        .iter()
+        .map(|tomb| {
+            format!(
+                "stranded mail: {} holds entries written after a retirement; move them out by \
+                 hand, then `aida agent gc` removes it",
+                tomb.display()
+            )
+        })
+        .collect();
+    if !leftovers.reapable.is_empty() {
+        lines.push(format!(
+            "{} leftover(s) from mailbox creation or reuse; `aida agent gc` removes them",
+            leftovers.reapable.len()
+        ));
+    }
+    lines
 }
 
 #[cfg(not(unix))]

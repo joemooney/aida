@@ -90,9 +90,15 @@ impl Retirement {
             Emptied::Removed => self.complete(),
             // Not reopened: the late entries sit in the tombstone and a new
             // mailbox is a new source; the source stays retired with them.
-            Emptied::Stranded(e) => Err(std::io::Error::other(RetentionRefusal {
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+            Emptied::Stranded(tomb, e) => Err(std::io::Error::other(RetentionRefusal {
                 checkout,
-                reason: format!("{e}; the retired source keeps its preserved mail"),
+                reason: format!(
+                    "{e}; {} is kept and listed by `{}` (`aida agent gc` removes it once \
+                     empty), and the retired source keeps the mail preserved before the reset",
+                    tomb.display(),
+                    super::ACTIVATION_COMMAND
+                ),
                 needs_activation: false,
                 retained_dir: Some(self.retained_dir.clone()),
             })),
@@ -323,9 +329,10 @@ enum Emptied {
     /// Still in place, untouched: the filesystem cannot rename it aside
     /// without risking a replace. The source is reopened.
     Unsupported(String),
-    /// Late entries left in the tombstone because a new mailbox took the
-    /// path meanwhile; never merged into it.
-    Stranded(LifecycleError),
+    /// The tombstone kept, with late entries left in it because a new
+    /// mailbox took the path meanwhile (never merged into it), or empty but
+    /// not removable.
+    Stranded(PathBuf, LifecycleError),
 }
 
 #[cfg(test)]
@@ -356,7 +363,7 @@ fn remove_retired_mailbox(dir: &Path) -> Emptied {
         Ok(Some(nonce)) => nonce,
         _ => uuid::Uuid::new_v4().simple().to_string(),
     };
-    let tomb = dir.with_file_name(format!(".mailbox-tomb-{tag}"));
+    let tomb = dir.with_file_name(format!("{}{tag}", super::leftovers::TOMB_PREFIX));
     if let Err(e) = super::rename_noreplace(dir, &tomb) {
         if super::noreplace_unsupported(&e) {
             // A replacing rename could swap a new mailbox out from under its
@@ -377,14 +384,17 @@ fn remove_retired_mailbox(dir: &Path) -> Emptied {
     if let Err(late) = remove_empty_tree_in(&tomb, true) {
         return match super::rename_noreplace(&tomb, dir) {
             Ok(()) => Emptied::Kept(late.to_string()),
-            Err(e) => Emptied::Stranded(LifecycleError::Unsafe {
-                path: tomb.clone(),
-                why: format!(
-                    "holds an entry written after the retirement ({late}) and could not \
+            Err(e) => Emptied::Stranded(
+                tomb.clone(),
+                LifecycleError::Unsafe {
+                    path: tomb.clone(),
+                    why: format!(
+                        "holds an entry written after the retirement ({late}) and could not \
                      return to {}: {e}; it was not merged into the mailbox there",
-                    dir.display()
-                ),
-            }),
+                        dir.display()
+                    ),
+                },
+            ),
         };
     }
     let nonce = tomb.join(super::SOURCE_ID_FILE);
@@ -394,16 +404,19 @@ fn remove_retired_mailbox(dir: &Path) -> Emptied {
     };
     match cleared {
         Ok(()) => Emptied::Removed,
-        Err(e) => Emptied::Stranded(LifecycleError::Unsafe {
-            path: tomb,
-            why: format!("could not be removed after the retirement: {e}"),
-        }),
+        Err(e) => Emptied::Stranded(
+            tomb.clone(),
+            LifecycleError::Unsafe {
+                path: tomb,
+                why: format!("could not be removed after the retirement: {e}"),
+            },
+        ),
     }
 }
 
 /// Fail if `dir` holds anything but directories (and, at the root, its
 /// creation nonce). Removes nothing.
-fn check_empty_tree(dir: &Path, root: bool) -> std::io::Result<()> {
+pub(super) fn check_empty_tree(dir: &Path, root: bool) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -424,7 +437,7 @@ fn check_empty_tree(dir: &Path, root: bool) -> std::io::Result<()> {
 
 /// Remove the subdirectories of `dir` (and `dir` itself below the root),
 /// refusing if any entry is not a directory. The root's nonce is left.
-fn remove_empty_tree_in(dir: &Path, root: bool) -> std::io::Result<()> {
+pub(super) fn remove_empty_tree_in(dir: &Path, root: bool) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
