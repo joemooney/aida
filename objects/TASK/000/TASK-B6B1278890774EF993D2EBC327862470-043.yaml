@@ -8,12 +8,12 @@ description: |-
 
   PR: #3025
   Reviewed sha: 6efd7270069d247871f1c043b227c8b21a3ec974
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T11:45:32.430964243Z
-modified_at: 2026-10-28T13:05:33.609797252Z
+modified_at: 2026-10-28T16:05:18.738630833Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-024
@@ -40,6 +40,20 @@ history:
   timestamp: 2026-10-28T13:05:35.120707244Z
   session_id: f6c20860-7f5a-4d46-95b3-edb373486218
   changes: []
+- id: 01a18342-3d0e-7973-a1fb-b3936c2b87f1
+  author: aida-auto-bump
+  timestamp: 2026-10-28T16:05:18.734123796Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a18342-3d12-7a53-b7f6-5d6f1a4e9932
+  timestamp: 2026-10-28T16:05:18.738626569Z
+  agent: aida
+  commit_sha: d6b47ff743e602f44f8200ee23b8b9655002373a
+  summary: 'Both specs PASS: kernels and orchestrators scanned with aida_core paths (outside_paths(..,true)); every kernel aida_core definer listed with a reason in FACADE_EXTERNAL_LEAVES; orchestrator inventories extended and frozen; refusal tests cover new sibling paths; dead allow(unused_imports) removed; kernel.rs docs point at kernel_deps. CI green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 42070fbece09cfca8f00042931b573300d85f0f9
@@ -48,3 +62,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 75d12e4354f
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T16:05:18.734119851Z
+  completion_sha: d6b47ff743e602f44f8200ee23b8b9655002373a
