@@ -864,12 +864,16 @@ fn story1843_d1_queued_role_mail_is_taken_only_by_its_live_owner() {
 const D1_SESSION: &str = "d1-test-thread-0001";
 
 /// Register this test process's own session as a `reviewer` reader in
-/// `root`'s registry, with a handle reservation naming the row, so its live
-/// identity owns a recipient UUID. The row is keyed to the nearest vendor
-/// ancestor when there is one (a developer's client), else to this process
-/// and a Codex thread id the caller exports.
+/// `root`'s registry so its live identity owns a recipient UUID, and return
+/// that UUID's audience. Two rows are registered: one keyed to the nearest
+/// vendor ancestor (a developer's or reviewer's client), one keyed to this
+/// process and the Codex thread id [`d1_env`] exports (CI, with no vendor
+/// ancestor). The reservation is then written for whichever row the
+/// production session lookup actually selects, read back from disk, so it
+/// names that row's id and handle exactly as `SessionBindingFacts::verify`
+/// sees them.
 // trace:STORY-1843 | ai:claude
-fn register_self_as_reviewer(root: &Path) {
+fn register_self_as_reviewer(root: &Path) -> ResolvedAudience {
     let me = std::process::id();
     let nearest = ["claude", "codex", "antigravity"]
         .into_iter()
@@ -879,23 +883,43 @@ fn register_self_as_reviewer(root: &Path) {
             Some((depth, pid, vendor))
         })
         .min_by_key(|(depth, _, _)| *depth);
-    let (pid, vendor) = nearest.map_or((me, "codex"), |(_, pid, vendor)| (pid, vendor));
-    let mut entry = crate::agent_registry::register_existing_agent(
-        root,
-        vendor,
-        pid,
-        "reviewer".into(),
-        None,
-        root.to_path_buf(),
-        Some("rev-me".into()),
-        None,
-    )
-    .unwrap();
-    if nearest.is_none() {
-        entry.native_session_id = Some(D1_SESSION.into());
-        crate::agent_registry::write_entry(root, &entry).unwrap();
+    let mut rows = vec![(me, "codex", "rev-me")];
+    if let Some((_, pid, vendor)) = nearest {
+        rows.push((pid, vendor, "rev-host"));
     }
+    for (pid, vendor, handle) in rows {
+        let mut entry = crate::agent_registry::register_existing_agent(
+            root,
+            vendor,
+            pid,
+            "reviewer".into(),
+            None,
+            root.to_path_buf(),
+            Some(handle.into()),
+            None,
+        )
+        .unwrap();
+        if pid == me {
+            entry.native_session_id = Some(D1_SESSION.into());
+            crate::agent_registry::write_entry(root, &entry).unwrap();
+        }
+    }
+    let row = crate::agent_handle::current_session_row_in(root)
+        .expect("the session lookup selects one of the registered rows");
+    let id = row.file_stem().unwrap().to_str().unwrap().to_string();
+    let entry = crate::agent_registry::load_entries(root)
+        .into_iter()
+        .map(|(_, e)| e)
+        .find(|e| e.id == id)
+        .expect("the selected row is on disk");
     crate::mailbox_resolver::reserve_test_reader(root, &entry);
+    let audience = own_audience_in(root);
+    assert!(
+        audience.recipient().is_some(),
+        "row {id} (handle {:?}) must own its reservation's UUID",
+        entry.name
+    );
+    audience
 }
 
 fn d1_env() -> crate::test_env::EnvVarsGuard {
@@ -937,8 +961,7 @@ fn pending(r: &MailRepo, audience: &ResolvedAudience) -> usize {
 fn story1843_d1_owning_reader_takes_queued_mail_on_explicit_read_and_notice() {
     let r = mail_repo();
     let _env = d1_env();
-    register_self_as_reviewer(&r.main);
-    let audience = own_audience_in(&r.main);
+    let audience = register_self_as_reviewer(&r.main);
     let own = audience
         .recipient()
         .cloned()
@@ -973,9 +996,7 @@ fn story1843_d1_notice_never_waits_on_a_held_lifecycle_lock() {
     use std::os::unix::fs::DirBuilderExt;
     let r = mail_repo();
     let _env = d1_env();
-    register_self_as_reviewer(&r.main);
-    let audience = own_audience_in(&r.main);
-    assert!(audience.recipient().is_some());
+    let audience = register_self_as_reviewer(&r.main);
     for (i, id) in ["q1", "q2", "q3"].into_iter().enumerate() {
         queue_role_mail(&r.sib, id, 10 + i as i64);
     }

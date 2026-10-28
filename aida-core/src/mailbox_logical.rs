@@ -682,21 +682,8 @@ pub fn logical_snapshot(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let retained = match &ctx.repository {
-        Some(common) => retained_sidecars(common.path(), &mut budget).unwrap_or_else(|code| {
-            anchor.error.get_or_insert(code);
-            Vec::new()
-        }),
-        None => Vec::new(),
-    };
-    let (delivered, pending_deliveries, delivery_conflicts) = delivery_gates(
-        ctx,
-        &observed,
-        &retained,
-        audience,
-        &mut anchor,
-        &mut budget,
-    );
+    let (delivered, pending_deliveries, delivery_conflicts) =
+        delivery_gates(ctx, &observed, audience, &mut anchor, &mut budget);
     let (mut records, mut conflicts) = reconcile(
         &observed,
         local_count,
@@ -1530,30 +1517,10 @@ fn read_source(
             recorded,
         });
     }
-    let mut deliveries = Vec::new();
-    if let Some(sidecars) = dir.child_dir(DELIVERIES_DIR)? {
-        for name in sidecars.names(budget)? {
-            let Some(stem) = name
-                .strip_suffix(b".json")
-                .filter(|_| !name.starts_with(b"."))
-            else {
-                continue;
-            };
-            if budget.expired() {
-                return Err(SourceErrorCode::OverBudget);
-            }
-            let Some(bytes) = sidecars.read_file(OsStr::from_bytes(&name), DELIVERY_FILE_CAP)?
-            else {
-                return Err(SourceErrorCode::SourceChanged);
-            };
-            budget.take(bytes.len())?;
-            let stem = std::str::from_utf8(stem).map_err(|_| SourceErrorCode::CorruptMessage)?;
-            deliveries.push(
-                DeliverySidecar::parse(&bytes, stem)
-                    .map_err(|_| SourceErrorCode::CorruptMessage)?,
-            );
-        }
-    }
+    let deliveries = match dir.child_dir(DELIVERIES_DIR)? {
+        Some(sidecars) => read_sidecars(&sidecars, budget)?,
+        None => Vec::new(),
+    };
     // Recheck that the path still names the directory that was read.
     let mut again = PinnedDir::open_root(root)?;
     for component in components {
@@ -1586,14 +1553,19 @@ enum DeliveryGate {
 
 /// Sidecars by message ID, the gate for every message the audience is
 /// addressed to, the queued deliveries this reader may bind, and the IDs
-/// whose sidecar replicas disagree (never projected). Reading a queued
-/// delivery's binding is read-only; an unreadable binding makes the view
-/// partial (it is recorded as an anchor error) and hides the message.
+/// whose sidecar replicas disagree (never projected).
+///
+/// A role message with no live sidecar is looked up by ID in the retained
+/// copies of retired sources, so a replica elsewhere keeps its cohort gate
+/// after the sending worktree is retired. Faults stay local to their
+/// message: a retained sidecar or a queued delivery's binding that cannot be
+/// read or parsed hides that one message (its ownership is unknown) and
+/// offers nothing to bind, without making the whole view partial. Only a
+/// retained area that cannot be opened at all is a view-wide anchor error.
 // trace:STORY-1843 | ai:claude
-fn delivery_gates<'a>(
+fn delivery_gates(
     ctx: &MailboxContext,
-    observed: &'a [Option<ObservedSource>],
-    retained: &'a [DeliverySidecar],
+    observed: &[Option<ObservedSource>],
     audience: &ResolvedAudience,
     anchor: &mut AnchorEvidence,
     budget: &mut Budget,
@@ -1602,24 +1574,16 @@ fn delivery_gates<'a>(
     Vec<PendingDelivery>,
     Conflicts,
 ) {
-    let mut sidecars: BTreeMap<&str, Vec<&DeliverySidecar>> = BTreeMap::new();
+    let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
-    // A retired source's sidecars live on in its retained copy, so a replica
-    // of its message elsewhere (another worktree, the canonical store) keeps
-    // the cohort gate instead of degrading to legacy role mail.
-    for sidecar in retained {
-        sidecars
-            .entry(&sidecar.message_id)
-            .or_default()
-            .push(sidecar);
-    }
+    let mut role_addressed: BTreeSet<&str> = BTreeSet::new();
     for source in observed.iter().flatten() {
         for sidecar in &source.deliveries {
             sidecars
-                .entry(&sidecar.message_id)
+                .entry(sidecar.message_id.clone())
                 .or_default()
-                .push(sidecar);
+                .push(sidecar.clone());
         }
         for m in &source.messages {
             threads
@@ -1630,15 +1594,50 @@ fn delivery_gates<'a>(
                 deleted: false,
                 ..m.message.clone()
             };
-            if !audience.matching_keys(&undeleted).is_empty() {
+            let keys = audience.matching_keys(&undeleted);
+            if !keys.is_empty() {
                 addressed.insert(&m.message.id);
+            }
+            if keys
+                .iter()
+                .any(|k| audience.shared_keys().iter().any(|s| s == k))
+            {
+                role_addressed.insert(&m.message.id);
             }
         }
     }
     let mut gates = HashMap::new();
+    let wanted: Vec<&str> = role_addressed
+        .into_iter()
+        .filter(|id| !sidecars.contains_key(*id))
+        .collect();
+    if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
+        match RetainedDeliveries::open(common.path(), budget) {
+            Ok(retained) => {
+                for id in wanted {
+                    match retained.lookup(id, budget) {
+                        Ok(found) if !found.is_empty() => {
+                            sidecars.insert(id.to_string(), found);
+                        }
+                        Ok(_) => {}
+                        Err(()) => {
+                            gates.insert(id.to_string(), DeliveryGate::NotOwned);
+                        }
+                    }
+                }
+            }
+            Err(code) => {
+                anchor.error.get_or_insert(code);
+                for id in wanted {
+                    gates.insert(id.to_string(), DeliveryGate::NotOwned);
+                }
+            }
+        }
+    }
     let mut pending = Vec::new();
     let mut conflicts = Vec::new();
-    for (id, replicas) in sidecars {
+    for (id, replicas) in &sidecars {
+        let id = id.as_str();
         if replicas.iter().any(|r| *r != replicas[0]) {
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
             if addressed.contains(id) {
@@ -1646,32 +1645,29 @@ fn delivery_gates<'a>(
             }
             continue;
         }
-        let sidecar = replicas[0];
+        let sidecar = &replicas[0];
         if !addressed.contains(id) {
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
             continue;
         }
         let mut bindings = HashMap::new();
+        let mut unknown = false;
         for delivery_id in sidecar.queued_ids() {
             match read_binding(ctx, delivery_id, budget) {
                 Ok(bound) => {
                     bindings.insert(delivery_id.to_string(), bound);
                 }
-                Err(code) => {
-                    anchor.error.get_or_insert(code);
-                    bindings.insert(delivery_id.to_string(), None);
-                }
+                Err(_) => unknown = true,
             }
         }
         let owners = sidecar.owners(|d| bindings.get(d).cloned().flatten());
         let gate = match audience.recipient() {
             Some(own) if owners.contains(own) => DeliveryGate::Owned(own.clone()),
-            Some(_) => {
+            Some(_) if !unknown => {
                 pending.extend(
                     sidecar
                         .queued_ids()
                         .filter(|d| bindings.get(*d).is_some_and(Option::is_none))
-                        .filter(|_| anchor.error.is_none())
                         .map(|d| PendingDelivery {
                             message_id: id.to_string(),
                             delivery_id: d.to_string(),
@@ -1679,7 +1675,7 @@ fn delivery_gates<'a>(
                 );
                 DeliveryGate::NotOwned
             }
-            None => DeliveryGate::NotOwned,
+            _ => DeliveryGate::NotOwned,
         };
         gates.insert(id.to_string(), gate);
     }
@@ -1690,41 +1686,62 @@ fn delivery_gates<'a>(
 /// `retained/<source-key>/<generation>/data/` mirrors the mailbox.
 const RETAINED_PATH: [&str; 3] = ["aida", "mail-lifecycle", "retained"];
 
-/// Every delivery sidecar in a retained copy of a retired source, read
-/// no-follow and bounded like every other snapshot read. Messages in
-/// retained copies are not read (retention coverage is unestablished);
-/// only their ownership is, so the gate survives the source.
+/// The `.deliveries/` directories of the retained copies of retired
+/// sources, pinned once per snapshot (one directory per retired
+/// generation that holds sidecars), then looked up by exact message ID:
+/// no sidecar is read unless the view holds a message it names.
 // trace:STORY-1843 | ai:claude
-fn retained_sidecars(
-    common: &Path,
-    budget: &mut Budget,
-) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
-    let mut dir = PinnedDir::open_root(common)?;
-    for component in RETAINED_PATH {
-        match dir.child_dir(component)? {
-            Some(child) => dir = child,
-            None => return Ok(Vec::new()),
+struct RetainedDeliveries {
+    dirs: Vec<PinnedDir>,
+}
+
+impl RetainedDeliveries {
+    fn open(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
+        let mut dir = PinnedDir::open_root(common)?;
+        for component in RETAINED_PATH {
+            match dir.child_dir(component)? {
+                Some(child) => dir = child,
+                None => return Ok(Self { dirs: Vec::new() }),
+            }
         }
-    }
-    let mut out = Vec::new();
-    for key in dir.names(budget)? {
-        let Some(key_dir) = dir.child_dir(&String::from_utf8_lossy(&key))? else {
-            continue;
-        };
-        for generation in key_dir.names(budget)? {
-            let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))? else {
+        let mut dirs = Vec::new();
+        for key in dir.names(budget)? {
+            let Some(key_dir) = dir.child_dir(&String::from_utf8_lossy(&key))? else {
                 continue;
             };
-            let Some(data) = gen_dir.child_dir("data")? else {
-                continue;
-            };
-            let Some(sidecars) = data.child_dir(DELIVERIES_DIR)? else {
-                continue;
-            };
-            out.extend(read_sidecars(&sidecars, budget)?);
+            for generation in key_dir.names(budget)? {
+                let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))?
+                else {
+                    continue;
+                };
+                if let Some(sidecars) = gen_dir
+                    .child_dir("data")?
+                    .map(|data| data.child_dir(DELIVERIES_DIR))
+                    .transpose()?
+                    .flatten()
+                {
+                    dirs.push(sidecars);
+                }
+            }
         }
+        Ok(Self { dirs })
     }
-    Ok(out)
+
+    /// Every retained sidecar for message `id`. `Err` when one exists but
+    /// cannot be read or parsed: that message's ownership is unknown.
+    fn lookup(&self, id: &str, budget: &mut Budget) -> Result<Vec<DeliverySidecar>, ()> {
+        let name = format!("{id}.json");
+        let mut out = Vec::new();
+        for dir in &self.dirs {
+            let bytes = dir
+                .read_file(OsStr::new(&name), DELIVERY_FILE_CAP)
+                .map_err(|_| ())?;
+            let Some(bytes) = bytes else { continue };
+            budget.take(bytes.len()).map_err(|_| ())?;
+            out.push(DeliverySidecar::parse(&bytes, id).map_err(|_| ())?);
+        }
+        Ok(out)
+    }
 }
 
 /// Parse every `<message-id>.json` sidecar in a `.deliveries/` directory.

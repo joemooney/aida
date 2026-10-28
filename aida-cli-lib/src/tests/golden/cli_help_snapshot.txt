@@ -4718,6 +4718,11 @@ Options:
           body (or this is a broadcast). By default that send is refused, because each reader takes
           the claim as addressed to itself
 
+      --queue-for-role
+          When the role in --to has no reader right now, queue the message for it: the first
+          eligible reader to check its mail takes it, once. Without this, a send to a role with no
+          reader is refused. A role that has readers delivers to them as usual
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mailbox inbox
@@ -29580,6 +29585,11 @@ Working on aida itself
         "name": "intent",
         "takes_value": true,
         "help": "How the recipient should treat this message: `fyi` (informational, surface only), `request` (needs a response), or `handoff` (work transfer). Default: fyi. Orthogonal to --urgent (loudness vs kind)"
+      },
+      {
+        "name": "queue-for-role",
+        "takes_value": false,
+        "help": "When the role in --to has no reader right now, queue the message for it: the first eligible reader to check its mail takes it, once. Without this, a send to a role with no reader is refused. A role that has readers delivers to them as usual"
       },
       {
         "name": "relayed-from",
