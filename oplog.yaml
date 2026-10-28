@@ -82192,5 +82192,32 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6403
+- id: 01a18392-7af8-79b1-9cf8-5f9c2c408c10
+  target_id: 01a18392-7426-72d2-94ef-a9af6469e724
+  author: aida
+  node_id: '1'
+  lamport: 6404
+  timestamp: 2026-10-28T17:32:57.464146922Z
+  kind: !Create
+    title: 'Review PR-3051: [AI:claude] fix(gate): count ::aida_core and extern-crate aliases as reach (TASK-b6b1278890774ef993d2ebc327862470-053 TASK-b6b1278890774ef993d2ebc327862470-054)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-reach-leading-colon`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3051>
+      - Branch: `fix/gate-reach-leading-colon` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-053
+      - TASK-b6b1278890774ef993d2ebc327862470-054
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3051` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6404
 node_id: '1'
