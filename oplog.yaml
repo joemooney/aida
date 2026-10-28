@@ -81830,5 +81830,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6374
+- id: 01a18342-b760-73c1-aabc-ce0332141bfa
+  target_id: 01a18342-b04f-7af2-8b1f-04b48a8b921b
+  author: aida
+  node_id: '1'
+  lamport: 6375
+  timestamp: 2026-10-28T16:05:50.048257817Z
+  kind: !Create
+    title: 'Cosmetic: ragged comment wrapping introduced by this PR - gate/orchestrator_lea…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-041, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Cosmetic: ragged comment wrapping introduced by this PR - gate/orchestrator_leaves.rs:5-7 module doc ends a line at 'module. The' and the GATE_KERNELS doc in story_1888_gate_paths_tests.rs:3475 runs well past 100 columns.
+
+      PR: #3036
+      Reviewed sha: 6588b3a632cefc924a47500fdfe857632596db57
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6375
 node_id: '1'
