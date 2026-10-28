@@ -503,11 +503,12 @@ fn run_comment(
                     // trace:STORY-644 | ai:claude
                     // trace:TASK-1766 | ai:antigravity
                     {
-                        let (mentions, warnings) = crate::punt_done::resolve_comment_mentions(
-                            store_path,
-                            &comment_author,
-                            &mention_body,
-                        );
+                        let (mentions, warnings) =
+                            crate::punt_done::resolve_comment_mention_recipients(
+                                store_path,
+                                &comment_author,
+                                &mention_body,
+                            );
                         for warning in &warnings {
                             eprintln!(
                                 "  {} {}",
@@ -518,11 +519,11 @@ fn run_comment(
                         if !mentions.is_empty() {
                             let display = req.spec_id.as_deref().unwrap_or(req_id);
                             let snippet = mention_snippet(&mention_body, 80);
-                            for handle in &mentions {
-                                send_notification(
+                            for recipient in &mentions {
+                                crate::punt_done::send_resolved_notification(
                                     store_path,
                                     &comment_author,
-                                    handle,
+                                    recipient,
                                     format!(
                                         "You were mentioned on {display} by {comment_author}: {snippet}"
                                     ),

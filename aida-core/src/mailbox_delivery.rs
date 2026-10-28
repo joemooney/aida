@@ -108,6 +108,15 @@ pub struct DeliveryRecord {
     /// The relay run that owns the recipient (slice D2); `None` here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_uuid: Option<String>,
+    /// For a handover delivery (slice D2b): the delivery it hands over.
+    /// The original keeps its recipient and receipts.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handover_of: Option<String>,
+    /// For a relay end notice (slice D2b): the undelivered delivery it
+    /// reports. A notice never produces another notice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice_of: Option<String>,
 }
 
 /// The sidecar file beside one message.
@@ -157,6 +166,8 @@ impl DeliverySidecar {
                     cohort: Some(cohort.clone()),
                     queued_for_role: false,
                     run_uuid: None,
+                    handover_of: None,
+                    notice_of: None,
                 })
                 .collect(),
         }
@@ -178,8 +189,63 @@ impl DeliverySidecar {
                 }),
                 queued_for_role: true,
                 run_uuid: None,
+                handover_of: None,
+                notice_of: None,
             }],
         }
+    }
+
+    /// One delivery to the relay run `run`, which owns the label the
+    /// message is addressed to (slice D2b).
+    // trace:STORY-1843 | ai:claude
+    pub fn relay(message_id: &str, run: &RecipientUuid) -> Self {
+        Self::single(DeliveryRecord {
+            delivery_id: uuid::Uuid::new_v4().to_string(),
+            message_id: message_id.to_string(),
+            recipient_uuid: Some(run.clone()),
+            cohort: None,
+            queued_for_role: false,
+            run_uuid: Some(run.as_str().to_string()),
+            handover_of: None,
+            notice_of: None,
+        })
+    }
+
+    /// A relay end notice to `recipient` about `original_delivery`
+    /// (slice D2b).
+    pub fn notice(message_id: &str, recipient: &RecipientUuid, original_delivery: &str) -> Self {
+        Self::single(DeliveryRecord {
+            delivery_id: uuid::Uuid::new_v4().to_string(),
+            message_id: message_id.to_string(),
+            recipient_uuid: Some(recipient.clone()),
+            cohort: None,
+            queued_for_role: false,
+            run_uuid: None,
+            handover_of: None,
+            notice_of: Some(original_delivery.to_string()),
+        })
+    }
+
+    /// Mark every delivery of this sidecar as a notice about
+    /// `original_delivery`.
+    pub fn as_notice_of(mut self, original_delivery: &str) -> Self {
+        for d in &mut self.deliveries {
+            d.notice_of = Some(original_delivery.to_string());
+        }
+        self
+    }
+
+    fn single(record: DeliveryRecord) -> Self {
+        Self {
+            schema: DELIVERY_SCHEMA,
+            message_id: record.message_id.clone(),
+            deliveries: vec![record],
+        }
+    }
+
+    /// Whether any delivery of this message is a relay end notice.
+    pub fn is_notice(&self) -> bool {
+        self.deliveries.iter().any(|d| d.notice_of.is_some())
     }
 
     /// Parse and validate the sidecar read from `<stem>.json`.
@@ -194,6 +260,8 @@ impl DeliverySidecar {
             && sidecar.deliveries.iter().all(|d| {
                 d.message_id == sidecar.message_id
                     && safe_id(&d.delivery_id)
+                    && d.handover_of.is_none()
+                    && d.notice_of.as_deref().is_none_or(safe_id)
                     && (d.queued_for_role || d.recipient_uuid.is_some())
                     && d.cohort
                         .as_ref()
@@ -229,6 +297,84 @@ impl DeliverySidecar {
         out.dedup();
         out
     }
+}
+
+/// Inside [`DELIVERIES_DIR`]: one file per handed-over delivery (slice
+/// D2b), named `<message-id>.<new-recipient>.json`. Each holds one
+/// [`DeliveryRecord`] whose `handover_of` names the delivery it hands over.
+/// The original sidecar is never rewritten.
+pub const HANDOVER_DIR: &str = "handover";
+
+/// The handover file name for `record`.
+pub fn handover_file_name(message_id: &str, recipient: &RecipientUuid) -> String {
+    format!("{message_id}.{}.json", recipient.as_str())
+}
+
+/// A handover delivery: `recipient` takes over `original` (a delivery of
+/// `message_id` owned by an ended relay run). Its delivery ID is derived
+/// from both, so writing it twice yields the same record.
+// trace:STORY-1843 | ai:claude
+pub fn handover_record(
+    message_id: &str,
+    original: &str,
+    recipient: &RecipientUuid,
+) -> DeliveryRecord {
+    let digest = {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(format!("{original}\n{}", recipient.as_str()).as_bytes())
+    };
+    let hex: String = digest.iter().take(16).map(|b| format!("{b:02x}")).collect();
+    DeliveryRecord {
+        delivery_id: format!("handover-{hex}"),
+        message_id: message_id.to_string(),
+        recipient_uuid: Some(recipient.clone()),
+        cohort: None,
+        queued_for_role: false,
+        run_uuid: Some(recipient.as_str().to_string()),
+        handover_of: Some(original.to_string()),
+        notice_of: None,
+    }
+}
+
+/// Parse a handover file named `name` (`<message-id>.<recipient>.json`).
+pub fn parse_handover(bytes: &[u8], name: &str) -> Result<DeliveryRecord, DeliveryFormatError> {
+    let record: DeliveryRecord =
+        serde_json::from_slice(bytes).map_err(|_| DeliveryFormatError::Corrupt)?;
+    let valid = record
+        .recipient_uuid
+        .as_ref()
+        .is_some_and(|r| handover_file_name(&record.message_id, r) == name)
+        && safe_id(&record.message_id)
+        && safe_id(&record.delivery_id)
+        && record.handover_of.as_deref().is_some_and(safe_id)
+        && record.notice_of.is_none()
+        && !record.queued_for_role
+        && record.cohort.is_none();
+    valid.then_some(record).ok_or(DeliveryFormatError::Corrupt)
+}
+
+/// Write handover `record` into `project_root`'s local mailbox, under the
+/// same write admission as a message.
+#[cfg(all(unix, feature = "native"))]
+pub fn write_handover(project_root: &Path, record: &DeliveryRecord) -> std::io::Result<()> {
+    let recipient = record
+        .recipient_uuid
+        .as_ref()
+        .ok_or_else(|| std::io::Error::other("handover without a recipient"))?;
+    let name = handover_file_name(&record.message_id, recipient);
+    let json = serde_json::to_vec_pretty(record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    parse_handover(&json, &name).map_err(|_| std::io::Error::other("invalid handover record"))?;
+    let mailbox = crate::mailbox::local_mailbox_dir(project_root);
+    crate::mailbox::mailbox_dir_guard(&mailbox)?;
+    let coverage = crate::mailbox_lifecycle::cover_local_write(project_root)?;
+    let dir = mailbox.join(DELIVERIES_DIR).join(HANDOVER_DIR);
+    std::fs::create_dir_all(&dir)?;
+    crate::write_atomic(&dir.join(name), &json)?;
+    if let crate::mailbox_lifecycle::AdmissionCoverage::Admitted(permit) = coverage {
+        let _ = permit.complete();
+    }
+    Ok(())
 }
 
 /// One queued delivery's binding to the reader that took it.

@@ -210,6 +210,13 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
             Ok(_) => {}
             Err(e) => eprintln!("warning: relay run reconciliation skipped: {e:#}"),
         }
+        let notices = crate::relay_mail::outbox::settle_ended_runs(&project_root)?;
+        if notices.delivered + notices.pending > 0 {
+            println!(
+                "Relay end notices: delivered {}, pending {}.",
+                notices.delivered, notices.pending
+            );
+        }
     }
     // Retention work belongs to explicit maintenance, never a turn hook.
     // trace:STORY-1843 | ai:codex

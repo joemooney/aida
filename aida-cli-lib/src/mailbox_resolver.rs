@@ -25,6 +25,9 @@ pub(crate) struct ResolvedRecipient {
     pub(crate) reader_notice: Option<String>,
     /// For a role address: the send-time reader snapshot (slice D1).
     pub(crate) cohort: Option<CohortReaders>,
+    /// For a relay label: the open run that owns it (slice D2b).
+    // trace:STORY-1843 | ai:claude
+    pub(crate) relay_run: Option<aida_core::mailbox_delivery::RecipientUuid>,
 }
 
 /// The live and unverified readers of a role at send, split by whether
@@ -60,7 +63,15 @@ pub(crate) fn delivery_sidecar(
 )> {
     use aida_core::mailbox_delivery::DeliverySidecar;
     let Some(cohort) = &resolved.cohort else {
-        return Ok((None, Vec::new()));
+        // Mail to a relay label belongs to the run that owns the label.
+        // trace:STORY-1843 | ai:claude
+        return Ok((
+            resolved
+                .relay_run
+                .as_ref()
+                .map(|run| DeliverySidecar::relay(message_id, run)),
+            Vec::new(),
+        ));
     };
     let uuidless = |verb: &str| -> Vec<String> {
         cohort
@@ -235,6 +246,12 @@ impl RecipientDirectory {
         for role in crate::list_roles(project)? {
             roles.insert(role.name.to_lowercase(), role.name);
         }
+        // Send is a relay reconciliation point: a run whose controller died
+        // is ended (and its end notices queued) before it is resolved.
+        // trace:STORY-1843 | ai:claude
+        if let Err(e) = crate::relay_mail::reconcile_relay_runs(project) {
+            warnings.push(format!("warning: relay run reconciliation skipped: {e:#}"));
+        }
         let (relay_runs, relay_warnings) = crate::relay_mail::accepting_runs(project);
         warnings.extend(relay_warnings);
         warnings.sort();
@@ -327,6 +344,27 @@ impl RecipientDirectory {
         mention: bool,
         queue_for_role: bool,
     ) -> Result<ResolvedRecipient> {
+        let mut resolved = self.resolve_address(target, mention, queue_for_role)?;
+        // A relay label resolves to the run that owns it, whether a session
+        // of the run is live or the run is between sessions. A live session
+        // under the label after the run ended is not the run.
+        // trace:STORY-1843 | ai:claude
+        if resolved.cohort.is_none() {
+            resolved.relay_run = self
+                .relay_runs
+                .iter()
+                .find(|r| r.label.eq_ignore_ascii_case(&resolved.address))
+                .and_then(|r| aida_core::mailbox_delivery::RecipientUuid::parse(&r.run_id));
+        }
+        Ok(resolved)
+    }
+
+    fn resolve_address(
+        &self,
+        target: &str,
+        mention: bool,
+        queue_for_role: bool,
+    ) -> Result<ResolvedRecipient> {
         let escape = self.refusal_hint(mention);
         let target = target.trim();
         if let Some(why) = aida_core::mailbox::recipient_id_rejection(target) {
@@ -338,6 +376,7 @@ impl RecipientDirectory {
                 .people
                 .get(name)
                 .map(|person| ResolvedRecipient {
+                    relay_run: None,
                     address: person.clone(),
                     reader_notice: None,
                     cohort: None,
@@ -383,6 +422,7 @@ impl RecipientDirectory {
                 bail!("send refused: --queue-for-role applies only to a role address");
             }
             return Ok(ResolvedRecipient {
+                relay_run: None,
                 address: person.clone(),
                 reader_notice: None,
                 cohort: None,
@@ -422,6 +462,7 @@ impl RecipientDirectory {
             let address = role.cloned().unwrap_or_else(|| vendor.unwrap().to_string());
             if readers.is_empty() && queue_for_role {
                 return Ok(ResolvedRecipient {
+                    relay_run: None,
                     address: address.clone(),
                     reader_notice: None,
                     cohort: Some(CohortReaders {
@@ -498,6 +539,7 @@ impl RecipientDirectory {
                 ""
             };
             return Ok(ResolvedRecipient {
+                relay_run: None,
                 address,
                 cohort,
                 reader_notice: Some(format!(
@@ -524,8 +566,10 @@ impl RecipientDirectory {
                     _ => "warning: relay controller liveness unknown (PID namespace unobservable); delivering to durable inbox".to_string(),
                 };
                 return Ok(ResolvedRecipient {
+                    relay_run: None,
                     address: run.label.clone(),
                     reader_notice: Some(notice),
+                    cohort: None,
                 });
             }
         }
@@ -559,7 +603,7 @@ impl RecipientDirectory {
                 {
                     bail!("send refused: ambiguous inbox '{name}' for '{target}'; {escape}");
                 }
-                Ok(ResolvedRecipient { address: name.to_string(), cohort: None, reader_notice: self.unknown_ids.contains(&agent.id).then(||
+                Ok(ResolvedRecipient { relay_run: None, address: name.to_string(), cohort: None, reader_notice: self.unknown_ids.contains(&agent.id).then(||
                     "warning: reader liveness unknown (PID namespace unobservable); delivering to durable inbox".to_string()) })
             }
             [] if !named.is_empty() => {

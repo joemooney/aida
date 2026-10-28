@@ -190,6 +190,42 @@ pub(crate) fn send_notification(
     recipient: &str,
     body: String,
 ) {
+    send_notification_with_deliveries(store_path, sender, recipient, body, |_| Ok(None));
+}
+
+/// [`send_notification`] to a resolved recipient: the message carries the
+/// delivery record the shared send helper gives it (a role cohort or a
+/// relay run), exactly as an explicit send would.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn send_resolved_notification(
+    store_path: &std::path::Path,
+    sender: &str,
+    recipient: &crate::mailbox_resolver::ResolvedRecipient,
+    body: String,
+) {
+    send_notification_with_deliveries(store_path, sender, &recipient.address, body, |id| {
+        let (sidecar, warnings) = crate::mailbox_resolver::delivery_sidecar(
+            recipient,
+            id,
+            chrono::Utc::now().timestamp_millis(),
+            false,
+        )?;
+        for warning in warnings {
+            eprintln!("  {}", warning.dimmed());
+        }
+        Ok(sidecar)
+    });
+}
+
+fn send_notification_with_deliveries(
+    store_path: &std::path::Path,
+    sender: &str,
+    recipient: &str,
+    body: String,
+    deliveries: impl FnOnce(
+        &str,
+    ) -> anyhow::Result<Option<aida_core::mailbox_delivery::DeliverySidecar>>,
+) {
     use aida_core::mailbox::{Intent, Message, Recipient};
     // TASK-1766: trim recipient id so Recipient::Agent stores the same trimmed
     // id that recipient_id_rejection validates. trace:TASK-1766 | ai:antigravity
@@ -204,6 +240,16 @@ pub(crate) fn send_notification(
         None => return,
     };
     let id = uuid::Uuid::new_v4().to_string();
+    let sidecar = match deliveries(&id) {
+        Ok(sidecar) => sidecar,
+        Err(e) => {
+            eprintln!(
+                "  {}",
+                format!("(could not send mailbox notice to {recipient}: {e})").dimmed()
+            );
+            return;
+        }
+    };
     let msg = Message {
         subject: None,
         id: id.clone(),
@@ -225,7 +271,9 @@ pub(crate) fn send_notification(
         from_role: None,
         relayed_from: None,
     };
-    if let Err(e) = mailbox_store::write_message(project_root, &msg) {
+    if let Err(e) =
+        mailbox_store::write_message_with_deliveries(project_root, &msg, sidecar.as_ref())
+    {
         eprintln!(
             "  {}",
             format!("(could not send mailbox notice to {recipient}: {e})").dimmed()
@@ -387,6 +435,18 @@ pub(crate) fn resolve_comment_mentions(
     comment_author: &str,
     text: &str,
 ) -> (Vec<String>, Vec<String>) {
+    let (resolved, warnings) = resolve_comment_mention_recipients(store_root, comment_author, text);
+    (resolved.into_iter().map(|r| r.address).collect(), warnings)
+}
+
+/// [`resolve_comment_mentions`] keeping each resolution, so delivery goes
+/// through the shared send helper.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn resolve_comment_mention_recipients(
+    store_root: &std::path::Path,
+    comment_author: &str,
+    text: &str,
+) -> (Vec<crate::mailbox_resolver::ResolvedRecipient>, Vec<String>) {
     // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
     // are known too, and delivery uses the identity's stored spelling.
     // Resolve known raw tokens before shape filtering, preserving SHA-shaped
@@ -419,12 +479,17 @@ pub(crate) fn resolve_comment_mentions(
             continue;
         }
         match directory.resolve_mention(trimmed) {
-            Ok(resolved) => {
-                if let Some(note) = resolved.reader_notice {
+            Ok(mut resolved) => {
+                if let Some(note) = resolved.reader_notice.take() {
                     warnings.push(note);
                 }
-                if !deliverable.contains(&resolved.address) {
-                    deliverable.push(resolved.address);
+                if !deliverable
+                    .iter()
+                    .any(|r: &crate::mailbox_resolver::ResolvedRecipient| {
+                        r.address == resolved.address
+                    })
+                {
+                    deliverable.push(resolved);
                 }
             }
             Err(error) => {

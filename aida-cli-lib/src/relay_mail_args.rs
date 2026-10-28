@@ -69,6 +69,17 @@ pub enum RelayMailCommand {
         json: bool,
     },
 
+    /// List relay end notices: who is told that an ended run left their
+    /// mail unread, and whether that notice is delivered or still pending.
+    Outbox {
+        /// Only this run.
+        #[clap(long)]
+        run: Option<String>,
+        /// Print JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Record the run's end once. Mail to the label is refused afterwards.
     /// The run capability is read from stdin unless `--cap-file` is given.
     End {
