@@ -1792,6 +1792,13 @@ fn scan_reach(text: &str, mut reach: Reach) -> Reach {
     reach
 }
 
+/// One parse of a source. The crate-root files run to ~0.5MB, so the
+/// ratchet parses each once and hands the tree to every check.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn parse_source(text: &str) -> syn::File {
+    syn::parse_file(text).unwrap_or_else(|e| panic!("source must parse: {e}"))
+}
+
 /// The `crate::dispatch` items a `gate/dispatch_*` source names, each as
 /// written after the module path. A glob is reported as `*`, and anything
 /// that hands over the module itself (or the crate root it hangs off) as
@@ -1853,6 +1860,395 @@ fn crate_root_names(text: &str) -> Vec<String> {
                 None => None,
             },
         )
+        .collect()
+}
+
+/// An out-of-line module a source mounts (`mod x;`, with or without
+/// `#[path]`): the files it may load from, relative to `aida-cli-lib/src`
+/// and each with whether rustc reads it mod.rs-style; how many levels below
+/// the source's top level it sits; and whether `#[cfg(test)]` (on it or an
+/// enclosing inline module) keeps it out of non-test builds.
+struct Mount {
+    name: String,
+    candidates: Vec<(String, bool)>,
+    depth: usize,
+    test: bool,
+}
+
+/// The modules `file` (read mod.rs-style when `mod_rs`) mounts. Paths
+/// follow rustc: a top-level `#[path]` is relative to the file's
+/// directory; a plain `mod x;` (and any `#[path]` inside an inline module)
+/// is relative to the directory the file owns (`forge.rs` owns `forge/`)
+/// plus the inline modules around it.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+fn mounts(file: &str, mod_rs: bool, text: &str) -> Vec<Mount> {
+    let parsed = syn::parse_file(text).unwrap_or_else(|e| panic!("{file} must parse: {e}"));
+    mounts_in(file, mod_rs, &parsed)
+}
+
+fn mounts_in(file: &str, mod_rs: bool, parsed: &syn::File) -> Vec<Mount> {
+    fn is_cfg_test(attrs: &[syn::Attribute]) -> bool {
+        attrs.iter().any(|a| {
+            a.path().is_ident("cfg")
+                && matches!(&a.meta, syn::Meta::List(l) if l.tokens.to_string() == "test")
+        })
+    }
+    fn walk(
+        items: &[syn::Item],
+        dir: &str,
+        owned: &str,
+        inline: &mut Vec<String>,
+        test: bool,
+        out: &mut Vec<Mount>,
+    ) {
+        let join = |base: &str, rest: &str| {
+            if base.is_empty() {
+                rest.to_string()
+            } else {
+                format!("{base}/{rest}")
+            }
+        };
+        for item in items {
+            let syn::Item::Mod(m) = item else { continue };
+            let test = test || is_cfg_test(&m.attrs);
+            let name = m.ident.to_string();
+            if let Some((_, content)) = &m.content {
+                inline.push(name);
+                walk(content, dir, owned, inline, test, out);
+                inline.pop();
+                continue;
+            }
+            let nested = inline.iter().fold(owned.to_string(), |b, s| join(&b, s));
+            let mut targets = Reach::default();
+            for attr in &m.attrs {
+                use syn::visit::Visit;
+                targets.visit_attribute(attr);
+            }
+            let base = if inline.is_empty() { dir } else { &nested };
+            let mut candidates: Vec<(String, bool)> = targets
+                .path_targets
+                .iter()
+                .map(|t| (join(base, t), true))
+                .collect();
+            if !m.attrs.iter().any(|a| a.path().is_ident("path")) {
+                candidates.push((join(&nested, &format!("{name}.rs")), false));
+                candidates.push((join(&nested, &format!("{name}/mod.rs")), true));
+            }
+            out.push(Mount {
+                name,
+                candidates,
+                depth: inline.len() + 1,
+                test,
+            });
+        }
+    }
+    let dir = file.rsplit_once('/').map_or("", |(d, _)| d);
+    let owned = if mod_rs {
+        dir.to_string()
+    } else {
+        file.trim_end_matches(".rs").to_string()
+    };
+    let mut out = Vec::new();
+    if !is_cfg_test(&parsed.attrs) {
+        walk(&parsed.items, dir, &owned, &mut Vec::new(), false, &mut out);
+    }
+    out
+}
+
+/// The files each top-level out-of-line `mod name;` in a crate-root source
+/// may load from. An allowlisted module is scanned as `name.rs`, so any
+/// `#[path]` here (`#[path = "forge2.rs"] mod forge;`) would let the gate's
+/// `crate::name` resolve to an unscanned file. A top-level inline
+/// `mod name { .. }` is reported as `["<inline>"]`, so a cfg-gated inline
+/// twin of a plain mount (`#[cfg(not(test))] mod forge { .. }`) is seen.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
+    root_module_mounts_in(&parse_source(text), name)
+        .into_iter()
+        .map(|(candidates, _)| candidates)
+        .collect()
+}
+
+/// [`root_module_mounts`] over a parsed source, each mount with every
+/// outer attribute on it but doc comments. Any such attribute can change
+/// where, or whether, rustc loads the module (`cfg`, `cfg_attr(not(test),
+/// cfg(any()))`, `path`, `macro_use`, ...), so an allowlisted mount carries
+/// none: there is no per-attribute reading to get wrong.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<(Vec<String>, Vec<String>)> {
+    let attrs = |attrs: &[syn::Attribute]| -> Vec<String> {
+        attrs
+            .iter()
+            .filter(|a| !a.path().is_ident("doc"))
+            .map(attr_text)
+            .collect()
+    };
+    let mods = |out_of_line: bool| {
+        file.items.iter().filter_map(move |item| match item {
+            syn::Item::Mod(m) if m.content.is_none() == out_of_line && m.ident == name => Some(m),
+            _ => None,
+        })
+    };
+    mounts_in("lib.rs", true, file)
+        .into_iter()
+        .filter(|m| m.depth == 1 && m.name == name)
+        .zip(mods(true))
+        .map(|(m, item)| {
+            let candidates = m.candidates.into_iter().map(|(c, _)| c).collect();
+            (candidates, attrs(&item.attrs))
+        })
+        .chain(mods(false).map(|item| (vec!["<inline>".to_string()], attrs(&item.attrs))))
+        .collect()
+}
+
+/// An attribute as written, enough to name it in a refusal.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn attr_text(a: &syn::Attribute) -> String {
+    let path = a
+        .path()
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    match &a.meta {
+        syn::Meta::Path(_) => format!("#[{path}]"),
+        syn::Meta::List(l) => format!("#[{path}({})]", l.tokens),
+        syn::Meta::NameValue(_) => format!("#[{path} = ..]"),
+    }
+}
+
+/// Why the crate-root mounts of `name` are not exactly one bare
+/// `mod name;` loading `name.rs` or `name/mod.rs`, or `None` when they are.
+/// Fails closed: a missing mount, a second mount, an inline body, a
+/// `#[path]` target or any attribute but a doc comment is refused.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn mount_not_bare(found: &[(Vec<String>, Vec<String>)], name: &str) -> Option<String> {
+    let plain = [format!("{name}.rs"), format!("{name}/mod.rs")];
+    match found {
+        [] => Some(format!("no top-level `mod {name};`")),
+        [(_, attrs)] if !attrs.is_empty() => Some(format!(
+            "`mod {name};` carries {}; only doc comments are allowed",
+            attrs.join(" ")
+        )),
+        [(candidates, _)] if *candidates != plain => {
+            Some(format!("`mod {name}` loads {candidates:?}, not {plain:?}"))
+        }
+        [_] => None,
+        _ => Some(format!("{} mounts of `{name}`: {found:?}", found.len())),
+    }
+}
+
+/// The names a crate-root source binds besides its modules: each `use`
+/// leaf or rename (a `self` leaf binds its parent) and each `extern crate`
+/// (under its alias when renamed). A root binding of an allowlisted name
+/// could stand in for its mount if a future cfg gap dropped the `mod`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn root_bindings(file: &syn::File) -> Vec<String> {
+    fn tree(prefix: Option<&syn::Ident>, t: &syn::UseTree, out: &mut Vec<String>) {
+        match t {
+            syn::UseTree::Path(p) => tree(Some(&p.ident), &p.tree, out),
+            syn::UseTree::Name(n) if n.ident == "self" => {
+                out.extend(prefix.map(|p| p.to_string()));
+            }
+            syn::UseTree::Name(n) => out.push(n.ident.to_string()),
+            syn::UseTree::Rename(r) => out.push(r.rename.to_string()),
+            syn::UseTree::Group(g) => g.items.iter().for_each(|i| tree(prefix, i, out)),
+            syn::UseTree::Glob(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    for item in &file.items {
+        match item {
+            syn::Item::Use(u) => tree(None, &u.tree, &mut out),
+            syn::Item::ExternCrate(e) => out.push(
+                e.rename
+                    .as_ref()
+                    .map_or(&e.ident, |(_, alias)| alias)
+                    .to_string(),
+            ),
+            _ => {}
+        }
+    }
+    out.into_iter()
+        .map(|n| n.trim_start_matches("r#").to_string())
+        .collect()
+}
+
+/// What a crate-root source puts in the textual macro scope of every
+/// module declared after it: each `#[macro_use]` module (bare or under
+/// `cfg_attr`, on the item or as an inner `#![macro_use]` in any file
+/// `load` returns for a top-level `mod x;`) as `mod x`, and each top-level
+/// `macro_rules!` by name. A `#[macro_use] extern crate x;` is reported as
+/// `extern crate x`: it puts `x`'s exported macros in the `macro_use`
+/// prelude, ahead of std's. A `#[macro_use] mod util;` or root
+/// `macro_rules! format` shadows the prelude macro `gate/dispatch_*` calls
+/// bare, so its expansion runs unscanned code inside the gate.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+fn root_textual_macros(
+    text: &str,
+    load: &dyn Fn(&str) -> Option<String>,
+) -> (Vec<String>, Vec<String>) {
+    root_textual_macros_in(&parse_source(text), load)
+}
+
+fn root_textual_macros_in(
+    file: &syn::File,
+    load: &dyn Fn(&str) -> Option<String>,
+) -> (Vec<String>, Vec<String>) {
+    let macro_use = regex::Regex::new(r"\bmacro_use\b").unwrap();
+    let widens = |attrs: &[syn::Attribute]| {
+        attrs.iter().any(|a| {
+            a.path().is_ident("macro_use")
+                || matches!(&a.meta, syn::Meta::List(l)
+                    if a.path().is_ident("cfg_attr")
+                        && macro_use.is_match(&l.tokens.to_string()))
+        })
+    };
+    let (mut mods, mut rules) = (Vec::new(), Vec::new());
+    for item in &file.items {
+        match item {
+            syn::Item::Mod(m) if widens(&m.attrs) => mods.push(format!("mod {}", m.ident)),
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+            syn::Item::ExternCrate(e) if widens(&e.attrs) => {
+                mods.push(format!("extern crate {}", e.ident));
+            }
+            syn::Item::Macro(m) if m.mac.path.is_ident("macro_rules") => {
+                if let Some(ident) = &m.ident {
+                    rules.push(ident.to_string().trim_start_matches("r#").to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    // An out-of-line module's own file can widen the scope from inside.
+    for mount in mounts_in("lib.rs", true, file) {
+        let named = format!("mod {}", mount.name);
+        if mount.depth != 1 || mods.contains(&named) {
+            continue;
+        }
+        let inner = mount.candidates.iter().any(|(candidate, _)| {
+            // Most modules never say `macro_use`; skip parsing those.
+            load(candidate).is_some_and(|body| {
+                if !macro_use.is_match(&body) {
+                    return false;
+                }
+                let parsed = syn::parse_file(&body)
+                    .unwrap_or_else(|e| panic!("{candidate} must parse: {e}"));
+                widens(&parsed.attrs)
+            })
+        });
+        if inner {
+            mods.push(named);
+        }
+    }
+    (mods, rules)
+}
+
+/// The root-level item macro invocations a crate-root source makes beyond
+/// `include!` of one of `parts` and `thread_local!`. syn sees only the
+/// unexpanded call, so `crate::m!();` expanding to `#[path = "gate2.rs"]
+/// mod gate;` would remount an allowlisted module past
+/// [`root_module_mounts`]; its tokens need not name it, and its definition may sit in any module, so
+/// every other invocation is refused. `macro_rules!` definitions expand
+/// nothing themselves.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn root_item_macros(file: &syn::File, parts: &[String]) -> Vec<String> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let syn::Item::Macro(m) = item else {
+                return None;
+            };
+            let path = &m.mac.path;
+            if path.is_ident("macro_rules") {
+                return None;
+            }
+            let allowed = if path.is_ident("include") {
+                syn::parse2::<syn::LitStr>(m.mac.tokens.clone())
+                    .is_ok_and(|lit| parts.contains(&lit.value()))
+            } else {
+                path.is_ident("thread_local")
+            };
+            let shown = path.segments.iter().map(|s| s.ident.to_string());
+            let lead = if path.leading_colon.is_some() {
+                "::"
+            } else {
+                ""
+            };
+            (!allowed).then(|| format!("{lead}{}!", shown.collect::<Vec<_>>().join("::")))
+        })
+        .collect()
+}
+
+/// Whether `text` defines or renames a macro to a name [`root_item_macros`]
+/// lets the crate root invoke bare: a `#[macro_export] macro_rules!
+/// include` (or `pub(crate) use m as include;` reached by a root glob)
+/// would shadow the builtin and run its own expansion at the root. Read
+/// from the source's raw tokens, macro bodies and use trees included, as
+/// `macro_rules ! name` or `as name`, so comments between tokens hide
+/// nothing (and a cast `x as include` fails closed too). Every syn item
+/// that defines or renames either name lexes to one of those two shapes,
+/// so tokens alone suffice and the ~33MB crate is lexed, not parsed. An
+/// unlexable source fails closed.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn shadows_root_item_macro(text: &str) -> bool {
+    use syn::ext::IdentExt;
+    fn shadowed(ident: &proc_macro2::Ident) -> bool {
+        matches!(
+            ident.unraw().to_string().as_str(),
+            "include" | "thread_local"
+        )
+    }
+    fn in_tokens(tokens: proc_macro2::TokenStream) -> bool {
+        use proc_macro2::TokenTree;
+        let tokens: Vec<TokenTree> = tokens.into_iter().collect();
+        tokens.iter().enumerate().any(|(i, t)| match t {
+            TokenTree::Group(g) => in_tokens(g.stream()),
+            TokenTree::Ident(id) if shadowed(id) => match (i.checked_sub(1), i.checked_sub(2)) {
+                (Some(p), _) if matches!(&tokens[p], TokenTree::Ident(a) if a == "as") => true,
+                (Some(p), Some(q)) => {
+                    matches!(&tokens[p], TokenTree::Punct(b) if b.as_char() == '!')
+                        && matches!(&tokens[q], TokenTree::Ident(m) if m == "macro_rules")
+                }
+                _ => false,
+            },
+            _ => false,
+        })
+    }
+    if !may_shadow_root_item_macro(text) {
+        return false;
+    }
+    text.parse::<proc_macro2::TokenStream>()
+        .map_or(true, in_tokens)
+}
+
+/// Whether `text` could name `include` or `thread_local` at all: any
+/// definition or rename spells the identifier (raw `r#include` too) in the
+/// raw bytes, and no comment can split an identifier, so a source where
+/// neither occurs between ASCII non-identifier bytes is skipped unlexed.
+/// A non-ASCII neighbour counts as a boundary, which only lets more files
+/// through.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn may_shadow_root_item_macro(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    ["include", "thread_local"].iter().any(|name| {
+        text.match_indices(name).any(|(at, _)| {
+            let end = at + name.len();
+            (at == 0 || !ident(bytes[at - 1])) && bytes.get(end).map_or(true, |&b| !ident(b))
+        })
+    })
+}
+
+/// The macros a source invokes by a bare name (`format!`, not
+/// `std::format!`), which textual scope resolves before the prelude.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+fn bare_macro_names(text: &str) -> std::collections::BTreeSet<String> {
+    regex::Regex::new(r"(?:^|[^:\w])(?:r#)?([A-Za-z_]\w*)\s*!\s*[(\[{]")
+        .unwrap()
+        .captures_iter(text)
+        .map(|c| c[1].to_string())
         .collect()
 }
 
@@ -2601,6 +2997,451 @@ fn gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves() {
         "`FACADE_EXTERNAL_LEAVES` lists paths nothing reaches (stale: {stale:?}, \
          duplicate: {duplicate:?}); remove them."
     );
+}
+
+/// The crate root mounts each [`GATE_DISPATCH_ROOT_ALLOWLIST`] module from
+/// the file the ratchet scans, invokes no item macro that could expand to
+/// an unseen mount or binding, and shadows no macro `gate/dispatch_*` calls
+/// bare.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+#[test]
+fn crate_root_mounts_the_gate_plainly_and_hides_no_macros() {
+    let src = workspace_root().join("aida-cli-lib/src");
+    let read =
+        |f: &str| std::fs::read_to_string(src.join(f)).unwrap_or_else(|e| panic!("{f}: {e}"));
+    let lib = read("lib.rs");
+    let include = regex::Regex::new(r#"include!\s*\(\s*"([^"]+)""#).unwrap();
+    let root_files: Vec<String> = std::iter::once("lib.rs".to_string())
+        .chain(include.captures_iter(&lib).map(|c| c[1].to_string()))
+        .collect();
+    // Parse each crate-root file once: every check below walks the same
+    // trees, and re-parsing ~0.5MB per check blew the test time budget.
+    let roots: Vec<(&String, syn::File)> = root_files
+        .iter()
+        .map(|f| (f, parse_source(&read(f))))
+        .collect();
+
+    // `gate` and `dispatch` are scanned as `gate/` and `dispatch.rs`, so the
+    // root mounts each from there as a bare `mod name;` and binds the name
+    // no other way.
+    for name in GATE_DISPATCH_ROOT_ALLOWLIST {
+        let found: Vec<(Vec<String>, Vec<String>)> = roots
+            .iter()
+            .flat_map(|(_, parsed)| root_module_mounts_in(parsed, name))
+            .collect();
+        if let Some(why) = mount_not_bare(&found, name) {
+            panic!(
+                "the crate root must mount allowlisted `{name}` as one bare \
+                 `mod {name};` (doc comments only) loading {name}.rs or \
+                 {name}/mod.rs: {why}"
+            );
+        }
+        let binders: Vec<&String> = roots
+            .iter()
+            .filter(|(_, parsed)| root_bindings(parsed).iter().any(|b| b == name))
+            .map(|(root, _)| *root)
+            .collect();
+        assert!(
+            binders.is_empty(),
+            "{binders:?} bind allowlisted `{name}` at the crate root by `use` or \
+             `extern crate`; only its bare `mod {name};` may"
+        );
+    }
+
+    // A root macro could expand to a mount or binding syn never sees, so
+    // the root invokes none but `include!` of its parts and `thread_local!`,
+    // and no crate source shadows either name.
+    let parts: Vec<String> = root_files[1..].to_vec();
+    for (root, parsed) in &roots {
+        let macros = root_item_macros(parsed, &parts);
+        assert!(
+            macros.is_empty(),
+            "{root}: root-level {macros:?} could expand to a mount or binding \
+             of an allowlisted name unscanned; write the items out instead"
+        );
+    }
+    let mut sources = Vec::new();
+    all_rust_files(&src, &mut sources);
+    let shadowing: Vec<_> = sources
+        .iter()
+        .filter(|p| !p.ends_with("tests/story_1888_gate_paths_tests.rs"))
+        .filter(|p| shadows_root_item_macro(&std::fs::read_to_string(p).unwrap_or_default()))
+        .collect();
+    assert!(
+        shadowing.is_empty(),
+        "these sources define or rename a macro to `include`/`thread_local`, \
+         shadowing the crate root's builtin call: {shadowing:?}"
+    );
+
+    // No crate-root source shadows a macro the gate calls bare: rustc
+    // resolves `format!` through textual scope first, so a `#[macro_use]`
+    // module or root `macro_rules! format` would expand unscanned code
+    // inside the gate.
+    let gate_macros: std::collections::BTreeSet<String> = gate_dispatch_sources()
+        .iter()
+        .flat_map(|(_, text)| bare_macro_names(text))
+        .collect();
+    let mut shadows = Vec::new();
+    for (root, parsed) in &roots {
+        let (mods, rules) =
+            root_textual_macros_in(parsed, &|f| std::fs::read_to_string(src.join(f)).ok());
+        shadows.extend(mods.iter().map(|m| format!("  {root}: #[macro_use] {m}")));
+        shadows.extend(
+            rules
+                .iter()
+                .filter(|r| gate_macros.contains(*r))
+                .map(|r| format!("  {root}: macro_rules! {r}")),
+        );
+    }
+    assert!(
+        shadows.is_empty(),
+        "a crate-root source shadows a macro gate/dispatch_* calls bare:\n{}",
+        shadows.join("\n")
+    );
+}
+
+// An allowlisted module mounted from any file but its own is seen.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+#[test]
+fn root_module_mount_detection_sees_redirected_modules() {
+    let plain = || vec!["forge.rs".to_string(), "forge/mod.rs".to_string()];
+    for src in [
+        "mod forge;",
+        "pub(crate) mod forge;",
+        "#[cfg(unix)]\nmod forge;",
+    ] {
+        assert_eq!(root_module_mounts(src, "forge"), vec![plain()], "{src}");
+    }
+    for src in [
+        "#[path = \"forge2.rs\"] mod forge;",
+        "#[path = \"forge2.rs\"]\npub mod forge;",
+        "#[path = \"forge.rs\"] mod forge_x;\n#[path = \"forge2.rs\"] mod forge;",
+        "#[cfg_attr(unix, path = \"forge2.rs\")] mod forge;",
+        "#[cfg_attr(all(), cfg_attr(all(), path = \"forge2.rs\"))] mod forge;",
+        "mod forge;\n#[cfg(windows)]\n#[path = \"forge2.rs\"]\nmod forge;",
+        "mod forge { pub fn f() {} }",
+        "#[cfg(test)]\nmod forge;\n#[cfg(not(test))]\nmod forge { pub use crate::x::*; }",
+    ] {
+        let found = root_module_mounts(src, "forge");
+        assert!(
+            found.iter().any(|c| *c != plain()),
+            "`{src}` mounts forge from another file unseen: {found:?}"
+        );
+    }
+    // Only one bare `mod forge;` counts; every other attribute fails closed
+    // and is named.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+    let not_bare =
+        |src: &str| mount_not_bare(&root_module_mounts_in(&parse_source(src), "forge"), "forge");
+    for src in [
+        "mod forge;",
+        "pub(crate) mod forge;",
+        "/// The forge.\nmod forge;",
+        "#[doc = \"The forge.\"]\n#[doc(hidden)]\nmod forge;",
+    ] {
+        assert_eq!(not_bare(src), None, "{src}");
+    }
+    for (src, named) in [
+        ("#[cfg_attr(not(test), cfg(any()))]\nmod forge;", "cfg_attr"),
+        (
+            "#[cfg_attr(all(), path = \"forge.rs\")]\nmod forge;",
+            "cfg_attr",
+        ),
+        ("#[cfg(test)]\nmod forge;", "#[cfg(test)]"),
+        ("#[cfg(not(test))]\nmod forge;", "#[cfg(not (test))]"),
+        ("#[cfg(unix)]\nmod forge;", "#[cfg(unix)]"),
+        ("#[allow(dead_code)]\nmod forge;", "#[allow(dead_code)]"),
+        ("#[macro_use]\nmod forge;", "#[macro_use]"),
+        (
+            "/// Doc.\n#[cfg_attr(test, doc = \"x\")]\nmod forge;",
+            "cfg_attr",
+        ),
+        ("#[path = \"forge.rs\"]\nmod forge;", "#[path = ..]"),
+        ("#[cfg(test)]\nmod forge;\nmod forge;", "2 mounts"),
+        ("mod forge { pub fn f() {} }", "<inline>"),
+        ("#![cfg(test)]\nmod forge;", "no top-level"),
+        ("", "no top-level"),
+    ] {
+        let why = not_bare(src).unwrap_or_else(|| panic!("`{src}` passed as bare"));
+        assert!(why.contains(named), "`{src}`: {why}");
+    }
+    // Any root `use` or `extern crate` that binds the name is seen.
+    for src in [
+        "use crate::shadow as forge;",
+        "pub(crate) use crate::x::{y, forge};",
+        "use crate::x::forge::{self};",
+        "extern crate forge;",
+        "extern crate core as forge;",
+        "use crate::x::r#forge;",
+    ] {
+        assert!(
+            root_bindings(&parse_source(src)).contains(&"forge".to_string()),
+            "{src}"
+        );
+    }
+    for src in ["use crate::forge::f;", "use crate::forge::*;", "mod forge;"] {
+        assert!(
+            !root_bindings(&parse_source(src)).contains(&"forge".to_string()),
+            "{src}"
+        );
+    }
+    // Nested or absent: nothing mounts `crate::forge`.
+    for src in [
+        "mod a { mod forge; }",
+        "mod a { mod forge { pub fn f() {} } }",
+        "mod forge_profiles;",
+        "",
+    ] {
+        assert!(root_module_mounts(src, "forge").is_empty(), "{src}");
+    }
+}
+
+// Every root item macro that could expand to a mount or binding is seen,
+// though syn never expands it and its tokens need not name what it binds.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+#[test]
+fn root_macro_detection_sees_hidden_mounts_and_bindings() {
+    let parts = ["lib_part1.rs".to_string()];
+    let invoked = |src: &str| root_item_macros(&parse_source(src), &parts);
+    for (src, shown) in [
+        (
+            "macro_rules! m { () => { #[cfg(not(test))] #[path = \"forge2.rs\"] mod forge; } }\n\
+             m!();\n#[cfg(test)]\nmod forge;",
+            "m!",
+        ),
+        (
+            "macro_rules! m { ($p:ident, $n:ident) => { use $p::$n; } }\n\
+             m!(util, canonical_role_name);",
+            "m!",
+        ),
+        ("crate::reexport! { r#forge }", "crate::reexport!"),
+        // The PR-2999 review repro (rustc-confirmed): util.rs holds
+        // `#[macro_export] macro_rules! m { () => { #[cfg(not(test))]
+        // #[path = "forge2.rs"] mod forge; } }`, so nothing here names
+        // forge and the only visible mount is test-only.
+        (
+            "mod util;\n#[cfg(test)]\nmod forge;\ncrate::m!();",
+            "crate::m!",
+        ),
+        ("::aida::m!();", "::aida::m!"),
+        ("include!(\"lib_part9.rs\");", "include!"),
+        ("include!(concat!(\"lib_part1\", \".rs\"));", "include!"),
+        ("std::include!(\"lib_part1.rs\");", "std::include!"),
+        (
+            "std::thread_local! { static X: u8 = 0; }",
+            "std::thread_local!",
+        ),
+    ] {
+        assert_eq!(invoked(src), vec![shown], "{src}");
+    }
+    for src in [
+        "mod forge;",
+        "macro_rules! m { () => { mod forge; } }",
+        "include!(\"lib_part1.rs\");",
+        "thread_local! { static X: u8 = 0; }",
+        "fn f() { m!(forge); }",
+        "mod a { m!(); }",
+    ] {
+        assert!(invoked(src).is_empty(), "{src}");
+    }
+    for text in [
+        "#[macro_export]\nmacro_rules! include { ($f:literal) => {} }",
+        "macro_rules! r#thread_local { () => {} }",
+        "pub(crate) use m as include;",
+        "pub(crate) use crate::m as\n  thread_local;",
+        // PR-2999 round 2: comments are whitespace to rustc.
+        "#[macro_export]\nmacro_rules!/**/include { ($f:literal) => {} }",
+        "macro_rules! /* x */ r#thread_local { () => {} }",
+        "use crate::m as /**/ include;",
+        "use crate::{a, m as // x\n include};",
+        "macro_rules! gen { () => { macro_rules! /**/ include { () => {} } } }",
+        "fn f() { macro_rules!/**/include { () => {} } }",
+    ] {
+        assert!(may_shadow_root_item_macro(text), "prefilter skips {text}");
+        assert!(shadows_root_item_macro(text), "{text}");
+    }
+    for text in [
+        "use std::include_str as inc;\nconst INCLUDED: u8 = 0;",
+        "fn r#includes() {} // thread_locals",
+    ] {
+        assert!(!may_shadow_root_item_macro(text), "prefilter keeps {text}");
+    }
+    for text in [
+        "include!(\"lib_part1.rs\");",
+        "thread_local! { static X: u8 = 0; }",
+        "use std::include_str as inc;",
+        "use x as included;",
+        "// macro_rules! include\nfn f() {}",
+        "const S: &str = \"use m as include;\";",
+    ] {
+        assert!(!shadows_root_item_macro(text), "{text}");
+    }
+}
+
+// Each way a crate-root source widens textual macro scope is seen.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+#[test]
+fn root_textual_macro_detection_sees_evasive_forms() {
+    let none = |_: &str| None;
+    for src in [
+        "#[macro_use] mod util;",
+        "#[macro_use]\npub(crate) mod util;",
+        "#[cfg_attr(all(), macro_use)] mod util;",
+        "#[cfg_attr(unix, cfg_attr(all(), macro_use))] mod util;",
+        "#[macro_use] mod util { macro_rules! format { () => {} } }",
+        "#[cfg(test)]\n#[macro_use]\nmod util;",
+    ] {
+        assert_eq!(root_textual_macros(src, &none).0, vec!["mod util"], "{src}");
+    }
+    // A `#[macro_use] extern crate` fills the `macro_use` prelude.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-015 | ai:claude
+    for src in [
+        "#[macro_use] extern crate util;",
+        "#[cfg_attr(all(), macro_use)]\nextern crate util;",
+        "#[macro_use] extern crate util as other;",
+    ] {
+        assert_eq!(
+            root_textual_macros(src, &none).0,
+            vec!["extern crate util"],
+            "{src}"
+        );
+    }
+    assert!(root_textual_macros("extern crate util;", &none)
+        .0
+        .is_empty());
+    for (src, want) in [
+        ("macro_rules! format { () => {} }", "format"),
+        (
+            "#[macro_export]\nmacro_rules! matches { () => {} }",
+            "matches",
+        ),
+        ("macro_rules! r#bail { () => {} }", "bail"),
+    ] {
+        assert_eq!(root_textual_macros(src, &none).1, vec![want], "{src}");
+    }
+    for src in [
+        "mod util;",
+        "mod util { macro_rules! format { () => {} } }",
+        "fn f() { macro_rules! format { () => {} } }",
+        "#[allow(unused_macros)] mod util;",
+    ] {
+        let (mods, rules) = root_textual_macros(src, &none);
+        assert!(mods.is_empty() && rules.is_empty(), "{src}");
+    }
+    // An inner `#![macro_use]` in the module's own file widens it too,
+    // wherever rustc would load that file from.
+    for (src, file, body) in [
+        (
+            "mod util;",
+            "util.rs",
+            "#![macro_use]\nmacro_rules! format { () => {} }",
+        ),
+        ("mod util;", "util/mod.rs", "#![cfg_attr(all(), macro_use)]"),
+        ("#[path = \"u2.rs\"] mod util;", "u2.rs", "#![macro_use]"),
+        ("#[cfg(test)]\nmod util;", "util.rs", "#![macro_use]"),
+    ] {
+        let load = |f: &str| (f == file).then(|| body.to_string());
+        assert_eq!(root_textual_macros(src, &load).0, vec!["mod util"], "{src}");
+    }
+    for (src, file, body) in [
+        (
+            "mod util;",
+            "util.rs",
+            "#![allow(unused_macros)]\nmacro_rules! format { () => {} }",
+        ),
+        ("mod util;", "other.rs", "#![macro_use]"),
+        ("mod util;", "util.rs", "#[macro_use]\nmod inner;"),
+        ("mod a { mod util; }", "a/util.rs", "#![macro_use]"),
+    ] {
+        let load = |f: &str| (f == file).then(|| body.to_string());
+        assert!(
+            root_textual_macros(src, &load).0.is_empty(),
+            "{src} + {file}"
+        );
+    }
+    let names = bare_macro_names(
+        "fn f() { let _ = format!(\"{}\", matches!(x, Some(_))); bail! {\"x\"}; \
+         std::println!(\"q\"); ::core::assert!(a != b); vec![1]; }",
+    );
+    let want: std::collections::BTreeSet<String> = ["bail", "format", "matches", "vec"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(names, want);
+}
+
+// Mounts are followed wherever rustc would load them, and judged test-only
+// by `#[cfg(test)]`, not by where the file lives.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-010 | ai:claude
+#[test]
+fn mount_detection_follows_path_and_plain_modules() {
+    let live = |file: &str, mod_rs: bool, src: &str| -> Vec<Vec<String>> {
+        mounts(file, mod_rs, src)
+            .into_iter()
+            .filter(|m| !m.test)
+            .map(|m| m.candidates.into_iter().map(|(c, _)| c).collect())
+            .collect()
+    };
+    let strs = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // A non-test `#[path]` mount under tests/ is still scanned.
+    assert_eq!(
+        live(
+            "forge.rs",
+            false,
+            "#[path = \"tests/helpers.rs\"]\npub mod helpers;"
+        ),
+        vec![strs(&["tests/helpers.rs"])]
+    );
+    assert_eq!(
+        live(
+            "forge.rs",
+            false,
+            "#[cfg(not(test))]\n#[path = \"tests/h.rs\"]\nmod h;"
+        ),
+        vec![strs(&["tests/h.rs"])]
+    );
+    // An out-of-line `pub mod sub;` loads forge/sub.rs or forge/sub/mod.rs.
+    assert_eq!(
+        live("forge.rs", false, "pub mod sub;"),
+        vec![strs(&["forge/sub.rs", "forge/sub/mod.rs"])]
+    );
+    assert_eq!(
+        live("forge.rs", false, "mod a { pub mod sub; }"),
+        vec![strs(&["forge/a/sub.rs", "forge/a/sub/mod.rs"])]
+    );
+    assert_eq!(
+        live("forge.rs", false, "mod a { #[path = \"x.rs\"] mod sub; }"),
+        vec![strs(&["forge/a/x.rs"])]
+    );
+    // A `#[path]`-loaded (or mod.rs) file owns its own directory.
+    assert_eq!(
+        live("forge_commit_ci.rs", true, "mod sub;"),
+        vec![strs(&["sub.rs", "sub/mod.rs"])]
+    );
+    assert_eq!(
+        live("forge/mod.rs", true, "mod sub;"),
+        vec![strs(&["forge/sub.rs", "forge/sub/mod.rs"])]
+    );
+    assert_eq!(
+        live(
+            "forge.rs",
+            false,
+            "#[cfg_attr(unix, path = \"tests/u.rs\")]\nmod u;"
+        ),
+        vec![strs(&["tests/u.rs", "forge/u.rs", "forge/u/mod.rs"])]
+    );
+    // Test-only mounts are skipped, however they are spelled.
+    for src in [
+        "#[cfg(test)]\n#[path = \"tests/story_1689_commit_ci_status_tests.rs\"]\nmod t;",
+        "#[cfg(test)]\nmod tests;",
+        "#[cfg(test)]\nmod tests { mod inner; }",
+        "#![cfg(test)]\nmod sub;",
+        "mod inline { fn f() {} }",
+    ] {
+        assert!(live("forge.rs", false, src).is_empty(), "{src}");
+    }
 }
 
 /// Whether `text` mounts one of the [`DISPATCH_POLICY_SUITES`] through any
