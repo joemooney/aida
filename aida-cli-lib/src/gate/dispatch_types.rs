@@ -1,9 +1,10 @@
 //! Plain data the dispatch facade hands the gate: the forge CI state the flow
 //! ship selector matches on and the drive ledger's row and outcome
 //! (TASK-b6b1278890774ef993d2ebc327862470-013). They live on the floor so no
-//! edit outside `gate/` changes the code the gate runs on them. Callers, `forge`
-//! and `mandate_drive` included, import them from the floor
-//! (`crate::gate::dispatch_types`); nothing outside `gate/` re-exports them.
+//! edit outside `gate/` changes the code the gate runs on them. Callers outside
+//! `gate/`, `forge` and `mandate_drive` included, import them from the floor
+//! (`crate::gate::dispatch_types`); gate-internal callers may use the facade
+//! re-export in `gate/dispatch_deps.rs`. Nothing outside `gate/` re-exports them.
 // mandate-gate
 // trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-028 | ai:claude
 
