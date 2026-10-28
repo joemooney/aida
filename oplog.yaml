@@ -80898,5 +80898,33 @@ operations:
   timestamp: 2026-10-28T11:25:41.404946485Z
   kind: !SetStatus
     status: Approved
-clock: 6298
+- id: 01a18250-46ae-70a1-94ce-ca35d63de910
+  target_id: 01a18250-3dfe-7911-8d40-2f3a05c3f86e
+  author: aida
+  node_id: '1'
+  lamport: 6299
+  timestamp: 2026-10-28T11:41:01.486104832Z
+  kind: !Create
+    title: 'Review PR-3027: [AI:claude] fix(show): budget-linked fallback scan, cause-named warning, 1 s show test (TASK-b6b1278890774ef993d2ebc327862470-031 TASK-b6b1278890774ef993d2ebc327862470-037 TASK-b6b1278'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/show-followups-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3027>
+      - Branch: `fix/show-followups-2` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-031
+      - TASK-b6b1278890774ef993d2ebc327862470-037
+      - TASK-b6b1278890774ef993d2ebc327862470-038
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3027` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6299
 node_id: '1'
