@@ -79784,5 +79784,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6212
+- id: 01a18056-b01c-79c1-a30f-a90068fc070f
+  target_id: 01a18056-a598-7f60-a8a6-647bf0845bf9
+  author: aida
+  node_id: '1'
+  lamport: 6213
+  timestamp: 2026-10-28T02:28:47.260949652Z
+  kind: !Create
+    title: 'Gate ratchet: assert crate::gate and crate::dispatch mount plainly from lib.rs'
+    description: Follow-up from PR-2999 review (non-blocking). The GATE_DISPATCH_ROOT_ALLOWLIST entries gate and dispatch (file "") get no mount check in gate_dispatch_reaches_the_crate_only_through_allowlisted_names, so `#[path = "elsewhere/mod.rs"] mod gate;` in lib.rs would point crate::gate away from the gate/ dir that gate_dispatch_sources() scans. Assert both mount as a plain `mod gate;` / `mod dispatch;` via root_module_mounts (aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs), with no inline twin.
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 6213
 node_id: '1'
