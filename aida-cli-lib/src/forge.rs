@@ -571,9 +571,10 @@ pub enum CheckRegistration {
     NoCi,
 }
 
-/// Lives on the floor (the gate matches on it); re-exported here for the
-/// forge's callers (TASK-b6b1278890774ef993d2ebc327862470-013).
-// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+/// Lives on the floor (the gate matches on it); imported here for the forge's
+/// own use, and callers import it from `crate::gate::dispatch_types` directly
+/// (TASK-b6b1278890774ef993d2ebc327862470-013).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-028 | ai:claude
 use crate::gate::dispatch_types::CiState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

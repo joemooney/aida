@@ -33,9 +33,10 @@ pub(crate) use mandate_drive_args::*;
 
 // ── Ledger rows ─────────────────────────────────────────────────────────────
 
-/// The ledger row and outcome live on the floor; re-exported for this
-/// module's callers (TASK-b6b1278890774ef993d2ebc327862470-013).
-// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+/// The ledger row and outcome live on the floor; imported here for this
+/// module's own use, and callers import them from `crate::gate::dispatch_types`
+/// directly (TASK-b6b1278890774ef993d2ebc327862470-013).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-013 | trace:TASK-b6b1278890774ef993d2ebc327862470-028 | ai:claude
 use crate::gate::dispatch_deps::emit_action;
 use crate::gate::dispatch_types::{ActionRow, Outcome};
 
