@@ -1,13 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-10-28T07:27:04.416934618Z
+last_run: 2026-10-28T12:33:18.412164191Z
 last_by:
   seat: advisor
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
   vendor: claude
 result: done
-due_since: 2026-10-28T09:31:17.279983102Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-10-28T09:25:39.281569149Z
-  job: hub-drift-guard
-  error: 'exit 1: '
