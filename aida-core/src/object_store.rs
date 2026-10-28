@@ -663,6 +663,47 @@ thread_local! {
     pub(crate) static OBJECT_LIST_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// Every object whose native `spec_id` or `agreed_id` is `id`
+/// (case-insensitive), scanning until `deadline`. Returns the matches and
+/// whether the scan covered every object: `false` means the deadline cut it
+/// short and an object it never reached may also answer to `id`. Only files
+/// whose text mentions `id` are parsed, so a miss costs one read per file.
+/// A file that cannot be read or parsed is skipped, like the agreed-id scan
+/// in `GitBackend::get_requirement_by_spec_id`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+#[cfg(feature = "native")]
+pub fn scan_id_matches_until(
+    objects_root: &Path,
+    id: &str,
+    deadline: std::time::Instant,
+) -> Result<(Vec<Requirement>, bool)> {
+    let needle = canonical_spec_id(id.trim());
+    let mut matches = Vec::new();
+    for (_name, path) in list_objects(objects_root)? {
+        if std::time::Instant::now() >= deadline {
+            return Ok((matches, false));
+        }
+        let Ok(text) = crate::read_atomic(&path) else {
+            continue;
+        };
+        if !text.to_ascii_uppercase().contains(&needle) {
+            continue;
+        }
+        let Ok(req) = serde_yaml::from_str::<Requirement>(&text) else {
+            continue;
+        };
+        let answers = |s: &Option<String>| {
+            s.as_deref()
+                .map(str::trim)
+                .is_some_and(|s| s.eq_ignore_ascii_case(&needle))
+        };
+        if answers(&req.spec_id) || answers(&req.agreed_id) {
+            matches.push(req);
+        }
+    }
+    Ok((matches, true))
+}
+
 // BUG-1606: test-only probe counting `find_by_uuid` calls on this thread. The
 // by-uuid lookup parses every object until it finds a match, so tests use this
 // to prove a hot path never falls back to it.
