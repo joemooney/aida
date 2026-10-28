@@ -115,6 +115,14 @@ pub enum MailboxCommand {
         // trace:BUG-1534 | ai:claude
         #[clap(long)]
         allow_second_person: bool,
+
+        /// When the role in --to has no reader right now, queue the message
+        /// for it: the first eligible reader to check its mail takes it,
+        /// once. Without this, a send to a role with no reader is refused.
+        /// A role that has readers delivers to them as usual.
+        // trace:STORY-1843 | ai:claude
+        #[clap(long, requires = "to")]
+        queue_for_role: bool,
     },
 
     /// Show your inbox: mail addressed to this session's own inboxes (its

@@ -814,3 +814,49 @@ fn story1843_b2c_inbox_commit_failure_exits_non_zero_and_a_retry_records() {
     run(&r.store, inbox_cmd()).unwrap();
     assert!(view_from(&r.main, &r.store, &audience).unread().is_empty());
 }
+
+// STORY-1843 D1 / F1: the verified session binding carries the recipient
+// UUID its reservation names, and a reader whose live identity does not own
+// that UUID never takes queued role mail.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_queued_role_mail_is_taken_only_by_its_live_owner() {
+    let r = mail_repo();
+    let uuid = "00000000-0000-4000-8000-0000000000aa";
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("reviewer")),
+        ("AIDA_HANDLE", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_HOOK_PAYLOAD", None),
+    ]);
+    let facts = bound_facts_with_recipient("rev-a", "codex", uuid);
+    assert_eq!(facts.own_recipient().map(|u| u.as_str()), Some(uuid));
+    let audience = ResolvedAudience::from_facts(&facts);
+    assert!(audience.recipient().is_some());
+
+    let sidecar = aida_core::mailbox_delivery::DeliverySidecar::queued("q1", "reviewer", 5);
+    crate::mailbox_store::write_message_with_deliveries(
+        &r.sib,
+        &mail("q1", "reviewer", 5, false),
+        Some(&sidecar),
+    )
+    .unwrap();
+    // This test process has no registry row in the repository, so its live
+    // identity owns no UUID: the explicit read re-checks and binds nothing.
+    let view = read_own_mail_binding(
+        &r.main,
+        &r.store,
+        &audience,
+        &explicit_limits(),
+        BindWait::Explicit,
+    );
+    assert!(view.records().is_empty());
+    let (taken, _) = snapshot_view(
+        &r.main,
+        &r.store,
+        &audience,
+        &Query::Inbox,
+        &explicit_limits(),
+    );
+    assert_eq!(taken.unwrap().1.pending_deliveries.len(), 1, "still queued");
+}
