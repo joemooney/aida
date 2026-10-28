@@ -721,6 +721,54 @@ fn resolve(repo: &Path, rev: &str) -> Option<String> {
 /// branch), the `incoming` tips and all merge bases of every pair of tips.
 /// Never fails: anything it cannot read is a gap in the report.
 pub fn collect(repo: &Path, local: Option<&str>, incoming: &[String]) -> ConflictReport {
+    collect_with(repo, local, incoming, true)
+}
+
+/// Whether `repo`'s `HEAD` names a branch that has no commit yet. A branch
+/// ref that exists but does not resolve is not unborn: that is a read gap.
+fn head_is_unborn(repo: &Path) -> bool {
+    if resolve(repo, "HEAD").is_some() {
+        return false;
+    }
+    let Ok((0, branch, true)) = git_status(repo, &["symbolic-ref", "--quiet", "HEAD"]) else {
+        return false;
+    };
+    matches!(
+        git_status(repo, &["for-each-ref", "--format=%(refname)", &branch]),
+        Ok((0, listed, true)) if listed.is_empty()
+    )
+}
+
+/// The on-demand audit (`aida db audit-ids`): every conflict [`collect`]
+/// reports for a sync of `HEAD` with `incoming`, plus the conflicts already
+/// inside `HEAD`'s own tree, judged against an empty baseline. A sync admits
+/// a lone tip as its own baseline; an audit must still show what that tip
+/// already holds. An unborn `HEAD` holds no claims and is not a gap.
+// trace:BUG-2017 | ai:claude
+pub fn audit(repo: &Path, incoming: &[String]) -> ConflictReport {
+    let local = (!head_is_unborn(repo)).then_some("HEAD");
+    let mut report = match local {
+        Some(head) => collect_with(repo, Some(head), &[], false),
+        None => ConflictReport::default(),
+    };
+    if !incoming.is_empty() {
+        let joined = collect(repo, local, incoming);
+        report.conflicts.extend(joined.conflicts);
+        report.gaps.extend(joined.gaps);
+        report.normalize();
+    }
+    report
+}
+
+/// [`collect`], where `lone_tip_is_baseline` decides whether a single
+/// distinct tip is its own baseline (a sync) or is judged against an empty
+/// baseline (an audit of the claims inside one tree).
+fn collect_with(
+    repo: &Path,
+    local: Option<&str>,
+    incoming: &[String],
+    lone_tip_is_baseline: bool,
+) -> ConflictReport {
     let mut report = ConflictReport::default();
     let mut tips: Vec<String> = Vec::new();
     for rev in local.into_iter().chain(incoming.iter().map(String::as_str)) {
@@ -739,7 +787,7 @@ pub fn collect(repo: &Path, local: Option<&str>, incoming: &[String]) -> Conflic
     // A sync that joins one distinct tip introduces nothing: that tip is its
     // own baseline (an unborn local, or local already equal to incoming).
     let mut bases: Vec<String> = match tips.as_slice() {
-        [only] => vec![only.clone()],
+        [only] if lone_tip_is_baseline => vec![only.clone()],
         _ => Vec::new(),
     };
     let mut unrelated = false;

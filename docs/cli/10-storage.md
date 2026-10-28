@@ -65,7 +65,7 @@ The check covers syncs AIDA runs while it holds the store write lock. A raw `git
 
 **One line** — find every allocation claim two clones dispute, before (or after) a store sync refuses them, and get a manual repair plan.
 
-**Mental model.** Every store sync AIDA runs checks allocation claims before it merges (see [Allocation claims at every store sync](#allocation-claims-at-every-store-sync)). `audit-ids` runs that same check on demand, over commits you already have: the store's `HEAD`, each `--against` ref, and all their merge bases. It reads committed trees only. It never fetches, never opens the store backend (so no load-time migration runs) and writes nothing.
+**Mental model.** Every store sync AIDA runs checks allocation claims before it merges (see [Allocation claims at every store sync](#allocation-claims-at-every-store-sync)). `audit-ids` runs that same check on demand, over commits you already have: the store's `HEAD` on its own, then `HEAD` joined with each `--against` ref and all their merge bases. It reads committed trees only. It never fetches, never opens the store backend (so no load-time migration runs) and writes nothing.
 
 It reports four kinds of conflict:
 
@@ -74,12 +74,12 @@ It reports four kinds of conflict:
 - **display IDs** claimed by two different object UUIDs;
 - **unissued** global display IDs above every recorded range and counter.
 
-A claim both sides already shared at their merge base is never a conflict. If a git read fails, a ref is missing, a size bound is exceeded or a registry row is malformed, the audit is **incomplete**. An incomplete audit is never a clean answer.
+When joining `HEAD` with an `--against` ref, a claim both sides already shared at their merge base is not a new conflict; it is still reported if it conflicts inside `HEAD` itself. If a git read fails, a ref is missing, a size bound is exceeded or a registry row is malformed, the audit is **incomplete**. An incomplete audit is never a clean answer.
 
 **Reach for it when** — a store sync refused with "allocation claims check refused this store sync", or before syncing a clone that allocated IDs offline. Name the incoming side explicitly, for example `aida db audit-ids --against origin/aida-store` after `aida fetch`.
 
 **Key options (rationale only).**
-- `--against <REF>` — also audit this already-local commit or ref. Repeatable. Without it, only `HEAD` is audited (conflicts inside one tree).
+- `--against <REF>` — also audit joining `HEAD` with this already-local commit or ref, as a sync would. Repeatable. Without it, only the conflicts already inside `HEAD`'s own tree are reported. `HEAD`'s own tree is always audited, with or without `--against`. A store with no commits yet holds no claims and audits clean.
 - `--json` — the same report as JSON: `status` (`clean`, `conflicts` or `incomplete`), `counts`, `conflicts`, `gaps` and `repair_plan`.
 
 **Output.** Per-category counts, then each conflict as opaque references only: object UUID, path class (`objects`, `registry/blocks.yaml`, `registry/nodes.toml`, `registry/agreed_counters.toml`), row ordinal and commit. Node names, hosts, emails, filenames, display IDs and parser messages never appear. The command exits non-zero unless the audit is complete and conflict-free.

@@ -59,7 +59,7 @@ fn store() -> (tempfile::TempDir, std::path::PathBuf) {
         &repo,
         "registry/nodes.toml",
         &format!(
-            "[[nodes]]\nid = \"N1\"\nuser_id = 1\nhostname = \"{LEGACY_HOST}\"\nemail = \"{LEGACY_EMAIL}\"\nclone_path = \"{LEGACY_PATH}\"\nname = \"{LEGACY_NAME}\"\nuser = \"{LEGACY_USER}\"\nregistered = \"2026-01-01T00:00:00Z\"\n"
+            "[[nodes]]\nid = \"N1\"\nuser_id = 1\nhostname = \"{LEGACY_HOST}\"\nemail = \"{LEGACY_EMAIL}\"\nclone_path = '{LEGACY_PATH}'\nname = \"{LEGACY_NAME}\"\nuser = \"{LEGACY_USER}\"\nregistered = \"2026-01-01T00:00:00Z\"\n"
         ),
     );
     write(
@@ -229,4 +229,89 @@ fn bug_2017_audit_ids_unknown_ref_is_incomplete_never_clean() {
     let json: serde_json::Value = serde_json::from_str(&render_json(&report).unwrap()).unwrap();
     assert_eq!(json["status"], "incomplete");
     assert_eq!(json["counts"]["gaps"]["git_read"], 1);
+}
+
+/// A second object (its own UUID) claiming `spec`, filed under `path_spec`'s
+/// store path so it does not overwrite the first claimant.
+fn claim_at(repo: &Path, spec: &str, path_spec: &str) {
+    let mut r = Requirement::new("title".into(), "body".into());
+    r.spec_id = Some(spec.into());
+    let path = aida_core::object_store::object_path(&repo.join("objects"), path_spec).unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, serde_yaml::to_string(&r).unwrap()).unwrap();
+}
+
+#[test]
+fn bug_2017_audit_ids_reports_conflicts_already_inside_head_without_against() {
+    let (_tmp, repo) = store();
+    claim(&repo, "FR-2");
+    claim_at(&repo, "FR-2", "FR-3");
+    let blocks = std::fs::read_to_string(repo.join("registry/blocks.yaml")).unwrap();
+    write(
+        &repo,
+        "registry/blocks.yaml",
+        &format!(
+            "{blocks}- node_id: N2\n  owner: {LEGACY_EMAIL}\n  hostname: {LEGACY_HOST}\n  type_prefix: 'FR'\n  range_start: 50\n  range_end: 150\n  next: 50\n  allocated_at: 2026-01-01T00:00:00Z\n"
+        ),
+    );
+    commit(
+        &repo,
+        "two claimants of one display ID and an overlapping range in HEAD",
+    );
+    let before = refs_and_tree(&repo);
+
+    for against in [
+        vec![],
+        vec!["HEAD".to_string()],
+        vec!["aida-store".to_string()],
+    ] {
+        let report = audit(&repo, &against);
+        assert_eq!(refs_and_tree(&repo), before, "the audit must write nothing");
+        assert!(report.is_complete(), "{against:?}: {report}");
+        let kinds: Vec<_> = report.conflicts.iter().map(|c| c.kind).collect();
+        assert!(
+            kinds.contains(&ConflictKind::DisplayId),
+            "{against:?}: {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&ConflictKind::GlobalRange),
+            "{against:?}: {kinds:?}"
+        );
+        let human = render_human(&report);
+        assert!(
+            human.starts_with("Allocation claims audit: conflicts"),
+            "{human}"
+        );
+        assert_sanitized(&human);
+        assert_sanitized(&render_json(&report).unwrap());
+    }
+
+    // Joined with a ref that forked before the conflict, HEAD's own
+    // conflicts are still reported, once.
+    let report = audit(&repo, &["other".to_string()]);
+    let display = report
+        .conflicts
+        .iter()
+        .filter(|c| c.kind == ConflictKind::DisplayId)
+        .count();
+    assert_eq!(display, 1, "{report}");
+}
+
+#[test]
+fn bug_2017_audit_ids_clean_head_without_against_is_clean() {
+    let (_tmp, repo) = store();
+    let report = audit(&repo, &[]);
+    assert!(report.is_clean(), "{report}");
+}
+
+#[test]
+fn bug_2017_audit_ids_unborn_store_is_clean_not_incomplete() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("store");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "aida-store"]);
+    let report = audit(&repo, &[]);
+    assert!(report.is_clean(), "{report}");
+    assert!(repair_plan(&report).is_empty());
+    assert!(render_human(&report).starts_with("Allocation claims audit: clean"));
 }

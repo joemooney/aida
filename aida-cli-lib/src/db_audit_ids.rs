@@ -1,14 +1,15 @@
 //! `aida db audit-ids`: a read-only audit of allocation claims.
 //!
 //! Runs the same collector every store sync runs before it merges
-//! (`aida_core::allocation_conflicts`) over the store's `HEAD` plus any
-//! `--against` refs, all already-local commits, and prints the conflict
+//! (`aida_core::allocation_conflicts`) over the store's `HEAD` on its own
+//! (conflicts already inside it) and joined with any `--against` refs, all
+//! already-local commits, and prints the conflict
 //! classification, the sanitized report and a manual repair plan. It reads
 //! committed trees only: it never fetches, never opens a `Storage` or
 //! `GitBackend` (so no load-time migration runs) and writes nothing.
 // trace:BUG-2017 | ai:claude
 
-use aida_core::allocation_conflicts::{collect, ConflictKind, ConflictReport, GapKind};
+use aida_core::allocation_conflicts::{ConflictKind, ConflictReport, GapKind};
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -188,9 +189,10 @@ pub(crate) fn render_human(report: &ConflictReport) -> String {
     out
 }
 
-/// Audit `store_path`'s `HEAD` and `against`, already-local commits only.
+/// Audit `store_path`'s `HEAD` (its own tree, and joined with each of
+/// `against`), already-local commits only.
 pub(crate) fn audit(store_path: &Path, against: &[String]) -> ConflictReport {
-    collect(store_path, Some("HEAD"), against)
+    aida_core::allocation_conflicts::audit(store_path, against)
 }
 
 /// Print the audit; exit 1 unless it is complete and conflict-free.
