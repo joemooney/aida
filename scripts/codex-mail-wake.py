@@ -529,9 +529,29 @@ def global_health_namespace(owned, aida):
             os.close(fd)
 
 
+# trace:STORY-1741 | ai:claude
+def refuse_adoption_owned_config(project):
+    """An adoption projection owns .aida/config.toml: editing it would withhold
+    the shared guidance and make the next refresh refuse. Fails closed on a
+    manifest that cannot be read."""
+    import tomllib
+    manifest = project / ".aida/adoption/manifest.toml"
+    try:
+        data = tomllib.loads(manifest.read_text())
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError, UnicodeError) as error:
+        raise Refusal("adoption manifest unreadable; it may own .aida/config.toml") from error
+    owned = [data.get(table, {}) for table in ("files", "pending")]
+    if any(not isinstance(table, dict) or ".aida/config.toml" in table for table in owned):
+        raise Refusal(".aida/config.toml is generated from the shared adoption plane; "
+                      "register the health job in ~/.aida/config.toml instead")
+
+
 def own_health_job(args, project, remove=False, check_only=False):
     """Edit only the exact owned block under a permanent project install lock."""
     import tomllib
+    refuse_adoption_owned_config(project)
     directory = project / ".aida"
     if not check_only:
         directory.mkdir(exist_ok=True)

@@ -3455,18 +3455,33 @@ impl std::fmt::Display for ScaffoldError {
 impl std::error::Error for ScaffoldError {}
 
 /// Refuse a scaffold write in an adopted worktree, projected yet or not:
-/// adoption keeps AIDA scaffolding off the product branch.
+/// adoption keeps AIDA scaffolding off the product branch. Fails closed: a
+/// plane that cannot be discovered refuses too, naming the discovery error.
 // trace:STORY-1741 | ai:claude
 pub fn refuse_in_adopted_worktree(project_root: &Path) -> Result<(), ScaffoldError> {
     #[cfg(all(unix, feature = "native"))]
-    if crate::adoption_projection::is_adopted(project_root) {
-        return Err(ScaffoldError::IoError {
-            path: project_root.to_path_buf(),
-            message: "this worktree is adopted from a shared AIDA plane, so scaffolding \
-                      would write product files; refused. Shared guidance comes from \
-                      adoption/ on the aida-store plane."
-                .to_string(),
-        });
+    {
+        use crate::adoption_projection::{adoption_state, AdoptionState};
+        let message = match adoption_state(project_root) {
+            AdoptionState::NotAdopted => None,
+            AdoptionState::Adopted => Some(
+                "this worktree is adopted from a shared AIDA plane, so scaffolding \
+                 would write product files; refused. Shared guidance comes from \
+                 adoption/ on the aida-store plane."
+                    .to_string(),
+            ),
+            AdoptionState::Unknown(error) => Some(format!(
+                "could not tell whether this worktree is adopted from a shared AIDA plane \
+                 ({error}), so scaffolding was refused rather than risk writing product \
+                 files. Fix the adoption locator or the aida-store refs, then retry."
+            )),
+        };
+        if let Some(message) = message {
+            return Err(ScaffoldError::IoError {
+                path: project_root.to_path_buf(),
+                message,
+            });
+        }
     }
     let _ = project_root;
     Ok(())

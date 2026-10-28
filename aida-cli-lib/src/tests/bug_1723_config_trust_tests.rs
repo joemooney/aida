@@ -687,6 +687,12 @@ fn names_project_config(text: &str) -> bool {
 
 /// Raw writes whose target (the call's line or the two after it, for a
 /// call rustfmt split) names the project config, as `file:line`.
+///
+/// Limit: the target is matched by name only ([`names_project_config`]). A
+/// raw write through a differently named variable in a file the config-trust
+/// inventory does not list goes undetected here; the inventory half of
+/// [`every_project_config_writer_goes_through_the_adoption_guard`] covers
+/// only files listed with a `write` channel.
 fn raw_config_writes(file: &str, source: &str) -> Vec<String> {
     let lines = production_lines(source);
     let mut out = Vec::new();

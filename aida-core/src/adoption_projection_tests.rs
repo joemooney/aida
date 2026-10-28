@@ -684,6 +684,47 @@ fn adoption_is_detected_before_the_first_projection() {
     assert!(!top.join(".aida").exists(), "detection writes nothing");
 }
 
+/// A plane that cannot be discovered fails closed: the state is unknown,
+/// never "not adopted", and the scaffold guard refuses naming the error.
+#[test]
+fn an_undiscoverable_plane_counts_as_adopted() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let unknown = |top: &Path, needle: &str| {
+        let AdoptionState::Unknown(error) = adoption_state(top) else {
+            panic!("{needle}: {:?}", adoption_state(top));
+        };
+        assert!(error.contains(needle), "{error}");
+        assert!(is_adopted(top));
+        let refusal = crate::scaffolding::refuse_in_adopted_worktree(top)
+            .unwrap_err()
+            .to_string();
+        assert!(refusal.contains(needle), "{refusal}");
+        assert!(git_out(top, &["status", "--porcelain"]).is_empty());
+    };
+
+    // A locator others can read, and one naming a ref that does not resolve.
+    let top = product(&tmp.path().join("locator"));
+    let path = crate::allocation_authority::common_dir(&top)
+        .unwrap()
+        .join(crate::adoption_plane::LOCATOR_FILE);
+    std::fs::write(&path, "version = 1\nref = \"refs/heads/plane\"\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    unknown(&top, "chmod 600");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    unknown(&top, "does not resolve");
+
+    // Remotes that disagree and no local aida-store branch.
+    let top = product(&tmp.path().join("remotes"));
+    let first = publish(&top, V1);
+    let second = publish(&top, "schema = 1\n");
+    git_out(&top, &["update-ref", "refs/remotes/a/aida-store", &first]);
+    git_out(&top, &["update-ref", "refs/remotes/b/aida-store", &second]);
+    git_out(&top, &["update-ref", "-d", STORE_REF]);
+    unknown(&top, "Remotes disagree");
+    assert!(!top.join(".aida").exists(), "detection writes nothing");
+}
+
 /// Racing creators of the projection directories both succeed: losing the
 /// `create_dir` race re-checks instead of failing.
 #[test]

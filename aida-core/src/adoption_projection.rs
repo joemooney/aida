@@ -428,21 +428,44 @@ pub fn is_projected(project_root: &Path) -> bool {
     false
 }
 
+/// What discovery says about the clone holding `project_root`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdoptionState {
+    /// No plane, or a plane without an adoption namespace.
+    NotAdopted,
+    /// Projected here, or the plane carries an adoption namespace (one
+    /// that does not parse counts too).
+    Adopted,
+    /// The plane could not be discovered (a malformed or non-600 locator, a
+    /// locator ref that does not resolve, remotes that disagree, ...). The
+    /// guards treat this as adopted: uncertainty refuses rather than falling
+    /// back to product-file mutation.
+    Unknown(String),
+}
+
 /// Whether the clone holding `project_root` is adopted, projected here yet
 /// or not: a new clone or linked worktree is adopted before its first
 /// launch projects anything. The projection is the fast path; otherwise
-/// the plane is discovered and its namespace looked up. A namespace that
-/// exists but does not parse still counts as adopted. A plane that cannot
-/// be discovered (remotes that disagree, say) adopts nothing, since no
-/// launch can project from it either; that refusal surfaces there.
-pub fn is_adopted(project_root: &Path) -> bool {
+/// the plane is discovered and its namespace looked up.
+// trace:STORY-1741 | ai:claude
+pub fn adoption_state(project_root: &Path) -> AdoptionState {
     if is_projected(project_root) {
-        return true;
+        return AdoptionState::Adopted;
     }
     match adoption_plane::discover(project_root) {
-        Ok(Some(plane)) => !matches!(adoption_plane::load(&plane), Ok(None)),
-        _ => false,
+        Ok(None) => AdoptionState::NotAdopted,
+        Ok(Some(plane)) => match adoption_plane::load(&plane) {
+            Ok(None) => AdoptionState::NotAdopted,
+            _ => AdoptionState::Adopted,
+        },
+        Err(e) => AdoptionState::Unknown(format!("{e:#}")),
     }
+}
+
+/// [`adoption_state`] for guards: fails closed, so a plane that cannot be
+/// discovered counts as adopted.
+pub fn is_adopted(project_root: &Path) -> bool {
+    adoption_state(project_root) != AdoptionState::NotAdopted
 }
 
 /// Refuse a write to `path` when it is a file the adoption projection

@@ -346,6 +346,16 @@ fn every_scaffold_write_path_refuses_in_an_adopted_worktree() {
     );
     assert_untouched(&top, &kept, "discipline and profile writers");
 
+    // `.mcp.json` is harness settings the product branch often tracks.
+    assert_refused(
+        "MCP registration add",
+        crate::config_cmd::add_local_aida_mcp_registration(&top),
+    );
+    // With no `.mcp.json` there is nothing to remove, so nothing is written.
+    crate::config_cmd::remove_local_aida_mcp_registration(&top).unwrap();
+    assert!(!top.join(".mcp.json").exists());
+    assert_untouched(&top, &kept, "MCP registration");
+
     // A writer rooted in a subdirectory is still inside the adopted worktree.
     std::fs::create_dir_all(top.join("src")).unwrap();
     assert!(aida_core::scaffolding::refuse_in_adopted_worktree(&top.join("src")).is_err());
@@ -503,4 +513,58 @@ fn a_local_config_written_before_the_first_projection_is_kept_and_reported() {
     assert!(describe_adoption_state(&top).contains(&format!("current at {commit}")));
     assert_eq!(std::fs::read(&config).unwrap(), local);
     assert_eq!(refresh_adoption_projection(&top), Some(warning));
+}
+
+/// A clone whose plane cannot be discovered (here a locator others can
+/// read) is treated as adopted: every scaffold writer refuses, names the
+/// discovery error, and leaves the product tree clean.
+#[test]
+fn scaffolding_refuses_when_the_plane_cannot_be_discovered() {
+    use crate::cli::ScaffoldCommand;
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, _) = adopted(&tmp.path().join("p"), SETTINGS);
+    std::fs::write(top.join(".gitignore"), "target/\n").unwrap();
+    git(&top, &["add", ".gitignore"], None);
+    git(&top, &["commit", "-q", "-m", "ignore"], None);
+    let common = top.join(".git");
+    let locator = common.join(aida_core::adoption_plane::LOCATOR_FILE);
+    std::fs::write(&locator, "version = 1\nref = \"refs/heads/aida-store\"\n").unwrap();
+    std::fs::set_permissions(&locator, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let refused = |path: &str, result: anyhow::Result<()>| {
+        let err = format!("{:#}", result.expect_err(path));
+        assert!(
+            err.contains("could not tell whether") && err.contains("chmod 600"),
+            "{path}: {err}"
+        );
+    };
+    let storage = crate::Storage::new(tmp.path().join("store.yaml"));
+    let db = tmp.path().join("cache.db");
+    let apply = ScaffoldCommand::Apply {
+        project_root: Some(top.clone()),
+        force: true,
+        dry_run: false,
+        prune: false,
+    };
+    refused(
+        "scaffold apply",
+        crate::scaffold_cmd::handle_scaffold_command(&apply, &storage, &db),
+    );
+    refused(
+        "refresh_agent_packs",
+        crate::scaffold_refresh::refresh_agent_packs_at(&top, None, None).map(drop),
+    );
+    refused(
+        "discipline .gitignore",
+        crate::ensure_discipline_pack_gitignore_allow_list(&top).map(drop),
+    );
+    refused(
+        "MCP registration add",
+        crate::config_cmd::add_local_aida_mcp_registration(&top),
+    );
+    assert!(aida_core::scaffolding::codex_hooks::scaffold_codex_hooks(&top, true).is_err());
+    assert!(git(&top, &["status", "--porcelain"], None).is_empty());
+    assert!(!top.join("AGENTS.md").exists() && !top.join(".aida").exists());
+    assert!(!top.join(".mcp.json").exists() && !top.join(".codex").exists());
 }

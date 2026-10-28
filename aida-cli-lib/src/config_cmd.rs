@@ -3510,7 +3510,7 @@ fn cli_toggle_local_aida_mcp_registration(project_root: &std::path::Path) -> aid
 }
 
 // trace:STORY-1131 | ai:codex
-fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
+pub(crate) fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
     let mut root = read_local_mcp_json(project_root)?.unwrap_or_else(|| serde_json::json!({}));
     let root_obj = root
         .as_object_mut()
@@ -3534,7 +3534,7 @@ fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()>
 }
 
 // trace:STORY-1131 | ai:codex
-fn remove_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
+pub(crate) fn remove_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
     let Some(mut root) = read_local_mcp_json(project_root)? else {
         return Ok(());
     };
@@ -3564,6 +3564,9 @@ fn read_local_mcp_json(project_root: &std::path::Path) -> Result<Option<serde_js
 
 // trace:STORY-1131 | ai:codex
 fn write_local_mcp_json(project_root: &std::path::Path, root: &serde_json::Value) -> Result<()> {
+    // `.mcp.json` is harness settings the product branch often tracks.
+    // trace:STORY-1741 | ai:claude
+    aida_core::scaffolding::refuse_in_adopted_worktree(project_root)?;
     let path = project_root.join(".mcp.json");
     let body = serde_json::to_string_pretty(root)?;
     aida_core::write_atomic(&path, format!("{body}\n"))
