@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-27T23:24:27.479659695Z
+modified_at: 2026-10-28T00:32:32.988215866Z
 req_type: Story
 tags:
 - portable-intake
@@ -230,6 +230,12 @@ history:
   session_id: 01a17fab5dd6
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a17fec-496a-7553-83b6-86d25ba97265
+  author: joe
+  timestamp: 2026-10-28T00:32:34.154019030Z
+  session_id: 01a17fe8a1d7
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
@@ -242,7 +248,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Slice 2 projection core is sound (determinism, ownership, crash recovery, orphan-ancestry refusal, #2985 findings), but the writer guard is incomplete: several project-config writers bypass it, and the scaffold refusal only fires once a projection exists, so an adopted-but-unprojected worktree still gets product files. CI was still queued at review time.'
+  detail: 'Round-3 findings F1-F5 all fixed with tests; one blocking gap: is_adopted fails open on a plane-discovery error, so an adopted clone with a bad locator or remotes that disagree lets scaffold writers touch product files, against the sketch''s refuse-uncertainty rule. CI still queued at review.'
   recovery_hint: address the review findings, move STORY-1741 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-27T23:24:27.479659695Z
+  shelved_at: 2026-10-28T00:32:32.988215866Z
