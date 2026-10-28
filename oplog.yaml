@@ -80002,5 +80002,31 @@ operations:
   timestamp: 2026-10-28T07:26:40.666680112Z
   kind: !SetStatus
     status: Approved
-clock: 6230
+- id: 01a1816a-332f-7d63-8ea5-805deb9ff01c
+  target_id: 01a1816a-2899-7703-a0e0-41b58a92a596
+  author: aida
+  node_id: '1'
+  lamport: 6231
+  timestamp: 2026-10-28T07:29:43.215350448Z
+  kind: !Create
+    title: 'Review PR-3007: [AI:claude] docs(plans): private aida-core split spike write-up (SPIKE-b6b1278890774ef993d2ebc327862470-001)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `spike/private-core-split`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3007>
+      - Branch: `spike/private-core-split` → `main`
+
+      ## Covers
+
+      - SPIKE-b6b1278890774ef993d2ebc327862470-001
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3007` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6231
 node_id: '1'
