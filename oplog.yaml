@@ -82880,5 +82880,23 @@ operations:
   timestamp: 2026-10-28T20:46:00.835237157Z
   kind: !SetStatus
     status: Completed
-clock: 6455
+- id: 01a18443-541d-79a1-8aba-878bdf255493
+  target_id: 01a18443-4cce-7441-8405-caa9752ce174
+  author: aida
+  node_id: '1'
+  lamport: 6456
+  timestamp: 2026-10-28T20:46:07.389097399Z
+  kind: !Create
+    title: '[minor, non-blocking] leftovers.rs:155-160 scan_era_markers: any non-JSON UTF-8…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-072, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor, non-blocking] leftovers.rs:155-160 scan_era_markers: any non-JSON UTF-8 aside body is taken as a bare admin name, so a torn (partial-JSON) record aside — write_source_id is create_new+write, not atomic — resolves to a bogus <common>/worktrees/<garbage> path, is judged stale, and is removed instead of kept. Not a regression (the marker was already absent), but inconsistent with era_marker_stale's fail-closed handling of a torn marker; consider treating a body that starts with '{' as an undecidable record and leaving it.
+
+      PR: #3062
+      Reviewed sha: c677f7f451561e73df019fdb0e84539c995f9f88
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6456
 node_id: '1'
