@@ -778,6 +778,9 @@ pub(crate) fn noreplace_unsupported(e: &std::io::Error) -> bool {
 
 #[cfg(test)]
 thread_local! {
+    /// Makes [`hard_link`] fail as on a filesystem without hard links.
+    pub(crate) static LINK_UNSUPPORTED: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
     /// Makes [`rename_noreplace`] fail as on a filesystem without it.
     pub(crate) static NOREPLACE_UNSUPPORTED: std::cell::Cell<bool> =
         const { std::cell::Cell::new(false) };
@@ -905,8 +908,13 @@ pub(crate) const ID_TEMP_PREFIX: &str = ".aida-id.";
 /// never leaves one inside a mailbox, where it would count as mail), which
 /// is then moved into place without replacing (`AlreadyExists` when `path`
 /// exists). Where the filesystem has no no-replace rename, it is linked in
-/// and the temp unlinked.
+/// and the temp unlinked; where it has no hard links either (some CIFS/SMB
+/// mounts), the bytes are written create-new straight to `path`, which is
+/// not atomic (a crash can leave it torn) but is what such a filesystem
+/// allows. Once `path` is placed, a failure to clean up or sync is a
+/// warning, not an error: the file is written.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
 fn write_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let temp_dir = dir.parent().unwrap_or(dir);
@@ -914,36 +922,85 @@ fn write_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         "{ID_TEMP_PREFIX}{}.tmp",
         uuid::Uuid::new_v4().simple()
     ));
-    let staged = (|| -> std::io::Result<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(&temp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        match rename_noreplace(&temp, path) {
-            Err(e) if noreplace_unsupported(&e) => {
-                std::fs::hard_link(&temp, path)?;
-                std::fs::remove_file(&temp)
-            }
-            Err(e) if e.raw_os_error() == Some(libc::EEXIST) => Err(std::io::Error::new(
-                std::io::ErrorKind::AlreadyExists,
-                format!("{} exists", path.display()),
-            )),
-            other => other,
-        }
-    })();
-    if let Err(e) = staged {
+    if let Err(e) = place_source_id(&temp, path, bytes) {
         let _ = std::fs::remove_file(&temp);
         return Err(e);
     }
-    File::open(dir)?.sync_all()?;
+    let warn = |what: String, e: std::io::Error| {
+        eprintln!("warning: {} was written, but {what}: {e}", path.display());
+    };
+    match std::fs::remove_file(&temp) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => warn(
+            format!("its temp file {} was not removed", temp.display()),
+            e,
+        ),
+        _ => {}
+    }
+    let sync = |d: &Path| File::open(d).and_then(|f| f.sync_all());
+    if let Err(e) = sync(dir) {
+        warn(format!("{} was not synced", dir.display()), e);
+    }
     if temp_dir != dir {
-        File::open(temp_dir)?.sync_all()?;
+        if let Err(e) = sync(temp_dir) {
+            warn(format!("{} was not synced", temp_dir.display()), e);
+        }
     }
     Ok(())
+}
+
+/// Stage `bytes` in `temp` and place it at `path` without replacing; see
+/// [`write_source_id`]. `temp` may be left for the caller to remove.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
+fn place_source_id(temp: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    write_new_synced(temp, bytes)?;
+    let exists = || {
+        std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("{} exists", path.display()),
+        )
+    };
+    match rename_noreplace(temp, path) {
+        Err(e) if e.raw_os_error() == Some(libc::EEXIST) => Err(exists()),
+        Err(e) if noreplace_unsupported(&e) => match hard_link(temp, path) {
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(exists()),
+            Err(e) if link_unsupported(&e) => {
+                let _ = std::fs::remove_file(temp);
+                write_new_synced(path, bytes)
+            }
+            other => other,
+        },
+        other => other,
+    }
+}
+
+/// Write `bytes` to a new file at `path`, mode 0600, synced.
+fn write_new_synced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()
+}
+
+/// [`std::fs::hard_link`], which a test can make fail as on a filesystem
+/// without hard links.
+fn hard_link(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if LINK_UNSUPPORTED.with(std::cell::Cell::get) {
+        return Err(std::io::Error::from_raw_os_error(libc::EPERM));
+    }
+    std::fs::hard_link(from, to)
+}
+
+/// Does this link error mean the filesystem has no hard links?
+fn link_unsupported(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(libc::EPERM | libc::ENOTSUP | libc::ENOSYS)
+    )
 }
 
 /// Is this mailbox-root entry the creation nonce rather than mail?
