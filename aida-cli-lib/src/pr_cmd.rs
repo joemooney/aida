@@ -6820,29 +6820,130 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
 /// predicate. Pulled out so the wiring (build the predicate, call the
 /// classifier) is reused by the preflight and unit-testable in
 /// isolation.
+///
+/// Every path handed in here comes from a PR's commit range, so it is
+/// committed (tracked) by construction — even one the PR adds that the
+/// local index has never seen. It is therefore judged only by the
+/// `.gitignore` rules in the tree, never by this clone's
+/// `info/exclude` or the user's global `core.excludesFile`.
 // trace:TASK-480 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 pub(crate) fn classify_intermediate_only_with_gitignore(
     project_root: &std::path::Path,
     changed: &[String],
 ) -> pr_rebase::IntermediateOnlyOutcome {
-    pr_rebase::classify_intermediate_only(changed, |path| git_path_is_ignored(project_root, path))
+    pr_rebase::classify_intermediate_only(changed, |path| {
+        git_path_is_ignored_by_tree_rules(project_root, path)
+    })
 }
 
-/// `git check-ignore -q <path>` — exit 0 ⇒ ignored. We pass `--no-index`
-/// so a path that is *tracked* but matches an ignore rule still reports
-/// its ignore status (we OR this with the generated-path heuristic; a
-/// tracked-but-ignored build output is exactly the intermediate case we
-/// want to catch). Any spawn/other error ⇒ treat as not-ignored (fail
+/// `git check-ignore --no-index <path>` — exit 0 ⇒ ignored. We pass
+/// `--no-index` so a path that is *tracked* but matches an ignore rule
+/// still reports its ignore status (we OR this with the generated-path
+/// heuristic; a tracked-but-ignored build output is exactly the
+/// intermediate case we want to catch). A tracked path is judged only by
+/// the in-tree `.gitignore` files: the per-clone `info/exclude` and
+/// the global `core.excludesFile` are local preferences and never make a
+/// committed file "intermediate". Untracked paths honour every ignore
+/// source, as before. Any spawn/other error ⇒ treat as not-ignored (fail
 /// open).
 // trace:TASK-480 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
+    if git_path_is_tracked(project_root, path) {
+        return git_indexed_path_is_ignored_by_tree_rules(project_root, path);
+    }
     std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["check-ignore", "-q", "--no-index", path])
+        .args(["check-ignore", "-q", "--no-index", "--", path])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+/// Whether `path` is in the index of `project_root`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
+fn git_path_is_tracked(project_root: &std::path::Path, path: &str) -> bool {
+    aida_core::git_ops::host_git_command(project_root)
+        .args(["ls-files", "-z", "--"])
+        .arg(format!(":(literal){path}"))
+        .output()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+/// `git ls-files -c -i --exclude-per-directory=.gitignore` for an indexed
+/// path: only in-tree `.gitignore` files are read, never `info/exclude`
+/// or `core.excludesFile`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
+fn git_indexed_path_is_ignored_by_tree_rules(project_root: &std::path::Path, path: &str) -> bool {
+    aida_core::git_ops::host_git_command(project_root)
+        .args([
+            "ls-files",
+            "-z",
+            "-c",
+            "-i",
+            "--exclude-per-directory=.gitignore",
+            "--",
+        ])
+        .arg(format!(":(literal){path}"))
+        .output()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+/// Ignore check restricted to the in-tree `.gitignore` files (as checked
+/// out in the working tree).
+///
+/// An indexed path is asked of `git ls-files -i` with only
+/// `--exclude-per-directory=.gitignore`, which never reads `info/exclude`
+/// or `core.excludesFile` — so a local rule on an ancestor directory
+/// cannot mask a committed `.gitignore` match.
+///
+/// A path the local index has never seen (added by the PR) falls back to
+/// `check-ignore -v`: it is ignored only when the reported deciding
+/// source is an in-tree `.gitignore` and the pattern is not a negation
+/// (`-v` reports negated matches too). Limitation: git resolves ancestor
+/// directory exclusion first, so when `info/exclude` or
+/// `core.excludesFile` matches an ancestor directory of such a path, that
+/// local source is reported and the path reads as not-ignored (fail open).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
+fn git_path_is_ignored_by_tree_rules(project_root: &std::path::Path, path: &str) -> bool {
+    if git_path_is_tracked(project_root, path) {
+        return git_indexed_path_is_ignored_by_tree_rules(project_root, path);
+    }
+    use std::io::Write as _;
+    // `-z` requires `--stdin`; NUL framing keeps odd paths unquoted.
+    let Ok(mut child) = aida_core::git_ops::host_git_command(project_root)
+        .args(["check-ignore", "-v", "-z", "--stdin", "--no-index"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(path.as_bytes());
+        let _ = stdin.write_all(b"\0");
+    }
+    let Ok(out) = child.wait_with_output() else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    // `-v -z` record: <source> NUL <linenum> NUL <pattern> NUL <path> NUL.
+    let mut fields = out.stdout.split(|b| *b == 0);
+    let source = String::from_utf8_lossy(fields.next().unwrap_or_default());
+    let _linenum = fields.next();
+    let pattern = fields.next().unwrap_or_default();
+    let source = std::path::Path::new(source.as_ref());
+    let from_tree_gitignore = !source.is_absolute()
+        && source.file_name() == Some(std::ffi::OsStr::new(".gitignore"))
+        && !source.starts_with(".git");
+    from_tree_gitignore && !pattern.is_empty() && !pattern.starts_with(b"!")
 }
 
 // ---------------------------------------------------------------------------
