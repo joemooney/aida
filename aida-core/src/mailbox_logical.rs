@@ -606,6 +606,11 @@ pub struct RelayRunDeliveries {
     pub unread: Vec<RelayRunDelivery>,
     pub legacy_label: usize,
     pub complete: bool,
+    /// The receipt anchor could not be read, so mail already read may be
+    /// listed in `unread`; `complete` is then false. Nothing may be told
+    /// or handed over from such a list.
+    // trace:STORY-1843 | ai:claude
+    pub receipts_unknown: bool,
 }
 
 fn unread_record(record: &SnapshotRecord) -> bool {
@@ -627,9 +632,12 @@ pub fn relay_run_unread_deliveries(
     let snapshot = logical_snapshot(ctx, &audience, &Query::Inbox, limits);
     // D1's unsighted rule (ruling 97), not the acknowledgement standard: a
     // missing or prunable sibling worktree never makes the count unknown.
-    // trace:STORY-1843 | ai:claude
+    // An unreadable receipt anchor does: read mail would look unread
+    // (advisor ruling on TASK-...-077). trace:STORY-1843 | ai:claude
+    let receipts_unknown = snapshot.anchor_error.is_some();
     let mut out = RelayRunDeliveries {
-        complete: snapshot.live_sources_observed(),
+        complete: snapshot.live_sources_observed() && !receipts_unknown,
+        receipts_unknown,
         ..Default::default()
     };
     for record in snapshot.records.iter().filter(|r| unread_record(r)) {
