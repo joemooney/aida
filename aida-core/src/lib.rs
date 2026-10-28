@@ -155,6 +155,8 @@ pub mod mailbox_lifecycle;
 pub mod mailbox_identity;
 // trace:STORY-1843 | ai:claude
 pub mod mailbox_logical;
+// Role-cohort delivery ownership (slice D1). trace:STORY-1843 | ai:claude
+pub mod mailbox_delivery;
 pub mod meta;
 pub mod models;
 pub mod node;

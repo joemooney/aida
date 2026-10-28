@@ -26,6 +26,10 @@
 // trace:STORY-1843 | ai:claude
 
 use crate::mailbox::{message_state_rank, Message, Recipient};
+use crate::mailbox_delivery::{
+    binding_dir_components, binding_file_name, DeliveryBinding, DeliverySidecar, RecipientUuid,
+    DELIVERIES_DIR, DELIVERY_FILE_CAP,
+};
 use crate::mailbox_identity::{classified_identities, IdentityClass, MailIdentityFacts};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -223,6 +227,12 @@ pub struct ResolvedAudience {
     private: Vec<String>,
     human: Vec<String>,
     shared: Vec<String>,
+    /// The `shared` keys that are roles, not vendor groups (slice D1): only
+    /// role mail can carry a delivery sidecar.
+    roles: Vec<String>,
+    /// The verified session's recipient UUID (slice D1): the only key a
+    /// role-cohort delivery is visible and acknowledged under.
+    recipient: Option<RecipientUuid>,
 }
 
 impl ResolvedAudience {
@@ -243,10 +253,14 @@ impl ResolvedAudience {
                 return Err("audience key is not a bounded mailbox identity".into());
             }
         }
+        // Callers of this constructor name roles only; `from_facts` splits
+        // the vendor group out.
         Ok(Self {
             private,
             human,
+            roles: shared.clone(),
             shared,
+            recipient: None,
         })
     }
 
@@ -272,8 +286,31 @@ impl ResolvedAudience {
                 IdentityClass::Shared => shared.push(key),
             }
         }
-        Self::from_identity_policy(private, human, shared)
-            .expect("every key was checked as a bounded mailbox identity")
+        let mut audience = Self::from_identity_policy(private, human, shared)
+            .expect("every key was checked as a bounded mailbox identity");
+        audience.recipient = facts.own_recipient().cloned();
+        let role = facts
+            .role()
+            .map(|raw| crate::mailbox_identity::effective_role(Some(raw)).0);
+        audience
+            .roles
+            .retain(|k| role.as_deref().is_some_and(|r| r == k));
+        audience
+    }
+
+    /// This session's recipient UUID, when its handle reservation names it.
+    pub fn recipient(&self) -> Option<&RecipientUuid> {
+        self.recipient.as_ref()
+    }
+
+    /// Whether `key` is an ACK key this audience holds: one of its keys, or
+    /// its recipient UUID's receipt key.
+    pub fn holds_key(&self, key: &str) -> bool {
+        self.keys().any(|k| k == key)
+            || self
+                .recipient
+                .as_ref()
+                .is_some_and(|r| r.receipt_key() == key)
     }
 
     /// This session's own handle/names (or an unbound user).
@@ -289,6 +326,12 @@ impl ResolvedAudience {
     /// Role and agent-type audiences several sessions share.
     pub fn shared_keys(&self) -> &[String] {
         &self.shared
+    }
+
+    /// The shared keys that are roles (never a vendor group).
+    // trace:STORY-1843 | ai:claude
+    pub fn role_keys(&self) -> &[String] {
+        &self.roles
     }
 
     /// Every key, private first.
@@ -315,6 +358,8 @@ impl ResolvedAudience {
             private: pick(&self.private),
             human: pick(&self.human),
             shared: pick(&self.shared),
+            roles: pick(&self.roles),
+            recipient: self.recipient.clone(),
         };
         let any = narrowed.keys().next().is_some();
         any.then_some(narrowed)
@@ -476,6 +521,32 @@ pub struct SnapshotRecord {
     pub message: Message,
     pub provenance: Vec<Provenance>,
     pub read: ReadEvidence,
+    /// Set when the message is a role-cohort delivery owned by this
+    /// audience's recipient UUID (slice D1): it is read and acknowledged
+    /// under that UUID's receipt key only.
+    pub delivered_to: Option<RecipientUuid>,
+}
+
+/// A queued role delivery that this audience's reader is eligible to bind
+/// (slice D1). Its message stays hidden until the binding exists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingDelivery {
+    pub message_id: String,
+    pub delivery_id: String,
+}
+
+/// The ACK keys of `record` for `audience`: its recipient UUID's receipt
+/// key for a cohort delivery, else the audience keys it is addressed to.
+// trace:STORY-1843 | ai:claude
+pub fn receipt_keys(audience: &ResolvedAudience, record: &SnapshotRecord) -> Vec<String> {
+    match &record.delivered_to {
+        Some(uuid) => vec![uuid.receipt_key()],
+        None => audience
+            .matching_keys(&record.message)
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+    }
 }
 
 /// Retention of mail from retired worktrees. Always unestablished until the
@@ -503,6 +574,8 @@ pub struct LogicalSnapshot {
     /// The receipt anchor could not be read for some key: acknowledgements
     /// recorded there may be missing, so the view is partial.
     pub anchor_error: Option<SourceErrorCode>,
+    /// Queued role deliveries this reader may bind (slice D1).
+    pub pending_deliveries: Vec<PendingDelivery>,
 }
 
 impl LogicalSnapshot {
@@ -592,11 +665,37 @@ pub fn logical_snapshot(
     let (roots, inventory_error) = inventory(ctx, &mut budget);
     let mut sources = Vec::new();
     let mut observed: Vec<Option<ObservedSource>> = Vec::new();
+    // A live source whose `.deliveries/` went unread may hold the sidecar of
+    // any role message, since a message carries no origin (ruling F2,
+    // narrowed): a present worktree whose read failed, one inventory could
+    // not resolve (`common_git_of` failed), or any worktree an inventory
+    // that could not enumerate them all left out. A missing or prunable
+    // worktree's files are gone or retained (the retained lookup covers
+    // them), another repository's worktree is not a source, and the
+    // canonical store never carries sidecars (F5), so none of those counts.
+    // trace:STORY-1843 | ai:claude
+    let mut unsighted =
+        inventory_error.is_some_and(|code| code != SourceErrorCode::NotAGitCheckout);
+    let mut salvaged: Vec<DeliverySidecar> = Vec::new();
     for root in roots {
         let (path, result) = match root {
-            Err((path, code)) => (path, Err(code)),
+            Err((path, code)) => {
+                unsighted |= !matches!(
+                    code,
+                    SourceErrorCode::WorktreeMissing
+                        | SourceErrorCode::WorktreePrunable
+                        | SourceErrorCode::CommonGitMismatch
+                );
+                (path, Err(code))
+            }
             Ok(path) => {
                 let result = read_source(&path, &[".aida", "mailbox"], &mut budget);
+                if result.is_err() {
+                    match read_source_deliveries(&path, &[".aida", "mailbox"], &mut budget) {
+                        Ok(sidecars) => salvaged.extend(sidecars),
+                        Err(_) => unsighted = true,
+                    }
+                }
                 (path, result)
             }
         };
@@ -627,8 +726,24 @@ pub fn logical_snapshot(
         Query::ExactId(want) => id == want,
         Query::Thread(want) => thread == want,
     };
-    let (mut records, conflicts) =
-        reconcile(&observed, local_count, audience, query.includes_own_sent());
+    let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
+    let (delivered, pending_deliveries, delivery_conflicts) = delivery_gates(
+        ctx,
+        &observed,
+        salvaged,
+        unsighted,
+        audience,
+        &mut anchor,
+        &mut budget,
+    );
+    let (mut records, mut conflicts) = reconcile(
+        &observed,
+        local_count,
+        audience,
+        query.includes_own_sent(),
+        &delivered,
+    );
+    conflicts.extend(delivery_conflicts);
     records.retain(|(m, _)| in_query(&m.id, &m.thread_id));
     let conflicts = conflicts
         .into_iter()
@@ -637,15 +752,28 @@ pub fn logical_snapshot(
         .collect();
 
     let mut receipts = ReceiptCache::default();
-    let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
     let mut out_records = Vec::with_capacity(records.len());
     for (mut message, provenance) in records {
+        let delivered_to = match delivered.get(&message.id) {
+            Some(DeliveryGate::Owned(uuid)) if !audience.matching_keys(&message).is_empty() => {
+                Some(uuid.clone())
+            }
+            _ => None,
+        };
+        let keys: Vec<String> = match &delivered_to {
+            Some(uuid) => vec![uuid.receipt_key()],
+            None => audience
+                .matching_keys(&message)
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        };
         let read = read_evidence(
             &message,
+            &keys,
             &provenance,
             &observed,
             local_count,
-            audience,
             &mut sources,
             &mut receipts,
             &mut anchor,
@@ -659,6 +787,7 @@ pub fn logical_snapshot(
             message,
             provenance,
             read,
+            delivered_to,
         });
     }
 
@@ -672,6 +801,10 @@ pub fn logical_snapshot(
         retention: RetentionCoverage::Unestablished,
         exact_found: None,
         anchor_error: anchor.error,
+        pending_deliveries: pending_deliveries
+            .into_iter()
+            .filter(|_| matches!(query, Query::Inbox | Query::Addressable))
+            .collect(),
     };
     if let Query::ExactId(id) = query {
         let found = snapshot.records.iter().any(|r| &r.message.id == id)
@@ -1359,6 +1492,8 @@ struct ObservedSource {
     mailbox: PinnedDir,
     identity: SourceIdentity,
     messages: Vec<ObservedMessage>,
+    /// Delivery sidecars (slice D1).
+    deliveries: Vec<DeliverySidecar>,
 }
 
 fn safe_id(id: &str) -> bool {
@@ -1389,6 +1524,25 @@ fn fingerprint(bytes: &[u8]) -> String {
 
 /// Read every top-level `*.json` message under `root/<components…>`.
 /// `Ok(None)` when the mailbox directory (or an ancestor) does not exist.
+/// The sidecars of a source whose full read failed: its `.deliveries/`
+/// read on its own, no-follow and budgeted. An absent mailbox or
+/// `.deliveries/` holds none. `Err`: they could not be read (ruling F2).
+// trace:STORY-1843 | ai:claude
+fn read_source_deliveries(
+    root: &Path,
+    components: &[&str],
+    budget: &mut Budget,
+) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+    let mut dir = PinnedDir::open_root(root)?;
+    for component in components.iter().copied().chain([DELIVERIES_DIR]) {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(Vec::new()),
+        }
+    }
+    read_sidecars(&dir, budget)
+}
+
 fn read_source(
     root: &Path,
     components: &[&str],
@@ -1434,6 +1588,10 @@ fn read_source(
             recorded,
         });
     }
+    let deliveries = match dir.child_dir(DELIVERIES_DIR)? {
+        Some(sidecars) => read_sidecars(&sidecars, budget)?,
+        None => Vec::new(),
+    };
     // Recheck that the path still names the directory that was read.
     let mut again = PinnedDir::open_root(root)?;
     for component in components {
@@ -1448,7 +1606,296 @@ fn read_source(
         mailbox: dir,
         identity,
         messages,
+        deliveries,
     }))
+}
+
+// ── Delivery ownership (slice D1) ───────────────────────────────────────────
+
+/// How a message with a delivery sidecar relates to this audience.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DeliveryGate {
+    /// This audience's recipient owns a delivery of it.
+    Owned(RecipientUuid),
+    /// Not owned here: a cohort this reader is not in, a queued delivery
+    /// bound to someone else, or one this reader may still bind.
+    NotOwned,
+}
+
+/// Sidecars by message ID, the gate for every message the audience is
+/// addressed to, the queued deliveries this reader may bind, and the IDs
+/// whose sidecar replicas disagree (never projected).
+///
+/// A role message with no live sidecar is looked up by ID in the retained
+/// copies of retired sources, so a replica elsewhere keeps its cohort gate
+/// after the sending worktree is retired. Faults stay local to their
+/// message: a retained sidecar or a queued delivery's binding that cannot be
+/// read or parsed hides that one message (its ownership is unknown) and
+/// offers nothing to bind, without making the whole view partial. Only a
+/// retained area that cannot be opened at all is a view-wide anchor error.
+///
+/// `salvaged`: the sidecars of live sources whose message read failed but
+/// whose `.deliveries/` was read on its own.
+///
+/// Fail closed (ruling F2): when `unsighted` (a live source's `.deliveries/`
+/// was not read, so the snapshot is already partial), a
+/// role message with no sidecar found anywhere has unknown ownership and is
+/// hidden from every reader of this snapshot, never served as legacy role
+/// mail. Vendor-group mail never carries a sidecar and is never gated.
+// trace:STORY-1843 | ai:claude
+fn delivery_gates(
+    ctx: &MailboxContext,
+    observed: &[Option<ObservedSource>],
+    salvaged: Vec<DeliverySidecar>,
+    unsighted: bool,
+    audience: &ResolvedAudience,
+    anchor: &mut AnchorEvidence,
+    budget: &mut Budget,
+) -> (
+    HashMap<String, DeliveryGate>,
+    Vec<PendingDelivery>,
+    Conflicts,
+) {
+    let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
+    let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
+    let mut addressed: HashSet<&str> = HashSet::new();
+    let mut role_addressed: BTreeSet<&str> = BTreeSet::new();
+    for sidecar in salvaged {
+        sidecars
+            .entry(sidecar.message_id.clone())
+            .or_default()
+            .push(sidecar);
+    }
+    for source in observed.iter().flatten() {
+        for sidecar in &source.deliveries {
+            sidecars
+                .entry(sidecar.message_id.clone())
+                .or_default()
+                .push(sidecar.clone());
+        }
+        for m in &source.messages {
+            threads
+                .entry(&m.message.id)
+                .or_default()
+                .insert(m.message.thread_id.clone());
+            let undeleted = Message {
+                deleted: false,
+                ..m.message.clone()
+            };
+            let keys = audience.matching_keys(&undeleted);
+            if !keys.is_empty() {
+                addressed.insert(&m.message.id);
+            }
+            if keys
+                .iter()
+                .any(|k| audience.role_keys().iter().any(|s| s == k))
+            {
+                role_addressed.insert(&m.message.id);
+            }
+        }
+    }
+    let mut gates = HashMap::new();
+    let wanted: Vec<&str> = role_addressed
+        .into_iter()
+        .filter(|id| !sidecars.contains_key(*id))
+        .collect();
+    if let (false, Some(common)) = (wanted.is_empty(), &ctx.repository) {
+        match RetainedDeliveries::open(common.path(), budget) {
+            Ok(retained) => {
+                for &id in &wanted {
+                    match retained.lookup(id, budget) {
+                        Ok(found) if !found.is_empty() => {
+                            sidecars.insert(id.to_string(), found);
+                        }
+                        Ok(_) => {}
+                        Err(()) => {
+                            gates.insert(id.to_string(), DeliveryGate::NotOwned);
+                        }
+                    }
+                }
+            }
+            Err(code) => {
+                anchor.error.get_or_insert(code);
+                for &id in &wanted {
+                    gates.insert(id.to_string(), DeliveryGate::NotOwned);
+                }
+            }
+        }
+    }
+    if unsighted {
+        for id in wanted.into_iter().filter(|id| !sidecars.contains_key(*id)) {
+            gates.insert(id.to_string(), DeliveryGate::NotOwned);
+        }
+    }
+    let mut pending = Vec::new();
+    let mut conflicts = Vec::new();
+    for (id, replicas) in &sidecars {
+        let id = id.as_str();
+        if replicas.iter().any(|r| *r != replicas[0]) {
+            gates.insert(id.to_string(), DeliveryGate::NotOwned);
+            if addressed.contains(id) {
+                conflicts.push((id.to_string(), threads.remove(id).unwrap_or_default()));
+            }
+            continue;
+        }
+        let sidecar = &replicas[0];
+        if !addressed.contains(id) {
+            gates.insert(id.to_string(), DeliveryGate::NotOwned);
+            continue;
+        }
+        let mut bindings = HashMap::new();
+        let mut unknown = false;
+        for delivery_id in sidecar.queued_ids() {
+            match read_binding(ctx, delivery_id, budget) {
+                Ok(bound) => {
+                    bindings.insert(delivery_id.to_string(), bound);
+                }
+                Err(_) => unknown = true,
+            }
+        }
+        let owners = sidecar.owners(|d| bindings.get(d).cloned().flatten());
+        let gate = match audience.recipient() {
+            Some(own) if owners.contains(own) => DeliveryGate::Owned(own.clone()),
+            Some(_) if !unknown => {
+                pending.extend(
+                    sidecar
+                        .queued_ids()
+                        .filter(|d| bindings.get(*d).is_some_and(Option::is_none))
+                        .map(|d| PendingDelivery {
+                            message_id: id.to_string(),
+                            delivery_id: d.to_string(),
+                        }),
+                );
+                DeliveryGate::NotOwned
+            }
+            _ => DeliveryGate::NotOwned,
+        };
+        gates.insert(id.to_string(), gate);
+    }
+    (gates, pending, conflicts)
+}
+
+/// Where retired sources' mailboxes are kept, below the common Git dir:
+/// `retained/<source-key>/<generation>/data/` mirrors the mailbox.
+const RETAINED_PATH: [&str; 3] = ["aida", "mail-lifecycle", "retained"];
+
+/// The `.deliveries/` directories of the retained copies of retired
+/// sources, pinned once per snapshot (one directory per retired
+/// generation that holds sidecars), then looked up by exact message ID:
+/// no sidecar is read unless the view holds a message it names.
+// trace:STORY-1843 | ai:claude
+struct RetainedDeliveries {
+    dirs: Vec<PinnedDir>,
+}
+
+impl RetainedDeliveries {
+    fn open(common: &Path, budget: &mut Budget) -> Result<Self, SourceErrorCode> {
+        let mut dir = PinnedDir::open_root(common)?;
+        for component in RETAINED_PATH {
+            match dir.child_dir(component)? {
+                Some(child) => dir = child,
+                None => return Ok(Self { dirs: Vec::new() }),
+            }
+        }
+        let mut dirs = Vec::new();
+        for key in dir.names(budget)? {
+            let Some(key_dir) = dir.child_dir(&String::from_utf8_lossy(&key))? else {
+                continue;
+            };
+            for generation in key_dir.names(budget)? {
+                let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))?
+                else {
+                    continue;
+                };
+                if let Some(sidecars) = gen_dir
+                    .child_dir("data")?
+                    .map(|data| data.child_dir(DELIVERIES_DIR))
+                    .transpose()?
+                    .flatten()
+                {
+                    dirs.push(sidecars);
+                }
+            }
+        }
+        Ok(Self { dirs })
+    }
+
+    /// Every retained sidecar for message `id`. `Err` when one exists but
+    /// cannot be read or parsed: that message's ownership is unknown.
+    fn lookup(&self, id: &str, budget: &mut Budget) -> Result<Vec<DeliverySidecar>, ()> {
+        let name = format!("{id}.json");
+        let mut out = Vec::new();
+        for dir in &self.dirs {
+            let bytes = dir
+                .read_file(OsStr::new(&name), DELIVERY_FILE_CAP)
+                .map_err(|_| ())?;
+            let Some(bytes) = bytes else { continue };
+            budget.take(bytes.len()).map_err(|_| ())?;
+            out.push(DeliverySidecar::parse(&bytes, id).map_err(|_| ())?);
+        }
+        Ok(out)
+    }
+}
+
+/// Parse every `<message-id>.json` sidecar in a `.deliveries/` directory.
+fn read_sidecars(
+    sidecars: &PinnedDir,
+    budget: &mut Budget,
+) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+    let mut out = Vec::new();
+    for name in sidecars.names(budget)? {
+        let Some(stem) = name
+            .strip_suffix(b".json")
+            .filter(|_| !name.starts_with(b"."))
+        else {
+            continue;
+        };
+        if budget.expired() {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        let Some(bytes) = sidecars.read_file(OsStr::from_bytes(&name), DELIVERY_FILE_CAP)? else {
+            return Err(SourceErrorCode::SourceChanged);
+        };
+        budget.take(bytes.len())?;
+        let stem = std::str::from_utf8(stem).map_err(|_| SourceErrorCode::CorruptMessage)?;
+        out.push(
+            DeliverySidecar::parse(&bytes, stem).map_err(|_| SourceErrorCode::CorruptMessage)?,
+        );
+    }
+    Ok(out)
+}
+
+/// The recipient a queued delivery is bound to, read no-follow and bounded
+/// from the private anchor (or a local-only project's mailbox).
+fn read_binding(
+    ctx: &MailboxContext,
+    delivery_id: &str,
+    budget: &mut Budget,
+) -> Result<Option<RecipientUuid>, SourceErrorCode> {
+    if budget.expired() {
+        return Err(SourceErrorCode::OverBudget);
+    }
+    let (root, components) = match &ctx.repository {
+        Some(common) => (common.path(), binding_dir_components(true)),
+        None => (ctx.requested_checkout.path(), binding_dir_components(false)),
+    };
+    let mut dir = PinnedDir::open_root(root)?;
+    for component in components {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(None),
+        }
+    }
+    let name = binding_file_name(delivery_id);
+    match dir.read_file(OsStr::new(&name), DELIVERY_FILE_CAP)? {
+        None => Ok(None),
+        Some(bytes) => {
+            budget.take(bytes.len())?;
+            DeliveryBinding::parse(&bytes, delivery_id)
+                .map(|b| Some(b.recipient_uuid))
+                .map_err(|_| SourceErrorCode::CorruptReceipt)
+        }
+    }
 }
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
@@ -1562,9 +2009,16 @@ fn reconcile(
     local_count: usize,
     audience: &ResolvedAudience,
     include_own_sent: bool,
+    delivered: &HashMap<String, DeliveryGate>,
 ) -> (Vec<(Message, Vec<Provenance>)>, Conflicts) {
+    let owned = |m: &Message| {
+        delivered
+            .get(&m.id)
+            .is_none_or(|gate| matches!(gate, DeliveryGate::Owned(_)))
+    };
     let reaches = |m: &Message| {
-        !audience.matching_keys(m).is_empty() || (include_own_sent && audience.sent_by_own(m))
+        (!audience.matching_keys(m).is_empty() && owned(m))
+            || (include_own_sent && audience.sent_by_own(m))
     };
     let mut by_id: BTreeMap<&str, Vec<(usize, &ObservedMessage)>> = BTreeMap::new();
     for (index, source) in observed.iter().enumerate() {
@@ -1692,16 +2146,16 @@ fn key_evidence(
 #[allow(clippy::too_many_arguments)]
 fn read_evidence(
     message: &Message,
+    keys: &[String],
     provenance: &[Provenance],
     observed: &[Option<ObservedSource>],
     local_count: usize,
-    audience: &ResolvedAudience,
     sources: &mut [SourceReport],
     cache: &mut ReceiptCache,
     anchor: &mut AnchorEvidence,
     budget: &mut Budget,
 ) -> ReadEvidence {
-    let keys = audience.matching_keys(message);
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     let mut anchored = None;
     let mut every_key = !keys.is_empty();
     for key in &keys {
