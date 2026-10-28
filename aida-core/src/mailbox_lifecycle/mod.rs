@@ -14,6 +14,8 @@
 //!   retained/<key>/<generation>/             preserved bytes + manifest.json
 //!   journal/<op_id>.json                     the retirement journal
 //!   claims/<key>.lock                        one retirement driver per source (flock)
+//!   receipts.lock                            the Receipt flock (only under Lifecycle)
+//!   receipts/<sha256(key)>.json              explicit per-ID ACK ledgers (B2c, [`ack`])
 //! ```
 //!
 //! A writer is *admitted* before it writes: under a short Lifecycle hold it
@@ -47,6 +49,7 @@
 //!
 //! trace:STORY-1843 | ai:claude
 
+pub mod ack;
 pub mod activation;
 pub mod guard;
 pub(crate) mod retire;
@@ -573,11 +576,16 @@ pub(crate) fn open_checked(path: &Path, cap: u64) -> Result<Option<File>> {
 
 /// Read a capped anchor file; `Ok(None)` when absent.
 pub(crate) fn read_checked(path: &Path) -> Result<Option<Vec<u8>>> {
-    let Some(file) = open_checked(path, RECORD_CAP)? else {
+    read_checked_capped(path, RECORD_CAP)
+}
+
+/// [`read_checked`] with an explicit byte cap.
+pub(crate) fn read_checked_capped(path: &Path, cap: u64) -> Result<Option<Vec<u8>>> {
+    let Some(file) = open_checked(path, cap)? else {
         return Ok(None);
     };
     let mut bytes = Vec::new();
-    file.take(RECORD_CAP + 1).read_to_end(&mut bytes)?;
+    file.take(cap + 1).read_to_end(&mut bytes)?;
     Ok(Some(bytes))
 }
 
@@ -683,6 +691,16 @@ pub fn enter_lock_class(class: &'static str) {
             if violation {
                 seen.push(UNDER_LIFECYCLE);
             }
+            seen.push(class);
+        }
+    });
+}
+
+/// Record that this thread entered `class` from inside a Lifecycle hold
+/// where the lock order allows it (Lifecycle then Receipt). Observation only.
+pub(crate) fn note_lock_class(class: &'static str) {
+    OBSERVED.with(|o| {
+        if let Some(seen) = o.borrow_mut().as_mut() {
             seen.push(class);
         }
     });

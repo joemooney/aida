@@ -153,7 +153,7 @@ fn story1843_adapters_share_one_logical_view_and_one_read_state() {
     // The explicit inbox shows both and marks exactly those, in main.
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
     assert_eq!(rows.len(), 2);
-    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    ack_displayed(&r.main, &view, &rows).unwrap();
 
     for root in [&r.main, &r.sib] {
         let after = view_from(root, &r.store, &audience);
@@ -176,8 +176,9 @@ fn story1843_adapters_share_one_logical_view_and_one_read_state() {
 }
 
 /// A legacy watermark alone is not new mail (passive surfaces stay quiet)
-/// and reads as `read (legacy)` in the explicit inbox; it gets no receipt
-/// when displayed, and the view is not caught up on it.
+/// and reads as `read (legacy)` in the explicit inbox. Displaying it
+/// explicitly acknowledges it in the receipt anchor (B2c) with no read time
+/// claimed: no local timed receipt is invented for it.
 #[test]
 fn story1843_legacy_watermark_is_not_new_and_is_labelled() {
     let r = mail_repo();
@@ -202,13 +203,30 @@ fn story1843_legacy_watermark_is_not_new_and_is_labelled() {
         .collect();
     assert_eq!(states, vec![("new", "unread"), ("old", "read (legacy)")]);
 
-    mark_displayed(&r.main, view.audience(), &default_rows).unwrap();
+    ack_displayed(&r.main, &view, &default_rows).unwrap();
     let receipts = crate::mailbox_store::read_receipts(&r.main, "operator");
     assert!(receipts.contains_key("new"));
     assert!(
         !receipts.contains_key("old"),
         "a legacy read has no known read time; no receipt is invented"
     );
+    let after = view_from(&r.main, &r.store, &audience);
+    assert!(after
+        .records()
+        .iter()
+        .all(|rec| ReadState::of(rec) == ReadState::Read));
+    assert!(matches!(
+        after
+            .records()
+            .iter()
+            .find(|rec| rec.message.id == "old")
+            .unwrap()
+            .read,
+        aida_core::mailbox_logical::ReadEvidence::Acknowledged {
+            origin: aida_core::mailbox_logical::AckOrigin::Anchor { legacy: true },
+            ..
+        }
+    ));
 }
 
 /// A worktree that vanished from disk makes every adapter say the view is
@@ -362,7 +380,7 @@ fn story1843_every_listed_id_resolves_in_the_follow_up_verbs() {
     // first) and retracting one's own sibling-only send both refuse, naming
     // the worktree that holds it.
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
-    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    ack_displayed(&r.main, &view, &rows).unwrap();
     let archive = |id: &str| MailboxCommand::Archive {
         message_id: Some(id.into()),
         older_than: None,
@@ -414,7 +432,7 @@ fn story1843_a_late_old_arrival_after_a_read_is_still_new() {
     put_canonical(&r.store, &mail("canon-new", "advisor", 200, false));
     let view = view_from(&r.main, &r.store, &audience);
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
-    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    ack_displayed(&r.main, &view, &rows).unwrap();
     assert_eq!(
         crate::mailbox_store::read_watermark(&r.main, "operator"),
         None
@@ -460,7 +478,7 @@ fn story1843_latency_rows_share_the_view() {
 
     let view = view_from(&r.main, &r.store, &audience);
     let shown = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
-    mark_displayed(&r.main, view.audience(), &shown).unwrap();
+    ack_displayed(&r.main, &view, &shown).unwrap();
     let (rows, _) =
         crate::mailbox_cmd::latency_rows(&r.main, &r.store, &audience, Some("operator"), now)
             .unwrap();
@@ -572,7 +590,7 @@ fn story1843_bound_child_never_sees_inherited_parent_mail() {
     assert_eq!(mail.unread + mail.shared_unread, 1);
 
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, false, 10);
-    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    ack_displayed(&r.main, &view, &rows).unwrap();
     assert!(crate::mailbox_store::read_receipts(&r.main, "parent-user").is_empty());
     assert!(crate::mailbox_store::read_receipts(&r.main, "parent-handle").is_empty());
     assert!(crate::mailbox_store::read_receipts(&r.main, "child-seat").contains_key("to-child"));
@@ -619,7 +637,7 @@ fn story1843_inbox_read_clears_every_fleet_wide_unread_reader() {
     let view = view_from(&r.sib, &r.store, &audience);
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
     assert_eq!(rows.len(), 2);
-    mark_displayed(&r.sib, view.audience(), &rows).unwrap();
+    ack_displayed(&r.sib, &view, &rows).unwrap();
     assert_eq!(
         crate::mailbox_store::read_watermark(&r.sib, "operator"),
         None
@@ -705,4 +723,94 @@ fn story1843_unanswerable_receipt_is_partial_not_absent() {
         Some(5),
         "latency reads the same fleet-wide receipts as the unread count"
     );
+}
+
+fn inbox_cmd() -> crate::cli::MailboxCommand {
+    crate::cli::MailboxCommand::Inbox {
+        agent: None,
+        all: false,
+        archived: false,
+        peek: false,
+        unread: false,
+        recent_read_tail: 5,
+    }
+}
+
+/// B2c: `aida mailbox inbox` acknowledges, after its output is flushed,
+/// exactly what it showed, in the common-Git receipt anchor; the ACK
+/// survives the removal of the worktree that held the mail and of every
+/// local receipt. A partial view shows the mail but acknowledges nothing.
+#[test]
+fn story1843_b2c_inbox_acknowledges_after_flush_into_the_anchor() {
+    let audience = operator();
+    let _env = operator_env();
+    let r = mail_repo();
+    crate::mailbox_store::write_message(&r.sib, &mail("sib-only", "operator", 10, false)).unwrap();
+    put_canonical(&r.store, &mail("canon", "advisor", 20, false));
+
+    run(&r.store, inbox_cmd()).unwrap();
+    let after = view_from(&r.main, &r.store, &audience);
+    assert!(after.unread().is_empty());
+    assert!(after.records().iter().all(|rec| matches!(
+        rec.read,
+        aida_core::mailbox_logical::ReadEvidence::Acknowledged {
+            origin: aida_core::mailbox_logical::AckOrigin::Anchor { legacy: false },
+            ..
+        }
+    )));
+    // The local compatibility copy is there too, for older readers.
+    assert!(crate::mailbox_store::read_receipts(&r.main, "operator").contains_key("sib-only"));
+    std::fs::remove_dir_all(r.main.join(".aida/mailbox/.read-receipts")).unwrap();
+    let after = view_from(&r.main, &r.store, &audience);
+    assert!(
+        after.unread().is_empty(),
+        "the anchor outlives local receipts"
+    );
+
+    // A new message with one sibling unreadable: shown, not acknowledged.
+    crate::mailbox_store::write_message(&r.main, &mail("main-new", "operator", 30, false)).unwrap();
+    let late = r.sib.join(".aida/mailbox/broken.json");
+    std::fs::write(&late, "{not json").unwrap();
+    run(&r.store, inbox_cmd()).unwrap();
+    std::fs::remove_file(&late).unwrap();
+    let after = view_from(&r.main, &r.store, &audience);
+    assert_eq!(ids(&after.unread()), vec!["main-new"]);
+}
+
+/// Signoff 60 #4: a commit that fails after the output was flushed exits
+/// non-zero with a message that says the mail was shown but not fully
+/// recorded, the mail stays unread, and running the read again records it.
+/// The failure here is a receipt lock another process holds past the
+/// bounded wait.
+#[test]
+fn story1843_b2c_inbox_commit_failure_exits_non_zero_and_a_retry_records() {
+    let audience = operator();
+    let _env = operator_env();
+    let r = mail_repo();
+    // A first read creates the receipt anchor and its lock file.
+    crate::mailbox_store::write_message(&r.main, &mail("first", "operator", 10, false)).unwrap();
+    run(&r.store, inbox_cmd()).unwrap();
+    crate::mailbox_store::write_message(&r.main, &mail("second", "operator", 20, false)).unwrap();
+
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(r.main.join(".git/aida/mail-lifecycle/receipts.lock"))
+        .unwrap();
+    fs2::FileExt::lock_exclusive(&lock).unwrap();
+    let err = run(&r.store, inbox_cmd()).unwrap_err();
+    fs2::FileExt::unlock(&lock).unwrap();
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("the mail above was shown, but recording it as read did not finish"),
+        "{text}"
+    );
+    assert!(text.contains("run `aida mailbox inbox` again"), "{text}");
+    assert_eq!(
+        ids(&view_from(&r.main, &r.store, &audience).unread()),
+        vec!["second"]
+    );
+
+    run(&r.store, inbox_cmd()).unwrap();
+    assert!(view_from(&r.main, &r.store, &audience).unread().is_empty());
 }

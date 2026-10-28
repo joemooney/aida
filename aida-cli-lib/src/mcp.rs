@@ -344,6 +344,44 @@ struct JsonRpcResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<JsonRpcError>,
     id: Value,
+    /// This response's own prepared mail ACK (`read_inbox` with
+    /// `mark_seen`), committed by [`deliver`] only after the response line
+    /// was written and flushed. Never serialized, never shared between
+    /// responses.
+    // trace:STORY-1843 | ai:claude
+    #[serde(skip)]
+    after_flush: Option<PendingAck>,
+}
+
+/// A `read_inbox` ACK waiting for its response to be delivered.
+#[derive(Debug)]
+struct PendingAck {
+    project_root: PathBuf,
+    plan: aida_core::mailbox_lifecycle::ack::AckPlan,
+}
+
+/// Write one JSON-RPC response line and flush it; only then commit the
+/// response's own ACK plan (STORY-1843 B2c: post-flush ACK, the successor
+/// to BUG-1482's mark-before-output). A failed write or flush commits
+/// nothing. A failed commit sends no second JSON-RPC message: the response
+/// already said `ack: "requested"`, the messages stay unread for the next
+/// `read_inbox`, and stderr gets one line with no IDs or bodies.
+// trace:STORY-1843 | ai:claude
+fn deliver(out: &mut impl Write, mut response: JsonRpcResponse) -> io::Result<()> {
+    let pending = response.after_flush.take();
+    let json = serde_json::to_string(&response)?;
+    writeln!(out, "{}", json)?;
+    out.flush()?;
+    if let Some(PendingAck { project_root, plan }) = pending {
+        // Authority is re-resolved after the flush, before any lock.
+        let current = crate::mailbox_view::own_audience_in(&project_root);
+        if let Err(e) = crate::mailbox_view::commit_ack(&project_root, plan, &current) {
+            eprintln!(
+                "aida mcp: read_inbox mark_seen did not finish ({e:#}); call read_inbox with mark_seen again to show and record what is still unrecorded"
+            );
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -524,6 +562,7 @@ impl JsonRpcResponse {
             result: Some(result),
             error: None,
             id,
+            after_flush: None,
         }
     }
 
@@ -537,6 +576,7 @@ impl JsonRpcResponse {
                 data: None,
             }),
             id,
+            after_flush: None,
         }
     }
 }
@@ -1091,6 +1131,9 @@ impl<'a> McpServer<'a> {
         let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+        // The response-scoped ACK plan a `read_inbox` call may prepare.
+        // trace:STORY-1843 | ai:claude
+        let mut after_flush: Option<PendingAck> = None;
 
         // BUG-1197: the inherited persona is a hard boundary at call time, not
         // merely a tools/list hint. This also protects against clients that
@@ -1153,7 +1196,12 @@ impl<'a> McpServer<'a> {
             "add_relationship" => self.tool_add_relationship(&arguments),
             "query_graph" => self.tool_query_graph(&arguments),
             "send_message" => self.tool_send_message(&arguments),
-            "read_inbox" => self.tool_read_inbox(&arguments),
+            "read_inbox" => self
+                .tool_read_inbox_planned(&arguments)
+                .map(|(text, plan)| {
+                    after_flush = plan;
+                    text
+                }),
             "list_features" => self.tool_list_features(),
             "history" => self.tool_history(&arguments),
 
@@ -1257,10 +1305,14 @@ impl<'a> McpServer<'a> {
             // (Claude Code) keep working; schema-driven clients (Codex, Cursor)
             // read the same logical payload out of `structuredContent` without
             // parsing the human string. trace:STORY-399 | ai:claude
-            Ok(content) => JsonRpcResponse::success(
-                id.clone(),
-                cache_labelled_tool_result(content, &cache_scope),
-            ),
+            Ok(content) => {
+                let mut response = JsonRpcResponse::success(
+                    id.clone(),
+                    cache_labelled_tool_result(content, &cache_scope),
+                );
+                response.after_flush = after_flush;
+                response
+            }
             // STORY-401: render the free-form tool error into a stable,
             // machine-readable envelope — `isError: true`, a short
             // `<tool>: <code>: <message>` text, and a `structuredError`
@@ -2911,8 +2963,14 @@ impl<'a> McpServer<'a> {
     /// MCP parity for `aida mailbox inbox` (STORY-493): an agent's inbox —
     /// messages addressed to it + broadcasts (excluding its own sent),
     /// oldest-first, as JSON. `agent` defaults to this server's identity.
-    // trace:STORY-493 | ai:claude
-    fn tool_read_inbox(&self, args: &Value) -> Result<String, String> {
+    /// With `mark_seen`, it returns the response's own prepared ACK plan,
+    /// which only [`deliver`] commits, after the response was flushed; the
+    /// tool itself writes nothing (STORY-1843 B2c).
+    // trace:STORY-493 trace:STORY-1843 | ai:claude
+    fn tool_read_inbox_planned(
+        &self,
+        args: &Value,
+    ) -> Result<(String, Option<PendingAck>), String> {
         let unread_only = args
             .get("unread")
             .and_then(|v| v.as_bool())
@@ -2933,7 +2991,11 @@ impl<'a> McpServer<'a> {
             None => own,
             Some(agent) => match own.narrowed_to(agent) {
                 Some(narrowed) => narrowed,
-                None => return self.inspect_inbox(agent, unread_only, mark_seen),
+                None => {
+                    return self
+                        .inspect_inbox(agent, unread_only, mark_seen)
+                        .map(|text| (text, None))
+                }
             },
         };
         let store_root = self.project_root.join(".aida-store");
@@ -2962,22 +3024,63 @@ impl<'a> McpServer<'a> {
             })
             .collect();
         // Explicit ack only (STORY-585 #4: the default is a non-marking
-        // peek): per-ID receipts for exactly the returned unread messages,
-        // written before the response is built.
+        // peek). STORY-1843 B2c: plan the ACK of exactly the returned
+        // messages; it is committed after this response is flushed, so the
+        // response can only say the ACK was requested, never committed.
         // trace:STORY-585 trace:TASK-1271 trace:STORY-1843 | ai:codex,claude
-        if mark_seen {
-            crate::mailbox_view::mark_displayed(&self.project_root, view.audience(), &shown)
-                .map_err(|e| e.to_string())?;
-        }
-        serde_json::to_string_pretty(&json!({
+        let (plan, ack, ack_note) = if mark_seen {
+            match crate::mailbox_view::plan_ack(&view, &shown) {
+                Ok(Some(plan)) => (Some(plan), "requested", None),
+                Ok(None) => (None, "none", None),
+                Err(e) => (None, "refused", Some(e.to_string())),
+            }
+        } else {
+            (None, "none", None)
+        };
+        let text = serde_json::to_string_pretty(&json!({
             "agent": audience.keys().collect::<Vec<_>>().join(" + "),
             "count": messages.len(),
             "unread": unread_only,
             "partial": view.is_partial(),
             "partial_note": view.partial_note(),
+            "ack": ack,
+            "ack_count": plan.as_ref().map_or(0, |p| p.len()),
+            "ack_note": ack_note,
             "messages": messages,
         }))
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        Ok((
+            text,
+            plan.map(|plan| PendingAck {
+                project_root: self.project_root.clone(),
+                plan,
+            }),
+        ))
+    }
+
+    /// The tool's text alone: a direct call never acknowledges anything,
+    /// because only [`deliver`] commits a plan. Test-only.
+    #[cfg(test)]
+    fn tool_read_inbox(&self, args: &Value) -> Result<String, String> {
+        self.tool_read_inbox_planned(args).map(|(text, _)| text)
+    }
+
+    /// `read_inbox` through the real response boundary: dispatched as a
+    /// `tools/call`, delivered into a buffer by [`deliver`] (which commits
+    /// any ACK after the flush), and the tool's text returned. Test-only.
+    #[cfg(test)]
+    fn read_inbox_delivered(&self, args: Value) -> String {
+        let response = self.handle_tools_call(
+            &json!(1),
+            &json!({ "name": "read_inbox", "arguments": args }),
+        );
+        let mut out = Vec::new();
+        deliver(&mut out, response).unwrap();
+        let line: Value = serde_json::from_slice(&out).unwrap();
+        line["result"]["content"][0]["text"]
+            .as_str()
+            .expect("a text result")
+            .to_string()
     }
 
     /// `read_inbox` for an inbox this server does not hold: read-only, this
@@ -8727,9 +8830,7 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
         }
 
         if let Some(response) = server.handle_request(&request) {
-            let json = serde_json::to_string(&response)?;
-            writeln!(stdout, "{}", json)?;
-            stdout.flush()?;
+            deliver(&mut stdout, response)?;
             if let Some(plan) = respawn.check() {
                 respawn.respawn(plan)?;
             }
@@ -11034,8 +11135,12 @@ mod tests {
             .unwrap();
         assert!(reply.contains("(thread sib-only)"), "{reply}");
 
-        let acked = read(json!({ "agent": "operator", "mark_seen": true, "unread": true }));
+        let acked: Value = serde_json::from_str(&server.read_inbox_delivered(
+            json!({ "agent": "operator", "mark_seen": true, "unread": true }),
+        ))
+        .unwrap();
         assert_eq!(acked["count"], 1);
+        assert_eq!(acked["ack"], "requested");
         assert!(crate::mailbox_store::read_receipts(&r.main, "operator").contains_key("sib-only"));
         let after = read(json!({ "unread": true }));
         assert_eq!(after["count"], 0, "{after}");
@@ -11051,6 +11156,99 @@ mod tests {
         let partial = read(json!({}));
         assert_eq!(partial["partial"], true, "{partial}");
         assert!(partial["partial_note"].as_str().is_some());
+    }
+
+    /// STORY-1843 B2c: `read_inbox` with `mark_seen` acknowledges only after
+    /// its OWN response line was written and flushed. A response whose
+    /// write fails commits nothing; two prepared responses carry separate
+    /// plans (delivering one commits only its own messages); a commit that
+    /// fails after the flush adds no second JSON-RPC line and leaves the
+    /// mail unread.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mcp_read_inbox_ack_commits_only_after_its_own_response_is_flushed() {
+        use crate::mailbox_view::tests::{mail, mail_repo};
+        struct BrokenPipe;
+        impl Write for BrokenPipe {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(io::Error::from(io::ErrorKind::BrokenPipe))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("operator")),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
+        let r = mail_repo();
+        crate::mailbox_store::write_message(&r.sib, &mail("m1", "operator", 10, false)).unwrap();
+        let server = mk_server(&r.main);
+        let call = |args: Value| {
+            server.handle_tools_call(
+                &json!(1),
+                &json!({ "name": "read_inbox", "arguments": args }),
+            )
+        };
+        let unread = || -> Vec<String> {
+            let v: Value =
+                serde_json::from_str(&server.tool_read_inbox(&json!({ "unread": true })).unwrap())
+                    .unwrap();
+            v["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| m["id"].as_str().unwrap().to_string())
+                .collect()
+        };
+
+        // A direct tool call and a failed delivery acknowledge nothing.
+        let direct: Value = serde_json::from_str(
+            &server
+                .tool_read_inbox(&json!({ "mark_seen": true }))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(direct["ack"], "requested");
+        assert!(deliver(&mut BrokenPipe, call(json!({ "mark_seen": true }))).is_err());
+        assert_eq!(unread(), vec!["m1"]);
+
+        // Two responses prepared before either is delivered.
+        let first = call(json!({ "mark_seen": true }));
+        crate::mailbox_store::write_message(&r.main, &mail("m2", "operator", 20, false)).unwrap();
+        let second = call(json!({ "mark_seen": true }));
+        let mut out = Vec::new();
+        deliver(&mut out, first).unwrap();
+        assert_eq!(
+            unread(),
+            vec!["m2"],
+            "only the first response's plan committed"
+        );
+        drop(second);
+        assert_eq!(
+            unread(),
+            vec!["m2"],
+            "an undelivered response commits nothing"
+        );
+
+        // The mail changes after the plan: the commit refuses after the
+        // flush, the client got exactly one line, and the mail stays unread.
+        let changed = call(json!({ "mark_seen": true }));
+        let mut m2 = mail("m2", "operator", 20, false);
+        m2.body = "edited".into();
+        crate::mailbox_store::write_message(&r.main, &m2).unwrap();
+        let mut out = Vec::new();
+        deliver(&mut out, changed).unwrap();
+        assert_eq!(out.iter().filter(|b| **b == b'\n').count(), 1);
+        let line: Value = serde_json::from_slice(&out).unwrap();
+        let text: Value =
+            serde_json::from_str(line["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(text["ack"], "requested");
+        assert_eq!(unread(), vec!["m2"]);
+        // A retry plans the current bytes and commits.
+        server.read_inbox_delivered(json!({ "mark_seen": true }));
+        assert!(unread().is_empty());
     }
 
     // trace:STORY-585 trace:TASK-1271 | ai:claude+codex
@@ -11101,11 +11299,9 @@ mod tests {
         assert_eq!(unread1_p["count"], 2, "peek did not consume: {unread1}");
         assert_eq!(unread1_p["unread"], true);
 
-        // Explicit ack: mark_seen records per-message latency history and
-        // advances the watermark.
-        server
-            .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
-            .unwrap();
+        // Explicit ack: mark_seen, once the response is delivered, records
+        // per-message latency history.
+        server.read_inbox_delivered(json!({ "agent": "claude", "mark_seen": true }));
         let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
         let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
         assert_eq!(receipts.len(), 2, "ack records a receipt for each message");
@@ -11199,9 +11395,7 @@ mod tests {
         server
             .tool_send_message(&json!({ "to": "claude", "body": "new unread", "from": "codex" }))
             .unwrap();
-        server
-            .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
-            .unwrap();
+        server.read_inbox_delivered(json!({ "agent": "claude", "mark_seen": true }));
 
         let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
         let old_id = messages

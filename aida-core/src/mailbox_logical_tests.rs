@@ -340,7 +340,7 @@ fn story1843_read_evidence_is_id_scoped_and_watermarks_stay_legacy() {
     assert_eq!(
         unseen.read,
         ReadEvidence::Acknowledged {
-            source: sib_a,
+            origin: AckOrigin::Source(sib_a),
             key: "advisor".into(),
             at: 120
         }
