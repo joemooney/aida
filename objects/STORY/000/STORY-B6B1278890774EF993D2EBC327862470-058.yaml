@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T16:36:29.610251963Z
-modified_at: 2026-10-28T16:36:29.610251963Z
+modified_at: 2026-10-28T16:36:38.293102065Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a18334-5e4d-75b0-a32b-6768d63f8f38
+  created_at: 2026-10-28T16:36:38.293099152Z
+  created_by: joe
+history:
+- id: 01a1835e-f107-7d00-8cac-1a30ccd9575a
+  author: joe
+  timestamp: 2026-10-28T16:36:39.815611225Z
+  session_id: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
+  changes: []
 filed_at:
   code_sha: ad2e2f0622670185e101b048d5772630114c41d7
   branch: fix/mailbox-tomb-followups
