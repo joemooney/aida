@@ -2088,9 +2088,15 @@ fn mounts_in(file: &str, mod_rs: bool, parsed: &syn::File) -> Vec<Mount> {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
     root_module_mounts_in(&parse_source(text), name)
+        .into_iter()
+        .map(|(candidates, _)| candidates)
+        .collect()
 }
 
-fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<Vec<String>> {
+/// [`root_module_mounts`] over a parsed source, each mount with whether
+/// `#[cfg(test)]` keeps it out of non-test builds.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<(Vec<String>, bool)> {
     let inline = file
         .items
         .iter()
@@ -2098,9 +2104,18 @@ fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<Vec<String>> {
     mounts_in("lib.rs", true, file)
         .into_iter()
         .filter(|m| m.depth == 1 && m.name == name)
-        .map(|m| m.candidates.into_iter().map(|(c, _)| c).collect())
-        .chain(inline.map(|_| vec!["<inline>".to_string()]))
+        .map(|m| (m.candidates.into_iter().map(|(c, _)| c).collect(), m.test))
+        .chain(inline.map(|_| (vec!["<inline>".to_string()], false)))
         .collect()
+}
+
+/// Whether the crate-root mounts of `name` are all a plain `mod name;` and
+/// at least one is compiled outside tests. A `#[cfg(test)]`-only mount
+/// leaves the non-test `crate::name` to something unscanned.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+fn mounts_plainly(found: &[(Vec<String>, bool)], name: &str) -> bool {
+    let plain = [format!("{name}.rs"), format!("{name}/mod.rs")];
+    found.iter().all(|(c, _)| *c == plain) && found.iter().any(|(_, test)| !test)
 }
 
 /// What a crate-root source puts in the textual macro scope of every
@@ -2173,29 +2188,52 @@ fn root_textual_macros_in(
     (mods, rules)
 }
 
-/// The root-level macros (definitions and invocations) whose tokens name
-/// `name`. syn sees only the unexpanded call, so `m!();` expanding to
-/// `#[path = "forge2.rs"] mod forge;` or `use util::canonical_role_name;`
-/// would rebind an allowlisted name past [`root_module_mounts`] and
-/// [`root_bindings`]; any root macro naming it is refused instead.
+/// The root-level item macro invocations a crate-root source makes beyond
+/// `include!` of one of `parts` and `thread_local!`. syn sees only the
+/// unexpanded call, so `crate::m!();` expanding to `#[path = "forge2.rs"]
+/// mod forge;` or `use util::canonical_role_name;` would rebind an
+/// allowlisted name past [`root_module_mounts`] and [`root_bindings`]; its
+/// tokens need not name it, and its definition may sit in any module, so
+/// every other invocation is refused. `macro_rules!` definitions expand
+/// nothing themselves.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-fn root_macros_naming(file: &syn::File, name: &str) -> Vec<String> {
-    let names = regex::Regex::new(&format!(r"\b(?:r#)?{name}\b")).unwrap();
+fn root_item_macros(file: &syn::File, parts: &[String]) -> Vec<String> {
     file.items
         .iter()
-        .filter_map(|item| match item {
-            syn::Item::Macro(m) if names.is_match(&m.mac.tokens.to_string()) => {
-                Some(m.ident.as_ref().map_or_else(
-                    || {
-                        let path = m.mac.path.segments.iter().map(|s| s.ident.to_string());
-                        path.collect::<Vec<_>>().join("::") + "!"
-                    },
-                    |i| format!("macro_rules! {i}"),
-                ))
+        .filter_map(|item| {
+            let syn::Item::Macro(m) = item else {
+                return None;
+            };
+            let path = &m.mac.path;
+            if path.is_ident("macro_rules") {
+                return None;
             }
-            _ => None,
+            let allowed = if path.is_ident("include") {
+                syn::parse2::<syn::LitStr>(m.mac.tokens.clone())
+                    .is_ok_and(|lit| parts.contains(&lit.value()))
+            } else {
+                path.is_ident("thread_local")
+            };
+            let shown = path.segments.iter().map(|s| s.ident.to_string());
+            let lead = if path.leading_colon.is_some() {
+                "::"
+            } else {
+                ""
+            };
+            (!allowed).then(|| format!("{lead}{}!", shown.collect::<Vec<_>>().join("::")))
         })
         .collect()
+}
+
+/// Whether `text` defines or renames a macro to a name [`root_item_macros`]
+/// lets the crate root invoke bare: a `#[macro_export] macro_rules!
+/// include` (or `pub(crate) use m as include;` reached by a root glob)
+/// would shadow the builtin and run its own expansion at the root.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+fn shadows_root_item_macro(text: &str) -> bool {
+    regex::Regex::new(r"\b(?:macro_rules\s*!\s*|as\s+)(?:r#)?(?:include|thread_local)\b")
+        .unwrap()
+        .is_match(text)
 }
 
 /// The macros a source invokes by a bare name (`format!`, not
@@ -2654,28 +2692,45 @@ fn gate_dispatch_reaches_the_crate_only_through_allowlisted_names() {
             // `dispatch` too: the gate sources are read from `gate/`, and
             // the primitives the ratchet guards from `dispatch`.
             // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-            let plain = vec![format!("{name}.rs"), format!("{name}/mod.rs")];
-            let found: Vec<Vec<String>> = roots
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+            let found: Vec<(Vec<String>, bool)> = roots
                 .iter()
                 .flat_map(|(_, parsed)| root_module_mounts_in(parsed, name))
                 .collect();
             assert!(
-                !found.is_empty() && found.iter().all(|c| *c == plain),
-                "the crate root must mount allowlisted `{name}` as a plain \
-                 `mod {name};` loading {file}, found {found:?}"
-            );
-        }
-        // A root macro could expand to a mount or binding syn never sees.
-        // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-        for (root, parsed) in &roots {
-            let macros = root_macros_naming(parsed, name);
-            assert!(
-                macros.is_empty(),
-                "{root}: root-level {macros:?} names allowlisted `{name}`; \
-                 its expansion could rebind it unscanned"
+                mounts_plainly(&found, name),
+                "the crate root must mount allowlisted `{name}` as a plain, \
+                 non-test `mod {name};` loading {name}.rs or {name}/mod.rs, \
+                 found (candidates, cfg(test)) {found:?}"
             );
         }
     }
+
+    // A root macro could expand to a mount or binding syn never sees, so
+    // the root invokes none but `include!` of its parts and `thread_local!`,
+    // and no crate source shadows either name.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    let parts: Vec<String> = root_files[1..].to_vec();
+    for (root, parsed) in &roots {
+        let macros = root_item_macros(parsed, &parts);
+        assert!(
+            macros.is_empty(),
+            "{root}: root-level {macros:?} could expand to a mount or binding \
+             of an allowlisted name unscanned; write the items out instead"
+        );
+    }
+    let mut sources = Vec::new();
+    all_rust_files(&src, &mut sources);
+    let shadowing: Vec<_> = sources
+        .iter()
+        .filter(|p| !p.ends_with("tests/story_1888_gate_paths_tests.rs"))
+        .filter(|p| shadows_root_item_macro(&std::fs::read_to_string(p).unwrap_or_default()))
+        .collect();
+    assert!(
+        shadowing.is_empty(),
+        "these sources define or rename a macro to `include`/`thread_local`, \
+         shadowing the crate root's builtin call: {shadowing:?}"
+    );
 
     // No crate-root source shadows a macro the gate calls bare: rustc
     // resolves `format!` through textual scope first, so a `#[macro_use]`
@@ -2898,6 +2953,25 @@ fn root_module_mount_detection_sees_redirected_modules() {
             "`{src}` mounts forge from another file unseen: {found:?}"
         );
     }
+    // Only a plain mount compiled outside tests counts.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
+    let plainly =
+        |src: &str| mounts_plainly(&root_module_mounts_in(&parse_source(src), "forge"), "forge");
+    for src in [
+        "mod forge;",
+        "#[cfg(not(test))]\nmod forge;",
+        "#[cfg(test)]\nmod forge;\nmod forge;",
+    ] {
+        assert!(plainly(src), "{src}");
+    }
+    for src in [
+        "#[cfg(test)]\nmod forge;",
+        "#[cfg(test)]\npub(crate) mod forge;",
+        "#[cfg(test)]\nmod forge;\n#[path = \"forge2.rs\"] mod forge;",
+        "",
+    ] {
+        assert!(!plainly(src), "{src}");
+    }
     // Nested or absent: nothing mounts `crate::forge`.
     for src in [
         "mod a { mod forge; }",
@@ -2909,39 +2983,69 @@ fn root_module_mount_detection_sees_redirected_modules() {
     }
 }
 
-// A root macro that could expand to a mount or binding of an allowlisted
-// name is seen, though syn never expands it.
+// Every root item macro that could expand to a mount or binding is seen,
+// though syn never expands it and its tokens need not name what it binds.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 #[test]
 fn root_macro_detection_sees_hidden_mounts_and_bindings() {
-    let naming = |src: &str, name: &str| root_macros_naming(&parse_source(src), name);
-    assert_eq!(
-        naming(
+    let parts = ["lib_part1.rs".to_string()];
+    let invoked = |src: &str| root_item_macros(&parse_source(src), &parts);
+    for (src, shown) in [
+        (
             "macro_rules! m { () => { #[cfg(not(test))] #[path = \"forge2.rs\"] mod forge; } }\n\
              m!();\n#[cfg(test)]\nmod forge;",
-            "forge"
+            "m!",
         ),
-        vec!["macro_rules! m"]
-    );
-    assert_eq!(
-        naming(
+        (
             "macro_rules! m { ($p:ident, $n:ident) => { use $p::$n; } }\n\
              m!(util, canonical_role_name);",
-            "canonical_role_name"
+            "m!",
         ),
-        vec!["m!"]
-    );
-    assert_eq!(
-        naming("crate::reexport! { r#forge }", "forge"),
-        vec!["crate::reexport!"]
-    );
+        ("crate::reexport! { r#forge }", "crate::reexport!"),
+        // The PR-2999 review repro (rustc-confirmed): util.rs holds
+        // `#[macro_export] macro_rules! m { () => { #[cfg(not(test))]
+        // #[path = "forge2.rs"] mod forge; } }`, so nothing here names
+        // forge and the only visible mount is test-only.
+        (
+            "mod util;\n#[cfg(test)]\nmod forge;\ncrate::m!();",
+            "crate::m!",
+        ),
+        ("::aida::m!();", "::aida::m!"),
+        ("include!(\"lib_part9.rs\");", "include!"),
+        ("include!(concat!(\"lib_part1\", \".rs\"));", "include!"),
+        ("std::include!(\"lib_part1.rs\");", "std::include!"),
+        (
+            "std::thread_local! { static X: u8 = 0; }",
+            "std::thread_local!",
+        ),
+    ] {
+        assert_eq!(invoked(src), vec![shown], "{src}");
+    }
     for src in [
         "mod forge;",
-        "macro_rules! m { () => { mod forge_x; } }",
+        "macro_rules! m { () => { mod forge; } }",
         "include!(\"lib_part1.rs\");",
+        "thread_local! { static X: u8 = 0; }",
         "fn f() { m!(forge); }",
+        "mod a { m!(); }",
     ] {
-        assert!(naming(src, "forge").is_empty(), "{src}");
+        assert!(invoked(src).is_empty(), "{src}");
+    }
+    for text in [
+        "#[macro_export]\nmacro_rules! include { ($f:literal) => {} }",
+        "macro_rules! r#thread_local { () => {} }",
+        "pub(crate) use m as include;",
+        "pub(crate) use crate::m as\n  thread_local;",
+    ] {
+        assert!(shadows_root_item_macro(text), "{text}");
+    }
+    for text in [
+        "include!(\"lib_part1.rs\");",
+        "thread_local! { static X: u8 = 0; }",
+        "use std::include_str as inc;",
+        "use x as included;",
+    ] {
+        assert!(!shadows_root_item_macro(text), "{text}");
     }
 }
 
