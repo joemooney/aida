@@ -80558,5 +80558,23 @@ operations:
   timestamp: 2026-10-28T10:38:02.720630731Z
   kind: !SetStatus
     status: Completed
-clock: 6269
+- id: 01a18216-b80c-7792-ae2a-ca58ee38ae4f
+  target_id: 01a18216-b0a1-7b11-95f1-a9bee61636b3
+  author: aida
+  node_id: '1'
+  lamport: 6270
+  timestamp: 2026-10-28T10:38:09.420961031Z
+  kind: !Create
+    title: (cosmetic, non-blocking) gate/dispatch_types.rs:4 says 'Callers ... import them…
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-028, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (cosmetic, non-blocking) gate/dispatch_types.rs:4 says 'Callers ... import them from the floor', but gate-internal callers (gate/dispatch_ledger.rs:18, gate/dispatch_authority.rs:21 and :1596-1600) import them via the facade re-export at gate/dispatch_deps.rs:189. 'nothing outside gate/ re-exports them' is accurate; 'Callers' could say 'Callers outside gate/'.
+
+      PR: #3019
+      Reviewed sha: e3fec82ea230fd3f382b64c45a68a3e9aa54ae6a
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6270
 node_id: '1'
