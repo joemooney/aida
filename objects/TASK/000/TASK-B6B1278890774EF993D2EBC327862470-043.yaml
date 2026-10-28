@@ -1,0 +1,29 @@
+id: 01a18254-690e-7f40-9adb-d61d50f5762e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-043
+title: 'Cosmetic: gate/merge_hold_core.rs keeps #[allow(unused_imports)] over the now-e…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-024, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic: gate/merge_hold_core.rs keeps #[allow(unused_imports)] over the now-explicit use crate::merge_hold::{reconcile_recusal_route, sync_label}; both names are used, so the suppression is dead and would hide a future stale import. current_user_id/aida_home_dir doc comments are now duplicated in kernel.rs and gate/kernel_deps.rs.
+
+  PR: #3025
+  Reviewed sha: 6efd7270069d247871f1c043b227c8b21a3ec974
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T11:45:32.430964243Z
+modified_at: 2026-10-28T11:45:32.430964243Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-024
+- finding-hash:758fb5a2
+- from-review:PR-3025
+- kind:carried-forward
+filed_at:
+  code_sha: 42070fbece09cfca8f00042931b573300d85f0f9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 75d12e4354f
+  vendor: claude

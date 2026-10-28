@@ -80978,5 +80978,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6303
+- id: 01a18254-720a-7e92-9af6-3a6252ec0060
+  target_id: 01a18254-690e-7f40-9adb-d61d50f5762e
+  author: aida
+  node_id: '1'
+  lamport: 6304
+  timestamp: 2026-10-28T11:45:34.730826615Z
+  kind: !Create
+    title: 'Cosmetic: gate/merge_hold_core.rs keeps #[allow(unused_imports)] over the now-e…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-024, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Cosmetic: gate/merge_hold_core.rs keeps #[allow(unused_imports)] over the now-explicit use crate::merge_hold::{reconcile_recusal_route, sync_label}; both names are used, so the suppression is dead and would hide a future stale import. current_user_id/aida_home_dir doc comments are now duplicated in kernel.rs and gate/kernel_deps.rs.
+
+      PR: #3025
+      Reviewed sha: 6efd7270069d247871f1c043b227c8b21a3ec974
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6304
 node_id: '1'
