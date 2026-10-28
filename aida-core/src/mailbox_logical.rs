@@ -1397,7 +1397,15 @@ fn inventory(
         if rec.bare || rec.branch.as_deref() == Some(STORE_BRANCH) {
             continue;
         }
-        let canonical = std::fs::canonicalize(&rec.path).ok();
+        // Only a path that is not there is missing. A present worktree that
+        // cannot be resolved (EACCES, ELOOP, ...) and that git does not
+        // report prunable is unreadable, so its `.deliveries/` went unread
+        // and the F2 gate fails closed (advisor ruling).
+        // trace:STORY-1843 | ai:claude
+        let (canonical, unresolvable) = match std::fs::canonicalize(&rec.path) {
+            Ok(path) => (Some(path), false),
+            Err(e) => (None, e.kind() != std::io::ErrorKind::NotFound),
+        };
         if canonical.is_some() && canonical == store {
             continue;
         }
@@ -1411,6 +1419,8 @@ fn inventory(
         let Some(path) = canonical else {
             let code = if rec.prunable {
                 SourceErrorCode::WorktreePrunable
+            } else if unresolvable {
+                SourceErrorCode::Unreadable
             } else {
                 SourceErrorCode::WorktreeMissing
             };
@@ -1666,8 +1676,6 @@ fn fingerprint(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-/// Read every top-level `*.json` message under `root/<components…>`.
-/// `Ok(None)` when the mailbox directory (or an ancestor) does not exist.
 /// The sidecars of a source whose full read failed: its `.deliveries/`
 /// read on its own, no-follow and budgeted. An absent mailbox or
 /// `.deliveries/` holds none. `Err`: they could not be read (ruling F2).
@@ -1687,6 +1695,8 @@ fn read_source_deliveries(
     read_sidecars(&dir, budget)
 }
 
+/// Read every top-level `*.json` message under `root/<components…>`.
+/// `Ok(None)` when the mailbox directory (or an ancestor) does not exist.
 fn read_source(
     root: &Path,
     components: &[&str],

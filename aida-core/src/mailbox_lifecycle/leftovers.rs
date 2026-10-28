@@ -9,11 +9,14 @@
 //! - `<checkout>/.aida/.mailbox.creating.<uuid>/`: a crashed creator's
 //!   staging directory.
 //! - `<anchor>/nonce-era/<hash>`: a nonce-era marker whose worktree admin
-//!   entry was pruned or recreated.
+//!   entry was pruned or recreated, and `.<hash>.drop.<id>` asides an
+//!   earlier build left while dropping one (a fresh aside whose marker is
+//!   gone is linked back).
 //!
-//! Tombs and staging are touched only once older than [`STALE_AFTER`], so a
-//! reuse or creation still in flight never loses its directory. The
-//! retention dry run reports; `aida agent gc` reaps.
+//! Tombs, staging and asides are touched only once older than
+//! [`STALE_AFTER`], so a reuse, creation or drop still in flight never loses
+//! its entry. Markers are dropped under the Lifecycle lock. The retention
+//! dry run reports; `aida agent gc` reaps.
 //!
 //! trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 
@@ -60,7 +63,7 @@ pub(crate) fn scan_at(project_root: &Path, reap: bool, now: SystemTime) -> Lefto
         scan_aida_dir(dir, reap, now, &mut out);
     }
     if let Some(anchored) = &anchor {
-        scan_era_markers(&anchored.anchor, reap, &mut out);
+        scan_era_markers(&anchored.anchor, &anchored.common, reap, now, &mut out);
     }
     out
 }
@@ -128,48 +131,93 @@ fn scan_aida_dir(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
     }
 }
 
-fn scan_era_markers(anchor: &Path, reap: bool, out: &mut Leftovers) {
+fn scan_era_markers(
+    anchor: &Path,
+    common: &Path,
+    reap: bool,
+    now: SystemTime,
+    out: &mut Leftovers,
+) {
     let Ok(entries) = std::fs::read_dir(anchor.join(super::NONCE_ERA_DIR)) else {
         return;
     };
     let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
     paths.sort();
-    for marker in paths {
-        // Only a marker that names its admin entry can be judged here; a
-        // pre-record one is judged when its checkout next resolves.
-        let Ok(Some(bytes)) = super::read_checked(&marker) else {
+    for path in paths {
+        let Ok(Some(bytes)) = super::read_checked(&path) else {
             continue;
         };
-        let Ok(record) = serde_json::from_slice::<super::EraMarker>(&bytes) else {
-            continue;
-        };
-        // A drop's aside (`.<marker>.drop.<id>`) is never linked back from
-        // here: a stale one is simply removed.
-        let aside = marker
-            .file_name()
-            .is_some_and(|n| n.to_string_lossy().starts_with('.'));
-        let drop = |marker: &Path| {
-            if aside {
-                std::fs::remove_file(marker).map_err(super::LifecycleError::from)
-            } else {
-                super::drop_stale_era_marker(marker, &record.admin_dir)
+        let record = serde_json::from_slice::<super::EraMarker>(&bytes).ok();
+        if let Some(marker) = aside_marker(&path) {
+            // An aside of a pre-record marker (the bare admin name) is judged
+            // against that admin name's entry.
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+            let admin_dir = match record {
+                Some(record) => record.admin_dir,
+                None => match std::str::from_utf8(&bytes) {
+                    Ok(admin) => super::admin_dir(common, admin),
+                    Err(_) => continue,
+                },
+            };
+            if is_old(&path, now) && (!reap || settle_aside(&path, &marker, &admin_dir)) {
+                out.reapable.push(path);
             }
-        };
-        if super::era_marker_stale(&marker, &record.admin_dir) && (!reap || drop(&marker).is_ok()) {
-            out.reapable.push(marker);
+            continue;
         }
+        // Only a marker that names its admin entry is judged here; a
+        // pre-record one is judged when its checkout next resolves.
+        let Some(record) = record else {
+            continue;
+        };
+        if super::era_marker_stale(&path, &record.admin_dir)
+            && (!reap
+                || super::drop_stale_era_marker(anchor, &path, &record.admin_dir).unwrap_or(false))
+        {
+            out.reapable.push(path);
+        }
+    }
+}
+
+/// The marker a drop aside (`.<marker>.drop.<id>`, left by a build that
+/// renamed markers aside to drop them) belongs to.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-067 | ai:claude
+fn aside_marker(path: &Path) -> Option<PathBuf> {
+    let name = path.file_name()?.to_str()?;
+    let (marker, _) = name.strip_prefix('.')?.split_once(".drop.")?;
+    Some(path.with_file_name(marker))
+}
+
+/// Settle an old drop aside: a fresh one whose marker is absent (its
+/// dropper crashed before linking it back) is linked back first, never over
+/// a marker that stands; then the aside is removed. Gone counts as settled.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-067 | ai:claude
+fn settle_aside(aside: &Path, marker: &Path, admin_dir: &Path) -> bool {
+    if !super::era_marker_stale(aside, admin_dir) {
+        match std::fs::hard_link(aside, marker) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return true,
+            Err(_) => return false,
+        }
+    }
+    match std::fs::remove_file(aside) {
+        Ok(()) => true,
+        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
     }
 }
 
 /// Is `path` a real directory last changed at least [`STALE_AFTER`] before
 /// `now`? Its change time counts, so a rename into place restarts the clock.
 fn is_stale_dir(path: &Path, now: SystemTime) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_dir()) && is_old(path, now)
+}
+
+/// Was `path` last changed (or renamed) at least [`STALE_AFTER`] before
+/// `now`?
+fn is_old(path: &Path, now: SystemTime) -> bool {
     let Ok(meta) = std::fs::symlink_metadata(path) else {
         return false;
     };
-    if !meta.file_type().is_dir() {
-        return false;
-    }
     let changed = u64::try_from(meta.ctime())
         .ok()
         .map(|s| UNIX_EPOCH + Duration::new(s, u32::try_from(meta.ctime_nsec()).unwrap_or(0)));

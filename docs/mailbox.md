@@ -278,7 +278,11 @@ through the shared role inbox as before. One exception: if a live
 worktree's delivery records cannot be read (a corrupt or unsafe file, a
 symlinked mailbox, a read that ran out of time), they may belong to any role
 message, so role messages without a delivery record are hidden from that
-view until a clean read, rather than shown to the whole role. A worktree
+view until a clean read, rather than shown to the whole role. The same holds
+when the list of worktrees is incomplete: `git worktree list` fails or runs
+out of time, the repository has more worktrees than one read covers (512),
+or a worktree that is present cannot be resolved (for example, a permission
+error on its path). A worktree
 whose other mail fails to read but whose delivery records read cleanly, a
 deleted or prunable worktree, and an unusable canonical store hide nothing.
 Mail to a vendor group is never hidden this way.

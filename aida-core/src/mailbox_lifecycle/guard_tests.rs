@@ -995,6 +995,53 @@ fn an_era_marker_drop_never_removes_a_fresh_marker_written_meanwhile() {
     assert_eq!(era.len(), 1, "no aside left behind: {era:?}");
 }
 
+/// A drop that cannot take the Lifecycle lock keeps the marker: a stale
+/// marker kept refuses, a fresh one dropped would fail open.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-067 | ai:claude
+#[test]
+fn an_era_marker_drop_without_the_lock_keeps_the_marker() {
+    let (_dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("m1")).unwrap();
+    let marker = only_era_marker(&wt);
+    let mut stale: EraMarker = serde_json::from_slice(&std::fs::read(&marker).unwrap()).unwrap();
+    stale.ino += 1;
+    std::fs::remove_file(&marker).unwrap();
+    std::fs::write(&marker, serde_json::to_vec(&stale).unwrap()).unwrap();
+    std::fs::set_permissions(&marker, std::os::unix::fs::PermissionsExt::from_mode(0o600)).unwrap();
+    std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    let anchor = marker.parent().unwrap().parent().unwrap().to_path_buf();
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
+    // Not re-entrant on this thread: the lock-order error, not the
+    // lost-nonce recovery.
+    let held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
+    let err = resolve_source(&wt).unwrap_err();
+    drop(held);
+    assert!(matches!(err, LifecycleError::LockOrder(_)), "{err}");
+    assert!(marker.is_file(), "kept while the lock is unavailable");
+    // Busy in another holder: retriable.
+    let (taken, release) = (std::sync::mpsc::channel(), std::sync::mpsc::channel::<()>());
+    let holder = {
+        let anchor = anchor.clone();
+        let (taken, release) = (taken.0, release.1);
+        std::thread::spawn(move || {
+            let _held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
+            taken.send(()).unwrap();
+            release.recv().unwrap();
+        })
+    };
+    taken.1.recv().unwrap();
+    let err = resolve_source(&wt).unwrap_err();
+    release.0.send(()).unwrap();
+    holder.join().unwrap();
+    assert!(matches!(err, LifecycleError::LockTimeout { .. }), "{err}");
+    assert!(err.to_string().contains("retry"), "{err}");
+    assert!(marker.is_file(), "kept while the lock is busy");
+    resolve_source(&wt)
+        .unwrap()
+        .expect("dropped once the lock is free");
+    assert!(!marker.exists());
+}
+
 /// A marker whose admin entry is current keeps refusing a lost nonce.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 #[test]
