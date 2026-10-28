@@ -309,6 +309,8 @@ These are known gaps (tracked for the master to triage):
 
 - **Role delivery records are not synced.** A clone that sees only the canonical store treats a role message as ordinary role mail (see "Mail to a role: who gets it").
 
+- **Relay delivery records are not synced either.** A canonical-only clone sees mail to a relay label as ordinary handle mail, without its run, its handover or its end-notice marker. Relay ownership, handover and end notices are documented under `aida relay-mail` in docs/cli/06-roles-sessions.md. <!-- trace:STORY-1843 | ai:claude -->
+
 - **Intent on the notice surface + read-mail skill.** `aida mailbox inbox` and the `read_inbox` MCP tool surface a message's `intent`, but folding it into the unread *notice* surface (`aida mailbox notice`) and the read-mail skill's interpret step is still pending — TASK-790.
 
 Resolved since the first cut: the operator overview (`aida mailbox list` + `aida mailbox inbox --all`, STORY-539 / BUG-513); urgency surfacing in the statusline (`--urgent`, STORY-539); retract/delete (STORY-583); the read/notice loop that surfaces unread mail into an agent's context (STORY-585); and message intent markers (`fyi | request | handoff`) + the act-on-mail policy (TASK-782).
