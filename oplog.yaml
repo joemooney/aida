@@ -80515,5 +80515,32 @@ operations:
   timestamp: 2026-10-28T10:14:11.433931865Z
   kind: !SetStatus
     status: Completed
-clock: 6266
+- id: 01a18213-2fe6-7560-b82d-d8a72bcb85fb
+  target_id: 01a18213-27be-72b3-9b49-e547e003090e
+  author: aida
+  node_id: '1'
+  lamport: 6267
+  timestamp: 2026-10-28T10:34:17.958365924Z
+  kind: !Create
+    title: 'Review PR-3022: [AI:claude] fix(show): collision-checked read fallback and 5 s bound in the open test (TASK-b6b1278890774ef993d2ebc327862470-029 TASK-b6b1278890774ef993d2ebc327862470-030)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/show-fallback-followups`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3022>
+      - Branch: `fix/show-fallback-followups` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-029
+      - TASK-b6b1278890774ef993d2ebc327862470-030
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3022` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6267
 node_id: '1'
