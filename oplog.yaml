@@ -80720,5 +80720,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6282
+- id: 01a1823f-f336-7af0-a4c0-ff1f5ccf2468
+  target_id: 01a1823f-ebe2-7253-b4b2-1f4322039d10
+  author: aida
+  node_id: '1'
+  lamport: 6283
+  timestamp: 2026-10-28T11:23:11.542646754Z
+  kind: !Create
+    title: 'N2 (minor, non-blocking): handle_init_distributed_worktree (aida-cli-lib/src/in…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-1741, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      N2 (minor, non-blocking): handle_init_distributed_worktree (aida-cli-lib/src/init_cmd.rs:4339) calls resolve_init_footprint before the adopted_init_route guard (:4383). At a TTY in a fresh adopted clone with no config, the user is asked the 'Setup style' Full/Minimal/Memory-lane question, and the answer is then ignored by handle_init_adopted. Move the adopted check above resolve_init_footprint, or skip the prompt when adopted.
+
+      PR: #3005
+      Reviewed sha: 9059829f7e6a87c2b6b65f6815d5360ba23cfd85
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6283
 node_id: '1'
