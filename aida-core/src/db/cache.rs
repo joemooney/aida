@@ -671,6 +671,28 @@ impl Drop for HoldingWrite {
 // trace:BUG-1956 | ai:claude
 pub(super) const READ_LADDER_CAP: Duration = Duration::from_secs(3);
 
+// The share of ADR-53's 5 s ceiling that a read's ladder waits and its
+// authoritative fallback scan may spend together; the rest is left for
+// opening, rendering and process start-up.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
+pub(super) const READ_WAIT_AND_SCAN_CAP: Duration = Duration::from_secs(4);
+
+// The scan a read fallback always gets, however long the waits before it ran.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
+pub(super) const READ_FALLBACK_MIN_SCAN: Duration = Duration::from_secs(1);
+
+/// How long a read's authoritative fallback scan may run: what the
+/// invocation's ladder waits (every refresh and lookup before it, not only
+/// this lookup's) left of [`READ_WAIT_AND_SCAN_CAP`], never less than
+/// [`READ_FALLBACK_MIN_SCAN`]. A budgeted read's waits stop at
+/// [`READ_LADDER_CAP`], so it always scans for at least the difference.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
+pub(super) fn read_fallback_scan_budget() -> Duration {
+    READ_WAIT_AND_SCAN_CAP
+        .saturating_sub(super::cache_refresh::ladder_waited())
+        .max(READ_FALLBACK_MIN_SCAN)
+}
+
 thread_local! {
     // trace:BUG-1956 | ai:claude
     static READ_LADDER_ARMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
