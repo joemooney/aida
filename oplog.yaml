@@ -80112,5 +80112,31 @@ operations:
   timestamp: 2026-10-28T08:09:01.202295766Z
   kind: !SetStatus
     status: Completed
-clock: 6236
+- id: 01a18195-b1fc-7e30-bc00-6cc71583af89
+  target_id: 01a18195-a701-7520-b0e0-d10e199bca92
+  author: aida
+  node_id: '1'
+  lamport: 6237
+  timestamp: 2026-10-28T08:17:13.724587233Z
+  kind: !Create
+    title: 'Review PR-3012: [AI:claude] fix(show): bound content linkage and attribute every show phase (BUG-b6b1278890774ef993d2ebc327862470-008)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/show-linkage-perf`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3012>
+      - Branch: `fix/show-linkage-perf` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-008
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3012` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6237
 node_id: '1'
