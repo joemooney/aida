@@ -22,8 +22,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T04:46:37.988787088Z
-modified_at: 2026-10-28T07:21:37.739797033Z
+modified_at: 2026-10-28T07:29:33.873566432Z
 req_type: Spike
+comments:
+- id: 01a1816a-0eb1-7051-b138-0ac6719759a4
+  author: joe
+  content: |-
+    Write-up: docs/plans/2026-10-28-private-core-split-spike.md (PR #3007).
+    1. Repo is already PUBLIC + MIT with 966 aida-core commits; a split only protects future code; history scrub breaks SHA refs and protects nothing.
+    2. Coupling: 85/99 core modules consumed (~3,150 refs); 50 of 57 core-src PRs in last 200 also touched a consumer (25% of all PRs would go two-repo).
+    3. Fork PRs: 0/200 from forks; public logs leak any privately-compiled source, so private code must never build on public runners.
+    4. Recommendation: DO NOT SPLIT YET. If a proprietary capability is named, use a narrow private aida-pro crate behind public traits (option C); monorepo+export mirror (D) only if it grows large.
+    5. Operator decision: what, specifically, is proprietary? (none -> close; named capability -> C; most of core -> D; also weigh a license change.)
+  created_at: 2026-10-28T07:29:33.873566432Z
+  modified_at: 2026-10-28T07:29:33.873566432Z
+  session_id: 447e7763-4579-4f68-843b-46721f8b1f1b
 history:
 - id: 01a18162-cacb-74c1-95d2-f4119339b737
   author: joe
