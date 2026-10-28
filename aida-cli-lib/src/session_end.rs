@@ -1800,7 +1800,7 @@ pub(crate) fn session_end(
             "run `aida worktree dismiss {}` once it is readable",
             target.worktree_path.display()
         );
-        match crate::seat_clone::destroy_retained(
+        let left_in_place = match crate::seat_clone::destroy_retained(
             &project_root,
             &target.worktree_path,
             crate::seat_clone::DestroyMode::SalvageUnshipped,
@@ -1820,29 +1820,34 @@ pub(crate) fn session_end(
                     "{} seat clone removed and its base pin released",
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
+                None
             }
             Ok(crate::seat_clone::Destroyed::Kept {
                 retention: Some(refusal),
                 ..
-            }) => late_refusal = Some(refusal),
-            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) if had_retirement => {
-                failed_step = Some(format!("the seat clone was kept: {reason}"))
-            }
-            Err(error) if had_retirement => {
-                failed_step = Some(format!("the seat clone could not be removed: {error:#}"))
+            }) => {
+                late_refusal = Some(refusal);
+                None
             }
             Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
-                clone_kept = true;
-                eprintln!(
-                    "{} seat clone {} left in place: {reason}; {dismiss_hint}",
-                    "Warning:".yellow().bold(),
-                    target.worktree_path.display()
-                )
+                Some(("the seat clone was kept", reason))
             }
-            Err(error) => {
+            Err(error) => Some(("the seat clone could not be removed", format!("{error:#}"))),
+        };
+        // R5-F2: only a clone that holds mail again after its retirement
+        // reopened keeps the session. A persistent cause (submodules, an
+        // unreadable state) would otherwise wedge every retried end; a clone
+        // with no mail is left in place and the session ends, as before C2.
+        // trace:STORY-1843 | ai:claude
+        if let Some((step, detail)) = left_in_place {
+            if had_retirement
+                && aida_core::mailbox_lifecycle::guard::checkout_holds_mail(&target.worktree_path)
+            {
+                failed_step = Some(format!("{step}: {detail}"));
+            } else {
                 clone_kept = true;
                 eprintln!(
-                    "{} seat clone {} left in place: {error:#}; {dismiss_hint}",
+                    "{} seat clone {} left in place: {detail}; {dismiss_hint}",
                     "Warning:".yellow().bold(),
                     target.worktree_path.display()
                 )
@@ -1954,14 +1959,6 @@ pub(crate) fn session_end(
         anyhow::bail!("{}", lines.join("\n"));
     }
 
-    // Delete the lease file now that the tree is removed, returned or kept
-    // for a reason that is not a retention refusal. The canonical path
-    // resolved above points at the parent's sessions dir, so the unlink
-    // succeeds although the worktree (and its symlink chain) is gone. Reporting is honest: success printed only on
-    // actual success; missing file is a quiet no-op (already-released
-    // lease from a previous partial run is fine); other errors warn so
-    // the user can clean up manually instead of trusting a stale check mark.
-    // trace:BUG-56 | ai:claude
     // R4-F2: the punt record and the role activity merge run only once the
     // session really ends, after every refusal above: a kept session never
     // claims it ended, and a retried end appends no second record.
@@ -1983,6 +1980,16 @@ pub(crate) fn session_end(
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
+
+    // Delete the lease file now that the tree is removed, returned or kept
+    // for a reason that is not a retention refusal. The canonical path
+    // resolved above points at the parent's sessions dir, so the unlink
+    // succeeds although the worktree (and its symlink chain) is gone.
+    // Reporting is honest: success printed only on actual success; missing
+    // file is a quiet no-op (already-released lease from a previous partial
+    // run is fine); other errors warn so the user can clean up manually
+    // instead of trusting a stale check mark.
+    // trace:BUG-56 | ai:claude
     match std::fs::remove_file(lease_target) {
         Ok(_) => eprintln!(
             "{} lease deleted",

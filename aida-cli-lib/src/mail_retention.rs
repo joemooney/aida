@@ -159,12 +159,14 @@ pub(crate) fn failed_step_refusal(tree: &Path, failure: String) -> RetentionRefu
 /// tree, a detached tree or a branch tree), never a raw `git worktree remove`
 /// (R3-F2) or `aida worktree dismiss`, which skips detached trees (R4-F4).
 pub(crate) fn failed_step_lines(refusal: &RetentionRefusal, retry: &str) -> Vec<String> {
+    // R5-F4: a mail-less retired source (QC1) had nothing to put back.
+    let mail = if aida_core::mailbox_lifecycle::guard::checkout_holds_mail(&refusal.checkout) {
+        "; its mail was put back"
+    } else {
+        ""
+    };
     vec![
-        format!(
-            "{}: {}; its mail was put back",
-            refusal.checkout.display(),
-            refusal.reason
-        ),
+        format!("{}: {}{mail}", refusal.checkout.display(), refusal.reason),
         String::new(),
         format!(
             "The session was NOT ended: its lease is kept (marked ending-retained, its grant \

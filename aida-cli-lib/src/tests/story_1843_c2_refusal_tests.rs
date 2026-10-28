@@ -581,6 +581,44 @@ fn r4_f1_a_failed_pool_reset_at_session_end_keeps_the_session() {
     std::fs::remove_file(lock).unwrap();
 }
 
+/// R5-F3: mail that lands during a reuse's reset (after the quiet check)
+/// fails `complete_reuse` with a [`RetentionRefusal`] that `settle` keeps
+/// typed, so session end and pool return read it as a late refusal and keep
+/// the session, never as an ordinary failed step.
+///
+/// [`RetentionRefusal`]: aida_core::mailbox_lifecycle::guard::RetentionRefusal
+#[test]
+fn r5_f3_a_late_reuse_failure_stays_a_typed_retention_refusal() {
+    use aida_core::mailbox_lifecycle::guard;
+    let repo = repo();
+    let root = repo.path();
+    activate(root);
+    let wt = worktree(root, "reuse");
+    put_mail(&wt, "m.json");
+    let retirement = guard::retire_checkout(&wt, "test")
+        .unwrap()
+        .expect("retired");
+    // The reset ran; a writer that took no permit landed mail meanwhile.
+    let err = guard::settle(
+        {
+            put_mail(&wt, "late.json");
+            Ok(())
+        },
+        Some(retirement),
+        guard::Retirement::complete_reuse,
+    )
+    .unwrap_err();
+    let refusal = crate::mail_retention::retention_refusal(&err)
+        .unwrap_or_else(|| panic!("a typed retention refusal: {err:#}"));
+    assert_eq!(refusal.checkout, wt);
+    assert!(refusal.reason.contains("not empty"), "{refusal}");
+    assert_eq!(
+        mail_in(&wt),
+        ["late.json", "m.json"],
+        "the mail was put back"
+    );
+}
+
 #[test]
 fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
     use aida_core::mailbox_lifecycle::activation::ActivationReport;

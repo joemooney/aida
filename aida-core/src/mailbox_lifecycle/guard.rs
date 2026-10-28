@@ -243,6 +243,34 @@ fn owns_a_mailbox(checkout: &Path) -> bool {
     }
 }
 
+/// Does the mailbox `checkout` owns hold any bytes? `false` when it owns
+/// none (see [`owns_a_mailbox`]) or its mailbox is absent or empty; `true`
+/// when the mailbox cannot be read (fail closed). After a retirement
+/// reopened, `false` means the retired source held no mail (R5-F2).
+// trace:STORY-1843 | ai:claude
+pub fn checkout_holds_mail(checkout: &Path) -> bool {
+    if !owns_a_mailbox(checkout) {
+        return false;
+    }
+    // Read-only: unlike `retire::holds_bytes`, this runs outside the
+    // retirement claim, so a staging file counts as mail and is never removed.
+    fn any_file(dir: &Path) -> std::io::Result<bool> {
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            if !std::fs::symlink_metadata(&path)?.file_type().is_dir() || any_file(&path)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    let mailbox = crate::mailbox::local_mailbox_dir(checkout);
+    match std::fs::symlink_metadata(&mailbox) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Ok(meta) if meta.file_type().is_dir() => any_file(&mailbox).unwrap_or(true),
+        _ => true,
+    }
+}
+
 /// No anchor to fence in: refuse, whatever the mailbox holds. Destroying an
 /// unfenced source because it looks empty is a check-then-act race with any
 /// writer that lands bytes in between.

@@ -1353,7 +1353,7 @@ fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
         .expect("the removal preserves the hold and stops on failure");
     // STORY-1843 C2: the removal goes through the mail-retention guard,
     // which retires the reviewer's mail before `git worktree remove`.
-    let removal = "crate::mail_retention::remove_worktree(";
+    let removal = "aida_core::mailbox_lifecycle::guard::remove_worktree_retained(";
     let git_remove = remove
         .find(removal)
         .expect("the removal runs the guarded git worktree remove");

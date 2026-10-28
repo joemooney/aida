@@ -2,8 +2,8 @@
 //! trace:STORY-1843 | ai:claude
 
 use super::guard::{
-    remove_worktree_retained, retire_checkout, retire_clone_checkout, settle, RetentionRefusal,
-    Retirement,
+    checkout_holds_mail, remove_worktree_retained, retire_checkout, retire_clone_checkout, settle,
+    RetentionRefusal, Retirement,
 };
 use super::tests::{
     activate, assert_open, assert_retiring, files_under, mailbox, message, record, repo, seed_mail,
@@ -149,6 +149,23 @@ fn a_write_after_the_commit_fails_the_reuse_and_reopens() {
     expected.sort();
     assert_eq!(files_under(&mailbox(&wt)), expected);
     assert_open(&wt);
+}
+
+/// R5-F2: session end keeps a seat clone's session only when the clone holds
+/// mail again after its retirement reopened.
+#[test]
+fn checkout_holds_mail_sees_only_the_checkouts_own_mail() {
+    let (dir, wt) = repo_with_worktree();
+    assert!(!checkout_holds_mail(&wt), "no mailbox yet");
+    std::fs::create_dir_all(mailbox(&wt).join("inbox")).unwrap();
+    assert!(!checkout_holds_mail(&wt), "empty directories are no mail");
+    seed_mail(&wt);
+    assert!(checkout_holds_mail(&wt));
+    // A mailbox linked to another checkout is not this checkout's mail.
+    std::fs::remove_dir_all(wt.join(".aida")).unwrap();
+    seed_mail(dir.path());
+    std::os::unix::fs::symlink(dir.path().join(".aida"), wt.join(".aida")).unwrap();
+    assert!(!checkout_holds_mail(&wt));
 }
 
 #[test]
