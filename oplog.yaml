@@ -79691,5 +79691,32 @@ operations:
   timestamp: 2026-10-28T01:43:39.538770176Z
   kind: !SetStatus
     status: Approved
-clock: 6204
+- id: 01a18031-90ee-7222-aa7d-7adc6c03182c
+  target_id: 01a18031-86d9-7721-86be-65586f589a5b
+  author: aida
+  node_id: '1'
+  lamport: 6205
+  timestamp: 2026-10-28T01:48:14.446459305Z
+  kind: !Create
+    title: 'Review PR-2999: [AI:claude] test(gate): ratchet follow-ups (TASK-b6b1278890774ef993d2ebc327862470-014, TASK-b6b1278890774ef993d2ebc327862470-015)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-ratchet-followups-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2999>
+      - Branch: `fix/gate-ratchet-followups-2` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-014
+      - TASK-b6b1278890774ef993d2ebc327862470-015
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2999` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6205
 node_id: '1'
