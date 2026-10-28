@@ -83284,5 +83284,23 @@ operations:
   timestamp: 2026-10-28T23:11:12.385049480Z
   kind: !SetStatus
     status: Completed
-clock: 6486
+- id: 01a184c8-4188-7ea2-b099-9f74d241c965
+  target_id: 01a184c8-3a1c-7390-8f4c-8ceec5068ddc
+  author: aida
+  node_id: '1'
+  lamport: 6487
+  timestamp: 2026-10-28T23:11:18.920442426Z
+  kind: !Create
+    title: '[minor, non-blocking] mod.rs:997-1000 + mark_nonce_era (mod.rs:696,719): on the…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-082, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor, non-blocking] mod.rs:997-1000 + mark_nonce_era (mod.rs:696,719): on the no-rename/no-link fallback, a concurrent writer B that sees A's in-progress marker (symlink_metadata ok, or AlreadyExists) returns Ok, then A's fill fails and A unlinks the marker, so B proceeds as if the nonce era were recorded while no marker exists. Narrow race on a degraded FS with concurrent EIO/ENOSPC; consider noting it in the write_source_id doc or having mark_nonce_era re-check after AlreadyExists.
+
+      PR: #3072
+      Reviewed sha: ce1df94975bf1c6b046306cf341be247cb5b3269
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6487
 node_id: '1'
