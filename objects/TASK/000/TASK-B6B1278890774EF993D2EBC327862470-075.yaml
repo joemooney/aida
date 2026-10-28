@@ -4,12 +4,12 @@ title: 'PR-3062 follow-up: torn era-marker aside must not resolve as a bare admi
 description: |
   Non-blocking finding from the APPROVED review of PR #3062 (TASK-b6b1278890774ef993d2ebc327862470-072) at c677f7f45156. ADVISOR RULING: a non-JSON aside body is accepted as a bare admin name only if it is a valid single path component (no slash, no NUL, non-empty, at most 255 bytes, no brace or quote, i.e. not a JSON fragment). Anything else is reported as corrupt and never removed or restored automatically. Make write_source_id atomic (temp + fsync + rename/link). Add a test for a torn aside.
   - [minor, non-blocking] leftovers.rs:155-160 scan_era_markers: any non-JSON UTF-8 aside body is taken as a bare admin name, so a torn (partial-JSON) record aside — write_source_id is create_new+write, not atomic — resolves to a bogus <common>/worktrees/<garbage> path, is judged stale, and is removed instead of kept. Not a regression (the marker was already absent), but inconsistent with era_marker_stale's fail-closed handling of a torn marker; consider treating a body that starts with '{' as an undecidable record and leaving it.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T20:18:40.457940692Z
-modified_at: 2026-10-28T20:18:50.095830089Z
+modified_at: 2026-10-28T20:45:52.512855855Z
 req_type: Task
 tags:
 - from-review:PR-3062
@@ -22,6 +22,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18443-1a00-7880-b7e9-9cf0e315fdf9
+  author: aida-session-start
+  timestamp: 2026-10-28T20:45:52.512854938Z
+  session_id: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f8d9a38f5345d5bf589e05bf28de49eb4148f712
   branch: main
