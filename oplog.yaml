@@ -81439,5 +81439,31 @@ operations:
   timestamp: 2026-10-28T13:36:30.983077678Z
   kind: !SetStatus
     status: In Progress
-clock: 6342
+- id: 01a182ba-89c5-76b1-90ae-06567965493e
+  target_id: 01a182ba-8311-7500-9c7c-47bbba044d68
+  author: aida
+  node_id: '1'
+  lamport: 6343
+  timestamp: 2026-10-28T13:37:05.477487649Z
+  kind: !Create
+    title: 'Review PR-3037: [AI:claude] fix(mailbox): compare writer build identity, not exe path (BUG-b6b1278890774ef993d2ebc327862470-010)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/retention-build-identity`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3037>
+      - Branch: `fix/retention-build-identity` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-010
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3037` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6343
 node_id: '1'
