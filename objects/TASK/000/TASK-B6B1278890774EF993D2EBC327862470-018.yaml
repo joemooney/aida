@@ -13,13 +13,24 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-27T22:59:30.651716486Z
-modified_at: 2026-10-27T22:59:30.651716486Z
+modified_at: 2026-10-28T00:56:07.884751682Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-011
 - finding-hash:a160a2e4
 - from-review:PR-2990
 - kind:carried-forward
+relationships:
+- rel_type: Supersedes
+  target_id: 01a17f97-476e-7563-aaf6-e9d46b872823
+  created_at: 2026-10-28T00:56:07.884740842Z
+  created_by: joe
+history:
+- id: 01a18001-e23c-7761-875a-21dae403dbc0
+  author: joe
+  timestamp: 2026-10-28T00:56:09.532844678Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes: []
 filed_at:
   code_sha: 56d730c9922ce85b6b463d9789d8bae0ba215f27
   branch: main
