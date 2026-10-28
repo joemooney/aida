@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T19:02:06.861538901Z
-modified_at: 2026-10-28T19:02:06.861538901Z
+modified_at: 2026-10-28T19:02:15.893335578Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a183cf-26e5-71d2-bce0-d17f6ed7a691
+  created_at: 2026-10-28T19:02:15.893332550Z
+  created_by: joe
+history:
+- id: 01a183e4-4444-7043-a5c8-c704f12bb271
+  author: joe
+  timestamp: 2026-10-28T19:02:17.412366466Z
+  session_id: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
+  changes: []
 filed_at:
   code_sha: a93c4aa6387997d2dca334025be1be9cba6f80f1
   branch: fix/mailbox-era-marker-drop
