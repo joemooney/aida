@@ -25,7 +25,7 @@
   requirement_id: 01a182bc-c661-7202-bb2b-d5bd162e4879
   position: 7000
   added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-10-28T13:39:53.422328575Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-10-28T13:40:39.105369692Z
   for_role: reviewer
   added_by_machine: imac
