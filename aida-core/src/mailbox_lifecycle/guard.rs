@@ -254,10 +254,17 @@ pub fn checkout_holds_mail(checkout: &Path) -> bool {
     }
     // Read-only: unlike `retire::holds_bytes`, this runs outside the
     // retirement claim, so a staging file counts as mail and is never removed.
-    fn any_file(dir: &Path) -> std::io::Result<bool> {
+    // The mailbox root's creation nonce is not mail.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+    fn any_file(dir: &Path, root: bool) -> std::io::Result<bool> {
         for entry in std::fs::read_dir(dir)? {
-            let path = entry?.path();
-            if !std::fs::symlink_metadata(&path)?.file_type().is_dir() || any_file(&path)? {
+            let entry = entry?;
+            let path = entry.path();
+            let meta = std::fs::symlink_metadata(&path)?;
+            if root && super::is_source_id(&entry.file_name().to_string_lossy(), &meta) {
+                continue;
+            }
+            if !meta.file_type().is_dir() || any_file(&path, false)? {
                 return Ok(true);
             }
         }
@@ -266,7 +273,7 @@ pub fn checkout_holds_mail(checkout: &Path) -> bool {
     let mailbox = crate::mailbox::local_mailbox_dir(checkout);
     match std::fs::symlink_metadata(&mailbox) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-        Ok(meta) if meta.file_type().is_dir() => any_file(&mailbox).unwrap_or(true),
+        Ok(meta) if meta.file_type().is_dir() => any_file(&mailbox, true).unwrap_or(true),
         _ => true,
     }
 }
@@ -288,19 +295,29 @@ fn lifecycle_failure(e: &LifecycleError) -> String {
     format!("the retention barrier could not run ({e}); retry")
 }
 
-/// Remove `dir` and its subdirectories, refusing if any entry is not a
-/// directory. Absent is fine.
+/// Remove the mailbox `dir` and its subdirectories, refusing if any entry
+/// is not a directory. Absent is fine. The root's creation nonce goes with
+/// it: the next directory created there is a new source with a new nonce.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
 fn remove_empty_tree(dir: &Path) -> std::io::Result<()> {
+    remove_empty_tree_in(dir, true)
+}
+
+fn remove_empty_tree_in(dir: &Path, root: bool) -> std::io::Result<()> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e),
     };
+    let mut nonce = None;
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
-        if std::fs::symlink_metadata(&path)?.file_type().is_dir() {
-            remove_empty_tree(&path)?;
+        let meta = std::fs::symlink_metadata(&path)?;
+        if root && super::is_source_id(&entry.file_name().to_string_lossy(), &meta) {
+            nonce = Some(path);
+        } else if meta.file_type().is_dir() {
+            remove_empty_tree_in(&path, false)?;
         } else {
             return Err(std::io::Error::other(format!(
                 "{} was written after the retirement",
@@ -308,7 +325,16 @@ fn remove_empty_tree(dir: &Path) -> std::io::Result<()> {
             )));
         }
     }
-    std::fs::remove_dir(dir)
+    let Some(nonce) = nonce else {
+        return std::fs::remove_dir(dir);
+    };
+    // A late entry keeps the directory: its nonce goes back, so the source
+    // the reuse reopens is still the one this directory resolves to.
+    let bytes = std::fs::read(&nonce)?;
+    std::fs::remove_file(&nonce)?;
+    std::fs::remove_dir(dir).inspect_err(|_| {
+        let _ = super::restore_source_id(&nonce, &bytes);
+    })
 }
 
 /// Remove the linked worktree at `worktree_path` behind the barrier: retire,

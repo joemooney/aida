@@ -95,6 +95,10 @@ pub(crate) const ACTIVATION_FILE: &str = "activation.json";
 pub(crate) const SOURCES_DIR: &str = "sources";
 pub(crate) const RETAINED_DIR: &str = "retained";
 pub(crate) const JOURNAL_DIR: &str = "journal";
+/// The creation nonce inside a mailbox directory. It names this creation of
+/// the directory, is never mail, and leaves only with the directory.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub const SOURCE_ID_FILE: &str = ".source-id";
 
 /// Size cap for any anchor record file.
 pub(crate) const RECORD_CAP: u64 = 1 << 20;
@@ -354,7 +358,14 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
             why: "the mailbox is not a directory".into(),
         });
     }
-    let key = source_key(&anchored.common, &anchored.admin, meta.dev(), meta.ino());
+    let nonce = read_source_id(&mailbox)?;
+    let key = source_key(
+        &anchored.common,
+        &anchored.admin,
+        meta.dev(),
+        meta.ino(),
+        nonce.as_deref(),
+    );
     Ok(Some(Source {
         anchor: anchored.anchor,
         key,
@@ -383,7 +394,14 @@ pub(crate) fn resolve_clone_source(main: &Path, clone_root: &Path) -> Result<Opt
             why: "the mailbox is not a real directory".into(),
         });
     }
-    let key = source_key(&anchored.common, &admin, meta.dev(), meta.ino());
+    let nonce = read_source_id(&mailbox)?;
+    let key = source_key(
+        &anchored.common,
+        &admin,
+        meta.dev(),
+        meta.ino(),
+        nonce.as_deref(),
+    );
     Ok(Some(Source {
         anchor: anchored.anchor,
         key,
@@ -442,16 +460,133 @@ fn locate_anchor(project_root: &Path) -> Result<Option<Anchored>> {
     }))
 }
 
-/// SHA-256 over the common Git dir, the worktree admin name and the mailbox
-/// directory's device and inode.
-fn source_key(common: &Path, admin: &str, dev: u64, ino: u64) -> String {
+/// SHA-256 over the common Git dir, the worktree admin name, the mailbox
+/// directory's device and inode and its creation nonce. A freed inode is
+/// often handed straight back, so device and inode alone let a recreated
+/// mailbox inherit the retired source's key; the nonce differs per creation.
+/// A legacy directory with no nonce keeps the key it always had.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+fn source_key(common: &Path, admin: &str, dev: u64, ino: u64, nonce: Option<&str>) -> String {
     let mut h = Sha256::new();
     h.update(common.as_os_str().as_encoded_bytes());
     h.update([0]);
     h.update(admin.as_bytes());
     h.update([0]);
     h.update(format!("{dev}:{ino}").as_bytes());
+    if let Some(nonce) = nonce {
+        h.update([0]);
+        h.update(nonce.as_bytes());
+    }
     hex(&h.finalize())
+}
+
+/// Hex digits in a creation nonce (128 bits).
+const SOURCE_ID_HEX_LEN: usize = 32;
+
+/// The creation nonce of the mailbox directory `mailbox`. `Ok(None)` for a
+/// legacy directory that has none. One that exists but cannot be read, is
+/// not a regular file of ours, or is malformed refuses as
+/// [`LifecycleError::Unsafe`]: guessing a key would alias another source.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub(crate) fn read_source_id(mailbox: &Path) -> Result<Option<String>> {
+    let path = mailbox.join(SOURCE_ID_FILE);
+    let unsafe_id = |why: String| LifecycleError::Unsafe {
+        path: path.clone(),
+        why,
+    };
+    let bytes = match read_checked_capped(&path, SOURCE_ID_HEX_LEN as u64 + 1) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return Ok(None),
+        Err(LifecycleError::Io(e)) => return Err(unsafe_id(format!("is unreadable: {e}"))),
+        Err(e) => return Err(e),
+    };
+    let text = std::str::from_utf8(&bytes).unwrap_or_default();
+    let nonce = text.strip_suffix('\n').unwrap_or(text);
+    if nonce.len() != SOURCE_ID_HEX_LEN
+        || !nonce
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(unsafe_id("is not a creation nonce".into()));
+    }
+    Ok(Some(nonce.to_string()))
+}
+
+/// Create the mailbox directory `mailbox` if it is absent, born holding a
+/// fresh creation nonce: the directory and its `.source-id` are staged beside
+/// it and renamed into place, so no reader ever sees the new directory
+/// without its nonce. A directory that already exists (or that a concurrent
+/// creator renamed in first) is kept as it is.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
+    match std::fs::metadata(mailbox) {
+        Ok(meta) if meta.is_dir() => return Ok(()),
+        Ok(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} is not a directory", mailbox.display()),
+            ))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    let (Some(parent), Some(name)) = (mailbox.parent(), mailbox.file_name()) else {
+        return Err(std::io::Error::other(format!(
+            "{} has no parent directory",
+            mailbox.display()
+        )));
+    };
+    std::fs::create_dir_all(parent)?;
+    let staging = parent.join(format!(
+        ".{}.creating.{}",
+        name.to_string_lossy(),
+        uuid::Uuid::new_v4().simple()
+    ));
+    std::fs::create_dir(&staging)?;
+    let staged = mint_source_id(&staging).and_then(|()| std::fs::rename(&staging, mailbox));
+    match staged {
+        Ok(()) => File::open(parent)?.sync_all(),
+        Err(e) => {
+            let _ = std::fs::remove_file(staging.join(SOURCE_ID_FILE));
+            let _ = std::fs::remove_dir(&staging);
+            if std::fs::metadata(mailbox).is_ok_and(|m| m.is_dir()) {
+                Ok(())
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+/// Write 128 random bits as `dir/.source-id`: create-new, mode 0600, synced.
+fn mint_source_id(dir: &Path) -> std::io::Result<()> {
+    let mut nonce = [0u8; SOURCE_ID_HEX_LEN / 2];
+    File::open("/dev/urandom")?.read_exact(&mut nonce)?;
+    restore_source_id(
+        &dir.join(SOURCE_ID_FILE),
+        format!("{}\n", hex(&nonce)).as_bytes(),
+    )
+}
+
+/// Write a nonce file create-new, mode 0600, synced with its directory.
+pub(crate) fn restore_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    match path.parent() {
+        Some(dir) => File::open(dir)?.sync_all(),
+        None => Ok(()),
+    }
+}
+
+/// Is this mailbox-root entry the creation nonce rather than mail?
+pub(crate) fn is_source_id(name: &str, meta: &std::fs::Metadata) -> bool {
+    name == SOURCE_ID_FILE && meta.file_type().is_file()
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
