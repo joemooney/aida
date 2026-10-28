@@ -80942,5 +80942,23 @@ operations:
   timestamp: 2026-10-28T11:45:14.876354211Z
   kind: !SetStatus
     status: Completed
-clock: 6301
+- id: 01a18254-4868-72a1-bb4f-4c2bf431c4c0
+  target_id: 01a18254-3fac-7182-8acd-df5b9bcdd6e4
+  author: aida
+  node_id: '1'
+  lamport: 6302
+  timestamp: 2026-10-28T11:45:24.072838967Z
+  kind: !Create
+    title: 'Non-blocking (design, ruling-sanctioned): kernels and orchestrators are scanned…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-024, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (design, ruling-sanctioned): kernels and orchestrators are scanned with outside_paths(text, false), so every aida_core:: path is exempt, while the dispatch facade lists aida_core leaves (sibling=true). Authority-feeding aida_core definers stay unbounded: seat_authority -> aida_core::team::TeamRoster::load, team::canonical_role, liveness::process_start_identity, store_locate::locate_distributed_store_from; review_marker -> liveness::process_identity_is_alive; fleet_lanes -> liveness::pid_is_alive/process_start_time. aida-core/ is not in GATE_PROTECTED_PATHS, so a mandate-shipped aida-core edit can change these. Moving process_probe calls to aida_core took them from listable to invisible. Raise at the regroup.
+
+      PR: #3025
+      Reviewed sha: 6efd7270069d247871f1c043b227c8b21a3ec974
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6302
 node_id: '1'
