@@ -1,9 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-10-25T15:58:41.475839543Z
+last_run: 2026-10-28T07:27:55.830389601Z
 last_by:
   seat: advisor
-  vendor: codex
+  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  vendor: claude
 result: done
-note: 15:58UTC fleet pass:17open/0openPRs; actualcode1,agy1,agy2,Claude2346PIDs verified, three actualCargo tests live (2347,1917,2346), Claudeheadless63451moving. All8relaystatusesread:4historicalblockedwithactualhandoff.md.done receipts,4exited; relaydoctor0findings, norestart. Old1742~17hstalledview has fullbrief143129 and existingownerc4dfsupersession/nativequeue01a173b6; uptakepending, preservedWIP/noduplicate. BUG2017S1S2PR2919actuallymerged54c/greenBuild40206777816/independent22bcapproval, fullS3open; review1931Completed.2347actualidleproofComplete/nativehealth0.2346delegatedlegitcontainedClaude; parentadvisorAUTHORcannotapprove/merge; warningkeyringnotyetactualrefusal.1917physicalmigrationquestionsde431/9c6pending,1889fourclustersowneruptakeconfirmed. No immediatehumanact;1889explicitoperatormerges remainswhenready. Nextnormalhourlycheck.
-due_since: 2026-10-25T16:59:56.500296844Z
-due_reason: every 1h
