@@ -13,13 +13,30 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-27T21:57:41.072663506Z
-modified_at: 2026-10-28T00:59:16.601843867Z
+modified_at: 2026-10-28T01:24:33.197096309Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-010
 - finding-hash:3abd3ed4
 - from-review:PR-2989
 - kind:carried-forward
+comments:
+- id: 01a1801b-e12d-7f32-b85c-97e39a898f6e
+  author: joe
+  content: |
+    SKETCH (design needed; not fixed in the 014/015 PR)
+
+    Why a ratchet fix does not close this: the gate's allowlisted definers (kernel.rs `canonical_role_name`, lib_part3.rs `load_store_for_lookup`, plus the agent_registry/forge/mandate_drive/process_probe modules) are unprotected. Their fn bodies can call any crate-root module (`util::wrap(raw)` through kernel.rs's private `use crate::*`, or a bare name resolved through a root glob), and that module can call `crate::dispatch::*`. Following this with a name scan means taking the transitive closure of every crate path the definers reach, and bare names behind a glob cannot be resolved by name at all. In practice that is the whole crate, which is not a ratchet.
+
+    Options:
+    A. Move the two allowlisted fns behind gate/ (for example `gate/dispatch_support.rs` re-exported from kernel/lib_part3 for existing callers). Their bodies are then protected. Cost: small refactor; the module entries (forge, agent_registry, mandate_drive, process_probe) still carry the same two-hop risk.
+    B. Add the GATE_DISPATCH_ROOT_ALLOWLIST definer files (kernel.rs, lib_part3.rs, agent_registry.rs, forge.rs, mandate_drive.rs, process_probe.rs and what they mount) to the protected gate paths. This closes every variant, but forge.rs and lib_part3.rs are hot files, so mandate-shipped work would need human merges much more often.
+    C. (Recommended) Shrink the surface first: give gate/dispatch_* a narrow gate-owned facade (`gate/dispatch_deps.rs`) that wraps exactly the external calls the gate uses. Point the allowlist at that facade alone, so the root allowlist becomes {gate, dispatch}. Then, where a wrapped call's implementation must stay outside the gate, protect only the specific leaf files (not all of forge.rs). This is A generalised to the module entries.
+
+    Needs: advisor ruling between A/B/C before implementation. 014 (module mount #[path]) and 015 (textual macro scope) are closed by the ratchet in the same PR and do not depend on this decision.
+  created_at: 2026-10-28T01:24:33.197096309Z
+  modified_at: 2026-10-28T01:24:33.197096309Z
+  session_id: 7e6ce215-5fbf-4d7d-b5b9-bd1abde3e2e8
 history:
 - id: 01a18001-e9f8-7af3-b001-6061d3080791
   author: joe
