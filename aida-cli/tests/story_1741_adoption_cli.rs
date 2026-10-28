@@ -166,6 +166,30 @@ fn init_in_a_fresh_clone_projects_the_plane_and_writes_no_product_file() {
 }
 
 #[test]
+fn re_running_init_in_a_projected_clone_takes_the_adopted_route_again() {
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-035 | ai:claude
+    let tmp = tempfile::TempDir::new().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let (home, clone, _) = cloned_adopted_project(&base);
+    let first = aida(&home, &clone, &["init"]);
+    assert!(first.status.success(), "{}", text(&first));
+    assert!(clone.join(".aida/adoption/manifest.toml").is_file());
+    let before = product_snapshot(&clone);
+
+    // Now the clone counts as adopted because it is projected.
+    let again = aida(&home, &clone, &["init"]);
+    assert!(again.status.success(), "{}", text(&again));
+    assert!(
+        String::from_utf8_lossy(&again.stdout).contains("adopted from a shared AIDA plane"),
+        "{}",
+        text(&again)
+    );
+    assert_eq!(product_snapshot(&clone), before, "{}", text(&again));
+    assert!(!clone.join(".gitignore").exists());
+    assert!(!clone.join("CLAUDE.md").exists() && !clone.join("AGENTS.md").exists());
+}
+
+#[test]
 fn inventory_uninstall_and_ci_bootstrap_leave_the_product_untouched() {
     // trace:STORY-1741.ac676d62 | ai:claude
     // trace:STORY-1741.ac7e5256 | ai:claude
