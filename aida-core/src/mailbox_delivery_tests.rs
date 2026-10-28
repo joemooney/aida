@@ -710,9 +710,10 @@ fn story1843_d1_an_incomplete_inventory_fails_closed() {
     let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 20, &[uuid(1)]);
     send(&r.sib, "cohort", 20, Some(&sidecar));
     crate::mailbox::write_local_message(&r.main, &role_message("cohort", 20)).unwrap();
+    seed_direct_and_vendor(&r.main);
     let uuidless = reviewer("rev-old", None);
     // Whole, the sibling's sidecar gates the replica.
-    assert!(visible(&r.main, &uuidless).is_empty());
+    assert_eq!(visible(&r.main, &uuidless), ["direct", "vendor"]);
 
     let ctx = MailboxContext::resolve_or_local(&r.main, None).unwrap();
     let mut limits = ReadLimits::explicit_read();
@@ -722,7 +723,7 @@ fn story1843_d1_an_incomplete_inventory_fails_closed() {
         s.inventory_error,
         Some(crate::mailbox_logical::SourceErrorCode::InventoryOverBudget)
     );
-    assert!(s.records.is_empty(), "over budget: {:?}", s.records);
+    assert_eq!(ids_of(&s), ["direct", "vendor"], "over budget");
 
     // A config git cannot parse makes `git worktree list` fail.
     let config = r.main.join(".git/config");
@@ -734,5 +735,102 @@ fn story1843_d1_an_incomplete_inventory_fails_closed() {
         s.inventory_error,
         Some(crate::mailbox_logical::SourceErrorCode::InventoryFailed)
     );
-    assert!(s.records.is_empty(), "inventory failed: {:?}", s.records);
+    assert_eq!(ids_of(&s), ["direct", "vendor"], "inventory failed");
+}
+
+/// Direct mail to `rev-old` and vendor-group mail to `codex` in `root`:
+/// neither can carry a sidecar, so neither is ever gated.
+fn seed_direct_and_vendor(root: &Path) {
+    for (id, to, ts) in [("direct", "rev-old", 30), ("vendor", "codex", 40)] {
+        let m: crate::mailbox::Message = serde_json::from_value(serde_json::json!({
+            "id": id, "thread_id": id, "from": "sender",
+            "to": {"kind": "agent", "agent": to},
+            "timestamp": ts, "body": format!("body of {id}"),
+        }))
+        .unwrap();
+        crate::mailbox::write_local_message(root, &m).unwrap();
+    }
+}
+
+fn ids_of(s: &LogicalSnapshot) -> Vec<&str> {
+    s.records.iter().map(|r| r.message.id.as_str()).collect()
+}
+
+fn status_is(s: &LogicalSnapshot, code: crate::mailbox_logical::SourceErrorCode) -> bool {
+    s.sources
+        .iter()
+        .any(|x| x.status == crate::mailbox_logical::SourceStatus::Error(code))
+}
+
+// Advisor ruling (STORY-1843 D1 follow-ups): a present, non-prunable
+// worktree inventory cannot resolve left its `.deliveries/` unread, so the
+// F2 gate fails closed. Here its `.git` pointer is garbage, so
+// `common_git_of` fails while git still lists it, not prunable.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_an_unresolvable_worktree_fails_closed() {
+    let r = repo();
+    let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 20, &[uuid(1)]);
+    send(&r.sib, "cohort", 20, Some(&sidecar));
+    crate::mailbox::write_local_message(&r.main, &role_message("cohort", 20)).unwrap();
+    send(&r.main, "legacy", 10, None);
+    seed_direct_and_vendor(&r.main);
+    let uuidless = reviewer("rev-old", None);
+    let gitfile = r.sib.join(".git");
+    let saved = std::fs::read(&gitfile).unwrap();
+    std::fs::write(&gitfile, b"not a gitdir pointer\n").unwrap();
+    let (_, s) = snap(&r.main, &uuidless);
+    std::fs::write(&gitfile, saved).unwrap();
+    assert!(
+        status_is(&s, crate::mailbox_logical::SourceErrorCode::NotAGitCheckout),
+        "{:?}",
+        s.sources
+    );
+    assert!(!s.complete());
+    assert_eq!(ids_of(&s), ["direct", "vendor"], "role mail fails closed");
+    assert_eq!(visible(&r.main, &uuidless), ["legacy", "direct", "vendor"]);
+}
+
+// Advisor ruling: a worktree whose path cannot be resolved for a reason
+// other than NotFound (here EACCES on its parent) and that git does not
+// report prunable (it is locked; git reports an inaccessible worktree as
+// prunable otherwise) is unreadable, not missing, so the gate fails closed.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_an_inaccessible_worktree_fails_closed() {
+    use std::os::unix::fs::PermissionsExt;
+    let r = repo();
+    let fence = r.main.parent().unwrap().join("fence");
+    std::fs::create_dir_all(&fence).unwrap();
+    let hidden = fence.join("hidden");
+    git(
+        &r.main,
+        &["worktree", "add", "-q", "-b", "h", hidden.to_str().unwrap()],
+    );
+    let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 20, &[uuid(1)]);
+    send(&hidden, "cohort", 20, Some(&sidecar));
+    crate::mailbox::write_local_message(&r.main, &role_message("cohort", 20)).unwrap();
+    send(&r.main, "legacy", 10, None);
+    seed_direct_and_vendor(&r.main);
+    git(&r.main, &["worktree", "lock", hidden.to_str().unwrap()]);
+    let uuidless = reviewer("rev-old", None);
+    std::fs::set_permissions(&fence, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let denied = matches!(
+        std::fs::canonicalize(&hidden),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied
+    );
+    let s = denied.then(|| snap(&r.main, &uuidless).1);
+    std::fs::set_permissions(&fence, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let Some(s) = s else {
+        eprintln!("SKIP: permissions are not enforced here (running as root?)");
+        return;
+    };
+    assert!(
+        status_is(&s, crate::mailbox_logical::SourceErrorCode::Unreadable),
+        "{:?}",
+        s.sources
+    );
+    assert!(!s.complete());
+    assert_eq!(ids_of(&s), ["direct", "vendor"], "role mail fails closed");
+    assert_eq!(visible(&r.main, &uuidless), ["legacy", "direct", "vendor"]);
 }
