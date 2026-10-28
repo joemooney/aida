@@ -710,6 +710,13 @@ pub(super) fn read_ladder_allowance(cap: Duration) -> Option<Duration> {
     })
 }
 
+/// The SQLite-ladder wait this invocation has already spent, across every
+/// refresh and lookup before the caller.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
+pub(super) fn ladder_waited() -> Duration {
+    COLLECTED.with(|c| c.borrow().ladder_waited)
+}
+
 // trace:BUG-1956 | ai:claude
 pub(super) fn record_ladder_wait(waited: Duration) {
     COLLECTED.with(|c| {

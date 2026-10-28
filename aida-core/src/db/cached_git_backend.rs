@@ -218,7 +218,6 @@ impl CachedGitBackend {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
-        let started = std::time::Instant::now();
         let scanned = if strict {
             self.id_candidates_strict(id)
         } else {
@@ -232,11 +231,14 @@ impl CachedGitBackend {
             // whole store (the ~8 s `lookup` phase on a busy ~4,400-object
             // store). Writes keep the full load: they must not act on a guess.
             // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
-            Err(_) if !strict => {
+            Err(e) if !strict => {
                 #[cfg(test)]
                 super::cache_refresh::test_count("lookup_targeted_fallback");
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
-                return self.resolve_by_bounded_scan(id, started + super::cache::READ_LADDER_CAP);
+                // trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
+                let deadline =
+                    std::time::Instant::now() + super::cache::read_fallback_scan_budget();
+                return self.resolve_by_bounded_scan(id, deadline, &e);
             }
             Err(_) => {
                 let store = self.inner.load()?;
@@ -300,6 +302,7 @@ impl CachedGitBackend {
     /// matches refuse with [`AmbiguousIdError`] exactly like the cache path;
     /// a scan cut short degrades — it serves what it found (or not-found)
     /// with a warning that the check was incomplete — instead of blocking.
+    /// `cause` is why the cache could not answer; the warning names it.
     ///
     /// [`AmbiguousIdError`]: crate::id_collisions::AmbiguousIdError
     // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
@@ -307,6 +310,7 @@ impl CachedGitBackend {
         &self,
         id: &str,
         deadline: std::time::Instant,
+        cause: &anyhow::Error,
     ) -> Result<Option<Requirement>> {
         let canonical = crate::object_store::canonical_spec_id(id.trim());
         // A malformed id never names an object (BUG-599), matching the inner
@@ -330,11 +334,7 @@ impl CachedGitBackend {
         let candidates = crate::id_collisions::candidates_for_id(rows.iter(), id);
         let pick = crate::id_collisions::resolve_candidates(id, candidates)?;
         if !complete {
-            eprintln!(
-                "warning: another process is updating the cache, so the check for other \
-                 requirements answering to {canonical} stopped early; re-run once it \
-                 finishes to confirm the match"
-            );
+            eprintln!("{}", incomplete_scan_warning(&canonical, cause));
         }
         Ok(pick.and_then(|uuid| found.into_iter().find(|r| r.id == uuid)))
     }
@@ -1671,6 +1671,27 @@ impl CachedGitBackend {
             self.refresh_epics_then_restamp(&[&updated], &pre_write_head, &post_write_head);
         }
         Ok(Some(updated))
+    }
+}
+
+/// The warning for a read fallback whose collision scan stopped at its
+/// deadline. It names why the cache could not answer: a concurrent writer
+/// holding the cache lock is transient (re-run once it finishes); any other
+/// cache error is not, so the warning quotes it instead of blaming a writer.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-038 | ai:claude
+fn incomplete_scan_warning(canonical: &str, cause: &anyhow::Error) -> String {
+    let stopped =
+        format!("the check for other requirements answering to {canonical} stopped early");
+    if super::cache::is_cache_lock_error(cause) {
+        format!(
+            "warning: another process is updating the cache, so {stopped}; re-run \
+             once it finishes to confirm the match"
+        )
+    } else {
+        format!(
+            "warning: the cache could not answer ({cause:#}), so {stopped}; re-run \
+             after `aida cache rebuild` to confirm the match"
+        )
     }
 }
 
@@ -3565,26 +3586,131 @@ mod tests {
         )
         .unwrap();
 
+        let cause = anyhow::anyhow!("cache unavailable");
         let spent = std::time::Instant::now();
         assert!(backend
-            .resolve_by_bounded_scan("BUG-999", spent)
+            .resolve_by_bounded_scan("BUG-999", spent, &cause)
             .unwrap()
             .is_none());
         let served = backend
-            .resolve_by_bounded_scan("BUG-2", spent)
+            .resolve_by_bounded_scan("BUG-2", spent, &cause)
             .unwrap()
             .expect("the object the id names is always read");
         assert_eq!(served.title, "second");
         // With budget left, the same lookup sees the collision.
         let later = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        assert!(backend.resolve_by_bounded_scan("BUG-2", later).is_err());
+        assert!(backend
+            .resolve_by_bounded_scan("BUG-2", later, &cause)
+            .is_err());
         assert_eq!(
             backend
-                .resolve_by_bounded_scan("BUG-3", later)
+                .resolve_by_bounded_scan("BUG-3", later, &cause)
                 .unwrap()
                 .map(|r| r.title),
             Some("collider".to_string())
         );
+    }
+
+    /// TASK-b6b1278890774ef993d2ebc327862470-037: the fallback scan's
+    /// deadline draws on the invocation's read-wait allowance. Ladder waits
+    /// spent BEFORE the lookup (an earlier refresh) shorten the scan, so the
+    /// whole read stays inside ADR-53's ceiling, yet a budgeted read that
+    /// spent its full allowance still gets a real scan: the collision behind
+    /// a writer is found and refused, not degraded to a silent pick.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
+    #[test]
+    fn read_fallback_scan_budget_counts_pre_lookup_waits_and_keeps_a_floor() {
+        use super::super::cache::{
+            read_fallback_scan_budget, READ_FALLBACK_MIN_SCAN, READ_LADDER_CAP,
+            READ_WAIT_AND_SCAN_CAP,
+        };
+        use super::super::cache_refresh::{record_ladder_wait, CacheReadScope, ReadBudget};
+        use std::time::Duration;
+        assert!(
+            READ_WAIT_AND_SCAN_CAP + Duration::from_secs(1) <= Duration::from_secs(5),
+            "waits and scan must leave room inside ADR-53's 5 s ceiling"
+        );
+        assert!(READ_WAIT_AND_SCAN_CAP.saturating_sub(READ_LADDER_CAP) >= READ_FALLBACK_MIN_SCAN);
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(Duration::from_secs(1))));
+        assert_eq!(read_fallback_scan_budget(), READ_WAIT_AND_SCAN_CAP);
+        record_ladder_wait(Duration::from_secs(2));
+        assert_eq!(
+            read_fallback_scan_budget(),
+            READ_WAIT_AND_SCAN_CAP - Duration::from_secs(2),
+            "waits before the lookup count against the ceiling"
+        );
+        record_ladder_wait(READ_LADDER_CAP);
+        assert_eq!(read_fallback_scan_budget(), READ_FALLBACK_MIN_SCAN);
+        drop(scope);
+
+        // End to end: the allowance is already spent when the lookup starts,
+        // and the fallback still scans far enough to see the collision.
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let mut collider = sample_req("BUG-3", "collider");
+        collider.agreed_id = Some("BUG-2".into());
+        crate::allocation_authority::home_fixture_backend(&store_root)
+            .unwrap()
+            .add_requirement(collider)
+            .unwrap();
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(Duration::from_secs(1))));
+        record_ladder_wait(READ_LADDER_CAP);
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let started = std::time::Instant::now();
+        let found = backend.get_requirement_unambiguous_for_read("bug-2");
+        let elapsed = started.elapsed();
+        super::super::cache::set_fast_fail_cache(prev);
+        holder.execute_batch("ROLLBACK").unwrap();
+        drop(scope);
+
+        let err = found.expect_err("the floor scan still sees both objects");
+        assert!(
+            err.downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+                .is_some(),
+            "not an ambiguity refusal: {err:#}"
+        );
+        assert!(
+            elapsed < READ_WAIT_AND_SCAN_CAP,
+            "lookup ran {elapsed:?} with its allowance spent"
+        );
+    }
+
+    /// TASK-b6b1278890774ef993d2ebc327862470-038: the incomplete-scan warning
+    /// names the real reason the cache could not answer — a writer holding
+    /// the lock only when that is the error, otherwise the error itself.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-038 | ai:claude
+    #[test]
+    fn incomplete_scan_warning_names_the_actual_cause() {
+        let locked: anyhow::Error = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            Some("database is locked".into()),
+        )
+        .into();
+        let warning = super::incomplete_scan_warning("BUG-2", &locked);
+        assert!(
+            warning.contains("another process is updating the cache"),
+            "{warning}"
+        );
+        assert!(warning.contains("BUG-2"), "{warning}");
+
+        let other = anyhow::anyhow!("no such table: requirements");
+        let warning = super::incomplete_scan_warning("BUG-2", &other);
+        assert!(
+            !warning.contains("another process"),
+            "a non-lock error must not blame a writer: {warning}"
+        );
+        assert!(warning.contains("no such table: requirements"), "{warning}");
+        assert!(warning.contains("BUG-2"), "{warning}");
     }
 
     /// BUG-1956: a mutation's constructor (no explicit read budget) keeps the
