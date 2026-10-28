@@ -399,3 +399,43 @@ fn story1843_d1_bind_rechecks_ownership_and_writes_nothing_when_lost() {
         1
     );
 }
+
+// A symlinked `.deliveries` or `.deliveries/bound` is refused, never
+// followed: nothing lands at the link's target and the message is not
+// written without its ownership.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_symlinked_delivery_dirs_are_refused_not_followed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(tmp.path()).unwrap().join("proj");
+    let outside = root.with_file_name("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let mailbox = root.join(".aida/mailbox");
+    std::fs::create_dir_all(&mailbox).unwrap();
+    std::os::unix::fs::symlink(&outside, mailbox.join(DELIVERIES_DIR)).unwrap();
+    let sidecar = DeliverySidecar::cohort("m1", "reviewer", 1, &[uuid(1)]);
+    let err = crate::mailbox::write_local_message_with_deliveries(
+        &root,
+        &role_message("m1", 1),
+        Some(&sidecar),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("refusing to follow"), "{err}");
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    assert!(!mailbox.join("m1.json").exists());
+
+    // The bindings directory of a local-only project.
+    std::fs::remove_file(mailbox.join(DELIVERIES_DIR)).unwrap();
+    std::fs::create_dir(mailbox.join(DELIVERIES_DIR)).unwrap();
+    std::os::unix::fs::symlink(&outside, mailbox.join(DELIVERIES_DIR).join(BINDINGS_DIR)).unwrap();
+    let refused = bind_queued_delivery(
+        None,
+        &root,
+        "d1",
+        &uuid(1),
+        || true,
+        std::time::Duration::from_secs(1),
+    );
+    assert!(matches!(refused, Err(BindError::Io(_))), "{refused:?}");
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+}

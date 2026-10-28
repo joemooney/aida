@@ -277,11 +277,34 @@ pub(crate) fn write_sidecar(project_root: &Path, sidecar: &DeliverySidecar) -> s
             "unsafe message id for a delivery sidecar",
         ));
     }
-    let dir = crate::mailbox::local_mailbox_dir(project_root).join(DELIVERIES_DIR);
-    std::fs::create_dir_all(&dir)?;
+    let mailbox = crate::mailbox::local_mailbox_dir(project_root);
+    std::fs::create_dir_all(&mailbox)?;
+    let dir = mailbox.join(DELIVERIES_DIR);
+    real_dir(&dir)?;
     let json = serde_json::to_vec_pretty(sidecar)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     crate::write_atomic(&dir.join(format!("{}.json", sidecar.message_id)), &json)
+}
+
+/// Create `dir` if absent, then require a real directory: a symlink (or any
+/// other non-directory) at a delivery path is refused, never followed, so a
+/// sidecar or binding can never be written through a link out of the
+/// mailbox (the `mailbox_dir_guard` rule, for its subdirectories).
+// trace:STORY-1843 | ai:claude
+pub(crate) fn real_dir(dir: &Path) -> std::io::Result<()> {
+    match std::fs::create_dir(dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e),
+    }
+    let meta = std::fs::symlink_metadata(dir)?;
+    if meta.file_type().is_dir() {
+        return Ok(());
+    }
+    Err(std::io::Error::other(format!(
+        "mail delivery path {} is not a directory (a symlink or a file); refusing to follow it",
+        dir.display()
+    )))
 }
 
 /// The outcome of binding a queued delivery.
@@ -369,19 +392,27 @@ pub fn bind_queued_delivery(
             outcome
         }
         None => {
-            let dir = crate::mailbox::local_mailbox_dir(checkout)
-                .join(DELIVERIES_DIR)
-                .join(BINDINGS_DIR);
-            std::fs::create_dir_all(&dir)?;
+            let mailbox = crate::mailbox::local_mailbox_dir(checkout);
+            crate::mailbox::mailbox_dir_guard(&mailbox)?;
+            std::fs::create_dir_all(&mailbox)?;
+            let deliveries = mailbox.join(DELIVERIES_DIR);
+            real_dir(&deliveries)?;
+            let dir = deliveries.join(BINDINGS_DIR);
+            real_dir(&dir)?;
             // No anchor, so no Lifecycle lock: a lock file in the bindings
             // directory serializes binders, so no binder ever reads a
             // binding another is still writing.
-            let lock = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(dir.join(".lock"))?;
+            let lock = {
+                use std::os::unix::fs::OpenOptionsExt;
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(false)
+                    .mode(0o600)
+                    .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+                    .open(dir.join(".lock"))?
+            };
             let start = std::time::Instant::now();
             loop {
                 match fs2::FileExt::try_lock_exclusive(&lock) {

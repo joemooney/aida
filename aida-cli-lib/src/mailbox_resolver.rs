@@ -39,14 +39,19 @@ pub(crate) struct CohortReaders {
 
 /// The delivery sidecar for `resolved` (slice D1) and the warnings to
 /// print. A role cohort gets one record per reader UUID; readers with no
-/// UUID are left out and named. A cohort left with no reader refuses as
-/// a zero-reader send does, unless the send was queued for the role, which
-/// writes one pending record. Other addresses get no sidecar.
+/// UUID are left out and named. A send queued for the role (`queued`: the
+/// role had no reader with a UUID and the sender asked to queue) writes one
+/// pending record that the first eligible reader with a UUID takes. Without
+/// that request a cohort left with no reader refuses, as a zero-reader send
+/// does; `cli_hint` names the CLI's `--queue-for-role` flag in that refusal
+/// (MCP callers cannot pass it, so their refusal never names it). Other
+/// addresses get no sidecar.
 // trace:STORY-1843 | ai:claude
 pub(crate) fn delivery_sidecar(
     resolved: &ResolvedRecipient,
     message_id: &str,
     now_ms: i64,
+    cli_hint: bool,
 ) -> Result<(
     Option<aida_core::mailbox_delivery::DeliverySidecar>,
     Vec<String>,
@@ -55,29 +60,38 @@ pub(crate) fn delivery_sidecar(
     let Some(cohort) = &resolved.cohort else {
         return Ok((None, Vec::new()));
     };
+    let uuidless = |verb: &str| -> Vec<String> {
+        cohort
+            .uuidless
+            .iter()
+            .map(|label| {
+                format!("warning: {label} has no recipient UUID and will not {verb} this; address it by handle")
+            })
+            .collect()
+    };
     if cohort.queued {
+        let mut warnings = vec![format!(
+            "queued for '{}': the first eligible reader with a recipient UUID to check its mail takes it",
+            cohort.role
+        )];
+        warnings.extend(uuidless("take"));
         return Ok((
             Some(DeliverySidecar::queued(message_id, &cohort.role, now_ms)),
-            vec![format!(
-                "queued for '{}': the first eligible reader to check its mail takes it",
-                cohort.role
-            )],
+            warnings,
         ));
     }
     if cohort.readers.is_empty() {
+        let queue = if cli_hint {
+            ", or pass --queue-for-role"
+        } else {
+            ""
+        };
         bail!(
-            "send refused: '{}' has 0 readers with a recipient UUID ({} has none); address a reader by handle, or pass --queue-for-role",
+            "send refused: '{}' has 0 readers with a recipient UUID ({} has none); address a reader by handle{queue}",
             cohort.role,
             cohort.uuidless.join(", ")
         );
     }
-    let warnings = cohort
-        .uuidless
-        .iter()
-        .map(|label| {
-            format!("warning: {label} has no recipient UUID and will not receive this; address it by handle")
-        })
-        .collect();
     Ok((
         Some(DeliverySidecar::cohort(
             message_id,
@@ -85,7 +99,7 @@ pub(crate) fn delivery_sidecar(
             now_ms,
             &cohort.readers,
         )),
-        warnings,
+        uuidless("receive"),
     ))
 }
 
@@ -440,6 +454,10 @@ impl RecipientDirectory {
                 }
                 cohort.readers.sort();
                 cohort.readers.dedup();
+                // Every live reader is UUID-less: an explicit queue request
+                // queues for the first reader with a UUID (advisor ruling,
+                // PR-3042 round 1). trace:STORY-1843 | ai:claude
+                cohort.queued = queue_for_role && cohort.readers.is_empty();
                 cohort
             });
             let live_count = readers.values().filter(|live| **live).count();
@@ -1327,7 +1345,7 @@ mod tests {
         let uuids: Vec<&str> = cohort.readers.iter().map(|u| u.as_str()).collect();
         assert_eq!(uuids, [a, b]);
         assert_eq!(cohort.uuidless, ["rev-old (row-old)"]);
-        let (sidecar, warnings) = delivery_sidecar(&resolved, "m1", 7).unwrap();
+        let (sidecar, warnings) = delivery_sidecar(&resolved, "m1", 7, true).unwrap();
         let sidecar = sidecar.unwrap();
         assert_eq!(sidecar.deliveries.len(), 2);
         assert!(sidecar
@@ -1362,9 +1380,40 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("0 readers with a recipient UUID"), "{err}");
+        assert!(
+            err.contains("--queue-for-role"),
+            "the CLI names its flag: {err}"
+        );
         assert!(crate::mailbox_store::read_local_messages(tmp.path())
             .unwrap()
             .is_empty());
+        // MCP callers cannot pass the flag, so their refusal never names it.
+        let d = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let mcp = delivery_sidecar(&d.resolve("reviewer").unwrap(), "m0", 1, false)
+            .unwrap_err()
+            .to_string();
+        assert!(mcp.contains("0 readers with a recipient UUID"), "{mcp}");
+        assert!(!mcp.contains("--queue-for-role"), "{mcp}");
+
+        // Queued, an all-UUID-less role queues for the first reader with a
+        // UUID, and the warning names the readers that will not take it.
+        let queued = d.resolve_send("reviewer", true).unwrap();
+        let (sidecar, warnings) = delivery_sidecar(&queued, "m0", 1, true).unwrap();
+        let sidecar = sidecar.unwrap();
+        assert!(sidecar.deliveries[0].queued_for_role);
+        assert!(
+            warnings[0].starts_with("queued for 'reviewer'"),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings[1].contains("rev-old (row-old) has no recipient UUID and will not take this"),
+            "{warnings:?}"
+        );
+        crate::mailbox_cmd::handle_mailbox_command(&role_send("reviewer", true), &store).unwrap();
+        let written = sidecars(tmp.path());
+        assert_eq!(written.len(), 1);
+        assert!(written[0].deliveries[0].queued_for_role);
+        std::fs::remove_dir_all(crate::mailbox_store::mailbox_dir(tmp.path())).unwrap();
 
         // No reader at all: refused by default, one pending record when queued.
         let err =

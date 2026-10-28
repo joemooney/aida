@@ -2951,7 +2951,7 @@ impl<'a> McpServer<'a> {
         // A role send records its send-time cohort, as on the CLI.
         // trace:STORY-1843 | ai:claude
         let (deliveries, delivery_warnings) = match &resolution {
-            Some(r) => crate::mailbox_resolver::delivery_sidecar(r, &id, msg.timestamp)
+            Some(r) => crate::mailbox_resolver::delivery_sidecar(r, &id, msg.timestamp, false)
                 .map_err(|e| e.to_string())?,
             None => (None, Vec::new()),
         };

@@ -261,12 +261,15 @@ file itself is unchanged.
   (`<name> has no recipient UUID and will not receive this; address it by
   handle`). If that leaves no reader, the send is refused, as a send to a
   role with no reader is.
-- **`--queue-for-role`**: when the role has no reader, the send is refused
-  unless you pass this flag. With it, the message waits, and the first
+- **`--queue-for-role`**: when the role has no reader (or none of its
+  readers has a recipient UUID), the send is refused unless you pass this
+  flag. With it, the message waits, and the first
   eligible reader whose `aida mailbox inbox`, MCP `read_inbox` or per-turn
   notice sees it takes it, exactly once. The other readers of the role never
-  see it. The per-turn notice only tries briefly and never holds up a turn;
-  if it cannot take the message now, it tries again next turn. The statusline,
+  see it. The per-turn notice spends at most 50 ms on this in total and stops
+  at the first busy lock, so it never holds up a turn; if it cannot take the
+  message now, it tries again next turn. MCP `send_message` has no queue
+  option: there a role with no reader is refused. The statusline,
   `aida status` and the TUI never take queued mail.
 
 Mail sent before this, mail to a handle, a person or a vendor group, and
@@ -274,8 +277,10 @@ broadcasts are unchanged: a role message with no delivery record is read
 through the shared role inbox as before.
 
 **Known limitation: a canonical-only clone.** The delivery records stay in
-the sending worktree's mailbox (and its retained copy when the worktree is
-retired). Syncing to the canonical store (`aida mailbox sync`) does not
+the sending worktree's mailbox. When that worktree is retired they move with
+its mail into the private retained copy, and every read still takes them
+from there, so a copy of the message elsewhere in this repository (the
+canonical store, another worktree) stays visible only to its cohort. Syncing to the canonical store (`aida mailbox sync`) does not
 publish them, so reader UUIDs never go into the shared store. A clone that
 sees only the canonical copy of a role message therefore treats it as
 ordinary role mail: every reader of the role there sees it and the role
