@@ -874,10 +874,89 @@ fn a_lost_nonce_in_the_nonce_era_fails_closed() {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
 #[test]
 fn a_nonce_less_mailbox_before_the_era_is_legacy() {
-    let (_dir, wt) = repo_with_worktree();
+    let (dir, wt) = repo_with_worktree();
     std::fs::create_dir_all(mailbox(&wt)).unwrap();
+    let meta = std::fs::metadata(mailbox(&wt)).unwrap();
     let anchored = resolve_source(&wt).unwrap().expect("anchored");
     assert!(!anchored.anchor.join(NONCE_ERA_DIR).exists());
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+    let common = std::fs::canonicalize(dir.path().join(".git")).unwrap();
+    assert_eq!(
+        anchored.key,
+        source_key(&common, "wt", meta.dev(), meta.ino(), None),
+        "the legacy key"
+    );
+    assert!(
+        !mailbox(&wt).join(SOURCE_ID_FILE).exists(),
+        "resolving minted no nonce"
+    );
+}
+
+/// The refusal for a lost nonce names the operator's recovery.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+#[test]
+fn a_lost_nonce_refusal_names_the_recovery() {
+    let (_dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("m1")).unwrap();
+    std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    let text = resolve_source(&wt).unwrap_err().to_string();
+    let mb = mailbox(&wt).display().to_string();
+    assert!(text.contains(&format!("`mv {mb} {mb}.orphaned`")), "{text}");
+    assert!(text.contains(NONCE_ERA_DIR), "{text}");
+}
+
+/// The single nonce-era marker under the anchor of `wt`.
+fn only_era_marker(wt: &Path) -> PathBuf {
+    let anchor = source(wt).anchor;
+    let mut markers: Vec<_> = std::fs::read_dir(anchor.join(NONCE_ERA_DIR))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(markers.len(), 1, "{markers:?}");
+    markers.remove(0)
+}
+
+/// A marker whose worktree admin entry was recreated (another identity)
+/// described another checkout: it is dropped, and the nonce-less mailbox
+/// there resolves as legacy. With a nonce, a fresh marker replaces it.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+#[test]
+fn a_recreated_admin_entry_drops_the_nonce_era_marker() {
+    let (_dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("m1")).unwrap();
+    let marker = only_era_marker(&wt);
+    let mut record: EraMarker = serde_json::from_slice(&std::fs::read(&marker).unwrap()).unwrap();
+    assert_eq!(record.admin, "wt");
+    let real = (record.dev, record.ino);
+    record.ino += 1;
+    let rewrite = |r: &EraMarker| {
+        std::fs::remove_file(&marker).unwrap();
+        std::fs::write(&marker, serde_json::to_vec(r).unwrap()).unwrap();
+        std::fs::set_permissions(&marker, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+    };
+    rewrite(&record);
+    // A nonce-bearing mailbox re-marks the era with the live identity.
+    resolve_source(&wt).unwrap().expect("anchored");
+    let fresh: EraMarker = serde_json::from_slice(&std::fs::read(&marker).unwrap()).unwrap();
+    assert_eq!((fresh.dev, fresh.ino), real);
+    // A nonce-less one under a stale marker is legacy, and the marker goes.
+    rewrite(&record);
+    std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    resolve_source(&wt).unwrap().expect("legacy, not refused");
+    assert!(!marker.exists());
+}
+
+/// A marker whose admin entry is current keeps refusing a lost nonce.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+#[test]
+fn a_current_admin_entry_keeps_the_nonce_era_marker() {
+    let (_dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("m1")).unwrap();
+    let marker = only_era_marker(&wt);
+    std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    assert!(resolve_source(&wt).is_err());
+    assert!(marker.is_file(), "kept while its admin entry is the same");
 }
 
 /// Without a no-replace rename the reuse is refused, never a replacing

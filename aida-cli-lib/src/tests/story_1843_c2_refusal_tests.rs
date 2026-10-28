@@ -633,6 +633,7 @@ fn r3_f4_the_report_says_an_activation_was_recorded_by_another_build() {
         hosts: Vec::new(),
         scan_incomplete: None,
         would_record: true,
+        leftovers: Default::default(),
     };
     let other =
         crate::mailbox_cmd::retention_record_lines(&report(false, Some("0.16.0+0ld"))).join("\n");

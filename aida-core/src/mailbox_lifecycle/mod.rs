@@ -52,12 +52,15 @@
 pub mod ack;
 pub mod activation;
 pub mod guard;
+pub mod leftovers;
 pub(crate) mod retire;
 
 #[cfg(test)]
 mod canonical_tests;
 #[cfg(test)]
 mod guard_tests;
+#[cfg(test)]
+mod leftovers_tests;
 #[cfg(test)]
 mod tests;
 
@@ -525,9 +528,12 @@ pub(crate) fn read_source_id(mailbox: &Path) -> Result<Option<String>> {
 /// The creation nonce of a checkout's mailbox, checked against the
 /// checkout's nonce era. A nonce marks the era; a mailbox without one in a
 /// checkout whose era has begun lost its nonce (deleted, or an older build
-/// moved it as mail) and refuses as [`LifecycleError::Unsafe`]. Without the
-/// marker a nonce-less mailbox is legacy and keeps its old key.
+/// moved it as mail) and refuses as [`LifecycleError::Unsafe`], naming the
+/// operator's recovery. Without the marker a nonce-less mailbox is legacy
+/// and keeps its old key. A marker whose worktree admin entry was pruned or
+/// recreated since is dropped first: it described another checkout.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 fn source_nonce(
     anchor: &Path,
     common: &Path,
@@ -535,18 +541,83 @@ fn source_nonce(
     mailbox: &Path,
 ) -> Result<Option<String>> {
     let marker = era_marker(anchor, common, admin);
+    if era_marker_stale(&marker, &admin_dir(common, admin)) {
+        drop_era_marker(&marker)?;
+    }
     match read_source_id(mailbox)? {
         Some(nonce) => {
-            mark_nonce_era(&marker, admin)?;
+            mark_nonce_era(&marker, common, admin)?;
             Ok(Some(nonce))
         }
         None if std::fs::symlink_metadata(&marker).is_ok() => Err(LifecycleError::Unsafe {
             path: mailbox.join(SOURCE_ID_FILE),
-            why: "is missing from a mailbox whose checkout has carried one; its source \
-                  cannot be told apart from an earlier one"
-                .into(),
+            why: format!(
+                "is missing from a mailbox whose checkout has carried one (nonce era marker \
+                 {}), so its source cannot be told apart from an earlier one. An older aida or \
+                 aida-server may have created it: restart those on this build. Then move the \
+                 mailbox aside (`mv {} {}.orphaned`) so the next write creates a new one with \
+                 its own nonce, and review any messages in the moved directory by hand",
+                marker.display(),
+                mailbox.display(),
+                mailbox.display()
+            ),
         }),
         None => Ok(None),
+    }
+}
+
+/// What a nonce-era marker records: the worktree admin entry it is keyed on
+/// and that entry's identity when the era began, so a pruned or recreated
+/// entry is told from the one that carried the nonce. A marker from before
+/// this record (the bare admin name) has no identity and is dropped only
+/// once its admin entry is gone.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct EraMarker {
+    pub admin: String,
+    pub admin_dir: PathBuf,
+    pub dev: u64,
+    pub ino: u64,
+}
+
+/// The directory a worktree admin name stands for: the common Git dir for
+/// the main checkout, `<common>/worktrees/<admin>` for a linked worktree,
+/// the clone root for a seat clone.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+fn admin_dir(common: &Path, admin: &str) -> PathBuf {
+    if admin.is_empty() {
+        common.to_path_buf()
+    } else if let Some(root) = admin.strip_prefix("seat-clone:") {
+        PathBuf::from(root)
+    } else {
+        common.join("worktrees").join(admin)
+    }
+}
+
+/// Is the nonce-era marker at `marker` stale: its admin entry (`admin_dir`
+/// for a pre-record marker) gone, or recreated with another identity?
+/// Absent, unreadable or undecidable is not stale (fail closed).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+pub(crate) fn era_marker_stale(marker: &Path, admin_dir: &Path) -> bool {
+    let Ok(Some(bytes)) = read_checked(marker) else {
+        return false;
+    };
+    let (dir, recorded) = match serde_json::from_slice::<EraMarker>(&bytes) {
+        Ok(m) => (m.admin_dir, Some((m.dev, m.ino))),
+        Err(_) => (admin_dir.to_path_buf(), None),
+    };
+    match std::fs::symlink_metadata(&dir) {
+        Err(e) => e.kind() == std::io::ErrorKind::NotFound,
+        Ok(meta) => recorded.is_some_and(|id| id != (meta.dev(), meta.ino())),
+    }
+}
+
+/// Remove a stale nonce-era marker. Absent is fine.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+pub(crate) fn drop_era_marker(marker: &Path) -> Result<()> {
+    match std::fs::remove_file(marker) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+        _ => Ok(()),
     }
 }
 
@@ -559,10 +630,11 @@ fn era_marker(anchor: &Path, common: &Path, admin: &str) -> PathBuf {
     anchor.join(NONCE_ERA_DIR).join(hex(&h.finalize()))
 }
 
-/// The nonce-era marker and admin name of the source whose mailbox lives at
-/// `<project_root>/.aida/mailbox`, resolved as [`writer_source`] does.
-/// `Ok(None)` when it has no anchor. Runs Git; never under the lock.
-fn era_marker_for(project_root: &Path) -> Result<Option<(PathBuf, String)>> {
+/// The nonce-era marker, common Git dir and admin name of the source whose
+/// mailbox lives at `<project_root>/.aida/mailbox`, resolved as
+/// [`writer_source`] does. `Ok(None)` when it has no anchor. Runs Git; never
+/// under the lock.
+fn era_marker_for(project_root: &Path) -> Result<Option<(PathBuf, PathBuf, String)>> {
     let (anchored, admin) = match crate::seat_clone_detect::seat_clone_root(project_root) {
         Some(clone_root) => {
             let Some(main) = crate::seat_clone_detect::clone_writer_main(&clone_root) else {
@@ -583,18 +655,36 @@ fn era_marker_for(project_root: &Path) -> Result<Option<(PathBuf, String)>> {
         }
     };
     let marker = era_marker(&anchored.anchor, &anchored.common, &admin);
-    Ok(Some((marker, admin)))
+    Ok(Some((marker, anchored.common, admin)))
 }
 
-/// Record, create-new, that the checkout's mailbox has carried a nonce.
-fn mark_nonce_era(marker: &Path, admin: &str) -> Result<()> {
+/// Record, create-new, that the checkout's mailbox has carried a nonce,
+/// with the identity of its admin entry (see [`EraMarker`]).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+fn mark_nonce_era(marker: &Path, common: &Path, admin: &str) -> Result<()> {
     if std::fs::symlink_metadata(marker).is_ok() {
         return Ok(());
     }
     if let Some(dir) = marker.parent() {
         ensure_dir(dir, true)?;
     }
-    match write_source_id(marker, admin.as_bytes()) {
+    // An admin entry that cannot be identified leaves a marker with none,
+    // which is only ever dropped once the entry is gone.
+    let admin_dir = admin_dir(common, admin);
+    let record = match std::fs::symlink_metadata(&admin_dir) {
+        Ok(meta) => serde_json::to_vec(&EraMarker {
+            admin: admin.to_string(),
+            admin_dir,
+            dev: meta.dev(),
+            ino: meta.ino(),
+        })
+        .map_err(|e| LifecycleError::Corrupt {
+            path: marker.to_path_buf(),
+            why: e.to_string(),
+        })?,
+        Err(_) => admin.as_bytes().to_vec(),
+    };
+    match write_source_id(marker, &record) {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         other => Ok(other?),
     }
@@ -694,6 +784,14 @@ pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
         )));
     };
     std::fs::create_dir_all(parent)?;
+    // A crashed creator's staging is reaped once it is old enough that no
+    // live creator can still be placing it.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+    leftovers::reap_stale_staging(
+        parent,
+        &name.to_string_lossy(),
+        std::time::SystemTime::now(),
+    );
     let staging = parent.join(format!(
         ".{}.creating.{}",
         name.to_string_lossy(),
@@ -735,8 +833,8 @@ pub fn create_mailbox_dir(mailbox: &Path) -> std::io::Result<()> {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-011 | ai:claude
 fn create_mailbox_dir_in_place(mailbox: &Path) -> std::io::Result<()> {
     let root = mailbox.parent().and_then(Path::parent).unwrap_or(mailbox);
-    if let Some((marker, admin)) = era_marker_for(root)? {
-        mark_nonce_era(&marker, &admin)?;
+    if let Some((marker, common, admin)) = era_marker_for(root)? {
+        mark_nonce_era(&marker, &common, &admin)?;
     }
     match std::fs::create_dir(mailbox) {
         Ok(()) => {}
