@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-27T21:57:41.072663506Z
-modified_at: 2026-10-28T01:24:33.197096309Z
+modified_at: 2026-10-28T01:50:45.935059642Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-010
@@ -37,6 +37,12 @@ comments:
   created_at: 2026-10-28T01:24:33.197096309Z
   modified_at: 2026-10-28T01:24:33.197096309Z
   session_id: 7e6ce215-5fbf-4d7d-b5b9-bd1abde3e2e8
+- id: 01a18033-e0af-7850-90a3-de84c41773e2
+  author: joe
+  content: 'ADVISOR RULING 2026-10-27 18:55 MST: option C approved. Add a gate-owned facade gate/dispatch_deps.rs wrapping exactly the external calls gate/dispatch_* make; point the allowlist at that facade alone (root allowlist = {gate, dispatch}); where a wrapped call must keep its implementation outside gate/, protect only that specific leaf file, never whole hot files (forge.rs, lib_part3.rs). B rejected (it would force human merges on hot files); A is subsumed by C. Ratchet: gate/dispatch_* may reach outside gate/ only through dispatch_deps.rs, with negative tests for the two-hop forms.'
+  created_at: 2026-10-28T01:50:45.935059642Z
+  modified_at: 2026-10-28T01:50:45.935059642Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a18001-e9f8-7af3-b001-6061d3080791
   author: joe
