@@ -122,10 +122,30 @@ impl ConflictKind {
     }
 }
 
+/// Whether a store sync refuses a conflict. Every conflict a sync's collector
+/// reports is [`ConflictScope::Introduced`]; only the on-demand audit reports
+/// [`ConflictScope::InHead`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictScope {
+    /// Newly introduced by joining the tips (it differs between the local
+    /// tip, the incoming tips and their merge bases): a sync refuses it.
+    Introduced,
+    /// Already inside `HEAD`'s own tree and not introduced by any audited
+    /// join: a sync that already shares it at the merge base admits it.
+    InHead,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Conflict {
     pub kind: ConflictKind,
     pub refs: Vec<RecordRef>,
+    pub scope: ConflictScope,
+    /// The disputed claim (display ID, node id or range key), so one dispute
+    /// found by two passes is reported once. Never serialized: it can hold
+    /// store text.
+    #[serde(skip)]
+    key: String,
 }
 
 /// Why the collector could not see every claim.
@@ -740,10 +760,12 @@ fn head_is_unborn(repo: &Path) -> bool {
 }
 
 /// The on-demand audit (`aida db audit-ids`): every conflict [`collect`]
-/// reports for a sync of `HEAD` with `incoming`, plus the conflicts already
-/// inside `HEAD`'s own tree, judged against an empty baseline. A sync admits
-/// a lone tip as its own baseline; an audit must still show what that tip
-/// already holds. An unborn `HEAD` holds no claims and is not a gap.
+/// reports for a sync of `HEAD` with `incoming` ([`ConflictScope::Introduced`]:
+/// a sync refuses it), plus the conflicts already inside `HEAD`'s own tree,
+/// judged against an empty baseline that no sync applies
+/// ([`ConflictScope::InHead`]: a sync that shares it at the merge base admits
+/// it). A dispute both passes find is reported once, as introduced. An
+/// unborn `HEAD` holds no claims and is not a gap.
 // trace:BUG-2017 | ai:claude
 pub fn audit(repo: &Path, incoming: &[String]) -> ConflictReport {
     let local = (!head_is_unborn(repo)).then_some("HEAD");
@@ -751,8 +773,17 @@ pub fn audit(repo: &Path, incoming: &[String]) -> ConflictReport {
         Some(head) => collect_with(repo, Some(head), &[], false),
         None => ConflictReport::default(),
     };
+    for c in &mut report.conflicts {
+        c.scope = ConflictScope::InHead;
+    }
     if !incoming.is_empty() {
         let joined = collect(repo, local, incoming);
+        report.conflicts.retain(|c| {
+            !joined
+                .conflicts
+                .iter()
+                .any(|j| j.kind == c.kind && j.key == c.key)
+        });
         report.conflicts.extend(joined.conflicts);
         report.gaps.extend(joined.gaps);
         report.normalize();
@@ -959,6 +990,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
             out.push(Conflict {
                 kind: ConflictKind::DisplayId,
                 refs,
+                scope: ConflictScope::Introduced,
+                key: format!("display:{id}"),
             });
         }
     }
@@ -986,6 +1019,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
             out.push(Conflict {
                 kind: ConflictKind::NodeBinding,
                 refs,
+                scope: ConflictScope::Introduced,
+                key: format!("node:{id}"),
             });
         }
     }
@@ -1013,6 +1048,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
             out.push(Conflict {
                 kind: ConflictKind::GlobalRange,
                 refs: union[key].1.clone(),
+                scope: ConflictScope::Introduced,
+                key: format!("range:{key:?}"),
             });
         }
     }
@@ -1041,6 +1078,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
                 out.push(Conflict {
                     kind: ConflictKind::GlobalRange,
                     refs: a_refs.iter().chain(b_refs.iter()).cloned().collect(),
+                    scope: ConflictScope::Introduced,
+                    key: format!("pair:{a:?}|{b:?}"),
                 });
             }
         }
@@ -1078,6 +1117,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
                         out.push(Conflict {
                             kind: ConflictKind::Unissued,
                             refs: vec![object_ref(t, *uuid, *ordinal)],
+                            scope: ConflictScope::Introduced,
+                            key: format!("unissued:{id}:{uuid}"),
                         });
                     }
                 }
