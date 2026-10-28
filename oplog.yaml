@@ -83054,5 +83054,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6469
+- id: 01a1847e-c781-7a22-8867-16e40ab7a2cc
+  target_id: 01a1847e-bfe0-7c42-bd11-efdf6311623f
+  author: aida
+  node_id: '1'
+  lamport: 6470
+  timestamp: 2026-10-28T21:51:03.553597561Z
+  kind: !Create
+    title: '[cosmetic, non-blocking] mod.rs write_source_id: on the link fallback, a failed…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-075, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [cosmetic, non-blocking] mod.rs write_source_id: on the link fallback, a failed remove_file(temp) after a successful hard_link returns Err even though the target is already placed. The same happens when the directory fsync fails after placement. mark_nonce_era then reports an error for a marker that was written. This fails closed and is harmless, but the error is misleading.
+
+      PR: #3065
+      Reviewed sha: 2e3d79d01356acf468ae99b0a4a8cc22f7323c1f
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6470
 node_id: '1'
