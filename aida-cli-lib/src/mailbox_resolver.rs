@@ -346,7 +346,7 @@ impl RecipientDirectory {
         queue_for_role: bool,
         cli_hint: bool,
     ) -> Result<ResolvedRecipient> {
-        let mut resolved = self.resolve_address(target, mention, queue_for_role)?;
+        let mut resolved = self.resolve_address(target, mention, queue_for_role, cli_hint)?;
         // A relay label resolves to the run that owns it, whether a session
         // of the run is live or the run is between sessions. A live session
         // under the label after the run ended is not the run.
@@ -366,6 +366,7 @@ impl RecipientDirectory {
         target: &str,
         mention: bool,
         queue_for_role: bool,
+        cli_hint: bool,
     ) -> Result<ResolvedRecipient> {
         let escape = self.refusal_hint(mention);
         let target = target.trim();
