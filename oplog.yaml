@@ -79718,5 +79718,21 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6205
+- id: 01a18037-5882-7651-9ceb-a43b115c4069
+  target_id: 01a17f5e-93fa-7581-9b68-fc188c97e0e7
+  author: aida
+  node_id: '1'
+  lamport: 6206
+  timestamp: 2026-10-28T01:54:33.218807152Z
+  kind: !SetStatus
+    status: Needs Attention
+- id: 01a18037-7b60-7751-aa2f-8701b499bdf7
+  target_id: 01a17f5e-ade5-78a1-9c4c-9b7a6b9fdd00
+  author: aida
+  node_id: '1'
+  lamport: 6207
+  timestamp: 2026-10-28T01:54:42.144721400Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 6207
 node_id: '1'

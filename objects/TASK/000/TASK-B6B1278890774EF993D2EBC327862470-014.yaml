@@ -8,12 +8,12 @@ description: |-
 
   PR: #2989
   Reviewed sha: c3492bbb7f08dab133af82f680887c061b0d59a1
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-27T21:57:47.130437236Z
-modified_at: 2026-10-28T01:48:27.324748085Z
+modified_at: 2026-10-28T01:54:31.838172720Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-010
@@ -48,6 +48,15 @@ history:
   timestamp: 2026-10-28T01:48:29.537945362Z
   session_id: 7e6ce215-5fbf-4d7d-b5b9-bd1abde3e2e8
   changes: []
+- id: 01a18037-531e-7f51-b45c-fc766226d6c9
+  author: aida-orchestrator
+  timestamp: 2026-10-28T01:54:31.838193398Z
+  session_id: 01a1803340ea
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 259fed79cd7f96bac2d2ba3a83a742f7bcaaf752
   branch: main
@@ -55,3 +64,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 1f280c78de
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'RequestChanges: the #[path] and outer #[macro_use]/macro_rules! detection is correct and tested, but two rustc-confirmed evasions of the same threats remain (cfg-gated inline duplicate mod; inner #![macro_use] in a module file). CI was still in progress at 51fa3b7 when this was recorded (cli-0 pass, others pending).'
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-014 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-28T01:54:31.838172720Z
