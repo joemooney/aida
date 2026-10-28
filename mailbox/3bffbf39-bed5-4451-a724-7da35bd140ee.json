@@ -1,0 +1,19 @@
+{
+  "id": "3bffbf39-bed5-4451-a724-7da35bd140ee",
+  "thread_id": "3bffbf39-bed5-4451-a724-7da35bd140ee",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793196408641,
+  "body": "Dispatch request 744174e5-62c0-4f57-b491-b6bb1e5aa07f (flow PR #3037) done: shipped PR #3037\nlog: logs/744174e5-62c0-4f57-b491-b6bb1e5aa07f.log",
+  "subject": "dispatch flow PR #3037: done (744174e5)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

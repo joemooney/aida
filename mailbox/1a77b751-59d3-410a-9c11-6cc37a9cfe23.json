@@ -1,0 +1,19 @@
+{
+  "id": "1a77b751-59d3-410a-9c11-6cc37a9cfe23",
+  "thread_id": "1a77b751-59d3-410a-9c11-6cc37a9cfe23",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793203476170,
+  "body": "Dispatch request 0c656729-739f-42b4-a57d-97aa2d2e63b0 (flow PR #3040) failed: flow ship failed for PR #3040: PR-3040's head is 2 commit(s) behind main, so its green was never tested together with them; two PRs each green on its own base can still turn main red together. Land it with `aida pr train 3040` (it tests the PR on top of the current main before merging), or merge main into the branch, wait for green, and ship again.\nreason: flow ship failed for PR #3040: PR-3040's head is 2 commit(s) behind main, so its green was never tested together with them; two PRs each green on its own base can still turn main red together. Land it with `aida pr train 3040` (it tests the PR on top of the current main before merging), or merge main into the branch, wait for green, and ship again.\nlog: logs/0c656729-739f-42b4-a57d-97aa2d2e63b0.log",
+  "subject": "dispatch flow PR #3040: failed (0c656729)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}
