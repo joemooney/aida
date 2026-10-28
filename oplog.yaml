@@ -83117,5 +83117,31 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6473
+- id: 01a18486-ac39-7310-b728-b0b585581a58
+  target_id: 01a18486-a502-7bc2-85a1-817f5d290a24
+  author: aida
+  node_id: '1'
+  lamport: 6474
+  timestamp: 2026-10-28T21:59:40.857993523Z
+  kind: !Create
+    title: 'Review PR-3069: [AI:claude] fix(mailbox): write_source_id falls back without rename or links; post-placement errors warn (TASK-b6b1278890774ef993d2ebc327862470-078)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/source-id-write-fallback`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3069>
+      - Branch: `fix/source-id-write-fallback` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-078
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3069` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6474
 node_id: '1'
