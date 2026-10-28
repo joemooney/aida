@@ -5,7 +5,7 @@
 // mandate-gate
 // trace:STORY-1889 | ai:claude
 
-use crate::*;
+use crate::leases::SessionLease;
 
 pub(crate) fn review_stale_lease_refusal(spec_id: &str, conflict: &SessionLease) -> String {
     format!(

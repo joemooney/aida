@@ -5,7 +5,9 @@
 // mandate-gate
 // trace:STORY-1889 | ai:claude
 
-use crate::*;
+use crate::gate::kernel_deps::authority_stdin_is_terminal;
+use crate::role::{current_role_instance_is_companion, effective_role_with_roster};
+use crate::worktree_gc::find_main_worktree_root;
 
 /// TASK-647 (ADR-3): "advisor authority" — permission to produce approved+
 /// specs and queue work for execution. Held by an explicit advisor role OR a
@@ -60,15 +62,15 @@ pub(crate) fn has_advisor_authority() -> bool {
         return false;
     }
     // BUG-460: a CLI op spawned by (or under) a live --auto-complete drain
-    // inherits AIDA_AUTO_COMPLETE + the run token, so `orchestrator::detect`
+    // inherits AIDA_AUTO_COMPLETE + the run token, so `crate::orchestrator::detect`
     // corroborates it against the drain-state file. Grant it authority so
     // --no-human drains can auto-queue the review + let the phase children
     // mutate; a bare headless agent (no live orchestrator) stays gated.
     let orchestrated = find_main_worktree_root()
         .map(|root| {
             matches!(
-                orchestrator::detect(&root),
-                orchestrator::OrchestratorContext::Orchestrated
+                crate::orchestrator::detect(&root),
+                crate::orchestrator::OrchestratorContext::Orchestrated
             )
         })
         .unwrap_or(false);
@@ -90,8 +92,8 @@ pub(crate) fn has_hold_authority() -> bool {
     let orchestrated = find_main_worktree_root()
         .map(|root| {
             matches!(
-                orchestrator::detect(&root),
-                orchestrator::OrchestratorContext::Orchestrated
+                crate::orchestrator::detect(&root),
+                crate::orchestrator::OrchestratorContext::Orchestrated
             )
         })
         .unwrap_or(false);
@@ -110,8 +112,8 @@ pub(crate) fn has_dispatch_authority() -> bool {
     let orchestrated = find_main_worktree_root()
         .map(|root| {
             matches!(
-                orchestrator::detect(&root),
-                orchestrator::OrchestratorContext::Orchestrated
+                crate::orchestrator::detect(&root),
+                crate::orchestrator::OrchestratorContext::Orchestrated
             )
         })
         .unwrap_or(false);

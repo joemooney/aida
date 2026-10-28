@@ -179,35 +179,26 @@ pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
 /// from an interactive shell cannot grant the TTY carve-out to a test that
 /// asserts a refusal.
 // trace:BUG-1618 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn authority_stdin_is_terminal() -> bool {
-    #[cfg(test)]
-    if let Some(tty) = test_ambient::stdin_is_terminal() {
-        return tty;
-    }
-    std::io::stdin().is_terminal()
+    crate::gate::kernel_deps::authority_stdin_is_terminal()
 }
 
 /// Whether stdout is an interactive terminal, through the same test seam as
 /// [`authority_stdin_is_terminal`]. A human-at-terminal gate checks both: an
 /// agent that pipes stdout (or stdin) is not a person at a terminal.
 // trace:BUG-1667 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn authority_stdout_is_terminal() -> bool {
-    #[cfg(test)]
-    if let Some(tty) = test_ambient::stdout_is_terminal() {
-        return tty;
-    }
-    std::io::stdout().is_terminal()
+    crate::gate::kernel_deps::authority_stdout_is_terminal()
 }
 
 /// TASK-1787: whether stderr is an interactive terminal, through the same test seam as
 /// [`authority_stdin_is_terminal`].
 // trace:TASK-1787 | ai:antigravity
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn authority_stderr_is_terminal() -> bool {
-    #[cfg(test)]
-    if let Some(tty) = test_ambient::stderr_is_terminal() {
-        return tty;
-    }
-    std::io::stderr().is_terminal()
+    crate::gate::kernel_deps::authority_stderr_is_terminal()
 }
 
 /// BUG-1618: test-only, per-thread override of the ambient inputs the
@@ -526,17 +517,9 @@ pub(crate) fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::pa
 /// isolate writes from the real user profile. Checking `AIDA_HOME` first
 /// gives tests a deterministic hook on every platform without changing
 /// the production lookup. trace:TASK-32 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn aida_home_dir() -> Option<std::path::PathBuf> {
-    if let Ok(p) = std::env::var("AIDA_HOME") {
-        if !p.is_empty() {
-            let p = std::path::PathBuf::from(p);
-            // trace:BUG-1642 | ai:claude
-            #[cfg(test)]
-            crate::test_home::assert_hermetic(&p);
-            return Some(p);
-        }
-    }
-    crate::home_dir()
+    crate::gate::kernel_deps::aida_home_dir()
 }
 
 /// BUG-1642: the one home-directory lookup for this crate. Production defers
@@ -641,13 +624,9 @@ pub(crate) fn resolve_current_session_id() -> Option<String> {
 /// invisible to their own queuer because list resolved to one identity and
 /// add resolved to another).
 /// trace:BUG-89 | ai:claude
+// Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
-    user_override.map(str::to_string).unwrap_or_else(|| {
-        std::env::var("AIDA_USER")
-            .or_else(|_| std::env::var("USER"))
-            .or_else(|_| std::env::var("USERNAME"))
-            .unwrap_or_else(|_| "default".to_string())
-    })
+    crate::gate::kernel_deps::current_user_id(user_override)
 }
 
 /// Resolve the aida binary path for all in-process `aida` subprocesses, once
