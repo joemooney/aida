@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T03:20:57.400288218Z
+modified_at: 2026-10-28T08:37:26.084181282Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1090,6 +1090,40 @@ comments:
   created_at: 2026-10-27T17:08:48.376744444Z
   modified_at: 2026-10-27T17:08:48.376744444Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a181a8-31c4-7dc2-a503-e77f4b49d96f
+  author: joe
+  content: |
+    ## B2c acceptance inventory (claude, 2026-10-28; branch story-1843-b2c @ 1561fd26567, on main 4e961089c95)
+
+    B2c scope per ruling 76 Q3 / C SKETCH section 7: post-flush explicit ACK and the private common-Git receipt anchor, integrated with C's lifecycle provider (Lifecycle->Receipt, 63 #6, 63 #8 ordering); BUG-1482 successor docs and the regression rename. Commit 1561fd26567 (Refs STORY-1843).
+
+    ### Signed obligations -> code -> test
+    - **60 #3 post-successful-output ACK, explicit successor to BUG-1482.** CLI `inbox` plans before output, prints, flushes, then commits (`mailbox_cmd.rs` Inbox arm; `mailbox_view::{plan_ack, commit_ack}`). Notices, peek, TUI, inspection and ID-only views never plan. Tests: `mailbox_cmd::tests::piped_inbox_closed_early_acknowledges_nothing_undelivered` (renamed from `piped_inbox_read_marks_displayed_even_when_stdout_closes_early` and inverted: a reader killed by SIGPIPE mid-print acknowledges nothing); `story1843_b2c_inbox_acknowledges_after_flush_into_the_anchor`. Rationale: docs/mailbox.md "When a read acknowledges (post-flush ACK)" and "Successor to BUG-1482".
+    - **60 #3 MCP response-scoped plan, no ambient slot, no early side effect.** `tool_read_inbox_planned` returns the plan inside its own `JsonRpcResponse.after_flush` (serde-skipped). `deliver()` commits only after that line is written and flushed; `run_mcp_server` uses `deliver`. Test (through the real delivery boundary): `mcp_read_inbox_ack_commits_only_after_its_own_response_is_flushed` covers a direct call, a broken-pipe write, two concurrently prepared responses (each commits only its own plan; an undelivered one commits nothing), and a commit failure after the flush. Existing mark_seen tests moved to `read_inbox_delivered`.
+    - **60 #4 honest outcome.** MCP says `ack: "requested"` (or `none`/`refused` + `ack_note`), never committed. A post-flush failure sends no second JSON-RPC line (asserted: exactly one line) and logs one stderr line with no IDs or bodies; the mail stays unread, and a retry is idempotent (asserted). CLI: a failed commit exits non-zero with "the mail above was shown but not marked read ...; run `aida mailbox inbox` again to retry". The commit validates the same IDs, fingerprints, source dev/ino, lifecycle state and generation, and current authority; an unrelated arrival is never added (`story1843_b2c_unrelated_arrival_is_never_added_to_a_plan`); a tombstone or edit refuses without writing (`..._changed_replica_refuses_and_writes_nothing`). TUI remains a non-marking peek, so it has no ACK error path.
+    - **60 #5 / 48 #1 anchor + safe IO.** `<common-git>/aida/mail-lifecycle/receipts/<sha256(key)>.json`, inside the C anchor (0700, owned, no-follow, fstat-checked, no hardlinks or FIFOs). One ledger per recipient key; each publication is a single atomic durable rename; idempotent (first ACK time kept: `..._commit_is_idempotent_and_keeps_the_first_ack_time`). Receipt lock: bounded 2 s try, refusing on timeout (`..._busy_receipt_lock_refuses_bounded`). Bounds: 4096 IDs and 64 keys per plan; 32,768 entries and 4 MiB per ledger. A full ledger refuses with nothing written and nothing pruned (`..._full_ledger_refuses_without_pruning`). Source receipts stay intact as inputs; nothing is imported, migrated or cleaned up.
+    - **63 #6 Lifecycle->Receipt, read-only validation only.** Facts (authority, anchor, source keys) are resolved before any lock. Under Lifecycle then Receipt the commit only reads the source records and replica files. It takes no Store, Seat, Pool or grant lock and runs no Git. The Receipt lock requires a `&LifecycleGuard`. Tests: `..._lock_order_is_lifecycle_then_receipt` (observed classes exactly `[lifecycle, receipt]`); `..._authority_is_rechecked_before_any_lock` (no lock taken on refusal).
+    - **63 #8 integrated with C's real lifecycle provider (no success-shaped stub).** A plan records each holding source's lifecycle key and generation from the C1 record; the commit refuses a fenced or retired source (`..._retiring_source_refuses_and_writes_nothing`), and a fenced source is not planned at all.
+    - **48 B / 60 #2 receipts and partials.** A partial view (refused store, unreadable sibling, unreadable ledger) plans no ACK (`..._partial_view_plans_nothing`; the CLI partial case in `..._inbox_acknowledges_after_flush_into_the_anchor`). A corrupt ledger makes the snapshot partial and never caught up (`..._corrupt_ledger_makes_the_view_partial`). The anchor outlives source receipts: deleting `.read-receipts` does not resurrect acked mail (core and CLI tests). A legacy-watermark record is resolved by a NEW explicit ACK, flagged `legacy` in the ledger with no read time claimed (`AckOrigin::Anchor{legacy:true}`, `ReceiptLookup::ReadUntimed`; latency readers skip it; TASK-1271). Test: `..._explicit_ack_resolves_a_legacy_watermark`. The fleet `ReceiptInspector` reads the same anchor.
+    - **Local-only (non-Git) projects** have no anchor. There the local per-ID receipt is the ACK, as before (`..._local_only_project_commits_without_an_anchor`). The anchored commit also mirrors timed local receipts for pre-B2c readers (best-effort, warned).
+
+    Local gate: `cargo test -p aida-core --lib story1843` (13 B2c tests plus the existing logical suite) and one targeted `cargo test -p aida-cli-lib --lib -- story1843 mcp_read_inbox mcp_mark_seen mcp_inspection piped_inbox bug_231` (73 passed after one fixture fix); `make check-ci-fast` 35/35; `cargo clippy -p aida-core -p aida-cli-lib --tests -D warnings` clean.
+
+    ### Original story acceptance -> status
+    - Handle at session start for claude/codex/agy, registered by SessionStart: done earlier (#2864, #2909; PR3 agy evidence, comment 4).
+    - Statusline renders the handle: done (#2864).
+    - `aida agent ls` with handle/role/spec/liveness, dead pruned or marked: done (#2864, b6aa5e8701).
+    - `mailbox send <handle>` delivers and the notice surfaces it; unroutable or dead refused with a hint: done (#2808, 597ea98e77).
+    - Claude -> agy by handle, seen next turn (black-box agy hook shape): done (#2909, story_1843_pr3_blackbox).
+    - C3 write migration: operator-run, not a code obligation.
+
+    ### What remains (why this is Refs, not completing)
+    - **D**: additive per-UUID delivery and cohort ownership. This includes explicit `--queue-for-role` assigned once, independent per-recipient receipts for role cohorts (original C1, 48 #4), and relay lifetime: one UUID per run across rotations, the gap queue, end/crash bounce outbox, label-reuse handover. D needs the linked aida-relay spec/PR (48 #6).
+    - **E**: final conformance across all named adapters plus a separate STRICT review. Relay STORY122 integration and real deployment proofs (60 #8).
+    - Operator: C3 write migration; retention activation recording (C2).
+  created_at: 2026-10-28T08:37:26.084181282Z
+  modified_at: 2026-10-28T08:37:26.084181282Z
+  session_id: 15c1ef2e-e902-4e79-a9eb-6758b4234253
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
