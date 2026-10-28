@@ -104,3 +104,14 @@ fn a_marker_whose_admin_entry_was_pruned_is_reaped() {
     assert!(!pruned.exists());
     assert!(bare.is_file());
 }
+
+/// The retention dry run carries the leftovers scan.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
+#[test]
+fn the_retention_dry_run_reports_stranded_tombs() {
+    let dir = repo();
+    let full = dir.path().join(".aida").join(".mailbox-tomb-cccc");
+    tomb_like(&full, &["late.json"]);
+    let report = super::activation::dry_run_report(dir.path());
+    assert_eq!(report.leftovers.stranded_tombs, [full]);
+}

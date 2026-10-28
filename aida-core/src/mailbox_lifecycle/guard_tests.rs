@@ -854,6 +854,17 @@ fn a_late_entry_never_merges_into_a_new_mailbox() {
     let text = err.to_string();
     assert!(text.contains(&tomb.display().to_string()), "{text}");
     assert!(text.contains(&mailbox(&wt).display().to_string()), "{text}");
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
+    let reason = &err
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<RetentionRefusal>())
+        .expect("a typed retention refusal")
+        .reason;
+    assert!(
+        reason.contains(&format!("{} is kept", tomb.display()))
+            && reason.contains(ACTIVATION_COMMAND),
+        "the refusal names the kept tomb and where it is listed: {reason}"
+    );
     assert!(tomb.join("late.json").is_file(), "the late entry stays");
     assert!(files_under(&mailbox(&wt)).is_empty(), "nothing merged");
 }
@@ -945,6 +956,43 @@ fn a_recreated_admin_entry_drops_the_nonce_era_marker() {
     std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
     resolve_source(&wt).unwrap().expect("legacy, not refused");
     assert!(!marker.exists());
+}
+
+/// A resolver that judged the marker stale must not drop the fresh one a
+/// faster resolver wrote meanwhile: the drop judges it again first.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
+#[test]
+fn an_era_marker_drop_never_removes_a_fresh_marker_written_meanwhile() {
+    let (_dir, wt) = repo_with_worktree();
+    write_local_message(&wt, &message("m1")).unwrap();
+    let marker = only_era_marker(&wt);
+    let fresh = std::fs::read(&marker).unwrap();
+    let mut stale: EraMarker = serde_json::from_slice(&fresh).unwrap();
+    stale.ino += 1;
+    let write = |path: &Path, bytes: &[u8]| {
+        let _ = std::fs::remove_file(path);
+        std::fs::write(path, bytes).unwrap();
+        std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+            .unwrap();
+    };
+    write(&marker, &serde_json::to_vec(&stale).unwrap());
+    std::fs::remove_file(mailbox(&wt).join(SOURCE_ID_FILE)).unwrap();
+    // The faster resolver drops the stale marker and writes a fresh one.
+    let fresh_bytes = fresh.clone();
+    super::BEFORE_ERA_DROP
+        .with(|h| *h.borrow_mut() = Some(Box::new(move |m: &Path| write(m, &fresh_bytes))));
+    let err = resolve_source(&wt).unwrap_err();
+    assert!(matches!(err, LifecycleError::Unsafe { .. }), "{err}");
+    assert_eq!(
+        std::fs::read(&marker).unwrap(),
+        fresh,
+        "the fresh marker stands"
+    );
+    let era: Vec<_> = std::fs::read_dir(marker.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(era.len(), 1, "no aside left behind: {era:?}");
 }
 
 /// A marker whose admin entry is current keeps refusing a lost nonce.
