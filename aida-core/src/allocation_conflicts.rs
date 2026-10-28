@@ -111,7 +111,8 @@ pub enum ConflictKind {
 }
 
 impl ConflictKind {
-    fn describe(self) -> &'static str {
+    /// The fixed sanitized phrase for this category.
+    pub fn describe(self) -> &'static str {
         match self {
             ConflictKind::GlobalRange => "global ID ranges can dispense the same ID",
             ConflictKind::NodeBinding => "one node id is bound to different registrations",
@@ -121,10 +122,30 @@ impl ConflictKind {
     }
 }
 
+/// Whether a store sync refuses a conflict. Every conflict a sync's collector
+/// reports is [`ConflictScope::Introduced`]; only the on-demand audit reports
+/// [`ConflictScope::InHead`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictScope {
+    /// Newly introduced by joining the tips (it differs between the local
+    /// tip, the incoming tips and their merge bases): a sync refuses it.
+    Introduced,
+    /// Already inside `HEAD`'s own tree and not introduced by any audited
+    /// join: a sync that already shares it at the merge base admits it.
+    InHead,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct Conflict {
     pub kind: ConflictKind,
     pub refs: Vec<RecordRef>,
+    pub scope: ConflictScope,
+    /// The disputed claim (display ID, node id or range key), so one dispute
+    /// found by two passes is reported once. Never serialized: it can hold
+    /// store text.
+    #[serde(skip)]
+    key: String,
 }
 
 /// Why the collector could not see every claim.
@@ -144,7 +165,8 @@ pub enum GapKind {
 }
 
 impl GapKind {
-    fn describe(self) -> &'static str {
+    /// The fixed sanitized phrase for this gap.
+    pub fn describe(self) -> &'static str {
         match self {
             GapKind::GitRead => "a git read failed or was refused",
             GapKind::Bound => "a resource bound was exceeded",
@@ -719,6 +741,69 @@ fn resolve(repo: &Path, rev: &str) -> Option<String> {
 /// branch), the `incoming` tips and all merge bases of every pair of tips.
 /// Never fails: anything it cannot read is a gap in the report.
 pub fn collect(repo: &Path, local: Option<&str>, incoming: &[String]) -> ConflictReport {
+    collect_with(repo, local, incoming, true)
+}
+
+/// Whether `repo`'s `HEAD` names a branch that has no commit yet. A branch
+/// ref that exists but does not resolve is not unborn: that is a read gap.
+fn head_is_unborn(repo: &Path) -> bool {
+    if resolve(repo, "HEAD").is_some() {
+        return false;
+    }
+    let Ok((0, branch, true)) = git_status(repo, &["symbolic-ref", "--quiet", "HEAD"]) else {
+        return false;
+    };
+    matches!(
+        git_status(repo, &["for-each-ref", "--format=%(refname)", &branch]),
+        Ok((0, listed, true)) if listed.is_empty()
+    )
+}
+
+/// The on-demand audit (`aida db audit-ids`): every conflict [`collect`]
+/// reports for a sync of `HEAD` with `incoming` ([`ConflictScope::Introduced`]:
+/// a sync refuses it), plus the conflicts already inside `HEAD`'s own tree,
+/// judged against an empty baseline that no sync applies
+/// ([`ConflictScope::InHead`]: a sync that shares it at the merge base admits
+/// it). A dispute both passes find is reported once, as introduced. An
+/// unborn `HEAD` holds no claims and is not a gap; with an unborn `HEAD` the
+/// incoming tips are what the first sync lands in `HEAD`, so their own trees
+/// are judged against the empty baseline instead (a lone incoming tip is a
+/// sync's own baseline, which would otherwise hide its in-tree conflicts).
+// trace:BUG-2017 | ai:claude
+pub fn audit(repo: &Path, incoming: &[String]) -> ConflictReport {
+    let local = (!head_is_unborn(repo)).then_some("HEAD");
+    let mut report = match local {
+        Some(head) => collect_with(repo, Some(head), &[], false),
+        None if incoming.is_empty() => ConflictReport::default(),
+        None => collect_with(repo, None, incoming, false),
+    };
+    for c in &mut report.conflicts {
+        c.scope = ConflictScope::InHead;
+    }
+    if !incoming.is_empty() {
+        let joined = collect(repo, local, incoming);
+        report.conflicts.retain(|c| {
+            !joined
+                .conflicts
+                .iter()
+                .any(|j| j.kind == c.kind && j.key == c.key)
+        });
+        report.conflicts.extend(joined.conflicts);
+        report.gaps.extend(joined.gaps);
+        report.normalize();
+    }
+    report
+}
+
+/// [`collect`], where `lone_tip_is_baseline` decides whether a single
+/// distinct tip is its own baseline (a sync) or is judged against an empty
+/// baseline (an audit of the claims inside one tree).
+fn collect_with(
+    repo: &Path,
+    local: Option<&str>,
+    incoming: &[String],
+    lone_tip_is_baseline: bool,
+) -> ConflictReport {
     let mut report = ConflictReport::default();
     let mut tips: Vec<String> = Vec::new();
     for rev in local.into_iter().chain(incoming.iter().map(String::as_str)) {
@@ -737,7 +822,7 @@ pub fn collect(repo: &Path, local: Option<&str>, incoming: &[String]) -> Conflic
     // A sync that joins one distinct tip introduces nothing: that tip is its
     // own baseline (an unborn local, or local already equal to incoming).
     let mut bases: Vec<String> = match tips.as_slice() {
-        [only] => vec![only.clone()],
+        [only] if lone_tip_is_baseline => vec![only.clone()],
         _ => Vec::new(),
     };
     let mut unrelated = false;
@@ -909,6 +994,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
             out.push(Conflict {
                 kind: ConflictKind::DisplayId,
                 refs,
+                scope: ConflictScope::Introduced,
+                key: format!("display:{id}"),
             });
         }
     }
@@ -936,6 +1023,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
             out.push(Conflict {
                 kind: ConflictKind::NodeBinding,
                 refs,
+                scope: ConflictScope::Introduced,
+                key: format!("node:{id}"),
             });
         }
     }
@@ -963,6 +1052,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
             out.push(Conflict {
                 kind: ConflictKind::GlobalRange,
                 refs: union[key].1.clone(),
+                scope: ConflictScope::Introduced,
+                key: format!("range:{key:?}"),
             });
         }
     }
@@ -991,6 +1082,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
                 out.push(Conflict {
                     kind: ConflictKind::GlobalRange,
                     refs: a_refs.iter().chain(b_refs.iter()).cloned().collect(),
+                    scope: ConflictScope::Introduced,
+                    key: format!("pair:{a:?}|{b:?}"),
                 });
             }
         }
@@ -1028,6 +1121,8 @@ pub(crate) fn analyze(tips: &[Tree], bases: &[Tree]) -> Vec<Conflict> {
                         out.push(Conflict {
                             kind: ConflictKind::Unissued,
                             refs: vec![object_ref(t, *uuid, *ordinal)],
+                            scope: ConflictScope::Introduced,
+                            key: format!("unissued:{id}:{uuid}"),
                         });
                     }
                 }

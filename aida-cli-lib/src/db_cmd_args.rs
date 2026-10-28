@@ -186,6 +186,15 @@ pub enum DbCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Audit allocation claims for conflicts, read-only. Reads the store's
+    /// committed HEAD plus every `--against` ref (already-local commits only;
+    /// nothing is fetched) and all their merge bases, and reports every
+    /// global ID range, node binding and display ID that two claims dispute,
+    /// with a manual repair plan. Changes nothing. Exits non-zero when it finds
+    /// a conflict or cannot read every claim.
+    // trace:BUG-2017 | ai:claude
+    AuditIds(crate::db_audit_ids::AuditIdsArgs),
 }
 
 #[derive(Subcommand, Debug)]
