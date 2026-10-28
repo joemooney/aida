@@ -24,12 +24,12 @@ description: |
 
   ## Non-goals
   Signatures, key enrollment, offline grant envelopes, a second authority service, automatic full-store trust-boundary merge, malicious raw Git, or copied/rolled-back entire-clone state. This signed single-HOME/node-local contract supersedes the original description signed-grant/offline-import clauses; full SKETCH v2 and signoff remain in comments.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-28T01:23:30.939937575Z
+modified_at: 2026-10-28T03:04:04.423291982Z
 req_type: Bug
 tags:
 - id-allocation
@@ -910,6 +910,26 @@ history:
   session_id: 01a18015667b
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a18076-efeb-73e1-9356-4ea11a45edee
+  author: aida-auto-bump
+  timestamp: 2026-10-28T03:04:00.747424098Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a18076-fe47-78d2-9108-ba05e7efff42
+  timestamp: 2026-10-28T03:04:04.423284877Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-2017-2026-10-25T140837Z.md.acked
+  commit_sha: da69af7628a679e665e2e6399185d7dc6d182220
+  summary: 'S3-ii complete: all four round-2 findings fixed (dispatch test expects exit 2/conflicts_in_head plus real-binary --against exit 1; check --collisions keys via canonical_spec_id; unborn HEAD audits lone incoming tip against empty baseline; PR body exit codes). AC3 scanner half and AC5 read-only sanitized audit with scoped manual repair plan verified; AC1/2/4 and AC5 preflight on main (#2919/#2938/#2972). All 7 PR CI lanes green at head; merge-hold-gate is the operator hold.'
+  punted:
+  - 'punted: codex2 independent slice1 review: P1 batch alias admission can persist metadata/first object before refusing; exact-head Build failed. Parent remains non-completing across all3 signed slices.'
+  - 'punted: codex2 STRICT: F1 batch ownership resolved. F2 exact-head contracts/Build red; F3 cold WORK init remains an unmerged bootstrap/activation dependency. Full signed3slice scope retained.'
+  - 'punted: codex2 independent bounded full S1+S2 sufficiency: F5 resolved; F4 legacy binding/provider validation and F6 native preservation assertions remain unchanged/incomplete. Actual REST/contracts CI failed; main integration absent (2 behind a01, merge-base3cbb). Not sufficient for approval; advisor round2 judgment, no autonomous third cycle. Evidence /tmp/codex2-pr2919-eff2-review.txt. Holds/S3 retained.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
@@ -918,11 +938,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 3dfcf99117
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'S3-ii audit-ids scope split (sync refuses vs already in HEAD) resolves the round-1 repair-plan finding and the scanner fixtures/docs are sound, but PR CI is red: the aida-cli dispatch integration test still asserts the pre-6f264fe200 exit 1/status conflicts for a HEAD-only conflict, which now exits 2/conflicts_in_head (cli-1 failed at 6f264fe200 and again at head 3f44f3e96b; last green run was dc30119a89).'
-  recovery_hint: address the review findings, move BUG-2017 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-28T01:23:30.939937575Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T03:04:00.747418031Z
+  completion_sha: da69af7628a679e665e2e6399185d7dc6d182220
