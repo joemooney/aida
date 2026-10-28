@@ -152,30 +152,12 @@ pub(crate) fn sh_single_quote(s: &str) -> String {
     s.replace('\'', "'\\''")
 }
 
-/// Canonicalize a role name. TASK-586 made `advisor` the canonical
-/// identifier; `dialog` (TASK-279's old internal token) is now a
-/// deprecated, silently-accepted alias so existing config / shells
-/// (`AIDA_SESSION_ROLE=dialog`) / `dialog`-routed queue items / legacy
-/// `dialog.toml` role files on not-yet-migrated machines keep resolving.
-/// Applied at every role-name boundary: load, list, input resolution,
-/// and queue routing. trace:TASK-586 | ai:claude
+/// Canonicalize a role name (`dialog` → `advisor`, `human` casing, stakeholder
+/// roles). The implementation is gate-owned: dispatch authority compares seats
+/// with it.
+// trace:TASK-586 trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 pub(crate) fn canonical_role_name(raw: &str) -> String {
-    if raw.eq_ignore_ascii_case("dialog") {
-        "advisor".to_string()
-    } else if is_human_route(raw) {
-        // SPIKE-57 / TASK-747: `human` is a first-class route target, the
-        // escalation-cascade terminus, symmetric with the agent roles. Normalize
-        // any casing to the lowercase canonical form so `--for Human` /
-        // `--for HUMAN` route identically and surface together in the view.
-        HUMAN_ROUTE.to_string()
-    } else if raw.eq_ignore_ascii_case("guest") || raw.eq_ignore_ascii_case("requester") {
-        // Stakeholder roles are identities, not build-loop seats. Canonicalize
-        // casing so the least-privilege gate applies uniformly from env, team
-        // roster, and queue target validation. trace:STORY-1110 | ai:codex
-        raw.to_ascii_lowercase()
-    } else {
-        raw.to_string()
-    }
+    crate::gate::dispatch_deps::canonical_role_name(raw)
 }
 
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {

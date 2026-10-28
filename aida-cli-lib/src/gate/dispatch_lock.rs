@@ -29,7 +29,10 @@ pub(crate) static TEST_PROC_PID_ALLOWLIST: std::sync::Mutex<Option<Vec<u32>>> =
 // trace:STORY-1917 | ai:claude
 #[cfg(test)]
 pub(crate) static TEST_PROC_VIEW: std::sync::Mutex<
-    Option<(crate::agent_registry::PidNamespaceProbe, Option<String>)>,
+    Option<(
+        crate::gate::dispatch_deps::PidNamespaceProbe,
+        Option<String>,
+    )>,
 > = std::sync::Mutex::new(None);
 #[cfg(test)]
 pub(crate) static TEST_POST_EXCHANGE_HOOK: std::sync::Mutex<
@@ -148,7 +151,7 @@ pub(crate) fn proc_mount_options(mountinfo: &str) -> Option<String> {
 /// `hidepid`. Either way a scan that finds no other holder proves nothing.
 // trace:STORY-1917 | ai:claude
 pub(crate) fn proc_view_refusal(
-    probe: &crate::agent_registry::PidNamespaceProbe,
+    probe: &crate::gate::dispatch_deps::PidNamespaceProbe,
     proc_mount_options: Option<&str>,
 ) -> Option<String> {
     if probe.is_isolated() {
@@ -173,7 +176,7 @@ pub(crate) fn proc_view_refusal(
 fn live_proc_view_refusal() -> Option<String> {
     let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").ok();
     proc_view_refusal(
-        &crate::agent_registry::PidNamespaceProbe::read(),
+        &crate::gate::dispatch_deps::PidNamespaceProbe::read(),
         mountinfo.as_deref().and_then(proc_mount_options).as_deref(),
     )
 }
