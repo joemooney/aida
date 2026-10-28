@@ -541,8 +541,13 @@ fn source_nonce(
     mailbox: &Path,
 ) -> Result<Option<String>> {
     let marker = era_marker(anchor, common, admin);
-    if era_marker_stale(&marker, &admin_dir(common, admin)) {
-        drop_era_marker(&marker)?;
+    let dir = admin_dir(common, admin);
+    if era_marker_stale(&marker, &dir) {
+        #[cfg(test)]
+        if let Some(hook) = BEFORE_ERA_DROP.with(|h| h.borrow_mut().take()) {
+            hook(&marker);
+        }
+        drop_stale_era_marker(&marker, &dir)?;
     }
     match read_source_id(mailbox)? {
         Some(nonce) => {
@@ -596,7 +601,10 @@ fn admin_dir(common: &Path, admin: &str) -> PathBuf {
 
 /// Is the nonce-era marker at `marker` stale: its admin entry (`admin_dir`
 /// for a pre-record marker) gone, or recreated with another identity?
-/// Absent, unreadable or undecidable is not stale (fail closed).
+/// Absent, unreadable or undecidable is not stale (fail closed). Identity is
+/// the admin entry's (dev, ino) only: an entry recreated on a reused inode
+/// looks current, so its marker is kept and a nonce-less mailbox there keeps
+/// refusing until the operator recovers it (fail closed).
 // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
 pub(crate) fn era_marker_stale(marker: &Path, admin_dir: &Path) -> bool {
     let Ok(Some(bytes)) = read_checked(marker) else {
@@ -612,13 +620,32 @@ pub(crate) fn era_marker_stale(marker: &Path, admin_dir: &Path) -> bool {
     }
 }
 
-/// Remove a stale nonce-era marker. Absent is fine.
-// trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
-pub(crate) fn drop_era_marker(marker: &Path) -> Result<()> {
-    match std::fs::remove_file(marker) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
-        _ => Ok(()),
+/// Remove the nonce-era marker at `marker`, judged stale against
+/// `admin_dir`. Absent is fine. Another resolver may have dropped it and
+/// written a fresh one since the judgement, so the marker is renamed aside
+/// and judged again there: a stale one is removed, a fresh one is linked
+/// back (never over a marker written meanwhile, which then stands).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-059 | ai:claude
+pub(crate) fn drop_stale_era_marker(marker: &Path, admin_dir: &Path) -> Result<()> {
+    let name = marker
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let aside = marker.with_file_name(format!(".{name}.drop.{}", uuid::Uuid::new_v4().simple()));
+    match std::fs::rename(marker, &aside) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
     }
+    if !era_marker_stale(&aside, admin_dir) {
+        match std::fs::hard_link(&aside, marker) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    std::fs::remove_file(&aside)?;
+    Ok(())
 }
 
 /// `<anchor>/nonce-era/<sha256(common, admin)>`.
@@ -752,6 +779,9 @@ thread_local! {
         const { std::cell::Cell::new(false) };
     /// Runs between the in-place `mkdir` and its nonce.
     pub(crate) static IN_PLACE_WINDOW: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+    /// Runs between judging a nonce-era marker stale and dropping it.
+    pub(crate) static BEFORE_ERA_DROP: std::cell::RefCell<Option<Box<dyn FnOnce(&Path)>>> =
         const { std::cell::RefCell::new(None) };
     /// Runs between staging a new mailbox and renaming it into place.
     pub(crate) static BEFORE_PLACE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =

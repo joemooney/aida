@@ -143,9 +143,19 @@ fn scan_era_markers(anchor: &Path, reap: bool, out: &mut Leftovers) {
         let Ok(record) = serde_json::from_slice::<super::EraMarker>(&bytes) else {
             continue;
         };
-        if super::era_marker_stale(&marker, &record.admin_dir)
-            && (!reap || super::drop_era_marker(&marker).is_ok())
-        {
+        // A drop's aside (`.<marker>.drop.<id>`) is never linked back from
+        // here: a stale one is simply removed.
+        let aside = marker
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with('.'));
+        let drop = |marker: &Path| {
+            if aside {
+                std::fs::remove_file(marker).map_err(super::LifecycleError::from)
+            } else {
+                super::drop_stale_era_marker(marker, &record.admin_dir)
+            }
+        };
+        if super::era_marker_stale(&marker, &record.admin_dir) && (!reap || drop(&marker).is_ok()) {
             out.reapable.push(marker);
         }
     }
