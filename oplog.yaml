@@ -80346,5 +80346,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6252
+- id: 01a181e9-fdfc-7a83-b0d3-bbc146706b7b
+  target_id: 01a181e9-f697-72c3-839c-011e6ccffd6d
+  author: aida
+  node_id: '1'
+  lamport: 6253
+  timestamp: 2026-10-28T09:49:18.204552967Z
+  kind: !Create
+    title: 'minor (non-blocking): aida-cli/tests/bug_1993_show_phase_timings.rs show_open_r…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking): aida-cli/tests/bug_1993_show_phase_timings.rs show_open_refuses_fast_when_a_writer_blocks_the_first_schema_write bounds the wait at a 60 s HARD_CEILING, not ADR-53's 5 s, so a 6-59 s regression passes. In that shape show also fails (no schema) rather than degrading.
+
+      PR: #3012
+      Reviewed sha: 5221e6c8957a7fdd4fe140ac6d249a0386cf16eb
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6253
 node_id: '1'
