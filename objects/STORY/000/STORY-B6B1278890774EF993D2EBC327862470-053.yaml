@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T13:39:32.065742351Z
-modified_at: 2026-10-28T13:39:32.065742351Z
+modified_at: 2026-10-28T13:39:45.052330380Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1828e-eb16-7fb0-bcbe-7851304d6891
+  created_at: 2026-10-28T13:39:45.052327205Z
+  created_by: joe
+history:
+- id: 01a182bc-ff21-7250-a10a-a2962cd79333
+  author: joe
+  timestamp: 2026-10-28T13:39:46.593154394Z
+  session_id: c03bd132-63a9-4ff8-ab54-32753d194f9c
+  changes: []
 filed_at:
   code_sha: 57166b44eaa0e978db9a650e4df1a8c92ad77730
   branch: chore/reflow-root-item-macros-doc
