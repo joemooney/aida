@@ -1,13 +1,7 @@
 job: disk-headroom-guard-route
-last_run: 2026-10-28T12:33:25.868980932Z
+last_run: 2026-10-28T15:41:11.989987086Z
 last_by:
   seat: advisor
-  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
   vendor: claude
 result: done
-due_since: 2026-10-28T15:32:14.115648015Z
-due_reason: on CronJobFailed:disk-headroom-guard
-due_failure:
-  trip_id: disk-headroom-guard@2026-10-28T15:21:26.363750319Z
-  job: disk-headroom-guard
-  error: 'exit 124: timed out: doctor check disk-headroom --fail-on-findings did not complete within 120s (killed)'
