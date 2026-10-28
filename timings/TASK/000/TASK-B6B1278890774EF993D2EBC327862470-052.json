@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-052",
+  "publishes": [
+    {
+      "at": "2026-10-28T17:58:51.794321836Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-28T15:50:39.536560780Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-052",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T17:41:59.095316890Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-052",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-28T17:58:31.216316649Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-052",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3047
+      }
+    },
+    {
+      "ts": "2026-10-28T17:58:51.659386249Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-052",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ff2227fbeeeb11364c751b769cda372b71cfdce3",
+        "pr": 3047,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
