@@ -1165,3 +1165,7 @@ mod tests {
             .unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2017_registry_scanner_tests.rs"]
+mod bug_2017_registry_scanner_tests;

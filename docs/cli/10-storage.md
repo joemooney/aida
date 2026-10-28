@@ -48,6 +48,7 @@ The check covers syncs AIDA runs while it holds the store write lock. A raw `git
 - `merge-gate` — collapses a distributed node-aware id (`<spec-id>-001`) down to its agreed short form (`<spec-id>`) at merge-to-trunk. It runs automatically inside `aida pull` (the merge-gate step); call it by hand only when you've disabled the auto-gate or are reconciling IDs manually.
 - `reconcile-status` — **the recovery tool you'll actually use.** Replays the Done→Completed auto-bump over a wider commit window than the `pull` that missed it. See its own entry below.
 - `check` — store integrity audit (currently `--collisions`: two specs claiming the same short id). The recovery-side counterpart to the gate-time prevention.
+- `audit-ids` — read-only audit of allocation claims (global ID ranges, node bindings, display IDs) across the store and any local refs you name, with a manual repair plan. Runs the check every store sync runs before it merges, and also reports conflicts already inside `HEAD` that a sync admits. See its own entry below.
 - `migrate-related-edges` — a one-time repair for custom-typed edges whose spelling resolves to a standard relationship type (`related`, `depends-on`, `verified_by`, `replaced_by`, and similar), which graph traversals don't follow. Converts each to its standard type, or deletes it when an edge of that type to the same target already exists. See its own entry below.
 - `block` — pre-allocates blocks of agreed IDs to a node so offline `trace:` comments can cite a final id. Distributed-multi-node housekeeping; single-machine projects never need it.
 - `workspace-init` / `retire-legacy-ids` — the rare ones. `workspace-init` sets up multiple code repos sharing one store; `retire-legacy-ids` is a one-time migration collapsing old zero-padded ids onto their short agreed ids. Both are setup/migration events, not daily verbs.
@@ -55,6 +56,37 @@ The check covers syncs AIDA runs while it holds the store write lock. A raw `git
 **Gotchas.** `db sync` moves *only the store branch* — it is **not** a substitute for `aida push`/`pull`, which move both legs. Pushing your store but forgetting your code (or vice versa) is exactly the split that two-leg `pull`/`push` exist to prevent; don't reintroduce it by reaching for `db sync` out of habit. And the destructive-shaped maintenance verbs (`retire-legacy-ids`, `check --repair`, `migrate-related-edges`) take `--dry-run` for a reason — preview first.
 
 **Chains with** — `db status` before a push; `db reconcile-status` after a merge whose auto-bump missed; `db merge-gate` is invoked by `aida pull`. For routine two-leg syncing, the wrappers in Chapter 4.
+
+---
+
+### `aida db audit-ids`
+
+<!-- trace:BUG-2017 | ai:claude -->
+
+**One line** — find every allocation claim two clones dispute, before (or after) a store sync refuses them, and get a manual repair plan.
+
+**Mental model.** Every store sync AIDA runs checks allocation claims before it merges (see [Allocation claims at every store sync](#allocation-claims-at-every-store-sync)). `audit-ids` runs that check on demand, over commits you already have: `HEAD` joined with each `--against` ref and all their merge bases, exactly as a sync would. Each conflict found there is marked **sync refuses**. It also checks `HEAD`'s own tree against an empty baseline, which no sync does, so it reports conflicts a sync admits. Syncs refuse only newly introduced conflicts (claims that differ between the local tip, the incoming tip and their merge bases); conflicts already inside `HEAD` are admitted by syncs and surfaced only by `audit-ids`, marked **already in HEAD**. A dispute both checks find is reported once, as **sync refuses**. It reads committed trees only. It never fetches, never opens the store backend (so no load-time migration runs) and writes nothing.
+
+It reports four kinds of conflict:
+
+- **global ID ranges** that can dispense the same ID (overlapping ranges with different owners, or one block claimed independently on two sides);
+- **node bindings**: one node id bound to different registrations, or registered independently on two sides;
+- **display IDs** claimed by two different object UUIDs;
+- **unissued** global display IDs above every recorded range and counter.
+
+When joining `HEAD` with an `--against` ref, a claim both sides already shared at their merge base is not a new conflict and does not block the sync; it is still reported, as **already in HEAD**, if it conflicts inside `HEAD` itself. Without `--against` the audit cannot tell whether a conflict inside `HEAD` is new since the last sync, so name the incoming ref to see which ones a sync refuses. If a git read fails, a ref is missing, a size bound is exceeded or a registry row is malformed, the audit is **incomplete**. An incomplete audit is never a clean answer.
+
+**Reach for it when** — a store sync refused with "allocation claims check refused this store sync", or before syncing a clone that allocated IDs offline. Name the incoming side explicitly, for example `aida db audit-ids --against origin/aida-store` after `aida fetch`.
+
+**Key options (rationale only).**
+- `--against <REF>` — also audit joining `HEAD` with this already-local commit or ref, as a sync would. Repeatable. Without it, only the conflicts already inside `HEAD`'s own tree are reported. `HEAD`'s own tree is always audited, with or without `--against`. A store with no commits yet holds no claims and audits clean; with `--against`, the incoming tree's own conflicts are reported as already in `HEAD`, since the first sync lands them there.
+- `--json` — the same report as JSON: `status` (`clean`, `conflicts` when a sync refuses at least one, `conflicts_in_head` when every conflict is already inside `HEAD`, or `incomplete`), `counts` (per kind, per scope and per gap), `conflicts` (each with `scope`: `introduced` or `in_head`), `gaps` and `repair_plan`.
+
+**Output.** Per-category counts, then each conflict as opaque references only: object UUID, path class (`objects`, `registry/blocks.yaml`, `registry/nodes.toml`, `registry/agreed_counters.toml`), row ordinal and commit. Node names, hosts, emails, filenames, display IDs and parser messages never appear. Exit code: 0 when complete and conflict-free; 1 when incomplete or when a sync refuses at least one conflict; 2 when every conflict is already inside `HEAD` and no audited sync refuses it.
+
+**Repair is manual.** Nothing is renumbered or rewritten automatically. The plan it prints: on the authoritative clone claim a fresh global block disjoint from every recorded range; keep every object UUID and give each conflicting object a new display ID from that block, keeping the old one as an alias and recording the mapping for review; correct overlapping range rows or conflicting node registrations by hand; then re-run `audit-ids` with the same refs until it lists nothing a sync refuses, and retry the sync. Display IDs already claimed twice inside `HEAD` do not block a sync; `aida db check --collisions` lists their claimants (matching IDs case-insensitively, as the audit does) so you can keep one and renumber the others by hand.
+
+**Chains with** — `aida fetch` → `aida db audit-ids --against origin/aida-store` → repair → re-audit → `aida pull`.
 
 ---
 
@@ -205,9 +237,22 @@ global aliases, block claims, and `blocks-only` allocation refuse. Other tracked
 block policies are effectively node-aware-only on that clone. Missing/broken
 bindings or dispensers refuse without internal-global-counter fallback.
 
-This is the first enforcement slice. Pseudonymous UUID bootstrap and the complete
-WORK-to-HOME canonical-promotion workflow are delivered in the next slice;
-reconciliation conflict preflight/audit follows separately. The operator explicitly
-enrolls HOME during that later rollout. Do not create an authority setting merely
-to make an unproven global allocation succeed. The remaining implementation scope
-and writer checklist are in the [allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
+A clone's node binding is a pseudonymous UUID with no host, user, email or path
+field, and canonical promotion from a WORK clone to HOME keeps every UUID and old
+ID as an alias. The operator enrolls HOME explicitly; nothing enrolls a clone
+automatically. Do not create an authority setting merely to make an unproven
+global allocation succeed. The writer checklist is in the
+[allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
+
+#### Allocation claims at every store sync
+
+<!-- trace:BUG-2017 | ai:claude -->
+
+Before any store sync AIDA runs merges, rebases or fast-forwards (the same syncs
+listed under [Store sync and pre-registration](#store-sync-and-pre-registration),
+including no-op and fast-forward exits), it reads the allocation claims of the
+local tip, every incoming tip and all their merge bases, and refuses if any two
+claims conflict or if it cannot read every claim. A refusal changes nothing:
+counters, oplog, refs and `HEAD` stay as they were and nothing is pushed or reset.
+There is no override flag. Use [`aida db audit-ids`](#aida-db-audit-ids) to see
+the full report and the manual repair plan.
