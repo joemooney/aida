@@ -13,7 +13,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T09:49:20.342181567Z
-modified_at: 2026-10-28T13:58:57.682987095Z
+modified_at: 2026-10-28T19:57:49.923574453Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-008
@@ -32,6 +32,12 @@ comments:
   content: 'ADVISOR 2026-10-28 07:00 MST, performance-guard trip performance-guard@2026-10-28T13:42:37Z (show: 40/178 over 1000 ms, worst 34821 ms). Ruling: this is NOT a new regression, and the budget is unchanged (ADR-53 forbids tuning it to a measurement). Breakdown by binary over the 24h window (~/.aida/usage.jsonl): the pre-fix build e33bf32234 (04:30-07:25Z) accounts for 15 of the 40 over-budget calls and the 34821/30965/10932 ms outliers (lookup ~7.5-8 s and linkage.content ~3 s, the fallback scan this task fixed; plus one notice=10.9 s under the 04:46Z advisor burst). Post-fix builds a1fa3e7cbc and 7335d1de32: 6 calls, max 620 ms. The pre-fix samples age out of the window by ~2026-10-29 07:25Z, and the gate should then go green. If it trips again with post-#3027 samples over the ceiling, file a bug against the notice phase.'
   created_at: 2026-10-28T13:58:57.682987095Z
   modified_at: 2026-10-28T13:58:57.682987095Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a18417-1de3-7e50-bb11-bff9599b3d0b
+  author: joe
+  content: 'ADVISOR 2026-10-28 13:00 MST, second performance-guard trip (show 25/95 over 1000 ms over 24h). Same ruling: no new regression, budget unchanged. Since #3027 (12:16Z), across 7 binaries: 31 calls, 4 over 1000 ms, worst 2606 ms (linkage phase, under concurrent cargo builds), no ceiling breach. The 24h window still holds the pre-fix e33bf32234 samples, which age out by 2026-10-29 07:25Z. If the guard trips after that with the post-fix proportion above 10%, file a bug on the linkage phase.'
+  created_at: 2026-10-28T19:57:49.923574453Z
+  modified_at: 2026-10-28T19:57:49.923574453Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a18241-bc9f-7c22-9335-865207df9b64
