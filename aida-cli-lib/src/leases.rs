@@ -441,12 +441,13 @@ pub(crate) fn adopt_spec_lease_for_subagent(
     let entries = std::fs::read_dir(leases_dir(project_root)).ok()?;
     for entry in entries.flatten() {
         let path = entry.path();
-        // Leases only: companions and staging files share the directory.
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
-        if !path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(crate::leases::is_session_lease_file)
+        if path.extension().and_then(|s| s.to_str()) != Some("toml")
+            || path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_lease_companion)
         {
             continue;
         }
@@ -1914,6 +1915,23 @@ pub(crate) fn is_session_lease_file(name: &str) -> bool {
     };
     let stem = stem.strip_prefix("mcp-claim.").unwrap_or(stem);
     !stem.is_empty() && !stem.contains('.')
+}
+
+/// Whether `name` is a companion that shares `.aida/sessions/` with the lease
+/// files but is not one: an `<id>.activity.toml` / `<id>.manifest.toml`
+/// sidecar, or a `write_atomic` staging file (`<stem>.tmp.<pid>.<seq>`).
+/// Scanners that also read other entry kinds (`lock-*.toml` lock-only entries,
+/// `mcp-claim.*.toml` claims, whose names may carry dots) skip only these,
+/// rather than requiring the strict [`is_session_lease_file`] shape.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+pub(crate) fn is_lease_companion(name: &str) -> bool {
+    if name.ends_with(".activity.toml") || name.ends_with(".manifest.toml") {
+        return true;
+    }
+    let mut parts = name.rsplit('.');
+    let all_digits =
+        |p: Option<&str>| p.is_some_and(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    all_digits(parts.next()) && all_digits(parts.next()) && parts.next() == Some("tmp")
 }
 
 /// What one lease file told the requeue gate.

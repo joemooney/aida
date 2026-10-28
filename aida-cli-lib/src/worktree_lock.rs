@@ -56,12 +56,12 @@ fn find_lease_file_for_worktree(project_root: &Path, target_canonical: &str) -> 
     let entries = std::fs::read_dir(&dir).ok()?;
     for entry in entries.flatten() {
         let p = entry.path();
-        // Leases only: companions and staging files share the directory.
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
-        if !p
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(crate::leases::is_session_lease_file)
+        if p.extension().and_then(|s| s.to_str()) != Some("toml")
+            || p.file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_lease_companion)
         {
             continue;
         }
@@ -213,12 +213,12 @@ pub(crate) fn list_locks(project_root: &Path) -> Vec<LockedWorktree> {
     };
     for entry in entries.flatten() {
         let p = entry.path();
-        // Leases only: companions and staging files share the directory.
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
-        if !p
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(crate::leases::is_session_lease_file)
+        if p.extension().and_then(|s| s.to_str()) != Some("toml")
+            || p.file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_lease_companion)
         {
             continue;
         }
@@ -350,6 +350,39 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    // A lock-only entry for a dotted worktree path keeps a dotted file name;
+    // it must still be listed and released, and a companion naming the same
+    // worktree is never patched as its lease.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+    #[test]
+    fn lock_only_entry_for_a_dotted_worktree_is_listed_and_released() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project_root = tmp.path().join("project");
+        let worktree = tmp.path().join("wt.v2");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let sessions_dir = aida_core::liveness::leases_dir(&project_root);
+        let canonical = worktree.canonicalize().unwrap();
+        write_session_lease(&sessions_dir, "abc123.manifest.toml", &canonical, "");
+
+        let path = acquire(&project_root, &worktree, "advisor-g").unwrap();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        assert!(name.starts_with("lock-") && name.contains(".v2"), "{name}");
+        let manifest = std::fs::read_to_string(sessions_dir.join("abc123.manifest.toml")).unwrap();
+        assert!(!manifest.contains("authorized_by"), "{manifest}");
+
+        let locks = list_locks(&project_root);
+        assert_eq!(locks.len(), 1);
+        assert_eq!(locks[0].authorized_by, "advisor-g");
+        assert_eq!(
+            read_authorized_by(&project_root, &worktree).as_deref(),
+            Some("advisor-g")
+        );
+
+        assert!(release(&project_root, &worktree).unwrap());
+        assert!(list_locks(&project_root).is_empty());
+        assert!(!path.exists());
     }
 
     #[test]

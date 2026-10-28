@@ -180,12 +180,13 @@ pub(crate) fn in_flight_vendor_children(project_root: &Path, drain_pid: u32) -> 
     let mut children = Vec::new();
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
-        // Leases only: companions and staging files share the directory.
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
-        if !path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(crate::leases::is_session_lease_file)
+        if path.extension().and_then(|s| s.to_str()) != Some("toml")
+            || path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_lease_companion)
         {
             continue;
         }
@@ -524,12 +525,13 @@ pub(crate) fn mark_in_flight_leases_interrupted(
     // drain is stopping and every other lease writer is idempotent.
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
-        // Leases only: companions and staging files share the directory.
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
-        if !path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .is_some_and(crate::leases::is_session_lease_file)
+        if path.extension().and_then(|s| s.to_str()) != Some("toml")
+            || path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_lease_companion)
         {
             continue;
         }
