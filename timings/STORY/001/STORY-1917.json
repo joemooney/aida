@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1917",
+  "publishes": [
+    {
+      "at": "2026-10-28T21:17:34.570335007Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T05:24:46.379622306Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T17:49:45.168929649Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2905
+      }
+    },
+    {
+      "ts": "2026-10-24T22:18:07.470087619Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1917",
+        "branch": "pr-2905",
+        "first_seen": "2026-10-24T22:18:07.462046473+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-25T03:16:49.393585211Z",
+      "spec": "STORY-1917",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2913,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "60402821cfa8f834c5e233e7906d67f070543bbf"
+      }
+    },
+    {
+      "ts": "2026-10-25T03:16:50.478961321Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Focused independent recheck: F1/F3/F4/F5 resolved; F2 ownership code improved but required real detached-worker race/terminal-fencing regression remains absent. All 13 executor and 7 request CI tests pass; Build required before landing. Refs STORY-1917.",
+        "recovery_hint": "address the review findings, move STORY-1917 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T04:52:00.431381754Z",
+      "spec": "STORY-1917",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "2b3cd94f5dc69193ee17b2dbbf0d1851254a620a"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:35:45.879754744Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:35:45.928374129Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T23:50:28.032213353Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1917",
+        "branch": "pr-2924",
+        "first_seen": "2026-10-25T23:50:28.029023795+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T03:25:50.915574688Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T03:26:07.469088959Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T03:52:07.095323976Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1917",
+        "branch": "claude/story-1917-slice3",
+        "first_seen": "2026-10-26T03:52:07.077123229+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T15:41:28.878703058Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1917",
+        "branch": "story-1917-slice4",
+        "first_seen": "2026-10-27T15:41:28.878650588+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:08:26.098311047Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:08:26.139244329Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T21:17:34.440604169Z",
+      "spec": "STORY-1917",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-28T21:17:34.452897255Z",
+      "spec": "STORY-1917",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
