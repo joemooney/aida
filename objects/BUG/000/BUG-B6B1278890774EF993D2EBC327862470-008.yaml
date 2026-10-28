@@ -12,7 +12,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T07:26:15.429931663Z
-modified_at: 2026-10-28T08:28:35.828235476Z
+modified_at: 2026-10-28T08:42:40.984846661Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-10-28T08:16:31.439328380Z
   modified_at: 2026-10-28T08:16:31.439328380Z
   session_id: b16d1137-069f-4b8e-8593-11fb7a993f05
+- id: 01a181ac-ffd8-7861-8acd-f46d5709a373
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 01:45 MST on PR-3012 round 1: acceptance (d) (24h guard window clean) is post-merge evidence by nature; it is discharged by the existing performance-guard substrate job, which re-trips and routes a new bug if the window breaches. The PR may use the completing trailer once (a)-(c) are met. (b) remains REQUIRED in this PR: bound the open and lookup waits by the ADR-53 ceiling with degrade-not-block (same mechanism as notice), and add a test that notice/open/lookup degrade under a held writer lock.'
+  created_at: 2026-10-28T08:42:40.984846661Z
+  modified_at: 2026-10-28T08:42:40.984846661Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 history:
 - id: 01a18167-65da-77f1-bcfd-b188482de5bd
   author: joe
