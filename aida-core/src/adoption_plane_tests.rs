@@ -255,9 +255,10 @@ fn an_ambiguous_malformed_or_unsafe_locator_refuses() {
         "version = 1\nref = \"refs/heads/aida-store\"\n",
         0o644,
     );
+    let err = refusal(discover(&top));
     assert!(
-        discover(&top).is_err(),
-        "a group/other-readable locator is not private"
+        err.contains(LOCATOR_FILE) && err.contains("chmod 600") && !err.contains("enroll"),
+        "a group/other-readable locator is not private: {err}"
     );
 }
 
@@ -391,4 +392,93 @@ fn every_policy_row_in_the_trust_manifest_is_admissible() {
         .values()
         .flatten()
         .any(|k| k == "command" || k.ends_with("_command")));
+}
+
+#[test]
+fn a_plane_sharing_product_history_refuses() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = repo(&tmp.path().join("p"));
+    git_out(&top, &["commit", "-q", "--allow-empty", "-m", "product"]);
+    plane_commit(&top, STORE_REF, Some(("100644", GOOD)));
+    assert!(discover(&top).unwrap().is_some());
+
+    locator(&top, "version = 1\nref = \"refs/heads/main\"\n", 0o600);
+    assert!(refusal(discover(&top)).contains("shares history"));
+
+    // A store branch grown out of product history is no orphan either.
+    std::fs::remove_file(
+        crate::allocation_authority::common_dir(&top)
+            .unwrap()
+            .join(LOCATOR_FILE),
+    )
+    .unwrap();
+    git_out(&top, &["branch", "-f", "aida-store", "main"]);
+    assert!(refusal(discover(&top)).contains("shares history"));
+}
+
+#[test]
+fn a_wildcard_row_never_admits_keys_beside_a_non_policy_row() {
+    let policy = policy_keys_from(
+        "[keys.worktree.open]\n\"*\" = \"policy\"\n\
+         [keys.worktree.mixed]\n\"*\" = \"policy\"\nlimit = \"policy\"\nsend_token = \"grandfathered\"\n",
+    );
+    assert_eq!(policy["open"], vec!["*".to_string()]);
+    assert_eq!(policy["mixed"], vec!["limit".to_string()]);
+}
+
+#[test]
+fn every_policy_row_round_trips_to_exactly_one_config_location() {
+    let mut settings = toml::Table::new();
+    let mut expected = Vec::new();
+    for (section, keys) in policy_keys() {
+        let mut rows = toml::Table::new();
+        for key in keys {
+            let (written, value) = if key == "*" {
+                let mut knob = toml::Table::new();
+                knob.insert("knob".into(), toml::Value::Integer(1));
+                ("dyn_key".to_string(), toml::Value::Table(knob))
+            } else {
+                (key.clone(), toml::Value::Integer(1))
+            };
+            rows.insert(written.clone(), value);
+            expected.push((section.clone(), written));
+        }
+        settings.insert(section, toml::Value::Table(rows));
+    }
+    let mut file = toml::Table::new();
+    file.insert("schema".into(), toml::Value::Integer(1));
+    file.insert("settings".into(), toml::Value::Table(settings));
+    let body = toml::to_string(&file).unwrap();
+    let adoption = parse("c0ffee", &body).unwrap();
+    let config = adoption.config_table().unwrap();
+    for (section, key) in &expected {
+        let mut at = &config;
+        if section != "_top" {
+            for part in section.split('.') {
+                at = at[part].as_table().unwrap_or_else(|| panic!("{section}"));
+            }
+        }
+        assert!(at.contains_key(key), "{section}.{key}");
+    }
+}
+
+#[test]
+fn a_section_colliding_with_a_setting_refuses() {
+    let table = |pairs: &[(&str, toml::Value)]| {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect::<BTreeMap<_, _>>()
+    };
+    let mut adoption = parse("c0ffee", "schema = 1\n").unwrap();
+    adoption.settings.insert(
+        "notify".into(),
+        table(&[("rules", toml::Value::Integer(1))]),
+    );
+    adoption.settings.insert(
+        "notify.rules".into(),
+        table(&[("x", toml::Value::Integer(1))]),
+    );
+    let err = format!("{:#}", adoption.config_table().unwrap_err());
+    assert!(err.contains("collides"), "{err}");
 }

@@ -93,6 +93,7 @@ mod criteria;
 mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
+mod db_audit_ids;
 mod db_block;
 mod db_cmd;
 mod db_reconcile;

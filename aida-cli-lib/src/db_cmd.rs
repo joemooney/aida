@@ -1,6 +1,6 @@
 //! `aida db` command cluster — the non-git fallback path.
 //!
-//! Handles `aida db <path|migrate|info|sync|merge-gate|status|block|
+//! Handles `aida db <path|migrate|info|sync|merge-gate|status|block|audit-ids|
 //! retire-legacy-ids|check|reconcile-status|workspace-init|export-git>`
 //! for non-git-backed stores (YAML / SQLite / Postgres). For a git-backed
 //! store the interesting arms (sync / merge-gate / reconcile-status) are
@@ -347,6 +347,10 @@ pub(crate) fn handle_db_command(
                 "!".yellow()
             );
         }
+        // trace:BUG-2017 | ai:claude
+        DbCommand::AuditIds(_) => {
+            anyhow::bail!("db audit-ids only applies to git-backed stores.");
+        }
         DbCommand::WorkspaceInit { name, remote } => {
             let cwd = std::env::current_dir()?;
             let ws_name = name.as_deref().unwrap_or_else(|| {
@@ -433,9 +437,17 @@ fn run_db(
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
+        // The audit reads committed trees from the store path alone, before any
+        // backend opens. trace:BUG-2017 | ai:claude
+        Some(crate::command_registry::StoreCtx::Distributed { store_path, .. }) => match &args {
+            DbArgs {
+                inner: DbCommand::AuditIds(audit),
+            } => {
+                crate::db_audit_ids::run(store_path, audit)?;
+                Ok(crate::command_registry::Flow::Return)
+            }
+            _ => Ok(crate::command_registry::Flow::Continue),
+        },
         Some(crate::command_registry::StoreCtx::Git {
             store_path,
             backend,
@@ -824,6 +836,12 @@ fn run_db(
                     }
                     handle_db_check_collisions(backend, store_path, *repair)?;
                 }
+                // trace:BUG-2017 | ai:claude
+                DbArgs {
+                    inner: DbCommand::AuditIds(audit),
+                } => {
+                    crate::db_audit_ids::run(store_path, audit)?;
+                }
                 // trace:TASK-1426 | ai:claude
                 DbArgs {
                     inner: DbCommand::MigrateRelatedEdges { dry_run, json },
@@ -913,6 +931,7 @@ fn db_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
                 DbCommand::Path
                 | DbCommand::Info
                 | DbCommand::Status
+                | DbCommand::AuditIds(_)
                 | DbCommand::Block {
                     subcommand: BlockCommand::List | BlockCommand::Status | BlockCommand::Verify,
                 },

@@ -228,7 +228,8 @@ pub(crate) fn handle_scaffold_command(
                 println!();
             }
 
-            let preview = scaffolder.preview(&store);
+            // trace:STORY-1741 | ai:claude
+            let preview = scaffolder.preview_for_write(&store)?;
             // Records on every exit, including an early IO error.
             // trace:TASK-1503 | ai:claude
             let skill_recorder =
@@ -579,7 +580,7 @@ pub(crate) fn handle_scaffold_command(
             if !root.exists() {
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
-            let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref());
+            let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref())?;
             crate::scaffold_refresh::print_refresh_summary(&packs);
             // A memory-lane project stays a memory lane: no discipline pack,
             // type protocols, or permission setup. trace:BUG-1662 | ai:claude
@@ -635,7 +636,8 @@ pub(crate) fn handle_scaffold_command(
                 crate::init_cmd::scaffold_config_for_project(&root),
                 db_path.to_path_buf(),
             );
-            let preview = scaffolder.preview(&store);
+            // trace:STORY-1741 | ai:claude
+            let preview = scaffolder.preview_for_write(&store)?;
             run_scaffold_upgrade(&root, &preview, *dry_run, *force, *prune)?;
         }
         ScaffoldCommand::Diff {
@@ -1011,6 +1013,10 @@ pub(crate) fn run_scaffold_upgrade(
 ) -> Result<()> {
     use aida_core::FileCategory;
     use std::path::PathBuf;
+
+    // A caller may hand in a preview it built itself.
+    // trace:STORY-1741 | ai:claude
+    aida_core::scaffolding::refuse_in_adopted_worktree(project_root)?;
 
     #[derive(Default)]
     struct CategoryStats {

@@ -26,24 +26,7 @@ pub(crate) fn handle_db_check_collisions(
 
     let store = backend.load()?;
 
-    // For each requirement, collect the set of short-id strings it claims:
-    // its spec_id and its agreed_id (if any, and not equal to spec_id).
-    // Then invert: short_id → set of claimant UUIDs. A short_id claimed by
-    // more than one distinct requirement is a collision.
-    let mut claims: std::collections::BTreeMap<String, Vec<uuid::Uuid>> =
-        std::collections::BTreeMap::new();
-    for req in &store.requirements {
-        let mut seen_for_this_req: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
-        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
-            .into_iter()
-            .flatten()
-        {
-            if seen_for_this_req.insert(id.to_string()) {
-                claims.entry(id.to_string()).or_default().push(req.id);
-            }
-        }
-    }
+    let claims = short_id_claims(&store.requirements);
 
     // A "collision" is a short_id claimed by 2+ distinct requirements.
     let collisions: Vec<(&String, &Vec<uuid::Uuid>)> = claims
@@ -115,6 +98,33 @@ pub(crate) fn handle_db_check_collisions(
 
     // Non-zero exit so CI / hooks can wire this in. trace:TASK-80 | ai:claude
     std::process::exit(1);
+}
+
+/// Each short id claimed in `requirements` (a requirement's `spec_id` and its
+/// `agreed_id`), keyed the way the allocation-claims collector keys display
+/// IDs (`object_store::canonical_spec_id`, ASCII-uppercased), with its
+/// claimant UUIDs. A key with 2+ claimants is a collision: `fr-5` and `FR-5`
+/// are one display ID, as `aida db audit-ids` reports them.
+// trace:BUG-2017 | ai:claude
+pub(crate) fn short_id_claims(
+    requirements: &[aida_core::models::Requirement],
+) -> std::collections::BTreeMap<String, Vec<uuid::Uuid>> {
+    let mut claims: std::collections::BTreeMap<String, Vec<uuid::Uuid>> =
+        std::collections::BTreeMap::new();
+    for req in requirements {
+        let mut seen_for_this_req: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            let key = aida_core::object_store::canonical_spec_id(id);
+            if seen_for_this_req.insert(key.clone()) {
+                claims.entry(key).or_default().push(req.id);
+            }
+        }
+    }
+    claims
 }
 
 /// One row of `aida db block list` after contiguous same-node/type/owner
