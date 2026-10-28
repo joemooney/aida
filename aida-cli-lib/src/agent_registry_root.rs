@@ -215,6 +215,25 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
     // trace:STORY-1843 | ai:codex
     let archived = crate::agent_handle::collect_retired_reservations(&project_root, dry_run)?;
     let archived_rows = agent_registry::archive_ended_entries(&project_root, dry_run)?;
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude
+    #[cfg(unix)]
+    {
+        let leftovers = aida_core::mailbox_lifecycle::leftovers::scan(&project_root, !dry_run);
+        for path in &leftovers.reapable {
+            println!(
+                "Mailbox leftover: {} {}",
+                if dry_run { "would remove" } else { "removed" },
+                path.display()
+            );
+        }
+        for tomb in &leftovers.stranded_tombs {
+            println!(
+                "Mailbox tomb kept: {} holds entries written after a retirement; move them out \
+                 by hand",
+                tomb.display()
+            );
+        }
+    }
     if archived_rows > 0 {
         println!(
             "Agent registry history: {} {archived_rows} ended records.",
