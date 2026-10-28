@@ -1,0 +1,33 @@
+id: 01a18303-3ffa-7fc3-8d36-14c18ab76c83
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-056
+title: 'Review PR-3043: [AI:claude] fix(mailbox): mint a per-creation nonce into the source key (BUG-b6b1278890774ef993d2ebc327862470-011)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/mailbox-source-nonce`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3043>
+  - Branch: `fix/mailbox-source-nonce` → `main`
+
+  ## Covers
+
+  - BUG-b6b1278890774ef993d2ebc327862470-011
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3043` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T14:56:30.714106281Z
+modified_at: 2026-10-28T14:56:30.714106281Z
+req_type: Story
+filed_at:
+  code_sha: 879660554219f93713ac377bfd6d25be68d4b9db
+  branch: fix/mailbox-source-nonce
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 679d4187bad
+  vendor: claude
+  session: bc1ea977-c54e-4469-b025-37232e7f0587
