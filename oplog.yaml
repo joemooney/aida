@@ -83208,5 +83208,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6480
+- id: 01a184a4-4fb7-7bf3-bd77-1b115f8b9ec4
+  target_id: 01a184a4-4817-7993-bd37-1741728977ec
+  author: aida
+  node_id: '1'
+  lamport: 6481
+  timestamp: 2026-10-28T22:32:03.255106046Z
+  kind: !Create
+    title: '[cosmetic, non-blocking] The post-placement warn-not-Err branches (temp remove,…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [cosmetic, non-blocking] The post-placement warn-not-Err branches (temp remove, dir fsync) have no fault-injection test; verified by inspection only.
+
+      PR: #3069
+      Reviewed sha: 1b2b235a3dd4de9cac540ebec457274b74fe1f94
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6481
 node_id: '1'
