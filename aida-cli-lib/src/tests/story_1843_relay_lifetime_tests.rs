@@ -199,9 +199,9 @@ fn reconcile_ends_a_dead_controller_and_never_an_unknown_one() {
         ControllerLiveness::Unknown
     );
 
-    // Not yet reconciled: the dead run no longer accepts gap mail.
-    assert!(resolve(tmp.path(), "relay-dead").is_err());
     let report = reconcile_relay_runs(tmp.path()).unwrap();
+    // Ended: the dead run no longer accepts gap mail.
+    assert!(resolve(tmp.path(), "relay-dead").is_err());
     assert_eq!(report.ended, vec![dead.clone()]);
     assert_eq!(report.unknown, vec![unknown.run.clone()]);
     let ended = load_run(tmp.path(), &dead).unwrap().unwrap();

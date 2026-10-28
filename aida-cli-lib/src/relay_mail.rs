@@ -29,15 +29,19 @@ use std::path::{Path, PathBuf};
 pub(crate) mod relay_mail_args;
 pub(crate) use relay_mail_args::*;
 
+// trace:STORY-1843 | ai:claude
+#[path = "relay_mail_outbox.rs"]
+pub(crate) mod outbox;
+
 /// The relay mail protocol this binary speaks. A relay compares it exactly;
 /// a different version refuses before anything is reserved.
 pub(crate) const PROTOCOL: &str = "aida-relay-mail/1";
 
 /// Operations the protocol offers, as `probe` reports them.
-const OPERATIONS: &[&str] = &["probe", "bind", "child-bind", "end"];
+const OPERATIONS: &[&str] = &["probe", "bind", "child-bind", "end", "outbox"];
 
 /// Behaviours the protocol guarantees, as `probe` reports them.
-const FEATURES: &[&str] = &["gap-acceptance", "terminal-reconcile"];
+const FEATURES: &[&str] = &["gap-acceptance", "terminal-reconcile", "end-notices"];
 
 const MAX_RUN_RECORD_BYTES: u64 = 65536;
 const MAX_RUN_RECORDS: usize = 1024;
@@ -119,6 +123,10 @@ pub(crate) struct RelayRun {
     pub(crate) children: Vec<ChildBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) terminal: Option<Terminal>,
+    /// A complete pass after the end inserted every end notice owed.
+    // trace:STORY-1843 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) notices_settled: bool,
 }
 
 /// Whether a run's controller is alive, as this process can see it.
@@ -403,8 +411,20 @@ pub(crate) fn reconcile_relay_runs(project_root: &Path) -> Result<ReconcileRepor
     if dead.is_empty() {
         return Ok(report);
     }
-    let _lock = agent_handle::lock_namespace(project_root)?;
-    for run_id in dead {
+    // The undelivered mail is read before the lock; its end notices are
+    // inserted in the same critical section that records the end.
+    // trace:STORY-1843 | ai:claude
+    let plans: Vec<_> = dead
+        .iter()
+        .map(|run_id| {
+            load_run(project_root, run_id)
+                .ok()
+                .flatten()
+                .and_then(|run| outbox::plan_end_notices(project_root, &run).ok())
+        })
+        .collect();
+    let lock = agent_handle::lock_namespace(project_root)?;
+    for (run_id, plan) in dead.into_iter().zip(plans) {
         let Some(mut run) = load_run(project_root, &run_id)? else {
             continue;
         };
@@ -415,6 +435,9 @@ pub(crate) fn reconcile_relay_runs(project_root: &Path) -> Result<ReconcileRepor
         }
         record_terminal(&mut run, TerminalReason::Crash, Utc::now());
         write_run(project_root, &run)?;
+        if let Some(plan) = plan {
+            outbox::insert_planned(project_root, &run, &plan, &lock)?;
+        }
         report.ended.push(run_id);
     }
     Ok(report)
@@ -448,6 +471,10 @@ pub(crate) fn bind(
     // before its label is considered.
     if let Err(e) = reconcile_relay_runs(project_root) {
         eprintln!("warning: relay run reconciliation skipped: {e:#}");
+    }
+    // trace:STORY-1843 | ai:claude
+    if let Err(e) = outbox::settle_ended_runs(project_root) {
+        eprintln!("warning: relay end notices stay pending: {e:#}");
     }
     let controller = controller_evidence(controller_pid)?;
     let run_lock = run_lock_evidence(run_lock, controller_pid)?;
@@ -485,6 +512,7 @@ pub(crate) fn bind(
         generation: 1,
         children: Vec::new(),
         terminal: None,
+        notices_settled: false,
     };
     write_run(project_root, &run)?;
     Ok(BindOutcome {
@@ -592,6 +620,9 @@ pub(crate) struct EndOutcome {
     pub(crate) reason: TerminalReason,
     /// False when an earlier `end` or reconciliation already recorded it.
     pub(crate) recorded_now: bool,
+    /// End notices inserted and delivered by this call's maintenance pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) notices: Option<outbox::SettleReport>,
 }
 
 /// Record the run's terminal generation once. A repeat reports the
@@ -603,21 +634,45 @@ pub(crate) fn end(
     reason: TerminalReason,
 ) -> Result<EndOutcome> {
     let run_id = canonical_run_id(run_id)?;
-    let _lock = agent_handle::lock_namespace(project_root)?;
-    let Some(mut run) = load_run(project_root, &run_id)? else {
-        bail!("unknown relay run {run_id}");
+    // The run's undelivered mail is read before the lock, so its end
+    // notices are inserted with the terminal record. trace:STORY-1843 | ai:claude
+    let plan = load_run(project_root, &run_id)?
+        .filter(|run| run.terminal.is_none() && run.controller.pid == controller_pid)
+        .map(|run| outbox::plan_end_notices(project_root, &run))
+        .transpose()
+        .unwrap_or_else(|e| {
+            eprintln!("warning: relay end notices deferred to maintenance: {e:#}");
+            None
+        });
+    let (run, recorded_now) = {
+        let lock = agent_handle::lock_namespace(project_root)?;
+        let Some(mut run) = load_run(project_root, &run_id)? else {
+            bail!("unknown relay run {run_id}");
+        };
+        if run.controller.pid != controller_pid {
+            bail!(
+                "relay run {run_id} belongs to controller pid {}, not {controller_pid}",
+                run.controller.pid
+            );
+        }
+        let recorded_now = run.terminal.is_none();
+        if recorded_now {
+            record_terminal(&mut run, reason, Utc::now());
+            write_run(project_root, &run)?;
+            if let Some(plan) = &plan {
+                outbox::insert_planned(project_root, &run, plan, &lock)?;
+            }
+        }
+        (run, recorded_now)
     };
-    if run.controller.pid != controller_pid {
-        bail!(
-            "relay run {run_id} belongs to controller pid {}, not {controller_pid}",
-            run.controller.pid
-        );
-    }
-    let recorded_now = run.terminal.is_none();
-    if recorded_now {
-        record_terminal(&mut run, reason, Utc::now());
-        write_run(project_root, &run)?;
-    }
+    // With no lock held: catch up any notice the plan missed and deliver.
+    let notices = match outbox::settle_ended_runs(project_root) {
+        Ok(report) => Some(report),
+        Err(e) => {
+            eprintln!("warning: relay end notices stay pending: {e:#}");
+            None
+        }
+    };
     let terminal = run.terminal.as_ref().expect("terminal recorded");
     Ok(EndOutcome {
         run: run.run_id.clone(),
@@ -625,6 +680,7 @@ pub(crate) fn end(
         terminal_generation: terminal.generation,
         reason: terminal.reason,
         recorded_now,
+        notices,
     })
 }
 
@@ -689,6 +745,44 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
                 Ok(())
             }
         }
+        RelayMailCommand::Outbox { run, json } => {
+            let root = project_root()?;
+            let runs: Vec<String> = match run {
+                Some(run) => vec![canonical_run_id(run)?],
+                None => list_runs(&root)?.into_iter().map(|r| r.run_id).collect(),
+            };
+            let mut entries = Vec::new();
+            for run in runs {
+                entries.extend(outbox::list_entries(&root, &run)?);
+            }
+            if *json {
+                return print_json(&entries);
+            }
+            if entries.is_empty() {
+                println!("No relay end notices.");
+            }
+            for e in &entries {
+                let state = match &e.state {
+                    outbox::NoticeState::Pending {
+                        attempts,
+                        last_error,
+                    } => format!(
+                        "pending ({attempts} attempt{}){}",
+                        if *attempts == 1 { "" } else { "s" },
+                        last_error
+                            .as_deref()
+                            .map(|err| format!(": {err}"))
+                            .unwrap_or_default()
+                    ),
+                    outbox::NoticeState::Delivered { .. } => "delivered".to_string(),
+                };
+                println!(
+                    "{} {} -> {} about {}: {state}",
+                    e.label, e.terminal_generation, e.destination.address, e.message_id
+                );
+            }
+            Ok(())
+        }
         RelayMailCommand::End {
             run,
             controller_pid,
@@ -744,3 +838,7 @@ pub(crate) static RELAY_MAIL: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/story_1843_relay_lifetime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/story_1843_relay_outbox_tests.rs"]
+mod outbox_tests;

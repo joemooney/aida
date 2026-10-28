@@ -27,8 +27,8 @@
 
 use crate::mailbox::{message_state_rank, Message, Recipient};
 use crate::mailbox_delivery::{
-    binding_dir_components, binding_file_name, DeliveryBinding, DeliverySidecar, RecipientUuid,
-    DELIVERIES_DIR, DELIVERY_FILE_CAP,
+    binding_dir_components, binding_file_name, parse_handover, DeliveryBinding, DeliveryRecord,
+    DeliverySidecar, RecipientUuid, DELIVERIES_DIR, DELIVERY_FILE_CAP, HANDOVER_DIR,
 };
 use crate::mailbox_identity::{classified_identities, IdentityClass, MailIdentityFacts};
 use std::cell::{Cell, RefCell};
@@ -506,6 +506,9 @@ pub struct SnapshotRecord {
     /// audience's recipient UUID (slice D1): it is read and acknowledged
     /// under that UUID's receipt key only.
     pub delivered_to: Option<RecipientUuid>,
+    /// The delivery record `delivered_to` owns (slice D2b): the original,
+    /// a queued delivery bound to it, or a handover.
+    pub owned_delivery: Option<DeliveryRecord>,
 }
 
 /// A queued role delivery that this audience's reader is eligible to bind
@@ -527,6 +530,117 @@ pub fn receipt_keys(audience: &ResolvedAudience, record: &SnapshotRecord) -> Vec
             .into_iter()
             .map(str::to_string)
             .collect(),
+    }
+}
+
+// ── Relay run inspection (slice D2b) ────────────────────────────────────────
+
+/// The audience of one relay run: its label as the private key and its run
+/// UUID as the recipient. Crate-private, like every audience constructor:
+/// only the inspections below use it, and they expose counts or the
+/// run's own undelivered deliveries, never another reader's view.
+// trace:STORY-1843 | ai:claude
+fn relay_run_audience(label: &str, run: &RecipientUuid) -> Option<ResolvedAudience> {
+    let mut audience =
+        ResolvedAudience::from_identity_policy(vec![label.to_string()], Vec::new(), Vec::new())
+            .ok()?;
+    audience.recipient = Some(run.clone());
+    Some(audience)
+}
+
+/// Unread mail of one relay run, as counts only.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RelayRunUnread {
+    /// Deliveries the run owns (its own, and handovers to it) with no read.
+    pub owned: usize,
+    /// Mail addressed to the label with no delivery record (written before
+    /// relay ownership, or by a writer that bypasses it): readable by
+    /// whoever holds the label, so it is never handed over.
+    pub legacy_label: usize,
+    /// Every source and receipt was fully observed.
+    pub complete: bool,
+}
+
+impl RelayRunUnread {
+    /// Whether a caller that cannot choose must refuse: some unread mail,
+    /// or a count it cannot trust.
+    pub fn any_or_unknown(&self) -> bool {
+        !self.complete || self.owned > 0 || self.legacy_label > 0
+    }
+}
+
+/// One undelivered delivery of a relay run, for its end notices and its
+/// handover.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelayRunDelivery {
+    pub message_id: String,
+    pub thread_id: String,
+    pub delivery_id: String,
+    pub from: String,
+    pub subject: Option<String>,
+    /// This delivery is itself a relay end notice.
+    pub notice: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RelayRunDeliveries {
+    pub unread: Vec<RelayRunDelivery>,
+    pub legacy_label: usize,
+    pub complete: bool,
+}
+
+fn unread_record(record: &SnapshotRecord) -> bool {
+    !record.message.archived && !matches!(record.read, ReadEvidence::Acknowledged { .. })
+}
+
+/// The undelivered deliveries of relay run `run` (label `label`): the
+/// mail its sessions never read. A legacy watermark is not a read here.
+// trace:STORY-1843 | ai:claude
+pub fn relay_run_unread_deliveries(
+    ctx: &MailboxContext,
+    label: &str,
+    run: &RecipientUuid,
+    limits: &ReadLimits,
+) -> RelayRunDeliveries {
+    let Some(audience) = relay_run_audience(label, run) else {
+        return RelayRunDeliveries::default();
+    };
+    let snapshot = logical_snapshot(ctx, &audience, &Query::Inbox, limits);
+    // Fully observed, the standard an acknowledgement needs (a local-only
+    // project's one mailbox qualifies).
+    let mut out = RelayRunDeliveries {
+        complete: snapshot.ack_eligible(),
+        ..Default::default()
+    };
+    for record in snapshot.records.iter().filter(|r| unread_record(r)) {
+        match &record.owned_delivery {
+            Some(delivery) => out.unread.push(RelayRunDelivery {
+                message_id: record.message.id.clone(),
+                thread_id: record.message.thread_id.clone(),
+                delivery_id: delivery.delivery_id.clone(),
+                from: record.message.from.clone(),
+                subject: record.message.subject.clone(),
+                notice: delivery.notice_of.is_some(),
+            }),
+            None => out.legacy_label += 1,
+        }
+    }
+    out
+}
+
+/// How much unread mail relay run `run` (label `label`) holds. Counts
+/// only: no IDs, senders or bodies.
+pub fn relay_run_unread(
+    ctx: &MailboxContext,
+    label: &str,
+    run: &RecipientUuid,
+    limits: &ReadLimits,
+) -> RelayRunUnread {
+    let found = relay_run_unread_deliveries(ctx, label, run, limits);
+    RelayRunUnread {
+        owned: found.unread.len(),
+        legacy_label: found.legacy_label,
+        complete: found.complete,
     }
 }
 
@@ -703,9 +817,13 @@ pub fn logical_snapshot(
     let mut out_records = Vec::with_capacity(records.len());
     for (mut message, provenance) in records {
         let delivered_to = match delivered.get(&message.id) {
-            Some(DeliveryGate::Owned(uuid)) if !audience.matching_keys(&message).is_empty() => {
+            Some(DeliveryGate::Owned(uuid, _)) if !audience.matching_keys(&message).is_empty() => {
                 Some(uuid.clone())
             }
+            _ => None,
+        };
+        let owned_delivery = match (&delivered_to, delivered.get(&message.id)) {
+            (Some(_), Some(DeliveryGate::Owned(_, record))) => Some((**record).clone()),
             _ => None,
         };
         let keys: Vec<String> = match &delivered_to {
@@ -736,6 +854,7 @@ pub fn logical_snapshot(
             provenance,
             read,
             delivered_to,
+            owned_delivery,
         });
     }
 
@@ -1442,6 +1561,8 @@ struct ObservedSource {
     messages: Vec<ObservedMessage>,
     /// Delivery sidecars (slice D1).
     deliveries: Vec<DeliverySidecar>,
+    /// Handover deliveries (slice D2b).
+    handovers: Vec<DeliveryRecord>,
 }
 
 fn safe_id(id: &str) -> bool {
@@ -1518,6 +1639,7 @@ fn read_source(
         });
     }
     let mut deliveries = Vec::new();
+    let mut handovers = Vec::new();
     if let Some(sidecars) = dir.child_dir(DELIVERIES_DIR)? {
         for name in sidecars.names(budget)? {
             let Some(stem) = name
@@ -1540,6 +1662,28 @@ fn read_source(
                     .map_err(|_| SourceErrorCode::CorruptMessage)?,
             );
         }
+        // trace:STORY-1843 | ai:claude
+        if let Some(handover) = sidecars.child_dir(HANDOVER_DIR)? {
+            for name in handover.names(budget)? {
+                if !name.ends_with(b".json") || name.starts_with(b".") {
+                    continue;
+                }
+                if budget.expired() {
+                    return Err(SourceErrorCode::OverBudget);
+                }
+                let Some(bytes) =
+                    handover.read_file(OsStr::from_bytes(&name), DELIVERY_FILE_CAP)?
+                else {
+                    return Err(SourceErrorCode::SourceChanged);
+                };
+                budget.take(bytes.len())?;
+                let name =
+                    std::str::from_utf8(&name).map_err(|_| SourceErrorCode::CorruptMessage)?;
+                handovers.push(
+                    parse_handover(&bytes, name).map_err(|_| SourceErrorCode::CorruptMessage)?,
+                );
+            }
+        }
     }
     // Recheck that the path still names the directory that was read.
     let mut again = PinnedDir::open_root(root)?;
@@ -1556,6 +1700,7 @@ fn read_source(
         identity,
         messages,
         deliveries,
+        handovers,
     }))
 }
 
@@ -1564,8 +1709,8 @@ fn read_source(
 /// How a message with a delivery sidecar relates to this audience.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum DeliveryGate {
-    /// This audience's recipient owns a delivery of it.
-    Owned(RecipientUuid),
+    /// This audience's recipient owns a delivery of it: the record it owns.
+    Owned(RecipientUuid, Box<DeliveryRecord>),
     /// Not owned here: a cohort this reader is not in, a queued delivery
     /// bound to someone else, or one this reader may still bind.
     NotOwned,
@@ -1589,6 +1734,7 @@ fn delivery_gates(
     Conflicts,
 ) {
     let mut sidecars: BTreeMap<&str, Vec<&DeliverySidecar>> = BTreeMap::new();
+    let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
     for source in observed.iter().flatten() {
@@ -1597,6 +1743,12 @@ fn delivery_gates(
                 .entry(&sidecar.message_id)
                 .or_default()
                 .push(sidecar);
+        }
+        for record in &source.handovers {
+            handovers
+                .entry(&record.message_id)
+                .or_default()
+                .push(record);
         }
         for m in &source.messages {
             threads
@@ -1640,9 +1792,14 @@ fn delivery_gates(
                 }
             }
         }
-        let owners = sidecar.owners(|d| bindings.get(d).cloned().flatten());
+        let handed = valid_handovers(sidecar, handovers.get(id).map(Vec::as_slice));
+        let owned = audience
+            .recipient()
+            .and_then(|own| owned_record(sidecar, &handed, own, &bindings));
         let gate = match audience.recipient() {
-            Some(own) if owners.contains(own) => DeliveryGate::Owned(own.clone()),
+            Some(own) if owned.is_some() => {
+                DeliveryGate::Owned(own.clone(), Box::new(owned.expect("checked")))
+            }
             Some(_) => {
                 pending.extend(
                     sidecar
@@ -1661,6 +1818,68 @@ fn delivery_gates(
         gates.insert(id.to_string(), gate);
     }
     (gates, pending, conflicts)
+}
+
+/// The handovers of `sidecar`'s message whose chain reaches one of its
+/// original deliveries. A handover naming any other delivery owns nothing.
+// trace:STORY-1843 | ai:claude
+fn valid_handovers<'a>(
+    sidecar: &DeliverySidecar,
+    found: Option<&[&'a DeliveryRecord]>,
+) -> Vec<&'a DeliveryRecord> {
+    let mut known: HashSet<&str> = sidecar
+        .deliveries
+        .iter()
+        .map(|d| d.delivery_id.as_str())
+        .collect();
+    let mut pending: Vec<&DeliveryRecord> = found.unwrap_or_default().to_vec();
+    pending.sort_by(|a, b| a.delivery_id.cmp(&b.delivery_id));
+    pending.dedup_by(|a, b| a == b);
+    let mut valid = Vec::new();
+    // Each pass admits handovers of already-known deliveries, so a chain
+    // (old run -> new run -> newer run) resolves in order.
+    loop {
+        let before = valid.len();
+        pending.retain(|h| {
+            let reaches = h.handover_of.as_deref().is_some_and(|o| known.contains(o));
+            if reaches {
+                valid.push(*h);
+            }
+            !reaches
+        });
+        if valid.len() == before {
+            break;
+        }
+        for h in &valid[before..] {
+            known.insert(h.delivery_id.as_str());
+        }
+    }
+    valid
+}
+
+/// The delivery record of `sidecar`'s message that `own` owns: an original
+/// delivery, a queued delivery bound to it, or a valid handover.
+fn owned_record(
+    sidecar: &DeliverySidecar,
+    handed: &[&DeliveryRecord],
+    own: &RecipientUuid,
+    bindings: &HashMap<String, Option<RecipientUuid>>,
+) -> Option<DeliveryRecord> {
+    sidecar
+        .deliveries
+        .iter()
+        .find(|d| match (&d.recipient_uuid, d.queued_for_role) {
+            (Some(r), _) => r == own,
+            (None, true) => bindings.get(&d.delivery_id).cloned().flatten().as_ref() == Some(own),
+            (None, false) => false,
+        })
+        .or_else(|| {
+            handed
+                .iter()
+                .copied()
+                .find(|h| h.recipient_uuid.as_ref() == Some(own))
+        })
+        .cloned()
 }
 
 /// The recipient a queued delivery is bound to, read no-follow and bounded
@@ -1812,7 +2031,7 @@ fn reconcile(
     let owned = |m: &Message| {
         delivered
             .get(&m.id)
-            .is_none_or(|gate| matches!(gate, DeliveryGate::Owned(_)))
+            .is_none_or(|gate| matches!(gate, DeliveryGate::Owned(..)))
     };
     let reaches = |m: &Message| {
         (!audience.matching_keys(m).is_empty() && owned(m))
@@ -2217,3 +2436,8 @@ pub fn replica_fingerprint(
 #[cfg(test)]
 #[path = "mailbox_logical_tests.rs"]
 mod tests;
+
+// trace:STORY-1843 | ai:claude
+#[cfg(test)]
+#[path = "mailbox_relay_handover_tests.rs"]
+mod relay_handover_tests;

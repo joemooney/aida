@@ -225,7 +225,20 @@ pub(crate) struct NamespaceLock {
 impl Drop for NamespaceLock {
     fn drop(&mut self) {
         let _ = FileExt::unlock(&self.file);
+        NAMESPACE_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     }
+}
+
+thread_local! {
+    /// Namespace locks this thread holds, so a caller can assert lock order.
+    // trace:STORY-1843 | ai:claude
+    static NAMESPACE_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether this thread holds the handle namespace lock. Mail writes take
+/// the mailbox Lifecycle lock, which must never be taken under it.
+pub(crate) fn namespace_lock_held() -> bool {
+    NAMESPACE_DEPTH.with(|d| d.get() > 0)
 }
 
 /// The common-root allocation lock. Held across read-decide-write so a
@@ -263,6 +276,7 @@ pub(crate) fn lock_namespace(project_root: &Path) -> Result<NamespaceLock> {
             Err(e) => return Err(e).context("handle allocation lock busy; retry after agent gc"),
         }
     }
+    NAMESPACE_DEPTH.with(|d| d.set(d.get() + 1));
     Ok(NamespaceLock { file })
 }
 
