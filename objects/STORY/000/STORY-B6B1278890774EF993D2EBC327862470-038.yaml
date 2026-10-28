@@ -23,8 +23,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-28T07:33:28.618187192Z
-modified_at: 2026-10-28T07:33:28.618187192Z
+modified_at: 2026-10-28T07:33:38.961191351Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
+  created_at: 2026-10-28T07:33:38.961187203Z
+  created_by: joe
+history:
+- id: 01a1816d-d50d-7b33-aa48-9209296d7eb1
+  author: joe
+  timestamp: 2026-10-28T07:33:41.261590418Z
+  session_id: 2f8d330d-e6f2-4390-a32b-73eb66082380
+  changes: []
 filed_at:
   code_sha: 33188d8b5c7097415664e477f3b2d49018844dc5
   branch: chore/dispatch-tick-job
