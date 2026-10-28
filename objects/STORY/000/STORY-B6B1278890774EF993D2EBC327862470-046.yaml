@@ -1,0 +1,33 @@
+id: 01a18235-cf35-7963-801d-75f6a50aaabe
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-046
+title: 'Review PR-3025: [AI:claude] refactor(gate): facade rule for every gate module (TASK-b6b1278890774ef993d2ebc327862470-024)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-facade-all-modules`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3025>
+  - Branch: `fix/gate-facade-all-modules` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-024
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3025` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T11:12:06.965112319Z
+modified_at: 2026-10-28T11:12:06.965112319Z
+req_type: Story
+filed_at:
+  code_sha: 6efd7270069d247871f1c043b227c8b21a3ec974
+  branch: fix/gate-facade-all-modules
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 75d12e4354f
+  vendor: claude
+  session: 6df68e51-f913-41a4-bf07-7cb9c1bab568
