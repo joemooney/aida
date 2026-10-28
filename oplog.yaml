@@ -81212,5 +81212,23 @@ operations:
   timestamp: 2026-10-28T12:49:13.034745665Z
   kind: !SetStatus
     status: Completed
-clock: 6324
+- id: 01a1828e-e253-7d13-a933-3fc61d3d54ec
+  target_id: 01a1828e-db7e-7f61-8c07-996a3e6dd6a3
+  author: aida
+  node_id: '1'
+  lamport: 6325
+  timestamp: 2026-10-28T12:49:24.563520453Z
+  kind: !Create
+    title: (cosmetic, non-blocking) The PR body still names only -014/-015 and never menti…
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-014, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (cosmetic, non-blocking) The PR body still names only -014/-015 and never mentions TASK-...-023 (bare gate/dispatch mounts, doc-comments-only ruling). Its local evidence ('46 passed') predates the current head.
+
+      PR: #2999
+      Reviewed sha: 3c459a93c7fdb6392faea0e8322bf5790d56628d
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6325
 node_id: '1'
