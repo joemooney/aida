@@ -665,18 +665,29 @@ pub fn logical_snapshot(
     let (roots, inventory_error) = inventory(ctx, &mut budget);
     let mut sources = Vec::new();
     let mut observed: Vec<Option<ObservedSource>> = Vec::new();
-    // A live source (inventory found its worktree present, not prunable)
-    // whose read failed, so its `.deliveries/` went unread: it may hold the
-    // sidecar of any role message, since a message carries no origin
-    // (ruling F2, narrowed). A missing or prunable worktree's files are gone
-    // or retained (the retained lookup covers them), and the canonical store
-    // never carries sidecars (F5), so neither counts.
+    // A live source whose `.deliveries/` went unread may hold the sidecar of
+    // any role message, since a message carries no origin (ruling F2,
+    // narrowed): a present worktree whose read failed, one inventory could
+    // not resolve (`common_git_of` failed), or any worktree an inventory
+    // that could not enumerate them all left out. A missing or prunable
+    // worktree's files are gone or retained (the retained lookup covers
+    // them), another repository's worktree is not a source, and the
+    // canonical store never carries sidecars (F5), so none of those counts.
     // trace:STORY-1843 | ai:claude
-    let mut unsighted = false;
+    let mut unsighted =
+        inventory_error.is_some_and(|code| code != SourceErrorCode::NotAGitCheckout);
     let mut salvaged: Vec<DeliverySidecar> = Vec::new();
     for root in roots {
         let (path, result) = match root {
-            Err((path, code)) => (path, Err(code)),
+            Err((path, code)) => {
+                unsighted |= !matches!(
+                    code,
+                    SourceErrorCode::WorktreeMissing
+                        | SourceErrorCode::WorktreePrunable
+                        | SourceErrorCode::CommonGitMismatch
+                );
+                (path, Err(code))
+            }
             Ok(path) => {
                 let result = read_source(&path, &[".aida", "mailbox"], &mut budget);
                 if result.is_err() {
@@ -1627,7 +1638,7 @@ enum DeliveryGate {
 /// whose `.deliveries/` was read on its own.
 ///
 /// Fail closed (ruling F2): when `unsighted` (a live source's `.deliveries/`
-/// could not be read, so the snapshot is already partial), a
+/// was not read, so the snapshot is already partial), a
 /// role message with no sidecar found anywhere has unknown ownership and is
 /// hidden from every reader of this snapshot, never served as legacy role
 /// mail. Vendor-group mail never carries a sidecar and is never gated.
