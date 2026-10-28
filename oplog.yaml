@@ -82253,5 +82253,22 @@ operations:
   timestamp: 2026-10-28T17:36:11.749876678Z
   kind: !SetStatus
     status: Rejected
-clock: 6406
+- id: 01a1839a-ca00-7873-9c94-2aa999290ff3
+  target_id: 01a1839a-c359-7940-bc59-765757d74410
+  author: aida
+  node_id: '1'
+  lamport: 6407
+  timestamp: 2026-10-28T17:42:01.984365608Z
+  kind: !Create
+    title: 'PR-3047 follow-ups: era-marker drop TOCTOU, leftover-report tests, stale-marker doc, gc doc wording'
+    description: |
+      Non-blocking findings from the APPROVED review of PR #3047 (TASK-b6b1278890774ef993d2ebc327862470-052) at b15cd18f6b68. All four are in aida-core/src/mailbox_lifecycle and its CLI surfaces.
+      1. [minor] mod.rs:544-546 source_nonce: era-marker staleness check then drop is a TOCTOU. Two resolvers can both judge the old marker stale, and the slower one deletes the fresh marker the faster one just wrote. Fix: rename the marker aside, re-validate, then remove; or re-check identity immediately before unlinking. Add a test.
+      2. [minor] Untested surfaces: assert that the Stranded refusal (guard.rs:93-104) names the tomb path, that dry_run_report (activation.rs:205) carries leftovers, and that retention_leftover_lines and the agent gc leftover output (mailbox_cmd.rs:1102-1127, agent_registry_root.rs:218-236) render them.
+      3. [minor] era_marker_stale compares only (dev,ino), and inode reuse fails closed. Document that in the doc comment.
+      4. [cosmetic] docs/cli/06-roles-sessions.md:327: era markers are not age-gated; only tombs and staging are. Fix the wording.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6407
 node_id: '1'
