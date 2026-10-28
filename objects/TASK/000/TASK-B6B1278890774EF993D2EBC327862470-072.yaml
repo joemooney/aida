@@ -5,12 +5,12 @@ description: |
   Non-blocking findings from the APPROVED review of PR #3058 (TASK-b6b1278890774ef993d2ebc327862470-067) at a93c4aa63879. Fix both, with a test each.
   - [minor, non-blocking] leftovers.rs scan_era_markers: the non-JSON 'continue' runs before aside_marker(), so drop asides of pre-record markers (body = raw admin name) are never restored, reported or reaped. A lost fresh one stays lost (narrow fail-open from a PR-3056-build crash). Judge them with admin_dir(common, admin), or report them.
   - [minor, non-blocking] mod.rs source_nonce: when the drop can't take the Lifecycle lock (busy or Store lock held), a nonce-less mailbox gets the Unsafe refusal telling the operator to mv the mailbox aside, yet a retry succeeds once the lock frees. Make it retriable or name the lock contention.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T19:17:12.822552384Z
-modified_at: 2026-10-28T19:17:20.730364205Z
+modified_at: 2026-10-28T19:55:17.711026750Z
 req_type: Task
 tags:
 - from-review:PR-3058
@@ -23,6 +23,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18414-cb4f-7dc1-ae84-58f786e20c47
+  author: aida-session-start
+  timestamp: 2026-10-28T19:55:17.711022359Z
+  session_id: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: fbc835fcf4858f96b699e4c9871b204db13d88a2
   branch: main
