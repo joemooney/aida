@@ -7,6 +7,6 @@ result: done
 due_since: 2026-10-26T06:07:24.907415117Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-10-27T16:54:35.271586694Z
+  trip_id: dev-autopromote@2026-10-27T23:52:55.265790539Z
   job: dev-autopromote
-  error: 'exit 1: build of 8ae30fc168597cccf1d714558403f69ffb0e3c0b failed; log /home/joe/.aida/dev-autopromote/20261027T163221Z-8ae30fc16859.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 4m 30s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+  error: 'exit 1: build of 56d730c9922ce85b6b463d9789d8bae0ba215f27 failed; log /home/joe/.aida/dev-autopromote/20261027T233042Z-56d730c9922c.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 4m 09s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
