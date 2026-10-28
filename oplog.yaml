@@ -80810,5 +80810,13 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6287
+- id: 01a18241-72a4-7ec0-931b-5e86847d5b44
+  target_id: 01a18240-1e0e-7223-a610-fd0188550d97
+  author: aida
+  node_id: '1'
+  lamport: 6288
+  timestamp: 2026-10-28T11:24:49.700323552Z
+  kind: !SetStatus
+    status: Rejected
+clock: 6288
 node_id: '1'
