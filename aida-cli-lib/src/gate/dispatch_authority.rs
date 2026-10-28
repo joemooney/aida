@@ -18,6 +18,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use crate::dispatch::{DispatchRequestVerb, DispatchStatusFilter, DispatchVendor};
+use crate::gate::dispatch_deps::{ActionRow, Outcome};
 use crate::gate::dispatch_io::{
     brief_path, read_bounded_regular_file, result_path, sha256_hex, BRIEFS_SUBDIR, MAX_BRIEF_BYTES,
 };
@@ -28,7 +29,6 @@ use crate::gate::mandate::{Mandate, MandateState, Scope};
 use crate::gate::mandate_gates::GateOp;
 use crate::gate::review_verdict::{self, VerdictKind};
 use crate::gate::seat_authority::{GrantCheck, GrantRejection};
-use crate::mandate_drive::{ActionRow, Outcome};
 
 pub(crate) const DISPATCH_SCHEMA_VERSION: u32 = 1;
 
@@ -864,7 +864,7 @@ pub(crate) fn validate_spec_in_store(
         }
     }
 
-    let store = crate::load_store_for_lookup(main_worktree)
+    let store = crate::gate::dispatch_deps::load_store_for_lookup(main_worktree)
         .with_context(|| format!("cannot load requirement store to validate `{spec}`"))?;
     let Some(req) = store.requirements.iter().find(|r| {
         r.spec_id
@@ -1258,7 +1258,9 @@ pub(crate) fn check_request_authority(
         }
     };
 
-    if crate::canonical_role_name(&grant.seat) != crate::gate::mandate::MANDATE_SEAT {
+    if crate::gate::dispatch_deps::canonical_role_name(&grant.seat)
+        != crate::gate::mandate::MANDATE_SEAT
+    {
         let msg = format!(
             "dispatch requests require the `advisor` seat grant, but current grant {} holds seat `{}`",
             grant.id, grant.seat
@@ -1298,7 +1300,7 @@ pub(crate) fn check_request_authority(
         && !grant
             .delegable_seats
             .iter()
-            .any(|s| crate::canonical_role_name(s) == "reviewer")
+            .any(|s| crate::gate::dispatch_deps::canonical_role_name(s) == "reviewer")
     {
         let msg = format!(
             "advisor grant {} does not delegate the `reviewer` seat required by `{}`; re-enter with `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"`",
@@ -1379,7 +1381,7 @@ pub(crate) fn emit_dispatch_event(
     why: Option<String>,
 ) {
     let row = ActionRow::new(&format!("dispatch:{verb}"), subject, verb, outcome, why);
-    crate::mandate_drive::emit_action(main_worktree, mandate_id, "session", &row);
+    crate::gate::dispatch_deps::emit_action(main_worktree, mandate_id, "session", &row);
 }
 
 /// Verify that `aida dispatch serve` is running with a valid, bound `advisor`
@@ -1409,7 +1411,9 @@ pub(crate) fn check_serve_grant(
             )
         }
     };
-    if crate::canonical_role_name(&grant.seat) != crate::gate::mandate::MANDATE_SEAT {
+    if crate::gate::dispatch_deps::canonical_role_name(&grant.seat)
+        != crate::gate::mandate::MANDATE_SEAT
+    {
         bail!(
             "`aida dispatch serve` requires the `advisor` seat grant, but current grant {} holds seat `{}`",
             grant.id,
@@ -1587,13 +1591,13 @@ pub(crate) fn verdict_at_head(
     Some(v.kind)
 }
 
-/// Accept only [`crate::forge::CiState::Success`] as green CI.
+/// Accept only [`crate::gate::dispatch_deps::CiState::Success`] as green CI.
 // trace:STORY-1917 | ai:claude
-pub(crate) fn ci_state_is_green(pr: u64, state: crate::forge::CiState) -> Result<()> {
+pub(crate) fn ci_state_is_green(pr: u64, state: crate::gate::dispatch_deps::CiState) -> Result<()> {
     match state {
-        crate::forge::CiState::Success => Ok(()),
-        crate::forge::CiState::Failed => bail!("CI failed for PR #{pr}"),
-        crate::forge::CiState::None => {
+        crate::gate::dispatch_deps::CiState::Success => Ok(()),
+        crate::gate::dispatch_deps::CiState::Failed => bail!("CI failed for PR #{pr}"),
+        crate::gate::dispatch_deps::CiState::None => {
             bail!("PR #{pr} has no CI checks; flow reports green only after CI passes")
         }
         other => bail!("CI for PR #{pr} did not pass (state {other:?})"),
@@ -2024,7 +2028,7 @@ fn execution_refusal(
             .map(|g| {
                 g.delegable_seats
                     .iter()
-                    .any(|s| crate::canonical_role_name(s) == "reviewer")
+                    .any(|s| crate::gate::dispatch_deps::canonical_role_name(s) == "reviewer")
             })
             .unwrap_or(false);
         if !delegable_ok {

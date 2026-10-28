@@ -4,7 +4,8 @@
 // trace:TASK-1915 | ai:claude
 
 use super::*;
-use crate::mandate_drive::{ledger_rows, Outcome};
+use crate::gate::dispatch_types::Outcome;
+use crate::mandate_drive::ledger_rows;
 
 #[test]
 fn a_failed_mandate_ship_is_ledgered_as_refused() {

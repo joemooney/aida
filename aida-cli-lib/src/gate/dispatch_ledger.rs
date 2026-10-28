@@ -15,11 +15,11 @@ use uuid::Uuid;
 use crate::gate::dispatch_authority::{
     emit_dispatch_event, DispatchRequest, DispatchResult, DispatchStatus, DispatchVerb,
 };
+use crate::gate::dispatch_deps::Outcome;
 use crate::gate::dispatch_io::{
     read_bounded_regular_file, recovery_path, request_path, requests_dir, result_path, results_dir,
     sha256_hex, write_private_atomic, MAX_BRIEF_BYTES,
 };
-use crate::mandate_drive::Outcome;
 
 pub(crate) const RECOVERY_SCHEMA_VERSION: u32 = 1;
 pub(crate) const MAX_RECOVERY_FILE_BYTES: usize = 256 * 1024;

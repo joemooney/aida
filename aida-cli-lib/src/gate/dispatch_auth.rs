@@ -153,7 +153,7 @@ impl DispatchExecutionContext {
         }
 
         let self_pid = std::process::id();
-        let self_start = crate::process_probe::process_start_identity(self_pid);
+        let self_start = crate::gate::dispatch_deps::process_start_identity(self_pid);
         let claim = WorkerClaim {
             worker_pid: self_pid,
             worker_start: self_start,
@@ -373,7 +373,7 @@ impl DispatchExecutionContext {
             && !grant
                 .delegable_seats
                 .iter()
-                .any(|s| crate::canonical_role_name(s) == "reviewer")
+                .any(|s| crate::gate::dispatch_deps::canonical_role_name(s) == "reviewer")
         {
             bail!(
                 "dispatch request {} aborted: requester advisor grant {} no longer delegates `reviewer`",

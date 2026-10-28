@@ -718,54 +718,14 @@ mod story1163_forge_dispatch_tests {
 // plan already in it. A re-completion, a sibling-spec completion, or a slice PR
 // landing the plan twice all become no-ops at the plan granularity.
 
-/// Best-effort load of the requirements store for read-only spec-id /
-/// title / status lookups inside session-manifest rendering. Tries
-/// distributed git-canonical mode first (the default), then falls back
-/// to the legacy YAML/SQLite path. Returns None on any error — caller
-/// renders with "(not found)" placeholders so missing data degrades
-/// gracefully.
-///
-/// Pure with respect to `project_root`: BOTH resolution modes read only stores
-/// reachable from that root, so this can never return another project's
-/// requirements. No process CWD, no `REQ_DB_NAME`, no registry default — see
-/// the legacy arm's comment for what went wrong when it did (BUG-1732).
-// trace:STORY-98 trace:BUG-1732 | ai:claude
+/// Best-effort, `project_root`-pure load of the requirements store for
+/// read-only lookups; `None` on any error. Gate-owned, since dispatch
+/// admission validates specs against it.
+// trace:STORY-98 trace:BUG-1732 trace:TASK-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 pub(crate) fn load_store_for_lookup(
     project_root: &std::path::Path,
 ) -> Option<aida_core::RequirementsStore> {
-    // Git-canonical: walk up from project_root looking for an .aida/config.toml.
-    if let Some(store_path) = detect_distributed_store_from(project_root) {
-        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
-            if let Ok(s) = aida_core::DatabaseBackend::load(&backend) {
-                return Some(s);
-            }
-        }
-    }
-    // Legacy fallback for projects that haven't migrated. BUG-1732: this used
-    // `determine_requirements_path(None)`, which probes for `requirements.db` /
-    // `requirements.yaml` relative to the PROCESS CWD and honours an ambient
-    // `REQ_DB_NAME` — both of which ignore the `project_root` every one of this
-    // function's ~70 callers went to the trouble of resolving. On a host where
-    // the cwd happens to hold an unrelated legacy store, a project-scoped
-    // lookup silently returned that other project's requirements, which is how
-    // `aida awaiting` came to report six In-Progress specs from a different
-    // project in its orphaned-in-progress channel. BUG-1574's author already
-    // documented this hazard and hand-bypassed the fallback for one call site
-    // (see `unattended_git_mutation_refusal`); this makes the function itself
-    // pure with respect to its argument so no caller has to remember.
-    //
-    // `resolve_requirements_path_in` is reused rather than reimplemented so the
-    // probe ORDER (`requirements.db` before `requirements.yaml`) stays defined
-    // in one place. Passing `project_root` as its cwd and `None` for both the
-    // `-p` option and `REQ_DB_NAME` leaves no ambient input: on that arm the
-    // resolver returns before it ever reads the registry, so the empty registry
-    // path below is inert and is passed to make that unreadability explicit
-    // rather than to imply the registry participates.
-    // trace:BUG-1732 | ai:claude
-    aida_core::resolve_requirements_path_in(project_root, None, None, std::path::Path::new(""))
-        .ok()
-        .map(Storage::new)
-        .and_then(|s| s.load().ok())
+    crate::gate::dispatch_deps::load_store_for_lookup(project_root)
 }
 
 // ───────────────────────────────────────────────────────────────────

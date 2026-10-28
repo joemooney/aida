@@ -5,6 +5,8 @@
 // trace:STORY-1700 | ai:claude
 
 use super::*;
+use crate::gate::dispatch_deps::emit_action;
+use crate::gate::dispatch_types::{ActionRow, Outcome};
 use crate::gate::fleet_lanes::{LaneEvidence, SeatKind};
 use crate::mandate_drive::*;
 use anyhow::Result;

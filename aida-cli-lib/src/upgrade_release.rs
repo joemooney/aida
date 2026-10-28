@@ -1649,7 +1649,10 @@ pub(crate) fn handle_release(
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
         match forge.watch_ci(&change_ref) {
-            Ok(crate::forge::CiState::Success | crate::forge::CiState::None) => println!(
+            Ok(
+                crate::gate::dispatch_types::CiState::Success
+                | crate::gate::dispatch_types::CiState::None,
+            ) => println!(
                 "  {} {change_noun} #{n} checks passed",
                 crate::glyph(crate::glyphs::Glyph::Check).green()
             ),

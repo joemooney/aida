@@ -257,7 +257,7 @@ fn the_admitted_record_takes_its_authority_from_the_checks() {
 
 #[test]
 fn only_success_is_green_ci() {
-    use crate::forge::CiState;
+    use crate::gate::dispatch_types::CiState;
     assert!(ci_state_is_green(1, CiState::Success).is_ok());
     assert_eq!(
         ci_state_is_green(1, CiState::None).unwrap_err().to_string(),
