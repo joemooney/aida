@@ -1284,7 +1284,7 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
 /// exhausted. Strict refresh propagates it without escalation; a tolerant
 /// incremental winner can serve a labelled compatible snapshot after one attempt.
 // trace:TASK-1515 | ai:claude
-pub(crate) fn is_cache_lock_error(err: &anyhow::Error) -> bool {
+pub fn is_cache_lock_error(err: &anyhow::Error) -> bool {
     is_sqlite_lock_error(err)
         || err
             .chain()
