@@ -7,9 +7,9 @@
   for_role: advisor
 - user_id: joe
   requirement_id: 01a1829d-5dfc-7fb1-89a8-a0f4fcb6e8e0
-  position: 74000
+  position: 5000
   added_by: joe
   note: auto-queue retry reused canonical review story; covers 2 specs
-  added_at: 2026-10-28T13:05:48.420370691Z
+  added_at: 2026-10-28T13:16:58.259421560Z
   for_role: reviewer
   added_by_machine: imac
