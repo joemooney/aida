@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T11:45:21.836101542Z
-modified_at: 2026-10-28T11:45:21.836101542Z
+modified_at: 2026-10-28T12:31:09.388641372Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-024
 - finding-hash:b500068b
 - from-review:PR-3025
 - kind:carried-forward
+comments:
+- id: 01a1827e-2c4c-7af3-a589-8657bbdc9374
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 05:35: fix now (not a regroup item). Scan kernels with outside_paths(text, true) like the dispatch facade, so aida_core paths count, and add each authority-feeding aida_core definer the kernels reach (team::TeamRoster::load, team::canonical_role, liveness::process_start_identity, liveness::process_identity_is_alive, liveness::pid_is_alive, liveness::process_start_time, store_locate::locate_distributed_store_from, and any others the scan finds) to the kernel leaf list with a reason. Do the same for orchestrator inventories so they are frozen too. aida-core/ is not protected, so this makes the reach enumerated and frozen, which is the facade standard. Fold TASK-b6b1278890774ef993d2ebc327862470-043 into the same PR.'
+  created_at: 2026-10-28T12:31:09.388641372Z
+  modified_at: 2026-10-28T12:31:09.388641372Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 filed_at:
   code_sha: 42070fbece09cfca8f00042931b573300d85f0f9
   branch: main
