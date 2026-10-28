@@ -682,8 +682,21 @@ pub fn logical_snapshot(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let (delivered, pending_deliveries, delivery_conflicts) =
-        delivery_gates(ctx, &observed, audience, &mut anchor, &mut budget);
+    let retained = match &ctx.repository {
+        Some(common) => retained_sidecars(common.path(), &mut budget).unwrap_or_else(|code| {
+            anchor.error.get_or_insert(code);
+            Vec::new()
+        }),
+        None => Vec::new(),
+    };
+    let (delivered, pending_deliveries, delivery_conflicts) = delivery_gates(
+        ctx,
+        &observed,
+        &retained,
+        audience,
+        &mut anchor,
+        &mut budget,
+    );
     let (mut records, mut conflicts) = reconcile(
         &observed,
         local_count,
@@ -1577,9 +1590,10 @@ enum DeliveryGate {
 /// delivery's binding is read-only; an unreadable binding makes the view
 /// partial (it is recorded as an anchor error) and hides the message.
 // trace:STORY-1843 | ai:claude
-fn delivery_gates(
+fn delivery_gates<'a>(
     ctx: &MailboxContext,
-    observed: &[Option<ObservedSource>],
+    observed: &'a [Option<ObservedSource>],
+    retained: &'a [DeliverySidecar],
     audience: &ResolvedAudience,
     anchor: &mut AnchorEvidence,
     budget: &mut Budget,
@@ -1591,6 +1605,15 @@ fn delivery_gates(
     let mut sidecars: BTreeMap<&str, Vec<&DeliverySidecar>> = BTreeMap::new();
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
+    // A retired source's sidecars live on in its retained copy, so a replica
+    // of its message elsewhere (another worktree, the canonical store) keeps
+    // the cohort gate instead of degrading to legacy role mail.
+    for sidecar in retained {
+        sidecars
+            .entry(&sidecar.message_id)
+            .or_default()
+            .push(sidecar);
+    }
     for source in observed.iter().flatten() {
         for sidecar in &source.deliveries {
             sidecars
@@ -1661,6 +1684,75 @@ fn delivery_gates(
         gates.insert(id.to_string(), gate);
     }
     (gates, pending, conflicts)
+}
+
+/// Where retired sources' mailboxes are kept, below the common Git dir:
+/// `retained/<source-key>/<generation>/data/` mirrors the mailbox.
+const RETAINED_PATH: [&str; 3] = ["aida", "mail-lifecycle", "retained"];
+
+/// Every delivery sidecar in a retained copy of a retired source, read
+/// no-follow and bounded like every other snapshot read. Messages in
+/// retained copies are not read (retention coverage is unestablished);
+/// only their ownership is, so the gate survives the source.
+// trace:STORY-1843 | ai:claude
+fn retained_sidecars(
+    common: &Path,
+    budget: &mut Budget,
+) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+    let mut dir = PinnedDir::open_root(common)?;
+    for component in RETAINED_PATH {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(Vec::new()),
+        }
+    }
+    let mut out = Vec::new();
+    for key in dir.names(budget)? {
+        let Some(key_dir) = dir.child_dir(&String::from_utf8_lossy(&key))? else {
+            continue;
+        };
+        for generation in key_dir.names(budget)? {
+            let Some(gen_dir) = key_dir.child_dir(&String::from_utf8_lossy(&generation))? else {
+                continue;
+            };
+            let Some(data) = gen_dir.child_dir("data")? else {
+                continue;
+            };
+            let Some(sidecars) = data.child_dir(DELIVERIES_DIR)? else {
+                continue;
+            };
+            out.extend(read_sidecars(&sidecars, budget)?);
+        }
+    }
+    Ok(out)
+}
+
+/// Parse every `<message-id>.json` sidecar in a `.deliveries/` directory.
+fn read_sidecars(
+    sidecars: &PinnedDir,
+    budget: &mut Budget,
+) -> Result<Vec<DeliverySidecar>, SourceErrorCode> {
+    let mut out = Vec::new();
+    for name in sidecars.names(budget)? {
+        let Some(stem) = name
+            .strip_suffix(b".json")
+            .filter(|_| !name.starts_with(b"."))
+        else {
+            continue;
+        };
+        if budget.expired() {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        let Some(bytes) = sidecars.read_file(OsStr::from_bytes(&name), DELIVERY_FILE_CAP)? else {
+            return Err(SourceErrorCode::SourceChanged);
+        };
+        budget.take(bytes.len())?;
+        let stem = std::str::from_utf8(stem).map_err(|_| SourceErrorCode::CorruptMessage)?;
+        out.push(
+            DeliverySidecar::parse(&bytes, stem).map_err(|_| SourceErrorCode::CorruptMessage)?,
+        );
+    }
+    Ok(out)
 }
 
 /// The recipient a queued delivery is bound to, read no-follow and bounded

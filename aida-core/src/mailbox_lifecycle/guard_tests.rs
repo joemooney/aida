@@ -903,3 +903,72 @@ fn without_noreplace_the_reuse_is_refused_in_place() {
     assert_eq!(source(&wt).key, old.key);
     assert_open(&wt);
 }
+
+// STORY-1843 D1: retiring a source that holds a cohort message's delivery
+// sidecar keeps the cohort gate. A replica of the message elsewhere (here
+// main's own mailbox, as a sync or copy leaves it) has no sidecar of its
+// own, yet stays visible only to the cohort, read from the retained copy.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn a_retired_source_keeps_its_cohort_gate_from_the_retained_copy() {
+    use crate::mailbox_delivery::{DeliverySidecar, RecipientUuid};
+    use crate::mailbox_identity::MailIdentityFacts;
+    use crate::mailbox_logical::{
+        logical_snapshot, MailboxContext, Query, ReadLimits, ResolvedAudience,
+    };
+    let reader = |n: u8| {
+        let uuid =
+            RecipientUuid::parse(&format!("00000000-0000-4000-8000-0000000000{n:02x}")).unwrap();
+        let facts = MailIdentityFacts::fixture(
+            Some(&format!("rev-{n}")),
+            Some("codex"),
+            "joe",
+            false,
+            &[],
+            Some("reviewer"),
+            None,
+        )
+        .with_recipient(uuid.clone());
+        (uuid, ResolvedAudience::from_facts(&facts))
+    };
+    let (member, member_aud) = reader(1);
+    let (_, outsider) = reader(2);
+
+    let (dir, wt) = repo_with_worktree();
+    activate(&wt);
+    let msg: crate::mailbox::Message = serde_json::from_value(serde_json::json!({
+        "id": "cohort", "thread_id": "cohort", "from": "sender",
+        "to": {"kind": "agent", "agent": "reviewer"},
+        "timestamp": 5, "body": "for the cohort",
+    }))
+    .unwrap();
+    let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 5, &[member.clone()]);
+    crate::mailbox::write_local_message_with_deliveries(&wt, &msg, Some(&sidecar)).unwrap();
+    // The replica elsewhere carries no sidecar.
+    write_local_message(dir.path(), &msg).unwrap();
+
+    let visible = |audience: &ResolvedAudience| {
+        let ctx = MailboxContext::resolve(dir.path(), None).unwrap();
+        let s = logical_snapshot(&ctx, audience, &Query::Inbox, &ReadLimits::explicit_read());
+        assert!(s.complete(), "{s:?}");
+        s.records
+            .iter()
+            .map(|r| (r.message.id.clone(), r.delivered_to.clone()))
+            .collect::<Vec<_>>()
+    };
+    let owned = vec![("cohort".to_string(), Some(member.clone()))];
+    assert_eq!(visible(&member_aud), owned);
+    assert!(visible(&outsider).is_empty());
+
+    let before = source(&wt);
+    remove_worktree_retained(dir.path(), &wt, true, "test").unwrap();
+    assert!(!wt.exists());
+    let kept = retained_generations(&before.anchor, &before.key);
+    assert!(files_under(&kept[0].join("data")).contains(&".deliveries/cohort.json".to_string()));
+
+    assert_eq!(visible(&member_aud), owned, "the cohort still owns it");
+    assert!(
+        visible(&outsider).is_empty(),
+        "the replica did not degrade to legacy role mail"
+    );
+}

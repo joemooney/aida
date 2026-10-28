@@ -202,10 +202,11 @@ pub(crate) fn read_own_mail(
     view
 }
 
-/// How long a reader may wait on the Lifecycle lock to bind a queued role
-/// delivery: an explicit read waits the lock's bounded try; the per-turn
-/// notice only tries briefly and skips on contention (it must never hold up
-/// a turn). Status, statusline and TUI views never bind.
+/// How long a reader may spend binding queued role deliveries. The whole
+/// pass shares ONE deadline. The per-turn notice gets 50 ms in total and
+/// stops at the first busy lock or error, so it never holds up a turn. An
+/// explicit read waits each bind up to the Lifecycle lock's bounded try, but
+/// the pass is still capped. Status, statusline and TUI views never bind.
 // trace:STORY-1843 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BindWait {
@@ -214,10 +215,19 @@ pub(crate) enum BindWait {
 }
 
 impl BindWait {
-    fn timeout(self) -> std::time::Duration {
+    /// The deadline for the whole binding pass.
+    pub(crate) fn total(self) -> std::time::Duration {
+        match self {
+            BindWait::Explicit => 2 * aida_core::mailbox_lifecycle::LIFECYCLE_LOCK_TIMEOUT,
+            BindWait::Notice => std::time::Duration::from_millis(50),
+        }
+    }
+
+    /// The most one bind may wait on its lock.
+    fn per_call(self) -> std::time::Duration {
         match self {
             BindWait::Explicit => aida_core::mailbox_lifecycle::LIFECYCLE_LOCK_TIMEOUT,
-            BindWait::Notice => std::time::Duration::from_millis(50),
+            BindWait::Notice => self.total(),
         }
     }
 }
@@ -225,8 +235,10 @@ impl BindWait {
 /// [`read_own_mail`] for a reader that takes queued role deliveries (slice
 /// D1): every queued delivery this reader is eligible for is bound to its
 /// recipient UUID once (the first binder wins; the rest see its binding),
-/// then the view is read again. A bind that fails or meets a busy lock is
-/// skipped (a debug line under `AIDA_DEBUG`) and retried on the next read.
+/// then the view is read again. The pass shares one deadline
+/// ([`BindWait::total`]). A busy lock or lifecycle refusal ends the pass, as
+/// does any error in a notice; what was not bound is retried on the next
+/// read (a debug line under `AIDA_DEBUG` says so).
 // trace:STORY-1843 | ai:claude
 pub(crate) fn read_own_mail_binding(
     project_root: &Path,
@@ -235,6 +247,7 @@ pub(crate) fn read_own_mail_binding(
     limits: &ReadLimits,
     wait: BindWait,
 ) -> OwnMail {
+    use aida_core::mailbox_delivery::{bind_queued_delivery, BindError};
     let (taken, view) = snapshot_view(project_root, store_root, audience, &Query::Inbox, limits);
     let (Some((ctx, snapshot)), Some(own)) = (taken, audience.recipient()) else {
         return view;
@@ -242,21 +255,33 @@ pub(crate) fn read_own_mail_binding(
     if snapshot.pending_deliveries.is_empty() {
         return view;
     }
+    let deadline = Instant::now() + wait.total();
     let mut changed = false;
     for pending in &snapshot.pending_deliveries {
-        let outcome = aida_core::mailbox_delivery::bind_queued_delivery(
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let outcome = bind_queued_delivery(
             ctx.repository().map(|r| r.path()),
             ctx.requested_checkout().path(),
             &pending.delivery_id,
             own,
             || own_audience_in(project_root).recipient() == Some(own),
-            wait.timeout(),
+            wait.per_call().min(remaining),
         );
         match outcome {
             Ok(_) => changed = true,
             Err(e) => {
                 if std::env::var_os("AIDA_DEBUG").is_some() {
                     eprintln!("debug: queued role mail not taken this time: {e}");
+                }
+                let lock_or_lifecycle = match &e {
+                    BindError::Lifecycle(_) | BindError::NotOwned => true,
+                    BindError::Io(io) => io.kind() == std::io::ErrorKind::WouldBlock,
+                };
+                if wait == BindWait::Notice || lock_or_lifecycle {
+                    break;
                 }
             }
         }

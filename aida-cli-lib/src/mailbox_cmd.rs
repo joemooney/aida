@@ -336,6 +336,7 @@ pub(crate) fn handle_mailbox_command(
                     r,
                     &id,
                     chrono::Utc::now().timestamp_millis(),
+                    true,
                 )?,
                 None => (None, Vec::new()),
             };

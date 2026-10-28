@@ -860,3 +860,158 @@ fn story1843_d1_queued_role_mail_is_taken_only_by_its_live_owner() {
     );
     assert_eq!(taken.unwrap().1.pending_deliveries.len(), 1, "still queued");
 }
+
+const D1_SESSION: &str = "d1-test-thread-0001";
+
+/// Register this test process's own session as a `reviewer` reader in
+/// `root`'s registry, with a handle reservation naming the row, so its live
+/// identity owns a recipient UUID. The row is keyed to the nearest vendor
+/// ancestor when there is one (a developer's client), else to this process
+/// and a Codex thread id the caller exports.
+// trace:STORY-1843 | ai:claude
+fn register_self_as_reviewer(root: &Path) {
+    let me = std::process::id();
+    let nearest = ["claude", "codex", "antigravity"]
+        .into_iter()
+        .filter_map(|vendor| {
+            let pid = crate::agent_registry::session_start_agent_pid(me, vendor)?;
+            let depth = crate::agent_registry::ancestor_depth(me, pid)?;
+            Some((depth, pid, vendor))
+        })
+        .min_by_key(|(depth, _, _)| *depth);
+    let (pid, vendor) = nearest.map_or((me, "codex"), |(_, pid, vendor)| (pid, vendor));
+    let mut entry = crate::agent_registry::register_existing_agent(
+        root,
+        vendor,
+        pid,
+        "reviewer".into(),
+        None,
+        root.to_path_buf(),
+        Some("rev-me".into()),
+        None,
+    )
+    .unwrap();
+    if nearest.is_none() {
+        entry.native_session_id = Some(D1_SESSION.into());
+        crate::agent_registry::write_entry(root, &entry).unwrap();
+    }
+    crate::mailbox_resolver::reserve_test_reader(root, &entry);
+}
+
+fn d1_env() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("reviewer")),
+        ("AIDA_HANDLE", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_HOOK_PAYLOAD", None),
+        ("CODEX_THREAD_ID", Some(D1_SESSION)),
+    ])
+}
+
+fn queue_role_mail(root: &Path, id: &str, ts: i64) {
+    let sidecar = aida_core::mailbox_delivery::DeliverySidecar::queued(id, "reviewer", ts);
+    crate::mailbox_store::write_message_with_deliveries(
+        root,
+        &mail(id, "reviewer", ts, false),
+        Some(&sidecar),
+    )
+    .unwrap();
+}
+
+fn pending(r: &MailRepo, audience: &ResolvedAudience) -> usize {
+    let (taken, _) = snapshot_view(
+        &r.main,
+        &r.store,
+        audience,
+        &Query::Inbox,
+        &explicit_limits(),
+    );
+    taken.unwrap().1.pending_deliveries.len()
+}
+
+// F4 happy path through the adapter: an owning reader binds queued role mail
+// from an explicit read and from the notice, and the re-taken view shows it
+// as delivered to its UUID.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_owning_reader_takes_queued_mail_on_explicit_read_and_notice() {
+    let r = mail_repo();
+    let _env = d1_env();
+    register_self_as_reviewer(&r.main);
+    let audience = own_audience_in(&r.main);
+    let own = audience
+        .recipient()
+        .cloned()
+        .expect("the registered session owns a recipient UUID");
+
+    for (id, wait) in [
+        ("q-explicit", BindWait::Explicit),
+        ("q-notice", BindWait::Notice),
+    ] {
+        queue_role_mail(&r.sib, id, 10);
+        assert_eq!(pending(&r, &audience), 1, "{id} waits for a reader");
+        let limits = match wait {
+            BindWait::Explicit => explicit_limits(),
+            BindWait::Notice => passive_limits(),
+        };
+        let view = read_own_mail_binding(&r.main, &r.store, &audience, &limits, wait);
+        let record = view
+            .records()
+            .iter()
+            .find(|rec| rec.message.id == id)
+            .unwrap_or_else(|| panic!("{id} is shown once taken"));
+        assert_eq!(record.delivered_to.as_ref(), Some(&own), "{id}");
+        assert_eq!(pending(&r, &audience), 0, "{id} is bound");
+    }
+}
+
+// F4 refusal path: with the Lifecycle lock held, the notice returns well
+// inside its deadline and leaves every queued delivery pending.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_notice_never_waits_on_a_held_lifecycle_lock() {
+    use std::os::unix::fs::DirBuilderExt;
+    let r = mail_repo();
+    let _env = d1_env();
+    register_self_as_reviewer(&r.main);
+    let audience = own_audience_in(&r.main);
+    assert!(audience.recipient().is_some());
+    for (i, id) in ["q1", "q2", "q3"].into_iter().enumerate() {
+        queue_role_mail(&r.sib, id, 10 + i as i64);
+    }
+    assert_eq!(pending(&r, &audience), 3);
+
+    let anchor = r.main.join(".git/aida/mail-lifecycle");
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&anchor)
+        .unwrap();
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(anchor.join("lifecycle.lock"))
+        .unwrap();
+    fs2::FileExt::lock_exclusive(&lock).unwrap();
+
+    let started = std::time::Instant::now();
+    let view = read_own_mail_binding(
+        &r.main,
+        &r.store,
+        &audience,
+        &passive_limits(),
+        BindWait::Notice,
+    );
+    let took = started.elapsed();
+    // The pass itself is capped at 50 ms; the rest is two bounded snapshot
+    // reads. One Explicit per-call wait alone would be 2 s.
+    assert!(
+        took < std::time::Duration::from_secs(1),
+        "the notice waited {took:?} on a held lock"
+    );
+    assert!(view.records().is_empty());
+    assert_eq!(pending(&r, &audience), 3, "nothing was bound");
+    fs2::FileExt::unlock(&lock).unwrap();
+}
