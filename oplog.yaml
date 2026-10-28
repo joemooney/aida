@@ -80465,5 +80465,31 @@ operations:
   timestamp: 2026-10-28T09:55:46.497929667Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6262
+- id: 01a181f2-c0b4-7730-8627-6cc1bacec032
+  target_id: 01a181f2-b880-7e23-86a6-809e00dfb115
+  author: aida
+  node_id: '1'
+  lamport: 6263
+  timestamp: 2026-10-28T09:58:52.340589885Z
+  kind: !Create
+    title: 'Review PR-3019: [AI:claude] docs(gate): stop claiming re-exports that do not exist (TASK-b6b1278890774ef993d2ebc327862470-028)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/doc-reexport-claims`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3019>
+      - Branch: `fix/doc-reexport-claims` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-028
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3019` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6263
 node_id: '1'
