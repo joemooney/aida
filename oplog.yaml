@@ -80328,5 +80328,23 @@ operations:
   timestamp: 2026-10-28T09:49:07.149800819Z
   kind: !SetStatus
     status: Completed
-clock: 6251
+- id: 01a181e9-edfa-7223-9c54-0a32287e02e6
+  target_id: 01a181e9-e6d2-7ba2-b4e4-dce7c79db4d4
+  author: aida
+  node_id: '1'
+  lamport: 6252
+  timestamp: 2026-10-28T09:49:14.106473946Z
+  kind: !Create
+    title: 'minor (non-blocking): aida-core/src/db/cached_git_backend.rs:234 — the read fal…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking): aida-core/src/db/cached_git_backend.rs:234 — the read fallback returns inner.get_requirement_by_spec_id without the collision check, so a colliding id silently returns one object during contention. It applies to every for_read caller (comment_cmd.rs:540, rel_cards.rs:503), not just fast-fail show. A not-found or agreed-id lookup still scans every object (git_backend.rs:2499), so a typo'd id under contention is not bounded.
+
+      PR: #3012
+      Reviewed sha: 5221e6c8957a7fdd4fe140ac6d249a0386cf16eb
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6252
 node_id: '1'
