@@ -445,7 +445,9 @@ pub(crate) fn extract_fn_source(path: &Path, start_line: usize) -> String {
         out.push('\n');
         let delta = braces.delta(line);
         depth += delta;
-        if delta != 0 || line.contains('{') {
+        // A `{` only inside a literal or comment does not open the body.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+        if delta != 0 || braces.opened() {
             started = true;
         }
         if started && depth <= 0 {
@@ -732,7 +734,7 @@ fn scan_braced_test_file(
 ) -> Vec<TracedTest> {
     let mut out = Vec::new();
     let mut pending_traces = Vec::new();
-    let mut current: Option<(String, usize, isize, Vec<String>, bool)> = None;
+    let mut current: Option<(String, usize, isize, Vec<String>)> = None;
     let mut braces = BraceScanner::c_like();
     for (index, line) in content.lines().enumerate() {
         let line_no = index + 1;
@@ -743,20 +745,18 @@ fn scan_braced_test_file(
                 let delta = braces.delta(line);
                 let mut traces = std::mem::take(&mut pending_traces);
                 traces.extend(traces_in_line(line, spec));
-                current = Some((name, line_no, delta, traces, line.contains('{')));
+                current = Some((name, line_no, delta, traces));
             } else {
                 update_pending_traces(&mut pending_traces, line, comment_prefix, spec);
             }
-        } else if let Some((_, _, depth, traces, started)) = current.as_mut() {
+        } else if let Some((_, _, depth, traces)) = current.as_mut() {
             traces.extend(traces_in_line(line, spec));
             *depth += braces.delta(line);
-            *started |= line.contains('{');
         }
-        if current
-            .as_ref()
-            .is_some_and(|(_, _, depth, _, started)| *started && *depth <= 0)
-        {
-            let (name, start, _, traces, _) = current.take().expect("current test");
+        // The body has started once the scanner saw a code-level `{`.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+        if braces.opened() && current.as_ref().is_some_and(|(_, _, depth, _)| *depth <= 0) {
+            let (name, start, _, traces) = current.take().expect("current test");
             push_traced_test(&mut out, root, path, name, start, traces);
         }
     }
@@ -868,26 +868,32 @@ fn brace_delta(line: &str) -> isize {
     BraceScanner::rust().delta(line)
 }
 
-/// Literal the scanner is inside at the end of a line.
+/// Literal or comment the scanner is inside at the end of a line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LiteralState {
     Code,
-    /// A `"`, backtick, or (outside Rust) `'` literal (escapes honored).
+    /// A `"` or (outside Rust) backtick or `'` literal (escapes honored).
     Quoted(char),
     /// A Rust raw string closed by `"` plus this many `#`.
     Raw(usize),
+    /// A `/* */` block comment this many levels deep (Rust nests them).
+    Block(usize),
 }
 
 /// Net `{`/`}` balance of source lines fed in order, ignoring braces inside
-/// string, byte, raw, backtick, and char literals and after a `//` comment.
-/// String/raw/backtick literal state carries ACROSS lines, so a fixture such
-/// as `r#"{` ... `}"#;` does not end the fn early. In Rust `"` and raw
-/// strings may span lines; in JS/TS/Go only backtick literals do, and `'`
-/// quotes a string or rune.
-// trace:STORY-1742 | ai:claude
+/// string, byte, raw, backtick, and char literals and `//` / `/* */`
+/// comments. Literal and block-comment state carries ACROSS lines, so a
+/// fixture such as `r#"{` ... `}"#;` does not end the fn early. In Rust only
+/// `"` and raw strings may span lines (a backtick is plain text there, e.g.
+/// in a doc comment); in JS/TS/Go only backtick literals do, and `'` quotes
+/// a string or rune.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-011 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-017 | ai:claude
 struct BraceScanner {
     state: LiteralState,
     rust: bool,
+    /// A code-level `{` has been seen since the scanner was created.
+    opened: bool,
 }
 
 impl BraceScanner {
@@ -895,6 +901,7 @@ impl BraceScanner {
         Self {
             state: LiteralState::Code,
             rust: true,
+            opened: false,
         }
     }
 
@@ -902,6 +909,7 @@ impl BraceScanner {
         Self {
             state: LiteralState::Code,
             rust: false,
+            opened: false,
         }
     }
 
@@ -915,11 +923,22 @@ impl BraceScanner {
 
     fn delta(&mut self, line: &str) -> isize {
         let depth = self.line_delta(line);
-        // Only backtick literals cross a line break outside Rust.
-        if !self.rust && self.state != LiteralState::Quoted('`') {
+        // Only backtick literals (and block comments) cross a line break
+        // outside Rust.
+        if !self.rust
+            && !matches!(
+                self.state,
+                LiteralState::Quoted('`') | LiteralState::Block(_)
+            )
+        {
             self.state = LiteralState::Code;
         }
         depth
+    }
+
+    /// Whether any line fed so far had a `{` outside literals and comments.
+    fn opened(&self) -> bool {
+        self.opened
     }
 
     fn line_delta(&mut self, line: &str) -> isize {
@@ -937,9 +956,26 @@ impl BraceScanner {
                 !is_ident(before(1)) || (before(1) == Some(&'b') && !is_ident(before(2)));
             match ch {
                 '/' if chars.get(i + 1) == Some(&'/') => break,
-                '{' => depth += 1,
+                '/' if chars.get(i + 1) == Some(&'*') => {
+                    self.state = LiteralState::Block(1);
+                    match self.resume(&chars, i + 2) {
+                        Some(next) => i = next - 1,
+                        None => break,
+                    }
+                }
+                '{' => {
+                    depth += 1;
+                    self.opened = true;
+                }
                 '}' => depth -= 1,
-                '"' | '`' | '\'' if ch != '\'' || !self.rust => {
+                '"' => {
+                    self.state = LiteralState::Quoted(ch);
+                    match self.resume(&chars, i + 1) {
+                        Some(next) => i = next - 1,
+                        None => break,
+                    }
+                }
+                '`' | '\'' if !self.rust => {
                     self.state = LiteralState::Quoted(ch);
                     match self.resume(&chars, i + 1) {
                         Some(next) => i = next - 1,
@@ -976,6 +1012,13 @@ impl BraceScanner {
             LiteralState::Code => return Some(start),
             LiteralState::Quoted(quote) => skip_quoted(chars, start, quote)?,
             LiteralState::Raw(hashes) => skip_raw(chars, start, hashes)?,
+            LiteralState::Block(open) => match skip_block(chars, start, open, self.rust) {
+                Ok(close) => close,
+                Err(open) => {
+                    self.state = LiteralState::Block(open);
+                    return None;
+                }
+            },
         };
         self.state = LiteralState::Code;
         Some(close + 1)
@@ -999,6 +1042,31 @@ fn skip_quoted(chars: &[char], start: usize, quote: char) -> Option<usize> {
         i += 1;
     }
     None
+}
+
+/// Index of the `/` closing a block comment `open` levels deep (nested
+/// `/*` count only in Rust), or `Err` with the depth still open at the end
+/// of the line.
+fn skip_block(chars: &[char], start: usize, mut open: usize, nested: bool) -> Result<usize, usize> {
+    let mut i = start;
+    while i < chars.len() {
+        match (chars[i], chars.get(i + 1)) {
+            ('*', Some('/')) => {
+                open -= 1;
+                if open == 0 {
+                    return Ok(i + 1);
+                }
+                i += 1;
+            }
+            ('/', Some('*')) if nested => {
+                open += 1;
+                i += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    Err(open)
 }
 
 /// Index of the last `#` closing a raw string (or its `"` when unhashed).
@@ -1126,7 +1194,7 @@ mod tests {
     }
 
     // Braces inside literals and comments do not move the scanner's depth.
-    // trace:STORY-1742 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     #[test]
     fn brace_delta_ignores_braces_in_literals_and_comments() {
         assert_eq!(
@@ -1138,14 +1206,17 @@ mod tests {
         assert_eq!(super::brace_delta(r##"let s = br#"{{"#;"##), 0);
         assert_eq!(super::brace_delta("match c { '{' => 1, '\\'' => 2 }"), 0);
         assert_eq!(super::brace_delta("fn f<'a>(x: &'a str) {"), 1);
-        assert_eq!(super::brace_delta("const t = `${a}{`; // }"), 0);
+        assert_eq!(
+            super::BraceScanner::c_like().delta("const t = `${a}{`; // }"),
+            0
+        );
         assert_eq!(super::brace_delta("for r in rows {"), 1);
         assert_eq!(super::brace_delta("} else {"), 0);
     }
 
     // Literal state carries across lines: a brace inside a multi-line string
     // or raw string does not move the depth on its continuation lines.
-    // trace:STORY-1742 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     #[test]
     fn brace_scanner_carries_literal_state_across_lines() {
         let mut rust = super::BraceScanner::rust();
@@ -1177,7 +1248,7 @@ mod tests {
         )
     }
 
-    // trace:STORY-1742 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     #[test]
     fn traced_test_after_multi_line_raw_string_fixture_keeps_its_trace() {
         let src = "#[test]\nfn fixture() {\n    let j = r#\"{\n  \"a\": 1\n}\"#;\n    // trace:T-1.AC1 | ai:claude\n    assert!(j.len() > 0);\n}\n";
@@ -1186,7 +1257,7 @@ mod tests {
         assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
     }
 
-    // trace:STORY-1742 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     #[test]
     fn traced_test_after_multi_line_string_with_braces_keeps_its_trace() {
         let src = "#[test]\nfn fixture() {\n    let j = \"{\n  \\\"a\\\": {1}\n}}\";\n    // trace:T-1.AC1 | ai:claude\n    assert!(true);\n}\n";
@@ -1195,7 +1266,7 @@ mod tests {
         assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
     }
 
-    // trace:STORY-1742 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-011 | ai:claude
     #[test]
     fn js_test_after_multi_line_template_literal_keeps_its_trace() {
         let src = "test('fixture', () => {\n  const t = `{\n  \"a\": ${x}\n}`;\n  // trace:T-1.AC1\n  expect(t).toBeTruthy();\n});\n\ntest('next', () => {\n  // trace:T-1.AC2\n});\n";
@@ -1217,6 +1288,88 @@ mod tests {
             by_name.get("next").cloned(),
             Some(vec!["T-1.AC2".to_string()])
         );
+    }
+
+    // A backtick or unmatched quote inside a block comment does not turn
+    // the rest of a Rust fn into a string; nested block comments close only
+    // at the outermost `*/`.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-017 | ai:claude
+    #[test]
+    fn rust_brace_scanner_skips_block_comments_and_plain_backticks() {
+        let mut rust = super::BraceScanner::rust();
+        let deltas: Vec<isize> = [
+            "fn f() {",
+            "    /* a stray \" or ` {",
+            "       /* nested { */ still a comment }",
+            "    */ let x = 1; {",
+            "    /// doc with `code` and a lone `",
+            "    let y = 2; }",
+            "}",
+        ]
+        .iter()
+        .map(|line| rust.delta(line))
+        .collect();
+        assert_eq!(deltas, vec![1, 0, 0, 1, 0, -1, -1]);
+        // A backtick in Rust code is plain text; it never opens a literal.
+        let mut rust = super::BraceScanner::rust();
+        assert_eq!(rust.delta("let s = '`'; {"), 1);
+        assert_eq!(rust.delta("}"), -1);
+        // JS block comments carry across lines but do not nest.
+        let mut js = super::BraceScanner::c_like();
+        let deltas: Vec<isize> = ["/* { /* {", "*/ {", "}"]
+            .iter()
+            .map(|line| js.delta(line))
+            .collect();
+        assert_eq!(deltas, vec![0, 1, -1]);
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-017 | ai:claude
+    #[test]
+    fn traced_test_after_block_comment_with_stray_quote_keeps_its_trace() {
+        let src = "#[test]\nfn commented() {\n    /* don't \" { */\n    // trace:T-1.AC1 | ai:claude\n    assert!(true);\n}\n\n#[test]\nfn next() {\n    // trace:T-1.AC2 | ai:claude\n}\n";
+        let tests = scan_rust(src);
+        let by_name: std::collections::BTreeMap<_, _> = tests
+            .iter()
+            .map(|t| (t.name.as_str(), t.traces.clone()))
+            .collect();
+        assert_eq!(
+            by_name.get("commented").cloned(),
+            Some(vec!["T-1.AC1".to_string()])
+        );
+        assert_eq!(
+            by_name.get("next").cloned(),
+            Some(vec!["T-1.AC2".to_string()])
+        );
+    }
+
+    // A pre-body line whose only `{` sits in a string does not start the
+    // body, so the fn is not cut before its real opening brace.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+    #[test]
+    fn extract_fn_source_ignores_brace_in_pre_body_string() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.rs");
+        let src = "#[test]\n#[should_panic(expected = \"{oops\")]\nfn panics()\n{\n    let a = 1;\n    assert!(a == 2);\n}\nfn after() {}\n";
+        std::fs::write(&path, src).unwrap();
+        let body = super::extract_fn_source(&path, 2);
+        assert!(body.contains("assert!(a == 2);"), "{body}");
+        assert!(body.trim_end().ends_with('}'), "{body}");
+        assert!(!body.contains("fn after"), "{body}");
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+    #[test]
+    fn braced_test_with_brace_only_in_pre_body_string_keeps_its_whole_body() {
+        let src =
+            "test(\"{weird name\",\n  () =>\n{\n  // trace:T-1.AC1\n  expect(1).toBe(1);\n});\n";
+        let tests = super::scan_javascript_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.test.ts"),
+            src,
+            "T-1",
+        );
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
     }
 
     #[test]
