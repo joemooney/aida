@@ -896,21 +896,54 @@ fn mint_source_id(dir: &Path) -> std::io::Result<()> {
     )
 }
 
+/// Prefix of [`write_source_id`]'s temp files.
+pub(crate) const ID_TEMP_PREFIX: &str = ".aida-id.";
+
 /// Write a nonce (or era marker) file create-new, mode 0600, synced with
-/// its directory.
+/// its directory, atomically: no reader ever sees it partly written. The
+/// bytes go to a synced temp file in the directory above `path` (so a crash
+/// never leaves one inside a mailbox, where it would count as mail), which
+/// is then moved into place without replacing (`AlreadyExists` when `path`
+/// exists). Where the filesystem has no no-replace rename, it is linked in
+/// and the temp unlinked.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
 fn write_source_id(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    match path.parent() {
-        Some(dir) => File::open(dir)?.sync_all(),
-        None => Ok(()),
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let temp_dir = dir.parent().unwrap_or(dir);
+    let temp = temp_dir.join(format!(
+        "{ID_TEMP_PREFIX}{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let staged = (|| -> std::io::Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        match rename_noreplace(&temp, path) {
+            Err(e) if noreplace_unsupported(&e) => {
+                std::fs::hard_link(&temp, path)?;
+                std::fs::remove_file(&temp)
+            }
+            Err(e) if e.raw_os_error() == Some(libc::EEXIST) => Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} exists", path.display()),
+            )),
+            other => other,
+        }
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e);
     }
+    File::open(dir)?.sync_all()?;
+    if temp_dir != dir {
+        File::open(temp_dir)?.sync_all()?;
+    }
+    Ok(())
 }
 
 /// Is this mailbox-root entry the creation nonce rather than mail?

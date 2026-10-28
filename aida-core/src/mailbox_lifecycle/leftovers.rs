@@ -39,6 +39,11 @@ pub struct Leftovers {
     /// Empty tombs, stale staging directories and stale nonce-era markers:
     /// removed by a reaping scan, listed by a reporting one.
     pub reapable: Vec<PathBuf>,
+    /// Era-marker drop asides whose body is neither a marker record nor a
+    /// bare admin name (a torn write): never removed or restored here.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrupt: Vec<PathBuf>,
 }
 
 /// Scan every checkout the anchor of `project_root` has a source for (and
@@ -61,9 +66,11 @@ pub(crate) fn scan_at(project_root: &Path, reap: bool, now: SystemTime) -> Lefto
     }
     for dir in &aida_dirs {
         scan_aida_dir(dir, reap, now, &mut out);
+        scan_id_temps(dir, reap, now, &mut out);
     }
     if let Some(anchored) = &anchor {
         scan_era_markers(&anchored.anchor, &anchored.common, reap, now, &mut out);
+        scan_id_temps(&anchored.anchor, reap, now, &mut out);
     }
     out
 }
@@ -154,9 +161,12 @@ fn scan_era_markers(
             // trace:TASK-b6b1278890774ef993d2ebc327862470-072 | ai:claude
             let admin_dir = match record {
                 Some(record) => record.admin_dir,
-                None => match std::str::from_utf8(&bytes) {
-                    Ok(admin) => super::admin_dir(common, admin),
-                    Err(_) => continue,
+                None => match bare_admin_name(&bytes) {
+                    Some(admin) => super::admin_dir(common, admin),
+                    None => {
+                        out.corrupt.push(path);
+                        continue;
+                    }
                 },
             };
             if is_old(&path, now) && (!reap || settle_aside(&path, &marker, &admin_dir)) {
@@ -173,6 +183,49 @@ fn scan_era_markers(
             && (!reap
                 || super::drop_stale_era_marker(anchor, &path, &record.admin_dir).unwrap_or(false))
         {
+            out.reapable.push(path);
+        }
+    }
+}
+
+/// A pre-record marker body: the bare admin name. Empty is the main
+/// checkout's; any other is a linked worktree's, a single path component (at
+/// most 255 bytes, no `/` or NUL) that cannot be a fragment of a JSON record
+/// (no brace or quote). Anything else is a torn or foreign body and is
+/// undecidable.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+fn bare_admin_name(bytes: &[u8]) -> Option<&str> {
+    let name = std::str::from_utf8(bytes).ok()?;
+    let component = name.len() <= 255
+        && name != "."
+        && name != ".."
+        && !name
+            .chars()
+            .any(|c| matches!(c, '/' | '\0' | '{' | '}' | '"'));
+    let valid = name.is_empty() || component;
+    valid.then_some(name)
+}
+
+/// Remove [`write_source_id`](super::write_source_id) temp files in `dir`
+/// older than [`STALE_AFTER`], left by a writer that crashed before placing
+/// them.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-075 | ai:claude
+fn scan_id_temps(dir: &Path, reap: bool, now: SystemTime, out: &mut Leftovers) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut paths: Vec<_> = entries
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.starts_with(super::ID_TEMP_PREFIX) && name.ends_with(".tmp")
+        })
+        .map(|e| e.path())
+        .collect();
+    paths.sort();
+    for path in paths {
+        let file = std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_file());
+        if file && is_old(&path, now) && (!reap || std::fs::remove_file(&path).is_ok()) {
             out.reapable.push(path);
         }
     }
