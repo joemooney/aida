@@ -85,6 +85,10 @@ impl Drop for StoreWriteGuard {
         if let Some(file) = self.file.take() {
             use fs2::FileExt;
             let _ = FileExt::unlock(&file);
+            drop(file);
+            // Canonical permits dropped inside the transaction release now,
+            // outside every Store-held region. trace:STORY-1843 | ai:claude
+            crate::mailbox_lifecycle::release_deferred_permits();
         }
     }
 }

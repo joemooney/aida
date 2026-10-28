@@ -634,12 +634,15 @@ pub(crate) fn digest_mailbox_to_canonical(
     store_root: &std::path::Path,
     project_root: &std::path::Path,
 ) -> Result<usize> {
+    // trace:STORY-1843 | ai:claude — admitted before the store lock and
+    // moved into the transaction; the row clears after the lock is released.
+    let permit = aida_core::mailbox_lifecycle::admit_canonical_publication(project_root)?;
     let local = mailbox_store::read_local_messages(project_root)?;
-    aida_core::db::with_store_write_lock(store_root, || {
+    aida_core::db::with_store_write_lock(store_root, move || {
         // A store whose status cannot be read is refused before any
         // canonical write.
         aida_core::git_ops::has_changes_checked(store_root)?;
-        let n = mailbox_store::digest_snapshot_to_canonical(store_root, &local)?;
+        let n = mailbox_store::digest_snapshot_to_canonical(store_root, &local, &permit)?;
         if n == 0 {
             return Ok(0);
         }
@@ -686,8 +689,8 @@ pub(crate) fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
 /// trace:STORY-643 | ai:claude
 pub(crate) fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reason: &str) -> usize {
     match mailbox_publish_snapshot(store_path, reason) {
-        Some(local) => {
-            let n = publish_mailbox_snapshot(store_path, &local, reason);
+        Some(publication) => {
+            let n = publish_mailbox_snapshot(store_path, &publication, reason);
             report_mailbox_published(n, reason);
             n
         }
@@ -695,20 +698,40 @@ pub(crate) fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reaso
     }
 }
 
-/// The local mailbox messages a sync publishes, read BEFORE the sync takes
-/// the store write lock (local reads and sends never need it). `None` when
-/// autosync is off or the local layer cannot be read (warned).
-// trace:TASK-1717 | ai:claude
+/// The local mailbox messages a sync publishes and their admission.
+/// Move it into the store transaction: its permit row clears once the store
+/// write lock is released.
+// trace:STORY-1843 | ai:claude
+pub(crate) struct MailboxPublication {
+    local: Vec<aida_core::mailbox::Message>,
+    permit: aida_core::mailbox_lifecycle::CanonicalPermit,
+}
+
+/// The local mailbox messages a sync publishes, admitted and read BEFORE the
+/// sync takes the store write lock (local reads and sends never need it).
+/// `None` when autosync is off, the local source is retiring, or the local
+/// layer cannot be read (warned).
+// trace:TASK-1717 trace:STORY-1843 | ai:claude
 pub(crate) fn mailbox_publish_snapshot(
     store_path: &std::path::Path,
     reason: &str,
-) -> Option<Vec<aida_core::mailbox::Message>> {
+) -> Option<MailboxPublication> {
     let project_root = store_path.parent()?;
     if !mailbox_autosync_enabled(project_root) {
         return None;
     }
+    let permit = match aida_core::mailbox_lifecycle::admit_canonical_publication(project_root) {
+        Ok(permit) => permit,
+        Err(e) => {
+            eprintln!(
+                "  {} mailbox publish skipped ({reason}): {e}",
+                "Warning:".yellow().bold()
+            );
+            return None;
+        }
+    };
     match mailbox_store::read_local_messages(project_root) {
-        Ok(local) => Some(local),
+        Ok(local) => Some(MailboxPublication { local, permit }),
         Err(e) => {
             eprintln!(
                 "  {} mailbox publish skipped ({reason}): {e}",
@@ -727,10 +750,14 @@ pub(crate) fn mailbox_publish_snapshot(
 // trace:TASK-1717 | ai:claude
 pub(crate) fn publish_mailbox_snapshot(
     store_path: &std::path::Path,
-    local: &[aida_core::mailbox::Message],
+    publication: &MailboxPublication,
     reason: &str,
 ) -> usize {
-    match mailbox_store::digest_snapshot_to_canonical(store_path, local) {
+    match mailbox_store::digest_snapshot_to_canonical(
+        store_path,
+        &publication.local,
+        &publication.permit,
+    ) {
         Ok(n) => n,
         Err(e) => {
             eprintln!(
@@ -1603,9 +1630,11 @@ pub(crate) fn handle_push_command(
             // digest or anything else touches it.
             git_ops::has_changes_checked(store_path)
                 .context("cannot read the store status; nothing was written or pushed")?;
+            // trace:STORY-1843 | ai:claude — the publication moves in here.
+            let mailbox = mailbox;
             let published = mailbox
                 .as_ref()
-                .map(|local| publish_mailbox_snapshot(store_path, local, "push"))
+                .map(|publication| publish_mailbox_snapshot(store_path, publication, "push"))
                 .unwrap_or(0);
             // Commit any pending orphan-branch changes regardless of origin —
             // the user's local edits should land in a commit either way so
@@ -2818,9 +2847,11 @@ pub(crate) fn handle_pull_command(
                 eprintln!("  {} {failure}", "Warning:".yellow().bold());
                 return Ok(Err(failure));
             }
+            // trace:STORY-1843 | ai:claude — the publication moves in here.
+            let mailbox = mailbox;
             let published = mailbox
                 .as_ref()
-                .map(|local| publish_mailbox_snapshot(store_path, local, "pull"))
+                .map(|publication| publish_mailbox_snapshot(store_path, publication, "pull"))
                 .unwrap_or(0);
             Ok(pull_store_leg_locked(store_path, quiet, no_gate, published))
         });

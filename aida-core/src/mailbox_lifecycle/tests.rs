@@ -49,7 +49,7 @@ pub(super) fn mailbox(root: &Path) -> PathBuf {
     local_mailbox_dir(root)
 }
 
-fn ensure_mailbox(root: &Path) {
+pub(super) fn ensure_mailbox(root: &Path) {
     std::fs::create_dir_all(mailbox(root)).unwrap();
 }
 
@@ -66,7 +66,7 @@ pub(super) fn record(root: &Path) -> SourceRecord {
     load_or_create(&source, &held).unwrap()
 }
 
-fn edit_record(root: &Path, f: impl FnOnce(&mut SourceRecord)) {
+pub(super) fn edit_record(root: &Path, f: impl FnOnce(&mut SourceRecord)) {
     let source = source(root);
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
     let mut record = load_or_create(&source, &held).unwrap();
@@ -134,14 +134,14 @@ pub(super) fn files_under(dir: &Path) -> Vec<String> {
     out
 }
 
-fn opts() -> RetireOptions {
+pub(super) fn opts() -> RetireOptions {
     RetireOptions {
         quiesce_timeout: Duration::from_millis(500),
         ..RetireOptions::default()
     }
 }
 
-fn retired(outcome: RetireOutcome) -> (super::retire::RetirementTicket, PathBuf) {
+pub(super) fn retired(outcome: RetireOutcome) -> (super::retire::RetirementTicket, PathBuf) {
     match outcome {
         RetireOutcome::Retired {
             ticket,
@@ -152,7 +152,7 @@ fn retired(outcome: RetireOutcome) -> (super::retire::RetirementTicket, PathBuf)
     }
 }
 
-fn refusal(outcome: RetireOutcome) -> (RefusalReason, Option<PathBuf>) {
+pub(super) fn refusal(outcome: RetireOutcome) -> (RefusalReason, Option<PathBuf>) {
     match outcome {
         RetireOutcome::Refused {
             reason,
@@ -494,7 +494,7 @@ fn git_and_the_pool_lock_never_start_under_lifecycle() {
 
 // ── Permit rows ─────────────────────────────────────────────────────────────
 
-fn dead_identity() -> ProcessIdentity {
+pub(super) fn dead_identity() -> ProcessIdentity {
     let mut child = std::process::Command::new("sleep")
         .arg("30")
         .spawn()
