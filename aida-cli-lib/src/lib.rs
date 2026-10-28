@@ -201,6 +201,7 @@ mod lane_liveness;
 // trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
+mod relay_mail;
 mod relay_stall;
 // trace:TASK-2347 | ai:codex
 mod codex_mail_health;
