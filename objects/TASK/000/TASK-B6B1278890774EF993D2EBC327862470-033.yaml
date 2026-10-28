@@ -8,12 +8,12 @@ description: |-
 
   PR: #3014
   Reviewed sha: 5ef4b03b89917be652d33515862f85b45b696494
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T11:22:56.937630146Z
-modified_at: 2026-10-28T11:53:56.076523791Z
+modified_at: 2026-10-28T12:29:29.275614813Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-009
@@ -40,6 +40,21 @@ history:
   timestamp: 2026-10-28T11:53:57.702301963Z
   session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
   changes: []
+- id: 01a1827c-a527-7fd3-be68-1ca5b848a8c9
+  author: aida-auto-bump
+  timestamp: 2026-10-28T12:29:29.255158576Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1827c-a53b-7630-8878-fa26f10b840d
+  timestamp: 2026-10-28T12:29:29.275597739Z
+  agent: aida
+  commit_sha: fa18e3a79555a3965e5e3c37fa507dc4b8d489a8
+  summary: Dead git_path_is_ignored deleted (no remaining refs), tests repointed to production classifier, raw-git ratchet lowered 49->48; three new tests cover every check-ignore -v AC (local exclude Clean, committed target/ IntermediateOnly, linked-worktree absolute exclude Clean). CI run 40683438953 green at head.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: b535e12d57703cc905424bb6875b357b5f66b4dc
@@ -49,3 +64,7 @@ filed_at:
   aida_build_sha: 75d12e4354f
   vendor: claude
   session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T12:29:29.255142853Z
+  completion_sha: fa18e3a79555a3965e5e3c37fa507dc4b8d489a8
