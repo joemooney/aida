@@ -79551,5 +79551,13 @@ operations:
   timestamp: 2026-10-28T00:55:15.763859816Z
   kind: !SetStatus
     status: Approved
-clock: 6187
+- id: 01a18001-2f22-7c30-aea0-5cf87dc109c3
+  target_id: 01a17f97-2791-77d0-b63f-c07eac739556
+  author: aida
+  node_id: '1'
+  lamport: 6188
+  timestamp: 2026-10-28T00:55:23.682235355Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6188
 node_id: '1'
