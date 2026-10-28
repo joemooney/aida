@@ -511,12 +511,9 @@ pub(crate) fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::pa
     }
 }
 
-/// TASK-32: cross-platform home-dir lookup with an `AIDA_HOME` override.
-/// On Windows, `dirs::home_dir()` resolves via `SHGetKnownFolderPath`,
-/// which ignores env vars — that breaks bg_worker tests that need to
-/// isolate writes from the real user profile. Checking `AIDA_HOME` first
-/// gives tests a deterministic hook on every platform without changing
-/// the production lookup. trace:TASK-32 | ai:claude
+/// Home-dir lookup with an `AIDA_HOME` override; see
+/// [`crate::gate::kernel_deps::aida_home_dir`].
+// trace:TASK-b6b1278890774ef993d2ebc327862470-043 | ai:claude
 // Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn aida_home_dir() -> Option<std::path::PathBuf> {
     crate::gate::kernel_deps::aida_home_dir()
@@ -606,24 +603,9 @@ pub(crate) fn resolve_current_session_id() -> Option<String> {
     None
 }
 
-/// Resolve the queue's "current user" identifier. Used by EVERY queue path
-/// (add, list, next, done, remove, move, work, role-show queue head, …) so
-/// items added in one shell are immediately visible in the same shell's
-/// `aida queue list` without flags.
-///
-/// Resolution order:
-///   1. Explicit `--user <id>` flag (override)
-///   2. `AIDA_USER` env var (set by sessions / agent harnesses)
-///   3. `USER` env var (POSIX shell convention)
-///   4. `USERNAME` env var (Windows fallback)
-///   5. The literal string "default" (last-ditch)
-///
-/// IMPORTANT: this is the SHELL's user identity, not the node identity from
-/// `~/.aida/node.toml`, the email in `[node]`, or the role's stored user_id.
-/// Those are different identity domains; mixing them caused BUG-89 (items
-/// invisible to their own queuer because list resolved to one identity and
-/// add resolved to another).
-/// trace:BUG-89 | ai:claude
+/// The queue's "current user" identifier; see
+/// [`crate::gate::kernel_deps::current_user_id`].
+// trace:TASK-b6b1278890774ef993d2ebc327862470-043 | ai:claude
 // Implemented on the floor (TASK-b6b1278890774ef993d2ebc327862470-024).
 pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     crate::gate::kernel_deps::current_user_id(user_override)
