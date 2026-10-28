@@ -11,6 +11,7 @@
 //! this module is only the file I/O around it. trace:STORY-493 trace:TASK-603 | ai:claude
 
 use aida_core::mailbox::{message_state_rank, Message};
+use aida_core::mailbox_lifecycle::CanonicalPermit;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -32,7 +33,10 @@ pub(crate) fn canonical_dir(store_root: &Path) -> PathBuf {
 
 /// Write one message as an atomically-written JSON file under `dir`, named by
 /// id. Append-only: ids are unique, so this never clobbers an existing message.
-fn write_message_in(dir: &Path, msg: &Message) -> Result<()> {
+/// Only the canonical layer is written here, so it takes the publication's
+/// admission.
+// trace:STORY-1843 | ai:claude
+fn write_message_in(dir: &Path, msg: &Message, _admitted: &CanonicalPermit) -> Result<()> {
     aida_core::mailbox::mailbox_dir_guard(dir)?; // trace:STORY-1843 | ai:claude
     std::fs::create_dir_all(dir)
         .with_context(|| format!("creating mailbox dir {}", dir.display()))?;
@@ -129,8 +133,9 @@ pub(crate) fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>>
 ///   trace:TASK-605 | ai:claude
 #[cfg(test)]
 pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) -> Result<usize> {
+    let permit = aida_core::mailbox_lifecycle::admit_canonical_publication(project_root)?;
     let local = read_local_messages(project_root)?;
-    digest_snapshot_to_canonical(store_root, &local)
+    digest_snapshot_to_canonical(store_root, &local, &permit)
 }
 
 /// Write the already-read local messages `local` into the canonical layer,
@@ -139,13 +144,24 @@ pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) 
 /// rank (a newer canonical tombstone is never overwritten by stale local
 /// state). Takes the store write lock itself (re-entrant), so a direct call
 /// cannot write canonical files outside a store-writer transaction; callers
-/// that also stage and commit hold the lock across both.
-// trace:TASK-1717 | ai:claude
-pub(crate) fn digest_snapshot_to_canonical(store_root: &Path, local: &[Message]) -> Result<usize> {
-    aida_core::db::with_store_write_lock(store_root, || write_snapshot_locked(store_root, local))
+/// that also stage and commit hold the lock across both. `permit` is the
+/// publication's admission, taken before the store lock.
+// trace:TASK-1717 trace:STORY-1843 | ai:claude
+pub(crate) fn digest_snapshot_to_canonical(
+    store_root: &Path,
+    local: &[Message],
+    permit: &CanonicalPermit,
+) -> Result<usize> {
+    aida_core::db::with_store_write_lock(store_root, || {
+        write_snapshot_locked(store_root, local, permit)
+    })
 }
 
-fn write_snapshot_locked(store_root: &Path, local: &[Message]) -> Result<usize> {
+fn write_snapshot_locked(
+    store_root: &Path,
+    local: &[Message],
+    permit: &CanonicalPermit,
+) -> Result<usize> {
     use std::collections::HashMap;
     let canonical_by_id: HashMap<String, Message> = read_canonical_messages_strict(store_root)?
         .into_iter()
@@ -161,7 +177,7 @@ fn write_snapshot_locked(store_root: &Path, local: &[Message]) -> Result<usize> 
         if !should_write {
             continue;
         }
-        write_message_in(&cdir, msg)?;
+        write_message_in(&cdir, msg, permit)?;
         written += 1;
     }
     Ok(written)
