@@ -80996,5 +80996,32 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6304
+- id: 01a1825b-e020-7b10-bba0-0c52bf038918
+  target_id: 01a1825b-d872-7442-b499-93e6132908a1
+  author: aida
+  node_id: '1'
+  lamport: 6305
+  timestamp: 2026-10-28T11:53:41.664120009Z
+  kind: !Create
+    title: 'Review PR-3028: [AI:claude] fix(review): drop dead git_path_is_ignored and test the check-ignore -v branch (TASK-b6b1278890774ef993d2ebc327862470-033 TASK-b6b1278890774ef993d2ebc327862470-034)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/ignore-classifier-followups`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3028>
+      - Branch: `fix/ignore-classifier-followups` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-033
+      - TASK-b6b1278890774ef993d2ebc327862470-034
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3028` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6305
 node_id: '1'
