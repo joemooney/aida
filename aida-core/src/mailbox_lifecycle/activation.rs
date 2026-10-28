@@ -254,10 +254,10 @@ pub(crate) fn record_at(
 
 /// Digest the executables of writer hosts that run a file other than this
 /// process's `me` (read from `self_exe`; writers from `proc`), each distinct
-/// file once, so a
-/// byte-identical copy at another path is recognised as this build. Nothing
-/// is read when every writer shares this process's file. An unreadable file
-/// keeps no digest, which [`classify`] reports as unidentified (fail closed).
+/// file once, so a byte-identical copy at another path is recognised as this
+/// build. Nothing is read when every writer shares this process's file. An
+/// unreadable file keeps no digest, which [`classify`] reports as
+/// unidentified (fail closed).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn fill_digests(
     proc: &Path,
