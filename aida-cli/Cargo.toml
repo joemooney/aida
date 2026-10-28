@@ -43,6 +43,8 @@ toml.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 portable-pty.workspace = true
+# STORY-1843: the relay-mail test holds a stub controller's run lock in-process.
+fs2.workspace = true
 
 [package.metadata.features]
 # Note: The "remote" feature enables gRPC client functionality

@@ -123,7 +123,7 @@ fn rotations_keep_one_run_uuid() {
     let tmp = tempfile::tempdir().unwrap();
     let (out, _lock) = bind_live(tmp.path(), "relay-a");
     for (n, sid) in ["child-one", "child-two"].into_iter().enumerate() {
-        let bound = child_bind(tmp.path(), &out.run, None).unwrap();
+        let bound = child_bind(tmp.path(), &out.run, &out.capability, None).unwrap();
         let token = bound.launch_token.clone().unwrap();
         assert_eq!(bound.generation, 2 + n as u64);
         // An unrelated session without the token is refused the label.
@@ -133,7 +133,7 @@ fn rotations_keep_one_run_uuid() {
         assert_eq!(child.recipient_id, out.run);
         assert_eq!(child.native_session_id.as_deref(), Some(sid));
     }
-    let direct = child_bind(tmp.path(), &out.run, Some("child-three")).unwrap();
+    let direct = child_bind(tmp.path(), &out.run, &out.capability, Some("child-three")).unwrap();
     assert!(direct.launch_token.is_none());
     let r = load_reservation(tmp.path(), "relay-a").unwrap();
     assert_eq!(r.recipient_id, out.run);
@@ -157,30 +157,184 @@ fn gap_mail_is_accepted_until_the_run_ends() {
     let resolved = resolve(tmp.path(), "relay-a").unwrap();
     assert_eq!(resolved.address, "relay-a");
     assert!(resolved.reader_notice.unwrap().contains("between sessions"));
-    end(tmp.path(), &out.run, me(), TerminalReason::Stop).unwrap();
+    end(tmp.path(), &out.run, &out.capability, TerminalReason::Stop).unwrap();
     let err = resolve(tmp.path(), "relay-a").unwrap_err().to_string();
     assert!(err.contains("unknown recipient"), "{err}");
 }
 
 #[test]
-fn end_is_recorded_once_and_only_by_the_controller() {
+fn end_is_recorded_once() {
     let tmp = tempfile::tempdir().unwrap();
     let (out, _lock) = bind_live(tmp.path(), "relay-a");
-    let err = end(tmp.path(), &out.run, me() + 1, TerminalReason::Stop)
-        .unwrap_err()
-        .to_string();
-    assert!(err.contains("belongs to controller"), "{err}");
-    let first = end(tmp.path(), &out.run, me(), TerminalReason::Exit).unwrap();
+    let first = end(tmp.path(), &out.run, &out.capability, TerminalReason::Exit).unwrap();
     assert!(first.recorded_now);
     assert_eq!(first.terminal_generation, 2);
-    let again = end(tmp.path(), &out.run, me(), TerminalReason::Stop).unwrap();
+    let again = end(tmp.path(), &out.run, &out.capability, TerminalReason::Stop).unwrap();
     assert!(!again.recorded_now);
     assert_eq!(again.terminal_generation, 2);
     assert_eq!(again.reason, TerminalReason::Exit);
-    let err = child_bind(tmp.path(), &out.run, None)
+    let err = child_bind(tmp.path(), &out.run, &out.capability, None)
         .unwrap_err()
         .to_string();
     assert!(err.contains("ended"), "{err}");
+    // The ended record is archived out of the open-run directory.
+    assert!(!run_path(tmp.path(), &out.run).exists());
+    assert!(ended_run_path(tmp.path(), &out.run).exists());
+}
+
+/// Every file under `.aida/agents/`, so a refusal can be shown to write
+/// nothing.
+fn agents_snapshot(project: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    fn walk(dir: &Path, out: &mut std::collections::BTreeMap<PathBuf, Vec<u8>>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else {
+                out.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(&agent_registry::agents_dir(project), &mut out);
+    out
+}
+
+#[test]
+fn bind_prints_the_capability_once_and_stores_only_its_digest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (out, _lock) = bind_live(tmp.path(), "relay-a");
+    assert_eq!(out.capability.len(), 2 * CAPABILITY_BYTES);
+    assert!(out.capability.bytes().all(|b| b.is_ascii_hexdigit()));
+    let (other, _lock_b) = bind_live(tmp.path(), "relay-b");
+    assert_ne!(out.capability, other.capability);
+    for (path, body) in agents_snapshot(tmp.path()) {
+        let body = String::from_utf8_lossy(&body);
+        assert!(
+            !body.contains(&out.capability),
+            "{} stores the capability",
+            path.display()
+        );
+    }
+    let run = load_run(tmp.path(), &out.run).unwrap().unwrap();
+    assert_eq!(run.capability_sha256, capability_digest(&out.capability));
+}
+
+#[test]
+fn child_bind_and_end_refuse_a_caller_without_the_capability_and_write_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (out, _lock) = bind_live(tmp.path(), "relay-a");
+    // The legitimate child holds the label.
+    child_bind(tmp.path(), &out.run, &out.capability, Some("real-child")).unwrap();
+    let before = agents_snapshot(tmp.path());
+    let wrong = "0".repeat(2 * CAPABILITY_BYTES);
+    // The run id and controller pid are public; neither grants anything.
+    let foreign_token = child_bind(tmp.path(), &out.run, &wrong, None).unwrap_err();
+    let foreign_session =
+        child_bind(tmp.path(), &out.run, &wrong, Some("intruder-session")).unwrap_err();
+    let foreign_end = end(tmp.path(), &out.run, &wrong, TerminalReason::Stop).unwrap_err();
+    let empty = end(tmp.path(), &out.run, "", TerminalReason::Stop).unwrap_err();
+    let other_run = bind_live(tmp.path(), "relay-b");
+    let after_bind_b = agents_snapshot(tmp.path());
+    let cross = end(
+        tmp.path(),
+        &out.run,
+        &other_run.0.capability,
+        TerminalReason::Stop,
+    )
+    .unwrap_err();
+    for err in [foreign_token, foreign_session, foreign_end, empty, cross] {
+        assert!(
+            err.to_string().contains("capability does not match"),
+            "{err}"
+        );
+    }
+    let snapshot = agents_snapshot(tmp.path());
+    assert_eq!(snapshot, after_bind_b);
+    for (path, body) in &before {
+        assert_eq!(snapshot.get(path), Some(body), "{} changed", path.display());
+    }
+    let r = load_reservation(tmp.path(), "relay-a").unwrap();
+    assert_eq!(r.native_session_id.as_deref(), Some("real-child"));
+    assert!(load_run(tmp.path(), &out.run)
+        .unwrap()
+        .unwrap()
+        .terminal
+        .is_none());
+}
+
+#[test]
+fn a_record_without_a_digest_accepts_no_capability() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (out, _lock) = bind_live(tmp.path(), "relay-a");
+    let mut run = load_run(tmp.path(), &out.run).unwrap().unwrap();
+    run.capability_sha256.clear();
+    write_run(tmp.path(), &run).unwrap();
+    assert!(end(tmp.path(), &out.run, &out.capability, TerminalReason::Stop).is_err());
+    assert!(end(tmp.path(), &out.run, "", TerminalReason::Stop).is_err());
+}
+
+#[test]
+fn the_capability_file_must_be_private_and_not_a_symlink() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("cap");
+    std::fs::write(&path, "abc123\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(read_capability(Some(&path)).unwrap(), "abc123");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let err = read_capability(Some(&path)).unwrap_err().to_string();
+    assert!(err.contains("0600"), "{err}");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let link = tmp.path().join("link");
+    std::os::unix::fs::symlink(&path, &link).unwrap();
+    assert!(read_capability(Some(&link)).is_err());
+    let empty = tmp.path().join("empty");
+    std::fs::write(&empty, "\n").unwrap();
+    std::fs::set_permissions(&empty, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert!(read_capability(Some(&empty)).is_err());
+}
+
+/// An open-run record as bind would write it, for budget tests.
+fn synthetic_run(template: &RelayRun, ended: bool) -> RelayRun {
+    let mut run = template.clone();
+    run.run_id = uuid::Uuid::new_v4().to_string();
+    run.label = format!("relay-{}", &run.run_id[..8]);
+    run.terminal = ended.then(|| Terminal {
+        generation: 2,
+        reason: TerminalReason::Exit,
+        at: Utc::now(),
+    });
+    run
+}
+
+#[test]
+fn ended_runs_and_stray_entries_do_not_count_against_the_open_run_budget() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (out, _lock) = bind_live(tmp.path(), "relay-a");
+    let template = load_run(tmp.path(), &out.run).unwrap().unwrap();
+    for _ in 0..MAX_OPEN_RUN_RECORDS + 8 {
+        write_run(tmp.path(), &synthetic_run(&template, true)).unwrap();
+    }
+    for n in 0..8 {
+        std::fs::write(runs_dir(tmp.path()).join(format!("stray-{n}.tmp")), "x").unwrap();
+    }
+    // The cliff: open records up to the budget, the live run included.
+    for _ in 1..MAX_OPEN_RUN_RECORDS {
+        write_run(tmp.path(), &synthetic_run(&template, false)).unwrap();
+    }
+    assert_eq!(list_runs(tmp.path()).unwrap().len(), MAX_OPEN_RUN_RECORDS);
+    let (accepting, warnings) = accepting_runs(tmp.path());
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(accepting.iter().any(|r| r.run_id == out.run));
+    reconcile_relay_runs(tmp.path()).unwrap();
+    // One more open record is over it: listing refuses, gap acceptance warns.
+    write_run(tmp.path(), &synthetic_run(&template, false)).unwrap();
+    let err = list_runs(tmp.path()).unwrap_err().to_string();
+    assert!(err.contains("open relay run budget"), "{err}");
+    let (accepting, warnings) = accepting_runs(tmp.path());
+    assert!(accepting.is_empty());
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
 }
 
 #[test]
@@ -254,7 +408,7 @@ fn a_reused_controller_pid_is_dead() {
 fn an_ended_runs_label_is_not_reused_without_a_handover_choice() {
     let tmp = tempfile::tempdir().unwrap();
     let (out, lock) = bind_live(tmp.path(), "relay-a");
-    end(tmp.path(), &out.run, me(), TerminalReason::Stop).unwrap();
+    end(tmp.path(), &out.run, &out.capability, TerminalReason::Stop).unwrap();
     let err = bind(tmp.path(), "relay-a", me(), &lock.path, PROTOCOL)
         .unwrap_err()
         .to_string();
@@ -271,9 +425,9 @@ fn an_ended_runs_label_is_not_reused_without_a_handover_choice() {
 fn run_ids_must_be_canonical() {
     let tmp = tempfile::tempdir().unwrap();
     for bad in ["../x", "not-a-uuid", "6F9619FF-8B86-D011-B42D-00C04FC964FF"] {
-        assert!(child_bind(tmp.path(), bad, None).is_err(), "{bad}");
+        assert!(child_bind(tmp.path(), bad, "x", None).is_err(), "{bad}");
         assert!(
-            end(tmp.path(), bad, me(), TerminalReason::Stop).is_err(),
+            end(tmp.path(), bad, "x", TerminalReason::Stop).is_err(),
             "{bad}"
         );
     }

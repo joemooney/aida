@@ -197,16 +197,18 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
     let report = agent_registry::gc_dead_agents(&project_root, dry_run, older_than)?;
     // A relay run whose controller is provably gone is ended before its
-    // label's reservation is considered for retirement.
+    // label's reservation is considered for retirement. A relay failure
+    // warns; the rest of maintenance still runs.
     // trace:STORY-1843 | ai:claude
     if !dry_run {
-        let relays = crate::relay_mail::reconcile_relay_runs(&project_root)?;
-        if !relays.ended.is_empty() {
-            println!(
+        match crate::relay_mail::reconcile_relay_runs(&project_root) {
+            Ok(relays) if !relays.ended.is_empty() => println!(
                 "Relay runs: recorded the end of {} run{} whose controller is gone.",
                 relays.ended.len(),
                 if relays.ended.len() == 1 { "" } else { "s" }
-            );
+            ),
+            Ok(_) => {}
+            Err(e) => eprintln!("warning: relay run reconciliation skipped: {e:#}"),
         }
     }
     // Retention work belongs to explicit maintenance, never a turn hook.

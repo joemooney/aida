@@ -44,6 +44,8 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
 sha2 = "0.10"
+# Relay run capabilities. trace:STORY-1843 | ai:claude
+getrandom = "0.2"
 # Fresh scoring roots need automatic cleanup in production. trace:TASK-1731 | ai:codex
 tempfile = "3.8"
 dirs = { workspace = true }

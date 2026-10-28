@@ -16,6 +16,18 @@
 //! [`reconcile_relay_runs`] when the controller is provably gone (the crash
 //! path, run at relay start and by `aida agent gc`). A controller this
 //! process cannot observe is unknown, and an unknown run is never retired.
+//!
+//! Authority over a run is a secret capability, not a process identity: the
+//! run id and controller pid are public, and process ancestry is unreliable
+//! under PID-namespaced sandboxes. `bind` generates 256 random bits, prints
+//! them once, and stores only their SHA-256. `child-bind` and `end` take the
+//! capability on stdin or from a private file, never on argv, and compare it
+//! in constant time before they read or write anything else. Crash
+//! reconciliation needs no capability: it only retires a controller that is
+//! conclusively gone.
+//!
+//! Open run records live in `relay-runs/`; ended ones are archived to
+//! `relay-runs/ended/`, so only open runs count against the record budget.
 // trace:STORY-1843 | ai:claude
 
 use crate::agent_handle::{self, HandleRequest};
@@ -40,7 +52,12 @@ const OPERATIONS: &[&str] = &["probe", "bind", "child-bind", "end"];
 const FEATURES: &[&str] = &["gap-acceptance", "terminal-reconcile"];
 
 const MAX_RUN_RECORD_BYTES: u64 = 65536;
-const MAX_RUN_RECORDS: usize = 1024;
+/// Open run records read per pass. Ended runs are archived outside it.
+const MAX_OPEN_RUN_RECORDS: usize = 1024;
+/// Random bytes in a run capability.
+const CAPABILITY_BYTES: usize = 32;
+/// Bytes read from a capability source: the hex capability and a newline.
+const MAX_CAPABILITY_INPUT: u64 = 256;
 /// Child bindings kept in a run record, newest last.
 const MAX_CHILD_HISTORY: usize = 64;
 
@@ -112,6 +129,10 @@ pub(crate) struct RelayRun {
     pub(crate) label: String,
     pub(crate) controller: ControllerEvidence,
     pub(crate) run_lock: RunLockEvidence,
+    /// SHA-256 (hex) of the run capability. The capability itself is never
+    /// stored; a record without a digest accepts no capability.
+    #[serde(default)]
+    pub(crate) capability_sha256: String,
     pub(crate) bound_at: DateTime<Utc>,
     /// Advances on every lifecycle change: bind, each child bind, end.
     pub(crate) generation: u64,
@@ -164,15 +185,21 @@ fn canonical_run_id(raw: &str) -> Result<String> {
     Ok(canonical)
 }
 
+/// Where ended run records are archived, outside the open-record budget.
+pub(crate) fn ended_runs_dir(project_root: &Path) -> PathBuf {
+    runs_dir(project_root).join("ended")
+}
+
 fn run_path(project_root: &Path, run_id: &str) -> PathBuf {
     runs_dir(project_root).join(format!("{run_id}.json"))
 }
 
-pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<RelayRun>> {
-    let run_id = canonical_run_id(run_id)?;
-    let Some(body) =
-        agent_handle::read_allocation_text(&run_path(project_root, &run_id), MAX_RUN_RECORD_BYTES)?
-    else {
+fn ended_run_path(project_root: &Path, run_id: &str) -> PathBuf {
+    ended_runs_dir(project_root).join(format!("{run_id}.json"))
+}
+
+fn read_run_at(path: &Path, run_id: &str) -> Result<Option<RelayRun>> {
+    let Some(body) = agent_handle::read_allocation_text(path, MAX_RUN_RECORD_BYTES)? else {
         return Ok(None);
     };
     let run: RelayRun = serde_json::from_str(&body).context("invalid relay run record")?;
@@ -182,19 +209,48 @@ pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<Relay
     Ok(Some(run))
 }
 
+/// A run record, open or ended. The ended archive wins: an end is written
+/// there before the open record is removed, so a crash between the two
+/// leaves the end authoritative.
+pub(crate) fn load_run(project_root: &Path, run_id: &str) -> Result<Option<RelayRun>> {
+    let run_id = canonical_run_id(run_id)?;
+    if let Some(run) = read_run_at(&ended_run_path(project_root, &run_id), &run_id)? {
+        return Ok(Some(run));
+    }
+    read_run_at(&run_path(project_root, &run_id), &run_id)
+}
+
+/// Write a run record: an open run to `relay-runs/`, an ended one to the
+/// archive, removing its open record afterwards.
 fn write_run(project_root: &Path, run: &RelayRun) -> Result<()> {
-    let dir = runs_dir(project_root);
+    let dir = if run.terminal.is_some() {
+        ended_runs_dir(project_root)
+    } else {
+        runs_dir(project_root)
+    };
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating relay run directory {}", dir.display()))?;
     let body = serde_json::to_string_pretty(run).context("serialising relay run")?;
-    let path = run_path(project_root, &run.run_id);
+    let path = dir.join(format!("{}.json", run.run_id));
     aida_core::write_atomic(&path, body.as_bytes())
-        .with_context(|| format!("writing relay run record {}", path.display()))
+        .with_context(|| format!("writing relay run record {}", path.display()))?;
+    if run.terminal.is_some() {
+        let open = run_path(project_root, &run.run_id);
+        match std::fs::remove_file(&open) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(e).with_context(|| format!("removing {}", open.display()));
+            }
+        }
+    }
+    Ok(())
 }
 
-/// Every readable run record, bounded in count. Unreadable records are
-/// skipped: they own nothing, and the label they named stays governed by its
-/// handle reservation.
+/// Every readable open run record, bounded in count. Only `.json` files
+/// count; the `ended/` archive and stray entries are skipped uncounted.
+/// Unreadable records are skipped: they own nothing, and the label they
+/// named stays governed by its handle reservation.
 fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
     let entries = match std::fs::read_dir(runs_dir(project_root)) {
         Ok(entries) => entries,
@@ -202,24 +258,129 @@ fn list_runs(project_root: &Path) -> Result<Vec<RelayRun>> {
         Err(e) => return Err(e).context("reading relay run records"),
     };
     let mut runs = Vec::new();
-    for (n, entry) in entries.enumerate() {
-        if n >= MAX_RUN_RECORDS {
-            bail!("relay run record budget exceeded");
+    let mut counted = 0usize;
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
         }
-        let path = entry?.path();
-        let Some(stem) = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .and_then(|name| name.strip_suffix(".json"))
-        else {
+        let name = entry.file_name();
+        let Some(stem) = name.to_str().and_then(|name| name.strip_suffix(".json")) else {
             continue;
         };
+        counted += 1;
+        if counted > MAX_OPEN_RUN_RECORDS {
+            bail!("open relay run budget exceeded ({MAX_OPEN_RUN_RECORDS} records)");
+        }
+        // An ended archive entry shadows a leftover open record.
         if let Ok(Some(run)) = load_run(project_root, stem) {
-            runs.push(run);
+            if run.terminal.is_none() {
+                runs.push(run);
+            }
         }
     }
     runs.sort_by(|a, b| a.run_id.cmp(&b.run_id));
     Ok(runs)
+}
+
+/// A fresh run capability: 256 random bits, lower-case hex.
+fn new_capability() -> Result<String> {
+    let mut bytes = [0u8; CAPABILITY_BYTES];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|e| anyhow::anyhow!("generating relay run capability: {e}"))?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn capability_digest(capability: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(capability.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// Equal-length byte comparison whose time does not depend on where the
+/// inputs differ.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Refuse unless `capability` is the one `bind` issued for `run`.
+fn verify_capability(run: &RelayRun, capability: &str) -> Result<()> {
+    let presented = capability_digest(capability.trim());
+    if run.capability_sha256.is_empty()
+        || !constant_time_eq(presented.as_bytes(), run.capability_sha256.as_bytes())
+    {
+        bail!(
+            "relay run {} refused: the run capability does not match",
+            run.run_id
+        );
+    }
+    Ok(())
+}
+
+/// Read a run capability from `cap_file`, or from stdin when none is given.
+/// The file must be a regular file (no symlink) readable by its owner only;
+/// stdin must not be a terminal. Either source is read to a small bound.
+pub(crate) fn read_capability(cap_file: Option<&Path>) -> Result<String> {
+    use std::io::Read;
+    let mut raw = String::new();
+    match cap_file {
+        Some(path) => {
+            let mut options = std::fs::OpenOptions::new();
+            options.read(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+            }
+            let file = options
+                .open(path)
+                .with_context(|| format!("opening capability file {}", path.display()))?;
+            let meta = file.metadata()?;
+            if !meta.is_file() {
+                bail!("capability file {} is not a regular file", path.display());
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                if meta.mode() & 0o077 != 0 {
+                    bail!(
+                        "capability file {} is readable by others; make it 0600",
+                        path.display()
+                    );
+                }
+                // SAFETY: geteuid has no preconditions.
+                if meta.uid() != unsafe { libc::geteuid() } {
+                    bail!("capability file {} is not owned by you", path.display());
+                }
+            }
+            (&file)
+                .take(MAX_CAPABILITY_INPUT)
+                .read_to_string(&mut raw)
+                .context("reading capability file")?;
+        }
+        None => {
+            use std::io::IsTerminal;
+            let stdin = std::io::stdin();
+            if stdin.is_terminal() {
+                bail!("pass the relay run capability on stdin or with --cap-file");
+            }
+            stdin
+                .lock()
+                .take(MAX_CAPABILITY_INPUT)
+                .read_to_string(&mut raw)
+                .context("reading capability from stdin")?;
+        }
+    }
+    let capability = raw.trim();
+    if capability.is_empty() {
+        bail!("no relay run capability was given");
+    }
+    Ok(capability.to_string())
 }
 
 fn current_boot_id() -> Option<String> {
@@ -426,6 +587,9 @@ pub(crate) struct BindOutcome {
     pub(crate) label: String,
     pub(crate) protocol: String,
     pub(crate) generation: u64,
+    /// The run capability, printed once. The controller keeps it for
+    /// `child-bind` and `end` and never exports it to a child.
+    pub(crate) capability: String,
 }
 
 /// Reserve `label` for a new run owned by `controller_pid`.
@@ -474,6 +638,7 @@ pub(crate) fn bind(
         explicit: Some(label),
         ..Default::default()
     };
+    let capability = new_capability()?;
     let reservation = agent_handle::reserve_handle_locked(project_root, &req, &lock)?;
     let run = RelayRun {
         protocol: PROTOCOL.to_string(),
@@ -481,6 +646,7 @@ pub(crate) fn bind(
         label: reservation.handle.clone(),
         controller,
         run_lock,
+        capability_sha256: capability_digest(&capability),
         bound_at: Utc::now(),
         generation: 1,
         children: Vec::new(),
@@ -492,6 +658,7 @@ pub(crate) fn bind(
         label: run.label,
         protocol: run.protocol,
         generation: run.generation,
+        capability,
     })
 }
 
@@ -510,9 +677,11 @@ pub(crate) struct ChildBindOutcome {
 
 /// Bind the run's next child. The run UUID never changes: the label's
 /// reservation keeps its recipient and only its session binding moves.
+/// Only the holder of the run capability may bind.
 pub(crate) fn child_bind(
     project_root: &Path,
     run_id: &str,
+    capability: &str,
     native_session_id: Option<&str>,
 ) -> Result<ChildBindOutcome> {
     let run_id = canonical_run_id(run_id)?;
@@ -524,6 +693,7 @@ pub(crate) fn child_bind(
     let Some(mut run) = load_run(project_root, &run_id)? else {
         bail!("unknown relay run {run_id}");
     };
+    verify_capability(&run, capability)?;
     if let Some(t) = &run.terminal {
         bail!(
             "relay run {run_id} ended at generation {}; bind a new run",
@@ -595,11 +765,12 @@ pub(crate) struct EndOutcome {
 }
 
 /// Record the run's terminal generation once. A repeat reports the
-/// recorded end and changes nothing.
+/// recorded end and changes nothing. Only the holder of the run capability
+/// may end a run.
 pub(crate) fn end(
     project_root: &Path,
     run_id: &str,
-    controller_pid: u32,
+    capability: &str,
     reason: TerminalReason,
 ) -> Result<EndOutcome> {
     let run_id = canonical_run_id(run_id)?;
@@ -607,12 +778,7 @@ pub(crate) fn end(
     let Some(mut run) = load_run(project_root, &run_id)? else {
         bail!("unknown relay run {run_id}");
     };
-    if run.controller.pid != controller_pid {
-        bail!(
-            "relay run {run_id} belongs to controller pid {}, not {controller_pid}",
-            run.controller.pid
-        );
-    }
+    verify_capability(&run, capability)?;
     let recorded_now = run.terminal.is_none();
     if recorded_now {
         record_terminal(&mut run, reason, Utc::now());
@@ -667,15 +833,23 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
                 print_json(&out)
             } else {
                 println!("{}", out.run);
+                println!("{}", out.capability);
                 Ok(())
             }
         }
         RelayMailCommand::ChildBind {
             run,
             native_session,
+            cap_file,
             json,
         } => {
-            let out = child_bind(&project_root()?, run, native_session.as_deref())?;
+            let capability = read_capability(cap_file.as_deref())?;
+            let out = child_bind(
+                &project_root()?,
+                run,
+                &capability,
+                native_session.as_deref(),
+            )?;
             if *json {
                 print_json(&out)
             } else {
@@ -691,11 +865,12 @@ pub(crate) fn handle_relay_mail_command(cmd: &RelayMailCommand) -> Result<()> {
         }
         RelayMailCommand::End {
             run,
-            controller_pid,
+            cap_file,
             reason,
             json,
         } => {
-            let out = end(&project_root()?, run, *controller_pid, (*reason).into())?;
+            let capability = read_capability(cap_file.as_deref())?;
+            let out = end(&project_root()?, run, &capability, (*reason).into())?;
             if *json {
                 print_json(&out)
             } else {
