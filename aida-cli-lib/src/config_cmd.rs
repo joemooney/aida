@@ -1267,7 +1267,8 @@ fn save_edit_doc(path: &std::path::Path, doc: &DocumentMut) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    aida_core::write_atomic(path, doc.to_string())
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, doc.to_string())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -3944,7 +3945,7 @@ pub(crate) fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
 /// Drop the `[ui] theme` key, preserving the rest of the file. Used by
 /// `aida config glyph theme unicode` to return to the implicit default.
 // trace:STORY-633 | ai:claude
-fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
+pub(crate) fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
     use toml_edit::DocumentMut;
     let body = match std::fs::read_to_string(path) {
         Ok(b) => b,
@@ -3955,7 +3956,8 @@ fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
     if let Some(ui) = doc.get_mut("ui").and_then(|i| i.as_table_mut()) {
         ui.remove("theme");
     }
-    aida_core::write_atomic(path, doc.to_string())?;
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, doc.to_string())?;
     Ok(())
 }
 

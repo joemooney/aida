@@ -141,7 +141,7 @@ fn a_projection_feeds_readers_without_touching_the_product_tree() {
         Outcome {
             commit: commit.clone(),
             written: true,
-            config_tracked: false
+            config_kept: None
         }
     );
     assert_eq!(product_snapshot(&top), before);
@@ -159,7 +159,7 @@ fn a_projection_feeds_readers_without_touching_the_product_tree() {
         inspect(&top).unwrap(),
         State::Current {
             commit: commit.clone(),
-            config_tracked: false
+            config_kept: None
         }
     );
     let Delivery::Verified {
@@ -205,7 +205,7 @@ fn a_refresh_is_deterministic_and_replaces_only_owned_outputs() {
         State::Stale {
             projected: read_manifest(&top).unwrap().unwrap().commit,
             plane: second.clone(),
-            config_tracked: false
+            config_kept: None
         }
     );
     assert!(sync(&top).unwrap().unwrap().written);
@@ -221,22 +221,21 @@ fn an_edited_or_unowned_output_is_preserved_and_refused() {
     let top = product(&tmp.path().join("p"));
     publish(&top, V1);
 
-    // A config file the projection never wrote.
-    std::fs::create_dir_all(top.join(".aida")).unwrap();
-    std::fs::write(top.join(CONFIG), "mine = 1\n").unwrap();
+    // A guidance file the projection never wrote.
+    let guidance = top.join(GUIDANCE_DIR).join("review-norms.md");
+    std::fs::create_dir_all(guidance.parent().unwrap()).unwrap();
+    std::fs::write(&guidance, "mine\n").unwrap();
     let err = format!("{:#}", sync(&top).unwrap_err());
     assert!(
-        err.contains("not written by the adoption projection"),
+        err.contains("not written by the adoption projection")
+            && err.contains("adoption/settings.toml")
+            && err.contains("~/.aida/config"),
         "{err}"
     );
-    assert_eq!(
-        std::fs::read_to_string(top.join(CONFIG)).unwrap(),
-        "mine = 1\n"
-    );
+    assert_eq!(std::fs::read_to_string(&guidance).unwrap(), "mine\n");
 
-    std::fs::remove_file(top.join(CONFIG)).unwrap();
+    std::fs::remove_file(&guidance).unwrap();
     sync(&top).unwrap();
-    let guidance = top.join(GUIDANCE_DIR).join("review-norms.md");
     std::fs::write(&guidance, "edited\n").unwrap();
     let commit = read_manifest(&top).unwrap().unwrap().commit;
     assert_eq!(
@@ -303,7 +302,7 @@ fn a_tracked_product_config_is_never_projected_over() {
     publish(&top, V1);
 
     let outcome = sync(&top).unwrap().unwrap();
-    assert!(outcome.config_tracked);
+    assert_eq!(outcome.config_kept, Some(KeptConfig::Tracked));
     assert_eq!(product_snapshot(&top), before);
     assert!(top.join(GUIDANCE_DIR).join("review-norms.md").is_file());
     assert!(!read_manifest(&top)
@@ -314,14 +313,14 @@ fn a_tracked_product_config_is_never_projected_over() {
     assert!(matches!(
         inspect(&top).unwrap(),
         State::Current {
-            config_tracked: true,
+            config_kept: Some(KeptConfig::Tracked),
             ..
         }
     ));
     assert!(matches!(
         delivered_guidance(&top),
         Delivery::Verified {
-            config_tracked: true,
+            config_kept: Some(KeptConfig::Tracked),
             ..
         }
     ));
@@ -341,7 +340,7 @@ fn a_config_the_product_branch_starts_tracking_is_forgotten_not_deleted() {
     git_out(&top, &["commit", "-q", "-m", "track config"]);
     let before = product_snapshot(&top);
     let outcome = sync(&top).unwrap().unwrap();
-    assert!(outcome.config_tracked);
+    assert_eq!(outcome.config_kept, Some(KeptConfig::Tracked));
     assert_eq!(std::fs::read(top.join(CONFIG)).unwrap(), projected);
     assert_eq!(product_snapshot(&top), before);
     assert!(!read_manifest(&top)
@@ -432,7 +431,7 @@ fn an_interrupted_refresh_completes_instead_of_reading_as_an_edit() {
         inspect(&top).unwrap(),
         State::Current {
             commit: second,
-            config_tracked: false
+            config_kept: None
         }
     );
 }
@@ -458,7 +457,7 @@ fn concurrent_refreshes_converge_on_one_projection() {
         inspect(&top).unwrap(),
         State::Current {
             commit,
-            config_tracked: false
+            config_kept: None
         }
     );
 }
@@ -498,7 +497,10 @@ fn a_config_the_product_branch_stops_tracking_reads_as_stale_until_refreshed() {
     git_out(&top, &["add", "-f", CONFIG]);
     git_out(&top, &["commit", "-q", "-m", "legacy scaffolding"]);
     let commit = publish(&top, V1);
-    assert!(sync(&top).unwrap().unwrap().config_tracked);
+    assert_eq!(
+        sync(&top).unwrap().unwrap().config_kept,
+        Some(KeptConfig::Tracked)
+    );
 
     // A checkout that drops the config: git deletes the file, and the
     // manifest has no settings entry, yet the plane is unchanged.
@@ -508,7 +510,7 @@ fn a_config_the_product_branch_stops_tracking_reads_as_stale_until_refreshed() {
     assert!(matches!(
         inspect(&top).unwrap(),
         State::Stale {
-            config_tracked: false,
+            config_kept: None,
             ..
         }
     ));
@@ -522,7 +524,7 @@ fn a_config_the_product_branch_stops_tracking_reads_as_stale_until_refreshed() {
         inspect(&top).unwrap(),
         State::Current {
             commit,
-            config_tracked: false
+            config_kept: None
         }
     );
     assert!(top.join(CONFIG).is_file());
@@ -575,7 +577,7 @@ fn a_second_interrupted_refresh_keeps_every_hash_a_file_still_holds() {
         inspect(&top).unwrap(),
         State::Current {
             commit: third,
-            config_tracked: false
+            config_kept: None
         }
     );
 }
@@ -590,4 +592,117 @@ fn a_symlinked_lock_refuses_without_creating_its_target() {
     std::os::unix::fs::symlink(&target, top.join(LOCK)).unwrap();
     assert!(format!("{:#}", sync(&top).unwrap_err()).contains(LOCK));
     assert!(!target.exists());
+}
+
+/// A local untracked config the projection never wrote (an `aida config
+/// set` before the first launch) is kept and reported, guidance still
+/// flows, and deleting it lets the plane's settings in.
+#[test]
+fn a_local_unowned_config_is_kept_and_guidance_still_delivered() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    std::fs::create_dir_all(top.join(".aida")).unwrap();
+    std::fs::write(top.join(CONFIG), "mine = 1\n").unwrap();
+
+    let outcome = sync(&top).unwrap().unwrap();
+    assert_eq!(outcome.config_kept, Some(KeptConfig::Local));
+    assert_eq!(
+        std::fs::read_to_string(top.join(CONFIG)).unwrap(),
+        "mine = 1\n"
+    );
+    assert!(matches!(
+        inspect(&top).unwrap(),
+        State::Current {
+            config_kept: Some(KeptConfig::Local),
+            ..
+        }
+    ));
+    assert!(matches!(
+        delivered_guidance(&top),
+        Delivery::Verified {
+            config_kept: Some(KeptConfig::Local),
+            ..
+        }
+    ));
+    let note = KeptConfig::Local.note();
+    assert!(
+        note.contains("adoption/settings.toml") && note.contains("~/.aida/config"),
+        "{note}"
+    );
+    assert!(
+        !sync(&top).unwrap().unwrap().written,
+        "a kept config is stable"
+    );
+
+    std::fs::remove_file(top.join(CONFIG)).unwrap();
+    assert!(matches!(inspect(&top).unwrap(), State::Stale { .. }));
+    assert_eq!(sync(&top).unwrap().unwrap().config_kept, None);
+    assert!(owns(&top.join(CONFIG)));
+}
+
+/// The ownership guard fails closed: a manifest that exists but cannot be
+/// read refuses the write rather than reading as "not owned".
+#[test]
+fn an_unreadable_manifest_refuses_every_config_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    sync(&top).unwrap();
+    let before = std::fs::read(top.join(CONFIG)).unwrap();
+    for broken in [
+        "not toml = = =",
+        "version = 9\ncommit = \"x\"\nschema = 1\ngenerator = \"g\"\n",
+    ] {
+        std::fs::write(top.join(MANIFEST), broken).unwrap();
+        assert!(owns(&top.join(CONFIG)), "{broken}");
+        let err = crate::write_config_atomic(&top.join(CONFIG), "x = 1\n").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied, "{err}");
+        assert_eq!(std::fs::read(top.join(CONFIG)).unwrap(), before);
+    }
+    // Without any manifest the writer is a plain atomic write.
+    std::fs::remove_file(top.join(MANIFEST)).unwrap();
+    crate::write_config_atomic(&top.join(CONFIG), "x = 1\n").unwrap();
+    assert_eq!(
+        std::fs::read_to_string(top.join(CONFIG)).unwrap(),
+        "x = 1\n"
+    );
+}
+
+/// An adopted clone counts as adopted before its first projection, so the
+/// scaffold guard refuses there too; a clone without a namespace does not.
+#[test]
+fn adoption_is_detected_before_the_first_projection() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    assert!(!is_adopted(&top));
+    publish(&top, V1);
+    assert!(!is_projected(&top));
+    assert!(is_adopted(&top));
+    std::fs::create_dir_all(top.join("src")).unwrap();
+    assert!(is_adopted(&top.join("src")));
+    assert!(!top.join(".aida").exists(), "detection writes nothing");
+}
+
+/// Racing creators of the projection directories both succeed: losing the
+/// `create_dir` race re-checks instead of failing.
+#[test]
+fn ensure_real_dir_tolerates_a_concurrent_creator() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+    let handles: Vec<_> = (0..8)
+        .map(|_| {
+            let barrier = barrier.clone();
+            let root = root.to_path_buf();
+            std::thread::spawn(move || {
+                barrier.wait();
+                ensure_real_dir(&root, ".aida")
+            })
+        })
+        .collect();
+    for handle in handles {
+        handle.join().unwrap().unwrap();
+    }
+    assert!(root.join(".aida").is_dir());
 }

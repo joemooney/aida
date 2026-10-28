@@ -3454,12 +3454,12 @@ impl std::fmt::Display for ScaffoldError {
 
 impl std::error::Error for ScaffoldError {}
 
-/// Refuse a scaffold write in a worktree holding an adoption projection:
+/// Refuse a scaffold write in an adopted worktree, projected yet or not:
 /// adoption keeps AIDA scaffolding off the product branch.
 // trace:STORY-1741 | ai:claude
 pub fn refuse_in_adopted_worktree(project_root: &Path) -> Result<(), ScaffoldError> {
     #[cfg(all(unix, feature = "native"))]
-    if crate::adoption_projection::is_projected(project_root) {
+    if crate::adoption_projection::is_adopted(project_root) {
         return Err(ScaffoldError::IoError {
             path: project_root.to_path_buf(),
             message: "this worktree is adopted from a shared AIDA plane, so scaffolding \

@@ -116,9 +116,8 @@ fn config_edits_and_scaffolding_refuse_in_an_adopted_worktree() {
         crate::config_edit::set_kv(&config, "agents", "vendor", toml_edit::Value::from("codex"))
             .unwrap_err();
     assert!(
-        err.to_string()
-            .contains("generated from the shared adoption plane"),
-        "{err}"
+        format!("{err:#}").contains("generated from the shared adoption plane"),
+        "{err:#}"
     );
     assert_eq!(std::fs::read(&config).unwrap(), before);
 
@@ -363,10 +362,145 @@ fn a_projected_config_refusal_names_where_local_keys_belong() {
         "scratch",
         toml_edit::Value::from("scratch-dir"),
     )
-    .unwrap_err()
-    .to_string();
+    .unwrap_err();
+    let err = format!("{err:#}");
     assert!(
         err.contains("adoption/settings.toml") && err.contains("~/.aida/config.toml"),
         "{err}"
     );
+}
+
+/// Plane settings that every project-config writer below would edit.
+const WRITER_SETTINGS: &str = "schema = 1\n[settings.ui]\ntheme = \"ascii\"\n\
+                               [settings.forge]\nprovider = \"gitlab\"\n\
+                               [settings.id_format]\ncounter_scope = \"per_type\"\n\
+                               [settings.hints]\nworkflow_hints = true\n\
+                               [guidance]\nreview-norms = \"Review.\\n\"\n";
+
+/// Every writer of the project `.aida/config.toml` refuses the projected
+/// copy through the one guarded writer, and leaves it byte for byte.
+#[test]
+fn every_project_config_writer_refuses_the_projected_config() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, _) = adopted(&tmp.path().join("p"), WRITER_SETTINGS);
+    assert_eq!(refresh_adoption_projection(&top), None);
+    let config = top.join(CONFIG);
+    let before = std::fs::read(&config).unwrap();
+    let refused = |writer: &str, result: anyhow::Result<()>| {
+        let err = result.expect_err(writer);
+        assert!(
+            format!("{err:#}").contains("generated from the shared adoption plane"),
+            "{writer}: {err:#}"
+        );
+        assert_eq!(std::fs::read(&config).unwrap(), before, "{writer} wrote");
+        assert!(
+            !describe_adoption_state(&top).contains("damaged"),
+            "{writer} damaged the projection"
+        );
+    };
+
+    refused(
+        "config_edit::save_doc",
+        crate::config_edit::set_kv(&config, "ui", "theme", toml_edit::Value::from("x")),
+    );
+    refused(
+        "glyph_config::save_doc",
+        crate::glyph_config::set_theme(&config, "unicode"),
+    );
+    refused(
+        "config glyph theme unicode",
+        crate::config_cmd::clear_theme_reference(&config),
+    );
+    refused(
+        "doctor counter-scope migration",
+        crate::doctor_cmd::update_config_counter_scope(&config, "global"),
+    );
+    refused(
+        "forge provider",
+        crate::forge::write_forge_config_provider(&top, crate::forge::ForgeKind::GitHub).map(drop),
+    );
+    refused(
+        "workflow hints",
+        crate::workflow_hints::persist_setting(&top, false).map(drop),
+    );
+    refused(
+        "project capabilities",
+        crate::project_capabilities::write_capabilities(
+            &top,
+            &crate::project_capabilities::classify(
+                &top,
+                None,
+                &crate::project_capabilities::Probes {
+                    cli_on_path: &|_| false,
+                    gh_authed: &|_| None,
+                },
+            ),
+        )
+        .map(drop),
+    );
+    assert!(describe_adoption_state(&top).contains("current at"));
+}
+
+/// An adopted clone refuses scaffolding before its first launch has
+/// projected anything, and the refusal writes nothing.
+#[test]
+fn scaffolding_refuses_in_an_adopted_worktree_before_its_first_projection() {
+    use crate::cli::ScaffoldCommand;
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, _) = adopted(&tmp.path().join("p"), SETTINGS);
+    std::fs::write(top.join(".gitignore"), "target/\n").unwrap();
+    git(&top, &["add", ".gitignore"], None);
+    git(&top, &["commit", "-q", "-m", "ignore"], None);
+    assert!(!aida_core::adoption_projection::is_projected(&top));
+
+    assert!(aida_core::scaffolding::refuse_in_adopted_worktree(&top).is_err());
+    let storage = crate::Storage::new(tmp.path().join("store.yaml"));
+    let db = tmp.path().join("cache.db");
+    let apply = ScaffoldCommand::Apply {
+        project_root: Some(top.clone()),
+        force: true,
+        dry_run: false,
+        prune: false,
+    };
+    assert_refused(
+        "scaffold apply",
+        crate::scaffold_cmd::handle_scaffold_command(&apply, &storage, &db),
+    );
+    assert_refused(
+        "refresh_agent_packs",
+        crate::scaffold_refresh::refresh_agent_packs_at(&top, None, None).map(|p| p.len()),
+    );
+    assert_refused(
+        "discipline .gitignore",
+        crate::ensure_discipline_pack_gitignore_allow_list(&top),
+    );
+    assert!(aida_core::scaffolding::codex_hooks::scaffold_codex_hooks(&top, true).is_err());
+    assert!(git(&top, &["status", "--porcelain"], None).is_empty());
+    assert!(!top.join("AGENTS.md").exists() && !top.join(".aida").exists());
+}
+
+/// A config an `aida config set` wrote before the first projection is
+/// kept: the launch warns with both destinations and still delivers the
+/// plane's guidance.
+#[test]
+fn a_local_config_written_before_the_first_projection_is_kept_and_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, commit) = adopted(&tmp.path().join("p"), SETTINGS);
+    let config = top.join(CONFIG);
+    crate::config_edit::set_kv(&config, "paths", "scratch", toml_edit::Value::from("s")).unwrap();
+    let local = std::fs::read(&config).unwrap();
+
+    let warning = refresh_adoption_projection(&top).expect("the kept config is reported");
+    assert!(
+        warning.contains("adoption/settings.toml") && warning.contains("~/.aida/config.toml"),
+        "{warning}"
+    );
+    let section = render_adoption_guidance_section(&top);
+    assert!(
+        section.contains(&format!("revision {commit}")) && section.contains("### review-norms"),
+        "{section}"
+    );
+    assert!(describe_adoption_state(&top).contains(&format!("current at {commit}")));
+    assert_eq!(std::fs::read(&config).unwrap(), local);
+    assert_eq!(refresh_adoption_projection(&top), Some(warning));
 }

@@ -379,7 +379,9 @@ pub(crate) fn write_capabilities(root: &Path, caps: &ProjectCapabilities) -> Res
     toml::from_str::<toml::Value>(&after)
         .with_context(|| format!("{} would not stay valid TOML", path.display()))?;
     if after != before {
-        std::fs::write(&path, after).with_context(|| format!("writing {}", path.display()))?;
+        // trace:STORY-1741 | ai:claude
+        aida_core::write_config_atomic(&path, after)
+            .with_context(|| format!("writing {}", path.display()))?;
     }
     Ok(true)
 }

@@ -521,7 +521,8 @@ pub(crate) fn write_global_agents_permission_posture(
          bypass = {}\n",
         posture.agents_bypass()
     );
-    std::fs::write(path, body)
+    // trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, body)
         .with_context(|| format!("writing agent permission posture {}", path.display()))?;
     Ok(())
 }

@@ -11,7 +11,9 @@
 //! symlink, a file it never wrote, or an owned file someone edited. When the
 //! product branch tracks its own `.aida/config.toml` (pre-adoption
 //! scaffolding), the settings output is skipped and reported; that file is
-//! the product's, and migration is a separate reviewed change.
+//! the product's, and migration is a separate reviewed change. A local
+//! untracked config the projection never wrote is kept and reported the
+//! same way, never overwritten.
 //!
 //! Replacement is crash-safe without a directory swap: the manifest is first
 //! rewritten with the new hashes as `pending`, then each file is replaced
@@ -61,15 +63,44 @@ impl Manifest {
     }
 }
 
+/// Why the plane's settings were not projected into `.aida/config.toml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeptConfig {
+    /// The product branch tracks the file.
+    Tracked,
+    /// An untracked file the projection never wrote, such as one an
+    /// `aida config set` created before the first projection.
+    Local,
+}
+
+impl KeptConfig {
+    /// What a launch reports about the kept file.
+    pub fn note(self) -> &'static str {
+        match self {
+            KeptConfig::Tracked => {
+                "the product branch tracks .aida/config.toml, so the adoption plane's \
+                 settings are not applied here"
+            }
+            KeptConfig::Local => {
+                "a local .aida/config.toml the adoption projection did not write is kept, so \
+                 the plane's settings are not applied here. A shared policy setting belongs \
+                 in adoption/settings.toml on the aida-store plane; a local path or personal \
+                 preference belongs in ~/.aida/config.toml. Delete the local file to receive \
+                 the plane's settings"
+            }
+        }
+    }
+}
+
 /// The result of a refresh.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
     pub commit: String,
     /// False when the projection already held this revision byte for byte.
     pub written: bool,
-    /// True when the product branch tracks `.aida/config.toml`, so the
-    /// settings were not projected.
-    pub config_tracked: bool,
+    /// Set when an existing `.aida/config.toml` was kept, so the settings
+    /// were not projected.
+    pub config_kept: Option<KeptConfig>,
 }
 
 /// How a worktree's projection relates to its plane.
@@ -79,16 +110,16 @@ pub enum State {
     NotAdopted,
     /// Adopted, but never projected into this worktree.
     NotProjected { plane: String },
-    /// `config_tracked`: the product branch tracks `.aida/config.toml`, so
-    /// the plane's settings are not applied here.
+    /// `config_kept`: an existing `.aida/config.toml` was kept, so the
+    /// plane's settings are not applied here.
     Current {
         commit: String,
-        config_tracked: bool,
+        config_kept: Option<KeptConfig>,
     },
     Stale {
         projected: String,
         plane: String,
-        config_tracked: bool,
+        config_kept: Option<KeptConfig>,
     },
     /// Owned outputs that were edited, removed, or left mid-refresh.
     Damaged { commit: String, paths: Vec<String> },
@@ -120,16 +151,18 @@ pub fn inspect(worktree: &Path) -> Result<State> {
             plane: adoption.revision.commit,
         });
     };
-    let config_tracked = !tracked(&root, &[CONFIG])?.is_empty();
-    let damaged = damaged_paths(&root, &manifest, config_tracked)?;
+    let config_kept = kept_config(&root, Some(&manifest))?;
+    let damaged = damaged_paths(&root, &manifest, config_kept)?;
     // The owned file set must be the one a refresh would write now: a
     // checkout that stops (or starts) tracking the config changes it with
     // no plane move, and until a refresh the settings are not applied.
-    let expected: Vec<String> = render(&adoption, !config_tracked)?.into_keys().collect();
+    let expected: Vec<String> = render(&adoption, config_kept.is_none())?
+        .into_keys()
+        .collect();
     let owned: Vec<&String> = manifest
         .files
         .keys()
-        .filter(|rel| !(config_tracked && rel.as_str() == CONFIG))
+        .filter(|rel| !(config_kept.is_some() && rel.as_str() == CONFIG))
         .collect();
     let same_files =
         owned.len() == expected.len() && owned.iter().zip(&expected).all(|(a, b)| *a == b);
@@ -145,12 +178,12 @@ pub fn inspect(worktree: &Path) -> Result<State> {
         State::Stale {
             projected: manifest.commit,
             plane: adoption.revision.commit,
-            config_tracked,
+            config_kept,
         }
     } else {
         State::Current {
             commit: manifest.commit,
-            config_tracked,
+            config_kept,
         }
     })
 }
@@ -160,16 +193,19 @@ pub fn inspect(worktree: &Path) -> Result<State> {
 /// that already holds them is left untouched.
 pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
     let root = worktree_root(worktree)?;
-    for dir in [".aida", ".aida/adoption", GUIDANCE_DIR] {
+    // Only `.aida` itself is made before the lock, which lives in it; the
+    // rest of the refresh, `info/exclude` included, runs under the lock.
+    ensure_real_dir(&root, ".aida")?;
+    let lock = open_lock(&root)?;
+    fs2::FileExt::lock_exclusive(&lock).with_context(|| format!("Failed to lock {LOCK}"))?;
+    for dir in [".aida/adoption", GUIDANCE_DIR] {
         ensure_real_dir(&root, dir)?;
     }
     crate::git_ops::ensure_aida_runtime_excluded(&root)?;
-    let lock = open_lock(&root)?;
-    fs2::FileExt::lock_exclusive(&lock).with_context(|| format!("Failed to lock {LOCK}"))?;
 
-    let config_tracked = !tracked(&root, &[CONFIG])?.is_empty();
-    let outputs = render(adoption, !config_tracked)?;
     let previous = read_manifest(&root)?;
+    let config_kept = kept_config(&root, previous.as_ref())?;
+    let outputs = render(adoption, config_kept.is_none())?;
     let mut paths: Vec<&str> = outputs.keys().map(String::as_str).collect();
     paths.push(MANIFEST);
     if let Some(found) = tracked(&root, &paths)?.first() {
@@ -227,8 +263,7 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
         if !previous.as_ref().is_some_and(|m| m.owns(rel, &hash)) {
             bail!(
                 "{rel} was not written by the adoption projection, or was edited since; refused \
-                 and left as is. Move any local change into adoption/settings.toml on the plane, \
-                 then delete {rel} and refresh."
+                 and left as is. {MOVE_LOCAL_CHANGE} Then delete {rel} and refresh."
             );
         }
         unchanged &= hashes.get(rel) == Some(&hash);
@@ -246,7 +281,7 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
         return Ok(Outcome {
             commit: finished.commit,
             written: false,
-            config_tracked,
+            config_kept,
         });
     }
 
@@ -274,7 +309,7 @@ pub fn refresh(worktree: &Path, adoption: &Adoption) -> Result<Outcome> {
     Ok(Outcome {
         commit: finished.commit,
         written: true,
-        config_tracked,
+        config_kept,
     })
 }
 
@@ -307,11 +342,11 @@ pub enum Delivery {
     /// unreadable, so nothing is delivered; `reason` says which.
     Withheld { reason: String },
     /// The projected revision, its `(name, body)` guidance documents, and
-    /// whether the product branch's tracked config kept the settings out.
+    /// the existing config that kept the settings out, if any.
     Verified {
         commit: String,
         docs: Vec<(String, String)>,
-        config_tracked: bool,
+        config_kept: Option<KeptConfig>,
     },
 }
 
@@ -328,8 +363,8 @@ pub fn delivered_guidance(worktree: &Path) -> Delivery {
         Ok(State::NotAdopted) => Delivery::None,
         Ok(State::Current {
             commit,
-            config_tracked,
-        }) => verified_guidance(&root, commit, config_tracked)
+            config_kept,
+        }) => verified_guidance(&root, commit, config_kept)
             .unwrap_or_else(|| withheld("an owned guidance file changed while it was read".into())),
         Ok(State::NotProjected { plane }) => {
             withheld(format!("plane {plane} has not been projected here"))
@@ -347,7 +382,11 @@ pub fn delivered_guidance(worktree: &Path) -> Delivery {
     }
 }
 
-fn verified_guidance(root: &Path, commit: String, config_tracked: bool) -> Option<Delivery> {
+fn verified_guidance(
+    root: &Path,
+    commit: String,
+    config_kept: Option<KeptConfig>,
+) -> Option<Delivery> {
     let manifest = read_manifest(root).ok()??;
     if !manifest.pending.is_empty() || manifest.commit != commit {
         return None;
@@ -370,14 +409,13 @@ fn verified_guidance(root: &Path, commit: String, config_tracked: bool) -> Optio
     Some(Delivery::Verified {
         commit,
         docs,
-        config_tracked,
+        config_kept,
     })
 }
 
 /// Whether the worktree holding `project_root` has an adoption projection.
 /// Plain file checks up to the worktree top (the first directory with a
-/// `.git`), cheap enough for every writer guard, so a writer rooted in a
-/// subdirectory is covered too.
+/// `.git`), so a writer rooted in a subdirectory is covered too.
 pub fn is_projected(project_root: &Path) -> bool {
     for dir in project_root.ancestors() {
         if dir.join(MANIFEST).is_file() {
@@ -390,35 +428,74 @@ pub fn is_projected(project_root: &Path) -> bool {
     false
 }
 
-/// Whether `path` is a file the adoption projection owns, so a config
-/// writer must not edit it in place.
-pub fn owns(path: &Path) -> bool {
+/// Whether the clone holding `project_root` is adopted, projected here yet
+/// or not: a new clone or linked worktree is adopted before its first
+/// launch projects anything. The projection is the fast path; otherwise
+/// the plane is discovered and its namespace looked up. A namespace that
+/// exists but does not parse still counts as adopted. A plane that cannot
+/// be discovered (remotes that disagree, say) adopts nothing, since no
+/// launch can project from it either; that refusal surfaces there.
+pub fn is_adopted(project_root: &Path) -> bool {
+    if is_projected(project_root) {
+        return true;
+    }
+    match adoption_plane::discover(project_root) {
+        Ok(Some(plane)) => !matches!(adoption_plane::load(&plane), Ok(None)),
+        _ => false,
+    }
+}
+
+/// Refuse a write to `path` when it is a file the adoption projection
+/// owns. Fails closed: a manifest that exists but cannot be read refuses
+/// too, since it may own the path. Every config writer goes through
+/// [`crate::fs_atomic::write_config_atomic`], which calls this.
+pub fn refuse_owned_write(path: &Path) -> Result<()> {
     let Some(root) = path
         .ancestors()
         .find(|dir| dir.file_name().is_some_and(|n| n == ".aida"))
         .and_then(Path::parent)
     else {
-        return false;
+        return Ok(());
     };
     let Ok(rel) = path.strip_prefix(root) else {
-        return false;
+        return Ok(());
     };
     let rel = rel.to_string_lossy();
-    read_manifest(root)
-        .ok()
-        .flatten()
-        .is_some_and(|m| m.files.contains_key(rel.as_ref()) || m.pending.contains_key(rel.as_ref()))
+    match read_manifest(root) {
+        Ok(None) => Ok(()),
+        Ok(Some(m))
+            if !m.files.contains_key(rel.as_ref()) && !m.pending.contains_key(rel.as_ref()) =>
+        {
+            Ok(())
+        }
+        Ok(Some(_)) => bail!(owned_write_refusal(path)),
+        Err(e) => bail!(
+            "{}: {e:#}. It may record {} as generated from the shared adoption plane, so the \
+             write was refused; refresh the projection with a fresh `aida agent` launch.",
+            root.join(MANIFEST).display(),
+            path.display()
+        ),
+    }
 }
 
-/// The refusal a writer reports for an owned projection file. It names
-/// both destinations, since the plane accepts only shared policy keys: a
-/// local path or preference never belongs on it.
+/// Whether `path` is a file the adoption projection owns, or might own
+/// behind an unreadable manifest.
+pub fn owns(path: &Path) -> bool {
+    refuse_owned_write(path).is_err()
+}
+
+/// Where a change to a projected file belongs. It names both
+/// destinations, since the plane accepts only shared policy keys: a local
+/// path or preference never belongs on it.
+const MOVE_LOCAL_CHANGE: &str = "A shared policy setting belongs in adoption/settings.toml on \
+     the aida-store plane. A local path or personal preference does not: set it in your user \
+     config, ~/.aida/config.toml, or in the config tracked on the default branch if the project \
+     agreed to keep one.";
+
+/// The refusal a writer reports for an owned projection file.
 pub fn owned_write_refusal(path: &Path) -> String {
     format!(
-        "{} is generated from the shared adoption plane; refused to edit it. A shared \
-         policy setting belongs in adoption/settings.toml on the aida-store plane. A local \
-         path or personal preference does not: set it in your user config, ~/.aida/config.toml, \
-         or in the config tracked on the default branch if the project agreed to keep one.",
+        "{} is generated from the shared adoption plane; refused to edit it. {MOVE_LOCAL_CHANGE}",
         path.display()
     )
 }
@@ -463,10 +540,14 @@ fn write_manifest(root: &Path, manifest: &Manifest) -> Result<()> {
 /// Owned files that are pending, edited or missing. A recorded config the
 /// product branch now tracks is the product's, not damage: the next refresh
 /// forgets it.
-fn damaged_paths(root: &Path, manifest: &Manifest, config_tracked: bool) -> Result<Vec<String>> {
+fn damaged_paths(
+    root: &Path,
+    manifest: &Manifest,
+    config_kept: Option<KeptConfig>,
+) -> Result<Vec<String>> {
     let mut damaged: Vec<String> = manifest.pending.keys().cloned().collect();
     for (rel, hash) in &manifest.files {
-        if config_tracked && rel == CONFIG {
+        if config_kept.is_some() && rel == CONFIG {
             continue;
         }
         let intact = read_regular(root, rel)?.is_some_and(|bytes| sha256(&bytes) == *hash);
@@ -477,6 +558,24 @@ fn damaged_paths(root: &Path, manifest: &Manifest, config_tracked: bool) -> Resu
     Ok(damaged)
 }
 
+/// Whether an existing `.aida/config.toml` keeps the plane's settings out:
+/// the product branch tracks it, or it is a local file `manifest` does not
+/// record. A recorded file is owned, so an edit to it is damage instead.
+fn kept_config(root: &Path, manifest: Option<&Manifest>) -> Result<Option<KeptConfig>> {
+    if !tracked(root, &[CONFIG])?.is_empty() {
+        return Ok(Some(KeptConfig::Tracked));
+    }
+    let recorded =
+        manifest.is_some_and(|m| m.files.contains_key(CONFIG) || m.pending.contains_key(CONFIG));
+    let exists = match std::fs::symlink_metadata(root.join(CONFIG)) {
+        Ok(meta) if meta.is_file() => true,
+        Ok(_) => bail!("{CONFIG} is not a regular file; the adoption projection refused"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(e.into()),
+    };
+    Ok((exists && !recorded).then_some(KeptConfig::Local))
+}
+
 /// The top of the worktree holding `path`.
 fn worktree_root(path: &Path) -> Result<PathBuf> {
     let top = git(path, &["rev-parse", "--show-toplevel"])?;
@@ -484,17 +583,25 @@ fn worktree_root(path: &Path) -> Result<PathBuf> {
 }
 
 /// `rel` under `root` as a real directory, created if missing; a symlink or
-/// non-directory anywhere on the way refuses.
+/// non-directory anywhere on the way refuses. A concurrent creator winning
+/// the race is re-checked, not reported as a failure.
 fn ensure_real_dir(root: &Path, rel: &str) -> Result<()> {
     let path = root.join(rel);
-    match std::fs::symlink_metadata(&path) {
-        Ok(meta) if meta.is_dir() => Ok(()),
-        Ok(_) => bail!("{rel} is not a plain directory; the adoption projection refused"),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir(&path).with_context(|| format!("Failed to create {rel}"))
+    for _ in 0..2 {
+        match std::fs::symlink_metadata(&path) {
+            Ok(meta) if meta.is_dir() => return Ok(()),
+            Ok(_) => bail!("{rel} is not a plain directory; the adoption projection refused"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                match std::fs::create_dir(&path) {
+                    Ok(()) => return Ok(()),
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(e) => return Err(e).with_context(|| format!("Failed to create {rel}")),
+                }
+            }
+            Err(e) => return Err(e.into()),
         }
-        Err(e) => Err(e.into()),
     }
+    bail!("{rel} kept changing while it was created; the adoption projection refused")
 }
 
 /// Open the refresh lock without following a symlink: a planted link must

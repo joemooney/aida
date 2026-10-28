@@ -642,3 +642,135 @@ mod tests {
          test fixture: {hits:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// STORY-1741: every project-config writer goes through the one guarded
+// writer, `aida_core::write_config_atomic`, which refuses a file the
+// adoption projection owns. A raw write would overwrite shared policy.
+// ---------------------------------------------------------------------------
+
+/// Write primitives that bypass the adoption guard.
+const RAW_WRITES: &[&str] = &[
+    "write_atomic(",
+    "fs::write(",
+    "File::create(",
+    "OpenOptions::new()",
+];
+
+/// The guarded writer, directly or through the shared TOML editor, whose
+/// only write is the guarded one.
+const GUARDED_WRITES: &[&str] = &["write_config_atomic(", "config_edit::"];
+
+/// Inventoried `write` files that put no bytes in a config themselves.
+const WRITE_CHANNEL_EXEMPT: &[(&str, &str)] = &[
+    (
+        "aida-cli-lib/src/config_commit.rs",
+        "commits the file with git; never writes it",
+    ),
+    (
+        "aida-cli-lib/src/lib.rs",
+        "its one site (read_review_mode) only reads; config writes live in their modules",
+    ),
+    (
+        "aida-core/src/adoption_projection.rs",
+        "the projection itself, under its own ownership checks",
+    ),
+];
+
+/// Text that names the project config path.
+fn names_project_config(text: &str) -> bool {
+    text.contains("config.toml\"")
+        || text.contains("CONFIG_REL_PATH")
+        || text.contains("config_path")
+        || text.contains("adoption_projection::CONFIG")
+}
+
+/// Raw writes whose target (the call's line or the two after it, for a
+/// call rustfmt split) names the project config, as `file:line`.
+fn raw_config_writes(file: &str, source: &str) -> Vec<String> {
+    let lines = production_lines(source);
+    let mut out = Vec::new();
+    for (i, (n, line)) in lines.iter().enumerate() {
+        if line.trim_start().starts_with("//") {
+            continue;
+        }
+        let Some(at) = RAW_WRITES.iter().filter_map(|w| line.find(w)).min() else {
+            continue;
+        };
+        let mut target = line[at..].to_string();
+        for (_, next) in lines.iter().skip(i + 1).take(2) {
+            target.push_str(next);
+        }
+        if names_project_config(&target) {
+            out.push(format!("{file}:{n}"));
+        }
+    }
+    out
+}
+
+fn uses_guarded_writer(source: &str) -> bool {
+    production_lines(source)
+        .iter()
+        .any(|(_, l)| GUARDED_WRITES.iter().any(|g| l.contains(g)))
+}
+
+#[test]
+fn every_project_config_writer_goes_through_the_adoption_guard() {
+    let root = workspace_root();
+    let inventory = parse_inventory(
+        &std::fs::read_to_string(root.join(INVENTORY_RELPATH)).expect("inventory exists"),
+    );
+    let mut complaints = Vec::new();
+    for krate in SCANNED_CRATES {
+        for file in rs_files(&root.join(krate).join("src")) {
+            let rel = file
+                .strip_prefix(&root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            if rel.ends_with("_tests.rs") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&file) else {
+                continue;
+            };
+            for site in raw_config_writes(&rel, &text) {
+                complaints.push(format!(
+                    "{site}: a raw write names the project config; use \
+                     aida_core::write_config_atomic"
+                ));
+            }
+        }
+    }
+    for (file, (channels, _)) in &inventory.readers {
+        if !channels.iter().any(|c| c == "write")
+            || WRITE_CHANNEL_EXEMPT.iter().any(|(f, _)| f == file)
+        {
+            continue;
+        }
+        let source = std::fs::read_to_string(root.join(file)).unwrap_or_default();
+        if !uses_guarded_writer(&source) {
+            complaints.push(format!(
+                "{file} is inventoried as a config writer but never calls \
+                 write_config_atomic or config_edit; route its write through the guard, \
+                 or exempt it here with the reason it writes no config"
+            ));
+        }
+    }
+    assert!(
+        complaints.is_empty(),
+        "adoption write guard failed:\n  {}",
+        complaints.join("\n  ")
+    );
+}
+
+#[test]
+fn the_write_guard_detector_sees_a_split_raw_write() {
+    let src = "fn f(config_path: &Path) {\n    std::fs::write(\n        config_path,\n        \"x\",\n    )\n    .unwrap();\n}\n";
+    assert_eq!(raw_config_writes("x.rs", src), vec!["x.rs:2".to_string()]);
+    let guarded = "fn f(p: &Path) {\n    aida_core::write_config_atomic(config_path, \"x\")?;\n}\n";
+    assert!(raw_config_writes("x.rs", guarded).is_empty());
+    assert!(uses_guarded_writer(guarded));
+    let tested = "#[cfg(test)]\nmod tests {\n    fn t() {\n        std::fs::write(config_path, \"\").unwrap();\n    }\n}\n";
+    assert!(raw_config_writes("x.rs", tested).is_empty());
+}

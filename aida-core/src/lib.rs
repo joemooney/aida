@@ -247,7 +247,7 @@ pub use db::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, Version
 pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
 pub use dispenser::{FileDispenser, SqliteDispenser};
-pub use fs_atomic::{read_atomic, write_atomic};
+pub use fs_atomic::{read_atomic, write_atomic, write_config_atomic};
 pub use import::{
     create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,
     ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,

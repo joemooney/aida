@@ -98,17 +98,13 @@ pub(crate) fn load_doc(path: &Path) -> Result<DocumentMut> {
 }
 
 pub(crate) fn save_doc(path: &Path, doc: &DocumentMut) -> Result<()> {
-    // An adopted worktree's config is projected from the shared plane; an
-    // in-place edit would be silently lost or block the next refresh.
-    // trace:STORY-1741 | ai:claude
-    if aida_core::adoption_projection::owns(path) {
-        anyhow::bail!(aida_core::adoption_projection::owned_write_refusal(path));
-    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    aida_core::write_atomic(path, doc.to_string())
+    // An adopted worktree's config is projected from the shared plane; the
+    // guarded writer refuses an in-place edit. trace:STORY-1741 | ai:claude
+    aida_core::write_config_atomic(path, doc.to_string())
         .with_context(|| format!("failed to write {}", path.display()))
 }
 

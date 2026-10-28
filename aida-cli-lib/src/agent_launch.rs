@@ -5505,9 +5505,6 @@ pub(crate) fn agent_guidance_files(
         .collect()
 }
 
-const CONFIG_TRACKED_NOTE: &str = "the product branch tracks .aida/config.toml, so the \
-                                   adoption plane's settings are not applied here";
-
 /// Bring the launch worktree's adoption projection up to the plane before
 /// the context is rendered, returning the warning to report, if any. A
 /// failure never blocks the launch: it is reported, and the context then
@@ -5518,10 +5515,10 @@ fn refresh_adoption_projection(worktree: &std::path::Path) -> Option<String> {
         Err(e) => Some(format!(
             "warning: shared adoption guidance not refreshed, so none is delivered: {e:#}"
         )),
-        Ok(Some(outcome)) if outcome.config_tracked => {
-            Some(format!("warning: {CONFIG_TRACKED_NOTE}"))
-        }
-        Ok(_) => None,
+        Ok(Some(outcome)) => outcome
+            .config_kept
+            .map(|kept| format!("warning: {}", kept.note())),
+        Ok(None) => None,
     }
 }
 
@@ -5539,14 +5536,14 @@ pub(crate) fn render_adoption_guidance_section(worktree: &std::path::Path) -> St
         Delivery::Verified {
             commit,
             docs,
-            config_tracked,
+            config_kept,
         } => {
             let mut out = format!(
                 "## Project Guidance\n\nShared guidance from the adoption plane, revision \
                  {commit}.\n\n"
             );
-            if config_tracked {
-                out.push_str(&format!("_Note: {CONFIG_TRACKED_NOTE}._\n\n"));
+            if let Some(kept) = config_kept {
+                out.push_str(&format!("_Note: {}._\n\n", kept.note()));
             }
             for (name, body) in docs {
                 out.push_str(&format!("### {name}\n\n{}\n\n", body.trim_end()));
@@ -5564,12 +5561,10 @@ pub(crate) fn describe_adoption_state(worktree: &std::path::Path) -> String {
     use aida_core::adoption_projection::{inspect, State};
     const VIA: &str = "delivered in the launch context file; harnesses started outside \
                        `aida agent` do not receive shared guidance";
-    let tracked = |config_tracked: bool| {
-        if config_tracked {
-            format!("; {CONFIG_TRACKED_NOTE}")
-        } else {
-            String::new()
-        }
+    let kept = |config_kept: Option<aida_core::adoption_projection::KeptConfig>| {
+        config_kept
+            .map(|kept| format!("; {}", kept.note()))
+            .unwrap_or_default()
     };
     match inspect(worktree) {
         Ok(State::NotAdopted) => "not adopted".to_string(),
@@ -5578,16 +5573,16 @@ pub(crate) fn describe_adoption_state(worktree: &std::path::Path) -> String {
         }
         Ok(State::Current {
             commit,
-            config_tracked,
-        }) => format!("current at {commit} ({VIA}){}", tracked(config_tracked)),
+            config_kept,
+        }) => format!("current at {commit} ({VIA}){}", kept(config_kept)),
         Ok(State::Stale {
             projected,
             plane,
-            config_tracked,
+            config_kept,
         }) => format!(
             "projected {projected}, plane at {plane} (a launch refreshes it, and delivers \
              nothing if that fails; {VIA}){}",
-            tracked(config_tracked)
+            kept(config_kept)
         ),
         Ok(State::Damaged { commit, paths }) => format!(
             "projection of {commit} damaged ({}); no shared guidance is delivered",
