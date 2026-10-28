@@ -244,7 +244,13 @@ fn worktree_from_leases_dir(dir: &Path, session_id: &str) -> Option<PathBuf> {
     let entries = std::fs::read_dir(dir).ok()?;
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+        // Skip `.activity.toml` / `.manifest.toml` companions and staging files.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+        if p.extension().and_then(|s| s.to_str()) != Some("toml")
+            || p.file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(crate::leases::is_lease_companion)
+        {
             continue;
         }
         let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
