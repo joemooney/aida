@@ -8,12 +8,12 @@ description: |-
 
   PR: #3019
   Reviewed sha: e3fec82ea230fd3f382b64c45a68a3e9aa54ae6a
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T10:38:07.521454956Z
-modified_at: 2026-10-28T11:59:44.372073947Z
+modified_at: 2026-10-28T13:06:42.765706699Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-028
@@ -40,6 +40,20 @@ history:
   timestamp: 2026-10-28T11:59:45.913288420Z
   session_id: 2e248d7c-99e2-4ccc-9a75-a02abc637e50
   changes: []
+- id: 01a1829e-b9c9-7693-b53a-84c463d3e513
+  author: aida-auto-bump
+  timestamp: 2026-10-28T13:06:42.761502663Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1829e-b9cd-7251-b053-7cca7ffecad4
+  timestamp: 2026-10-28T13:06:42.765700982Z
+  agent: aida
+  commit_sha: 7335d1de3222f0710ff32f394a196a064eef7130
+  summary: 'Comment-only fix: dispatch_types.rs module doc now scopes floor imports to callers outside gate/ and names the gate-internal facade re-export at gate/dispatch_deps.rs:189; all claims verified against the tree; PR CI green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 75d12e4354ff69020584f67d8d0066b47bffe587
@@ -48,3 +62,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 18b1bc00b15
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T13:06:42.761498345Z
+  completion_sha: 7335d1de3222f0710ff32f394a196a064eef7130
