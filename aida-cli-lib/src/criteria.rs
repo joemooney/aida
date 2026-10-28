@@ -830,7 +830,10 @@ fn scan_rust_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> V
             traces.extend(traces_in_line(line, spec));
             let next = (*depth as isize + braces.delta(line)).max(0) as usize;
             *depth = next;
-            if next == 0 && line_no > *start {
+            // A header line with no brace (e.g. a `where` clause) does not
+            // close the test; only a code-level `{` starts the body.
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+            if next == 0 && line_no > *start && braces.opened() {
                 let traces = dedupe(std::mem::take(traces));
                 if !traces.is_empty() {
                     out.push(TracedTest {
@@ -1382,6 +1385,21 @@ mod tests {
             "T-1",
         );
         assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+    #[test]
+    fn traced_test_with_where_clause_header_keeps_its_whole_body() {
+        let src = "#[test]\nfn generic<T>()\nwhere\n    T: Default,\n{\n    // trace:T-1.AC1 | ai:claude\n    assert!(true);\n}\n";
+        let tests = super::scan_rust_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.rs"),
+            src,
+            "T-1",
+        );
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert_eq!(tests[0].line, 2);
         assert_eq!(tests[0].traces, vec!["T-1.AC1".to_string()]);
     }
 
