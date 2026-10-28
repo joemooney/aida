@@ -602,3 +602,23 @@ fn scaffolding_writes_in_a_plain_clone_with_a_non_orphan_store() {
     crate::scaffold_refresh::refresh_agent_packs_at(&top, None, None).unwrap();
     assert!(top.join(".claude").exists() || top.join("AGENTS.md").exists());
 }
+
+/// Every `aida init` mode that writes product files refuses in an adopted
+/// clone, and runs as before in a plain one.
+#[test]
+fn product_writing_init_modes_refuse_in_an_adopted_clone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (top, _) = adopted(&tmp.path().join("p"), SETTINGS);
+    for flag in ["--minimal", "--centralized", "--sibling", "--store-path"] {
+        let err = crate::init_cmd::refuse_init_mode_in_adopted_clone(&top, flag)
+            .expect_err(flag)
+            .to_string();
+        assert!(err.contains(&format!("aida init {flag}")), "{err}");
+    }
+    assert!(git(&top, &["status", "--porcelain"], None).is_empty());
+
+    let plain = tmp.path().join("plain");
+    std::fs::create_dir_all(&plain).unwrap();
+    git(&plain, &["init", "-q", "-b", "main"], None);
+    crate::init_cmd::refuse_init_mode_in_adopted_clone(&plain, "--minimal").unwrap();
+}

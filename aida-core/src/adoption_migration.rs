@@ -6,13 +6,18 @@
 //! Git objects and compares it with what this build's scaffolder generates.
 //! It writes nothing: no worktree file, no index entry, no ref, no store
 //! object. Removal stays a separate, reviewed product change; the inventory
-//! only proposes it. A file is proposed for removal only when its committed
-//! bytes are exactly what this build generates, so an AIDA header alone
-//! (copied or spoofed) never makes a file removable. Authored or mixed
-//! instruction files (`AGENTS.md`, `CLAUDE.md`), harness settings and
-//! `.gitignore` are kept. A tracked `.aida/config.toml` is split into the
-//! policy keys the plane admits and the keys that stay in trusted or local
-//! configuration; executable settings never become shared settings.
+//! only proposes it. A file is proposed for removal only when it is
+//! non-executable guidance the plane can deliver to agent launches
+//! (generated Markdown such as `docs/agents/*.md`) and its committed bytes
+//! are exactly what this build generates, so an AIDA header alone (copied
+//! or spoofed) never makes a file removable. Hooks, commands, skills, harness settings and the
+//! Codex/Antigravity artifacts are executable configuration: the plane never
+//! carries them (they stay under config-trust), so they are always kept.
+//! Authored or mixed instruction files (`AGENTS.md`, `CLAUDE.md`), seed
+//! starters such as `README.md`, and `.gitignore` are product content. A
+//! tracked `.aida/config.toml` is split into the policy keys the plane
+//! admits and the keys that stay in trusted or local configuration;
+//! executable settings never become shared settings.
 // trace:STORY-1741 | ai:claude
 
 use crate::adoption_plane::{self, PolicySplit};
@@ -122,6 +127,11 @@ pub fn inventory(project_root: &Path) -> Result<Inventory> {
         let Some((meta, path)) = record.split_once('\t') else {
             continue;
         };
+        // A seed starter (README.md) is product content even while it still
+        // matches AIDA's starter text.
+        if is_seed(path) && !on_aida_path(path) {
+            continue;
+        }
         if !(expected.contains_key(path) || on_aida_path(path)) {
             continue;
         }
@@ -149,14 +159,17 @@ pub fn inventory(project_root: &Path) -> Result<Inventory> {
             }
             Some(text) => {
                 let expected = expected.get(path).map(String::as_str);
-                // A path the scaffolder also seeds (a README starter) is the
-                // product's own unless AIDA's output or header is in it.
+                // A path off the AIDA paths is the product's own unless
+                // AIDA's output or header is in it.
                 let generated =
                     expected.is_some_and(|e| crate::scaffolding::generated_text_matches(&text, e));
                 if !on_aida_path(path) && !generated && !has_generated_header(&text) {
                     continue;
                 }
-                classify(path, &text, expected)
+                let Some(entry) = classify(path, &text, expected) else {
+                    continue;
+                };
+                entry
             }
         };
         entries.push(entry);
@@ -179,6 +192,7 @@ fn generated(root: &Path) -> BTreeMap<String, String> {
         .preview(&crate::models::RequirementsStore::new())
         .artifacts
         .into_iter()
+        .filter(|a| a.category() != crate::scaffolding::FileCategory::Seed)
         .map(|a| (a.path.to_string_lossy().replace('\\', "/"), a.content))
         .collect()
 }
@@ -202,20 +216,46 @@ fn on_aida_path(path: &str) -> bool {
     FILES.contains(&path) || DIRS.iter().any(|d| path.starts_with(d)) || claude_owned
 }
 
-fn classify(path: &str, text: &str, expected: Option<&str>) -> Entry {
-    let entry = |class, proposal, detail: &str| Entry {
-        path: path.to_string(),
-        class,
-        proposal,
-        detail: detail.to_string(),
+fn is_seed(path: &str) -> bool {
+    crate::scaffolding::FileCategory::from_path(Path::new(path))
+        == crate::scaffolding::FileCategory::Seed
+}
+
+/// Non-executable guidance the plane can deliver to agent launches as
+/// guidance documents: generated Markdown outside the harness directories
+/// (the agent docs under `docs/agents/`). `CLAUDE.local.md` is loaded by
+/// the harness itself, so it is not.
+fn plane_guidance(path: &str) -> bool {
+    path.ends_with(".md") && !executable(path) && !is_seed(path) && path != "CLAUDE.local.md"
+}
+
+/// Executable harness configuration: hooks, commands, skills, harness
+/// settings and the Codex/Antigravity artifacts. The plane never carries
+/// these; they stay under config-trust on the product branch.
+fn executable(path: &str) -> bool {
+    [".claude/", ".codex/", ".agents/", ".antigravity/"]
+        .iter()
+        .any(|d| path.starts_with(d))
+        || path == ".mcp.json"
+        || path.ends_with(".sh")
+}
+
+const EXECUTABLE_KEPT: &str = "executable harness configuration (hook, command, skill or \
+     harness settings); the adoption plane carries only inert settings and guidance, so it \
+     stays on the product branch under config-trust";
+
+/// `None` when the file carries nothing of AIDA's (a product-only
+/// `.gitignore`).
+fn classify(path: &str, text: &str, expected: Option<&str>) -> Option<Entry> {
+    let entry = |class, proposal, detail: &str| {
+        Some(Entry {
+            path: path.to_string(),
+            class,
+            proposal,
+            detail: detail.to_string(),
+        })
     };
-    if expected.is_some_and(|e| crate::scaffolding::generated_text_matches(text, e)) {
-        return entry(
-            Class::Generated,
-            Proposal::Remove,
-            "matches this build's output; adoption delivers guidance from the plane instead",
-        );
-    }
+    let generated = expected.is_some_and(|e| crate::scaffolding::generated_text_matches(text, e));
     match path {
         "AGENTS.md" | "CLAUDE.md" => {
             return entry(
@@ -231,40 +271,59 @@ fn classify(path: &str, text: &str, expected: Option<&str>) -> Entry {
                 .map(str::trim)
                 .filter(|l| !l.starts_with('#') && l.contains(".aida"))
                 .collect();
-            return if lines.is_empty() {
-                entry(Class::Mixed, Proposal::Keep, "no AIDA entries")
-            } else {
-                entry(
-                    Class::Mixed,
-                    Proposal::Keep,
-                    &format!(
-                        "AIDA entries can be deleted by hand (adoption ignores its files \
-                         through .git/info/exclude): {}",
-                        lines.join(", ")
-                    ),
-                )
-            };
+            if lines.is_empty() {
+                return None;
+            }
+            return entry(
+                Class::Mixed,
+                Proposal::Keep,
+                &format!(
+                    "AIDA entries can be deleted by hand (adoption ignores its files \
+                     through .git/info/exclude): {}",
+                    lines.join(", ")
+                ),
+            );
         }
         _ => {}
     }
-    if has_generated_header(text) {
-        return entry(
-            Class::GeneratedEdited,
+    let class = if generated {
+        Class::Generated
+    } else if has_generated_header(text) {
+        Class::GeneratedEdited
+    } else {
+        Class::Ambiguous
+    };
+    if executable(path) {
+        return entry(class, Proposal::Keep, EXECUTABLE_KEPT);
+    }
+    match class {
+        Class::Generated if plane_guidance(path) => entry(
+            class,
+            Proposal::Remove,
+            "generated guidance matching this build's output; publish it as plane \
+             guidance and agent launches deliver it from there instead",
+        ),
+        Class::Generated => entry(
+            class,
+            Proposal::Keep,
+            "matches this build's output, but it is not guidance the plane delivers",
+        ),
+        Class::GeneratedEdited => entry(
+            class,
             Proposal::Review,
             "has an AIDA generated header but is not this build's output (edited, another \
              version, or a copied header); review it for local changes before removing",
-        );
+        ),
+        _ => entry(
+            class,
+            Proposal::Review,
+            if path.ends_with(".json") || path.ends_with(".toml") || path.contains("/hooks") {
+                "settings with no AIDA marker; they may hold your own entries"
+            } else {
+                "on an AIDA path but not generated by this build; review it"
+            },
+        ),
     }
-    let harness = path.ends_with(".json") || path.ends_with(".toml") || path.contains("/hooks");
-    entry(
-        Class::Ambiguous,
-        Proposal::Review,
-        if harness {
-            "harness or hook settings with no AIDA marker; they may hold your own entries"
-        } else {
-            "on an AIDA path but not generated by this build; review it"
-        },
-    )
 }
 
 fn classify_config(text: &str) -> (Entry, Option<PolicySplit>) {

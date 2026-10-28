@@ -170,10 +170,20 @@ fn uninstall(cwd: &Path, dry_run: bool) -> Result<()> {
     if removal.removed.is_empty() && hooks.removed.is_empty() {
         println!("Nothing to remove: no adoption projection or AIDA git hook here.");
     }
+    if !hooks.removed.is_empty() {
+        // Git hooks live in the clone's shared hooks directory, not in one
+        // worktree. trace:STORY-1741 | ai:claude
+        println!(
+            "Git hooks are shared by the whole clone, so the AIDA git hooks are gone for \
+             every worktree of it, the aida-store worktree included. Nothing reinstalls \
+             them: neither `aida adoption refresh` nor `aida agent` does."
+        );
+    }
     println!(
         "The aida-store branch and worktree, the adoption locator, this clone's node \
          identity and every product file are left as they are. While the clone stays \
-         adopted, `aida agent` and `aida adoption refresh` project it again."
+         adopted, `aida agent` and `aida adoption refresh` project the plane's settings \
+         and guidance again."
     );
     if dry_run {
         println!("Dry run: nothing was removed.");

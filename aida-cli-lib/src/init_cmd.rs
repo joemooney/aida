@@ -5130,6 +5130,21 @@ fn maybe_scaffold_codex_prompts_on_init(project_root: &std::path::Path) {
     }
 }
 
+/// Refuse an `aida init` mode that writes product files (`--sibling`,
+/// `--minimal`, `--centralized`) in an adopted clone; only the default
+/// route knows how to set an adopted clone up without them.
+// trace:STORY-1741 | ai:claude
+pub(crate) fn refuse_init_mode_in_adopted_clone(cwd: &std::path::Path, flag: &str) -> Result<()> {
+    if adopted_init_route(cwd)? {
+        anyhow::bail!(
+            "This clone is adopted from a shared AIDA plane, so `aida init {flag}` would \
+             write product files; refused. Run `aida init` without {flag}; a sibling plane \
+             is named in the adoption locator."
+        );
+    }
+    Ok(())
+}
+
 /// Whether `aida init` in `cwd` must take the adopted-clone bootstrap.
 /// Refuses when the clone shows adoption evidence but its plane cannot be
 /// read: writing product files is never the fallback.
@@ -5574,13 +5589,12 @@ pub(crate) fn handle_init_distributed_sibling(
     // Sibling init writes `.aida/config.toml` and scaffolding; an adopted
     // clone names a sibling plane in its adoption locator instead.
     // trace:STORY-1741 | ai:claude
-    if adopted_init_route(&cwd)? {
-        anyhow::bail!(
-            "This clone is adopted from a shared AIDA plane, so `aida init --sibling` would \
-             write product files; refused. Run `aida init` without --sibling or --store-path; \
-             a sibling plane is named in the adoption locator."
-        );
-    }
+    let flag = if store_path_arg.is_some() {
+        "--store-path"
+    } else {
+        "--sibling"
+    };
+    refuse_init_mode_in_adopted_clone(&cwd, flag)?;
     let aida_dir = cwd.join(".aida");
     let footprint = resolve_init_footprint(&cwd, footprint)?;
     // BUG-608/STORY-676: the store is a separate repo at an explicit relative (or
@@ -6787,6 +6801,7 @@ fn run_init(
     // / MCP / skills / roles machine. Proves the 60-second magic needs no
     // setup. Short-circuits before every heavy init path. trace:STORY-757
     if *minimal {
+        refuse_init_mode_in_adopted_clone(&std::env::current_dir()?, "--minimal")?;
         handle_init_minimal(*force)?;
         return Ok(());
     }
@@ -6829,6 +6844,7 @@ fn run_init(
     // the deprecated SQLite-canonical path.
     // trace:EPIC-1-001 | ai:claude
     if *centralized {
+        refuse_init_mode_in_adopted_clone(&std::env::current_dir()?, "--centralized")?;
         self::handle_init_command(
             *no_skills,
             agent.as_deref(),

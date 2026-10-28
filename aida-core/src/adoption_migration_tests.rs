@@ -70,13 +70,16 @@ fn the_inventory_classifies_tracked_scaffolding_and_writes_nothing() {
         .iter()
         .find(|(path, _)| path.starts_with(".claude/skills/aida-"))
         .expect("this build generates a Claude skill");
+    let (hook, hook_body) = expected
+        .iter()
+        .find(|(path, _)| path.starts_with(".claude/hooks/aida-") && path.ends_with(".sh"))
+        .expect("this build generates a Claude hook");
     let (edited, edited_body) = expected
         .iter()
-        .find(|(path, body)| {
-            *path != skill && path.ends_with(".md") && body.contains("AIDA Generated")
-        })
-        .expect("a second generated markdown file");
+        .find(|(path, body)| plane_guidance(path) && body.contains("AIDA Generated"))
+        .expect("generated guidance with a header");
     put(&top, skill, body);
+    put(&top, hook, hook_body);
     put(&top, edited, &format!("{edited_body}\nmy local rule\n"));
     put(
         &top,
@@ -104,8 +107,12 @@ fn the_inventory_classifies_tracked_scaffolding_and_writes_nothing() {
             .find(|e| e.path == path)
             .unwrap_or_else(|| panic!("{path} not inventoried: {:?}", inv.entries))
     };
-    assert_eq!(find(skill).class, Class::Generated);
-    assert_eq!(find(skill).proposal, Proposal::Remove);
+    // Executable scaffolding the plane never carries is kept even when it is
+    // byte for byte this build's output.
+    for path in [skill, hook] {
+        assert_eq!(find(path).class, Class::Generated);
+        assert_eq!(find(path).proposal, Proposal::Keep, "{path}");
+    }
     assert_eq!(find(edited).class, Class::GeneratedEdited);
     assert_eq!(find(edited).proposal, Proposal::Review);
     let spoofed = find(".aida/discipline/spoofed.md");
@@ -116,8 +123,9 @@ fn the_inventory_classifies_tracked_scaffolding_and_writes_nothing() {
     assert!(find(".gitignore").detail.contains(".aida-store/"));
     assert_eq!(find(".gitignore").proposal, Proposal::Keep);
     assert_eq!(find(".claude/settings.json").class, Class::Ambiguous);
+    assert_eq!(find(".claude/settings.json").proposal, Proposal::Keep);
     assert!(inv.entries.iter().all(|e| e.path != "src/main.rs"));
-    assert_eq!(inv.removable().collect::<Vec<_>>(), vec![skill.as_str()]);
+    assert_eq!(inv.removable().count(), 0, "{:?}", inv.entries);
 
     let config = find(CONFIG);
     assert_eq!(config.class, Class::Config);
@@ -177,4 +185,85 @@ fn a_repository_without_commits_has_an_empty_inventory() {
     let inv = inventory(&top).unwrap();
     assert_eq!(inv.commit, None);
     assert!(inv.entries.is_empty());
+}
+
+#[test]
+fn a_byte_identical_generated_hook_is_never_removable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = repo(&tmp.path().join("p"));
+    let expected = generated(&top);
+    let hooks: Vec<_> = expected
+        .iter()
+        .filter(|(path, _)| {
+            path.starts_with(".claude/hooks/aida-")
+                || path.starts_with(".claude/commands/aida-")
+                || path.starts_with(".codex/")
+                || path.starts_with(".agents/")
+                || path.starts_with(".antigravity/")
+        })
+        .collect();
+    assert!(
+        hooks
+            .iter()
+            .any(|(p, _)| p.starts_with(".claude/hooks/aida-")),
+        "this build generates a Claude hook"
+    );
+    for (path, body) in &hooks {
+        put(&top, path, body);
+    }
+    git(&top, &["add", "-A"]);
+    git(&top, &["commit", "-q", "-m", "hooks"]);
+
+    let inv = inventory(&top).unwrap();
+    assert_eq!(inv.removable().count(), 0, "{:?}", inv.entries);
+    for (path, _) in &hooks {
+        let entry = inv.entries.iter().find(|e| &e.path == *path).unwrap();
+        assert_eq!(entry.class, Class::Generated, "{path}");
+        assert_eq!(entry.proposal, Proposal::Keep, "{path}");
+        assert!(entry.detail.contains("config-trust"), "{}", entry.detail);
+    }
+}
+
+#[test]
+fn product_files_are_not_inventoried() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = repo(&tmp.path().join("p"));
+    // AIDA's own README starter, byte for byte, is still the product's README.
+    let mut scaffolder = crate::scaffolding::Scaffolder::new(
+        top.clone(),
+        crate::scaffolding::ScaffoldConfig::default(),
+    );
+    let readme = scaffolder
+        .preview(&crate::models::RequirementsStore::new())
+        .artifacts
+        .into_iter()
+        .find(|a| a.path == Path::new("README.md"))
+        .expect("this build seeds a README starter");
+    put(&top, "README.md", &readme.content);
+    put(&top, ".gitignore", "target/\n# build output\n*.log\n");
+    git(&top, &["add", "-A"]);
+    git(&top, &["commit", "-q", "-m", "product"]);
+
+    let inv = inventory(&top).unwrap();
+    assert!(inv.commit.is_some());
+    assert!(inv.entries.is_empty(), "{:?}", inv.entries);
+}
+
+#[test]
+fn byte_identical_generated_guidance_is_removable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let top = repo(&tmp.path().join("p"));
+    let expected = generated(&top);
+    let (guide, body) = expected
+        .iter()
+        .find(|(path, _)| plane_guidance(path))
+        .expect("this build generates .aida guidance");
+    put(&top, guide, body);
+    git(&top, &["add", "-A"]);
+    git(&top, &["commit", "-q", "-m", "guidance"]);
+
+    let inv = inventory(&top).unwrap();
+    let entry = inv.entries.iter().find(|e| &e.path == guide).unwrap();
+    assert_eq!(entry.class, Class::Generated);
+    assert_eq!(inv.removable().collect::<Vec<_>>(), vec![guide.as_str()]);
 }
