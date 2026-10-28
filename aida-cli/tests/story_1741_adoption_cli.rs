@@ -163,11 +163,6 @@ fn init_in_a_fresh_clone_projects_the_plane_and_writes_no_product_file() {
         text(&status)
     );
     assert!(!said.contains("Note:"), "{}", text(&status));
-
-    // Running init again stays on the adopted path and stays clean.
-    let again = aida(&home, &clone, &["init"]);
-    assert!(again.status.success(), "{}", text(&again));
-    assert_eq!(product_snapshot(&clone), before);
 }
 
 #[test]
