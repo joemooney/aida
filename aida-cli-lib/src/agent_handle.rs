@@ -269,7 +269,7 @@ pub(crate) fn lock_namespace(project_root: &Path) -> Result<NamespaceLock> {
 // Every allocation input is a bounded regular file. In particular, FIFO
 // counters/session indexes must not defeat the SessionStart time budget.
 // trace:STORY-1843 | ai:codex
-fn read_allocation_text(path: &Path, limit: u64) -> Result<Option<String>> {
+pub(crate) fn read_allocation_text(path: &Path, limit: u64) -> Result<Option<String>> {
     use std::io::Read;
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
@@ -298,7 +298,7 @@ fn read_allocation_text(path: &Path, limit: u64) -> Result<Option<String>> {
     Ok(Some(body))
 }
 
-fn checked_reservation(root: &Path, handle: &str) -> Result<Option<HandleReservation>> {
+pub(crate) fn checked_reservation(root: &Path, handle: &str) -> Result<Option<HandleReservation>> {
     if handle_spelling_rejection(handle).is_some() {
         bail!("invalid reservation handle");
     }
@@ -325,7 +325,7 @@ pub(crate) fn load_reservation(project_root: &Path, handle: &str) -> Option<Hand
     checked_reservation(project_root, handle).ok().flatten()
 }
 
-fn write_reservation(project_root: &Path, r: &HandleReservation) -> Result<()> {
+pub(crate) fn write_reservation(project_root: &Path, r: &HandleReservation) -> Result<()> {
     let body = toml::to_string_pretty(r).context("serialising handle reservation")?;
     let path = reservation_path(project_root, &r.handle);
     aida_core::write_atomic(&path, body.as_bytes())
@@ -412,6 +412,12 @@ fn other_live_holder(
         || (req.registry_id.is_some() && r.registry_id.as_deref() == req.registry_id)
     {
         return None;
+    }
+    // A relay run owns its label across child rotations and the gaps
+    // between them, until its terminal generation is recorded.
+    // trace:STORY-1843 | ai:claude
+    if let Some(run) = crate::relay_mail::run_holding(project_root, r) {
+        return Some(format!("relay run {run}"));
     }
     if now.signed_duration_since(r.reserved_at)
         > chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS)
@@ -547,9 +553,33 @@ pub(crate) fn reserve_handle(
     if let Some(name) = req.explicit {
         validate_explicit_handle(name, &reserved)?;
     }
-    let _lock = lock_namespace(project_root)?;
+    let lock = lock_namespace(project_root)?;
+    reserve_validated(project_root, req, &reserved, &lock)
+}
+
+/// [`reserve_handle`] for a caller already holding the namespace lock, so
+/// it can write its own records in the same critical section.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn reserve_handle_locked(
+    project_root: &Path,
+    req: &HandleRequest<'_>,
+    lock: &NamespaceLock,
+) -> Result<HandleReservation> {
+    let reserved = reserved_addresses(project_root);
+    if let Some(name) = req.explicit {
+        validate_explicit_handle(name, &reserved)?;
+    }
+    reserve_validated(project_root, req, &reserved, lock)
+}
+
+fn reserve_validated(
+    project_root: &Path,
+    req: &HandleRequest<'_>,
+    reserved: &BTreeSet<String>,
+    _lock: &NamespaceLock,
+) -> Result<HandleReservation> {
     let now = Utc::now();
-    let (handle, existing) = decide(project_root, req, &reserved, now)?;
+    let (handle, existing) = decide(project_root, req, reserved, now)?;
     if req.explicit.is_none() {
         if let Some((stem, seq)) = handle.rsplit_once('-') {
             let prefix = generated_handle(req.agent_type, req.role, 0);
@@ -700,7 +730,7 @@ fn held_by_requester(r: &HandleReservation, req: &HandleRequest<'_>) -> bool {
 /// reservation the same session held (e.g. a generated handle a `--bg`
 /// session got before its launch renamed it). The unbound spelling keeps
 /// its recipient and history and becomes free once no live entry names it.
-fn release_other_bindings(project_root: &Path, taken: &HandleReservation) -> Result<()> {
+pub(crate) fn release_other_bindings(project_root: &Path, taken: &HandleReservation) -> Result<()> {
     let Some(sid) = taken.native_session_id.as_deref() else {
         return Ok(());
     };
@@ -891,7 +921,7 @@ pub(crate) fn assign_session_handle(
 // Refuse allocation instead of silently ignoring a possible live owner.
 // trace:STORY-1843 | ai:codex
 const MAX_ALLOCATION_RECORDS: usize = 4096;
-fn bounded_records<T: serde::de::DeserializeOwned>(dir: &Path) -> Result<Vec<T>> {
+pub(crate) fn bounded_records<T: serde::de::DeserializeOwned>(dir: &Path) -> Result<Vec<T>> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -959,6 +989,7 @@ pub(crate) fn collect_retired_reservations(root: &Path, dry_run: bool) -> Result
     for mut r in list_reservations(root) {
         if now.signed_duration_since(r.reserved_at)
             <= chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS)
+            || crate::relay_mail::run_holding(root, &r).is_some()
             || entries
                 .iter()
                 .any(|e| e.name.as_deref() == Some(&r.handle) && entry_may_hold(root, e, now))
