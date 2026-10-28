@@ -1,0 +1,19 @@
+{
+  "id": "da8901f5-9905-40d8-a340-3fda89b9c0a4",
+  "thread_id": "da8901f5-9905-40d8-a340-3fda89b9c0a4",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793213822532,
+  "body": "Dispatch request 8f24584e-95e7-4523-a198-ec14f6368ee3 (take PR #3049) done: launched take PR #3049 in /home/joe/ai/aida-worktrees/s1843d2\nlog: logs/8f24584e-95e7-4523-a198-ec14f6368ee3.log",
+  "subject": "dispatch take PR #3049: done (8f24584e)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

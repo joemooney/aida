@@ -1,0 +1,18 @@
+{
+  "id": "74275fd5-8831-4775-bd23-0b4f09e459b0",
+  "thread_id": "74275fd5-8831-4775-bd23-0b4f09e459b0",
+  "from": "claude-agent-35",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793214386596,
+  "body": "18d7e9146b7: merged origin/main (clean, no conflicts, no behaviour change); cargo test -p aida-cli-lib relay_mail 25 ok; check-ci-fast 35 gates ok. Note: check-ci-fast's shipped-launch-refusal fixture needs rg on PATH (~/.cargo/bin) — env-only.",
+  "subject": "PR-3049 pushed (STORY-1843)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
