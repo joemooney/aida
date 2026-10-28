@@ -1319,6 +1319,23 @@ pub(crate) fn exit_unsupported_on_git_backend() -> ! {
     std::process::exit(1);
 }
 
+/// Arms BUG-681's fast-fail cache ladder for one `show` dispatch and restores
+/// the prior mode on drop, early returns included.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+struct ShowFastFail(bool);
+
+impl ShowFastFail {
+    fn arm() -> Self {
+        Self(aida_core::db::set_fast_fail_cache(true))
+    }
+}
+
+impl Drop for ShowFastFail {
+    fn drop(&mut self) {
+        aida_core::db::set_fast_fail_cache(self.0);
+    }
+}
+
 pub(crate) fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
@@ -1358,6 +1375,14 @@ pub(crate) fn handle_git_backend_command(
     if command.name() == "show" {
         crate::usage::arm_phases();
     }
+    // BUG-b6b1278890774ef993d2ebc327862470-008: every cache wait in `show`
+    // (open, lookup, the advisory notice) uses BUG-681's short fast-fail
+    // ladder, so behind a concurrent writer each one degrades — committed
+    // snapshot, targeted YAML read, skipped notice — instead of spending
+    // the 3 s read allowance per wait and stacking past ADR-53's 5 s
+    // ceiling. Restored when this handler returns.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let _show_fast_fail = (command.name() == "show").then(ShowFastFail::arm);
     let open_phase = crate::usage::phase("open");
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
@@ -1399,12 +1424,36 @@ pub(crate) fn handle_git_backend_command(
             // Cache momentarily locked — the advisory notice degrades to empty.
             return Ok(());
         }
+        // BUG-b6b1278890774ef993d2ebc327862470-008: the open's refresh cannot
+        // run inside show's zero read budget — a writer holds the lock it
+        // needs, or a pending migration makes the snapshot unservable (which
+        // used to end `show` silently with no output). `show` reads the spec
+        // from authoritative YAML anyway, so it degrades to the committed
+        // snapshot; its reads then take their own degrade paths.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+        Err(e)
+            if _show_fast_fail.is_some()
+                && (aida_core::db::is_cache_lock_error(&e)
+                    || e.chain().any(|c| {
+                        c.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>()
+                    })) =>
+        {
+            let inner =
+                aida_core::GitBackend::new(store_path)?.with_dispenser(load_dispenser(store_path)?);
+            aida_core::CachedGitBackend::with_inner_cache_snapshot(inner, &cache_path)
+                .map_err(|_| e)?
+        }
         Err(e) => return Err(e),
     };
     drop(open_phase);
+    // BUG-b6b1278890774ef993d2ebc327862470-008: the pre-dispatch hygiene
+    // checks (auto-push warning here, team-identity guard below) were time
+    // `show` spent outside every named phase. trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let guard_phase = crate::usage::phase("guard");
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
+    drop(guard_phase);
     if !notice_fast_fail
         && !cache_rebuild
         && !command
@@ -1417,6 +1466,11 @@ pub(crate) fn handle_git_backend_command(
         // probe itself is unchanged — attribution only.
         // trace:BUG-2221 | ai:claude
         let _notice_phase = crate::usage::phase("notice");
+        // BUG-b6b1278890774ef993d2ebc327862470-008: the notice is advisory
+        // and skips itself on any cache error; on `show` it reads under the
+        // fast-fail ladder armed above, so behind a concurrent writer it
+        // degrades to no notice (re-checked next command) instead of blocking.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }
@@ -1428,21 +1482,31 @@ pub(crate) fn handle_git_backend_command(
     // single-own-node context is silent, and an unreadable roster never blocks.
     // Skips the `team` command itself (it surfaces the same facts) and the
     // machine-readable JSON status path. trace:STORY-640 | ai:claude
+    let guard_phase = crate::usage::phase("guard");
     maybe_team_identity_guard(store_path, command)?;
+    drop(guard_phase);
 
-    match command {
+    let flow = match command {
         // trace:STORY-1728 | ai:claude
         Command::Registered(invocation) => {
             let store = crate::command_registry::StoreCtx::Git {
                 store_path,
                 backend: &backend,
             };
-            if invocation.run_store(store, None)? == crate::command_registry::Flow::Return {
-                return Ok(());
-            }
+            invocation.run_store(store, None)?
         }
 
         _ => exit_unsupported_on_git_backend(),
+    };
+    // BUG-b6b1278890774ef993d2ebc327862470-008: closing the cached backend
+    // (connection and snapshot teardown) is its own `show` phase rather than
+    // unmeasured time after the handler returns.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    let close_phase = crate::usage::phase("close");
+    drop(backend);
+    drop(close_phase);
+    if flow == crate::command_registry::Flow::Return {
+        return Ok(());
     }
 
     if command_triggers_per_write_auto_push(command) {

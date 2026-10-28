@@ -225,6 +225,17 @@ impl CachedGitBackend {
         };
         let candidates = match scanned {
             Ok(c) => c,
+            // BUG-b6b1278890774ef993d2ebc327862470-008: a READ whose cache scan
+            // failed (a concurrent writer under show's fast-fail ladder) degrades
+            // to the targeted authoritative object read instead of loading the
+            // whole store (the ~8 s `lookup` phase on a busy ~4,400-object
+            // store). Writes keep the full load: they must not act on a guess.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+            Err(_) if !strict => {
+                #[cfg(test)]
+                super::cache_refresh::test_count("lookup_targeted_fallback");
+                return self.inner.get_requirement_by_spec_id(id);
+            }
             Err(_) => {
                 let store = self.inner.load()?;
                 let rows: Vec<crate::id_collisions::IdRow> = store
@@ -3397,6 +3408,48 @@ mod tests {
             "{err:#}"
         );
         holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    /// BUG-b6b1278890774ef993d2ebc327862470-008: `show`'s lookup behind a
+    /// live writer on a snapshot it cannot refresh degrades to the targeted
+    /// authoritative object read — it serves the spec, fast, and never falls
+    /// back to the whole-store load.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    #[test]
+    fn read_lookup_degrades_to_targeted_object_read_behind_a_writer() {
+        use super::super::cache_refresh::{test_counts, CacheReadScope, ReadBudget};
+        let root = tempdir().unwrap();
+        let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
+            &cache_path,
+        )
+        .unwrap();
+        let holder = rusqlite::Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::from_secs(1))));
+        test_counts();
+        let prev = super::super::cache::set_fast_fail_cache(true);
+        let started = std::time::Instant::now();
+        let found = backend.get_requirement_unambiguous_for_read("BUG-2");
+        let elapsed = started.elapsed();
+        super::super::cache::set_fast_fail_cache(prev);
+        let counts = test_counts();
+        holder.execute_batch("ROLLBACK").unwrap();
+
+        let req = found.unwrap().expect("the spec is served from its object");
+        assert_eq!(req.title, "second");
+        assert_eq!(
+            counts.get("lookup_targeted_fallback"),
+            Some(&1),
+            "{counts:?}"
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "lookup waited {elapsed:?}, past ADR-53's 5 s ceiling"
+        );
     }
 
     /// BUG-1956: a mutation's constructor (no explicit read budget) keeps the

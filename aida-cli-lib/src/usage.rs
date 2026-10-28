@@ -105,6 +105,34 @@ pub fn take_phases() -> Vec<PhaseTiming> {
         .unwrap_or_default()
 }
 
+/// BUG-b6b1278890774ef993d2ebc327862470-008: the name of the phase that
+/// carries whatever part of `duration_ms` no other top-level phase measured.
+pub const RESIDUAL_PHASE: &str = "residual";
+
+/// BUG-b6b1278890774ef993d2ebc327862470-008: append the [`RESIDUAL_PHASE`] —
+/// `total_ms` minus the sum of the top-level phases — so a recorded event's
+/// phases always account for its whole duration and a new unmeasured wait
+/// shows up by name instead of as a silent gap. Dotted names (`linkage.log`)
+/// are sub-spans that overlap their aggregate and are not summed. An
+/// unarmed (empty) phase list stays empty.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+pub fn with_residual(mut phases: Vec<PhaseTiming>, total_ms: u64) -> Vec<PhaseTiming> {
+    if phases.is_empty() {
+        return phases;
+    }
+    let measured: u64 = phases
+        .iter()
+        .filter(|p| !p.name.contains('.'))
+        .map(|p| p.ms)
+        .sum();
+    accumulate_phase(
+        &mut phases,
+        RESIDUAL_PHASE,
+        total_ms.saturating_sub(measured),
+    );
+    phases
+}
+
 /// BUG-1993: records the time from construction to drop under `name`.
 pub struct PhaseTimer {
     name: &'static str,
@@ -456,6 +484,31 @@ pub fn schedule_invocation_source(argv: &[String]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+    #[test]
+    fn residual_names_the_unmeasured_remainder_of_top_level_phases() {
+        let phase = |name: &str, ms| PhaseTiming {
+            name: name.to_string(),
+            ms,
+        };
+        let phases = with_residual(
+            vec![
+                phase("open", 30),
+                phase("linkage.content", 400),
+                phase("linkage", 500),
+            ],
+            1_000,
+        );
+        let residual = phases.iter().find(|p| p.name == RESIDUAL_PHASE).unwrap();
+        // Sub-spans overlap their aggregate and are not counted twice.
+        assert_eq!(residual.ms, 470);
+        // Overlapping rounding never underflows.
+        let phases = with_residual(vec![phase("open", 30)], 10);
+        assert_eq!(phases.last().unwrap().ms, 0);
+        // An unarmed command records no phases at all.
+        assert!(with_residual(Vec::new(), 1_000).is_empty());
+    }
 
     // BUG-1993: a repeated phase accumulates into its first entry, so the
     // order is first-seen order. (The armed/unarmed global is exercised
