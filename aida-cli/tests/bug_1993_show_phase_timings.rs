@@ -447,3 +447,39 @@ fn show_open_refuses_fast_when_a_writer_blocks_the_first_schema_write() {
         "the refusal names the lock and its remedy:\n{stdout}"
     );
 }
+
+/// TASK-b6b1278890774ef993d2ebc327862470-031: acceptance (a) of
+/// BUG-b6b1278890774ef993d2ebc327862470-008, end to end — `aida show` on a
+/// healthy, warm cache finishes under 1 s. Two measurements of the same call:
+/// the command's own `duration_ms` (dispatch to exit, what the user waits
+/// for once the process is up) must be under 1 s, and the wall clock of the
+/// whole process under 1 s plus a start-up margin for a loaded CI runner.
+/// The best of three runs is taken, so one scheduler stall cannot fail it
+/// while a real regression (every run slow) still does.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-031 | ai:claude
+#[test]
+fn show_on_a_healthy_cache_finishes_under_one_second() {
+    const BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
+    const SPAWN_MARGIN: std::time::Duration = std::time::Duration::from_secs(1);
+    let (_base, repo, home, spec) = fixture();
+    // Warm the cache and the content walk; a cold first build is not (a).
+    run_ok(aida(&repo, &home).args(["show", &spec]));
+
+    let mut best_wall = std::time::Duration::MAX;
+    let mut best_ms = u64::MAX;
+    for _ in 0..3 {
+        let started = std::time::Instant::now();
+        let record = usage_record_of(&repo, &home, &["show", &spec]);
+        best_wall = best_wall.min(started.elapsed());
+        best_ms = best_ms.min(record["duration_ms"].as_u64().expect("duration_ms"));
+    }
+    assert!(
+        u128::from(best_ms) < BUDGET.as_millis(),
+        "show took {best_ms} ms (best of 3) on a healthy cache, over {BUDGET:?}"
+    );
+    assert!(
+        best_wall < BUDGET + SPAWN_MARGIN,
+        "show's process took {best_wall:?} (best of 3) on a healthy cache, over \
+         {BUDGET:?} plus a {SPAWN_MARGIN:?} start-up margin"
+    );
+}
