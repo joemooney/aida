@@ -225,9 +225,21 @@ fn a_torn_era_marker_aside_is_reported_and_kept() {
     let era = anchor.join(NONCE_ERA_DIR);
     ensure_dir(&era, true).unwrap();
     let mut asides = Vec::new();
-    for (i, body) in [&b"{\"admin\":\"wt\",\"admin_d"[..], b"a/b", b"x\0y", b".."]
-        .into_iter()
-        .enumerate()
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
+    let long = vec![b'a'; 256];
+    for (i, body) in [
+        &b"{\"admin\":\"wt\",\"admin_d"[..],
+        b"a/b",
+        b"x\0y",
+        b"..",
+        b".",
+        &long,
+        b"\"",
+        b"{",
+        b"}",
+    ]
+    .into_iter()
+    .enumerate()
     {
         let path = era.join(format!(".t{i}.drop.{i}"));
         std::fs::write(&path, body).unwrap();
@@ -323,4 +335,68 @@ fn a_main_checkout_pre_record_aside_is_settled_not_corrupt() {
         b"standing",
         "a standing marker stays"
     );
+}
+
+/// A 255-byte admin name is still a name: judged, not reported corrupt.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
+#[test]
+fn a_255_byte_bare_admin_name_is_judged() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let aside = era.join(".n.drop.1");
+    std::fs::write(&aside, vec![b'a'; 255]).unwrap();
+    std::fs::set_permissions(&aside, std::os::unix::fs::PermissionsExt::from_mode(0o600)).unwrap();
+    let report = scan_at(dir.path(), false, later());
+    assert!(report.corrupt.is_empty(), "{report:?}");
+    assert_eq!(report.reapable, [aside], "no such worktree: stale");
+}
+
+/// A temp a crashed mailbox mint left in the checkout's `.aida` is kept
+/// while young and reaped once old; its nonce never reaches the mailbox.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
+#[test]
+fn a_crashed_mint_temp_in_the_checkout_is_reaped_once_old() {
+    let dir = repo();
+    let aida = dir.path().join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    let temp = aida.join(format!("{ID_TEMP_PREFIX}dead.tmp"));
+    std::fs::write(&temp, "0".repeat(32)).unwrap();
+    assert!(scan_at(dir.path(), true, SystemTime::now())
+        .reapable
+        .is_empty());
+    assert!(temp.is_file(), "a writer may still be placing it");
+    assert_eq!(scan_at(dir.path(), true, later()).reapable, [temp.clone()]);
+    assert!(!temp.exists());
+}
+
+/// Without a no-replace rename or hard links, the write falls back to
+/// create-new on the final name: it still succeeds, still refuses an
+/// existing file, and leaves no temp.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-078 | ai:claude
+#[test]
+fn without_rename_or_links_the_write_falls_back_to_create_new() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let era = anchor.join(NONCE_ERA_DIR);
+    ensure_dir(&era, true).unwrap();
+    let marker = era.join("m");
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(true));
+    LINK_UNSUPPORTED.with(|f| f.set(true));
+    let written = write_source_id(&marker, b"first");
+    let again = write_source_id(&marker, b"second");
+    NOREPLACE_UNSUPPORTED.with(|f| f.set(false));
+    LINK_UNSUPPORTED.with(|f| f.set(false));
+    written.unwrap();
+    assert_eq!(again.unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(std::fs::read(&marker).unwrap(), b"first");
+    let meta = std::fs::metadata(&marker).unwrap();
+    assert_eq!(meta.mode() & 0o777, 0o600);
+    let temps: Vec<_> = std::fs::read_dir(&anchor)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(ID_TEMP_PREFIX))
+        .collect();
+    assert!(temps.is_empty(), "{temps:?}");
 }
