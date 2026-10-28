@@ -83190,5 +83190,23 @@ operations:
   timestamp: 2026-10-28T22:31:52.730463546Z
   kind: !SetStatus
     status: Completed
-clock: 6479
+- id: 01a184a4-3eff-7141-a27b-4dd6543be26d
+  target_id: 01a184a4-37a1-7b13-86de-6c69d23d457d
+  author: aida
+  node_id: '1'
+  lamport: 6480
+  timestamp: 2026-10-28T22:31:58.975813358Z
+  kind: !Create
+    title: '[minor, non-blocking] mod.rs write_new_synced on the no-rename/no-link fallback…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor, non-blocking] mod.rs write_new_synced on the no-rename/no-link fallback path: if write_all/sync_all fails after create_new (e.g. ENOSPC/EIO), the partial or empty file stays at the final name. Later write_source_id calls get AlreadyExists, and mark_nonce_era treats that as Ok, so the torn marker/nonce persists. The doc comment mentions only a crash. Suggest removing path on write/sync error in the fallback.
+
+      PR: #3069
+      Reviewed sha: 1b2b235a3dd4de9cac540ebec457274b74fe1f94
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6480
 node_id: '1'
