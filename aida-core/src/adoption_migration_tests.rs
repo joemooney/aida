@@ -86,7 +86,7 @@ fn the_inventory_classifies_tracked_scaffolding_and_writes_nothing() {
     put(&top, "AGENTS.md", "# Our agents\nhand written\n");
     put(&top, ".gitignore", "target/\n.aida-store/\n");
     put(&top, ".claude/settings.json", "{\"hooks\": {}}\n");
-    put(&top, ".aida/config.toml", CONFIG_BODY);
+    put(&top, CONFIG, CONFIG_BODY);
     put(&top, "src/main.rs", "fn main() {}\n");
     git(&top, &["add", "-A"]);
     git(&top, &["commit", "-q", "-m", "product with scaffolding"]);
@@ -146,7 +146,7 @@ fn a_policy_only_config_is_removable_once_published_and_its_settings_round_trip(
     let top = repo(&tmp.path().join("p"));
     put(
         &top,
-        ".aida/config.toml",
+        CONFIG,
         "use_agreed_blocks = true\n[agents]\nvendor = \"codex\"\n[agents.codex]\nmodel = \"m\"\n\
          [store.sync]\nauto_push = \"manual\"\n",
     );
