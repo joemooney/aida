@@ -80738,5 +80738,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6283
+- id: 01a18240-03d7-7f93-9f46-16e35135b9e0
+  target_id: 01a1823f-fc89-7b32-8899-cf7a95552788
+  author: aida
+  node_id: '1'
+  lamport: 6284
+  timestamp: 2026-10-28T11:23:15.799996954Z
+  kind: !Create
+    title: 'minor (non-blocking): aida-core/src/db/cached_git_backend.rs:239 — the fallback…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-029, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking): aida-core/src/db/cached_git_backend.rs:239 — the fallback deadline is the lookup's start + READ_LADDER_CAP, not linked to the run-wide read-wait allowance (cache.rs:672, cache_refresh.rs:706). A budgeted caller without fast-fail whose cache scan used up the 3 s allowance gets ~0 s of scan, so its collision check always degrades. Waits before the lookup do not count against the claimed 5 s ceiling. No test covers it.
+
+      PR: #3022
+      Reviewed sha: 8bb8dbc8df9edad1ac1db7c254780cc7070985c3
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6284
 node_id: '1'
