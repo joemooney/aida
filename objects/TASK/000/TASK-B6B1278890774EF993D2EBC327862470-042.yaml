@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T11:45:27.006976168Z
-modified_at: 2026-10-28T11:45:27.006976168Z
+modified_at: 2026-10-28T12:31:03.126550085Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-024
 - finding-hash:08faf304
 - from-review:PR-3025
 - kind:carried-forward
+comments:
+- id: 01a1827e-13d6-7233-8e1c-1eefbcf98d50
+  author: joe
+  content: 'ADVISOR: closed, no change needed. A kernel->orchestrator hop lands in a protected gate/ module whose every outside path is in its frozen, shrink-only inventory (gate/orchestrator_leaves.rs); growing that reach already needs a human merge, which is the same bound the kernel rule gives. Following the hop would add scan cost but no new protection.'
+  created_at: 2026-10-28T12:31:03.126550085Z
+  modified_at: 2026-10-28T12:31:03.126550085Z
+  session_id: 24a9a7ec-0307-41c2-97da-15e4e955b18d
 filed_at:
   code_sha: 42070fbece09cfca8f00042931b573300d85f0f9
   branch: main
