@@ -81605,5 +81605,33 @@ operations:
   timestamp: 2026-10-28T14:26:23.621933746Z
   kind: !SetStatus
     status: Approved
-clock: 6353
+- id: 01a182f0-957d-7fc0-8232-a909cea986ae
+  target_id: 01a182f0-8f05-7bd1-8226-5958fbfb82a0
+  author: aida
+  node_id: '1'
+  lamport: 6354
+  timestamp: 2026-10-28T14:36:07.421516280Z
+  kind: !Create
+    title: 'Review PR-3042: [AI:claude] feat(mailbox): STORY-1843 D1 role-cohort delivery ownership (Refs STORY-1843)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-d1-delivery`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3042>
+      - Branch: `story-1843-d1-delivery` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-1843
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3042` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6354
 node_id: '1'
