@@ -81951,5 +81951,31 @@ operations:
   timestamp: 2026-10-28T16:26:06.462440723Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6383
+- id: 01a1835e-d09a-7132-b5bc-80a29b05aedf
+  target_id: 01a1835e-c92a-70b1-bf75-22170869c17f
+  author: aida
+  node_id: '1'
+  lamport: 6384
+  timestamp: 2026-10-28T16:36:31.514552456Z
+  kind: !Create
+    title: 'Review PR-3047: [AI:claude] fix(mailbox): surface and reap tombs, era-marker recovery, staging reaping (TASK-b6b1278890774ef993d2ebc327862470-052)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/mailbox-tomb-followups`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3047>
+      - Branch: `fix/mailbox-tomb-followups` → `main`
+
+      ## Covers
+
+      - TASK-b6b1278890774ef993d2ebc327862470-052
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3047` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6384
 node_id: '1'
