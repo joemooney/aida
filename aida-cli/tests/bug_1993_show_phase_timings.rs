@@ -388,12 +388,23 @@ fn show_open_lookup_and_notice_degrade_under_a_held_writer_lock() {
 /// so the open must write before any row can be read. The open's schema
 /// write rides show's fast-fail ladder and refuses with the usual
 /// lock-holder guidance instead of the full retry ladder (stretched here so
-/// a single uncapped sleep runs past the hard ceiling; the live binary took
+/// a single uncapped sleep would blow the ceiling; the live binary took
 /// ~16 s on the unstretched ladder).
+///
+/// Failing fast IS the ADR-53 outcome here, not a missed degrade: every
+/// degrade path `show` has (the committed snapshot, the targeted object
+/// read) runs on an open cache, and opening one means writing its schema —
+/// the very write the writer blocks. With no schema there is no snapshot to
+/// serve, so the bounded outcome is a prompt refusal naming the lock and
+/// its remedy. The test pins the refusal inside ADR-53's 5 s ceiling (plus
+/// a margin for process start-up on a loaded CI runner), so a 6-59 s
+/// regression fails instead of passing under a loose watchdog.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-008 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-030 | ai:claude
 #[test]
 fn show_open_refuses_fast_when_a_writer_blocks_the_first_schema_write() {
-    const HARD_CEILING: std::time::Duration = std::time::Duration::from_secs(60);
+    const ADR_53_CEILING: std::time::Duration = std::time::Duration::from_secs(5);
+    const SPAWN_MARGIN: std::time::Duration = std::time::Duration::from_secs(1);
     let (_base, repo, home, spec) = fixture();
     let cache = aida_core::CachedGitBackend::default_cache_path(&repo.join(".aida-store"));
     for suffix in ["", "-wal", "-shm"] {
@@ -415,10 +426,14 @@ fn show_open_refuses_fast_when_a_writer_blocks_the_first_schema_write() {
         .spawn()
         .expect("spawn aida show");
     while child.try_wait().expect("poll aida show").is_none() {
-        if started.elapsed() >= HARD_CEILING {
+        if started.elapsed() >= ADR_53_CEILING + SPAWN_MARGIN {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("show was still waiting on the writer after {HARD_CEILING:?}");
+            panic!(
+                "show was still waiting on the writer after {:?}, past ADR-53's \
+                 {ADR_53_CEILING:?} ceiling",
+                started.elapsed()
+            );
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }

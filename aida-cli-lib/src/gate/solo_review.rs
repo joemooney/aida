@@ -220,7 +220,7 @@ pub(crate) fn run_challenge(spec: &str, pr: u64) -> anyhow::Result<()> {
         let tty = (std::io::Cursor::new(answer.into_bytes()), Vec::new());
         return run_challenge_with(true, Some(tty), spec, pr);
     }
-    let stdin_is_terminal = crate::authority_stdin_is_terminal();
+    let stdin_is_terminal = crate::gate::kernel_deps::authority_stdin_is_terminal();
     let tty = if stdin_is_terminal {
         open_controlling_tty()
     } else {

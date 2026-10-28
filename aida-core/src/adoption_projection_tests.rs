@@ -127,6 +127,8 @@ fn load_at(top: &Path, commit: &str) -> Adoption {
 
 #[test]
 fn a_projection_feeds_readers_without_touching_the_product_tree() {
+    // trace:STORY-1741.acd975e1 | ai:claude
+    // trace:STORY-1741.ac6b1be3 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     // A pre-dirty product tree stays exactly as dirty.
@@ -177,6 +179,7 @@ fn a_projection_feeds_readers_without_touching_the_product_tree() {
 
 #[test]
 fn a_refresh_is_deterministic_and_replaces_only_owned_outputs() {
+    // trace:STORY-1741.acd975e1 | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     let top = product(&tmp.path().join("p"));
     publish(&top, V1);
@@ -793,4 +796,117 @@ fn a_refusal_without_adoption_evidence_is_not_adopted() {
     };
     assert!(error.contains("shares history"), "{error}");
     assert!(crate::scaffolding::refuse_in_adopted_worktree(&top).is_err());
+}
+
+#[test]
+fn uninstall_removes_owned_outputs_keeps_edits_and_leaves_the_product_alone() {
+    // trace:STORY-1741.ac7e5256 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    std::fs::write(top.join("README.md"), "pre-dirty\n").unwrap();
+    publish(&top, V1);
+    sync(&top).unwrap().unwrap();
+    std::fs::write(top.join(".aida/notes.txt"), "mine\n").unwrap();
+    let edited = format!("{GUIDANCE_DIR}/review-norms.md");
+    std::fs::write(top.join(&edited), "my edit\n").unwrap();
+    let before = product_snapshot(&top);
+    let store_ref = git_out(&top, &["rev-parse", STORE_REF]);
+
+    let planned = uninstall(&top, true).unwrap();
+    assert!(top.join(MANIFEST).exists(), "a dry run removes nothing");
+    let removal = uninstall(&top, false).unwrap();
+    assert_eq!(removal, planned);
+    assert_eq!(removal.removed, [CONFIG, MANIFEST, LOCK]);
+    assert_eq!(removal.kept.len(), 1, "{removal:?}");
+    assert_eq!(removal.kept[0].0, edited);
+
+    assert!(!top.join(CONFIG).exists() && !top.join(MANIFEST).exists());
+    assert!(!top.join(LOCK).exists());
+    assert_eq!(
+        std::fs::read_to_string(top.join(&edited)).unwrap(),
+        "my edit\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(top.join(".aida/notes.txt")).unwrap(),
+        "mine\n"
+    );
+    assert_eq!(product_snapshot(&top), before);
+    assert_eq!(git_out(&top, &["rev-parse", STORE_REF]), store_ref);
+    assert!(!is_projected(&top));
+    // Idempotent: nothing left to remove.
+    assert_eq!(uninstall(&top, false).unwrap(), Removal::default());
+}
+
+#[test]
+fn uninstall_after_an_interrupted_refresh_removes_pending_outputs() {
+    // trace:STORY-1741.ac7e5256 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    publish(&top, V1);
+    sync(&top).unwrap().unwrap();
+    // Simulate a refresh to V2 that stopped after writing one file.
+    let next = load_at(&top, &publish(&top, V2));
+    let mut manifest = read_manifest(&top).unwrap().unwrap();
+    let outputs = render(&next, true).unwrap();
+    manifest.pending = outputs
+        .iter()
+        .map(|(rel, body)| (rel.clone(), sha256(body.as_bytes())))
+        .collect();
+    write_manifest(&top, &manifest).unwrap();
+    std::fs::write(top.join(CONFIG), &outputs[CONFIG]).unwrap();
+
+    let removal = uninstall(&top, false).unwrap();
+    assert!(removal.kept.is_empty(), "{removal:?}");
+    assert!(!top.join(CONFIG).exists());
+    assert!(!top.join(".aida/adoption").exists());
+}
+
+#[test]
+fn bootstrap_projects_only_the_selected_revision() {
+    // trace:STORY-1741.ac591cd7 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    let old = publish(&top, V1);
+    let current = publish(&top, V2);
+    let before = product_snapshot(&top);
+
+    let err = bootstrap(&top, &old).unwrap_err().to_string();
+    assert!(err.contains("not the selected revision"), "{err}");
+    assert!(!top.join(MANIFEST).exists(), "a mismatch writes nothing");
+    let err = bootstrap(&top, &current[..12]).unwrap_err().to_string();
+    assert!(err.contains("full lowercase commit id"), "{err}");
+
+    let outcome = bootstrap(&top, &current).unwrap();
+    assert_eq!(outcome.commit, current);
+    assert_eq!(
+        inspect(&top).unwrap(),
+        State::Current {
+            commit: current.clone(),
+            config_kept: None
+        }
+    );
+    assert_eq!(product_snapshot(&top), before);
+    // Repeating it is a verified no-op.
+    assert!(!bootstrap(&top, &current).unwrap().written);
+}
+
+#[test]
+fn bootstrap_refuses_when_a_local_config_keeps_the_settings_out() {
+    // trace:STORY-1741.ac591cd7 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    let commit = publish(&top, V1);
+    std::fs::create_dir_all(top.join(".aida")).unwrap();
+    std::fs::write(top.join(CONFIG), "[agents]\nvendor = \"codex\"\n").unwrap();
+    let err = bootstrap(&top, &commit).unwrap_err().to_string();
+    assert!(err.contains("not applied"), "{err}");
+}
+
+#[test]
+fn bootstrap_refuses_a_clone_with_no_plane() {
+    // trace:STORY-1741.ac591cd7 | ai:claude
+    let tmp = tempfile::tempdir().unwrap();
+    let top = product(&tmp.path().join("p"));
+    let err = bootstrap(&top, &"a".repeat(40)).unwrap_err().to_string();
+    assert!(err.contains("No adoption plane"), "{err}");
 }

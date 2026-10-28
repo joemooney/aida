@@ -1031,8 +1031,8 @@ pub(crate) fn with_live_tick_inputs<R>(
     if active_drive_records(&dir, now).is_empty() {
         return Ok(None);
     }
-    let principal = crate::current_user_id(None);
-    let store = crate::load_store_for_lookup(main_root);
+    let principal = crate::gate::kernel_deps::current_user_id(None);
+    let store = crate::gate::dispatch_deps::load_store_for_lookup(main_root);
     let store_readable = store.is_some();
     let reqs: Vec<aida_core::Requirement> = store.map(|s| s.requirements).unwrap_or_default();
     let ledger = crate::gate::mandate::read_exclusions(&dir).ok();

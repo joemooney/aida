@@ -10,11 +10,17 @@
 //!
 //! Read state follows the B2 ruling: only [`ReadEvidence::Unread`] is new
 //! mail. Passive counts and notices treat a legacy watermark as not-new; the
-//! explicit inbox labels it "read (legacy)". Marking stays the existing
-//! BUG-1482 write-before-print path ([`mark_displayed`]); it writes per-ID
-//! receipts for the displayed unread IDs only, never a legacy watermark. No
-//! new receipt anchor exists before the retention barrier (slice C), and the
-//! post-flush ACK is B2c.
+//! explicit inbox labels it "read (legacy)".
+//!
+//! Marking is the post-flush explicit ACK (slice B2c, the successor to
+//! BUG-1482's write-before-print marking): an explicit read [`plan_ack`]s
+//! exactly the records it is about to deliver, writes and flushes its
+//! output, and only then [`commit_ack`]s, into the private receipt anchor
+//! under the common Git directory ([`aida_core::mailbox_lifecycle::ack`]).
+//! Output that fails, or a reader killed mid-print, acknowledges nothing:
+//! the mail stays unread and is shown again. A partial view plans no ACK.
+//! The commit also mirrors timed per-ID receipts into the requesting
+//! checkout for older readers; a legacy watermark is never advanced.
 //!
 //! Every verb that takes a message ID (`read`, `thread`, `archive`,
 //! `retract`, `delete`, replies) resolves against [`Addressable`]: the same
@@ -32,6 +38,7 @@
 // trace:STORY-1843 | ai:claude
 
 use aida_core::mailbox::Message;
+use aida_core::mailbox_lifecycle::ack::{AckCommitted, AckError, AckPlan};
 use aida_core::mailbox_logical::{
     logical_snapshot, LogicalSnapshot, MailboxContext, Query, ReadEvidence, ReadLimits,
     ResolvedAudience, SnapshotRecord, SourceErrorCode, SourceKind, SourceStatus,
@@ -63,6 +70,9 @@ pub(crate) struct OwnMail {
     audience: ResolvedAudience,
     records: Vec<SnapshotRecord>,
     coverage: Coverage,
+    /// The snapshot the records came from and its verified common Git
+    /// directory, for planning an ACK; `None` when no context resolved.
+    ack_basis: Option<(Option<PathBuf>, LogicalSnapshot)>,
 }
 
 /// How a displayed record reads.
@@ -216,6 +226,7 @@ fn snapshot_view(
                         codes: vec![code],
                         conflicts: 0,
                     },
+                    ack_basis: None,
                 },
             )
         }
@@ -233,6 +244,7 @@ fn snapshot_view(
             })
             .collect();
         codes.extend(snapshot.inventory_error);
+        codes.extend(snapshot.anchor_error);
         if let aida_core::mailbox_logical::CanonicalCoverage::Refused(code) = snapshot.canonical {
             codes.push(code);
         }
@@ -245,6 +257,10 @@ fn snapshot_view(
         audience: audience.clone(),
         records: snapshot.records.clone(),
         coverage,
+        ack_basis: Some((
+            ctx.repository().map(|r| r.path().to_path_buf()),
+            snapshot.clone(),
+        )),
     };
     (Some((ctx, snapshot)), view)
 }
@@ -390,32 +406,71 @@ pub(crate) fn addressable_for(
     }
 }
 
-/// Mark the displayed records read, before they are printed (BUG-1482: a
-/// reader that closes the pipe early still has what it was shown marked).
-/// Writes a per-ID receipt for each displayed UNREAD record under every key
-/// it is addressed to, in the requesting checkout, and nothing else (ruling
-/// 76 Q3): the legacy timestamp watermark is never advanced, because a
-/// displayed record may come from a sibling or the canonical store, and a
-/// watermark at its timestamp would hide a later-arriving older local
-/// message from every passive surface. A record covered only by a legacy
-/// watermark gets no receipt: its real read time is unknown (TASK-1271),
-/// and resolving it is the explicit ACK of slice B2c.
-pub(crate) fn mark_displayed(
+/// Plan the explicit ACK of `displayed`, records of `view` this read is
+/// about to deliver in full. Writes nothing; commit it with [`commit_ack`]
+/// only after the output was flushed. `Ok(None)`: nothing to acknowledge.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn plan_ack(
+    view: &OwnMail,
+    displayed: &[&SnapshotRecord],
+) -> std::result::Result<Option<AckPlan>, AckError> {
+    match &view.ack_basis {
+        Some((common, snapshot)) => {
+            AckPlan::prepare(snapshot, common.as_deref(), &view.audience, displayed)
+        }
+        None if displayed
+            .iter()
+            .any(|r| ReadState::of(r) != ReadState::Read) =>
+        {
+            Err(AckError::Partial)
+        }
+        None => Ok(None),
+    }
+}
+
+/// Commit a planned ACK after the reader's output was flushed. `current` is
+/// the reader's audience re-resolved after the flush. The anchor commit is
+/// the acknowledgement; timed per-ID receipts are then mirrored into the
+/// requesting checkout for readers that predate the anchor (never for an
+/// ACK that resolved a legacy watermark: its read time is unknown,
+/// TASK-1271). In a local-only project, which has no anchor, the mirror is
+/// the acknowledgement and its failure is the commit's.
+// trace:STORY-1843 trace:TASK-1271 | ai:claude
+pub(crate) fn commit_ack(
     project_root: &Path,
-    audience: &ResolvedAudience,
+    plan: AckPlan,
+    current: &ResolvedAudience,
+) -> Result<AckCommitted> {
+    let committed = plan.commit(current)?;
+    let mirror = committed.by_key.iter().try_for_each(|(key, ids)| {
+        let timed: Vec<&str> = ids
+            .iter()
+            .filter(|id| !committed.legacy.contains(*id))
+            .map(String::as_str)
+            .collect();
+        crate::mailbox_store::record_seen(project_root, key, &timed)
+    });
+    match mirror {
+        Err(e) if !committed.anchored => Err(e.context("recording read receipts")),
+        Err(e) => {
+            // The anchor holds the ACK; only the compatibility copy failed.
+            eprintln!("warning: acknowledged, but the local receipt copy was not written: {e}");
+            Ok(committed)
+        }
+        Ok(()) => Ok(committed),
+    }
+}
+
+/// Plan and commit at once, for tests that model a read whose output was
+/// delivered. Production readers commit only after flushing.
+#[cfg(test)]
+pub(crate) fn ack_displayed(
+    project_root: &Path,
+    view: &OwnMail,
     displayed: &[&SnapshotRecord],
 ) -> Result<()> {
-    let mut receipts: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
-    for record in displayed {
-        if ReadState::of(record) != ReadState::Unread {
-            continue;
-        }
-        for key in audience.matching_keys(&record.message) {
-            receipts.entry(key).or_default().push(&record.message.id);
-        }
-    }
-    for (key, ids) in &receipts {
-        crate::mailbox_store::record_seen(project_root, key, ids)?;
+    if let Some(plan) = plan_ack(view, displayed)? {
+        commit_ack(project_root, plan, view.audience())?;
     }
     Ok(())
 }

@@ -10,7 +10,7 @@
 // trace:STORY-1889 | ai:claude
 
 #[allow(unused_imports)]
-use crate::merge_hold::*;
+use crate::merge_hold::{reconcile_recusal_route, sync_label};
 use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 

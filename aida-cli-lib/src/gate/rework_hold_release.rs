@@ -10,7 +10,10 @@
 use crate::gate::{review_verdict as rv, seat_authority as sa};
 mod mh {
     pub(super) use crate::gate::merge_hold_core::*;
-    pub(super) use crate::merge_hold::*;
+    pub(super) use crate::merge_hold::{
+        fetch_pinned_change, resolve_pinned_repo, sync_label, ChangeState, LabelSyncError,
+        PinnedChange,
+    };
 }
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{DateTime, FixedOffset};
@@ -215,7 +218,7 @@ fn eligible(
         .and_then(Value::as_str)
         .context("approval has no head SHA")?;
     ensure!(
-        head.len() == 40 && sha == head && crate::git_arg_guard::is_hex_sha(head),
+        head.len() == 40 && sha == head && crate::gate::kernel_deps::is_hex_sha(head),
         "approval is at a stale or unverifiable head"
     );
     let grant = match authority {

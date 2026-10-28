@@ -8,8 +8,9 @@
 // mandate-gate
 
 use crate::gate::approval::ship_approval_policy;
+use crate::gate::dispatch_deps::load_store_for_lookup;
 use crate::pr_cmd::{fetch_change_info_via_resolved_forge, normalized_spec_ids, pr_gate_subject};
-use crate::{load_store_for_lookup, pr_ship};
+use crate::pr_ship;
 
 /// STORY-1698: who a fire-fighting mandate lets ship — the mandate id and the
 /// advisor principal it is bound to.

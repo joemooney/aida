@@ -5,6 +5,9 @@
 //! fixtures, no forge.
 // trace:BUG-2176 | ai:claude
 use super::*;
+use crate::merge_hold::{
+    adopt_worktree_hold, stray_marker_warning, stray_markers_json, stray_worktree_markers,
+};
 
 fn git(repo: &Path, args: &[&str]) {
     let out = crate::test_git::git_command()

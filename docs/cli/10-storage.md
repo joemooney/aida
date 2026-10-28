@@ -18,6 +18,10 @@ What this means in practice: **a normal user needs almost none of the commands b
 
 > `aida fetch`/`pull`/`push`/`rebase` *also* move the store (it's the second of AIDA's two git legs), but they're the everyday sync verbs and live in **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**. This chapter is the store's *direct* management surface; reach for Chapter 4 for routine syncing.
 
+### The adoption plane
+
+The `aida-store` branch can also carry an `adoption/` namespace: `adoption/settings.toml` with shared, non-executable project settings and guidance documents. Each worktree projects one pinned revision of it into the git-ignored `.aida/` (see [`aida adoption`](07-project-setup.md#aida-adoption)), so a project can adopt AIDA without tracked configuration on its code branches. Settings are read from Git objects at one commit, never from a checkout, so a branch that moves mid-read cannot mix two revisions. The plane must be an orphan: one that shares history with the product branch is refused. Executable settings are not accepted there; they keep coming from the trusted default-branch config. Publishing plane content is an ordinary store write and goes through the same outbound checks as any other store change.
+
 ### Store sync and pre-registration
 
 Every store sync AIDA runs (the `aida pull` store leg, `aida db sync`, push-retry pulls, `aida remote reconcile` merges and fast-forwards, and the coordination refreshes behind claims and locks) checks [locked hypotheses](02-specs.md#pre-registering-a-hypothesis) on both sides before Git touches the store, and checks the result before reporting success. A clean Git merge is not enough on its own.

@@ -1294,7 +1294,7 @@ fn read_urgent_unread_count_clears_after_inbox_read() {
         &crate::mailbox_view::explicit_limits(),
     );
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, false, 10);
-    crate::mailbox_view::mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    crate::mailbox_view::ack_displayed(&r.main, &view, &rows).unwrap();
     assert_eq!(
         read_urgent_unread_count_for(&r.main, &audience),
         Some(0),

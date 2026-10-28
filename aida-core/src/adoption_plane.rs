@@ -403,7 +403,7 @@ pub fn verify(adoption: &Adoption, expected: &str) -> Result<()> {
     Ok(())
 }
 
-fn parse(commit: &str, text: &str) -> Result<Adoption> {
+pub(crate) fn parse(commit: &str, text: &str) -> Result<Adoption> {
     let file: SettingsFile = toml::from_str(text)
         .map_err(|e| anyhow::anyhow!("{SETTINGS_PATH} at {commit} is invalid: {}", e.message()))?;
     if file.schema != SCHEMA {
@@ -453,6 +453,74 @@ fn parse(commit: &str, text: &str) -> Result<Adoption> {
         settings,
         guidance: file.guidance,
     })
+}
+
+/// A tracked `.aida/config.toml` split for migration: the keys the plane
+/// admits, by `[settings.<section>]` name, and the dotted names of every
+/// other key (commands, hooks, credentials, locations, unknown keys), which
+/// stay in trusted or local configuration.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PolicySplit {
+    pub settings: BTreeMap<String, BTreeMap<String, toml::Value>>,
+    pub kept: Vec<String>,
+}
+
+impl PolicySplit {
+    /// The `adoption/settings.toml` body that would publish `settings`.
+    /// It parses back through the same reader the projection uses.
+    pub fn settings_toml(&self) -> Result<String> {
+        let mut settings = toml::Table::new();
+        for (section, keys) in &self.settings {
+            settings.insert(
+                section.clone(),
+                toml::Value::Table(keys.clone().into_iter().collect()),
+            );
+        }
+        let mut file = toml::Table::new();
+        file.insert("schema".into(), toml::Value::Integer(i64::from(SCHEMA)));
+        file.insert("settings".into(), toml::Value::Table(settings));
+        Ok(toml::to_string(&file)?)
+    }
+}
+
+/// Split a config table into what the plane admits and what stays. Uses
+/// the same allowlist as [`load`], so a split never proposes a key the
+/// plane would refuse.
+// trace:STORY-1741 | ai:claude
+pub fn split_policy(config: &toml::Table) -> PolicySplit {
+    let mut split = PolicySplit::default();
+    split_into(&policy_keys(), "", config, &mut split);
+    split
+}
+
+fn split_into(
+    policy: &BTreeMap<String, Vec<String>>,
+    prefix: &str,
+    table: &toml::Table,
+    split: &mut PolicySplit,
+) {
+    let section = if prefix.is_empty() { "_top" } else { prefix };
+    let rows = policy.get(section);
+    for (key, value) in table {
+        let named = rows.is_some_and(|rows| rows.contains(key));
+        let dynamic = rows.is_some_and(|rows| rows.iter().any(|row| row == "*"));
+        let dotted = if prefix.is_empty() {
+            key.clone()
+        } else {
+            format!("{prefix}.{key}")
+        };
+        if (named && inert(value, false)) || (dynamic && inert(value, true)) {
+            split
+                .settings
+                .entry(section.to_string())
+                .or_default()
+                .insert(key.clone(), value.clone());
+        } else if let toml::Value::Table(child) = value {
+            split_into(policy, &dotted, child, split);
+        } else {
+            split.kept.push(dotted);
+        }
+    }
 }
 
 /// A value that can only tune: a scalar or an array of scalars, or, under a

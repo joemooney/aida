@@ -237,7 +237,8 @@ pub(crate) fn committed_layer(project_root: &Path) -> Result<GateLayer> {
 /// The operator layer: `~/.aida/config.toml`; absent = empty.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn operator_layer() -> Result<GateLayer> {
-    let home = crate::aida_home_dir().context("cannot locate the user's home directory")?;
+    let home = crate::gate::kernel_deps::aida_home_dir()
+        .context("cannot locate the user's home directory")?;
     let path = home.join(".aida").join("config.toml");
     match std::fs::read_to_string(&path) {
         Ok(text) => parse_layer(&text, &path.display().to_string()),
