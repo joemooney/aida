@@ -1,0 +1,33 @@
+id: 01a1841b-ce73-78d1-bd77-42324bcafee3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-066
+title: 'Review PR-3062: [AI:claude] fix(mailbox): judge pre-record era-marker asides; retriable era-drop lock error (TASK-b6b1278890774ef993d2ebc327862470-072)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/era-marker-preformat-asides`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3062>
+  - Branch: `fix/era-marker-preformat-asides` → `main`
+
+  ## Covers
+
+  - TASK-b6b1278890774ef993d2ebc327862470-072
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3062` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T20:02:57.267764334Z
+modified_at: 2026-10-28T20:02:57.267764334Z
+req_type: Story
+filed_at:
+  code_sha: c677f7f451561e73df019fdb0e84539c995f9f88
+  branch: fix/era-marker-preformat-asides
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fbc835fcf48
+  vendor: claude
+  session: c333b1b5-8bc8-4a4a-8676-ba4e5df3cb86
