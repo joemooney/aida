@@ -274,7 +274,14 @@ file itself is unchanged.
 
 Mail sent before this, mail to a handle, a person or a vendor group, and
 broadcasts are unchanged: a role message with no delivery record is read
-through the shared role inbox as before.
+through the shared role inbox as before. One exception: if a live
+worktree's delivery records cannot be read (a corrupt or unsafe file, a
+symlinked mailbox, a read that ran out of time), they may belong to any role
+message, so role messages without a delivery record are hidden from that
+view until a clean read, rather than shown to the whole role. A worktree
+whose other mail fails to read but whose delivery records read cleanly, a
+deleted or prunable worktree, and an unusable canonical store hide nothing.
+Mail to a vendor group is never hidden this way.
 
 **Known limitation: a canonical-only clone.** The delivery records stay in
 the sending worktree's mailbox. When that worktree is retired they move with

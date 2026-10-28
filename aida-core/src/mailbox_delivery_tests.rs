@@ -562,3 +562,177 @@ fn story1843_d1_retained_sidecars_are_looked_up_by_id_and_faults_stay_local() {
     assert_eq!(visible(&r.main, &a), ["legacy"]);
     assert!(visible(&r.main, &reviewer("rev-b", Some(2))).is_empty());
 }
+
+// Ruling F2, fail closed (narrowed): the cohort sidecar lives only in the
+// sending source. When that live source's messages cannot be read but its
+// `.deliveries/` can, the sidecar still gates the replica and legacy role
+// mail is served. When its `.deliveries/` cannot be read either, no
+// sidecar-less role message is served to anyone from that partial view,
+// while direct mail stays visible.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_an_unreadable_sending_source_fails_closed() {
+    let r = repo();
+    let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 20, &[uuid(1)]);
+    send(&r.sib, "cohort", 20, Some(&sidecar));
+    // A sync or copy leaves a replica in main with no sidecar of its own.
+    crate::mailbox::write_local_message(&r.main, &role_message("cohort", 20)).unwrap();
+    send(&r.main, "legacy", 10, None);
+    let direct: crate::mailbox::Message = serde_json::from_value(serde_json::json!({
+        "id": "direct", "thread_id": "direct", "from": "sender",
+        "to": {"kind": "agent", "agent": "rev-old"},
+        "timestamp": 30, "body": "for one handle",
+    }))
+    .unwrap();
+    crate::mailbox::write_local_message(&r.main, &direct).unwrap();
+    // Vendor-group mail never carries a sidecar and is never gated.
+    let vendor: crate::mailbox::Message = serde_json::from_value(serde_json::json!({
+        "id": "vendor", "thread_id": "vendor", "from": "sender",
+        "to": {"kind": "agent", "agent": "codex"},
+        "timestamp": 40, "body": "for every codex session",
+    }))
+    .unwrap();
+    crate::mailbox::write_local_message(&r.main, &vendor).unwrap();
+    let member = reviewer("rev-a", Some(1));
+    let uuidless = reviewer("rev-old", None);
+    let late = reviewer("rev-late", Some(3));
+    let served = |reader: &ResolvedAudience| {
+        let (_, s) = snap(&r.main, reader);
+        let ids: Vec<String> = s.records.iter().map(|r| r.message.id.clone()).collect();
+        (s.complete(), ids)
+    };
+    assert_eq!(
+        served(&uuidless),
+        (
+            true,
+            vec!["legacy".into(), "direct".into(), "vendor".into()]
+        )
+    );
+    assert_eq!(
+        served(&late),
+        (true, vec!["legacy".into(), "vendor".into()])
+    );
+
+    // A corrupt message: the source errors, its sidecars are still read.
+    let bad = r.sib.join(".aida/mailbox/bad.json");
+    std::fs::write(&bad, b"{not json").unwrap();
+    assert_eq!(
+        served(&uuidless),
+        (
+            false,
+            vec!["legacy".into(), "direct".into(), "vendor".into()]
+        )
+    );
+    assert_eq!(
+        served(&late),
+        (false, vec!["legacy".into(), "vendor".into()])
+    );
+    assert_eq!(
+        served(&member),
+        (
+            false,
+            vec!["legacy".into(), "cohort".into(), "vendor".into()]
+        )
+    );
+    std::fs::remove_file(&bad).unwrap();
+
+    // A corrupt sidecar: the source's `.deliveries/` cannot be read.
+    let bad = r.sib.join(".aida/mailbox/.deliveries/bad.json");
+    std::fs::write(&bad, b"{not json").unwrap();
+    for reader in [&uuidless, &late, &member] {
+        let (complete, ids) = served(reader);
+        assert!(!complete, "the snapshot is partial");
+        assert!(
+            ids.iter().all(|id| id == "direct" || id == "vendor"),
+            "no sidecar-less role mail is served: {ids:?}"
+        );
+        assert!(ids.iter().any(|id| id == "vendor"), "vendor mail is served");
+    }
+    std::fs::remove_file(&bad).unwrap();
+    assert_eq!(
+        served(&member),
+        (
+            true,
+            vec!["legacy".into(), "cohort".into(), "vendor".into()]
+        )
+    );
+}
+
+// Ruling F2 (narrowed): a missing or prunable sibling worktree and a refused
+// canonical store make the view partial, but cannot hold an unread sidecar
+// (the retained lookup covers a retired source; the store never carries
+// one), so legacy role mail in a healthy source is still served. Vendor
+// group mail is never gated.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_stale_worktrees_and_a_refused_store_keep_legacy_role_mail() {
+    let r = repo();
+    send(&r.main, "legacy", 10, None);
+    let vendor: crate::mailbox::Message = serde_json::from_value(serde_json::json!({
+        "id": "vendor", "thread_id": "vendor", "from": "sender",
+        "to": {"kind": "agent", "agent": "codex"},
+        "timestamp": 20, "body": "for every codex session",
+    }))
+    .unwrap();
+    crate::mailbox::write_local_message(&r.main, &vendor).unwrap();
+    // Locked, the deleted sibling is missing but not prunable, so inventory
+    // takes its WorktreeMissing branch.
+    git(&r.main, &["worktree", "lock", r.sib.to_str().unwrap()]);
+    std::fs::remove_dir_all(&r.sib).unwrap();
+    let foreign = r.main.parent().unwrap().join("foreign");
+    std::fs::create_dir_all(&foreign).unwrap();
+    git(&foreign, &["init", "-q", "-b", "main"]);
+    for reader in [reviewer("rev-old", None), reviewer("rev-late", Some(3))] {
+        let ctx = MailboxContext::resolve(&r.main, Some(&foreign)).unwrap();
+        let s = logical_snapshot(&ctx, &reader, &Query::Inbox, &ReadLimits::explicit_read());
+        assert!(!s.complete(), "the stale sibling and the refused store");
+        assert!(
+            s.sources.iter().any(|x| x.status
+                == crate::mailbox_logical::SourceStatus::Error(
+                    crate::mailbox_logical::SourceErrorCode::WorktreeMissing
+                )),
+            "{:?}",
+            s.sources
+        );
+        let ids: Vec<_> = s.records.iter().map(|r| r.message.id.as_str()).collect();
+        assert_eq!(ids, ["legacy", "vendor"]);
+    }
+}
+
+// Ruling F2 (advisor, round 5): an inventory that cannot enumerate the live
+// worktrees left their `.deliveries/` unread, so a sidecar-less role
+// replica is gated for a UUID-less reader: when the inventory runs over its
+// root budget, and when `git worktree list` fails.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_d1_an_incomplete_inventory_fails_closed() {
+    let r = repo();
+    let sidecar = DeliverySidecar::cohort("cohort", "reviewer", 20, &[uuid(1)]);
+    send(&r.sib, "cohort", 20, Some(&sidecar));
+    crate::mailbox::write_local_message(&r.main, &role_message("cohort", 20)).unwrap();
+    let uuidless = reviewer("rev-old", None);
+    // Whole, the sibling's sidecar gates the replica.
+    assert!(visible(&r.main, &uuidless).is_empty());
+
+    let ctx = MailboxContext::resolve_or_local(&r.main, None).unwrap();
+    let mut limits = ReadLimits::explicit_read();
+    limits.max_roots = 1;
+    let s = logical_snapshot(&ctx, &uuidless, &Query::Inbox, &limits);
+    assert_eq!(
+        s.inventory_error,
+        Some(crate::mailbox_logical::SourceErrorCode::InventoryOverBudget)
+    );
+    assert!(s.records.is_empty(), "over budget: {:?}", s.records);
+
+    // A config git cannot parse makes `git worktree list` fail.
+    let config = r.main.join(".git/config");
+    let saved = std::fs::read(&config).unwrap();
+    std::fs::write(&config, b"[[[not a config\n").unwrap();
+    let s = logical_snapshot(&ctx, &uuidless, &Query::Inbox, &ReadLimits::explicit_read());
+    std::fs::write(&config, saved).unwrap();
+    assert_eq!(
+        s.inventory_error,
+        Some(crate::mailbox_logical::SourceErrorCode::InventoryFailed)
+    );
+    assert!(s.records.is_empty(), "inventory failed: {:?}", s.records);
+}
