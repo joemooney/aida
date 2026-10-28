@@ -4,12 +4,12 @@ title: 'Mailbox source key collides on inode reuse: dev:ino identity lets a reus
 description: |
   Mailbox lifecycle source identity collides when an inode is reused. `source_key` (aida-core/src/mailbox_lifecycle/mod.rs:447) is SHA-256(common git dir, worktree admin name, mailbox dir dev:ino). After a reuse (`Retirement::complete_reuse`) deletes the mailbox directory, the next occupant's first write recreates it. On many filesystems (ext4/overlayfs on CI runners) the freed inode is handed straight back, so the "new" source gets the OLD key. Evidence: guard_tests::a_reuse_hands_the_next_occupant_an_empty_mailbox fails `assert_ne!(new.key, old.key)` with both keys 68eaa6f0ec70417e2f02045e73a5f166ff748ad2978e2c35e96b9891f70113cf, on train PRs #3039 (13:59Z) and #3041 (14:13Z) for a comment-only PR (#3038), while main CI is green. The result depends on the filesystem, so main can go red at any time, and the same collision can happen in production on reuse: the next occupant's source aliases the retired source's record and retained generations.
   Acceptance: source identity is unique per mailbox-directory creation, not per (dev, ino). Recommended: mint a random 128-bit creation nonce when the mailbox dir is created, persist it (e.g. a `.source-id` file written create-new inside the dir, or in the anchor record), and hash it into the key. An existing dir with no nonce keeps its legacy key (back-compat), and a missing/unreadable nonce on a dir that should have one fails closed. Deterministic regression test that does not rely on inode reuse: inject the same (dev, ino) for two creations and assert distinct keys. The existing guard test must pass on all shards.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T14:26:05.535197008Z
-modified_at: 2026-10-28T15:48:34.744172449Z
+modified_at: 2026-10-28T16:05:11.722194492Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-10-28T15:48:35.555488222Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a18342-21a6-7ea3-ba8b-0b31c436b254
+  author: aida-auto-bump
+  timestamp: 2026-10-28T16:05:11.718496683Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18342-21aa-7643-86d9-4c2d505fee36
+  timestamp: 2026-10-28T16:05:11.722186875Z
+  agent: aida
+  commit_sha: c8d9d7105dc44b5856c72e366ada9c63468c3305
+  summary: 'All 6 acceptance criteria verified: per-creation 128-bit nonce hashed into source key, legacy keys preserved, missing/unreadable nonce fails closed (nonce-era marker), deterministic injected-inode test; CI run 40716903350 green on all shards at head. Non-blocking follow-ups filed (tomb surfacing, era-marker recovery, staging reaping).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
@@ -68,11 +82,7 @@ filed_at:
   aida_build_sha: 7335d1de322
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2: all six round-1 findings fixed and every acceptance criterion has a test, but rename_noreplace has no fallback, so a mailbox can no longer be created on filesystems without RENAME_NOREPLACE (a regression). PR CI was still queued at the head.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-011 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-28T15:22:51.225082427Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T16:05:11.718492934Z
+  completion_sha: c8d9d7105dc44b5856c72e366ada9c63468c3305
