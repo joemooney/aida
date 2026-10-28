@@ -367,7 +367,7 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
         // The plan reports every limitation `config transport show` does for
         // this operation, then the plan-only caveat; pull additionally carries
         // the fast-forward caveat.
-        // trace:STORY-1742 | ai:claude
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-012 | ai:claude
         let limits = plan["limitations"].to_string();
         for expected in [
             "raw Git",
