@@ -1,0 +1,21 @@
+id: 01a182e7-665f-7a51-9dfb-2cf67a27791e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-011
+title: 'Mailbox source key collides on inode reuse: dev:ino identity lets a reused mailbox inherit the retired source''s key'
+description: |
+  Mailbox lifecycle source identity collides when an inode is reused. `source_key` (aida-core/src/mailbox_lifecycle/mod.rs:447) is SHA-256(common git dir, worktree admin name, mailbox dir dev:ino). After a reuse (`Retirement::complete_reuse`) deletes the mailbox directory, the next occupant's first write recreates it. On many filesystems (ext4/overlayfs on CI runners) the freed inode is handed straight back, so the "new" source gets the OLD key. Evidence: guard_tests::a_reuse_hands_the_next_occupant_an_empty_mailbox fails `assert_ne!(new.key, old.key)` with both keys 68eaa6f0ec70417e2f02045e73a5f166ff748ad2978e2c35e96b9891f70113cf, on train PRs #3039 (13:59Z) and #3041 (14:13Z) for a comment-only PR (#3038), while main CI is green. The result depends on the filesystem, so main can go red at any time, and the same collision can happen in production on reuse: the next occupant's source aliases the retired source's record and retained generations.
+  Acceptance: source identity is unique per mailbox-directory creation, not per (dev, ino). Recommended: mint a random 128-bit creation nonce when the mailbox dir is created, persist it (e.g. a `.source-id` file written create-new inside the dir, or in the anchor record), and hash it into the key. An existing dir with no nonce keeps its legacy key (back-compat), and a missing/unreadable nonce on a dir that should have one fails closed. Deterministic regression test that does not rely on inode reuse: inject the same (dev, ino) for two creations and assert distinct keys. The existing guard test must pass on all shards.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T14:26:05.535197008Z
+modified_at: 2026-10-28T14:26:05.535197008Z
+req_type: Bug
+filed_at:
+  code_sha: 679d4187baddf94613e00f6ac9c90874a1cbf8d8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7335d1de322
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
