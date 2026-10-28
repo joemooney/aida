@@ -1,0 +1,29 @@
+id: 01a18342-c02b-7153-a3ae-396516a11b40
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-055
+title: 'Non-blocking (minor, fail-open): the reach scanner skips any path with a leadin…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-043, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor, fail-open): the reach scanner skips any path with a leading colon (story_1888_gate_paths_tests.rs:1716 path() ignores leading_colon), so a kernel or orchestrator naming ::aida_core::liveness::pid_is_alive(..) in an expression is not reported by kernel_outside_reach/orchestrator_drift and bypasses the new freeze; extern crate aida_core as x is also unhandled. Pre-existing scanner limitation shared with the dispatch facade; add a refused case and treat ::aida_core like aida_core.
+
+  PR: #3036
+  Reviewed sha: 6588b3a632cefc924a47500fdfe857632596db57
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T16:05:52.299683593Z
+modified_at: 2026-10-28T16:05:52.299683593Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-043
+- finding-hash:28e45461
+- from-review:PR-3036
+- kind:carried-forward
+filed_at:
+  code_sha: 01344b788fe2e3b2aeda58a12b3239924c93b6d6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 679d4187bad
+  vendor: claude
