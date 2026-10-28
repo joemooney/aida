@@ -1,12 +1,7 @@
 job: disk-headroom-guard-route
-last_run: 2026-10-25T04:58:51.278066796Z
+last_run: 2026-10-28T07:27:08.120218850Z
 last_by:
   seat: advisor
-  vendor: codex
+  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  vendor: claude
 result: done
-due_since: 2026-10-26T06:07:24.907415117Z
-due_reason: on CronJobFailed:disk-headroom-guard
-due_failure:
-  trip_id: disk-headroom-guard@2026-10-28T06:29:26.848262067Z
-  job: disk-headroom-guard
-  error: 'exit 1: 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
