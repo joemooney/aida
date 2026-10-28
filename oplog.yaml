@@ -82456,5 +82456,23 @@ operations:
   timestamp: 2026-10-28T18:34:13.592303468Z
   kind: !SetStatus
     status: Completed
-clock: 6423
+- id: 01a183ca-abe5-7a03-8956-2f2bcaf90396
+  target_id: 01a183ca-a4cb-7492-8fda-1ccf46654a16
+  author: aida
+  node_id: '1'
+  lamport: 6424
+  timestamp: 2026-10-28T18:34:20.005296872Z
+  kind: !Create
+    title: 'minor (non-blocking, pre-existing): dispatch.rs:1898-1918 still parses aida-loc…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking, pre-existing): dispatch.rs:1898-1918 still parses aida-lock lock-only entries (lock-<slug>.toml: scope/worktree_path/started_at/authorized_by/aida_lock_only, no id/slug/owner/branch/hostname) as SessionLease, so any 'aida lock' lock-only entry refuses every dispatch launch with 'malformed session lease' - same failure class as this bug; is_session_lease_file would not have skipped it either.
+
+      PR: #3052
+      Reviewed sha: 08c719342aed2fd370e8e1a92e49966b40da638b
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6424
 node_id: '1'
