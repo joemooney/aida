@@ -6839,7 +6839,7 @@ pub(crate) fn classify_intermediate_only_with_gitignore(
 /// still reports its ignore status (we OR this with the generated-path
 /// heuristic; a tracked-but-ignored build output is exactly the
 /// intermediate case we want to catch). A tracked path is judged only by
-/// the `.gitignore` files in the tree: the per-clone `info/exclude` and
+/// the in-tree `.gitignore` files: the per-clone `info/exclude` and
 /// the global `core.excludesFile` are local preferences and never make a
 /// committed file "intermediate". Untracked paths honour every ignore
 /// source, as before. Any spawn/other error ⇒ treat as not-ignored (fail
@@ -6848,7 +6848,7 @@ pub(crate) fn classify_intermediate_only_with_gitignore(
 // trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
     if git_path_is_tracked(project_root, path) {
-        return git_path_is_ignored_by_tree_rules(project_root, path);
+        return git_indexed_path_is_ignored_by_tree_rules(project_root, path);
     }
     std::process::Command::new("git")
         .arg("-C")
@@ -6862,9 +6862,7 @@ pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) ->
 /// Whether `path` is in the index of `project_root`.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 fn git_path_is_tracked(project_root: &std::path::Path, path: &str) -> bool {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    aida_core::git_ops::host_git_command(project_root)
         .args(["ls-files", "-z", "--"])
         .arg(format!(":(literal){path}"))
         .output()
@@ -6872,19 +6870,49 @@ fn git_path_is_tracked(project_root: &std::path::Path, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Ignore check restricted to the `.gitignore` files in the tree. Git
-/// consults `.gitignore` files before `info/exclude` and
-/// `core.excludesFile` and stops at the first source with a match, so
-/// `check-ignore -v` names the deciding source: the path is ignored only
-/// when that source is an in-tree `.gitignore` and the pattern is not a
-/// negation (`-v` reports negated matches too).
+/// `git ls-files -c -i --exclude-per-directory=.gitignore` for an indexed
+/// path: only in-tree `.gitignore` files are read, never `info/exclude`
+/// or `core.excludesFile`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
+fn git_indexed_path_is_ignored_by_tree_rules(project_root: &std::path::Path, path: &str) -> bool {
+    aida_core::git_ops::host_git_command(project_root)
+        .args([
+            "ls-files",
+            "-z",
+            "-c",
+            "-i",
+            "--exclude-per-directory=.gitignore",
+            "--",
+        ])
+        .arg(format!(":(literal){path}"))
+        .output()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+/// Ignore check restricted to the in-tree `.gitignore` files (as checked
+/// out in the working tree).
+///
+/// An indexed path is asked of `git ls-files -i` with only
+/// `--exclude-per-directory=.gitignore`, which never reads `info/exclude`
+/// or `core.excludesFile` — so a local rule on an ancestor directory
+/// cannot mask a committed `.gitignore` match.
+///
+/// A path the local index has never seen (added by the PR) falls back to
+/// `check-ignore -v`: it is ignored only when the reported deciding
+/// source is an in-tree `.gitignore` and the pattern is not a negation
+/// (`-v` reports negated matches too). Limitation: git resolves ancestor
+/// directory exclusion first, so when `info/exclude` or
+/// `core.excludesFile` matches an ancestor directory of such a path, that
+/// local source is reported and the path reads as not-ignored (fail open).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-009 | ai:claude
 fn git_path_is_ignored_by_tree_rules(project_root: &std::path::Path, path: &str) -> bool {
+    if git_path_is_tracked(project_root, path) {
+        return git_indexed_path_is_ignored_by_tree_rules(project_root, path);
+    }
     use std::io::Write as _;
     // `-z` requires `--stdin`; NUL framing keeps odd paths unquoted.
-    let Ok(mut child) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    let Ok(mut child) = aida_core::git_ops::host_git_command(project_root)
         .args(["check-ignore", "-v", "-z", "--stdin", "--no-index"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
