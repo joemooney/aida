@@ -8,12 +8,12 @@ description: |-
 
   PR: #2989
   Reviewed sha: c3492bbb7f08dab133af82f680887c061b0d59a1
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-27T21:57:41.072663506Z
-modified_at: 2026-10-28T07:20:26.403196417Z
+modified_at: 2026-10-28T09:22:07.966062660Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-010
@@ -80,6 +80,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a181d1-1dda-7fc2-9055-041412b5ceca
+  author: aida-auto-bump
+  timestamp: 2026-10-28T09:22:07.962202757Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a181d1-1dde-7d80-9e6a-3bce4daeb230
+  timestamp: 2026-10-28T09:22:07.966054936Z
+  agent: aida
+  commit_sha: a92022ef3335e4934d2c8d3f96467b206729df8d
+  summary: 'Round 2 conforms to the 2026-10-28 00:10 ruling: CiState/ActionRow/Outcome and emit_action are on the floor (callers import from gate/ directly, because no_unprotected_file_reexports_gate_items refuses re-exports); shrink-only FACADE_EXTERNAL_LEAVES has a stale-entry check; a one-hop follow from dispatch_* into named gate modules; re-export negative cases; seat_authority goes through the facade and aida_core. CI run 40659969388 green at head. merge-hold-gate red is the expected human-merge hold on protected gate paths.'
+  review_verdict: approved
 filed_at:
   code_sha: 259fed79cd7f96bac2d2ba3a83a742f7bcaaf752
   branch: main
@@ -87,11 +101,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 1f280c78de
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Facade + {gate,dispatch} allowlist + two-hop negative tests are sound and behaviour-preserving, but the ruling''s leaf-protection clause was replaced by an unsigned self-ruling (emit_action pinned unprotected), and the ratchet''s ''cannot change what the gate runs'' guarantee is false: protected gate modules dispatch_* calls still reach unprotected definers (seat_authority -> grant_keyring::read, process_probe, current_user_id, kernel.rs canonical_role_name). CI at head 6c7acd3 still in progress; pre-merge head 40c3d23 CI green.'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-013 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-28T04:36:23.304845240Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-28T09:22:07.962198449Z
+  completion_sha: a92022ef3335e4934d2c8d3f96467b206729df8d
