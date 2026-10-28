@@ -1,0 +1,30 @@
+id: 01a183dc-ce01-7bd2-8162-5c8e567391dd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-069
+title: '[minor] mod.rs:634-645: while a fresh marker is renamed aside and before it is …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor] mod.rs:634-645: while a fresh marker is renamed aside and before it is hard-linked back, the marker path is absent. A concurrent resolver then sees no era, so a nonce-less mailbox (e.g. inside create_mailbox_dir_in_place's mkdir->nonce window, mod.rs:860-866) is keyed as legacy instead of refused. This is the fail-open the marker exists to prevent. Narrow (needs 3 concurrent actors after an admin-entry recreation); consider serialising the drop under the mailbox lock, or document the residual window.
+
+  PR: #3056
+  Reviewed sha: 9e63e7c6364060bfe01ca6b62674ce4001f1208b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T18:54:08.385379538Z
+modified_at: 2026-10-28T18:54:08.385379538Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-059
+- finding-hash:4b4cac87
+- from-review:PR-3056
+- kind:carried-forward
+filed_at:
+  code_sha: fbc835fcf4858f96b699e4c9871b204db13d88a2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aecc4311ee4
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
