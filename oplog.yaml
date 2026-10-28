@@ -80198,5 +80198,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6242
+- id: 01a18199-5b12-79f1-a60b-5492bf38ef43
+  target_id: 01a18199-523c-7483-a9b8-c5dc9ee07cba
+  author: aida
+  node_id: '1'
+  lamport: 6243
+  timestamp: 2026-10-28T08:21:13.618137569Z
+  kind: !Create
+    title: 'cosmetic (non-blocking): docs/spikes/2026-10-28-private-core-split.md:256 lists…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on SPIKE-B6B1278890774EF993D2EBC327862470-001, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      cosmetic (non-blocking): docs/spikes/2026-10-28-private-core-split.md:256 lists transport_private alongside module names; it is a private submodule file (#[path = "transport_private.rs"]) of transport_policy, not a public aida-core module.
+
+      PR: #3007
+      Reviewed sha: 9aabd2357da2fb7fa60b08a054bc0d136a56db8d
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6243
 node_id: '1'
