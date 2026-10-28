@@ -81266,5 +81266,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6327
+- id: 01a1828f-12b6-7d81-a0ad-578c06bd87ac
+  target_id: 01a1828f-0baa-73e0-a451-0604ca5cba25
+  author: aida
+  node_id: '1'
+  lamport: 6328
+  timestamp: 2026-10-28T12:49:36.950229280Z
+  kind: !Create
+    title: (cosmetic, non-blocking) The root_item_macros doc comment (story_1888_gate_path…
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-015, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (cosmetic, non-blocking) The root_item_macros doc comment (story_1888_gate_paths_tests.rs:2151) still has the one ~110-column line left over from an edit. Reflow it.
+
+      PR: #2999
+      Reviewed sha: 3c459a93c7fdb6392faea0e8322bf5790d56628d
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6328
 node_id: '1'

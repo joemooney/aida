@@ -1,0 +1,29 @@
+id: 01a1828f-0baa-73e0-a451-0604ca5cba25
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-047
+title: (cosmetic, non-blocking) The root_item_macros doc comment (story_1888_gate_path…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-015, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (cosmetic, non-blocking) The root_item_macros doc comment (story_1888_gate_paths_tests.rs:2151) still has the one ~110-column line left over from an edit. Reflow it.
+
+  PR: #2999
+  Reviewed sha: 3c459a93c7fdb6392faea0e8322bf5790d56628d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T12:49:35.146961907Z
+modified_at: 2026-10-28T12:49:35.146961907Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-015
+- finding-hash:371d7026
+- from-review:PR-2999
+- kind:carried-forward
+filed_at:
+  code_sha: 6488c041c27974682823d2b09c7f680aee94b777
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a1fa3e7cbc9
+  vendor: claude
