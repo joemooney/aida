@@ -2093,19 +2093,34 @@ fn root_module_mounts(text: &str, name: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
-/// [`root_module_mounts`] over a parsed source, each mount with whether
-/// `#[cfg(test)]` keeps it out of non-test builds.
+/// [`root_module_mounts`] over a parsed source, each mount with whether it
+/// may be left out of non-test builds. That fails closed: only a mount with
+/// no `cfg`, or none but `cfg(not(test))`, counts as compiled outside tests,
+/// so `cfg(any(test))`, `cfg(all(test))` or `cfg(unix)` all count as
+/// possibly test-only.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-023 | ai:claude
 fn root_module_mounts_in(file: &syn::File, name: &str) -> Vec<(Vec<String>, bool)> {
-    let inline = file
-        .items
-        .iter()
-        .filter(|item| matches!(item, syn::Item::Mod(m) if m.content.is_some() && m.ident == name));
+    let gated = |attrs: &[syn::Attribute]| {
+        attrs.iter().any(|a| {
+            a.path().is_ident("cfg")
+                && !matches!(&a.meta, syn::Meta::List(l) if l.tokens.to_string() == "not (test)")
+        })
+    };
+    let mods = |out_of_line: bool| {
+        file.items.iter().filter_map(move |item| match item {
+            syn::Item::Mod(m) if m.content.is_none() == out_of_line && m.ident == name => Some(m),
+            _ => None,
+        })
+    };
     mounts_in("lib.rs", true, file)
         .into_iter()
         .filter(|m| m.depth == 1 && m.name == name)
-        .map(|m| (m.candidates.into_iter().map(|(c, _)| c).collect(), m.test))
-        .chain(inline.map(|_| (vec!["<inline>".to_string()], false)))
+        .zip(mods(true))
+        .map(|(m, item)| {
+            let candidates = m.candidates.into_iter().map(|(c, _)| c).collect();
+            (candidates, m.test || gated(&item.attrs))
+        })
+        .chain(mods(false).map(|_| (vec!["<inline>".to_string()], false)))
         .collect()
 }
 
@@ -2228,12 +2243,57 @@ fn root_item_macros(file: &syn::File, parts: &[String]) -> Vec<String> {
 /// Whether `text` defines or renames a macro to a name [`root_item_macros`]
 /// lets the crate root invoke bare: a `#[macro_export] macro_rules!
 /// include` (or `pub(crate) use m as include;` reached by a root glob)
-/// would shadow the builtin and run its own expansion at the root.
+/// would shadow the builtin and run its own expansion at the root. Read
+/// from syn's items and use trees, plus the raw tokens of every macro body
+/// (which may define either), so comments between tokens hide nothing. An
+/// unparsable source fails closed.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 fn shadows_root_item_macro(text: &str) -> bool {
-    regex::Regex::new(r"\b(?:macro_rules\s*!\s*|as\s+)(?:r#)?(?:include|thread_local)\b")
-        .unwrap()
-        .is_match(text)
+    use syn::ext::IdentExt;
+    use syn::visit::Visit;
+    fn shadowed(ident: &proc_macro2::Ident) -> bool {
+        matches!(
+            ident.unraw().to_string().as_str(),
+            "include" | "thread_local"
+        )
+    }
+    fn in_tokens(tokens: proc_macro2::TokenStream) -> bool {
+        use proc_macro2::TokenTree;
+        let tokens: Vec<TokenTree> = tokens.into_iter().collect();
+        tokens.iter().enumerate().any(|(i, t)| match t {
+            TokenTree::Group(g) => in_tokens(g.stream()),
+            TokenTree::Ident(id) if shadowed(id) => match (i.checked_sub(1), i.checked_sub(2)) {
+                (Some(p), _) if matches!(&tokens[p], TokenTree::Ident(a) if a == "as") => true,
+                (Some(p), Some(q)) => {
+                    matches!(&tokens[p], TokenTree::Punct(b) if b.as_char() == '!')
+                        && matches!(&tokens[q], TokenTree::Ident(m) if m == "macro_rules")
+                }
+                _ => false,
+            },
+            _ => false,
+        })
+    }
+    #[derive(Default)]
+    struct Shadow(bool);
+    impl<'ast> Visit<'ast> for Shadow {
+        fn visit_item_macro(&mut self, m: &'ast syn::ItemMacro) {
+            self.0 |= m.mac.path.is_ident("macro_rules") && m.ident.as_ref().is_some_and(shadowed);
+            syn::visit::visit_item_macro(self, m);
+        }
+        fn visit_use_rename(&mut self, r: &'ast syn::UseRename) {
+            self.0 |= shadowed(&r.rename);
+        }
+        fn visit_macro(&mut self, m: &'ast syn::Macro) {
+            self.0 |= in_tokens(m.tokens.clone());
+            syn::visit::visit_macro(self, m);
+        }
+    }
+    let Ok(file) = syn::parse_file(text) else {
+        return true;
+    };
+    let mut shadow = Shadow::default();
+    shadow.visit_file(&file);
+    shadow.0
 }
 
 /// The macros a source invokes by a bare name (`format!`, not
@@ -2969,6 +3029,12 @@ fn root_module_mount_detection_sees_redirected_modules() {
         "#[cfg(test)]\npub(crate) mod forge;",
         "#[cfg(test)]\nmod forge;\n#[path = \"forge2.rs\"] mod forge;",
         "",
+        // Fail closed: any other cfg may leave the non-test build without it.
+        "#[cfg(any(test))]\nmod forge;",
+        "#[cfg(all(test))]\nmod forge;",
+        "#[cfg(any(test, test))]\nmod forge;",
+        "#[cfg(unix)]\nmod forge;",
+        "#![cfg(test)]\nmod forge;",
     ] {
         assert!(!plainly(src), "{src}");
     }
@@ -3036,6 +3102,13 @@ fn root_macro_detection_sees_hidden_mounts_and_bindings() {
         "macro_rules! r#thread_local { () => {} }",
         "pub(crate) use m as include;",
         "pub(crate) use crate::m as\n  thread_local;",
+        // PR-2999 round 2: comments are whitespace to rustc.
+        "#[macro_export]\nmacro_rules!/**/include { ($f:literal) => {} }",
+        "macro_rules! /* x */ r#thread_local { () => {} }",
+        "use crate::m as /**/ include;",
+        "use crate::{a, m as // x\n include};",
+        "macro_rules! gen { () => { macro_rules! /**/ include { () => {} } } }",
+        "fn f() { macro_rules!/**/include { () => {} } }",
     ] {
         assert!(shadows_root_item_macro(text), "{text}");
     }
@@ -3044,6 +3117,8 @@ fn root_macro_detection_sees_hidden_mounts_and_bindings() {
         "thread_local! { static X: u8 = 0; }",
         "use std::include_str as inc;",
         "use x as included;",
+        "// macro_rules! include\nfn f() {}",
+        "const S: &str = \"use m as include;\";",
     ] {
         assert!(!shadows_root_item_macro(text), "{text}");
     }
