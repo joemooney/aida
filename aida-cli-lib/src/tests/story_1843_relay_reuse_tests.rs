@@ -296,3 +296,56 @@ fn a_session_taking_an_ended_runs_label_passes_the_unread_gate() {
         crate::agent_handle::reserve_handle(tmp.path(), &session_req("relay-quiet")).unwrap();
     assert_ne!(taken.recipient_id, quiet.run);
 }
+
+#[test]
+fn unreadable_read_receipts_make_the_count_unknown_and_record_no_notice() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("main");
+    std::fs::create_dir(&project).unwrap();
+    git(&project, &["init", "-q"]);
+    git(&project, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    let lock = held_lock(&project, "relay.lock");
+    let first = bind(
+        &project,
+        "relay-a",
+        std::process::id(),
+        &lock.path,
+        PROTOCOL,
+    )
+    .unwrap();
+    for id in ["m1", "m2"] {
+        send(&project, id, "relay-a");
+    }
+    // The receipt anchor cannot be read: read mail would look unread.
+    let anchor = project.join(".git").join("aida");
+    let _ = std::fs::remove_dir_all(&anchor);
+    std::fs::write(&anchor, "not a directory").unwrap();
+
+    let ended = end(
+        &project,
+        &first.run,
+        &first.capability,
+        TerminalReason::Stop,
+    )
+    .unwrap();
+    let report = ended.notices.unwrap();
+    assert_eq!(
+        (report.inserted, report.delivered, report.partial_runs),
+        (0, 0, 1)
+    );
+    assert!(super::outbox::list_entries(&project, &first.run)
+        .unwrap()
+        .is_empty());
+    let err = rebind(&project, &lock, Some(ReuseChoice::Handover))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("could not be fully counted"), "{err}");
+
+    // Once the anchor reads, the notices are recorded.
+    std::fs::remove_file(&anchor).unwrap();
+    let settled = super::outbox::settle_ended_runs(&project).unwrap();
+    assert_eq!(settled.partial_runs, 0);
+    assert!(!super::outbox::list_entries(&project, &first.run)
+        .unwrap()
+        .is_empty());
+}
