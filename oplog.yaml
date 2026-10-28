@@ -82551,5 +82551,23 @@ operations:
   timestamp: 2026-10-28T18:53:59.923278379Z
   kind: !SetStatus
     status: Completed
-clock: 6430
+- id: 01a183dc-c59f-7802-bff0-5dc35176a80d
+  target_id: 01a183dc-be93-75c1-b7db-ab8b095fc414
+  author: aida
+  node_id: '1'
+  lamport: 6431
+  timestamp: 2026-10-28T18:54:06.239908248Z
+  kind: !Create
+    title: '[minor] mod.rs:647 drop_stale_era_marker: remove_file(&aside)? fails on NotFoun…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      [minor] mod.rs:647 drop_stale_era_marker: remove_file(&aside)? fails on NotFound. A concurrent aida agent gc (leftovers.rs:150-153 removes stale dot-prefixed asides without an age gate) can delete an in-flight resolver's stale aside, so source_nonce returns Err and the mailbox write fails spuriously. Treat NotFound as success there.
+
+      PR: #3056
+      Reviewed sha: 9e63e7c6364060bfe01ca6b62674ce4001f1208b
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6431
 node_id: '1'

@@ -1,0 +1,30 @@
+id: 01a183dc-be93-75c1-b7db-ab8b095fc414
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-068
+title: '[minor] mod.rs:647 drop_stale_era_marker: remove_file(&aside)? fails on NotFoun…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor] mod.rs:647 drop_stale_era_marker: remove_file(&aside)? fails on NotFound. A concurrent aida agent gc (leftovers.rs:150-153 removes stale dot-prefixed asides without an age gate) can delete an in-flight resolver's stale aside, so source_nonce returns Err and the mailbox write fails spuriously. Treat NotFound as success there.
+
+  PR: #3056
+  Reviewed sha: 9e63e7c6364060bfe01ca6b62674ce4001f1208b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-28T18:54:04.435061171Z
+modified_at: 2026-10-28T18:54:04.435061171Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-059
+- finding-hash:9dd76728
+- from-review:PR-3056
+- kind:carried-forward
+filed_at:
+  code_sha: fbc835fcf4858f96b699e4c9871b204db13d88a2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aecc4311ee4
+  vendor: claude
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
