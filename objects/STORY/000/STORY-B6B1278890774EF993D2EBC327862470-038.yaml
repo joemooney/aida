@@ -1,0 +1,35 @@
+id: 01a1816d-a3aa-7360-b538-a270007c0ffc
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-038
+title: 'Review PR-3008: [AI:claude] chore(dispatch): register the dispatch-tick schedule job (Refs STORY-1917)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `chore/dispatch-tick-job`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3008>
+  - Branch: `chore/dispatch-tick-job` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1917
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3008` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-28T07:33:28.618187192Z
+modified_at: 2026-10-28T07:33:28.618187192Z
+req_type: Story
+filed_at:
+  code_sha: 33188d8b5c7097415664e477f3b2d49018844dc5
+  branch: chore/dispatch-tick-job
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33bf322340
+  vendor: claude
+  session: 2f8d330d-e6f2-4390-a32b-73eb66082380
