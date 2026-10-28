@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T17:21:07.198148660Z
+modified_at: 2026-10-28T17:22:09.539940105Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1353,6 +1353,12 @@ comments:
     D2b depends on D2a's capability API. If the D2a takeover rework has not landed by the time D2b needs it, rebase onto story-1843-d2-relay-mail once its rework commit is pushed rather than re-implementing it. STRICT gate. The PR body names its bases (#3042, #3040).
   created_at: 2026-10-28T14:38:31.486848254Z
   modified_at: 2026-10-28T14:38:31.486848254Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a18388-9803-70b2-a726-35bb8e98ff9f
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 10:23 MST, narrowing the F2 fail-closed ruling (10:13, PR #3042 round 3) after the round-4 review. My ''if origin is unknown, any errored source counts'' was too broad: missing or prunable worktrees (9 on the live repo) would hide all legacy role mail. Corrected rule: a source counts as unsighted ONLY when it is live (its worktree exists and is not prunable) and its .deliveries/ read, or the whole source read, failed (OverBudget, SourceChanged, corrupt or unreadable). WorktreeMissing and WorktreePrunable never count (their sidecars are covered by the retained lookup). CanonicalCoverage::Refused never counts (F5: the store carries no sidecars). The gate and the retained lookup apply to ROLE keys only, never to agent-type/vendor-group keys (they never get sidecars by design). Restore the two weakened tests to assert healthy-source mail is served from a partial view, and add a test that a missing/prunable sibling plus a refused store do not hide legacy role mail.'
+  created_at: 2026-10-28T17:22:09.539940105Z
+  modified_at: 2026-10-28T17:22:09.539940105Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
