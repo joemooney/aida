@@ -82245,5 +82245,13 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 6405
+- id: 01a18395-71e5-7462-8534-c27dcca00a09
+  target_id: 01a1838b-7e30-7800-a52f-1c97edd68271
+  author: aida
+  node_id: '1'
+  lamport: 6406
+  timestamp: 2026-10-28T17:36:11.749876678Z
+  kind: !SetStatus
+    status: Rejected
+clock: 6406
 node_id: '1'
