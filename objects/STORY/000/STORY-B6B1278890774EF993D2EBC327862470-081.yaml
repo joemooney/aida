@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:46:50.807919819Z
-modified_at: 2026-10-29T16:13:19.008392087Z
+modified_at: 2026-10-29T17:08:57.649356179Z
 req_type: Story
 relationships:
 - rel_type:
@@ -67,6 +67,12 @@ comments:
   content: 'Round 6 review (advisor, 2026-10-29 09:14) for PR-3090 at 308b231. Check ONLY the 2 round-5 findings: (1) aida review <SPEC> post-run read cannot return a previous round''s verdict from the ledger after the file is deleted (test it); (2) phase3_head_archive_fallback refuses the fallback when the current verdict path exists but the anchored reader refuses it (TASK-1801 fail-closed). Plus CI at this head. Any other finding: rule-once accept-with-reason in the verdict, not a new round.'
   created_at: 2026-10-29T16:13:19.008392087Z
   modified_at: 2026-10-29T16:13:19.008392087Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a188a2-deb1-7e90-a07e-d618a1884f29
+  author: joe
+  content: 'Round 7 review (advisor, 2026-10-29 10:10) for PR-3090 at 267d293. Scope: the ROUND 6 item only (the two fail-closed tests restored without changing expectations; rustdoc ordering) plus CI at this exact head — poll CI in <=60s steps within budget and cite the green run. Everything earlier was verified in rounds 1-6. Advisor cap: any other finding is accepted with a reason in the verdict, not a new round.'
+  created_at: 2026-10-29T17:08:57.649356179Z
+  modified_at: 2026-10-29T17:08:57.649356179Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877c-19b8-7861-83cd-857726302b71
