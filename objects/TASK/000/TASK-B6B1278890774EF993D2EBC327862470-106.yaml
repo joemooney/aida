@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-29T18:08:03.508355060Z
+modified_at: 2026-10-29T18:08:26.462142940Z
 req_type: Task
 tags:
 - advisor-review
@@ -43,6 +43,10 @@ relationships:
 - rel_type: Child
   target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
   created_at: 2026-10-29T18:08:09.887375313Z
+- rel_type: Blocks
+  target_id: 01a188d9-3821-7c82-855c-e9bf18c6e7bc
+  created_at: 2026-10-29T18:08:26.462135262Z
+  created_by: joe
 history:
 - id: 01a188d8-e7f2-7920-ae16-f28e478dd331
   author: joe
@@ -55,6 +59,10 @@ history:
 - id: 01a188d9-18fc-7342-964a-e11e2bde5e09
   author: joe
   timestamp: 2026-10-29T18:08:11.516699690Z
+  changes: []
+- id: 01a188d9-599b-71c2-9fdd-5580f03e96b8
+  author: joe
+  timestamp: 2026-10-29T18:08:28.059848663Z
   changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
