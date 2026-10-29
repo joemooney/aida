@@ -1922,8 +1922,12 @@ pub(crate) fn is_session_lease_file(name: &str) -> bool {
 /// sidecar, or a `write_atomic` staging file (`<stem>.tmp.<pid>.<seq>`).
 /// Scanners that also read other entry kinds (`lock-*.toml` lock-only entries,
 /// `mcp-claim.*.toml` claims, whose names may carry dots) skip only these,
-/// rather than requiring the strict [`is_session_lease_file`] shape.
+/// rather than requiring the strict [`is_session_lease_file`] shape. Every
+/// current caller first requires a `.toml` extension, which already excludes
+/// staging files, so for them only the sidecar match adds anything; the
+/// staging match keeps the helper correct for a caller without that check.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-012 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-065 | ai:claude
 pub(crate) fn is_lease_companion(name: &str) -> bool {
     if name.ends_with(".activity.toml") || name.ends_with(".manifest.toml") {
         return true;
