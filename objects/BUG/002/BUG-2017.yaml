@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-28T03:04:04.423291982Z
+modified_at: 2026-10-29T22:48:21.815197157Z
 req_type: Bug
 tags:
 - id-allocation
@@ -805,6 +805,12 @@ comments:
   created_at: 2026-10-28T00:55:09.664192708Z
   modified_at: 2026-10-28T00:55:09.664192708Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a189d9-9a37-7752-b589-a3dbaa631dde
+  author: joe
+  content: 'Follow-up: STORY-HOME-095 proposes hierarchical block delegation (declared upstream, block lineage to a transferable root, CAS claims during push/pull). If signed off, it supersedes acceptance item 4 and the single-HOME operating model here; items 1-3 and 5 still apply.'
+  created_at: 2026-10-29T22:48:21.815197157Z
+  modified_at: 2026-10-29T22:48:21.815197157Z
+  session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
