@@ -116,6 +116,15 @@ impl OwnMail {
         &self.coverage
     }
 
+    /// Queued role deliveries this audience is eligible for and nobody has
+    /// taken yet; none are shown until a binding read takes them.
+    // trace:STORY-1843 | ai:claude
+    pub(crate) fn pending_deliveries(&self) -> usize {
+        self.ack_basis
+            .as_ref()
+            .map_or(0, |(_, snapshot)| snapshot.pending_deliveries.len())
+    }
+
     pub(crate) fn is_partial(&self) -> bool {
         matches!(self.coverage, Coverage::Partial { .. })
     }
