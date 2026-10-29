@@ -137,3 +137,62 @@ fn bug_012_subagent_adoption_skips_companions() {
     assert!(lease.contains("adopted_by_subagent_at"), "{lease}");
     companions_untouched(tmp.path(), "adopted_by_subagent_at");
 }
+
+/// Write an `aida lock` lock-only entry for `locked` into `root`'s sessions dir.
+fn write_lock_only_entry(root: &std::path::Path, locked: &std::path::Path) {
+    let sessions = crate::leases::leases_dir(root);
+    std::fs::create_dir_all(&sessions).expect("sessions dir");
+    let body = format!(
+        "scope = \"aida:lock:wt\"\nworktree_path = {:?}\n\
+         started_at = \"2026-10-28T00:00:00Z\"\nauthorized_by = \"advisor\"\n\
+         aida_lock_only = true\n",
+        locked.canonicalize().expect("canonical").to_string_lossy()
+    );
+    std::fs::write(sessions.join("lock-_tmp_wt.toml"), body).expect("lock entry");
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
+#[test]
+fn task_064_lock_only_entry_for_another_worktree_admits() {
+    let (root, _sessions) = sessions_with_companions();
+    let other = root.path().join("other-worktree");
+    let target = root.path().join("target-worktree");
+    std::fs::create_dir_all(&other).expect("other");
+    std::fs::create_dir_all(&target).expect("target");
+    write_lock_only_entry(root.path(), &other);
+    let refusal =
+        check_live_worktree_or_branch_occupant(root.path(), &target, Some("demo/lane"), None);
+    assert_eq!(refusal, None, "a lock on another worktree must not refuse");
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
+#[test]
+fn task_064_lock_only_entry_for_the_target_refuses_as_occupied() {
+    let (root, _sessions) = sessions_with_companions();
+    let target = root.path().join("target-worktree");
+    std::fs::create_dir_all(&target).expect("target");
+    write_lock_only_entry(root.path(), &target);
+    let refusal =
+        check_live_worktree_or_branch_occupant(root.path(), &target, Some("demo/lane"), None)
+            .expect("a lock on the target occupies it");
+    assert!(
+        refusal.contains("occupied by an aida lock") && refusal.contains("advisor"),
+        "{refusal}"
+    );
+}
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
+#[test]
+fn task_064_corrupt_lock_only_entry_refuses() {
+    let (root, sessions) = sessions_with_companions();
+    std::fs::write(sessions.join("lock-_tmp_wt.toml"), "worktree_path = [").expect("corrupt");
+    let target = root.path().join("target-worktree");
+    std::fs::create_dir_all(&target).expect("target");
+    let refusal =
+        check_live_worktree_or_branch_occupant(root.path(), &target, Some("demo/lane"), None)
+            .expect("corrupt lock entry fails closed");
+    assert!(
+        refusal.contains("malformed aida lock entry") && refusal.contains("lock-_tmp_wt.toml"),
+        "{refusal}"
+    );
+}

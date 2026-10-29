@@ -1912,6 +1912,37 @@ pub(crate) fn check_live_worktree_or_branch_occupant(
                         p.display()
                     ));
                 };
+                // An `aida lock` lock-only entry is not a session lease: it
+                // occupies only the worktree it names. A corrupt one still
+                // fails closed.
+                // trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
+                if p.file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|n| n.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX))
+                {
+                    let lock = match crate::worktree_lock::parse_lock_only_entry(&body) {
+                        Ok(lock) => lock,
+                        Err(e) => {
+                            return Some(format!(
+                                "unknown occupant: malformed aida lock entry {}: {e:#}",
+                                p.display()
+                            ));
+                        }
+                    };
+                    let lock_path = Path::new(&lock.worktree_path);
+                    let lock_canon = lock_path
+                        .canonicalize()
+                        .unwrap_or_else(|_| lock_path.to_path_buf());
+                    if !lock.worktree_path.is_empty() && lock_canon == target_canon {
+                        return Some(format!(
+                            "worktree {} is currently occupied by an aida lock held by `{}` ({})",
+                            worktree.display(),
+                            lock.authorized_by,
+                            p.display()
+                        ));
+                    }
+                    continue;
+                }
                 if toml::from_str::<crate::SessionLease>(&body).is_err() {
                     return Some(format!(
                         "unknown occupant: malformed session lease {}",
