@@ -10,12 +10,12 @@ description: |-
   Why parked (not built): per-edge weight is canonical data (YAML write per edge); who sets it is unclear (manual = tedious, AI = another generation pass); and no concrete case yet exists where two same-type edges genuinely need different weights. Type-weighting already separates blocks from references. Build only when a real same-type-divergence case appears.
 
   If built later: weight: Option<f32> on Relationship (skip_serializing_if none); centrality (STORY-632) would multiply each edge by its per-edge weight when present, falling back to the type-table weight. Settle who/when sets it before implementing.
-status: Draft
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:16:00.953892836Z
-modified_at: 2026-10-29T06:36:11.410117220Z
+modified_at: 2026-10-29T06:36:14.715301797Z
 req_type: Task
 tags:
 - aida:graph
@@ -32,3 +32,11 @@ history:
   timestamp: 2026-10-29T06:36:12.254825779Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1865f-99fb-75b3-8943-8886772a15f8
+  author: joe
+  timestamp: 2026-10-29T06:36:14.715299800Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
