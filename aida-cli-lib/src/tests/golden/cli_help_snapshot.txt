@@ -4529,10 +4529,11 @@ Usage: aida mailbox wake-snapshot [OPTIONS]
 
 Options:
       --local-root <LOCAL_ROOT>
-          Local checkout whose mailbox is inspected (defaults to the main checkout)
+          Checkout the logical mail view is read from (defaults to the main checkout); every
+          worktree of its repository is included
 
       --recipient <RECIPIENT>
-          Exact inbox identity; does not inherit the caller's identity union
+          One of this process's own inboxes; narrows, never widens, the audience a notice would read
           
           [default: advisor]
 
@@ -29613,12 +29614,12 @@ Working on aida itself
       {
         "name": "local-root",
         "takes_value": true,
-        "help": "Local checkout whose mailbox is inspected (defaults to the main checkout)"
+        "help": "Checkout the logical mail view is read from (defaults to the main checkout); every worktree of its repository is included"
       },
       {
         "name": "recipient",
         "takes_value": true,
-        "help": "Exact inbox identity; does not inherit the caller's identity union"
+        "help": "One of this process's own inboxes; narrows, never widens, the audience a notice would read"
       }
     ],
     "hidden": false
