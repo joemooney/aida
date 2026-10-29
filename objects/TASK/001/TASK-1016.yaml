@@ -3,12 +3,12 @@ spec_id: TASK-1016
 agreed_id: TASK-1016
 title: 'Followup TASK (file at sign-off): flip the *solo-loop default* groom step to `--autopilot` once the envelope is proven in supervised use (separate, later — `feedback_reliability_fixes_use_keyboard_not'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:37.514912096Z
-modified_at: 2026-10-29T06:42:19.720709587Z
+modified_at: 2026-10-29T06:42:22.778733785Z
 req_type: Task
 tags:
 - zen-ready
@@ -40,4 +40,12 @@ history:
   timestamp: 2026-10-29T06:42:20.564508967Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18665-37ba-7613-b88c-1a32e6149305
+  author: joe
+  timestamp: 2026-10-29T06:42:22.778731770Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 execution_mode: drive
