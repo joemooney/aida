@@ -3,12 +3,12 @@ spec_id: SPIKE-60
 agreed_id: SPIKE-60
 title: 'SPIKE: durable advisor-watch supervisor for machine-asleep (cloud/cron vs daemon)'
 description: 'STORY-586''s watch loop survives only while the launching terminal/laptop is awake (same lifetime as Claude''s /loop). For truly durable ''garden while I''m away overnight / machine asleep'' we''d need a supervisor that outlives the session — cloud cron, a system service, or a daemon. SPIKE-11 deliberately AVOIDED a daemon (operational complexity for a solo tool). Evaluate: is durable-supervisor worth it, and if so cloud-cron (cold-boot, no daemon) vs a local service? Verdict + smallest-slice. Deferred design — do NOT build unsupervised. trace:STORY-586 trace:SPIKE-11'
-status: Approved
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T05:56:01.315522672Z
-modified_at: 2026-10-29T06:36:32.932193615Z
+modified_at: 2026-10-29T06:36:35.344149364Z
 req_type: Spike
 tags:
 - advisor
@@ -25,4 +25,12 @@ history:
   timestamp: 2026-10-29T06:36:33.774210475Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1865f-ea90-7721-809e-e21c9bd48b8d
+  author: joe
+  timestamp: 2026-10-29T06:36:35.344147354Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 human_only: true

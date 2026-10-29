@@ -84328,5 +84328,13 @@ operations:
   timestamp: 2026-10-29T06:36:30.732131214Z
   kind: !RemoveTag
     tag: deferred:design
-clock: 6575
+- id: 01a1865f-ee4a-7a91-92ca-046df747ba8e
+  target_id: 019ebf8d-2ea3-7803-b157-3ba618843a2b
+  author: aida
+  node_id: '1'
+  lamport: 6576
+  timestamp: 2026-10-29T06:36:36.298006016Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6576
 node_id: '1'
