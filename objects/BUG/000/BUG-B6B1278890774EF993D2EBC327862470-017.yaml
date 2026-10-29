@@ -12,16 +12,61 @@ description: |
 
   ## Notes
   CI/CD was disabled on GitLab project ai/aida and was re-enabled by the operator on 2026-10-29 to run this pipeline. FASTTRACK gate (make check-ci-fast); no cargo.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:01:08.891323831Z
-modified_at: 2026-10-29T18:13:44.172115434Z
+modified_at: 2026-10-29T18:20:04.476515819Z
 req_type: Bug
 tags:
 - ci
 - release
+comments:
+- id: 01a188de-81bb-7353-8783-f7700403e3f8
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Fixture/inspection:** `ci/Dockerfile` apt set lists `libc6-dev-arm64-cross` next to `gcc-aarch64-linux-gnu`; verified by diff review + `make check-ci-fast`.
+    - **Fixture/inspection:** `.gitlab-ci.yml` `image:` bumped `localhost/aida-ci:1.92` -> `localhost/aida-ci:1.92-2`; Dockerfile header, docs/gitlab-ci-runner.md build command and runner config example updated to match so they cannot drift. PR body documents the operator rebuild command.
+    - **No automated test:** pipeline success on the runner requires the operator to rebuild the image and retry pipeline 362 / a new tag pipeline — verified post-merge by the operator.
+
+    ### Expected files
+    - `ci/Dockerfile`
+    - `.gitlab-ci.yml`
+    - `docs/gitlab-ci-runner.md`
+
+    ### Ambiguities / conflicts as questions
+    - None (tag name `1.92-2` chosen: keeps the Rust version visible, suffix marks image revision).
+  created_at: 2026-10-29T18:14:06.011606564Z
+  modified_at: 2026-10-29T18:14:06.011606564Z
+  session_id: 01a188de28c9
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a188e3-81ef-7060-9812-e15d09743cc5
+  author: joe
+  content: |
+    protocol check at `aida queue done` ([protocol] enforce = "warn"): BUG-b6b1278890774ef993d2ebc327862470-017 proceeded with missing protocol items:
+    - protocol: bug — missing test-file change (layer: type; no test file in the diff)
+  created_at: 2026-10-29T18:19:33.743893413Z
+  modified_at: 2026-10-29T18:19:33.743893413Z
+  session_id: 01a188de28c9
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a188e3-f9fc-76c1-bb8c-82d4d68baa5e
+  author: joe
+  content: |-
+    ## Implementer finding (kind:bug-spotted, severity:minor) — could not file as draft TASK
+
+    `aida add` failed in this contained seat: "requirement ID allocation failed: Read-only file system (os error 30)". Recording here for advisor triage.
+
+    `aida ship <SPEC> --no-merge` refused at step 1 with a clean tree: "could not list staged files to check for sandbox stand-ins: refusing to run git in <seat>: it is a contained seat's private clone..." It also announced "committing uncommitted work" though `git status` was empty. /aida-pr names `aida ship --no-merge` as the publication path, so contained seats fall back to `git push` + `gh pr create` (used for PR #3095). `git push -u` also warned "unable to write upstream branch configuration" (push succeeded).
+
+    Suggest: make aida ship work in contained seats, or document the fallback in /aida-pr.
+  created_at: 2026-10-29T18:20:04.476515819Z
+  modified_at: 2026-10-29T18:20:04.476515819Z
+  session_id: 01a188de28c9
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a188de-2c6c-75b1-81e9-a34edecf6203
   author: aida-session-start
@@ -31,6 +76,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a188de-5fa6-7af1-9d35-9b4fb2c5cf54
+  author: joe
+  timestamp: 2026-10-29T18:13:57.286643648Z
+  session_id: 01a188de28c9
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
+- id: 01a188e3-884f-79e2-b68a-e28bdd907f2d
+  author: joe
+  timestamp: 2026-10-29T18:19:35.375314243Z
+  session_id: 01a188de28c9
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: main
@@ -39,3 +99,7 @@ filed_at:
   aida_build_sha: b74166aba21
   vendor: claude
   session: 59349e57-271d-4b9e-b662-8585b949736a
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-29T18:19:35.279138102Z
+  implemented_by: joe
