@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T05:26:54.171557407Z
-modified_at: 2026-10-29T05:32:51.426965724Z
+modified_at: 2026-10-29T05:35:50.935484065Z
 req_type: Task
 relationships:
 - rel_type:
@@ -21,6 +21,12 @@ history:
   timestamp: 2026-10-29T05:32:53.031022188Z
   session_id: 950d0de9-9ab4-4d83-b6d0-e9d580715520
   changes: []
+- id: 01a18628-51bd-7c83-adfd-3577526a8838
+  author: joe
+  timestamp: 2026-10-29T05:35:51.741840160Z
+  session_id: 01a18627397d
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 filed_at:
   code_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
   branch: docs/what-is-aida
@@ -29,3 +35,11 @@ filed_at:
   aida_build_sha: a470735bfed
   vendor: claude
   session: 950d0de9-9ab4-4d83-b6d0-e9d580715520
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Docs-only PR: md + self-contained HTML are present, match each other, and carry no external resources; spec IDs are mostly anonymized. Two factual or cross-reference errors in prose and one partial-anonymization inconsistency need a quick rework.'
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-095 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T05:35:50.935484065Z
