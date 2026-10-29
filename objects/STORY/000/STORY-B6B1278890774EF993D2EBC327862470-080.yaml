@@ -50,12 +50,12 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
   BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T14:59:18.959489440Z
+modified_at: 2026-10-29T15:03:48.412643847Z
 req_type: Story
 tags:
 - architecture
@@ -441,6 +441,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18830-49bc-74c3-9d41-ad6813aa24de
+  author: aida-orchestrator
+  timestamp: 2026-10-29T15:03:48.412670212Z
+  session_id: 01a1882e0dbb
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -453,3 +462,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 4: round-3 findings 1,3,5 fixed with tests (ledger_supersedes at both merge gates, calibration, expired-grant-at-collection). Blocking: the round-3 ruling''s ''no reader opens a legacy verdict file directly; add that to the ratchet'' is not met - no reader ratchet exists and ~10 direct legacy readers remain, one a regression; and ''aida review verdict --json'', which the new templates point launchers at, prints the stale/missing file body. AC1 partial-for-slice (verdict + legacy-imported events; seq/flock tested; other kinds slices 2-3); AC2 verified (a_verdict_for_the_spec_of_a_pr_and_one_for_the_pr_are_the_same_record); AC3 n/a (slice 2); AC4 n/a (slice 3); AC5 verified as amended (a_contained_writer_cannot_write_the_ledger, a_verdict_for_another_pr_is_refused_at_collection, a_revoked_or_foreign_grant_is_refused_at_collection, an_expired_grant_is_refused_at_collection, a_collected_verdict_goes_on_the_ledger_and_no_legacy_file_is_written); AC6 partial (read-through tested; writer ratchet present; reader ratchet required by round-3 ruling missing; dual write accepted for slice 1); AC7 partial (code in gate/ledger; reduction due at final slice). CI at review: merge-hold-gate fail (hold label), lib/cli/gates/contracts/rest pending.'
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-080 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T15:03:48.412643847Z
