@@ -87201,5 +87201,84 @@ operations:
   timestamp: 2026-10-29T21:21:38.461707029Z
   kind: !SetStatus
     status: Approved
-clock: 6803
+- id: 01a1898a-47f3-7733-813f-f53af2a6c467
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6804
+  timestamp: 2026-10-29T21:21:43.411856403Z
+  kind: !SetDescription
+    description: |
+      ## Problem
+      Review and merge-gate state lives in two key spaces and several places: ~2,700 files in `.aida/review-verdicts/` keyed by spec OR by `PR-N`, holds in `.aida/merge-holds/PR-N`, and verdict/hold files that reviewer lanes write into their own worktrees and that the launcher must "collect" back into the primary checkout. Consequences seen repeatedly (most recently PR-3089 on 2026-10-29, four review rounds): an approval under `PR-N` does not release a hold under the spec key (BUG-2221 class); releasing a hold deletes the marker the ship-held mandate needs as evidence; removing a reviewer worktree can lose state (BUG-2176); the carry-over proof is recomputed ~4 times per ship (TASK-1992). This is regroup move M1 (.aida/regroup-draft.md), the prerequisite for M2 (merge train by default).
+
+      ## Acceptance
+      1. One append-only gate ledger per change (PR/MR) in the primary checkout's shared state, never in a worktree. Events: verdict, hold, hold-release, mandate-cover, carry-over-proof. Each event names the head SHA and the change's patch identity (diff of the change's own commits against its merge base).
+      2. The change is the only primary key. A spec ID is an index to changes, never a second state location. A verdict recorded for the spec of PR-N and one recorded as PR-N are the same record.
+      3. Release appends an event; nothing deletes evidence. The ship-held mandate and `aida awaiting` read "a hold existed and was cleared" from the ledger.
+      4. Carry-over: after a base-only update whose patch identity is unchanged, the prior approval applies at the new head automatically. The proof is computed once, stored as an event, and read by every gate (ship, mandate, merge-hold-gate CI check).
+      5. Writers resolve the ledger location from the common Git dir, so a reviewer or implementer in any worktree or contained seat clone writes the shared ledger directly; the "collected the reviewer's verdict" step and worktree-local hold markers are removed.
+      6. Migration: existing `.aida/review-verdicts/*` and `.aida/merge-holds/*` are read as legacy input (one-time import or read-through) with no loss; old writers are deleted, not kept in parallel. A ratchet test fails if new code writes either legacy path.
+      7. All of this lives in `aida-cli-lib/src/gate/` (STORY-1889 boundary). Net effect is fewer gate code paths: the review_verdict / review_marker / merge_hold_core / rework_hold_release / approval duplication collapses onto the ledger.
+
+      ## Process (architecture change)
+      FIRST deliverable is a SKETCH posted as a comment on this spec: ledger format and location, event schema, patch-identity computation, legacy migration, the list of gate call sites that switch over, and what gets deleted. No implementation before advisor signoff on the sketch. Then implement in at most 3 vertical slices, each its own PR with `(Refs <this spec>)`; only the final slice uses the plain trailer.
+
+      ## Subsumes (supersede on completion)
+      TASK-1992, TASK-1316, STORY-1375, TASK-2008 (carry-over part), STORY-1683 (tier becomes a recorded field). Not in scope: the merge train itself (M2), risk-tier policy, STORY-1156.
+
+      ## Test tier
+      STRICT for the final slice (gate code, heft >= 7): targeted cargo tests for gate:: plus the ship/mandate integration binaries; LIGHT for earlier slices. Never `cargo test --workspace` or `make check-ci` locally.
+
+      ## Sketch status
+      The sketch is posted as the first comment and SIGNED OFF (second comment, 2026-10-29 04:05). Do not write another sketch; implement SLICE 1 per the sketch as amended by the signoff (Q1: mailbox gate-event transport, no contained write path to the ledger).
+
+      ## Slice 1 (PR-3090) round-1 advisor rulings, 2026-10-29 05:00 — ONE rework push, no follow-up PR
+      BUNDLE all seven findings in .aida/review-verdicts/PR-3090.json:
+      1. [security] Ingest validates the attestation with the SAME authority checks as approval_attested / review_authority (grant/receipt lookup via authority_key), not RecorderAttestation::authorizes(). Test: a contained implementer's mailbox submission claiming seat "reviewer" is appended as `rejected-event`, never as a verdict.
+      2. [security] Ordering uses only primary-side data: the ledger's own `at`/`seq` stamped on append (re-stamp recorded_at on ingest). newer_of() must not trust submitter timestamps. Test: a future-dated submission cannot shadow a later file verdict.
+      3. Remove consumed spool files on the empty-pending path too; test the failed-removal case does not duplicate events.
+      4. Recompute patch_id / base_ref / base_tip primary-side on ingest (null if not computable); never store submitter-supplied identity.
+      5. Ratchet counts legacy WRITER call sites (write_verdict_object*, write_hold*, record_clearance*, collect/adopt), not string literals.
+      6. Import the legacy file BEFORE the file write (or dedupe by record identity) so the first write is not recorded twice; delete verdict_history or give it a real caller.
+      7. Memoize store_root() like hold_store_root.
+      ACCEPTED deviation (reason: switching every verdict writer/reader and deleting collect in the same slice whose own review depends on reviewers recording verdicts is the riskier order): slice 1 may dual-write. SLICE 2 acceptance now additionally REQUIRES: verdict writers stop writing legacy files, all verdict readers read the ledger projection, collect_standalone_verdict / adopt_direct_write are deleted, and the ratchet baseline for verdict writers drops to 0. The story cannot complete with dual writes in place.
+
+
+      ## Slice 1 (PR-3090) ROUND 2 advisor ruling, 2026-10-29 06:35 — REVERSES signoff Q1; final rework push for slice 1
+      Finding: mailbox submissions are not origin-authenticated. Grant files (id + binding) are readable from contained seats, so ingest cannot tell the real reviewer from a seat that copied its grant, and ingest is not bound to the PR. The mailbox gate-event transport is therefore WITHDRAWN.
+      New rule for contained writers: the ONLY route from a contained seat to the ledger is the launcher-side collect, which is origin-authenticated (the uncontained launcher reads the verdict from the exact seat clone it launched, requires the record's pr == the launched PR, and requires the grant to be that launch's own child grant, valid at COLLECTION time). collect_standalone_verdict / adopt_direct_write are KEPT but rewritten to append a `verdict` event to the ledger (no legacy file write on that path). AC5 is amended accordingly: "no verdict/hold state persists in a worktree or seat clone after collection; the ledger is written only by uncontained primary-side code".
+      Do in this push:
+      1. Delete gate/ledger/spool.rs, the mailbox gate-event kind and drain-on-read; projection reads only the ledger (+ legacy read-through).
+      2. Point collect/adopt at ledger append, keeping StandaloneVerdictChecks::check_record (PR binding, child-grant check at collection time). Tests: a verdict naming PR-B collected from PR-A's reviewer seat is refused; an expired/revoked grant at collection is refused.
+      3. Make legacy_gate_writers_do_not_gain_call_sites fast (<10s; scan once, cached file list) or add a justified entry to scripts/test-time-budget.toml — CI lib-1 currently fails on this budget.
+      Findings 3 (backdating) and 4 (rejected-event size) disappear with the spool; no further action. Slice 2's acceptance items stand (legacy writers to 0, readers on the ledger).
+
+
+      ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
+      BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
+
+
+      ## Slice 1 (PR-3090) ROUND 6 (advisor, 2026-10-29 09:45): make CI green, nothing else
+      Two existing fail-closed tests regressed since 7dac907: review_gates::bug_775_commits_ahead_tests::a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites (bug_775_commits_ahead_tests.rs:701) and gate::review_verdict::review_verdict_tests::task1801_ship_and_phase_gates_refuse_linked_verdicts (review_verdict_tests.rs:2118). Restore their fail-closed behavior: a current verdict path that exists but is unreadable or a link must make ship and phase-3 gates REFUSE, even when the ledger has a readable record. Do not edit the tests' expectations. Fix the rustdoc ordering at lib_part5.rs:951-965 (cosmetic, bundled). Run exactly: cargo test -p aida-cli-lib --lib bug_775_commits_ahead task1801 review_verdict, plus make check-ci-fast.
+
+      ## SLICE 2 brief (advisor, 2026-10-29 13:05): slice 1 SHIPPED as PR-3090 (eb306b0). Implement slice 2 now, as a NEW PR with `(Refs <this spec>)`.
+      Slice 1 rulings above are history; do not reopen them. Slice 2 scope, all from the signed-off sketch and the round rulings:
+      1. AC3 holds on the ledger: `hold` and `hold-release` events replace `.aida/merge-holds/PR-N` writes. Release APPENDS an event and never deletes evidence. The ship-held mandate, `aida awaiting` held_prs, the merge-hold-gate CI check and rework_hold_release read holds via `gate::ledger::project` (with legacy read-through of existing marker files). rework_hold_release reads verdicts via the projection, not `verdict_file`/`read_history`.
+      2. Single writer: verdict writers stop writing legacy `.aida/review-verdicts/*` files, including the `archive_round_by_sha` archive write. Hold writers stop writing marker files. `collect_standalone_verdict` / `adopt_direct_write` STAY (round-2 reversal: launcher collect is the only contained route) and append ledger events only. Delete local_hold_path / local_clearance_path; no gate state persists in a worktree or seat clone after collection.
+      3. With the writers switched, flip `newer_of`'s tie-break to ledger-only for new records. Spec-only verdicts (no `--pr`) also go onto the ledger, keyed by the spec index → change.
+      4. Ratchet `legacy_gate_writers_do_not_gain_call_sites`: verdict AND hold writer baselines drop to 0. The story cannot complete with dual writes.
+      5. Keep every existing fail-closed test green without editing its expectations (TASK-1801 refused/linked files, bug_775 phase-3).
+      NOT in slice 2: carry-over proof events (AC4) and superseding TASK-1992/TASK-1316/STORY-1375/TASK-2008/STORY-1683; that is slice 3, the final slice with the plain trailer.
+      Test tier LIGHT: ONE targeted run `cargo test -p aida-cli-lib --lib gate::` (+ the specific merge_hold / review_verdict filters you touch) plus `make check-ci-fast`; `make test-touched` only if you touch shared test infra or >10 files. Never the workspace suite or make check-ci.
+
+
+      ## SLICE 2 continuation (advisor, 2026-10-29 13:40)
+      Continue from branch head e87ae08 and the "Slice 2 handoff" comment (the newest comment). Do not restart or re-sketch. Retarget each of the ~119 failing tests in `.slice2-failing.txt` to assert the equivalent LEDGER state (event appended, projection value, hold open or released). Never delete a test to make it pass, and never weaken an assertion. Fail-closed expectations (TASK-1801, bug_775) stay byte-identical. Run tests with `env -u AIDA_CONTAINED`. Delete `.slice2-failing.txt`, run make check-ci-fast, then open the PR with `(Refs <this spec>)`. The handoff's 4 "findings to file" are RULED here, so do not file them: (a) by-spec ledger for unindexed specs is accepted for slice 2; slice 3 binds it to the change. (b) backfill-shas legacy rewrite is accepted; it is the operator's exemption. (c) list_holds full scan is accepted (perf, revisit if measured). (d) collected untyped legacy markers keeping legacy=true is a defect: fix it in this slice.
+      If context runs low again, push the WIP and update the handoff comment before stopping.
+
+
+      ## SLICE 2 finish (advisor, 2026-10-29 14:25): third seat, OPEN THE PR THIS SEAT
+      Read the newest handoff comment (comment 26). The test retargeting is done. Do only this: (1) compile and fix errors; (2) run `env -u AIDA_CONTAINED cargo test --profile agent -p aida-cli-lib --lib -- gate:: drain_gate pr_merge_gate`; (3) run make check-ci-fast; (4) push and open the PR with `(Refs <this spec>)`. If a test cannot run in this seat because of the sandbox (read-only /tmp test home, or a missing advisor grant such as task_2344_q2), do NOT fight it. List it in the PR body, then push; CI runs it and is the gate. Do not start new refactors. Stop early and push rather than run out of context.
+clock: 6804
 node_id: '1'
