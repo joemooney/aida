@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:45.174321949Z
-modified_at: 2026-10-29T06:40:59.206731405Z
+modified_at: 2026-10-29T06:41:05.840719417Z
 req_type: Bug
 tags:
 - aida:review
@@ -39,6 +39,12 @@ comments:
     The defect as filed ('reviewer bails on epic+child') is covered whenever the epic-child relationship exists in the store. If an unlinked pair occurs, the disambiguation error is expected behavior per BUG-440 acceptance. This spec can be closed as completed/verified by BUG-440 and BUG-431.
   created_at: 2026-10-02T06:34:52.468485726Z
   modified_at: 2026-10-02T06:34:52.468485726Z
+- id: 01a18664-0b30-7132-a33f-54d6fa66960c
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as superseded by BUG-440. Reason: Triage verified covered by BUG-440/BUG-431.'
+  created_at: 2026-10-29T06:41:05.840719417Z
+  modified_at: 2026-10-29T06:41:05.840719417Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18663-dd8b-7d62-bea0-945c6b27c831
   author: joe
