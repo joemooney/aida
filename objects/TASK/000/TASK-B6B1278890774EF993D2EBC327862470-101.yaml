@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T12:04:29.744420943Z
-modified_at: 2026-10-29T18:04:18.348787093Z
+modified_at: 2026-10-29T18:04:21.643477700Z
 req_type: Task
 tags:
 - docs:impacted
@@ -27,6 +27,36 @@ comments:
     Conservative scope choice for the future isolated PR: docs/showcase/ with the original six-file static showcase from prototype commit 5fe926a96f8 (HTML/CSS/JS, autonomy selector, SVG operating-model graphic, printable brief and README). The expanded multi-page site, Metrics tab, reference generator and corpus-wide docs edits remain unmerged prototype material for EPIC-B6B1278890774EF993D2EBC327862470-002 slices after advisor approval. Preserve the existing owner-private hosted prototype; do not silently downgrade it or claim it is an exact preview of the narrower six-file PR. No new implementation files changed yet.
   created_at: 2026-10-29T17:50:50.170563046Z
   modified_at: 2026-10-29T17:50:50.170563046Z
+- id: 01a188d5-970b-7343-8e2c-bd62a37c6832
+  author: joe
+  content: |
+    ## Summary
+    Add a portable, self-contained AIDA product showcase under `docs/showcase/`, with a landing page, original SVG operating-model graphic, an interactive four-mode autonomy selector, and a printable executive brief. The copy describes people and coding agents working together and retains alpha/Linux, authority and harness limitations.
+
+    ## Files
+    - `docs/showcase/index.html`
+    - `docs/showcase/styles.css`
+    - `docs/showcase/app.js`
+    - `docs/showcase/executive-brief.html`
+    - `docs/showcase/brief.js`
+    - `docs/showcase/README.md`
+
+    The HTML/CSS/JS use local assets and no runtime framework, external font, analytics or image service. The selector supports arrow keys, Home/End and labeled tab/panel state; the brief invokes the browser print dialog.
+
+    ## Validation
+    - `make check-ci-fast`: **35 fast-tier gates passed**. No separate cargo command or full build/test lane was run.
+    - Factual claims checked against `ExecutionMode`, dispatch human contracts and supported CLI help.
+    - One fresh-context read-only author self-check ran its own source/help inspection: no request-changes findings. It checked local assets/links, keyboard handling, print controls and caveats. This is not independent review or approval.
+
+    ## Preview and deferred scope
+    The existing owner-private hosted prototype was built earlier and now contains broader, unmerged work. It is not presented as an exact preview of this narrow source. This PR preserves the portable source and does not downgrade or change the hosted audience.
+
+    The multi-page expansion, Metrics tab, generated handbook, broad docs refresh and publishing/build additions belong to EPIC-B6B1278890774EF993D2EBC327862470-002 child slices, to be submitted for advisor approval before implementation. No protected gate/review-verdict/merge-hold/ledger code or template mirrors changed.
+
+    ## Handoff
+    TASK-B6B1278890774EF993D2EBC327862470-101. Open for advisor review and shipping; no merge or auto-merge requested by this implementer.
+  created_at: 2026-10-29T18:04:21.643477700Z
+  modified_at: 2026-10-29T18:04:21.643477700Z
 history:
 - id: 01a188c9-71c8-7d00-b7d2-4faaaa6020f5
   author: joe
