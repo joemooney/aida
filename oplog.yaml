@@ -87555,5 +87555,36 @@ operations:
   timestamp: 2026-10-29T22:39:49.384593893Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6824
+- id: 01a189d8-b350-7f03-a31b-b06ab6762081
+  target_id: 01a189d8-a9a8-75d1-aae7-bbdd1a230a49
+  author: aida
+  node_id: '1'
+  lamport: 6825
+  timestamp: 2026-10-29T22:47:22.704196841Z
+  kind: !Create
+    title: 'Hierarchical block delegation: upstream nodes dispense ID blocks to downstream nodes via push/pull'
+    description: |
+      ## Problem
+      Since BUG-2017, only a clone marked `authoritative = true` in its common git dir may dispense blocks, and no command exists to mark one. The primary HOME clone was never enrolled, and its move to a pseudonymous node binding orphaned the blocks registered to legacy node "1" (BUG next 2225, FAQ next 63, TASK next 2360). Every clone therefore issues node-local `<TYPE>-<node>-<n>` IDs, `blocks-then-fallback` downgrades silently, and nothing promotes those IDs to short ones. A single enrolled clone also cannot serve multi-level topologies (a WORK clone behind a GitLab hub, laptops behind HOME).
+
+      ## Proposal
+      Hierarchical block delegation. One root owns the unallocated ID space. Each node declares one upstream and claims blocks only from that upstream's pool, by a CAS push to the upstream's ref during `aida push`/`aida pull`. Intermediate nodes hold larger pools and top them up from their own upstream. Authority comes from a block's lineage back to the root, not from a per-clone flag. The root role can be transferred.
+
+      ## Acceptance
+      1. Root: exactly one node per store lineage is root, set by an explicit operator command run on that clone. It is HOME initially. `aida node transfer-root <node>` hands the role and the unallocated space to another node; the old root becomes that node's child; existing blocks stay valid; no renumbering.
+      2. Declared upstream: each non-root node has exactly one `allocation.upstream` (a git remote name). Cycles are refused. A remote that is not the declared upstream (e.g. a store mirror) never accepts or confers claims.
+      3. Lineage: every block records the pool it was carved from, back to the root. A node dispenses only from blocks whose lineage reaches the root through its own upstream chain. A block that merely appears in an imported store, with no valid lineage to this node, is never spendable (keeps BUG-2017's intent).
+      4. Claim: claiming moves a range from the upstream pool to the node in one store commit, pushed to the upstream ref with CAS. A non-fast-forward fetches and retries. Two siblings racing never both receive the same range (test).
+      5. Replenish: when a node's block for a type drops below LOW_THRESHOLD, the next `aida push`/`aida pull` that reaches its upstream claims another, with a one-line notice. Intermediate pools replenish from their own upstream the same way. `aida add` never waits on the network.
+      6. Offline: with no spendable block, `aida add` issues node-local IDs as today. Once the node holds a block it promotes its own node-local IDs into it, keeping UUIDs and old IDs as aliases; repeat promotion is idempotent.
+      7. No silent downgrade: when blocks are configured but unusable, `aida add` says why once per session (no upstream, no lineage, exhausted and offline). `aida node show` reports root/upstream/pool/blocks.
+      8. Migration: an operator-run, dry-run-first command enrolls HOME as root, attaches every open block in `blocks.yaml` to a pool, moves legacy node "1"'s open blocks to HOME's current binding, and reports conflicting or unattributable ranges without picking a winner (reuses BUG-2017's reconciliation preflight).
+      9. Supersedes BUG-2017 acceptance item 4 ("only the authoritative clone may claim/dispense") and its single-HOME operating model; items 1-3 and 5 still apply (no authority from env/forge URLs, pseudonymous bindings, refuse-before-write, full-conflict preflight).
+
+      ## Non-goals
+      Signatures or key enrollment; defending against a malicious writer to an upstream ref (trust = push permission on that ref); reclaiming unused ranges from dead nodes (later).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6825
 node_id: '1'
