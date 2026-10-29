@@ -85355,5 +85355,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 6673
+- id: 01a1878c-274b-7e22-ad99-5037bff2b1d0
+  target_id: 01a1878c-1fb0-7db2-a6ca-876c69e9f082
+  author: aida
+  node_id: '1'
+  lamport: 6674
+  timestamp: 2026-10-29T12:04:31.691661691Z
+  kind: !Create
+    title: Build a polished AIDA product showcase
+    description: 'Operator requests polished newcomer and management-facing sales material inspired by factory.strongdm.ai/products. Build a responsive interactive showcase grounded in existing capabilities: governed software factory, selectable autonomy, independent review, durable requirements, roles, mandates and evidence. Include a clear next step, printable executive brief, accessible controls and accurate alpha/Linux limitations. Preserve reusable static source in the repository and provide a private hosted preview where possible. No invented customer claims, metrics or live dashboard data.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6674
 node_id: '1'
