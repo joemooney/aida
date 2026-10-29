@@ -85924,5 +85924,13 @@ operations:
 
       ## Slice 1 (PR-3090) ROUND 6 (advisor, 2026-10-29 09:45): make CI green, nothing else
       Two existing fail-closed tests regressed since 7dac907: review_gates::bug_775_commits_ahead_tests::a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites (bug_775_commits_ahead_tests.rs:701) and gate::review_verdict::review_verdict_tests::task1801_ship_and_phase_gates_refuse_linked_verdicts (review_verdict_tests.rs:2118). Restore their fail-closed behavior: a current verdict path that exists but is unreadable or a link must make ship and phase-3 gates REFUSE, even when the ledger has a readable record. Do not edit the tests' expectations. Fix the rustdoc ordering at lib_part5.rs:951-965 (cosmetic, bundled). Run exactly: cargo test -p aida-cli-lib --lib bug_775_commits_ahead task1801 review_verdict, plus make check-ci-fast.
-clock: 6712
+- id: 01a1888b-70c2-79d3-9f1f-9e6a19971aa7
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6713
+  timestamp: 2026-10-29T16:43:22.178053649Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6713
 node_id: '1'
