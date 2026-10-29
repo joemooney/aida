@@ -61,6 +61,9 @@ relationships:
   target_id: 01a188da-efd0-7c12-91f9-ae2f6592676f
   created_at: 2026-10-29T18:11:11.835957575Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
+  created_at: 2026-10-29T18:11:18.988251281Z
 history:
 - id: 01a188db-422f-7a63-aa54-4ee293059e7c
   author: joe
@@ -89,6 +92,10 @@ history:
 - id: 01a188db-df95-7bc3-b2d1-485bcd849f51
   author: joe
   timestamp: 2026-10-29T18:11:13.429851861Z
+  changes: []
+- id: 01a188db-fbb3-71c2-93ec-6d4f32dcbbe4
+  author: joe
+  timestamp: 2026-10-29T18:11:20.627505572Z
   changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
