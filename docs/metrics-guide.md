@@ -18,7 +18,7 @@ This capability map was checked against source and command help on 29 October 20
 
 Token attribution is supported through `aida usage rebuild` and `aida usage show`, using retained Claude Code and Codex artifacts with attributable session evidence. Coverage depends on available artifacts and launch/handoff evidence; it is not a complete account of all agent work. The built-in ledger does not parse Antigravity artifacts. Provenance output distinguishes known write/session context from missing model, harness or usage evidence.
 
-`aida usage show --cost` adds an offline estimate using the binary's pinned, dated rate table. The bundled table is versioned 2026-09-22.1 and covers a limited model set. Unpriced models or token classes remain unpriced; they are not zero-cost usage. Cache-read, cache-write and uncached input are distinct classes. The estimate is not billing and should not be presented as a complete project cost.
+`aida usage show --cost` adds an offline estimate using the binary's pinned, dated rate table. The bundled table is versioned 2026-09-22.1 and prices only Claude Sonnet 4 (20250514) and Opus 4.1 (20250805), plus their listed aliases. Newer Claude models and Codex models remain unpriced. Unpriced models or token classes remain unpriced; they are not zero-cost usage. Cache-read, cache-write and uncached input are distinct classes. The estimate is not billing and should not be presented as a complete project cost.
 
 Review artifacts record judgments and findings against commits; `aida review classes` summarizes classified findings. Optional classification and local artifact availability limit coverage. Review artifacts and cycle-time bounce counters are separate sources; do not assume one is a complete report of the other.
 
