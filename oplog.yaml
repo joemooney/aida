@@ -85185,5 +85185,33 @@ operations:
   timestamp: 2026-10-29T11:00:23.402016127Z
   kind: !SetStatus
     status: In Progress
-clock: 6663
+- id: 01a1877b-fe4b-7833-be9c-9795c38e6a66
+  target_id: 01a1877b-f737-7fe0-a507-aee81eb91f5b
+  author: aida
+  node_id: '1'
+  lamport: 6664
+  timestamp: 2026-10-29T11:46:52.619024892Z
+  kind: !Create
+    title: 'Review PR-3090: [AI:claude] feat(gate): M1 slice 1 - one gate ledger per change for review verdicts (Refs STORY-B6B1278890774EF993D2EBC327862470-080)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-080`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3090>
+      - Branch: `story-b6b1278890774ef993d2ebc327862470-080` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-B6B1278890774EF993D2EBC327862470-080
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3090` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6664
 node_id: '1'
