@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T06:33:06.220012840Z
+modified_at: 2026-10-29T06:46:19.751550465Z
 req_type: Story
 tags:
 - id-allocation
@@ -45,6 +45,17 @@ relationships:
 - rel_type: Child
   target_id: 01a18655-d0c9-7490-ba48-bfdd8b1a30bc
   created_at: 2026-10-29T06:33:10.944804318Z
+comments:
+- id: 01a18668-d567-70a3-a416-0d9dce02af11
+  author: joe
+  content: |
+    Operator rulings 2026-10-28 23:34:
+    1. This clone's node b6b1278890774ef993d2ebc327862470 gets label HOME. Bind it as the slice's acceptance fixture-in-anger, after the slice merges (`aida node alias set HOME`).
+    2. Slice 1 approved.
+    3. Relabel (amends acceptance items 1 and 6): a node's display label may be CHANGED with `aida node alias rename <OLD> <NEW>`. The old label is retired, not deleted: it keeps resolving to the same node for input forever and is never reusable for any other node. Display uses the current label. What stays forbidden is pointing an existing label at a different node, because hand-written commit messages, traces, PR titles and chat already containing TASK-OLD-NNN would then silently name a different requirement.
+  created_at: 2026-10-29T06:46:19.751550465Z
+  modified_at: 2026-10-29T06:46:19.751550465Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
