@@ -1,0 +1,30 @@
+id: 01a187a2-bc88-77f0-a251-15dd79a0c6eb
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-102
+title: 'minor (non-blocking): reviewer_preflight.rs tree_entry/read_following_links — a…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): reviewer_preflight.rs tree_entry/read_following_links — a target path routed through a committed directory symlink (e.g. ../tmpl/settings.json where tmpl -> templates) reports 'does not exist' though a checkout resolves it; git ls-tree never walks through link components
+
+  PR: #3092
+  Reviewed sha: 7eb3e940b01ab9130ddbafa26791956868f6d0ab
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T12:29:11.688637372Z
+modified_at: 2026-10-29T12:29:11.688637372Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-016
+- finding-hash:8d9069a1
+- from-review:PR-3092
+- kind:carried-forward
+filed_at:
+  code_sha: b74166aba21293380f163f21e5df6137a79dbcce
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 8e45449d340
+  vendor: claude
+  session: 59349e57-271d-4b9e-b662-8585b949736a

@@ -85460,5 +85460,23 @@ operations:
   timestamp: 2026-10-29T12:29:07.000881731Z
   kind: !SetStatus
     status: Completed
-clock: 6681
+- id: 01a187a2-c3c3-7133-9ede-808a7dbd7adf
+  target_id: 01a187a2-bc88-77f0-a251-15dd79a0c6eb
+  author: aida
+  node_id: '1'
+  lamport: 6682
+  timestamp: 2026-10-29T12:29:13.539729511Z
+  kind: !Create
+    title: 'minor (non-blocking): reviewer_preflight.rs tree_entry/read_following_links — a…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking): reviewer_preflight.rs tree_entry/read_following_links — a target path routed through a committed directory symlink (e.g. ../tmpl/settings.json where tmpl -> templates) reports 'does not exist' though a checkout resolves it; git ls-tree never walks through link components
+
+      PR: #3092
+      Reviewed sha: 7eb3e940b01ab9130ddbafa26791956868f6d0ab
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6682
 node_id: '1'
