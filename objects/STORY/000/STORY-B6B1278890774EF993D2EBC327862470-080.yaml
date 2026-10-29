@@ -25,12 +25,23 @@ description: |
 
   ## Sketch status
   The sketch is posted as the first comment and SIGNED OFF (second comment, 2026-10-29 04:05). Do not write another sketch; implement SLICE 1 per the sketch as amended by the signoff (Q1: mailbox gate-event transport, no contained write path to the ledger).
+
+  ## Slice 1 (PR-3090) round-1 advisor rulings, 2026-10-29 05:00 — ONE rework push, no follow-up PR
+  BUNDLE all seven findings in .aida/review-verdicts/PR-3090.json:
+  1. [security] Ingest validates the attestation with the SAME authority checks as approval_attested / review_authority (grant/receipt lookup via authority_key), not RecorderAttestation::authorizes(). Test: a contained implementer's mailbox submission claiming seat "reviewer" is appended as `rejected-event`, never as a verdict.
+  2. [security] Ordering uses only primary-side data: the ledger's own `at`/`seq` stamped on append (re-stamp recorded_at on ingest). newer_of() must not trust submitter timestamps. Test: a future-dated submission cannot shadow a later file verdict.
+  3. Remove consumed spool files on the empty-pending path too; test the failed-removal case does not duplicate events.
+  4. Recompute patch_id / base_ref / base_tip primary-side on ingest (null if not computable); never store submitter-supplied identity.
+  5. Ratchet counts legacy WRITER call sites (write_verdict_object*, write_hold*, record_clearance*, collect/adopt), not string literals.
+  6. Import the legacy file BEFORE the file write (or dedupe by record identity) so the first write is not recorded twice; delete verdict_history or give it a real caller.
+  7. Memoize store_root() like hold_store_root.
+  ACCEPTED deviation (reason: switching every verdict writer/reader and deleting collect in the same slice whose own review depends on reviewers recording verdicts is the riskier order): slice 1 may dual-write. SLICE 2 acceptance now additionally REQUIRES: verdict writers stop writing legacy files, all verdict readers read the ledger projection, collect_standalone_verdict / adopt_direct_write are deleted, and the ratchet baseline for verdict writers drops to 0. The story cannot complete with dual writes in place.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T11:55:07.576063927Z
+modified_at: 2026-10-29T11:56:15.136460342Z
 req_type: Story
 tags:
 - architecture
@@ -247,6 +258,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18784-96d3-7132-9dc0-29daada3b491
+  author: joe
+  timestamp: 2026-10-29T11:56:15.955397771Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
