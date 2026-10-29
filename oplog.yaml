@@ -84344,5 +84344,13 @@ operations:
   timestamp: 2026-10-29T06:36:55.621772333Z
   kind: !RemoveTag
     tag: deferred:cockpit-phase2
-clock: 6577
+- id: 01a18660-4b00-7561-b06e-b11930de7f0d
+  target_id: 019f0242-0cc6-79d0-b0e4-aae9a35dc705
+  author: aida
+  node_id: '1'
+  lamport: 6578
+  timestamp: 2026-10-29T06:37:00.032426746Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6578
 node_id: '1'
