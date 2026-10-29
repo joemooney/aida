@@ -86054,5 +86054,27 @@ operations:
   timestamp: 2026-10-29T17:58:26.173782029Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6726
+- id: 01a188d2-ad18-7840-82c1-f723feeb3f85
+  target_id: 01a188d2-a61b-7112-a426-2b5b5571ce37
+  author: aida
+  node_id: '1'
+  lamport: 6727
+  timestamp: 2026-10-29T18:01:10.680069817Z
+  kind: !Create
+    title: 'GitLab release build fails: builder image lacks arm64 libc headers for the aarch64 cross target'
+    description: |
+      ## Problem
+      The GitLab tag pipeline for v0.16.0 (project 2, pipeline 362, job 747 release-linux-assets) fails cross-compiling aarch64: ring v0.17.14's build runs aarch64-linux-gnu-gcc and fails with 'bits/libc-header-start.h: No such file or directory'. ci/Dockerfile installs gcc-aarch64-linux-gnu with --no-install-recommends, which skips the arm64 libc headers (libc6-dev-arm64-cross). The x86_64 target builds. gitlab-release is skipped, so the GitLab v0.16.0 release (and every future tag release) is missing.
+
+      ## Acceptance
+      - ci/Dockerfile installs libc6-dev-arm64-cross alongside gcc-aarch64-linux-gnu.
+      - Bump the builder image tag in .gitlab-ci.yml (localhost/aida-ci:1.92 -> a new tag) so runners cannot keep using the stale image; document the operator rebuild command in the PR body.
+      - After the operator rebuilds the image on the runner host and retries pipeline 362 (or a new tag pipeline), release-linux-assets and gitlab-release succeed and the GitLab v0.16.0 release has the four Linux assets.
+
+      ## Notes
+      CI/CD was disabled on GitLab project ai/aida and was re-enabled by the operator on 2026-10-29 to run this pipeline. FASTTRACK gate (make check-ci-fast); no cargo.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 6727
 node_id: '1'
