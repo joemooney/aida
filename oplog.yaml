@@ -87220,5 +87220,44 @@ operations:
     req_type: Faq
     status: Completed
     priority: Medium
-clock: 6801
+- id: 01a1895f-e50d-7dc2-b792-a0fc900ae0f2
+  target_id: 01a1895f-e1ae-7111-bda7-40de0c530068
+  author: aida
+  node_id: '1'
+  lamport: 6802
+  timestamp: 2026-10-29T20:35:25.581919845Z
+  kind: !Create
+    title: Is aida push --store-only equivalent to a raw Git store-branch push?
+    description: |
+      **An ordinary `aida push --store-only` is not equivalent to a raw Git ref push. An enabled transport profile deliberately narrows AIDA's behavior.**
+
+      ## Difference
+
+      ```bash
+      git -C .aida-store push origin aida-store:aida-store
+      ```
+
+      This pushes existing commits using the explicit refspec. It does not itself stage or commit pending store files, publish mailbox data, or run AIDA lifecycle reconciliation. Git hooks still run and can have side effects.
+
+      Ordinary AIDA push orchestration may commit pending state, publish collaboration metadata, run lifecycle follow-ups, and fan out to configured mirrors. `--store-only` disables the code leg, not all those other behaviors.
+
+      ## How
+
+      Inspect the effective profile before assuming push is ref-only:
+
+      ```bash
+      aida config transport show
+      ```
+
+      ## Caveat
+
+      Raw Git bypasses AIDA's transport content scanner. An explicit refspec limits the destination branch but does not certify the history as safe. Neither a blocked code push nor a store-only flag is a complete information-boundary control.
+
+      ## See also
+
+      STORY-1742, FAQ-33, FAQ-34.
+    req_type: Faq
+    status: Completed
+    priority: Medium
+clock: 6802
 node_id: '1'
