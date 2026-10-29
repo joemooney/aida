@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T12:30:36.494411466Z
-modified_at: 2026-10-29T18:12:13.270207529Z
+modified_at: 2026-10-29T20:00:16.853285757Z
 req_type: Epic
 tags:
 - docs:impacted
@@ -66,6 +66,53 @@ comments:
     TASK-100 and TASK-101 are delivered separately in open PRs #3093 and #3094, with author leases released and reviewer handoffs queued. Both passed make check-ci-fast (35 gates). Existing broader product-site and hosted artifacts remain unmerged prototypes, not approved implementation to bulk merge. Advisor next action: review/ship the two PRs and assess these draft slices. No children have been approved, queued or implemented by this session.
   created_at: 2026-10-29T18:12:13.270207529Z
   modified_at: 2026-10-29T18:12:13.270207529Z
+- id: 01a1893f-b7d5-7001-861b-86244e3786ed
+  author: ai:codex:joe
+  content: |
+    Delivered the eight approved documentation/showcase slices as separate PRs, in dependency order. All work was isolated in claimed sibling worktrees. All author leases/worktrees have been released; branches are retained. No self-merge, protected runtime edits, direct cargo build/test or hosted publication occurred.
+
+    Shareable combined branch: https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29 (tip 6e72a0df6e655fa5576f072c1e60064de74dc522). Open docs/showcase/index.html from the checkout; preserve the repository layout for source/reference links.
+
+    TASK-B6B1278890774EF993D2EBC327862470-106 — PR #3096: https://github.com/joemooney/aida/pull/3096
+    Commit: 120226d4d2bc6eec8362f0c3bc2615649f711545. Files changed (11): README.md, docs/first-project.md, docs/getting-started.md, docs/showcase/README.md, docs/showcase/build.py, docs/showcase/getting-started.html, docs/showcase/guide.css, docs/showcase/index.html, docs/showcase/page-template.html, docs/what-is-aida.html, docs/what-is-aida.md.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-107 — PR #3097: https://github.com/joemooney/aida/pull/3097
+    Commit: c85f20fe33d002fbec6312fc39adecb834a4bd8b. Files changed (8): docs/configuration-guide.md, docs/showcase/assets/configuration.svg, docs/showcase/build.py, docs/showcase/configuration.html, docs/showcase/getting-started.html, docs/showcase/guide.css, docs/showcase/index.html, docs/showcase/page-template.html.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-108 — PR #3098: https://github.com/joemooney/aida/pull/3098
+    Commit: 2e6e624efdbfa5265d83b335bfd18025e4a33719. Files changed (7): docs/product-workflow.md, docs/showcase/assets/workflow.svg, docs/showcase/build.py, docs/showcase/configuration.html, docs/showcase/getting-started.html, docs/showcase/index.html, docs/showcase/workflow.html.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-109 — PR #3099: https://github.com/joemooney/aida/pull/3099
+    Commit: e796316741cee5a255f91a9d35e2123197935348. Files changed (12): docs/selectable-autonomy.md, docs/showcase/assets/trust.svg, docs/showcase/autonomy.html, docs/showcase/build.py, docs/showcase/configuration.html, docs/showcase/getting-started.html, docs/showcase/index.html, docs/showcase/page-template.html, docs/showcase/styles.css, docs/showcase/trust.html, docs/showcase/workflow.html, docs/trust-and-evidence.md.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-110 — PR #3100: https://github.com/joemooney/aida/pull/3100
+    Commit: 3f2833e1fd0448eb6eb7cfe7a0bd48fe8a929a8f. Files changed (13): docs/metrics-guide.md, docs/showcase/assets/metrics.svg, docs/showcase/autonomy.html, docs/showcase/build.py, docs/showcase/configuration.html, docs/showcase/getting-started.html, docs/showcase/index.html, docs/showcase/metrics.html, docs/showcase/styles.css, docs/showcase/trust.html, docs/showcase/workflow.html, docs/what-is-aida.html, docs/what-is-aida.md.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-111 — PR #3101: https://github.com/joemooney/aida/pull/3101
+    Commit: ef7985cb11c8fe990f4b47a464eec2044b2af7da. Files changed (15): docs/showcase/README.md, docs/showcase/autonomy.html, docs/showcase/build.py, docs/showcase/configuration.html, docs/showcase/getting-started.html, docs/showcase/guide.css, docs/showcase/index.html, docs/showcase/library-template.html, docs/showcase/library.html, docs/showcase/library.js, docs/showcase/metrics.html, docs/showcase/publication.json, docs/showcase/search-data.js, docs/showcase/trust.html, docs/showcase/workflow.html.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-112 — PR #3102: https://github.com/joemooney/aida/pull/3102
+    Commit: b2c511eb9eec6d4932c9a2ba04ad3f2818517c90. Files changed (23): AGENTS.md, OVERVIEW.md, README.md, docs/admin-guide.md, docs/cli/01-getting-started.md, docs/cli/07-project-setup.md, docs/cli/10-storage.md, docs/getting-started.md, docs/multi-hub-sync.md, docs/multi-node.md, docs/operator-setup.md, docs/showcase/README.md, docs/showcase/autonomy.html, docs/showcase/configuration.html, docs/showcase/getting-started.html, docs/showcase/library.html, docs/showcase/metrics.html, docs/showcase/publication.json, docs/showcase/search-data.js, docs/showcase/setup.html, docs/showcase/trust.html, docs/showcase/workflow.html, docs/storage-modes.md.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    TASK-B6B1278890774EF993D2EBC327862470-113 — PR #3103: https://github.com/joemooney/aida/pull/3103
+    Commit: 6e72a0df6e655fa5576f072c1e60064de74dc522. Files changed (18): README.md, docs/admin-guide.md, docs/audit-documentation.py, docs/cli/07-project-setup.md, docs/cli/README.md, docs/cli/lifecycle-vocabulary.md, docs/cli/machinery-glossary.md, docs/first-project.md, docs/lifecycle.md, docs/reports/2026-10-29-documentation-inventory.csv, docs/reports/2026-10-29-documentation-links.csv, docs/reports/2026-10-29-documentation-review.md, docs/reports/2026-10-29-documentation-snapshot.json, docs/showcase/index.html, docs/showcase/library-template.html, docs/showcase/library.html, docs/what-is-aida.html, docs/what-is-aida.md.
+    Validation: make check-ci-fast completed with all 35 fast-tier gates passed. Spawned author self-check completed; independent review remains a separate gate.
+
+    Deferred / next authority:
+    - Slice 111: broader CLI/history publication scope remains the recorded advisor question. The current allowlist is seven verified product/operator guides after slice 112; hosting audience is unchanged.
+    - Slice 109/113: PR #3090 was still open at inspection. Recheck trust claims after that lane lands; no new ledger functionality is advertised.
+    - Audit records 223 contextual/template/historical link candidates and explicitly limits semantic/external/vendor/browser/assistive-technology certification. Current reader references and static pages have zero local-link candidates.
+    - PRs are stacked on their immediate prior slice (106 on 101). Integrate/rebase/retarget through the advisor workflow in order; independently merged #3093 overview changes are carried forward in slice 113, preserving newer onboarding/metrics.
+    Next: advisor independently reviews and ships the stack under the active mandate. Implementer turn ended; no background work remains.
+  created_at: 2026-10-29T20:00:16.853285757Z
+  modified_at: 2026-10-29T20:00:16.853285757Z
 history:
 - id: 01a188d9-2570-7371-9263-443539ea244d
   author: joe
