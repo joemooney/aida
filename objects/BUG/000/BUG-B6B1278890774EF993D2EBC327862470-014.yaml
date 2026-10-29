@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-014
 title: Adopted repos lack the contained egress allowlist and reviewer allow entries; contained reviews fail silently
 description: |
   In a repo adopted with `aida init` other than aida itself (aida-relay), contained headless reviewers could not work. (1) .aida/config.toml had no [contained] allowed_hosts, so GitHub was unreachable and verdicts could not be recorded (fixed by hand in aida-relay #99). (2) .claude/settings.json had zero permissions.allow entries, so `aida show`, `git log` etc. were denied (fixed by hand with operator approval). Each failure made the reviewer exit with no verdict and only a terse "permission layer denied N calls" message; three review attempts were lost. Acceptance: `aida init` (and its template-refresh/upgrade path) scaffolds the same [contained] allowed_hosts and reviewer permissions.allow entries the aida repo uses, from the template master; and `aida queue work --role reviewer` preflights a contained launch: if the repo lacks the egress allowlist or the reviewer allow entries, it refuses BEFORE launching, naming the missing config and the command that fixes it. Tests: init scaffolds both; preflight refuses on a repo missing either. Do not widen permissions beyond what the aida repo has.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T03:02:31.871007283Z
-modified_at: 2026-10-29T05:49:20.613048699Z
+modified_at: 2026-10-29T06:06:24.831064961Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -71,6 +71,20 @@ history:
   timestamp: 2026-10-29T05:49:21.457650023Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a18644-4a3a-7d93-a6c0-2d926006814f
+  author: aida-auto-bump
+  timestamp: 2026-10-29T06:06:24.826619615Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18644-4a3f-7c11-8309-3169f7bbe433
+  timestamp: 2026-10-29T06:06:24.831058368Z
+  agent: aida
+  commit_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
+  summary: 'All 7 acceptance criteria verified (init scaffolds hosts+reviewer allow; refresh/upgrade fill absent; contained reviewer preflight refuses before launch on PR-branch copy, names base merge when only base has it; adopted repos get a subset of aida''s entries). CI green at head (run 40824109263). Non-blocking: empty-allowlist message wording, config-trust comment placement.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: c832ed71e03db1a6c9d1535b2063f6fd36e276a2
@@ -80,11 +94,7 @@ filed_at:
   aida_build_sha: c832ed71e03
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design meets the acceptance criteria (init + scaffold upgrade scaffold hosts/allow, preflight checks the PR-branch copy, base-merge hint tested), but PR CI is red at head (cli-0, lib-0, lib-1, also red at 09593abc while main is green) and the settings scaffold copies aida-dev-only allow entries into every adopted repo. AC: init scaffolds allowed_hosts=verified (init_cmd.rs x3 + bug_014_init_scaffold_satisfies_the_preflight); init scaffolds allow entries=verified (settings.rs bug_014_scaffold_carries_template_allow_and_contained_hosts); upgrade path=verified for scaffold upgrade (bug_014_permissions_allow_merges_additively, bug_014_upgrade_adds_hosts_only_when_absent), unverified for init --refresh; preflight refuses before launch naming config+fix=verified (queue_cmd.rs:12704, refuse tests); tests init+refuse-either=verified locally-authored but CI red; no widening beyond aida repo=literally met but see finding 2; addendum PR-branch copy + merge-base hint=verified (bug_014_preflight_reads_the_pr_branch_copy_not_the_base).'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-014 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T04:16:35.798915009Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T06:06:24.826615756Z
+  completion_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
