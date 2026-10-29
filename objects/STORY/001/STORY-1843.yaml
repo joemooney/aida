@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-28T22:14:01.018018785Z
+modified_at: 2026-10-29T01:12:40.268615335Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1372,6 +1372,30 @@ comments:
   created_at: 2026-10-28T22:14:01.018018785Z
   modified_at: 2026-10-28T22:14:01.018018785Z
   session_id: 4633c77c-8ad3-4645-84cc-de44f83f3a7f
+- id: 01a18537-5c4c-73a3-82ff-3326940ea470
+  author: joe
+  content: |-
+    ## D2 SKETCH (STORY-1843 D2, relay lifetime, AIDA side), claude, 2026-10-28
+
+    Result: **BLOCKED-SKETCH.** I wrote no code. The 06:05 ruling has D2 rebase onto D1's PR branch for any shared type. Three of the six D2 bullets need D1 types that do not exist yet: the outbox key's "original delivery", the per-UUID unread count, and handover's provenance-linked deliveries. Checked on 2026-10-28 at ~06:30: the s1843d1 lane has 0 commits and no pushed branch, and `DeliveryRecord` is nowhere in the tree. The D1/D2 boundary also crosses at the send path. Proposed contract and questions follow.
+
+    ### Proposed CLI contract (relay_mail.rs + relay_mail_args.rs, one command_registry entry)
+    - `aida relay-mail probe --json`: versioned capability document `{protocol:"aida-relay-mail/1", ops:[bind,child-bind,end,reuse], terminal_reconcile:true}`. relay.sh refuses before reservation if the version is missing or different. No version-string guessing.
+    - `aida relay-mail bind --label <L> --controller-pid <P> --run-lock <path> [--leave-with-old|--handover] [--headless] --json`: under `handles::lock_namespace`, reserve the label as a `HandleReservation` whose `recipient_id` is a new run UUID. Write `.aida/agents/relay-runs/<uuid>.toml` = {run_uuid, label, controller pid + start time + boot id (BUG-2212 `PidObserver` evidence), run-lock path + inode, generation=0, state=accepting}. Print the run UUID. The relay must register before it advertises the label, so bind runs before any child launches.
+    - `aida relay-mail child-bind --run <uuid> --native-session <sid>`: validate the run record (live controller, not terminal), then bind the child's native session to the run UUID (session index → label). It never mints a new UUID, so rotations share one UUID. The label or inherited env alone grants nothing.
+    - `aida relay-mail end --run <uuid> [--reason stop|crash]`: record the terminal generation once. The record is idempotent and compare-and-set on generation. It closes admission and inserts end notices. A trap is the fast path. Crash path: `reconcile_relay_runs()`, called from start, maintenance (relay_stall / agent gc) and, see Q2, send. It ends a run only when the controller is conclusively dead (pid gone, or start/boot mismatch). Unobservable means Unknown, and an Unknown run is never retired.
+    - Gap acceptance: the resolver treats a label whose run record is accepting (controller live or paused, no child) as a live recipient.
+    - `aida relay-mail reuse --label <L> [--leave-with-old|--handover] --json`: report the old run's exact unread count. A headless caller with unread > 0 and no choice exits nonzero. Handover writes provenance-linked deliveries to the new UUID. It never renames anything and never auto-ACKs.
+    - Outbox: `.aida/agents/relay-runs/<uuid>/outbox/<sha256(key)>.json`, key=(run UUID, terminal generation, original delivery, destination intent→UUID per 48 Q3). Entries are pending until delivered. Retry is maintenance-driven. The advisor and sender are deduplicated. The notice is marked `kind=relay-end-notice`, so a notice about a notice is never generated. Bodies are not quoted.
+
+    ### Questions for the advisor
+    - **Q1 (D1 dependency):** Pick one: (a) D2 waits and rebases onto D1's PR once its `DeliveryRecord` and per-UUID receipt key exist (recommended; it matches the 06:05 ruling); (b) D2 ships now as D2a = probe, bind, child-bind, end/terminal generation, reconciliation and gap acceptance, with D2b = outbox, reuse count and handover after D1; or (c) D2 keys "original delivery" on message ID in the meantime. I recommend against (c): it creates a second ownership key that D1 would have to reconcile, and the label's string receipt key cannot distinguish an old run's unread mail from a new run's.
+    - **Q2 (send-path reconciliation ownership):** The crash path runs reconciliation from send, but the 06:05 ruling gives the send path to D1. Recommendation: D2 exports `relay_mail::reconcile_relay_runs(root)` (bounded, read-mostly, takes the namespace lock only when a run is conclusively dead), and D1, or a one-line follow-up, calls it from send. D2 calls it only from start and maintenance.
+    - **Q3 (run record home):** Where should the run record live: `.aida/agents/relay-runs/` beside the handle reservations, under the same namespace lock (recommended), or the relay's own `.aida/relay/<run>/` directory? The relay directory belongs to aida-relay, and it lives outside the common-root namespace lock.
+    - **Q4 (pause):** A paused relay has a live controller and no child. Recommendation: accepting, with no new state. "Paused" only labels the status line.
+  created_at: 2026-10-29T01:12:40.268615335Z
+  modified_at: 2026-10-29T01:12:40.268615335Z
+  session_id: e87c4851-e0b9-4d34-a09d-f5a062c1f187
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
