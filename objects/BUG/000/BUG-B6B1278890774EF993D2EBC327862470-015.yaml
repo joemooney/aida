@@ -18,11 +18,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T11:56:50.351934491Z
+modified_at: 2026-10-29T11:57:37.050149457Z
 req_type: Bug
 tags:
 - id-allocation
 - regroup
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a18785-a06e-7d60-872a-85e31388136b
+  created_at: 2026-10-29T11:57:37.050146158Z
+  created_by: joe
 comments:
 - id: 01a18750-0dfa-70d3-afb8-0706bb47a594
   author: joe
@@ -96,6 +102,11 @@ history:
   timestamp: 2026-10-29T11:56:51.187388555Z
   session_id: 01a1874d0ae3
   harness_version: 2.1.312 (Claude Code)
+  changes: []
+- id: 01a18785-da79-7220-a19c-79f4b09f31d3
+  author: joe
+  timestamp: 2026-10-29T11:57:38.809288192Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
