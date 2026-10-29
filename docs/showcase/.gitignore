@@ -1,0 +1,5 @@
+# Rendered reference views derive from repository docs via build.py.
+handbook/
+reference-assets/
+library-data.js
+__pycache__/

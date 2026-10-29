@@ -1,17 +1,42 @@
-# AIDA product showcase
+# AIDA product site
 
-A presentation for newcomers and engineering management, centered on **a governed software factory with selectable autonomy**.
+A professional product introduction for newcomers and engineering management, centered on **a governed software factory with selectable autonomy**. People communicate intent; agents normally operate the CLI/MCP. Configurability is a primary product theme.
 
-- Open [index.html](index.html) for the interactive showcase.
-- Open [executive-brief.html](executive-brief.html) for a concise meeting handout. Its Print / Save as PDF button uses the browser's print dialog.
-- Read [the detailed overview](../what-is-aida.md) for supporting technical context and limitations.
+## Pages
 
-The site is buildless and self-contained: HTML, CSS, JavaScript and an inline SVG diagram. It has no external font, package, analytics or image dependency. Both pages work when opened directly from disk; deploy this directory with any static host. Publishing to a Git repository alone does not make the HTML a website.
+- [Home](index.html): positioning and product map.
+- [The product](workflow.html): the human/agent loop, delivery lifecycle and data layers.
+- [Autonomy](autonomy.html): the four delivery modes and separate decision stop.
+- [Configure](configure.html): six configuration layers, interactive explorer and illustrative policy requests.
+- [Trust](trust.html): authority, independent review, evidence and current limits.
+- [Start](start.html): human-first adoption journey, with operator setup kept separate.
+- [Documentation](resources.html): searchable integrated reference library.
+- [Executive brief](executive-brief.html): printable meeting handout.
 
-The autonomy selector supports mouse, touch, arrow keys, Home and End. With JavaScript disabled, the initial autonomous-delivery explanation remains readable. Print styles are included, and reduced-motion preferences are respected.
+## Build the documentation views
 
-The diagrams explain the operating model; they are not a live dashboard. Descriptive delivery labels map to existing execution modes rather than introducing new CLI values. Claims are grounded in `ExecutionMode` in `aida-core/src/models.rs`, the human contracts in `aida-cli-lib/src/do_dispatch.rs`, and the existing overview. Keep the alpha/Linux and authority limitations accurate when editing the copy.
+From the repository root, with Python 3 and pandoc installed:
 
-The initial version was also published as an owner-private preview through Sites. Access to that preview is separate from these portable source files; sharing the preview URL does not make it public.
+```bash
+python3 docs/showcase/build.py
+```
 
-<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-101 | ai:codex -->
+The build renders current/reference Markdown into ignored `handbook/` pages and a content-search index. It excludes archived material, plans, research, dated investigations, presentation decks and other evidence collections. Source links remain available. The generated library is a derived view, not a second documentation authority.
+
+To produce a standalone publish directory:
+
+```bash
+python3 docs/showcase/build.py --output /tmp/aida-product-site-dist
+```
+
+The resulting output has no runtime framework, package, font, analytics or external image dependency. It can be opened directly from disk or served by any static host. Publishing these files in Git alone does not host a website. Top-level generated pages and original SVG graphics are committed for direct browsing; the large reference library is regenerated rather than duplicated in Git.
+
+## Editing
+
+Edit `pages/*.html` for product-page bodies; `build.py` supplies shared navigation, footer and original SVG diagrams. The authored home page, shared CSS and JavaScript are kept here. Autonomy content on the dedicated page reuses the home selector. Edit the underlying repository Markdown for handbook content, then rebuild. Keep the source-link branch constant in the generator aligned with the published source branch.
+
+Controls support keyboard navigation, mobile menu use and copy-request feedback. Reduced-motion and print styles are present. Illustrative policy requests are not live settings, and diagrams are operating models rather than a live dashboard.
+
+The hosted version remains owner-private in Sites. Hosting access is separate from the portable sources; a preview URL is not public access. Credentials and hosting identity are managed outside this repository.
+
+<!-- trace:EPIC-b6b1278890774ef993d2ebc327862470-002 | ai:codex -->

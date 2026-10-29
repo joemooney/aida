@@ -47,7 +47,7 @@ Additional corrections: the power-features page no longer promises unlimited con
 
 ## Full before/after record
 
-[review-changes.patch](review-changes.patch) contains the complete current-documentation diff for this pass, including the new configuration guide (excluding the separate site implementation, inventory and this report). Files in that diff:
+[review-changes.txt](review-changes.txt) contains the complete current-documentation diff for this pass, including the new configuration guide (excluding the separate site implementation, inventory and this report). Files in that diff:
 
 - `OVERVIEW.md`
 - `README.md`
@@ -105,3 +105,11 @@ The site includes product workflow, autonomy, configuration, trust, human-first 
 Run `python3 docs/showcase/build.py` after source documentation changes. [The site README](showcase/README.md) documents source ownership and deployment. Search indexes the documentation content, not only titles. The hosted audience remains owner-private.
 
 The repository still contains dated material by design. This pass gives it an explicit place and removes it from the main product journey instead of rewriting history to match today's product.
+
+## Site verification
+
+The eight main/brief pages were checked in Chromium at 390, 768 and 1440 pixels with no document-level horizontal overflow or JavaScript errors. Smoke checks covered all four autonomy modes, the six configuration panels, keyboard selection/wrapping, all policy examples, copy-request feedback, mobile menu/Escape, content search, category filtering, empty results and the brief print action. Local page/asset links and rendered section anchors were checked across the generated site.
+
+Contrast findings were corrected and the main/brief pages rechecked with axe-core WCAG A/AA and WCAG 2.1 AA rules: no automated violations were detected. This is a scoped automated check, not a claim of full accessibility certification. Desktop and mobile pages were also visually inspected.
+
+All 104 integrated reference pages were also opened at mobile width. One long-heading overflow in the repository guide was corrected and rechecked. The generated product-library routes point to the integrated pages rather than requiring a GitHub detour.
