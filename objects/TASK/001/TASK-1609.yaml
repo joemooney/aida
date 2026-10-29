@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:06.737868438Z
-modified_at: 2026-10-29T06:43:39.253635554Z
+modified_at: 2026-10-29T06:43:43.411707876Z
 req_type: Task
 tags:
 - follow-up
@@ -40,6 +40,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): apply recorded operator answer Retain refusal (2026-10-08). Keep native macOS enablement unimplemented and Draft; park until TASK-1607 common integration is independently accepted and Joe explicitly revisits macOS enablement with native test capability. Deferral is not completion.'
   created_at: 2026-10-08T16:20:14.889189814Z
   modified_at: 2026-10-08T16:20:14.889189814Z
+- id: 01a18666-72b3-76f0-9acc-b297f5fa31f3
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Obsolete: ADR-72.'
+  created_at: 2026-10-29T06:43:43.411707876Z
+  modified_at: 2026-10-29T06:43:43.411707876Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18666-5761-7c30-97ac-9778fe47b0be
   author: joe
