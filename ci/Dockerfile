@@ -4,7 +4,7 @@
 # baked in here once, so a job starts compiling immediately. Rebuild when the
 # pinned Rust version or the apt set changes:
 #
-#   sudo podman build -t localhost/aida-ci:1.92 -f ci/Dockerfile ci/
+#   sudo podman build -t localhost/aida-ci:1.92-2 -f ci/Dockerfile ci/
 #
 # The runner pulls with `pull_policy = ["if-not-present"]`, so the image is
 # used straight from the host's podman store — no registry, no per-run pull.
@@ -12,13 +12,16 @@
 # a stale local image is never silently reused.
 FROM docker.io/library/rust:1.92
 
+# libc6-dev-arm64-cross: --no-install-recommends drops the arm64 libc headers
+# gcc-aarch64-linux-gnu needs to cross-compile C deps (ring) for aarch64.
+# trace:BUG-b6b1278890774ef993d2ebc327862470-017 | ai:claude
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       protobuf-compiler \
       libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
       libxkbcommon-dev libssl-dev libgtk-3-dev \
       bubblewrap \
-      gcc-aarch64-linux-gnu curl ca-certificates git \
+      gcc-aarch64-linux-gnu libc6-dev-arm64-cross curl ca-certificates git \
  && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add clippy rustfmt \

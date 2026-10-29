@@ -64,7 +64,7 @@ default:
   # clippy/rustfmt, cross targets and the apt set baked in — nothing is
   # downloaded per run. Built on the runner host with podman; the runner uses
   # pull_policy if-not-present. Bump the tag together with ci/Dockerfile.
-  image: localhost/aida-ci:1.92
+  image: localhost/aida-ci:1.92-2
   before_script:
     - ci/restore-git-mtimes
 
