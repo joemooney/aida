@@ -948,13 +948,6 @@ pub(crate) fn review_spec_launch_reviewer(
         .context("failed to launch the reviewer")
 }
 
-/// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
-/// counterpart to `aida queue work`. Resolves the spec's review surface,
-/// runs the existing headless reviewer tier (`/aida-review`) over the diff
-/// against the spec's `## Acceptance` criteria, then presents the verdict
-/// and lets the human decide (approve / request changes / open the diff /
-/// defer). NEVER auto-merges — that would defeat the review:draft-only gate
-/// (cf. STORY-529 self-merge bug-class).
 /// The verdict `aida review <SPEC>` presents and re-records for the reviewer
 /// it launched at `launched_at`. M1: read through the gate ledger, as every
 /// gate does, but a ledger record written before the launch is an earlier
@@ -970,6 +963,13 @@ pub(crate) fn review_spec_verdict(
         .and_then(|current| reviewer_summary::parse_verdict_file(&current.body))
 }
 
+/// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
+/// counterpart to `aida queue work`. Resolves the spec's review surface,
+/// runs the existing headless reviewer tier (`/aida-review`) over the diff
+/// against the spec's `## Acceptance` criteria, then presents the verdict
+/// and lets the human decide (approve / request changes / open the diff /
+/// defer). NEVER auto-merges — that would defeat the review:draft-only gate
+/// (cf. STORY-529 self-merge bug-class).
 pub(crate) fn handle_review_spec(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,

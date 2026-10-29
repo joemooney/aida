@@ -313,6 +313,23 @@ pub(crate) fn spec_verdict_fallback_for_phase3(
     current_head: Option<&str>,
 ) -> Result<Option<auto_complete::ReviewerOutcome>, auto_complete::PhaseFailure> {
     let path = crate::gate::review_verdict::verdict_path(project_root, spec);
+    // TASK-2137: a fresh spec file the anchored reader refuses fails closed,
+    // and the ledger never answers in its place. A refused file with no
+    // readable mtime (a link) or an old one is no fresh verdict.
+    // trace:TASK-2137 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if crate::gate::review_verdict::verdict_file_refused(&path) {
+        return match crate::gate::review_verdict::verdict_file_modified(&path) {
+            Some(mtime) if mtime >= reviewer_started_at => Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::NoVerdict,
+                format!(
+                    "the verdict file {} exists but could not be read — the review cannot be \
+                     proven, so phase 3 fails closed",
+                    path.display()
+                ),
+            )),
+            _ => Ok(None),
+        };
+    }
     // M1: the spec record may be on the gate ledger only (a collected
     // verdict); its freshness is the ledger's order time, a file's its mtime.
     // trace:TASK-1801 | ai:claude
@@ -748,6 +765,16 @@ fn handshake_body(
     // Anchored read: a linked verdict directory or a hard-linked file is no
     // verdict at all, so phase 4 can never merge on redirected evidence.
     // trace:TASK-1801 | ai:claude
+    if crate::gate::review_verdict::verdict_file_refused(path) {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::NoVerdict,
+            format!(
+                "the verdict file {} exists but could not be read — no other record answers \
+                 in its place",
+                path.display()
+            ),
+        ));
+    }
     crate::gate::review_verdict::current_verdict_since(path, since)
         .map(|current| current.body)
         .ok_or_else(no_verdict)

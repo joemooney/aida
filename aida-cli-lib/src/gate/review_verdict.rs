@@ -1144,6 +1144,13 @@ fn choose_current(
     path: PathBuf,
     file_body: Option<String>,
 ) -> Option<CurrentVerdict> {
+    // A current file that exists but the anchored reader refuses (unreadable,
+    // or a linked file or directory) is not evidence, and the ledger must not
+    // answer in its place: every gate fails closed on it (TASK-1801).
+    // trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if file_body.is_none() && std::fs::symlink_metadata(&path).is_ok() {
+        return None;
+    }
     let parsed = file_body.as_deref().map(parse_recorded_verdict);
     let from_file = |body: String| CurrentVerdict {
         body,
