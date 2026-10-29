@@ -12,12 +12,12 @@ description: |
 
   ## Test tier
   LIGHT: `cargo test -p aida-cli-lib --lib reviewer_preflight` plus `make check-ci-fast`.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T11:48:32.376104043Z
-modified_at: 2026-10-29T12:27:19.550518962Z
+modified_at: 2026-10-29T12:29:01.568898986Z
 req_type: Bug
 tags:
 - regroup
@@ -83,6 +83,21 @@ history:
   timestamp: 2026-10-29T12:11:12.437253798Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a187a2-94fd-74c3-bd34-de1e06f89d0f
+  author: aida-auto-bump
+  timestamp: 2026-10-29T12:29:01.565208641Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a187a2-9500-74f3-9a43-ce52913f7205
+  timestamp: 2026-10-29T12:29:01.568891922Z
+  agent: aida
+  commit_sha: b74166aba21293380f163f21e5df6137a79dbcce
+  summary: All 3 ACs verified by bug_016_* tests (follow links incl. chains, specific dangling/escape/absolute/cycle errors); CI green, CLEAN; 4 minor non-blocking deep-pass notes
+  review_verdict: approved
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -95,3 +110,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T12:10:04.770627001Z
   implemented_by: joe
+  completed_at: 2026-10-29T12:29:01.565204279Z
+  completion_sha: b74166aba21293380f163f21e5df6137a79dbcce
