@@ -86323,5 +86323,36 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6736
+- id: 01a188db-330e-7161-b284-a5c0776e3421
+  target_id: 01a188db-2c65-74b2-b493-e7a754ce37d3
+  author: aida
+  node_id: '1'
+  lamport: 6737
+  timestamp: 2026-10-29T18:10:29.262650471Z
+  kind: !Create
+    title: Complete documentation freshness and navigation audit
+    description: |
+      Slice 8 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approves scope] Close the epic with an auditable reader-facing reference set after the approved content/page slices land.
+
+      ## Acceptance
+      - [ ] Inventory all tracked documentation, classify current/derived versus historical/decision/evidence/assets, and record the reviewed snapshot. Preserve historical records as dated evidence rather than rewriting their claims to current time.
+      - [ ] Sweep the final current set for file links, section anchors, moved source paths, CLI examples, freshness/terminology conflicts, unsupported claims and accessibility/navigation issues. Verify substantive corrections against source/help.
+      - [ ] Apply bounded verified fixes in the affected reader journeys; report unresolved/external-verification gaps without claiming every historical statement or vendor client was re-tested.
+      - [ ] Record file/line evidence, before/after fixes, severity, coverage and remaining gaps in a concise review report. Reference the Git diff instead of duplicating entire obsolete documents unless the advisor requests a separate artifact.
+      - [ ] Validate the final static site against its current source set and check that primary overview topics are reachable. No new runtime CI/gate policy is introduced; keep owner-private hosting unchanged unless separately authorized.
+
+      ## Layers / boundaries
+      Final source-document inventory and verification -> bounded source fixes + derived site rebuild -> usable navigation and durable audit evidence. Does not implement the epic as an unreviewed bulk task.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6737
 node_id: '1'
