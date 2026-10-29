@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T13:40:39.861886359Z
+modified_at: 2026-10-29T13:48:45.533104731Z
 req_type: Bug
 tags:
 - id-allocation
@@ -104,6 +104,13 @@ comments:
   created_at: 2026-10-29T13:07:45.696074126Z
   modified_at: 2026-10-29T13:07:45.696074126Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a187eb-945d-71b2-bc2a-a0a04fc87309
+  author: joe
+  content: 'Round-2 findings on 422274c are already addressed on the PR branch by 6649ab1 and 37d5a96 (pushed after the review): (1) worktree_add_and_enter_target_the_canonical_id; (2) session_verbs_carry_the_canonical_id (end --spec, start --owns, manifest write/mark-started); (3) review_coverage_trailers_resolve_to_the_canonical_id, and review_coverage_from_commits now canonicalizes trailer ids; (4) integration test does queue remove/done by alias as advisor; (5) asserts the alias queue-work dry-run plan equals the canonical plan; (6) review record <spec> uses the spec_arg::spec_id value parser, and its only non-test caller is the CLI; (7) every listed arg is routed by value parser or justified in the PR body (questions sweep --scope and triage --scope are keyword/subsystem, not spec ids), and every_routed_spec_argument_parses_to_the_canonical_id pins each one. A re-run implementer seat started from stale HEAD 422274c, so this round has no new commit. Re-review at 37d5a96.'
+  created_at: 2026-10-29T13:48:45.533104731Z
+  modified_at: 2026-10-29T13:48:45.533104731Z
+  session_id: 01a187e4e3cf
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874c-5b8f-74b0-876c-68ad6612be70
   author: joe
