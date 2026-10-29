@@ -8,8 +8,15 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T03:02:31.871007283Z
-modified_at: 2026-10-29T03:03:24.341017107Z
+modified_at: 2026-10-29T03:25:43.225385166Z
 req_type: Bug
+comments:
+- id: 01a185b1-2bb9-79b1-94f1-666d826ffcb2
+  author: joe
+  content: 'ADVISOR addendum 20:26: the contained reviewer reads .claude/settings.json and .aida/config.toml from the PR branch''s review worktree, not from main. The preflight must check the PR branch''s copy, and when the allowlist exists on the base but not the branch, refuse with ''merge <base> into the PR branch first''. Add a test for that case.'
+  created_at: 2026-10-29T03:25:43.225385166Z
+  modified_at: 2026-10-29T03:25:43.225385166Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a1859c-1c86-7760-a7e4-388dc79eb8f8
   author: joe
