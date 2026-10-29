@@ -124,7 +124,8 @@ informational_workflows = ["Cross-platform*"]
 # budget to a measurement is what this spec family forbids.
 # trace:STORY-1423 trace:ADR-53 | ai:claude
 [performance.budgets]
-show = { budget_ms = 1000, ceiling_ms = 5000 }
+# The operator raised the budget from 1000ms to 2000ms deliberately on 2026-10-29 for a build-loaded host; the ceiling still catches a hung call (ADR-53). trace:TASK-b6b1278890774ef993d2ebc327862470-116 | ai:claude
+show = { budget_ms = 2000, ceiling_ms = 5000 }
 
 # STORY-1484 slice C: pick up an orphaned cache refresh request. Scaffold
 # entry (see `schedule_section()` in aida-cli-lib/src/init_cmd.rs), enabled
