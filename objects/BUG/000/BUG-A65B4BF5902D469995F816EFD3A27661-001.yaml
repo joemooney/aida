@@ -1,0 +1,50 @@
+id: 01a18968-65ca-7971-a97a-fbfccf17648d
+spec_id: BUG-a65b4bf5902d469995f816efd3a27661-001
+title: Scaffold status and diff misreport user-owned README changes as AIDA drift
+description: |
+  ## Problem
+
+  `aida scaffold diff` emits a full diff between a consuming project's authored README.md and the generic starter README template. `aida scaffold status` consequently reports the project README as modified scaffold drift. This is misleading: README.md is already classified as FileCategory::Seed and is expected to become user-owned after initialization. A project can have all maintained AIDA artifacts up to date and still appear stale solely because its README describes the actual product.
+
+  Reproduced with a current installed AIDA binary in an existing consuming project: scaffold status reported 306 matching, 1 modified, 0 missing; scaffold diff identified README.md alone, comparing a short generic starter README with the full project documentation. No source or project-private README content is needed to reproduce.
+
+  ## Cause
+
+  FileCategory::from_path classifies README.md as Seed. However, file_matches_artifact only special-cases CLAUDE.md and AGENTS.md and falls through to whole-content equality for README.md. The managed-diff slice/report paths also surface the full README comparison. Upgrade ownership and drift-reporting semantics are inconsistent.
+
+  ## Acceptance
+
+  - An existing user-owned README.md that differs from the starter template does not count as stale AIDA scaffolding in status or the default diff/list output.
+  - Existing README.md content remains untouched by ordinary upgrade and refresh commands.
+  - Status, diff selection, diff exit code, and upgrade reporting share consistent seed-ownership semantics.
+  - CLAUDE.md import checks and AGENTS.md managed-block checks remain intact; genuine drift in AIDA-owned templates still reports normally.
+  - Explicit single-path README comparison, if retained, is clearly labeled as an optional seed comparison, not an upgrade requirement. Document and test its exit-code semantics.
+  - Missing README behavior is explicit and consistent with seed creation policy; it must not imply a private authored README should be replaced.
+  - Add focused regressions for a richly customized README, a seed-only difference, a genuinely stale managed artifact, and missing seed files.
+
+  ## Constraints
+
+  - Do not solve this by overwriting or shortening consuming-project README files, suppressing all scaffold drift, or disabling managed-block comparisons.
+  - No project-specific paths or source content are required in fixtures.
+
+  ## Non-goals
+
+  - Redesigning scaffold template storage or the adoption plane.
+  - Changing consuming-project documentation.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T20:44:42.826469822Z
+modified_at: 2026-10-29T20:44:42.826469822Z
+req_type: Bug
+tags:
+- aida:scaffold
+- papercut
+filed_at:
+  code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5fbe1e39c0
+  vendor: codex
