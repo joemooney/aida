@@ -3,12 +3,12 @@ spec_id: TASK-1023
 agreed_id: TASK-1023
 title: 'Followup TASK (file at sign-off): SPIKE — is a dedicated product *advisor* subsystem (SPIKE-10 subsystem-scoped advisors) the right long-term home, or does the evidence-tag contract suffice?'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:28:44.567363507Z
-modified_at: 2026-10-29T06:42:30.415278314Z
+modified_at: 2026-10-29T06:42:33.346551843Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,3 +22,11 @@ history:
   timestamp: 2026-10-29T06:42:31.250508654Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18665-6102-71c1-be41-9775a07c42d3
+  author: joe
+  timestamp: 2026-10-29T06:42:33.346549805Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
