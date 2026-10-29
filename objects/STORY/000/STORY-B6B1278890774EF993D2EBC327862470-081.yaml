@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:46:50.807919819Z
-modified_at: 2026-10-29T17:08:57.649356179Z
+modified_at: 2026-10-29T17:59:10.062576966Z
 req_type: Story
 relationships:
 - rel_type:
@@ -73,6 +73,12 @@ comments:
   content: 'Round 7 review (advisor, 2026-10-29 10:10) for PR-3090 at 267d293. Scope: the ROUND 6 item only (the two fail-closed tests restored without changing expectations; rustdoc ordering) plus CI at this exact head — poll CI in <=60s steps within budget and cite the green run. Everything earlier was verified in rounds 1-6. Advisor cap: any other finding is accepted with a reason in the verdict, not a new round.'
   created_at: 2026-10-29T17:08:57.649356179Z
   modified_at: 2026-10-29T17:08:57.649356179Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a188d0-d5ee-7de1-842f-7d7ee02a0362
+  author: joe
+  content: 'Round 8 review (advisor, 2026-10-29 11:00) for PR-3090 at e1bca90b80884a4cc9c25e3ff6a50476fe9b1c52 (5d6bcbd + merge from main). Scope: ONLY the round-7 finding (reader ratchet: phase_gates.rs direct legacy verdict-file read routed through the projection or allowlisted with a reason) plus CI green at this exact head (poll <=60s steps; cite the run). All else verified in rounds 1-7; any other finding is accepted with a reason in the verdict.'
+  created_at: 2026-10-29T17:59:10.062576966Z
+  modified_at: 2026-10-29T17:59:10.062576966Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877c-19b8-7861-83cd-857726302b71
