@@ -15,7 +15,8 @@ PAGES = [('getting-started.md', 'getting-started.html', 'Get started'),
          ('configuration-guide.md', 'configuration.html', 'Configuration'),
          ('product-workflow.md', 'workflow.html', 'Workflow'),
          ('selectable-autonomy.md', 'autonomy.html', 'Autonomy'),
-         ('trust-and-evidence.md', 'trust.html', 'Trust')]
+         ('trust-and-evidence.md', 'trust.html', 'Trust'),
+         ('metrics-guide.md', 'metrics.html', 'Metrics')]
 
 
 def inline(text):
