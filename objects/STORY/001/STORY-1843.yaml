@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-29T01:46:23.161718662Z
+modified_at: 2026-10-29T02:27:05.103550348Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1912,6 +1912,12 @@ history:
   session_id: 01a18553acf6
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a1857b-805c-74b2-86a9-5bc3861bc001
+  author: joe
+  timestamp: 2026-10-29T02:27:05.948181141Z
+  session_id: 01a18564450c
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
@@ -1925,7 +1931,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'All six slice-W ruling criteria are met and tested, but the watcher''s identity isolation is incomplete: a wake-snapshot run under a non-advisor agent session can bind advisor role deliveries to that session''s UUID. Also a duplicated validate check and untested partial_wake branches. PR CI was still pending at review time.'
+  detail: 'Round 2: all six slice-W criteria and the four round-1 findings are addressed, but CI lib-0 is red at both heads: the golden CLI help snapshot was not regenerated after the wake-snapshot flag help changed'
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-29T01:46:23.161718662Z
+  shelved_at: 2026-10-29T02:27:05.103550348Z
