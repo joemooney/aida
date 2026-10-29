@@ -2,12 +2,12 @@ id: 01a18620-1ddb-7e12-8e5a-7e1969c7e0c7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-095
 title: Publish the What is AIDA overview under docs/
 description: Operator-requested overview doc (md + self-contained html), spec IDs anonymized
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T05:26:54.171557407Z
-modified_at: 2026-10-29T05:35:50.935484065Z
+modified_at: 2026-10-29T05:40:17.770403486Z
 req_type: Task
 relationships:
 - rel_type:
@@ -27,6 +27,14 @@ history:
   session_id: 01a18627397d
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a1862c-60ea-7bb2-84c8-7ba78c14bef9
+  author: joe
+  timestamp: 2026-10-29T05:40:17.770396903Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
   branch: docs/what-is-aida
