@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:47:20.232117001Z
-modified_at: 2026-10-29T22:52:52.294547242Z
+modified_at: 2026-10-29T22:55:23.427108969Z
 req_type: Story
 tags:
 - architecture
@@ -101,6 +101,36 @@ comments:
   created_at: 2026-10-29T22:49:36.336336297Z
   modified_at: 2026-10-29T22:49:36.336336297Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+- id: 01a189e0-0923-70c1-8e78-c9b8b6d67cbc
+  author: joe
+  content: |-
+    ## Implementer approach (slice 1 of 3, per advisor signoff R1-R8)
+
+    This PR is slice 1 only (commits carry `Refs`, so the story stays open).
+
+    ### Acceptance criteria as tests (slice-1 portion)
+    - **Unit (aida-core allocation_lineage):** R1 record shapes. `PoolRecord {pool_id, type_prefix, range_start, range_end, parent_pool_id, holder_node, home_ref}` is append-only in `registry/pools.yaml`. `RootRecord {holder_node, epoch}` lives in `registry/root.yaml`. `AgreedIdBlock` gains an optional `pool_id`.
+    - **Unit:** `free_ranges(parent)` returns the parent range minus its child pools and blocks.
+    - **Unit:** `check_invariants` lists every overlapping sibling, every child outside its parent, every type mismatch, every unknown parent or cycle, every `*` lineage record and every root pool not held by the root. It never picks a winner. Test: "two claims union-merged from two hubs" (overlapping children under one parent) are reported, not resolved.
+    - **Unit:** spendability (AC3). A block is spendable only if it is bound to this node, its pool chain reaches a root pool, and for a non-root node its parent pool's `home_ref` names the declared upstream remote. An imported block with no lineage is never spendable.
+    - **Unit (allocation_authority):** v2 clone-local setting `{version=2, role=root|node, upstream}`. v1 `authoritative=true` still reads as root. A root with an upstream refuses, and so does an invalid remote name. `authoritative` stays derived (role == root), so existing BUG-2017 callers are unchanged.
+    - **Command-level:** `aida node enroll-root [--dry-run]` writes root.yaml by CAS and then the local role. It refuses when another node already holds root, and is idempotent for the current holder. `aida node upstream <remote>` refuses on root, refuses mirror remotes and unknown remotes, and refuses when this node is the root holder (cycle). `aida node show` reports role, upstream, root, pools and this node's blocks with spendability.
+    - **Command-level:** the AC7 notice. When blocks are configured but `aida add` falls back to node-local IDs, it prints one line with the reason (no upstream / no lineage / exhausted) once per session.
+    - R5 defaults (100 / 1000 / 20%) ship as constants now. They become `[allocation]` config keys in slice 2, where claims consume them.
+
+    ### Expected files
+    - `aida-core/src/allocation_lineage.rs` (new) and its tests, `aida-core/src/lib.rs`
+    - `aida-core/src/allocation_authority.rs`
+    - `aida-core/src/node.rs` (`pool_id`), plus `pool_id: None` added to struct literals
+    - `aida-cli-lib/src/node_cmd.rs`, `node_cmd_args.rs`, `requirements_cli.rs` (the notice)
+    - `docs/cli/` storage page (the new node subcommands)
+
+    ### Ambiguities / conflicts as questions
+    - Does a non-root node with a lineage-valid block dispense short IDs in slice 1? I plan no. Claims (slice 2) are the only legitimate way such a block can exist, and dispensing must widen BUG-2017's `admit()` and the clone dispenser in the same change as claims. Until then `node show` marks the block spendable and `aida add` says that delegated dispensing is not enabled yet. I'll file this as a deviation finding.
+  created_at: 2026-10-29T22:55:23.427108969Z
+  modified_at: 2026-10-29T22:55:23.427108969Z
+  session_id: 01a189ddb67a
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a189da-dae2-7bd0-9ea0-812a156462e8
   author: joe
