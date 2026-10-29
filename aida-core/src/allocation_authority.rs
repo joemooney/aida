@@ -176,11 +176,21 @@ pub fn effective_policy(
     Ok(crate::IdFormatPolicy::NodeAwareOnly)
 }
 
+/// Refusal for a clone that has never claimed a node (no work binding and no
+/// legacy `.aida/node.toml`).
+pub const NO_NODE_BINDING: &str = "this clone has no AIDA node binding yet; run `aida node acquire` (or `aida init`) to claim a node id before issuing new IDs";
+
 pub fn node(root: &Path) -> Result<String> {
     if let Some(binding) = crate::work_binding::load(root)? {
         return Ok(binding.node_id);
     }
-    let node = crate::NodeConfig::load(&root.join(".aida/node.toml"))?.node_id;
+    // A fresh clone has neither binding; name the repair, not the bare ENOENT.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-019 | ai:claude
+    let legacy = root.join(".aida/node.toml");
+    if !legacy.try_exists()? {
+        bail!("{NO_NODE_BINDING}")
+    }
+    let node = crate::NodeConfig::load(&legacy)?.node_id;
     if node.is_empty()
         || node.len() > 128
         || !node.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -642,6 +652,18 @@ mod tests {
             std::fs::write(dir.path().join(".git").join(CONFIG_FILE), text).unwrap();
             assert!(resolve(dir.path()).is_err());
         }
+    }
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-019 | ai:claude
+    #[test]
+    fn unbound_clone_add_names_the_node_repair() {
+        let (dir, backend) = fixture(false);
+        std::fs::remove_file(dir.path().join(".aida/node.toml")).unwrap();
+        let err = backend
+            .add_requirement(Requirement::new("x".into(), "fixture".into()))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(NO_NODE_BINDING), "{err}");
+        assert!(!err.contains("os error 2"), "{err}");
     }
     #[test]
     fn bug_2017_work_backend_and_bulk_only_allocate_local() {
