@@ -40,31 +40,122 @@ pub(crate) enum AllowedHosts {
     Present,
 }
 
+/// How many symlinks one lookup follows before giving up (a cycle, or a
+/// chain no layout needs).
+const MAX_LINK_HOPS: usize = 8;
+
 /// One revision's copies of the two files the reviewer loads. `None` is a
-/// file absent at that revision.
+/// file absent at that revision. `broken_links` names each of the two paths
+/// that is a symlink whose target dangles or leaves the tree; that file is
+/// `None`.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ReviewerConfigFiles {
     pub(crate) settings: Option<String>,
     pub(crate) config: Option<String>,
+    pub(crate) broken_links: Vec<String>,
+}
+
+/// The tree path a symlink at `link_path` with link text `target` points to,
+/// resolved against the link's directory. `None` when the target is absolute
+/// or climbs above the repository root.
+/// trace:BUG-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+fn resolve_link_target(link_path: &str, target: &str) -> Option<String> {
+    if target.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = link_path.split('/').collect();
+    parts.pop();
+    for part in target.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            name => parts.push(name),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+/// The entry at `path` in `rev`'s tree: its mode and object id. `None` when
+/// the path is absent.
+fn tree_entry(repo: &Path, rev: &str, path: &str) -> Option<(String, String)> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["ls-tree", "-z", rev, "--", path])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let line = String::from_utf8_lossy(&out.stdout);
+    let (meta, _) = line.split_once('\t')?;
+    let mut fields = meta.split(' ');
+    let mode = fields.next()?.to_string();
+    let _kind = fields.next()?;
+    Some((mode, fields.next()?.to_string()))
+}
+
+fn read_blob(repo: &Path, oid: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["cat-file", "blob", oid])
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The content of `path` at `rev`, following committed symlinks (tree mode
+/// 120000) within the same tree, as a checkout of `rev` would. `Ok(None)` is
+/// a path absent at `rev`; `Err` names a link that dangles, escapes the
+/// repository, or chains past [`MAX_LINK_HOPS`].
+/// trace:BUG-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+fn read_following_links(repo: &Path, rev: &str, path: &str) -> Result<Option<String>, String> {
+    let mut current = path.to_string();
+    for hop in 0..=MAX_LINK_HOPS {
+        let Some((mode, oid)) = tree_entry(repo, rev, &current) else {
+            return if hop == 0 {
+                Ok(None)
+            } else {
+                Err(format!(
+                    "`{path}` is a symlink to `{current}`, which does not exist"
+                ))
+            };
+        };
+        if mode != "120000" {
+            return Ok(read_blob(repo, &oid));
+        }
+        let target = read_blob(repo, &oid).unwrap_or_default();
+        current =
+            resolve_link_target(&current, target.trim_end_matches('\n')).ok_or_else(|| {
+                format!("`{path}` is a symlink to `{target}`, which points outside the repository")
+            })?;
+    }
+    Err(format!(
+        "`{path}` is a chain of more than {MAX_LINK_HOPS} symlinks (last: `{current}`)"
+    ))
 }
 
 impl ReviewerConfigFiles {
-    /// The copies committed at `rev`, read with `git show` from `repo`.
+    /// The copies committed at `rev` in `repo`, following symlinks.
     fn at_revision(repo: &Path, rev: &str) -> Self {
-        let show = |path: &str| {
-            let out = std::process::Command::new("git")
-                .arg("-C")
-                .arg(repo)
-                .args(["show", &format!("{rev}:{path}")])
-                .output()
-                .ok()?;
-            out.status
-                .success()
-                .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+        let mut broken_links = Vec::new();
+        let mut read = |path: &str| {
+            read_following_links(repo, rev, path).unwrap_or_else(|problem| {
+                broken_links.push(problem);
+                None
+            })
         };
+        let settings = read(SETTINGS_PATH);
+        let config = read(CONFIG_PATH);
         Self {
-            settings: show(SETTINGS_PATH),
-            config: show(CONFIG_PATH),
+            settings,
+            config,
+            broken_links,
         }
     }
 
@@ -101,7 +192,9 @@ impl ReviewerConfigFiles {
     }
 
     fn complete(&self) -> bool {
-        self.allowed_hosts() == AllowedHosts::Present && self.missing_allow_entries().is_empty()
+        self.broken_links.is_empty()
+            && self.allowed_hosts() == AllowedHosts::Present
+            && self.missing_allow_entries().is_empty()
     }
 }
 
@@ -113,6 +206,17 @@ pub(crate) fn contained_reviewer_preflight(
     branch: &ReviewerConfigFiles,
     base: Option<(&str, &ReviewerConfigFiles)>,
 ) -> Result<()> {
+    // A broken link is its own problem: reporting the file's missing
+    // entries would send the operator to edit a file that is not there.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-016 | ai:claude
+    if !branch.broken_links.is_empty() {
+        anyhow::bail!(
+            "refusing to launch a contained reviewer for PR-{pr}: on the PR branch, {}. The \
+             reviewer loads these files from the PR branch and cannot read them through a broken \
+             link. Fix: point the link at a file inside the repository, commit, push, then re-run.",
+            branch.broken_links.join("; ")
+        );
+    }
     let hosts = branch.allowed_hosts();
     let absent = branch.missing_allow_entries();
     if hosts == AllowedHosts::Present && absent.is_empty() {
@@ -242,6 +346,7 @@ mod tests {
         ReviewerConfigFiles {
             settings: settings.map(str::to_string),
             config: Some(config.to_string()),
+            broken_links: Vec::new(),
         }
     }
 
@@ -390,6 +495,185 @@ mod tests {
         run(Some("release")).unwrap();
     }
 
+    /// A repository whose HEAD commits `files` (path, content) and `links`
+    /// (path, link text, as tree mode 120000 — no filesystem symlinks, so it
+    /// runs on every platform).
+    fn repo_with_links(files: &[(&str, &str)], links: &[(&str, &str)]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let git = |args: &[&str], stdin: Option<&str>| -> String {
+            use std::io::Write as _;
+            let mut child = crate::test_git::git_command()
+                .arg("-C")
+                .arg(dir.path())
+                .args([
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                    "-c",
+                    "commit.gpgsign=false",
+                ])
+                .args(args)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(stdin.unwrap_or("").as_bytes())
+                .unwrap();
+            let out = child.wait_with_output().unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        git(&["init", "--quiet"], None);
+        for (path, content) in files {
+            let full = dir.path().join(path);
+            std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+            std::fs::write(full, content).unwrap();
+            git(&["add", path], None);
+        }
+        for (path, target) in links {
+            let oid = git(&["hash-object", "-w", "--stdin"], Some(target));
+            git(
+                &[
+                    "update-index",
+                    "--add",
+                    "--cacheinfo",
+                    &format!("120000,{oid},{path}"),
+                ],
+                None,
+            );
+        }
+        git(&["commit", "--quiet", "-m", "c"], None);
+        dir
+    }
+
+    /// The template-mirror layout: `.claude/settings.json` (and the config)
+    /// are committed symlinks into a template directory. The preflight reads
+    /// the target, not the link text.
+    #[test]
+    fn bug_016_preflight_follows_symlinked_config_files() {
+        let links = [
+            (SETTINGS_PATH, "../templates/settings.json"),
+            (CONFIG_PATH, "../templates/./config.toml"),
+        ];
+        let ok = repo_with_links(
+            &[
+                ("templates/settings.json", ALLOW),
+                ("templates/config.toml", HOSTS),
+            ],
+            &links,
+        );
+        let files = ReviewerConfigFiles::at_revision(ok.path(), "HEAD");
+        assert!(files.broken_links.is_empty(), "{:?}", files.broken_links);
+        contained_reviewer_preflight(7, &files, None).unwrap();
+
+        let lacking = repo_with_links(
+            &[
+                (
+                    "templates/settings.json",
+                    r#"{"permissions": {"allow": ["Bash(aida)"]}}"#,
+                ),
+                ("templates/config.toml", HOSTS),
+            ],
+            &links,
+        );
+        let files = ReviewerConfigFiles::at_revision(lacking.path(), "HEAD");
+        let err = contained_reviewer_preflight(7, &files, None)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("lacks the reviewer allow entries `Bash(aida *)`"),
+            "{err}"
+        );
+
+        // A link to a link is followed too.
+        let chained = repo_with_links(
+            &[
+                ("templates/settings.json", ALLOW),
+                ("templates/config.toml", HOSTS),
+            ],
+            &[
+                (SETTINGS_PATH, "settings.mirror.json"),
+                (".claude/settings.mirror.json", "../templates/settings.json"),
+                (CONFIG_PATH, "../templates/config.toml"),
+            ],
+        );
+        let files = ReviewerConfigFiles::at_revision(chained.path(), "HEAD");
+        contained_reviewer_preflight(7, &files, None).unwrap();
+    }
+
+    /// A dangling, escaping, absolute, or cyclic link is named as such, not
+    /// reported as a file that lacks the allow entries.
+    #[test]
+    fn bug_016_preflight_names_a_broken_settings_link() {
+        let cases: [(&[(&str, &str)], &str); 4] = [
+            (
+                &[(SETTINGS_PATH, "../templates/settings.json")],
+                "`.claude/settings.json` is a symlink to `templates/settings.json`, which does not exist",
+            ),
+            (
+                &[(SETTINGS_PATH, "../../outside/settings.json")],
+                "`.claude/settings.json` is a symlink to `../../outside/settings.json`, which points outside the repository",
+            ),
+            (
+                &[(SETTINGS_PATH, "/etc/settings.json")],
+                "`.claude/settings.json` is a symlink to `/etc/settings.json`, which points outside the repository",
+            ),
+            (
+                &[(SETTINGS_PATH, "a.json"), (".claude/a.json", "settings.json")],
+                "`.claude/settings.json` is a chain of more than 8 symlinks",
+            ),
+        ];
+        for (links, expected) in cases {
+            let dir = repo_with_links(&[(CONFIG_PATH, HOSTS)], links);
+            let files = ReviewerConfigFiles::at_revision(dir.path(), "HEAD");
+            assert!(files.settings.is_none());
+            let err = contained_reviewer_preflight(7, &files, Some(("main", &files)))
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected), "{err}");
+            assert!(err.contains("PR-7"), "{err}");
+            assert!(!err.contains("lacks the reviewer allow entries"), "{err}");
+        }
+    }
+
+    #[test]
+    fn bug_016_link_targets_resolve_against_the_link_directory() {
+        let cases = [
+            (
+                ".claude/settings.json",
+                "../aida-core/templates/settings.json",
+                Some("aida-core/templates/settings.json"),
+            ),
+            (
+                ".claude/settings.json",
+                "./local.json",
+                Some(".claude/local.json"),
+            ),
+            (
+                ".claude/settings.json",
+                "a//b/../c.json",
+                Some(".claude/a/c.json"),
+            ),
+            ("top.json", "other.json", Some("other.json")),
+            (".claude/settings.json", "../..", None),
+            (".claude/settings.json", "../../x.json", None),
+            (".claude/settings.json", "/abs.json", None),
+            (".claude/settings.json", "..", None),
+        ];
+        for (link, target, expected) in cases {
+            assert_eq!(
+                resolve_link_target(link, target).as_deref(),
+                expected,
+                "{link} -> {target}"
+            );
+        }
+    }
+
     /// A fresh scaffold passes: the init config section and the scaffolded
     /// reviewer entries hold what the preflight requires.
     #[test]
@@ -419,6 +703,7 @@ mod tests {
         let read = |dir: &Path| ReviewerConfigFiles {
             settings: std::fs::read_to_string(dir.join(SETTINGS_PATH)).ok(),
             config: std::fs::read_to_string(dir.join(CONFIG_PATH)).ok(),
+            broken_links: Vec::new(),
         };
         let dir = repo(
             "[forge]\nprovider = \"github\"\n",
