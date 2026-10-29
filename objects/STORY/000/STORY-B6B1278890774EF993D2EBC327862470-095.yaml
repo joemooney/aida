@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:47:20.232117001Z
-modified_at: 2026-10-29T22:55:23.427108969Z
+modified_at: 2026-10-29T23:56:04.651543812Z
 req_type: Story
 tags:
 - architecture
@@ -129,6 +129,22 @@ comments:
     - Does a non-root node with a lineage-valid block dispense short IDs in slice 1? I plan no. Claims (slice 2) are the only legitimate way such a block can exist, and dispensing must widen BUG-2017's `admit()` and the clone dispenser in the same change as claims. Until then `node show` marks the block spendable and `aida add` says that delegated dispensing is not enabled yet. I'll file this as a deviation finding.
   created_at: 2026-10-29T22:55:23.427108969Z
   modified_at: 2026-10-29T22:55:23.427108969Z
+  session_id: 01a189ddb67a
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18a17-98ab-7132-9e72-f890629b6ca6
+  author: joe
+  content: |-
+    ## Implementer findings (slice 1, commit 4efcb0f3d81)
+
+    These are not filed as draft TASKs. This seat cannot allocate IDs: `aida add` hit a read-only filesystem in the sandbox, and the MCP file_finding call was denied. Please triage them from here.
+
+    1. **Deviation (minor):** non-root clones do not dispense from a lineage-valid block yet. effective_policy stays node-aware-only off the root, and `aida add` says that delegated dispensing is not enabled yet. Slice 2 must do three things in the same change as claims: route effective_policy to the configured policy when `spendable_block(type)` is Ok, widen BUG-2017 `admit()` and `CloneDispenser::format_id` to accept IDs inside that block, and dispense under the dispense lock.
+    2. **Design choice (minor):** R5 sizes are constants (`DEFAULT_LEAF_BLOCK` / `DEFAULT_HUB_POOL` / `DEFAULT_LOW_WATER_PCT`). They become `[allocation]` config keys in slice 2, where claims consume them.
+    3. **Design choice (minor):** `aida node enroll-root` writes only `registry/root.yaml {holder_node, epoch: 1}` plus the local role. It creates no root pools: per R3 they are created lazily on first claim, and migrate-blocks attaches existing blocks.
+    4. **Followup (minor):** `PoolRegistry::union` exists and is tested. git_ops has no union merge driver for `registry/pools.yaml` yet (blocks.yaml has one), so wire it in with claims.
+    5. **Design choice (minor):** cycle refusal for `aida node upstream` is local: the root holder cannot declare an upstream. A cross-clone cycle surfaces as a lineage Cycle conflict once pools exist.
+  created_at: 2026-10-29T23:56:04.651543812Z
+  modified_at: 2026-10-29T23:56:04.651543812Z
   session_id: 01a189ddb67a
   harness_version: 2.1.312 (Claude Code)
 history:
