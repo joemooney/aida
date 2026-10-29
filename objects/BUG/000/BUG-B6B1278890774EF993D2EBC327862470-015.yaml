@@ -21,12 +21,12 @@ description: |
   2. ONE structural test walks the full clap command tree (`Cli::command()`), finds every argument whose id or value_name denotes a spec ID (spec, specs, owns, id/ID on spec commands, SPEC, SPEC-ID), and fails if it lacks the parser. That test is the ratchet; it replaces the per-command parse tests the reviewer asked for.
   3. Keep end-to-end checks only where behavior goes beyond parsing: `review record STORY-HOME-NNN` keys the verdict under the canonical ID; `queue work` dry-run plan names the canonical ID (assert it, not the absence of an error); queue rm/done by alias acts on the entry `queue add` created; a (TYPE-<LABEL>-NNN) trailer in auto-queue-review files against the canonical ID.
   Gate (LIGHT): targeted cargo test filters for spec_arg + bug_015 + story_078, plus make check-ci-fast. >10 files: also make test-touched once.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T12:13:16.276379850Z
+modified_at: 2026-10-29T12:13:25.250570272Z
 req_type: Bug
 tags:
 - id-allocation
@@ -76,6 +76,12 @@ comments:
   modified_at: 2026-10-29T11:55:55.960784264Z
   session_id: 01a1874d0ae3
   harness_version: 2.1.312 (Claude Code)
+- id: 01a18794-4b82-76b2-8eb8-7c0051b093bf
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: CI green; AC1 code paths routed, but AC2 lacks per-family tests for worktree add, session end --spec, pr auto-queue-review (queue rm/done parse-only), and AC3 audit missed user spec args such as review record <SPEC>.. No triage reason was given.'
+  created_at: 2026-10-29T12:13:25.250565728Z
+  modified_at: 2026-10-29T12:13:25.250565728Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1874c-5b8f-74b0-876c-68ad6612be70
   author: joe
@@ -130,6 +136,14 @@ history:
   timestamp: 2026-10-29T12:13:17.098496955Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18794-4b82-76b2-8eb8-7bf7ca416bab
+  author: joe
+  timestamp: 2026-10-29T12:13:25.250556350Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -142,14 +156,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T11:56:47.497371016Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: CI green; AC1 code paths routed, but AC2 lacks per-family tests for worktree add, session end --spec, pr auto-queue-review (queue rm/done parse-only), and AC3 audit missed user spec args such as review record <SPEC>.
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-015 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T12:12:10.031351363Z
 interface_changes:
   cli:
   - Spec-scope commands (queue, rework, claim/unclaim, worktree add/enter, session end/start/manifest, plan fan-out, db reconcile-status) accept a friendly node alias TYPE-<LABEL>-NNN and act on the canonical id

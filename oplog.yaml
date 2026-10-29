@@ -85436,5 +85436,13 @@ operations:
       2. ONE structural test walks the full clap command tree (`Cli::command()`), finds every argument whose id or value_name denotes a spec ID (spec, specs, owns, id/ID on spec commands, SPEC, SPEC-ID), and fails if it lacks the parser. That test is the ratchet; it replaces the per-command parse tests the reviewer asked for.
       3. Keep end-to-end checks only where behavior goes beyond parsing: `review record STORY-HOME-NNN` keys the verdict under the canonical ID; `queue work` dry-run plan names the canonical ID (assert it, not the absence of an error); queue rm/done by alias acts on the entry `queue add` created; a (TYPE-<LABEL>-NNN) trailer in auto-queue-review files against the canonical ID.
       Gate (LIGHT): targeted cargo test filters for spec_arg + bug_015 + story_078, plus make check-ci-fast. >10 files: also make test-touched once.
-clock: 6678
+- id: 01a18794-4f72-7191-9c9a-2bfc11742773
+  target_id: 01a1874c-239a-7f73-afc0-c9a87b8256d8
+  author: aida
+  node_id: '1'
+  lamport: 6679
+  timestamp: 2026-10-29T12:13:26.258245118Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6679
 node_id: '1'
