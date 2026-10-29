@@ -86678,5 +86678,31 @@ operations:
   timestamp: 2026-10-29T18:44:57.810322232Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6768
+- id: 01a188ff-da31-7c53-afb6-cb7462ae0072
+  target_id: 01a188ff-d0d1-7ee2-b831-b2fa163b244a
+  author: aida
+  node_id: '1'
+  lamport: 6769
+  timestamp: 2026-10-29T18:50:31.345627568Z
+  kind: !Create
+    title: 'Review PR-3099: [AI:codex] docs(autonomy): publish autonomy and trust boundaries (TASK-B6B1278890774EF993D2EBC327862470-109)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188fa`) for branch `task-b6b1278890774ef993d2ebc327862470-109-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3099>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-109-work` → `task-b6b1278890774ef993d2ebc327862470-108-work`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-109
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3099` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6769
 node_id: '1'
