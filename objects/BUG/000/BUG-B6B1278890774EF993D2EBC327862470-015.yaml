@@ -26,7 +26,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T12:13:25.250570272Z
+modified_at: 2026-10-29T13:01:15.231951296Z
 req_type: Bug
 tags:
 - id-allocation
@@ -82,6 +82,13 @@ comments:
   created_at: 2026-10-29T12:13:25.250565728Z
   modified_at: 2026-10-29T12:13:25.250565728Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a187c0-165f-7ed3-ad26-8b17280e240c
+  author: joe
+  content: 'Round 2 (6649ab1334c, PR-3091): all 7 findings addressed. Spec-ID args now pass through the spec_arg::spec_id/spec_id_csv clap value parsers. That covers review record/verdict/claim/prompt (review record keyed its verdict under the alias), gate, dispatch, drain, approvals, human, plan, questions, backlog, usage, record, punts, agent --spec, and worktree add/enter. review_coverage_from_commits canonicalizes trailer ids, because the shared paren parser does not expand them. New tests: parse-layer tests for worktree, session, review and punts/usage, plus review-coverage trailers. The integration test now compares the alias and canonical queue work plans and runs queue remove/done by alias under an advisor seat grant. Remaining deviation, for advisor sign-off: worktree add and session end are tested at the parse layer only. The canonical parse result is the only input that differs between the two forms. Not changed: questions sweep --scope (a keyword) and triage --scope (a subsystem name).'
+  created_at: 2026-10-29T13:01:15.231951296Z
+  modified_at: 2026-10-29T13:01:15.231951296Z
+  session_id: 01a187952b8f
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874c-5b8f-74b0-876c-68ad6612be70
   author: joe
