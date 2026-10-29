@@ -85478,5 +85478,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6682
+- id: 01a187a2-d569-78a1-8fb5-b3b39631b3b7
+  target_id: 01a187a2-ce21-7c83-ae69-9e70ede74e6a
+  author: aida
+  node_id: '1'
+  lamport: 6683
+  timestamp: 2026-10-29T12:29:18.057723696Z
+  kind: !Create
+    title: 'minor (non-blocking): a link resolving to a directory (mode 040000, incl. empty…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking): a link resolving to a directory (mode 040000, incl. empty link text -> parent dir) returns Ok(None) and is reported as 'lacks the allow entries' instead of a broken-link error
+
+      PR: #3092
+      Reviewed sha: 7eb3e940b01ab9130ddbafa26791956868f6d0ab
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6683
 node_id: '1'
