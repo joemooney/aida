@@ -66,8 +66,8 @@ cd aida
 cargo install --path aida-cli
 ```
 
-`protoc` is needed only for the optional server/gRPC features; the default CLI
-build does not need it.
+No external `protoc` is needed: protobuf definitions are compiled with the
+pure-Rust `protox` crate.
 
 ## Quick start
 
