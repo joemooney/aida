@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:10:37.126637011Z
-modified_at: 2026-09-06T01:29:50.092029195Z
+modified_at: 2026-10-29T06:45:11.922919751Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -33,6 +33,10 @@ relationships:
   target_id: 01a07450-7e98-79a1-861a-1193c84108e9
   created_at: 2026-09-06T01:23:52.106939480Z
   created_by: joe
+- rel_type: Supersedes
+  target_id: 019efd2f-ac61-7b70-ab62-f5d5e8aca31a
+  created_at: 2026-10-29T06:45:11.922902963Z
+  created_by: joe
 history:
 - id: 01a07456-0705-7891-be0a-51dcb134996b
   author: aida-auto-bump
@@ -41,6 +45,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a18667-d2ed-7113-9395-91a7ff037fa0
+  author: joe
+  timestamp: 2026-10-29T06:45:13.581244582Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 processing_record:
 - id: 01a07456-070c-7410-81b0-77856f2dba5d
   timestamp: 2026-09-06T01:29:50.092027494Z
