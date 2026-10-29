@@ -8,12 +8,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:38.590060636Z
-modified_at: 2026-10-29T06:40:38.652058717Z
+modified_at: 2026-10-29T06:40:42.205879736Z
 req_type: Bug
 tags:
 - aida:orchestrator
 - from-downstream:quizdom
 - needs-repro-verification
+relationships:
+- rel_type: SupersededBy
+  target_id: 019f856f-8153-7061-bebb-4c681dd637a8
+  created_at: 2026-10-29T06:40:42.205875797Z
+  created_by: joe
 comments:
 - id: 01a0fb53-4229-79b3-8fe4-d4eb58aecfdf
   author: joe
@@ -46,3 +51,8 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Superseded
+- id: 01a18663-b537-7702-a204-f820901c1cd3
+  author: joe
+  timestamp: 2026-10-29T06:40:43.831923744Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
