@@ -73,6 +73,16 @@ tags:
 - id-allocation
 - privacy
 - traceability
+relationships:
+- rel_type: Parent
+  target_id: 01a1865c-b9ac-7fe3-9246-f5e80986f5dc
+  created_at: 2026-10-29T06:33:10.944804318Z
+history:
+- id: 01a1865c-df1e-7472-a738-f4a6cc6b529c
+  author: joe
+  timestamp: 2026-10-29T06:33:15.806557581Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
