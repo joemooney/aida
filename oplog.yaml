@@ -87082,5 +87082,40 @@ operations:
   timestamp: 2026-10-29T20:01:53.996145282Z
   kind: !SetStatus
     status: In Progress
-clock: 6797
+- id: 01a1895d-ce27-78a1-a860-2fb226c3bccd
+  target_id: 01a1895d-c9f1-7500-8e2f-86db48466256
+  author: aida
+  node_id: '1'
+  lamport: 6798
+  timestamp: 2026-10-29T20:33:08.647164019Z
+  kind: !Create
+    title: How do I upgrade an existing project to the latest AIDA scaffolding?
+    description: |
+      **Use `aida scaffold upgrade` for category-aware project upgrades, or `aida scaffold refresh` for a gentler refresh of installed agent packs.**
+
+      ## How
+
+      Run from the consuming project with the intended installed binary:
+
+      ```bash
+      aida --version
+      aida scaffold status
+      aida scaffold upgrade --dry-run
+      aida scaffold upgrade
+      git diff
+      ```
+
+      Upgrade replaces drifted AIDA-owned templates, creates missing seed files, and updates the delimited AIDA-AUTOGEN block in AGENTS.md. Existing user-owned seed content outside that block is left alone; existing managed-merge files are left alone in the current implementation.
+
+      ## Caveat
+
+      Customized AIDA-owned skills and hooks may be overwritten by upgrade. `aida scaffold refresh` preserves edited installed pack files and does not install packs that were never installed. Avoid `--force` unless deliberately replacing user guidance. Review any tracked changes before committing; scaffolding refresh is not requirement-store synchronization.
+
+      ## See also
+
+      FAQ-25: building and promoting the live binary.
+    req_type: Faq
+    status: Completed
+    priority: Medium
+clock: 6798
 node_id: '1'
