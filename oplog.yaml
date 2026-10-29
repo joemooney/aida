@@ -85620,5 +85620,13 @@ operations:
       STEP 3 — DELETE the post-parse helpers: canonicalize_queue_spec_args (queue_cmd.rs), canonicalize_session_spec_args (agent_launch.rs), the run_claim/run_unclaim canonicalization (claim.rs), and handler-side canonical() calls at db_reconcile.rs:3120, plan_cmd.rs:763 and queue rework. ship::resolve_spec and commit normalize_spec must receive already-canonical IDs.
       STEP 4 — end-to-end, exactly two tests: `review record STORY-<LABEL>-NNN` writes its verdict under the canonical ID; `aida commit --spec STORY-<LABEL>-NNN` produces the canonical (SPEC-ID) trailer. worktree add / session end staying parse-level is ACCEPTED (reason: the parser is the only resolution point once Step 3 lands, and the tree test proves it is attached).
       Advisor cap: this is the last round; the next review checks Steps 1-4 and green CI only.
-clock: 6692
+- id: 01a187c6-0f50-7ed3-b56c-8bb967d3bf36
+  target_id: 01a1874c-239a-7f73-afc0-c9a87b8256d8
+  author: aida
+  node_id: '1'
+  lamport: 6693
+  timestamp: 2026-10-29T13:07:46.640850911Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6693
 node_id: '1'
