@@ -7,8 +7,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:03.935600642Z
-modified_at: 2026-10-29T21:32:57.723060982Z
+modified_at: 2026-10-29T21:33:53.013368106Z
 req_type: Bug
+comments:
+- id: 01a18995-69f5-7ad1-b227-09b1e1b4e752
+  author: joe
+  content: 'Advisor ruling 2026-10-29: no auto-bootstrap of a node id on aida add (BUG-2017 invariant). The named-repair refusal in PR-3104 closes this bug.'
+  created_at: 2026-10-29T21:33:53.013368106Z
+  modified_at: 2026-10-29T21:33:53.013368106Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
 history:
 - id: 01a1898a-30bb-70a3-84e1-b0059f871681
   author: joe
