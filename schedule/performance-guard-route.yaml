@@ -1,27 +1,7 @@
 job: performance-guard-route
-last_run: 2026-10-29T09:31:56.620920283Z
+last_run: 2026-10-29T18:32:58.635473481Z
 last_by:
   seat: advisor
-  session: 59349e57-271d-4b9e-b662-8585b949736a
+  session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
   vendor: claude
 result: done
-note: 'Ruled: no code regression, budget unchanged. Trip 07:58Z: show over 1000ms on 15.7% of 83 calls (tolerated 10%), worst 2606ms, ceiling 5000ms NOT breached. The share is falling (26%->25%->16%), the 34.8s outlier has left the window, and the over-budget calls are spread across 7 binaries (0%-28.6%, no single build responsible), consistent with CPU contention from concurrent cargo lanes. Re-examine if the ceiling breaches again or one binary owns the excess.'
-due_since: 2026-10-29T14:13:38.712994090Z
-due_reason: on CronJobFailed:performance-guard
-due_failure:
-  trip_id: performance-guard@2026-10-29T14:03:45.568595227Z
-  performance:
-  - command: show
-    budget_ms: 1000
-    over_budget: 18
-    denominator: 74
-    proportion_millipercent: 24324
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 2606
-    excluded_samples: 0
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: false
-  job: performance-guard
-  error: 'exit 1: '
