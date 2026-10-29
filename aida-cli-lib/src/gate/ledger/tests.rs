@@ -1092,6 +1092,7 @@ fn a_refused_or_unparseable_file_keeps_the_ledger_out_of_every_reader() {
         serde_json::to_string(&record("approved", &ts(0), None)).unwrap(),
     )
     .unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::os::unix::fs::symlink(&real, &path).unwrap();
     assert!(rv::verdict_file_refused(&path));
     assert_eq!(approved_by_every_reader(), (false, false, false, false));
