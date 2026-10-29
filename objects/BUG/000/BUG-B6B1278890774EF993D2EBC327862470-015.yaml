@@ -13,12 +13,12 @@ description: |
   ## Test tier
   LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
   - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T10:54:49.976442323Z
+modified_at: 2026-10-29T10:55:36.567504991Z
 req_type: Bug
 tags:
 - id-allocation
@@ -29,6 +29,14 @@ history:
   timestamp: 2026-10-29T10:54:50.767464195Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1874d-0e77-73f2-b518-b73159536520
+  author: aida-session-start
+  timestamp: 2026-10-29T10:55:36.567502679Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
