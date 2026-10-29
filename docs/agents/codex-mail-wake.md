@@ -234,9 +234,11 @@ next interval. Scans have per-command time and output bounds.
 When AIDA reports the view as partial (some mailbox source could not be fully
 read), the watcher does not treat it as an empty inbox. The next wake says the
 view is partial, and says when role mail is queued for a reader. If a scan
-lists no new IDs but is partial or has queued role mail, the watcher queues
-one notice without IDs per episode; a complete scan with nothing queued ends
-the episode. A partial scan never prunes accepted IDs. A notice without IDs
+lists no new IDs, the watcher queues a notice without IDs for each of two
+independent episodes. A partial view is announced once, until the next
+complete scan. Queued role mail is announced when the queued count rises
+above the count last announced, so new role mail queued behind older untaken
+mail wakes again; the episode ends when nothing is queued. A partial scan never prunes accepted IDs. A notice without IDs
 carries nothing to recover, so an uncertain queue result for it is recorded
 as sent instead of requiring recovery.
 
@@ -244,8 +246,8 @@ The envelope stays at version 1 with three added fields: `partial` (boolean),
 `partial_codes` (safe source error codes, with no paths or IDs) and `pending`
 (the number of queued role deliveries no reader has taken). The adapter
 refuses an envelope without `partial` or `pending`, because an older AIDA
-binary reads only one checkout. `--local-root` now selects the checkout the logical view is read
-from, not one mailbox to inspect.
+binary reads only one checkout. `--local-root` now selects the checkout the
+logical view is read from, not one mailbox to inspect.
 
 Successful queue submissions are committed atomically under a permanent exclusive
 lock. Failure to create the queue process is known not to have submitted anything

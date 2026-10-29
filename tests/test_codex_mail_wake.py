@@ -157,6 +157,10 @@ class WatcherTests(unittest.TestCase):
             with self.assertRaises(wake.Refusal):
                 wake.validate(ledger, self.root, THREAD)
         wake.validate(dict(self.ledger, partial_notified=True), self.root, THREAD)
+        for bad in (0, -1, True, "1", 100_001):
+            with self.assertRaises(wake.Refusal):
+                wake.validate(dict(self.ledger, role_notified=bad), self.root, THREAD)
+        wake.validate(dict(self.ledger, role_notified=3), self.root, THREAD)
 
     # trace:STORY-1843 | ai:claude
     def test_queued_role_mail_wakes_once_without_ids(self):
@@ -166,8 +170,37 @@ class WatcherTests(unittest.TestCase):
             self.assertNotIn("partial (some", cmd.call_args.args[0][-1])
             self.assertFalse(self.tick({}, now=110, batch_seconds=0, role_pending=1)["queue_submitted"])
             self.tick({}, now=120, batch_seconds=0)
-            self.assertNotIn("partial_notified", self.ledger)
+            self.assertNotIn("role_notified", self.ledger)
             self.assertEqual(cmd.call_count, 1)
+
+    # trace:STORY-1843 | ai:claude — PR-3079 round 2, case A.
+    def test_partial_notice_does_not_suppress_a_later_queued_role_mail_notice(self):
+        with patch.object(wake, "command", return_value=b"accepted") as cmd:
+            self.assertTrue(self.tick({}, batch_seconds=0, partial=True)["queue_submitted"])
+            self.assertNotIn("queued", cmd.call_args.args[0][-1])
+            # Complete view, role mail now queued: its own notice goes out.
+            self.assertTrue(self.tick({}, now=110, batch_seconds=0, role_pending=1)["queue_submitted"])
+            self.assertIn("queued", cmd.call_args.args[0][-1])
+            self.assertNotIn("partial (some", cmd.call_args.args[0][-1])
+            self.assertNotIn("partial_notified", self.ledger)
+            self.assertEqual(self.ledger["role_notified"], 1)
+            wake.validate(self.state.read(), self.root, THREAD)
+            self.assertEqual(cmd.call_count, 2)
+
+    # trace:STORY-1843 | ai:claude — PR-3079 round 2, case B.
+    def test_more_queued_role_mail_wakes_again(self):
+        with patch.object(wake, "command", return_value=b"accepted") as cmd:
+            self.assertTrue(self.tick({}, batch_seconds=0, role_pending=1)["queue_submitted"])
+            self.assertTrue(self.tick({}, now=110, batch_seconds=0, role_pending=2)["queue_submitted"])
+            self.assertEqual(self.ledger["role_notified"], 2)
+            # One taken, none new: quiet; then a new one arrives: wake.
+            self.assertFalse(self.tick({}, now=120, batch_seconds=0, role_pending=1)["queue_submitted"])
+            self.assertEqual(self.ledger["role_notified"], 1)
+            self.assertTrue(self.tick({}, now=130, batch_seconds=0, role_pending=2)["queue_submitted"])
+            # A partial view with the same queue: the partial notice alone.
+            self.assertTrue(self.tick({}, now=140, batch_seconds=0, partial=True, role_pending=2)["queue_submitted"])
+            self.assertNotIn("queued", cmd.call_args.args[0][-1])
+            self.assertEqual(cmd.call_count, 4)
 
     def test_snapshot_without_read_evidence_refuses(self):
         for raw in (b'{"version":1,"messages":[]}',

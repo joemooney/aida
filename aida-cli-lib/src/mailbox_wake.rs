@@ -260,6 +260,8 @@ mod tests {
             ("AIDA_AGENT_NAME", None),
             ("AIDA_HOOK_PAYLOAD", None),
             ("CODEX_THREAD_ID", Some(D1_SESSION)),
+            ("CLAUDE_CODE_SESSION_ID", None),
+            ("CLAUDE_PID", None),
         ]);
         let own = register_self_as_reviewer(&r.main);
         assert!(own.recipient().is_some(), "the session owns a UUID");

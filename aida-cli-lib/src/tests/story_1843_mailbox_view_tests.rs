@@ -929,6 +929,10 @@ fn d1_env() -> crate::test_env::EnvVarsGuard {
         ("AIDA_AGENT_NAME", None),
         ("AIDA_HOOK_PAYLOAD", None),
         ("CODEX_THREAD_ID", Some(D1_SESSION)),
+        // The caller's own Claude session must not win the native-session
+        // fallback where vendor ancestors are hidden.
+        ("CLAUDE_CODE_SESSION_ID", None),
+        ("CLAUDE_PID", None),
     ])
 }
 

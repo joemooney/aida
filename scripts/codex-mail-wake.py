@@ -251,7 +251,7 @@ def initial(project, thread):
 
 def validate(value, project, thread, allow_inflight=False):
     expected = set(initial(project, thread))
-    if not isinstance(value, dict) or set(value) - {"accepted_at", "partial_notified"} != expected or type(value.get("version")) is not int or value.get("version") != 1 or value.get("project") != str(project) or value.get("thread") != thread:
+    if not isinstance(value, dict) or set(value) - {"accepted_at", "partial_notified", "role_notified"} != expected or type(value.get("version")) is not int or value.get("version") != 1 or value.get("project") != str(project) or value.get("thread") != thread:
         raise Refusal("ledger belongs to a different project/thread or has invalid schema")
     def identity(ident):
         return isinstance(ident, str) and 0 < len(ident) <= 200 and all(
@@ -270,6 +270,9 @@ def validate(value, project, thread, allow_inflight=False):
         raise Refusal("accepted notifications cannot remain pending")
     if value.get("partial_notified", True) is not True:
         raise Refusal("invalid partial notification state")
+    role_notified = value.get("role_notified", 1)
+    if type(role_notified) is not int or not 0 < role_notified <= 100_000:
+        raise Refusal("invalid queued role mail notification state")
     stamps = value.get("accepted_at", {})
     if (not isinstance(stamps, dict) or not set(stamps).issubset(value["accepted"])
             or not all(number(stamp) for stamp in stamps.values())):
@@ -346,12 +349,18 @@ def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=Fal
     # Only a complete successful scan prunes the ledger with read evidence;
     # a partial view keeps every accepted ID suppressed. Absence from an
     # inventory proves no read. trace:STORY-1843 | ai:claude
-    # A notice episode (partial view, or role mail queued for a reader) ends
-    # on a complete scan with nothing queued.
+    # Two independent notice episodes: a partial view ends on the next
+    # complete scan; queued role mail ends when nothing is queued, and
+    # `role_notified` records the queued count last announced, so a rise
+    # (new role mail while older mail is still untaken) wakes again.
     if partial:
         acknowledged = set()
-    elif not role_pending:
+    else:
         ledger.pop("partial_notified", None)
+    if not role_pending:
+        ledger.pop("role_notified", None)
+    elif role_pending < ledger.get("role_notified", 0):
+        ledger["role_notified"] = role_pending
     accepted = set(ledger["accepted"]) - acknowledged
     ledger["accepted"] = sorted(accepted)
     ledger["accepted_at"] = {ident: stamp for ident, stamp in ledger.get("accepted_at", {}).items()
@@ -372,9 +381,10 @@ def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=Fal
                 "queue_submitted": False, "dry_run": True, "partial": partial,
                 "role_pending": role_pending}
     state.write(ledger)
-    if (not pending and (partial or role_pending) and "partial_notified" not in ledger
-            and now >= ledger["retry_after"]):
-        return partial_wake(state, ledger, codex, thread, now, partial, role_pending)
+    partial_due = partial and "partial_notified" not in ledger
+    role_due = role_pending > ledger.get("role_notified", 0)
+    if not pending and (partial_due or role_due) and now >= ledger["retry_after"]:
+        return partial_wake(state, ledger, codex, thread, now, partial_due, role_pending if role_due else 0)
     if not pending or now < ledger["retry_after"] or now - ledger["first_pending"] < batch_seconds:
         return {"pending": len(pending), "queue_submitted": False, "partial": partial}
     # A byte-bound packs ordinary unread backlogs into one wake rather than
@@ -409,22 +419,28 @@ def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=Fal
     ledger["failures"] = 0
     ledger["retry_after"] = 0
     ledger["last_acceptance"] = {"ids": batch, "time": now}
-    if partial or role_pending:
-        ledger["partial_notified"] = True
+    mark_notified(ledger, partial, role_pending)
     state.write(ledger)
     return {"pending": len(ledger["pending"]), "queue_submitted": True, "ids": batch, "partial": partial}
 
 
 # trace:STORY-1843 | ai:claude
+def mark_notified(ledger, partial, role_pending):
+    """Record which notice episodes a sent wake announced."""
+    if partial:
+        ledger["partial_notified"] = True
+    if role_pending:
+        ledger["role_notified"] = role_pending
+
+
 def partial_wake(state, ledger, codex, thread, now, partial=True, role_pending=0):
     """Wake once per notice episode when the view lists no new IDs but is
-    partial or has role mail queued for a reader.
+    partial or has more role mail queued for a reader than last announced.
 
     The watcher does not guess that a partial view means no mail, and queued
     role mail is not visible until a reader takes it. The wake
     carries no IDs, so an uncertain result is recorded as sent rather than
-    paused for recovery: the cost of a miss is one notice, and the next
-    complete scan ends the episode."""
+    paused for recovery: the cost of a miss is one notice."""
     try:
         command([codex, "queue", "--thread", thread, "--message",
                  partial_notification(partial, role_pending)])
@@ -435,10 +451,10 @@ def partial_wake(state, ledger, codex, thread, now, partial=True, role_pending=0
         return {"pending": 0, "queue_submitted": False, "partial": partial,
                 "retry_after": ledger["retry_after"]}
     except Refusal:
-        ledger["partial_notified"] = True
+        mark_notified(ledger, partial, role_pending)
         state.write(ledger)
         return {"pending": 0, "queue_submitted": False, "partial": partial, "partial_wake_uncertain": True}
-    ledger["partial_notified"] = True
+    mark_notified(ledger, partial, role_pending)
     ledger["failures"] = 0
     ledger["retry_after"] = 0
     state.write(ledger)
