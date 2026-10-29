@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:29.266230594Z
-modified_at: 2026-10-29T06:38:38.745137135Z
+modified_at: 2026-10-29T06:38:42.463498160Z
 req_type: Story
 tags:
 - beads
@@ -22,6 +22,13 @@ relationships:
 - rel_type: Child
   target_id: 019eddc4-96f5-7ad3-bda0-345e1218dd73
   created_at: 2026-06-30T16:35:50.134419754Z
+comments:
+- id: 01a18661-db1f-7120-9385-16bcca199dd5
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject unless Beads becomes a real funnel.'
+  created_at: 2026-10-29T06:38:42.463498160Z
+  modified_at: 2026-10-29T06:38:42.463498160Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18661-c3d8-76f0-b9f6-735cddb62d3d
   author: joe
