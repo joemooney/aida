@@ -24,6 +24,34 @@ fn attestation(seat: &str) -> RecorderAttestation {
     }
 }
 
+/// A real reviewer seat grant for the hermetic test user, and an
+/// attestation that presents it — what `aida review record` stores. The
+/// guard holds the env lock; keep it alive for the test.
+fn granted_reviewer(root: &Path) -> (crate::test_env::AmbientGuard, RecorderAttestation) {
+    let guard = crate::test_env::AmbientGuard::hermetic(root, None);
+    let id = crate::gate::seat_authority::test_support::mint_grant_for(
+        root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "reviewer",
+        &[],
+    );
+    let binding = crate::gate::seat_authority::read_grant(&id)
+        .unwrap()
+        .binding;
+    let actor = RecorderAttestation {
+        grant_id: Some(id),
+        grant_binding: binding,
+        ..attestation("reviewer")
+    };
+    (guard, actor)
+}
+
+/// `now + secs` as RFC 3339: a grant minted now authorizes only verdicts
+/// recorded after it was issued.
+fn ts(secs: i64) -> String {
+    (chrono::Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339()
+}
+
 fn record(verdict: &str, at: &str, actor: Option<&RecorderAttestation>) -> JsonObj {
     let mut obj = JsonObj::new();
     for (k, v) in [
@@ -195,8 +223,8 @@ fn rewriting_the_same_record_does_not_append_twice() {
 fn a_contained_writer_submits_through_the_mailbox_and_the_next_read_ingests_it() {
     let (_tmp, root) = root();
     let change = ChangeKey::pr(11);
-    let a = attestation("reviewer");
-    let rec = record("approved", "2026-10-29T10:00:00Z", Some(&a));
+    let (_guard, a) = granted_reviewer(&root);
+    let rec = record("approved", &ts(1), Some(&a));
     let Delivered::Spooled(file) =
         record_event(&root, verdict(change, Some("BUG-5"), rec.clone()), true).unwrap()
     else {
@@ -285,8 +313,11 @@ fn legacy_files_are_read_through_and_imported_verbatim_on_the_first_write() {
     std::fs::write(archive.join("aaaaaaa.json"), old).unwrap();
     std::fs::write(&current, cur).unwrap();
 
-    let before = project::verdict_history(&root, change);
-    assert_eq!(before.len(), 2, "read through before any ledger write");
+    assert_eq!(
+        rv::read_recorded_verdict(&root, "PR-13").unwrap().kind,
+        rv::VerdictKind::Approved,
+        "read through before any ledger write"
+    );
     record_event(
         &root,
         verdict(
@@ -303,22 +334,50 @@ fn legacy_files_are_read_through_and_imported_verbatim_on_the_first_write() {
     };
     let bodies: Vec<&str> = legacy.iter().map(|f| f.body.as_str()).collect();
     assert_eq!(bodies, [cur, old], "imported byte for byte");
-    let after = project::verdict_history(&root, change);
-    assert_eq!(after[..2], before[..], "no legacy round is lost");
-    assert_eq!(after.len(), 3);
     assert!(
         current.exists() && archive.join("aaaaaaa.json").exists(),
         "legacy files are never deleted"
     );
 }
 
+/// Finding 6: the first PR-keyed write imports the legacy files as they were
+/// before it, so its own record lands on the ledger exactly once.
+#[test]
+fn the_first_verdict_write_is_recorded_once() {
+    // An uncontained writer, as the primary side runs it.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(17);
+    let path = rv::verdict_path(&root, "PR-17");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let prior = "{\"verdict\":\"request-changes\",\"reviewed_sha\":\"aaaaaaa\"}\n";
+    std::fs::write(&path, prior).unwrap();
+
+    let rec = record("approved", "2026-10-29T12:00:00Z", None);
+    rv::write_verdict_object(&path, &rec).unwrap();
+    rv::write_verdict_object(&path, &rec).unwrap();
+
+    let events = store::read_file(&root, change);
+    assert_eq!(kinds(&events), ["legacy-imported", "verdict"]);
+    let EventBody::LegacyImported { legacy } = &events[0].body else {
+        panic!("the first event is the legacy import");
+    };
+    assert_eq!(
+        legacy.iter().map(|f| f.body.as_str()).collect::<Vec<_>>(),
+        [prior],
+        "the import holds the file as it was before the write, not the new record"
+    );
+    assert_eq!(events[1].verdict_record(), Some(&rec));
+}
+
 #[test]
 fn the_ledger_answers_a_read_only_where_the_file_knows_less() {
     let (_tmp, root) = root();
     let change = ChangeKey::pr(14);
-    let a = attestation("reviewer");
+    let (_guard, a) = granted_reviewer(&root);
     // A contained reviewer's verdict that never reached the file.
-    let rec = record("approved", "2026-10-29T10:00:00Z", Some(&a));
+    let first = ts(1);
+    let rec = record("approved", &first, Some(&a));
     record_event(&root, verdict(change, None, rec), true).unwrap();
     let got = rv::read_recorded_verdict(&root, "PR-14").unwrap();
     assert_eq!(got.kind, rv::VerdictKind::Approved);
@@ -328,23 +387,21 @@ fn the_ledger_answers_a_read_only_where_the_file_knows_less() {
     );
 
     // The same round on file, annotated by a later close: the file wins a tie.
-    let mut closed = record("approved", "2026-10-29T10:00:00Z", Some(&a));
+    let mut closed = record("approved", &first, Some(&a));
     closed.insert("closed_by_merge".into(), "cccccccc".into());
     let file = rv::verdict_path(&root, "PR-14");
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(file, serde_json::to_string(&closed).unwrap()).unwrap();
+    std::fs::write(&file, serde_json::to_string(&closed).unwrap()).unwrap();
     assert!(rv::read_recorded_verdict(&root, "PR-14")
         .unwrap()
         .is_closed());
 
-    // A strictly newer ledger round wins over an older file.
+    // An older file round loses to a newer ledger round.
+    let older = record("approved", &ts(-60), Some(&a));
+    std::fs::write(&file, serde_json::to_string(&older).unwrap()).unwrap();
     record_event(
         &root,
-        verdict(
-            change,
-            None,
-            record("request-changes", "2026-10-29T11:00:00Z", Some(&a)),
-        ),
+        verdict(change, None, record("request-changes", &ts(2), Some(&a))),
         true,
     )
     .unwrap();
@@ -354,8 +411,145 @@ fn the_ledger_answers_a_read_only_where_the_file_knows_less() {
     );
 }
 
+/// Finding 1: ingest applies the ship gate's authority checks. A contained
+/// implementer that claims the reviewer seat — with no grant, or with a
+/// grant that is not a reviewer grant — is recorded as a `rejected-event`,
+/// never as a verdict.
+#[test]
+fn a_forged_reviewer_seat_submission_is_rejected() {
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(18);
+    let _guard = crate::test_env::AmbientGuard::hermetic(&root, None);
+    let implementer_grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "implementer",
+        &[],
+    );
+    let binding = crate::gate::seat_authority::read_grant(&implementer_grant)
+        .unwrap()
+        .binding;
+    let no_grant = RecorderAttestation {
+        grant_id: Some("00000000-0000-4000-8000-000000000000".into()),
+        ..attestation("reviewer")
+    };
+    let wrong_seat = RecorderAttestation {
+        grant_id: Some(implementer_grant),
+        grant_binding: binding,
+        ..attestation("reviewer")
+    };
+    for forged in [no_grant, wrong_seat] {
+        spool::submit(
+            &root,
+            &verdict(change, None, record("approved", &ts(1), Some(&forged))),
+        )
+        .unwrap();
+    }
+    assert_eq!(project::newest_verdict(&root, "PR-18"), None);
+    let events = store::read_file(&root, change);
+    assert_eq!(
+        kinds(&events),
+        ["legacy-imported", "rejected-event", "rejected-event"]
+    );
+    assert!(events.iter().all(|e| match &e.body {
+        EventBody::RejectedEvent { reason, .. } => reason.contains("did not re-validate"),
+        _ => true,
+    }));
+}
+
+/// Finding 2: a submission dated in the future is refused on ingest, and a
+/// ledger verdict is ordered by primary-side time, so it cannot shadow a
+/// later file verdict.
+#[test]
+fn a_future_dated_submission_cannot_shadow_a_later_file_verdict() {
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(19);
+    let (_guard, a) = granted_reviewer(&root);
+    spool::submit(
+        &root,
+        &verdict(change, None, record("approved", &ts(86_400), Some(&a))),
+    )
+    .unwrap();
+    let file = rv::verdict_path(&root, "PR-19");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let later = record("request-changes", &ts(5), Some(&a));
+    std::fs::write(&file, serde_json::to_string(&later).unwrap()).unwrap();
+
+    assert_eq!(
+        rv::read_recorded_verdict(&root, "PR-19").unwrap().kind,
+        rv::VerdictKind::RequestChanges
+    );
+    let events = store::read_file(&root, change);
+    assert_eq!(kinds(&events), ["legacy-imported", "rejected-event"]);
+
+    // Even a future-dated record on the ledger counts only as of its `at`.
+    let mut on_ledger = verdict(change, None, record("approved", &ts(86_400), Some(&a)));
+    on_ledger.at = ts(0);
+    let legacy = rv::parse_ledger_record(&later);
+    assert_eq!(
+        rv::newer_of(legacy, Some(&on_ledger)).unwrap().kind,
+        rv::VerdictKind::RequestChanges
+    );
+}
+
+/// Finding 3: a spool file that outlived its ingest is removed on the next
+/// drain even with nothing new to append, and never re-appended.
+#[test]
+fn a_surviving_spool_file_is_removed_without_a_duplicate_event() {
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(20);
+    let (_guard, a) = granted_reviewer(&root);
+    let rec = record("approved", &ts(1), Some(&a));
+    let Delivered::Spooled(file) =
+        record_event(&root, verdict(change, None, rec.clone()), true).unwrap()
+    else {
+        panic!("a contained writer submits");
+    };
+    let body = std::fs::read(&file).unwrap();
+    project::events(&root, change);
+    // The removal failed: the same submission is still in the spool.
+    std::fs::write(&file, &body).unwrap();
+    assert!(spool::has_pending(&root, change));
+    project::events(&root, change);
+    assert!(!file.exists(), "consumed on the empty-pending path too");
+    assert_eq!(
+        record_event(&root, verdict(change, None, rec), false).unwrap(),
+        Delivered::Unchanged
+    );
+    assert_eq!(
+        kinds(&store::read_file(&root, change)),
+        ["legacy-imported", "verdict"]
+    );
+}
+
+/// Finding 4: a submitter's patch identity never reaches the ledger; it is
+/// recomputed primary-side (here, outside a repository: none).
+#[test]
+fn a_submitted_patch_identity_is_recomputed_on_ingest() {
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(21);
+    let (_guard, a) = granted_reviewer(&root);
+    let mut event = verdict(change, None, record("approved", &ts(1), Some(&a)));
+    event.patch_id = Some("forged".into());
+    event.base_ref = Some("forged".into());
+    event.base_tip = Some("forged".into());
+    spool::submit(&root, &event).unwrap();
+    let events = project::events(&root, change);
+    assert_eq!(kinds(&events), ["legacy-imported", "verdict"]);
+    assert_eq!(
+        (
+            &events[1].patch_id,
+            &events[1].base_ref,
+            &events[1].base_tip
+        ),
+        (&None, &None, &None)
+    );
+}
+
 #[test]
 fn a_pr_keyed_verdict_write_lands_on_the_ledger_and_a_spec_keyed_one_does_not() {
+    // An uncontained writer, as the primary side runs it.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let (_tmp, root) = root();
     let a = attestation("reviewer");
     let rec = record("approved", "2026-10-29T10:00:00Z", Some(&a));
@@ -412,12 +606,9 @@ fn a_linked_worktree_writes_the_primary_checkouts_ledger() {
     );
 
     assert_eq!(store_root(&linked).unwrap(), primary);
-    // Attested, so a contained write's submission is accepted on ingest.
-    let rec = record(
-        "approved",
-        "2026-10-29T10:00:00Z",
-        Some(&attestation("reviewer")),
-    );
+    // Granted, so a contained write's submission is accepted on ingest.
+    let (_guard, a) = granted_reviewer(&primary);
+    let rec = record("approved", &ts(1), Some(&a));
     rv::write_verdict_object(&rv::verdict_path(&linked, "PR-16"), &rec).unwrap();
     // Contained or not, the event reaches the primary ledger (direct, or
     // through the primary mailbox and the next primary-side read).
@@ -427,6 +618,77 @@ fn a_linked_worktree_writes_the_primary_checkouts_ledger() {
         !ledger_dir(&linked).exists(),
         "never a worktree-local ledger"
     );
+}
+
+fn non_test_sources() -> Vec<PathBuf> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                if name != "tests" {
+                    walk(&path, out);
+                }
+            } else if name.ends_with(".rs") && name != "tests.rs" && !name.ends_with("_tests.rs") {
+                out.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    walk(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    files
+}
+
+/// AC6 ratchet (finding 5): non-test code may not add calls to the legacy
+/// gate-state writers, which build their paths through helpers and so add
+/// no directory literal. Counted per writer, definitions excluded. Slice 2
+/// takes the verdict writers to 0 (advisor ruling); slice 3 the rest.
+#[test]
+fn legacy_gate_writers_do_not_gain_call_sites() {
+    const BASELINE: &[(&str, usize)] = &[
+        // Verdict files.
+        ("write_verdict_atomic", 10),
+        ("write_verdict_object", 3),
+        ("write_verdict_object_for_spec", 3),
+        ("record_verdict", 2),
+        ("record_verdict_at_path", 2),
+        ("adopt_direct_write", 7),
+        ("collect_standalone_verdict", 1),
+        ("close_verdict_on_merge", 3),
+        ("stamp_pr_review_verdict", 3),
+        // Merge holds and their clearances.
+        ("write_hold", 4),
+        ("write_typed_hold", 15),
+        ("write_typed_hold_context", 3),
+        ("write_marker", 9),
+        ("write_marker_with_route", 1),
+        ("place_hand_hold", 1),
+        ("record_clearance", 2),
+        ("record_clearance_with_verdict", 3),
+        ("record_clearance_by", 2),
+        ("clear_hold", 6),
+        // Carry-over proofs.
+        ("record_carry_over", 1),
+    ];
+    let sources: Vec<String> = non_test_sources()
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect();
+    for (writer, baseline) in BASELINE {
+        let call = regex::Regex::new(&format!(r"(^|[^A-Za-z0-9_])(fn\s+)?{writer}\s*\(")).unwrap();
+        let found: usize = sources
+            .iter()
+            .flat_map(|src| call.captures_iter(src))
+            .filter(|c| c.get(2).is_none())
+            .count();
+        assert!(
+            found <= *baseline,
+            "{found} non-test call sites of {writer} (baseline {baseline}): new gate state goes on the gate ledger (gate::ledger), not a legacy file writer"
+        );
+    }
 }
 
 /// AC6 ratchet: non-test code may not grow its references to the legacy
@@ -441,22 +703,8 @@ fn legacy_gate_paths_do_not_gain_new_references() {
         ("review-carryover", 1),
         ("review-in-progress", 6),
     ];
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        for entry in std::fs::read_dir(dir).unwrap().flatten() {
-            let path = entry.path();
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if path.is_dir() {
-                if name != "tests" {
-                    walk(&path, out);
-                }
-            } else if name.ends_with(".rs") && name != "tests.rs" && !name.ends_with("_tests.rs") {
-                out.push(path);
-            }
-        }
-    }
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    walk(&src, &mut files);
+    let files = non_test_sources();
     let sanctioned = src.join("gate").join("ledger").join("legacy.rs");
     for (dir, baseline) in BASELINE {
         let needle = format!("\"{dir}\"");

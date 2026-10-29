@@ -941,9 +941,8 @@ pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<Recorded
     let legacy = read_verdict_body(verdict_path(project_root, spec))
         .ok()
         .and_then(|body| parse_recorded_verdict(&body));
-    let ledger = crate::gate::ledger::project::newest_verdict(project_root, spec)
-        .and_then(|record| parse_ledger_record(&record));
-    newer_of(legacy, ledger)
+    let ledger = crate::gate::ledger::project::newest_verdict_event(project_root, spec);
+    newer_of(legacy, ledger.as_ref())
 }
 
 /// A verdict record carried on the gate ledger, parsed like a file body.
@@ -955,25 +954,43 @@ pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
 /// Read-through while the legacy files are still written (M1 slice 1): the
 /// ledger answers only where it knows something the file does not — the file
 /// is missing (a contained reviewer's verdict that never reached it) or
-/// strictly older. A tie keeps the file, which may carry a later annotation
-/// (`closed_by_merge`) on the same round.
+/// strictly older.
+///
+/// Order uses primary-side time only. A ledger verdict counts as of the
+/// earlier of the ledger's own `at` (stamped on append) and the record's
+/// `recorded_at`: the `at` bound stops a submitter's future-dated record
+/// from shadowing later verdicts, the `recorded_at` bound stops a late
+/// ingest from passing off an old round as new. The file's `recorded_at` was
+/// written by an uncontained writer. The same round on both sides (equal
+/// `recorded_at`) keeps the file, which may carry a later annotation
+/// (`closed_by_merge`).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn newer_of(
     legacy: Option<RecordedVerdict>,
-    ledger: Option<RecordedVerdict>,
+    ledger: Option<&crate::gate::ledger::GateEvent>,
 ) -> Option<RecordedVerdict> {
-    let at = |v: &RecordedVerdict| {
-        v.recorded_at
-            .as_deref()
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-    };
+    let time =
+        |s: Option<&str>| s.and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok());
+    let ledger = ledger.and_then(|event| {
+        let verdict = parse_ledger_record(event.verdict_record()?)?;
+        let at = match (time(Some(&event.at)), time(verdict.recorded_at.as_deref())) {
+            (Some(at), Some(recorded)) => Some(at.min(recorded)),
+            (at, recorded) => at.or(recorded),
+        };
+        Some((verdict, at))
+    });
     match (legacy, ledger) {
-        (Some(file), Some(led)) => match (at(&file), at(&led)) {
-            (Some(f), Some(l)) if l > f => Some(led),
-            (None, Some(_)) => Some(led),
-            _ => Some(file),
-        },
-        (file, led) => file.or(led),
+        (Some(file), Some((led, led_at))) => {
+            if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
+                return Some(file);
+            }
+            match (time(file.recorded_at.as_deref()), led_at) {
+                (Some(f), Some(l)) if l > f => Some(led),
+                (None, Some(_)) => Some(led),
+                _ => Some(file),
+            }
+        }
+        (file, led) => file.or(led.map(|(v, _)| v)),
     }
 }
 
@@ -1456,6 +1473,7 @@ pub(crate) fn write_verdict_object_for_spec(
     obj: &serde_json::Map<String, serde_json::Value>,
     spec: Option<&str>,
 ) -> std::io::Result<()> {
+    crate::gate::ledger::before_verdict_write(path);
     write_verdict_file(path, obj)?;
     crate::gate::ledger::mirror_verdict_write(path, obj, spec);
     Ok(())
@@ -1668,10 +1686,8 @@ pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
         .and_then(|path| read_verdict_body(path).ok())
         .and_then(|b| parse_recorded_verdict(&b));
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    let ledger = crate::gate::ledger::project::verdicts_at(project_root, key, sha)
-        .first()
-        .and_then(parse_ledger_record);
-    newer_of(legacy, ledger)
+    let ledger = crate::gate::ledger::project::verdict_events_at(project_root, key, sha);
+    newer_of(legacy, ledger.first())
 }
 
 /// TASK-1460: the FILE holding the verdict recorded under `key` for commit

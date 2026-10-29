@@ -94,18 +94,44 @@ pub(crate) fn ledger_dir(root: &Path) -> PathBuf {
 /// worktree (read from git's files, no subprocess) or of a verified seat
 /// clone. An unverified seat clone is refused rather than given a ledger of
 /// its own: a worktree-local gate store is exactly what AC5 removes.
+///
+/// Memoised per process like `hold_store_root`: readers call this inside
+/// per-spec loops, and resolving a seat clone lists leases. A refusal is
+/// never memoised, so a clone resolves afresh once its lease verifies.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn store_root(start: &Path) -> std::io::Result<PathBuf> {
-    match crate::seat_clone::main_for(start) {
-        crate::seat_clone::MainFor::Unverified(clone) => Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            format!(
-                "{} is a seat clone that does not verify against its main checkout; refusing to resolve its gate ledger",
-                clone.display()
-            ),
-        )),
-        _ => Ok(crate::gate::merge_hold_core::hold_store_root(start)),
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static MEMO: OnceLock<Mutex<HashMap<PathBuf, PathBuf>>> = OnceLock::new();
+    let memo = MEMO.get_or_init(Default::default);
+    if let Some(hit) = memo.lock().ok().and_then(|m| m.get(start).cloned()) {
+        return Ok(hit);
     }
+    let resolved = match crate::seat_clone::main_for(start) {
+        crate::seat_clone::MainFor::Unverified(clone) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!(
+                    "{} is a seat clone that does not verify against its main checkout; refusing to resolve its gate ledger",
+                    clone.display()
+                ),
+            ))
+        }
+        crate::seat_clone::MainFor::Verified(main) => main,
+        // A root with no `.git` stays unmemoised, as in `hold_store_root`.
+        crate::seat_clone::MainFor::NotAClone
+            if std::fs::symlink_metadata(start.join(".git")).is_err() =>
+        {
+            return Ok(start.to_path_buf())
+        }
+        crate::seat_clone::MainFor::NotAClone => {
+            crate::gate::merge_hold_core::hold_store_root(start)
+        }
+    };
+    if let Ok(mut m) = memo.lock() {
+        m.insert(start.to_path_buf(), resolved.clone());
+    }
+    Ok(resolved)
 }
 
 /// Where a recorded event went.
@@ -115,7 +141,7 @@ pub(crate) enum Delivered {
     Appended,
     /// Submitted through the mailbox for the primary side to ingest.
     Spooled(PathBuf),
-    /// Identical to the newest event of its kind already on the ledger.
+    /// The ledger already held this record.
     Unchanged,
 }
 
@@ -142,6 +168,28 @@ pub(crate) fn record_event(
             spool::submit(&root, &event).map(Delivered::Spooled)
         }
         other => other,
+    }
+}
+
+/// Before a PR-keyed verdict file is written: take the change's one-time
+/// legacy import now, so it captures the files as they were and the record
+/// about to be written lands on the ledger once, as its own `verdict` event.
+/// A contained writer cannot write the ledger; its submission is ingested
+/// after the primary side's own import. Best-effort, like the mirror.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn before_verdict_write(path: &Path) {
+    let Some((root, change)) = legacy::change_of_verdict_path(path) else {
+        return;
+    };
+    if crate::session::aida_contained_env().unwrap_or(false) {
+        return;
+    }
+    let imported = store_root(&root).and_then(|store| store::import_legacy(&store, change));
+    if let Err(e) = imported {
+        eprintln!(
+            "warning: could not import the legacy verdicts of {} into its gate ledger: {e}",
+            change.as_key()
+        );
     }
 }
 

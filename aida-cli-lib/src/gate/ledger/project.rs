@@ -4,7 +4,7 @@
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
 
-use super::event::{EventBody, GateEvent};
+use super::event::GateEvent;
 use super::{ledger_dir, store, store_root, ChangeKey};
 use crate::gate::review_verdict::{same_reviewed_sha, JsonObj};
 use std::path::{Path, PathBuf};
@@ -79,36 +79,6 @@ pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
     store::read_file(root, change)
 }
 
-/// Every verdict the change has on record, oldest first: the legacy files
-/// (as imported, or read live before the first ledger write), then the
-/// ledger's own verdict events. Nothing a legacy file held is lost.
-// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn verdict_history(root: &Path, change: ChangeKey) -> Vec<JsonObj> {
-    let events = events(root, change);
-    let legacy = events
-        .iter()
-        .find_map(|e| match &e.body {
-            EventBody::LegacyImported { legacy } => Some(legacy.clone()),
-            _ => None,
-        })
-        .unwrap_or_else(|| super::legacy::verdict_files(root, change));
-    let as_obj = |body: &str| {
-        serde_json::from_str::<serde_json::Value>(body)
-            .ok()
-            .and_then(|v| v.as_object().cloned())
-    };
-    // Archived rounds are older than the current file they were archived from.
-    let (current, archived): (Vec<_>, Vec<_>) = legacy
-        .iter()
-        .partition(|f| f.path.ends_with(&format!("{}.json", change.as_key())));
-    archived
-        .iter()
-        .chain(current.iter())
-        .filter_map(|f| as_obj(&f.body))
-        .chain(events.iter().filter_map(|e| e.verdict_record().cloned()))
-        .collect()
-}
-
 /// Ledger verdict events for `key` — a change key, or a spec ID through the
 /// index (only events recorded for that spec) — newest last.
 fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
@@ -130,19 +100,21 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     out
 }
 
-/// The newest verdict record the ledger holds for `key`, read from `start`
+/// The newest verdict event the ledger holds for `key`, read from `start`
 /// (any checkout sharing the ledger).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn newest_verdict(start: &Path, key: &str) -> Option<JsonObj> {
+pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent> {
     let root = store_root(start).ok()?;
-    verdict_events(&root, key)
-        .into_iter()
-        .rev()
-        .find_map(|e| e.verdict_record().cloned())
+    verdict_events(&root, key).pop()
 }
 
-/// The ledger's verdict records for `key` taken at `sha`, newest first.
-pub(crate) fn verdicts_at(start: &Path, key: &str, sha: &str) -> Vec<JsonObj> {
+/// The newest verdict record the ledger holds for `key`.
+pub(crate) fn newest_verdict(start: &Path, key: &str) -> Option<JsonObj> {
+    newest_verdict_event(start, key).and_then(|e| e.verdict_record().cloned())
+}
+
+/// The ledger's verdict events for `key` taken at `sha`, newest first.
+pub(crate) fn verdict_events_at(start: &Path, key: &str, sha: &str) -> Vec<GateEvent> {
     let Ok(root) = store_root(start) else {
         return Vec::new();
     };
@@ -154,6 +126,5 @@ pub(crate) fn verdicts_at(start: &Path, key: &str, sha: &str) -> Vec<JsonObj> {
                 .as_deref()
                 .is_some_and(|head| same_reviewed_sha(head, sha))
         })
-        .filter_map(|e| e.verdict_record().cloned())
         .collect()
 }

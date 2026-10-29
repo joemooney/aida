@@ -94,12 +94,20 @@ fn read_submission(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("unreadable: {e}"))
 }
 
-/// Whether a submitted event may go on the ledger. Slice 1 accepts verdicts
-/// whose recorder attestation authorizes exactly the head they name, and
-/// which carry that same attestation inside the record. Approval gates still
-/// re-validate the attestation against the grant stores on read.
+/// How far ahead of the ingesting clock a submission's `recorded_at` may be
+/// (the ship gate's skew allowance).
+const RECORDED_AT_SKEW_SECS: i64 = 300;
+
+/// Whether a submitted event may go on the ledger, checked with the same
+/// authority the approval gates apply (Q1 signoff): a verdict whose recorder
+/// attestation names exactly the head the event does, is carried unchanged
+/// inside the record, and whose seat grant (as of the record's
+/// `recorded_at`) or human-review receipt re-validates against its durable
+/// store, as [`crate::gate::review_authority::verified_authority_keys`]
+/// checks for ship. A record dated in the future is refused: its timestamp
+/// is the submitter's, and must not order it after later verdicts.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn validate(event: &GateEvent, change: ChangeKey) -> Result<(), String> {
+pub(crate) fn validate(root: &Path, event: &GateEvent, change: ChangeKey) -> Result<(), String> {
     if ChangeKey::parse(&event.change) != Some(change) {
         return Err(format!(
             "submitted for `{}` under {}",
@@ -139,11 +147,33 @@ pub(crate) fn validate(event: &GateEvent, change: ChangeKey) -> Result<(), Strin
             "the record reviewed `{reviewed}`, the event names {head}"
         ));
     }
+    let parsed = crate::gate::review_verdict::parse_ledger_record(record)
+        .ok_or("the record is not a recorded verdict")?;
+    let recorded_at = parsed
+        .recorded_at
+        .as_deref()
+        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t.trim()).ok())
+        .ok_or("its recording time is missing or unreadable")?;
+    if recorded_at > chrono::Utc::now() + chrono::Duration::seconds(RECORDED_AT_SKEW_SECS) {
+        return Err(format!("it is dated in the future ({recorded_at})"));
+    }
+    let key = actor
+        .authority_key(parsed.recorded_at.as_deref())
+        .ok_or("the attestation names neither a seat grant nor a human-review receipt")?;
+    let verified =
+        crate::gate::review_authority::verified_authority_keys(root, std::slice::from_ref(&parsed));
+    if !verified.contains_key(&key) {
+        return Err(
+            "its seat grant or human-review receipt did not re-validate against the grant store"
+                .to_string(),
+        );
+    }
     Ok(())
 }
 
 /// The change's pending submissions as ledger events — each accepted event,
-/// or a `rejected-event` — and the spool files they came from. A submission
+/// with its patch identity recomputed here, or a `rejected-event` — and the
+/// spool files they came from. A submission
 /// the ledger already holds (its spool file outlived an earlier ingest)
 /// yields no event; its file is still returned for removal.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
@@ -167,8 +197,16 @@ pub(crate) fn drain(
         let parsed = raw.as_ref().map_err(Clone::clone).and_then(|b| {
             serde_json::from_str::<GateEvent>(b).map_err(|e| format!("not a gate event: {e}"))
         });
-        let mut event = match parsed.and_then(|e| validate(&e, change).map(|()| e)) {
-            Ok(event) => event,
+        let mut event = match parsed.and_then(|e| validate(root, &e, change).map(|()| e)) {
+            Ok(mut event) => {
+                // The patch identity is taken here, primary-side; a
+                // submitter's values never reach the ledger.
+                (event.base_ref, event.base_tip, event.patch_id) = match event.head.as_deref() {
+                    Some(head) => super::event::patch_identity(root, head),
+                    None => (None, None, None),
+                };
+                event
+            }
             Err(reason) => {
                 let submitted = match &raw {
                     Ok(body) => serde_json::from_str(body)
