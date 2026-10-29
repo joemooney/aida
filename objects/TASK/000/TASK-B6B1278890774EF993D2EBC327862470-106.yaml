@@ -20,12 +20,12 @@ description: |
 
   ## Approval boundary
   Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-29T18:10:35.771970365Z
+modified_at: 2026-10-29T18:24:18.975929414Z
 req_type: Task
 tags:
 - advisor-review
@@ -104,6 +104,14 @@ history:
   author: joe
   timestamp: 2026-10-29T18:10:37.377462454Z
   changes: []
+- id: 01a188e7-dc1f-7292-93d7-6f65a7408bf6
+  author: joe
+  timestamp: 2026-10-29T18:24:18.975922844Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
