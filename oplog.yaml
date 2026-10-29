@@ -87352,5 +87352,17 @@ operations:
   timestamp: 2026-10-29T22:17:29.603751095Z
   kind: !SetStatus
     status: Done
-clock: 6813
+- id: 01a189c5-452f-7113-95d4-102ad63c4ada
+  target_id: 01a189c5-3df0-7ea1-83a3-ed90136ced18
+  author: aida
+  node_id: '1'
+  lamport: 6814
+  timestamp: 2026-10-29T22:26:09.327168903Z
+  kind: !Create
+    title: aida alias --help still says 'Built-in shortcuts only.' though user aliases shipped
+    description: 'The long help for `aida alias` ends with ''Built-in shortcuts only.'' That was true for STORY-667, but TASK-877 (PR #1096) added `aida alias add/remove` for personal (~/.aida/aliases.toml) and project (.aida/aliases.toml) aliases, and `aida alias list` now shows them. Acceptance: the `aida alias --help` text describes built-in shortcuts AND user aliases; no sentence says built-ins only.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6814
 node_id: '1'
