@@ -86170,5 +86170,35 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6731
+- id: 01a188d9-8bf0-7fb3-8425-dd82f4b44e9d
+  target_id: 01a188d9-846e-7f72-900e-ae0ec12bd056
+  author: aida
+  node_id: '1'
+  lamport: 6732
+  timestamp: 2026-10-29T18:08:40.944853942Z
+  kind: !Create
+    title: Explain the human agent lifecycle and durable data layers
+    description: |
+      Slice 3 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Let a newcomer follow an outcome through people/agent collaboration, implementation and review, and understand what record remains afterward.
+
+      ## Acceptance
+      - [ ] A product-workflow page connects ordinary conversation, requirements/decisions, owned work, validation, independent review and integration without requiring a particular autonomy mode for all work.
+      - [ ] Original accessible diagrams explain the human/agent loop and code/canonical-store/cache/local-operational-evidence layers. They are operating models, not a live dashboard.
+      - [ ] Explain maintenance, enhancement and handoff value of durable intent; distinguish captured structured intent from a transcript archive or complete automatic observation.
+      - [ ] Storage and lifecycle statements match current source and maintained references, with source links and responsive page navigation.
+
+      ## Layers / boundaries
+      Current lifecycle/storage documentation -> explanatory graphics/copy -> reader-facing workflow page. No storage format, synchronization, lease or orchestration behavior changes.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6732
 node_id: '1'
