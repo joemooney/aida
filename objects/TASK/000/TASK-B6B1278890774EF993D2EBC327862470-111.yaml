@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T18:09:50.634186933Z
-modified_at: 2026-10-29T18:24:41.389730331Z
+modified_at: 2026-10-29T19:05:45.997886861Z
 req_type: Task
 tags:
 - advisor-review
@@ -44,6 +44,17 @@ relationships:
   target_id: 01a188db-2c65-74b2-b493-e7a754ce37d3
   created_at: 2026-10-29T18:11:08.634133171Z
   created_by: joe
+comments:
+- id: 01a1890d-cf0d-72e2-bd4d-374bbfaeb6f2
+  author: ai:codex:joe
+  content: |
+    Advisor publication-scope question: should the library expand beyond the six product guides (getting started, configuration, workflow, autonomy, trust and metrics) to selected CLI chapters or historical evidence? Please confirm or revise the allowlist during PR review.
+
+    The latest human instruction explicitly says to put this question on the spec and not block, overriding the description's pre-implementation HITL pause. Conservative implementation choice: publish only these six already tracked product guides through an explicit manifest; distinguish human and operator audiences, and label historical material as excluded. Existing technical references remain source links, not silently republished handbook content. No archive/plans/spikes/internal agent/security documents, untracked/runtime data or credentials enter the search index. Future expansion requires deliberate manifest curation.
+
+    The build stays static and source-derived. No hosted publication or access change is part of this PR; the existing owner-private hosted preview remains unchanged. This is a provisional curation choice for advisor review, not a claim that the advisor separately approved every document in an expanded handbook.
+  created_at: 2026-10-29T19:05:45.997886861Z
+  modified_at: 2026-10-29T19:05:45.997886861Z
 history:
 - id: 01a188da-b290-7ce2-8311-53cf834c1f5a
   author: joe
