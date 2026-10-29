@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T11:48:32.376104043Z
-modified_at: 2026-10-29T12:11:10.785614605Z
+modified_at: 2026-10-29T12:27:19.550518962Z
 req_type: Bug
 tags:
 - regroup
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-10-29T11:49:42.634461113Z
   session_id: 01a1877e1198
   harness_version: 2.1.312 (Claude Code)
+- id: 01a187a1-067e-7a20-b269-cd19b0afca01
+  author: joe
+  content: 'Advisor ruling on PR-3092 non-blocking findings (2026-10-29 05:30, rule-once): ACCEPTED, not reworked. (1) directory-symlink path components: no repo using AIDA''s template layout links through a directory, and a checkout-faithful walk is a larger change than this bug; the error is explicit, not a false pass. (2) directory-target link reported as missing entries: fails closed with an actionable message. (3) .aida/config.toml broken-link test: same code path as settings, already tested there. (4) trailing newline in the escape error: cosmetic.'
+  created_at: 2026-10-29T12:27:19.550518962Z
+  modified_at: 2026-10-29T12:27:19.550518962Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877e-154b-77b2-8d83-87ce645863f9
   author: aida-session-start
