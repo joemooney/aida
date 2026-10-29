@@ -3,12 +3,12 @@ spec_id: TASK-912
 agreed_id: TASK-912
 title: 'Possible: a per-action "inject this" choice (currently `Ctrl-Y` injects the *last*'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:40:21.469271332Z
-modified_at: 2026-10-29T06:45:31.261044144Z
+modified_at: 2026-10-29T06:45:34.465137911Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,3 +22,11 @@ history:
   timestamp: 2026-10-29T06:45:32.101627092Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18668-2481-7b41-82d5-abd6cc1afd9e
+  author: joe
+  timestamp: 2026-10-29T06:45:34.465135665Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
