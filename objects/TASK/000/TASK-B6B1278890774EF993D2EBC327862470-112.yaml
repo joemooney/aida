@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-29T19:37:22.151832122Z
+modified_at: 2026-10-29T19:37:27.292959811Z
 req_type: Task
 tags:
 - advisor-review
@@ -56,6 +56,20 @@ comments:
     The separately approved operator-setup guide is added as the seventh curated product guide; it is source-verified narrative, not a bulk CLI/manual/history publication. This extends the narrow product-guide allowlist only. Broader publication scope remains the advisor question on slice 111. No hosted publication/access change.
   created_at: 2026-10-29T19:23:32.407289716Z
   modified_at: 2026-10-29T19:23:32.407289716Z
+- id: 01a1892a-d1fc-7d20-a301-cd331d11b9ab
+  author: ai:codex:joe
+  content: |
+    Operators now have one supported setup route distinct from the conversational newcomer journey. The guide covers Linux releases/install, init/MCP opt-in, adoption/sibling stores, canonical/cache/local state, clone-local UUID allocation, HOME/WORK authority and independent transport policy. It is the seventh curated product guide.
+
+    Corrects administrator/storage/multi-node/multi-hub references, CLI setup/getting-started/storage chapters, README and root orientation docs. Personal project vs machine role-global queues are distinguished; stale unconditional cache guarantees and default MCP/profile claims are removed. Linux-only release assets replace obsolete Darwin guidance. Existing transport source already implements prepared sanitized writes and journaled fast-forward pull; contradictory pending statements are corrected without runtime changes. Legacy backend detail and the dated queue incident are preserved with scope.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed. Two author self-check rounds: fixed linked Chapter1 defaults and Chapter10 cache guarantees; a fresh checker ran its own source/help/diff/index evidence commands and found no further findings. No template mirror/master required changing. No real HOME enrollment, config mutation, runtime, gate, review, ledger or hosting changes.
+
+    Files: AGENTS.md, OVERVIEW.md, README.md; docs/operator-setup.md, administrator/storage/multi-node/multi-hub/getting-started references; CLI Chapters1/7/10; showcase manifest/README and regenerated setup/library/search/navigation artifacts. Scope/comment records why the approved operator guide extends the narrow curated set; broad historical/CLI publication still awaits advisor curation review.
+
+    Stacked on PR #3101. TASK-B6B1278890774EF993D2EBC327862470-112.
+  created_at: 2026-10-29T19:37:27.292959811Z
+  modified_at: 2026-10-29T19:37:27.292959811Z
 history:
 - id: 01a188db-04e1-7113-a4de-4d5e2010ac1b
   author: joe
