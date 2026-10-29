@@ -83767,5 +83767,31 @@ operations:
   timestamp: 2026-10-29T03:11:23.851677300Z
   kind: !SetStatus
     status: Completed
-clock: 6535
+- id: 01a185b7-2601-7cd0-810f-2f6157d36bfb
+  target_id: 01a185b7-1de3-7b11-a41e-18abd918f73f
+  author: aida
+  node_id: '1'
+  lamport: 6536
+  timestamp: 2026-10-29T03:32:14.977892498Z
+  kind: !Create
+    title: 'Review PR-3081: [AI:claude] fix: adopted repos scaffold contained egress + reviewer allow entries; reviewer launch preflights them (BUG-b6b1278890774ef993d2ebc327862470-014)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/adopted-repo-reviewer-config`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3081>
+      - Branch: `fix/adopted-repo-reviewer-config` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-014
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3081` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6536
 node_id: '1'
