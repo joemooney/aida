@@ -13,12 +13,20 @@ description: |
   ## Test tier
   LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
   - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
+
+
+  ## PR-3091 round-1 advisor ruling (2026-10-29 05:15) — ONE rework push, no follow-up PR
+  BUNDLE all findings in .aida/review-verdicts/PR-3091.json, but fix them with ONE mechanism instead of per-command patches:
+  1. A single clap value parser (e.g. `spec_arg::SpecIdParser`, wrapping `spec_arg::canonical` / resolve_literal_first) is attached to EVERY user-facing spec-ID argument: review record/claim/prompt, gate run, dispatch review/impl, drain, approvals, human, plan, questions, worktree add/enter, session end --spec / start --owns / manifest, queue add/rm/done/work, claim, pr auto-queue-review, and any other found. Remove the ad-hoc canonicalize_* helpers this PR added where the parser replaces them (net fewer resolution sites).
+  2. ONE structural test walks the full clap command tree (`Cli::command()`), finds every argument whose id or value_name denotes a spec ID (spec, specs, owns, id/ID on spec commands, SPEC, SPEC-ID), and fails if it lacks the parser. That test is the ratchet; it replaces the per-command parse tests the reviewer asked for.
+  3. Keep end-to-end checks only where behavior goes beyond parsing: `review record STORY-HOME-NNN` keys the verdict under the canonical ID; `queue work` dry-run plan names the canonical ID (assert it, not the absence of an error); queue rm/done by alias acts on the entry `queue add` created; a (TYPE-<LABEL>-NNN) trailer in auto-queue-review files against the canonical ID.
+  Gate (LIGHT): targeted cargo test filters for spec_arg + bug_015 + story_078, plus make check-ci-fast. >10 files: also make test-touched once.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T12:12:10.031351363Z
+modified_at: 2026-10-29T12:13:16.276379850Z
 req_type: Bug
 tags:
 - id-allocation
@@ -117,6 +125,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18794-2baa-7413-8ce9-d10f70c17231
+  author: joe
+  timestamp: 2026-10-29T12:13:17.098496955Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
