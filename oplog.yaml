@@ -85329,5 +85329,31 @@ operations:
   timestamp: 2026-10-29T11:56:48.433527889Z
   kind: !SetStatus
     status: Done
-clock: 6672
+- id: 01a18785-a7ea-77c0-9d98-6c041cca11c7
+  target_id: 01a18785-a06e-7d60-872a-85e31388136b
+  author: aida
+  node_id: '1'
+  lamport: 6673
+  timestamp: 2026-10-29T11:57:25.866715986Z
+  kind: !Create
+    title: 'Review PR-3091: [AI:claude] fix(node): spec-scope commands resolve node-alias IDs (BUG-B6B1278890774EF993D2EBC327862470-015)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-015`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3091>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-015` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-015
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3091` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6673
 node_id: '1'
