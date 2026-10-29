@@ -8,18 +8,34 @@ description: |-
 
   PR: #3094
   Reviewed sha: 32bebfab93f9df469f443fdfb019a12f9d7053bc
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T18:54:14.712280670Z
-modified_at: 2026-10-29T18:54:14.712280670Z
+modified_at: 2026-10-29T23:57:30.830564424Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-101
 - finding-hash:8cc7dc74
 - from-review:PR-3094
 - kind:carried-forward
+comments:
+- id: 01a18a18-ec5f-7270-85e3-ad897817a33e
+  author: joe
+  content: 'Dismissed by joe 2026-10-29: Accepted rule-once on TASK-HOME-101 (PR-3094 shipped): cosmetic showcase styling, no follow-up PR'
+  created_at: 2026-10-29T23:57:30.830564424Z
+  modified_at: 2026-10-29T23:57:30.830564424Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+history:
+- id: 01a18a19-c8c9-7252-a048-a18154ba0072
+  author: joe
+  timestamp: 2026-10-29T23:58:28.041679767Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 8c0adc8fe0776cdc8eb53eb7061cbc65c5302682
   branch: main
