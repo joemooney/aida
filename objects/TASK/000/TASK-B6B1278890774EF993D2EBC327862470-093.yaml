@@ -1,0 +1,29 @@
+id: 01a185ff-7331-7293-a849-45fcd2fbc98b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-093
+title: 'Non-blocking (cosmetic): bug_013 tests a_real_commit_that_is_not_the_head_under…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): bug_013 tests a_real_commit_that_is_not_the_head_under_review_is_refused and an_unreachable_forge_checks_against_the_checkout_head exercise the same path (no envelope, no forge, checkout fallback); the first could be folded into the second.
+
+  PR: #3082
+  Reviewed sha: 29f2116cf7224a6109668e206e31e10bef2ca4bf
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T04:51:13.329739619Z
+modified_at: 2026-10-29T04:51:13.329739619Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-013
+- finding-hash:760823a9
+- from-review:PR-3082
+- kind:carried-forward
+filed_at:
+  code_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3b3d89ae3b0
+  vendor: claude

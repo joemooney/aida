@@ -84007,5 +84007,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6552
+- id: 01a185ff-7a8f-7521-9cdf-e2239a26d388
+  target_id: 01a185ff-7331-7293-a849-45fcd2fbc98b
+  author: aida
+  node_id: '1'
+  lamport: 6553
+  timestamp: 2026-10-29T04:51:15.215197214Z
+  kind: !Create
+    title: 'Non-blocking (cosmetic): bug_013 tests a_real_commit_that_is_not_the_head_under…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (cosmetic): bug_013 tests a_real_commit_that_is_not_the_head_under_review_is_refused and an_unreachable_forge_checks_against_the_checkout_head exercise the same path (no envelope, no forge, checkout fallback); the first could be folded into the second.
+
+      PR: #3082
+      Reviewed sha: 29f2116cf7224a6109668e206e31e10bef2ca4bf
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6553
 node_id: '1'
