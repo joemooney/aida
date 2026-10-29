@@ -21,12 +21,12 @@ description: |
   2. ONE structural test walks the full clap command tree (`Cli::command()`), finds every argument whose id or value_name denotes a spec ID (spec, specs, owns, id/ID on spec commands, SPEC, SPEC-ID), and fails if it lacks the parser. That test is the ratchet; it replaces the per-command parse tests the reviewer asked for.
   3. Keep end-to-end checks only where behavior goes beyond parsing: `review record STORY-HOME-NNN` keys the verdict under the canonical ID; `queue work` dry-run plan names the canonical ID (assert it, not the absence of an error); queue rm/done by alias acts on the entry `queue add` created; a (TYPE-<LABEL>-NNN) trailer in auto-queue-review files against the canonical ID.
   Gate (LIGHT): targeted cargo test filters for spec_arg + bug_015 + story_078, plus make check-ci-fast. >10 files: also make test-touched once.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T13:01:15.231951296Z
+modified_at: 2026-10-29T13:06:16.982334648Z
 req_type: Bug
 tags:
 - id-allocation
@@ -151,6 +151,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a187c4-b116-77d2-8b15-d32714738f0b
+  author: aida-orchestrator
+  timestamp: 2026-10-29T13:06:16.982353630Z
+  session_id: 01a187c26844
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -163,6 +172,14 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T11:56:47.497371016Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 2: most spec args now resolve aliases, but the advisor-ruled clap-tree ratchet test is missing, queue/session/claim keep ad-hoc canonicalize helpers instead of the single value parser, and ship/commit --spec write node-local alias trailers into git history. CI was still pending at the head.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-015 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T13:06:16.982334648Z
 interface_changes:
   cli:
   - Spec-scope commands (queue, rework, claim/unclaim, worktree add/enter, session end/start/manifest, plan fan-out, db reconcile-status) accept a friendly node alias TYPE-<LABEL>-NNN and act on the canonical id
