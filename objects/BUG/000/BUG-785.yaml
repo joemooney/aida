@@ -8,12 +8,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:19.667769905Z
-modified_at: 2026-10-29T06:40:21.067519127Z
+modified_at: 2026-10-29T06:40:24.247039315Z
 req_type: Bug
 tags:
 - aida:queue
 - from-downstream:quizdom
 - needs-repro-verification
+relationships:
+- rel_type: SupersededBy
+  target_id: 019e31df-2573-7b03-9415-3cb25a2c9df7
+  created_at: 2026-10-29T06:40:24.247030741Z
+  created_by: joe
 comments:
 - id: 01a0fb53-a399-7290-a2b8-8d2b57a99c18
   author: joe
@@ -45,4 +50,9 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Superseded
+- id: 01a18663-6f1e-7f00-aa0c-a2a3d93ff646
+  author: joe
+  timestamp: 2026-10-29T06:40:25.886160730Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 execution_mode: drive
