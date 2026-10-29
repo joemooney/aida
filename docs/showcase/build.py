@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / 'docs/showcase'
 PAGES = [('getting-started.md', 'getting-started.html', 'Get started'),
          ('configuration-guide.md', 'configuration.html', 'Configuration'),
-         ('product-workflow.md', 'workflow.html', 'Workflow')]
+         ('product-workflow.md', 'workflow.html', 'Workflow'),
+         ('selectable-autonomy.md', 'autonomy.html', 'Autonomy'),
+         ('trust-and-evidence.md', 'trust.html', 'Trust')]
 
 
 def inline(text):
@@ -90,7 +92,14 @@ def main():
         nav = ''.join(f'<a href="{dest}"' + (' aria-current="page"' if dest == output else '') + f'>{html.escape(label)}</a>' for _, dest, label in PAGES)
         graphic_path = SITE / 'assets' / (Path(output).stem + '.svg')
         graphic = f'<figure><img class="guide-graphic" src="assets/{graphic_path.name}" alt="{html.escape(title)} diagram; details follow in the source guide"></figure>' if graphic_path.exists() else ''
-        page = template.replace('{{graphic}}', graphic).replace('{{title}}', html.escape(title)).replace('{{nav}}', nav).replace('{{source}}', '../' + source).replace('{{content}}', render(content))
+        interactive = ''
+        scripts = ''
+        # trace:TASK-B6B1278890774EF993D2EBC327862470-109 | ai:codex
+        if output == 'autonomy.html':
+            landing = (SITE / 'index.html').read_text()
+            interactive = re.search(r'<section class="autonomy shell" id="autonomy">.*?</section>', landing, re.S).group(0)
+            scripts = '<script src="app.js" defer></script>'
+        page = template.replace('{{interactive}}', interactive).replace('{{scripts}}', scripts).replace('{{graphic}}', graphic).replace('{{title}}', html.escape(title)).replace('{{nav}}', nav).replace('{{source}}', '../' + source).replace('{{content}}', render(content))
         (SITE / output).write_text(page)
 
 

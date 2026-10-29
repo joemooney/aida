@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autonomy — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html">✳ AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html" aria-current="page">Autonomy</a><a href="trust.html">Trust</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="choose-where-people-take-part">Choose where people take part</h1>
+<p>AIDA is a governed software factory with selectable autonomy. The choice is made per spec, so the same project can keep sensitive design interactive while delegating approved routine work. People still set intent and acceptance criteria, develop collaboratively and decide how much authority to grant.</p>
+<h2 id="four-delivery-choices">Four delivery choices</h2>
+<ul>
+<li><strong>Human-led — operator:</strong> AIDA presents a checklist and stops. A person performs the work; the mode does not launch an implementation agent.</li>
+<li><strong>Collaborative — guided:</strong> a person and agent resolve recorded design forks in an interactive session, then the person reviews the resulting PR. The mode does not auto-merge.</li>
+<li><strong>Supervised — drive:</strong> agents implement, open a PR and proceed through CI, then stop for the human&#x27;s review and merge.</li>
+<li><strong>Autonomous — drain:</strong> agents implement, run CI, independently review, merge through applicable gates and pull. Eligible authorized work proceeds without routine human coding or code review. Exceptions stop for triage.</li>
+</ul>
+<p>Autonomous delivery is AIDA&#x27;s dark factory mode. It removes routine human intervention from the execution path for work that is eligible and authorized. It does not grant authority, resolve product decisions, promise every task will succeed or deploy software to production. Whether a whole organization operates without routine intervention depends on how it assigns work and handles exceptions.</p>
+<p>The interactive selector below is generated from the same bounded selector used on the product landing page. Delivery labels are descriptions; the stored values are the execution modes above. Keyboard users can use arrow keys, Home and End. Without JavaScript, the initial autonomous explanation remains readable.</p>
+<h2 id="decisions-are-a-separate-block">Decisions are a separate block</h2>
+<p><code>decide</code> sits outside the delivery ladder. A pending decision blocks dispatch; a one-shot mode override cannot bypass it, even with <code>--force</code>. Resolve the decision before dispatching the work again.</p>
+<p>For the four delivery modes, the increasing human-involvement order is drain, drive, guided, operator. <code>aida do --mode</code> is a one-shot override. Moving toward more human involvement is allowed; moving toward less requires <code>--force</code>. The override is not persisted. A durable mode change uses the documented spec-edit surface and its authority checks. Neither kind of change grants a role or bypasses review, CI or holds.</p>
+<h2 id="pair-autonomy-with-trust">Pair autonomy with trust</h2>
+<p>Execution mode describes the human contract; authority determines whether a particular action may proceed. Read <a href="trust.html">trust and evidence</a> before treating autonomous dispatch as permission to integrate. Harness features, model/effort controls and containment differ; use the <a href="configuration.html">configuration guide</a> to inspect the actual launcher.</p>
+<p>The <a href="getting-started.html">getting-started guide</a> requires no autonomous delivery. The <a href="workflow.html">workflow guide</a> shows how intent survives for maintenance and collaboration. AIDA is alpha software and supports Linux only.</p>
+<h2 id="source-and-inspection">Source and inspection</h2>
+<p>The stored variants and ordering are in <a href="../../aida-core/src/models.rs">ExecutionMode</a>; human contracts and one-shot override classification are in <a href="../../aida-cli-lib/src/do_dispatch.rs">dispatch</a>. <code>aida do --help</code> documents the current flags. This page changes no execution or authority behavior.</p><section class="autonomy shell" id="autonomy">
+ <div class="section-top"><p class="section-index">03 / SELECTABLE AUTONOMY</p><span class="mono">ONE PROJECT. DIFFERENT LEVELS OF DELEGATION.</span></div>
+ <h2>Choose where<br>people stay in the loop.</h2>
+ <p class="section-intro">Run a dark factory for bounded work. Keep people close to consequential decisions. Choose the execution mode per spec.</p>
+ <div class="mode-picker" role="tablist" aria-label="Delivery autonomy">
+  <button role="tab" id="tab-operator" aria-controls="mode-panel" aria-selected="false" tabindex="-1" data-mode="operator"><span>01</span>Human-led<small>operator</small></button>
+  <button role="tab" id="tab-guided" aria-controls="mode-panel" aria-selected="false" tabindex="-1" data-mode="guided"><span>02</span>Collaborative<small>guided</small></button>
+  <button role="tab" id="tab-drive" aria-controls="mode-panel" aria-selected="false" tabindex="-1" data-mode="drive"><span>03</span>Supervised<small>drive</small></button>
+  <button role="tab" id="tab-drain" aria-controls="mode-panel" aria-selected="true" tabindex="0" data-mode="drain"><span>04</span>Autonomous<small>drain</small></button>
+ </div>
+ <div class="mode-panel" id="mode-panel" role="tabpanel" aria-labelledby="tab-drain" tabindex="0">
+  <div class="mode-story"><p class="eyebrow" id="mode-kicker">DARK FACTORY MODE</p><h3 id="mode-title">Delegate the lifecycle.</h3><p id="mode-description">Agents implement, test, independently review and merge approved, authorized work. People set the intent, acceptance criteria and limits. Exceptions escalate.</p><div class="mode-example"><span class="mono">A GOOD FIT</span><p id="mode-example">A bounded fix with clear acceptance criteria and no unresolved design decision.</p></div></div>
+  <div class="mode-detail"><span class="mono">WHO DOES WHAT</span><ol id="mode-stages"><li><span>Define intent &amp; limits</span><b class="human">Human</b></li><li><span>Implement &amp; test</span><b>Agent</b></li><li><span>Independent review</span><b>Agent</b></li><li><span>Merge through gates</span><b>Agent</b></li></ol><p id="mode-boundary">Routine human coding and code review are removed from the execution path. Review, CI and authority gates remain.</p></div>
+ </div>
+ <div class="decision-stop"><span class="stop-icon" aria-hidden="true">Ⅱ</span><p><strong>Some work needs a decision first.</strong> <code>decide</code> blocks execution until the pending decision is resolved. It sits outside the autonomy ladder.</p></div>
+</section></main>
+<footer class="guide-footer"><p>Generated from <a href="../selectable-autonomy.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>
