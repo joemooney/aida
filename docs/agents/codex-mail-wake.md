@@ -74,17 +74,14 @@ written alongside the ledger. It does not automatically requeue mail.
 
 After a complete successful scan, accepted IDs and their timestamps are pruned
 only when AIDA supplies acknowledgement evidence for the same logical advisor.
-Accepted unread IDs remain suppressed across restarts, missing inventories and
-removed worktrees. Failed scans retain them. Read-and-accept cycles therefore
-do not accumulate notification history indefinitely; genuinely unread accepted
-mail remains visible until acknowledgement evidence arrives.
+Accepted unread IDs remain suppressed across restarts and failed or partial
+scans. Read-and-accept cycles therefore do not accumulate notification history
+indefinitely; genuinely unread accepted mail remains visible until
+acknowledgement evidence arrives.
 
-Acknowledgement reconciliation uses evidence available from current mailbox
-roots. If the only root holding a read receipt disappears after pruning, a stale
-unread replica in another root can become eligible again. The adapter does not
-retain permanent read tombstones or write shared acknowledgement state; durable
-logical-inbox reconciliation belongs to AIDA's mailbox store. Preserve receipt
-roots when retiring worktrees until that shared reconciliation is available.
+Read state comes from AIDA's logical mail view, not from individual checkouts.
+A read is recorded in the receipt anchor under the repository's common Git
+directory, so mail read in a worktree that was later removed stays read.
 
 ## Owned scheduled health check
 
@@ -216,18 +213,31 @@ unread inventories produce no new Codex turn. A first `once` can persist a
 pending batch without submitting until a later scan; use `--batch-seconds 0` for
 an immediate one-shot submission.
 
-Git's NUL-delimited worktree inventory identifies sibling checkouts. Each local
-mailbox is inspected using the version-1 AIDA `mailbox wake-snapshot` interface
-with the main project as the AIDA subprocess working directory. The envelope
-contains unread message IDs and existing acknowledged IDs, without moving read
-watermarks. Existing per-ID receipts are shared across these roots for the same
-advisor. A root watermark acknowledges only messages actually present in that
-root; it never suppresses unknown private mail from another checkout. The adapter
-keeps all source checkout paths for each ID so the advisor can find mail that
-has not yet been published from a sibling. Replicated IDs cause one notification.
-New or removed checkouts are discovered at each scan. Failed scans do not record
-acceptance and retry at the next interval. Scans have per-command and total time,
-output, entry and message bounds.
+Each scan runs one `aida mailbox wake-snapshot --recipient advisor --json`
+from the main project. AIDA builds the envelope from its logical mail view,
+which already covers every worktree of the repository and the canonical store.
+The adapter keeps no per-worktree union of its own. The snapshot resolves the
+audience a notice in an advisor session would, so the adapter runs it with
+`AIDA_SESSION_ROLE=advisor` and clears inherited handle and agent variables.
+Role mail that another reader has already taken (owned by another recipient)
+is not in the advisor's view and never wakes. The envelope contains unread
+message IDs and acknowledged IDs, without moving read state. Replicated IDs
+cause one notification. Failed scans do not record acceptance and retry at the
+next interval. Scans have per-command time and output bounds.
+
+When AIDA reports the view as partial (some mailbox source could not be fully
+read), the watcher does not treat it as an empty inbox. The next wake says the
+view is partial. If a partial view lists no new IDs, the watcher queues one
+partial-only notice per episode; a complete scan ends the episode. A partial
+scan never prunes accepted IDs. A partial-only notice carries no IDs, so an
+uncertain queue result for it is recorded as sent instead of requiring
+recovery.
+
+The envelope stays at version 1 with two added fields: `partial` (boolean) and
+`partial_codes` (safe source error codes, with no paths or IDs). The adapter
+refuses an envelope without `partial`, because an older AIDA binary reads only
+one checkout. `--local-root` now selects the checkout the logical view is read
+from, not one mailbox to inspect.
 
 Successful queue submissions are committed atomically under a permanent exclusive
 lock. Failure to create the queue process is known not to have submitted anything

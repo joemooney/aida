@@ -349,11 +349,16 @@ A manifest that claims the layout this build already uses is reported as damaged
 ---
 
 For host notification adapters, `aida mailbox wake-snapshot --recipient advisor
---local-root <checkout> --json` emits a version-1 envelope containing unread
-message IDs and existing acknowledged IDs. It uses bounded no-follow reads, merges the canonical mailbox, and
-never acknowledges mail. Invoke from the main project directory while selecting
-a sibling's local mailbox with `--local-root`. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
+--json` emits a version-1 envelope of unread message IDs and acknowledged IDs
+from the logical mail view: every worktree of the repository and the canonical
+store, with read state from the common-Git receipt anchor. `--recipient` must be
+one of the calling process's own inboxes (the audience `mailbox notice`
+resolves); it narrows and never widens. `partial: true` (with safe
+`partial_codes`) means some source was not fully read, so more mail may exist.
+It never acknowledges mail. `--local-root` selects the checkout the view is read
+from. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
 for opt-in setup, deduplication, and uncertain-delivery recovery.
+<!-- trace:STORY-1843 | ai:claude -->
 <!-- trace:TASK-2347 | ai:codex -->
 
 #### Relay mail lifetime (`aida relay-mail`)

@@ -1244,8 +1244,8 @@ protection from in-lock reloads. See
 ## Codex mail wake adapter
 
 The opt-in host adapter in `scripts/codex-mail-wake.py` reads bounded AIDA
-`mailbox wake-snapshot` envelopes across sibling checkouts, deduplicates message
-IDs in a private durable ledger, and uses native `codex queue` to notify an
+`mailbox wake-snapshot` envelope (AIDA's logical mail view across every worktree,
+with a `partial` flag), deduplicates message IDs in a private durable ledger, and uses native `codex queue` to notify an
 explicit existing advisor thread. Quiet scans use no model inference. Uncertain
 queue results require explicit recovery; a queue receipt is not mail read/ack
 evidence. See [installation and recovery](docs/agents/codex-mail-wake.md).
