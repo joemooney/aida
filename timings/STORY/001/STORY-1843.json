@@ -1,0 +1,623 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1843",
+  "publishes": [
+    {
+      "at": "2026-10-29T04:14:50.884662505Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-18T18:31:58.857566776Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-21T17:32:07.167222447Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-22T03:51:21.398439452Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T03:51:21.400046111Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T03:55:03.557798340Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-22T03:56:33.518824448Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-22T06:18:26.875543131Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T06:18:26.876184124Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T15:48:42.258182556Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T15:48:42.258850548Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-23T07:02:21.465323039Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T16:57:42.779346385Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T17:08:04.866099803Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-24T22:01:52.057383817Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2909
+      }
+    },
+    {
+      "ts": "2026-10-24T23:41:31.399458129Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "pr-2909",
+        "first_seen": "2026-10-24T23:41:31.396445304+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-25T04:20:08.577548664Z",
+      "spec": "STORY-1843",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2909,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ba8f07efd8ec01392e33b228fec7e6aaaf89615c"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:35:40.705184621Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:35:40.767534522Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T06:49:39.853806704Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T08:41:30.238109681Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T08:41:30.271433192Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T08:41:43.770875866Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T09:25:02.677587806Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T09:26:03.297316202Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T09:53:25.545740643Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "origin/story-1843-b2",
+        "first_seen": "2026-10-26T09:53:25.537332275+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T09:53:25.546975605Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843",
+        "first_seen": "2026-10-26T09:53:25.546937723+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T12:14:27.013461817Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T12:14:44.071127207Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T15:10:02.760603368Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-b2b",
+        "first_seen": "2026-10-26T15:10:02.760529847+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T15:47:28.011322285Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-26T18:39:02.410115285Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T18:39:02.457509998Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T18:39:18.046114495Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T20:20:17.551052026Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T20:20:17.608482912Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T20:20:33.151734829Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T00:06:41.261946810Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T00:06:41.300373722Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T00:07:06.181633795Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T01:30:39.050093632Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T01:30:39.092798227Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T01:30:55.776969593Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-27T01:32:20.010742105Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-c1",
+        "first_seen": "2026-10-27T01:32:20.010693702+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T09:49:00.499353128Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-c2",
+        "first_seen": "2026-10-27T09:49:00.499291496+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-27T16:37:45.410638477Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:08:47.919736195Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-27T17:08:47.997649912Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T04:36:05.268445893Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-c3x",
+        "first_seen": "2026-10-28T04:36:05.268375727+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T08:38:00.163792740Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-b2c",
+        "first_seen": "2026-10-28T08:38:00.155775207+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T11:25:43.673218395Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T11:25:43.675078299Z",
+      "spec": "STORY-1843",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-28T14:45:32.191480926Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-d2b-relay-outbox",
+        "first_seen": "2026-10-28T14:45:32.191430084+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T17:28:07.766978849Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "origin/story-1843-d2b-relay-outbox",
+        "first_seen": "2026-10-28T17:28:07.760094720+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T17:28:07.778925181Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-d2-relay-mail",
+        "first_seen": "2026-10-28T17:28:07.778868700+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T19:57:30.006999334Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-d1-delivery",
+        "first_seen": "2026-10-28T19:57:29.990766848+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-28T22:23:50.878682721Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-d2b-relay",
+        "first_seen": "2026-10-28T22:23:50.864327276+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-29T01:15:32.669347038Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1843",
+        "branch": "story-1843-e-conformance",
+        "first_seen": "2026-10-29T01:15:32.669296074+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-29T04:14:36.834784172Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3083
+      }
+    },
+    {
+      "ts": "2026-10-29T04:14:50.751716605Z",
+      "spec": "STORY-1843",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3b3d89ae3b08ede89ff290429902a25807062f8a",
+        "pr": 3083,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
