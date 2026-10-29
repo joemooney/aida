@@ -90,7 +90,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T22:36:51.583733119Z
+modified_at: 2026-10-29T22:37:50.032504672Z
 req_type: Story
 tags:
 - architecture
@@ -628,6 +628,28 @@ comments:
   created_at: 2026-10-29T22:35:36.932552380Z
   modified_at: 2026-10-29T22:35:36.932552380Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+- id: 01a189cf-f650-7632-88ab-65334cfcf702
+  author: joe
+  content: |-
+    ## Implementer approach — slice 2 (PR-3106) round-1 rework
+
+    ### Acceptance criteria as tests
+    - **Item 1 (command-level):** `aida-cli/tests/bug_2187_reviewer_record_identity.rs` and `bug_2201_outside_project_reviewer.rs` assert the verdict on the ledger (via `aida review verdict PR-N --json` / ledger file) instead of `PR-N.json`; lib-0/lib-1 failures from run 40964841522 retargeted the same way, no weakened assertion.
+    - **Item 2 (unit):** `collect_standalone_verdict` finds an uncontained reviewer's ledger-only verdict written during the launch and arms the refusal hold.
+    - **Item 3 (unit):** a contained reviewer's collected request-changes arms a hold through `arm_collected_refusal` (ledger `hold` event).
+    - **Item 4 (no automated test beyond check-templates):** take-prompt.md, aida-review step 6a and discipline docs point at `aida review verdict PR-N --json`.
+    - **Item 5 (unit):** failed mandate release posts nothing; malformed `AIDA_CONTAINED` is contained; hand-off file removed after collection; `verdicts_for_sha` orders by ledger seq.
+    - **Item 6 (unit):** launcher collect succeeds when the parent env has no `AIDA_CONTAINED` (root cause fixed where the launcher acquires it).
+
+    ### Expected files
+    `gate/review_verdict.rs`, `gate/ledger/*`, `gate/merge_hold.rs`, `mandate_ship.rs`, `session`/contained env helper, `queue_cmd.rs` / launcher, `aida-cli/tests/bug_2187*`, `bug_2201*`, templates + discipline docs.
+
+    ### Ambiguities / conflicts as questions
+    - None; the 15:45 ruling settles scope.
+  created_at: 2026-10-29T22:37:50.032504672Z
+  modified_at: 2026-10-29T22:37:50.032504672Z
+  session_id: 01a189cf0e41
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -1009,6 +1031,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a189cf-beef-7162-aa9d-929756a9744d
+  author: joe
+  timestamp: 2026-10-29T22:37:35.855157835Z
+  session_id: 01a189cf0e41
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
