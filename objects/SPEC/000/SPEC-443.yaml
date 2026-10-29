@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T04:53:44.729675488Z
-modified_at: 2026-10-29T06:41:12.955634360Z
+modified_at: 2026-10-29T06:41:16.492768951Z
 req_type: Task
 tags:
 - from-implementer:TASK-1325
@@ -19,6 +19,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approve native Windows verification-only followup and conditionally defer until an existing Windows platform run can execute cargo test -p aida-cli --test task_1597_delegation_prompt on the merged identity fix. Retain assertions and collect child diagnostics. No native Windows pass claimed, no new schedule enabled.'
   created_at: 2026-10-07T23:06:45.818223635Z
   modified_at: 2026-10-07T23:06:45.818223635Z
+- id: 01a18664-34cc-77c0-b795-ad329e933cc8
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Obsolete: ADR-72.'
+  created_at: 2026-10-29T06:41:16.492768951Z
+  modified_at: 2026-10-29T06:41:16.492768951Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1189e-92b3-7191-9e2a-d33db0857d40
   author: joe
