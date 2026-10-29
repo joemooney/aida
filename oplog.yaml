@@ -86500,5 +86500,17 @@ operations:
   timestamp: 2026-10-29T18:26:42.164082508Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6753
+- id: 01a188ef-af32-7fb1-9aff-f9eaf6ca4461
+  target_id: 01a188ef-a78a-74d3-afbc-98b15c8f621a
+  author: aida
+  node_id: '1'
+  lamport: 6754
+  timestamp: 2026-10-29T18:32:51.762362341Z
+  kind: !Create
+    title: 'aida show exceeds its 1000 ms budget again: 18 of 74 calls (24%) over, worst 2.6 s, in the 24h before 2026-10-29 14:03Z'
+    description: 'performance-guard tripped at 2026-10-29T14:03:45Z (trip evidence performance-guard@2026-10-29T14:03:45.568595227Z): aida show 24.3% over 1000 ms (18/74, tolerance 10%, worst 2606 ms, ceiling 5000 ms not breached, window 24h, lineage-scoped). Third recurrence after BUG-1480 and BUG-2221; BUG-2221''s AC4 (fresh guard telemetry after promotion) stayed open. First step: split the 18 slow calls by whether a cargo build or headless lane was running at the time (both cargo slots were busy most of the window). If the slow calls track load, rule on the budget explicitly (a load-aware budget, or exclude calls made under build load). Otherwise profile the slow path the same way BUG-2221 did. Advisor ruling 2026-10-29: real breach, not a budget change yet.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6754
 node_id: '1'
