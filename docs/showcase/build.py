@@ -12,7 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / 'docs/showcase'
 PAGES = [('getting-started.md', 'getting-started.html', 'Get started'),
-         ('configuration-guide.md', 'configuration.html', 'Configuration')]
+         ('configuration-guide.md', 'configuration.html', 'Configuration'),
+         ('product-workflow.md', 'workflow.html', 'Workflow')]
 
 
 def inline(text):
