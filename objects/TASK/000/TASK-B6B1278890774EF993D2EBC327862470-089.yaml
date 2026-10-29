@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T04:14:56.266636681Z
-modified_at: 2026-10-29T04:14:56.266636681Z
+modified_at: 2026-10-29T04:15:59.948719453Z
 req_type: Task
 tags:
 - carried-from:STORY-1843
 - finding-hash:30556b88
 - from-review:PR-3083
 - kind:carried-forward
+comments:
+- id: 01a185df-33cc-7592-8b8a-a59ae102fbb4
+  author: joe
+  content: 'ADVISOR: accepted at review time (STORY-1843 comment, 21:07; standing order 16:19); the doc-only nit has no behavioural impact. Closing the carried-forward copy.'
+  created_at: 2026-10-29T04:15:59.948719453Z
+  modified_at: 2026-10-29T04:15:59.948719453Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 filed_at:
   code_sha: 3b3d89ae3b08ede89ff290429902a25807062f8a
   branch: main
