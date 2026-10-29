@@ -6,15 +6,39 @@
 //!
 //! The reviewer loads `.claude/settings.json` and `.aida/config.toml` from
 //! its review worktree — the PR branch — so the PR branch's copies are the
-//! ones checked. When the base has them and the branch does not, the fix is
-//! a merge of the base, not `aida scaffold upgrade`.
+//! ones checked. When the PR's base branch has them and the PR branch does
+//! not, the fix is a merge of the base, not `aida scaffold upgrade`.
 //! trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use anyhow::Result;
 use std::path::Path;
 
 const SETTINGS_PATH: &str = ".claude/settings.json";
 const CONFIG_PATH: &str = ".aida/config.toml";
+
+/// Whether the `permissions.allow` entry `entry` grants what the reviewer
+/// entry `needed` (one of [`aida_core::scaffolding::REVIEWER_ALLOW_ENTRIES`])
+/// grants. Besides the entry itself, three equivalent or broader forms are
+/// accepted: the whole tool (`Bash`), every command (`Bash(*)`), and the
+/// legacy colon prefix form (`Bash(aida:*)`, which matches `aida` with or
+/// without arguments). Anything else — a narrower subcommand list, say —
+/// does not count, so the check never passes a reviewer that would be denied.
+pub(crate) fn allow_entry_covers(entry: &str, needed: &str) -> bool {
+    matches!(entry.trim(), "Bash" | "Bash(*)" | "Bash(aida:*)") || entry.trim() == needed
+}
+
+/// The state of `[contained] allowed_hosts` in one copy of the config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AllowedHosts {
+    /// No key (or no file, or an unparseable one): `aida scaffold upgrade`
+    /// adds the template hosts.
+    Absent,
+    /// `allowed_hosts = []`: the project's explicit choice, which the
+    /// scaffold never overwrites, so the operator must edit it.
+    Empty,
+    Present,
+}
 
 /// One revision's copies of the two files the reviewer loads. `None` is a
 /// file absent at that revision.
@@ -25,14 +49,6 @@ pub(crate) struct ReviewerConfigFiles {
 }
 
 impl ReviewerConfigFiles {
-    /// The working-tree copies under `root`.
-    pub(crate) fn from_worktree(root: &Path) -> Self {
-        Self {
-            settings: std::fs::read_to_string(root.join(SETTINGS_PATH)).ok(),
-            config: std::fs::read_to_string(root.join(CONFIG_PATH)).ok(),
-        }
-    }
-
     /// The copies committed at `rev`, read with `git show` from `repo`.
     fn at_revision(repo: &Path, rev: &str) -> Self {
         let show = |path: &str| {
@@ -52,8 +68,8 @@ impl ReviewerConfigFiles {
         }
     }
 
-    /// The [`aida_core::scaffolding::REVIEWER_ALLOW_ENTRIES`] absent from
-    /// `permissions.allow`. A missing or unparseable file lacks them all.
+    /// The reviewer entries no `permissions.allow` entry covers (see
+    /// [`allow_entry_covers`]). A missing or unparseable file lacks them all.
     pub(crate) fn missing_allow_entries(&self) -> Vec<&'static str> {
         let allow: Vec<String> = self
             .settings
@@ -67,121 +83,152 @@ impl ReviewerConfigFiles {
         aida_core::scaffolding::REVIEWER_ALLOW_ENTRIES
             .iter()
             .copied()
-            .filter(|entry| !allow.iter().any(|a| a == entry))
+            .filter(|needed| !allow.iter().any(|a| allow_entry_covers(a, needed)))
             .collect()
     }
 
-    /// Whether `[contained] allowed_hosts` is a non-empty array.
-    pub(crate) fn has_allowed_hosts(&self) -> bool {
-        self.config
+    pub(crate) fn allowed_hosts(&self) -> AllowedHosts {
+        let hosts = self
+            .config
             .as_deref()
             .and_then(|body| toml::from_str::<toml::Value>(body).ok())
-            .and_then(|v| {
-                v.get("contained")?
-                    .get("allowed_hosts")?
-                    .as_array()
-                    .map(|a| !a.is_empty())
-            })
-            .unwrap_or(false)
+            .and_then(|v| Some(v.get("contained")?.get("allowed_hosts")?.as_array()?.len()));
+        match hosts {
+            None => AllowedHosts::Absent,
+            Some(0) => AllowedHosts::Empty,
+            Some(_) => AllowedHosts::Present,
+        }
     }
 
-    /// What this revision lacks, in operator prose; empty when complete.
-    fn missing(&self) -> Vec<String> {
-        let mut missing = Vec::new();
-        if !self.has_allowed_hosts() {
-            missing.push(format!(
-                "the contained egress allowlist (`[contained] allowed_hosts` in {CONFIG_PATH})"
-            ));
-        }
-        let absent = self.missing_allow_entries();
-        if !absent.is_empty() {
-            missing.push(format!(
-                "the reviewer allow entries {} (`permissions.allow` in {SETTINGS_PATH})",
-                absent
-                    .iter()
-                    .map(|e| format!("`{e}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
-        }
-        missing
+    fn complete(&self) -> bool {
+        self.allowed_hosts() == AllowedHosts::Present && self.missing_allow_entries().is_empty()
     }
 }
 
-/// Decide from the PR branch's copies (`branch`) and the base checkout's
-/// (`base`, named `base_name`). Pure.
-pub(crate) fn contained_reviewer_decision(
+/// Decide from the PR branch's copies (`branch`) and the PR base branch's
+/// (`base`, named by `base_name`; `None` when the base could not be read).
+/// Pure.
+pub(crate) fn contained_reviewer_preflight(
     pr: u64,
     branch: &ReviewerConfigFiles,
-    base: &ReviewerConfigFiles,
-    base_name: &str,
+    base: Option<(&str, &ReviewerConfigFiles)>,
 ) -> Result<()> {
-    let missing = branch.missing();
-    if missing.is_empty() {
+    let hosts = branch.allowed_hosts();
+    let absent = branch.missing_allow_entries();
+    if hosts == AllowedHosts::Present && absent.is_empty() {
         return Ok(());
     }
-    let fix = if base.missing().is_empty() {
-        format!(
-            "{base_name} already has it: merge {base_name} into the PR branch first, push, then re-run"
-        )
-    } else {
-        format!(
-            "run `aida scaffold upgrade` on {base_name} to add it, commit {CONFIG_PATH} and \
-             {SETTINGS_PATH}, merge {base_name} into the PR branch, then re-run"
-        )
+    let mut problems = Vec::new();
+    match hosts {
+        AllowedHosts::Present => {}
+        AllowedHosts::Absent => problems.push(format!(
+            "the PR branch has no contained egress allowlist (`[contained] allowed_hosts` in {CONFIG_PATH})"
+        )),
+        AllowedHosts::Empty => problems.push(format!(
+            "allowed_hosts is empty in {CONFIG_PATH}; add github.com/api.github.com or remove the key to use the default"
+        )),
+    }
+    if !absent.is_empty() {
+        problems.push(format!(
+            "the PR branch lacks the reviewer allow entries {} (`permissions.allow` in {SETTINGS_PATH})",
+            absent
+                .iter()
+                .map(|e| format!("`{e}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    let fix = match base {
+        Some((name, base)) if base.complete() => format!(
+            "{name} already has them: merge {name} into the PR branch first, push, then re-run"
+        ),
+        Some((name, _)) => format!(
+            "on {name}, run `aida scaffold upgrade` (or fix the file by hand), commit {CONFIG_PATH} \
+             and {SETTINGS_PATH}, merge {name} into the PR branch, then re-run"
+        ),
+        None => format!(
+            "run `aida scaffold upgrade` (or fix the file by hand) on the PR's base branch, commit \
+             {CONFIG_PATH} and {SETTINGS_PATH}, merge it into the PR branch, then re-run"
+        ),
     };
     anyhow::bail!(
-        "refusing to launch a contained reviewer for PR-{pr}: the PR branch lacks {}. The \
-         reviewer loads these files from the PR branch; without them it cannot reach the \
-         forge or run `aida`, and exits with no verdict. Fix: {fix}.",
-        missing.join(" and ")
+        "refusing to launch a contained reviewer for PR-{pr}: {}. The reviewer loads these files \
+         from the PR branch; without them it cannot reach the forge or run `aida`, and exits with \
+         no verdict. Fix: {fix}.",
+        problems.join("; ")
     )
 }
 
-/// The base branch name: `origin/HEAD`'s target, else `main`.
-fn base_branch_name(project_root: &Path) -> String {
-    std::process::Command::new("git")
+/// Fetch `remote_ref` into a private ref, read both files there, and delete
+/// the ref. `None` when the fetch fails.
+fn read_remote_revision(
+    project_root: &Path,
+    remote_ref: &str,
+    local_ref: &str,
+) -> Option<ReviewerConfigFiles> {
+    let fetched = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .and_then(|r| r.strip_prefix("origin/").map(str::to_string))
-        .filter(|r| !r.is_empty())
-        .unwrap_or_else(|| "main".to_string())
+        .args(["fetch", "--quiet", "--no-tags", "origin"])
+        .arg(format!("+{remote_ref}:{local_ref}"))
+        .remote_credentials(project_root, "origin")
+        .status()
+        .is_ok_and(|s| s.success());
+    if !fetched {
+        return None;
+    }
+    let files = ReviewerConfigFiles::at_revision(project_root, local_ref);
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["update-ref", "-d", local_ref])
+        .status();
+    Some(files)
 }
 
 /// Refuse a contained reviewer launch for PR-`pr` whose branch cannot carry
-/// it. The PR head is fetched into a private ref; when the fetch fails the
-/// launch is not refused here — the worktree fetch that follows reports it.
+/// it, comparing against the PR's base branch from the forge metadata.
 pub(crate) fn preflight_contained_reviewer(
     project_root: &Path,
     forge: crate::ReviewForge,
     pr: u64,
 ) -> Result<()> {
-    let local_ref = format!("refs/aida/reviewer-preflight/pr-{pr}");
-    let fetched = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["fetch", "--quiet", "--no-tags", "origin"])
-        .arg(format!(
-            "+{}:{local_ref}",
-            crate::pr_head_remote_ref_for(forge, pr)
-        ))
-        .status()
-        .is_ok_and(|s| s.success());
-    if !fetched {
+    let base_ref = crate::query_pr_metadata(forge, pr, project_root)
+        .ok()
+        .and_then(|meta| meta.base_ref);
+    preflight_contained_reviewer_against(project_root, forge, pr, base_ref.as_deref())
+}
+
+/// [`preflight_contained_reviewer`] with the base branch already resolved.
+/// When the PR head cannot be fetched the launch is not refused here — the
+/// worktree fetch that follows reports it.
+pub(crate) fn preflight_contained_reviewer_against(
+    project_root: &Path,
+    forge: crate::ReviewForge,
+    pr: u64,
+    base_ref: Option<&str>,
+) -> Result<()> {
+    let prefix = format!("refs/aida/reviewer-preflight/pr-{pr}");
+    let Some(branch) = read_remote_revision(
+        project_root,
+        &crate::pr_head_remote_ref_for(forge, pr),
+        &format!("{prefix}-head"),
+    ) else {
         eprintln!(
             "  {} could not fetch PR-{pr}'s head to check its reviewer config; skipping that check",
             crate::glyph(crate::glyphs::Glyph::Warning)
         );
         return Ok(());
-    }
-    let branch = ReviewerConfigFiles::at_revision(project_root, &local_ref);
-    let base = ReviewerConfigFiles::from_worktree(project_root);
-    contained_reviewer_decision(pr, &branch, &base, &base_branch_name(project_root))
+    };
+    let base = base_ref.and_then(|name| {
+        read_remote_revision(
+            project_root,
+            &format!("refs/heads/{name}"),
+            &format!("{prefix}-base"),
+        )
+        .map(|files| (name, files))
+    });
+    contained_reviewer_preflight(pr, &branch, base.as_ref().map(|(n, f)| (*n, f)))
 }
 
 #[cfg(test)]
@@ -199,13 +246,13 @@ mod tests {
     }
 
     fn decide(branch: &ReviewerConfigFiles, base: &ReviewerConfigFiles) -> Result<()> {
-        contained_reviewer_decision(7, branch, base, "main")
+        contained_reviewer_preflight(7, branch, Some(("main", base)))
     }
 
     #[test]
     fn bug_014_preflight_passes_a_configured_branch() {
         let ok = files(HOSTS, Some(ALLOW));
-        decide(&ok, &ReviewerConfigFiles::default()).unwrap();
+        contained_reviewer_preflight(7, &ok, None).unwrap();
     }
 
     #[test]
@@ -215,6 +262,21 @@ mod tests {
         assert!(err.contains("[contained] allowed_hosts"), "{err}");
         assert!(!err.contains("permissions.allow"), "{err}");
         assert!(err.contains("aida scaffold upgrade"), "{err}");
+    }
+
+    /// An explicit empty allowlist is the project's choice, which the
+    /// scaffold never overwrites — so the refusal names the edit to make.
+    #[test]
+    fn bug_014_preflight_names_an_empty_allowlist_as_a_hand_fix() {
+        let branch = files("[contained]\nallowed_hosts = []\n", Some(ALLOW));
+        assert_eq!(branch.allowed_hosts(), AllowedHosts::Empty);
+        let err = decide(&branch, &branch).unwrap_err().to_string();
+        assert!(
+            err.contains(
+                "allowed_hosts is empty in .aida/config.toml; add github.com/api.github.com or remove the key to use the default"
+            ),
+            "{err}"
+        );
     }
 
     #[test]
@@ -230,6 +292,20 @@ mod tests {
         assert!(err.contains("permissions.allow"), "{err}");
     }
 
+    /// Equivalent and broader entries satisfy the check; narrower ones do not.
+    #[test]
+    fn bug_014_allow_matcher_accepts_equivalent_entries() {
+        for entry in ["Bash(aida:*)", "Bash(*)", "Bash"] {
+            let settings = format!(r#"{{"permissions": {{"allow": ["{entry}"]}}}}"#);
+            let branch = files(HOSTS, Some(&settings));
+            assert!(branch.missing_allow_entries().is_empty(), "{entry}");
+        }
+        for entry in ["Bash(aida show *)", "Bash(git *)", "Read(*)"] {
+            assert!(!allow_entry_covers(entry, "Bash(aida *)"), "{entry}");
+        }
+        assert!(allow_entry_covers(" Bash(aida *) ", "Bash(aida *)"));
+    }
+
     /// The advisor addendum: the base has the config, the PR branch (cut
     /// before it landed) does not — the fix is merging the base.
     #[test]
@@ -242,10 +318,12 @@ mod tests {
         assert!(!err.contains("aida scaffold upgrade"), "{err}");
     }
 
-    /// End to end against git: the base checkout has the config committed,
-    /// the PR head predates it, and the preflight reads the head's copy.
+    /// End to end against git: the PR's base branch has the config committed,
+    /// the PR head predates it, and the primary checkout's working tree is
+    /// something else entirely. The preflight reads the head and the base
+    /// ref, and leaves no private refs behind.
     #[test]
-    fn bug_014_preflight_reads_the_pr_branch_copy_not_the_base() {
+    fn bug_014_preflight_reads_the_pr_branch_and_its_base_ref() {
         let git = |dir: &Path, args: &[&str]| {
             let ok = crate::test_git::git_command()
                 .arg("-C")
@@ -265,7 +343,7 @@ mod tests {
             assert!(ok, "git {args:?}");
         };
         let origin = tempfile::tempdir().unwrap();
-        git(origin.path(), &["init", "--quiet", "-b", "main"]);
+        git(origin.path(), &["init", "--quiet", "-b", "release"]);
         std::fs::create_dir_all(origin.path().join(".aida")).unwrap();
         std::fs::write(origin.path().join(".aida/config.toml"), "[forge]\n").unwrap();
         git(origin.path(), &["add", "."]);
@@ -286,56 +364,83 @@ mod tests {
             .unwrap()
             .success();
         assert!(ok);
+        // The primary checkout's working copy is irrelevant to the decision.
+        std::fs::write(clone.path().join(".aida/config.toml"), "[forge]\n").unwrap();
 
-        let err = preflight_contained_reviewer(clone.path(), crate::ReviewForge::GitHub, 7)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("merge main into the PR branch first"), "{err}");
+        let run = |base: Option<&str>| {
+            preflight_contained_reviewer_against(clone.path(), crate::ReviewForge::GitHub, 7, base)
+        };
+        let err = run(Some("release")).unwrap_err().to_string();
+        assert!(
+            err.contains("merge release into the PR branch first"),
+            "{err}"
+        );
+        let refs = crate::test_git::git_command()
+            .arg("-C")
+            .arg(clone.path())
+            .args(["for-each-ref", "refs/aida/"])
+            .output()
+            .unwrap();
+        assert!(refs.stdout.is_empty(), "private refs left behind");
 
-        git(origin.path(), &["update-ref", "refs/pull/7/head", "main"]);
-        preflight_contained_reviewer(clone.path(), crate::ReviewForge::GitHub, 7).unwrap();
+        git(
+            origin.path(),
+            &["update-ref", "refs/pull/7/head", "release"],
+        );
+        run(Some("release")).unwrap();
     }
 
-    /// A fresh scaffold passes: the init config section and the template
-    /// master's allow entries (which the generated settings carry, see the
-    /// core scaffold test) hold what the preflight requires.
+    /// A fresh scaffold passes: the init config section and the scaffolded
+    /// reviewer entries hold what the preflight requires.
     #[test]
     fn bug_014_init_scaffold_satisfies_the_preflight() {
         let settings = serde_json::json!({
-            "permissions": {"allow": aida_core::scaffolding::template_permissions_allow()}
+            "permissions": {"allow": aida_core::scaffolding::REVIEWER_ALLOW_ENTRIES}
         })
         .to_string();
         let scaffold = files(&crate::init_contained_config_section(), Some(&settings));
-        decide(&scaffold, &ReviewerConfigFiles::default()).unwrap();
+        contained_reviewer_preflight(7, &scaffold, None).unwrap();
     }
 
-    /// `aida scaffold upgrade`'s config step adds the template hosts to a
-    /// config without them, and leaves a project's own allowlist alone.
+    /// The refresh/upgrade config steps add the template hosts and the
+    /// reviewer entries where absent, and leave a project's own choices.
     #[test]
-    fn bug_014_upgrade_adds_hosts_only_when_absent() {
-        let repo = |config: &str| {
+    fn bug_014_ensure_steps_fill_only_what_is_absent() {
+        let repo = |config: &str, settings: Option<&str>| {
             let dir = tempfile::tempdir().unwrap();
             std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
             std::fs::write(dir.path().join(".aida/config.toml"), config).unwrap();
+            if let Some(body) = settings {
+                std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
+                std::fs::write(dir.path().join(".claude/settings.json"), body).unwrap();
+            }
             dir
         };
-        let dir = repo("[forge]\nprovider = \"github\"\n");
-        assert!(crate::ensure_contained_allowed_hosts(dir.path(), true).unwrap());
-        assert!(
-            !ReviewerConfigFiles::from_worktree(dir.path()).has_allowed_hosts(),
-            "dry run writes nothing"
+        let read = |dir: &Path| ReviewerConfigFiles {
+            settings: std::fs::read_to_string(dir.join(SETTINGS_PATH)).ok(),
+            config: std::fs::read_to_string(dir.join(CONFIG_PATH)).ok(),
+        };
+        let dir = repo(
+            "[forge]\nprovider = \"github\"\n",
+            Some(r#"{"hooks": {}, "permissions": {"allow": ["Bash(make *)"]}}"#),
         );
+        assert!(crate::ensure_contained_allowed_hosts(dir.path(), true).unwrap());
+        assert!(crate::ensure_reviewer_allow_entries(dir.path(), true).unwrap());
+        assert!(!read(dir.path()).complete(), "dry run writes nothing");
         assert!(crate::ensure_contained_allowed_hosts(dir.path(), false).unwrap());
+        assert!(crate::ensure_reviewer_allow_entries(dir.path(), false).unwrap());
+        let after = read(dir.path());
+        assert!(after.complete());
+        assert!(after.settings.unwrap().contains("Bash(make *)"));
         assert_eq!(
             crate::session::contained_allowed_hosts(dir.path()),
             aida_core::scaffolding::template_contained_allowed_hosts()
         );
+        assert!(!crate::ensure_contained_allowed_hosts(dir.path(), false).unwrap());
+        assert!(!crate::ensure_reviewer_allow_entries(dir.path(), false).unwrap());
 
-        let own = repo(HOSTS);
+        let own = repo("[contained]\nallowed_hosts = []\n", None);
         assert!(!crate::ensure_contained_allowed_hosts(own.path(), false).unwrap());
-        assert_eq!(
-            crate::session::contained_allowed_hosts(own.path()),
-            vec!["api.github.com".to_string()]
-        );
+        assert_eq!(read(own.path()).allowed_hosts(), AllowedHosts::Empty);
     }
 }

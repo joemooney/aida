@@ -56,6 +56,13 @@ channels = ["home"]
 sites = 1
 
 # review watch readiness: the project's required CI check names (TASK-1945).
+# BUG-014: the reviewer launch preflight reads the PR branch's committed copy
+# (`git show <ref>:.aida/config.toml`) for `[contained] allowed_hosts`
+# presence only; it selects nothing. trace:BUG-b6b1278890774ef993d2ebc327862470-014
+[readers."aida-cli-lib/src/reviewer_preflight.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/review_watch_ready.rs"]
 channels = ["worktree"]
 sites = 1

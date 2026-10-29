@@ -36,8 +36,8 @@ pub use managed_merge::{
     slot_merge, slot_value_matches, slots_for_file, SlotChange, SlotChangeKind,
 };
 pub use settings::{
-    template_contained_allowed_hosts, template_permissions_allow, CONTAINED_CONFIG_TEMPLATE,
-    REVIEWER_ALLOW_ENTRIES,
+    is_aida_repository, scaffold_permissions_allow, template_contained_allowed_hosts,
+    AIDA_DEV_ALLOW_ENTRIES, CONTAINED_CONFIG_TEMPLATE, REVIEWER_ALLOW_ENTRIES,
 };
 
 /// Slot-level diff for ManagedMerge files. Parses both sides as JSON, walks

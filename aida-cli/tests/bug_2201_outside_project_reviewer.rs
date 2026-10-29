@@ -124,8 +124,10 @@ fn spec_id(stdout: &str, prefix: &str) -> String {
 
 /// A project outside the aida repo with a hooks-only `.claude/settings.json`,
 /// a spec, a queued `Review PR-7` story, and a local `origin` carrying
-/// `refs/pull/7/head`.
-fn fixture() -> Fixture {
+/// `refs/pull/7/head`. When `reviewer_config` is set, the PR head also
+/// commits the reviewer allow entries and the contained egress allowlist the
+/// BUG-014 launch preflight requires; without it the launch is refused.
+fn fixture_with(reviewer_config: bool) -> Fixture {
     use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
@@ -182,6 +184,19 @@ fn fixture() -> Fixture {
         "[agents]\nenabled = [\"claude\"]\n",
     )
     .unwrap();
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    // `aida init` already commits the contained egress allowlist; the PR
+    // head also needs the reviewer allow entries.
+    if reviewer_config {
+        std::fs::write(
+            fx.repo.join(".claude/settings.json"),
+            "{\"hooks\":{\"PreToolUse\":[]},\"permissions\":{\"allow\":[\"Bash(aida)\",\"Bash(aida *)\"]}}\n",
+        )
+        .unwrap();
+        git(&fx.repo, &["add", ".claude/settings.json"]);
+        git(&fx.repo, &["commit", "-q", "-m", "reviewer config"]);
+        fx.sha = git(&fx.repo, &["rev-parse", "HEAD"]);
+    }
     fx.advisor = support::ensure_seat(&fx.home, &fx.repo, "advisor", &["implementer", "reviewer"])
         .expect("initialized");
     let add = as_advisor(&fx)
@@ -234,6 +249,10 @@ fn fixture() -> Fixture {
     let settle = aida(&fx).args(["queue", "list", "--all"]).output().unwrap();
     assert!(settle.status.success(), "{settle:?}");
     fx
+}
+
+fn fixture() -> Fixture {
+    fixture_with(true)
 }
 
 fn contained_review(fx: &Fixture, force_deny: bool) -> Output {
@@ -342,5 +361,34 @@ fn denied_reviewer_error_names_the_denied_calls() {
     assert!(
         log.contains("Read `/primary/.aida-store/objects/x.yaml`"),
         "{log}"
+    );
+}
+
+/// BUG-014: a PR branch without the reviewer config is refused before any
+/// lease or worktree, naming what is missing; the vendor never runs.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+#[test]
+fn contained_reviewer_without_reviewer_config_is_refused_before_launch() {
+    let fx = fixture_with(false);
+    let out = contained_review(&fx, false);
+    let log = text(&out);
+    assert!(!out.status.success(), "{log}");
+    assert!(
+        log.contains("refusing to launch a contained reviewer for PR-7"),
+        "{log}"
+    );
+    // `aida init` now scaffolds the egress allowlist, so only the allow
+    // entries are missing from this hooks-only settings file.
+    assert!(log.contains("`Bash(aida *)`"), "{log}");
+    // The vendor preflight's `--version` probe may run; the review launch
+    // (which passes `--settings`) must not.
+    let argv = std::fs::read_to_string(fx.base.join("child-argv")).unwrap_or_default();
+    assert!(
+        !argv.contains("--settings"),
+        "the reviewer never launched: {log}"
+    );
+    assert!(
+        !fx.base.join("relay-pr-7").exists(),
+        "no review worktree: {log}"
     );
 }

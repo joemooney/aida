@@ -41,18 +41,45 @@ pub fn template_contained_allowed_hosts() -> Vec<String> {
         .collect()
 }
 
-/// `permissions.allow` from the `settings.json` template master — the same
-/// entries the AIDA repository's own settings carry.
+/// The AIDA repository's own development entries: its dev binaries and the
+/// operator's on/off aliases. Emitted only when the scaffolded repository IS
+/// AIDA ([`is_aida_repository`]) — in an adopted repo `./target/debug/aida`
+/// is an agent-writable path, so allowing it would run anything written
+/// there unprompted. trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub const AIDA_DEV_ALLOW_ENTRIES: &[&str] = &[
+    "Bash(aida-on)",
+    "Bash(aida-off)",
+    "Bash(./target/debug/aida)",
+    "Bash(./target/debug/aida *)",
+    "Bash(./target/release/aida)",
+    "Bash(./target/release/aida *)",
+];
+
+/// Whether `project_root` is the AIDA workspace itself: its root
+/// `Cargo.toml` lists an `aida-core` member whose package is `aida-core`.
 /// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-pub fn template_permissions_allow() -> Vec<String> {
-    crate::templates::EMBEDDED_TEMPLATES
-        .get("settings.json")
-        .and_then(|body| serde_json::from_str::<serde_json::Value>(body).ok())
-        .and_then(|v| v.pointer("/permissions/allow")?.as_array().cloned())
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|e| e.as_str().map(str::to_string))
-        .collect()
+pub fn is_aida_repository(project_root: &std::path::Path) -> bool {
+    let read = |path: std::path::PathBuf| -> Option<toml::Value> {
+        toml::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    };
+    let lists_member = read(project_root.join("Cargo.toml"))
+        .and_then(|v| v.get("workspace")?.get("members")?.as_array().cloned())
+        .is_some_and(|members| members.iter().any(|m| m.as_str() == Some("aida-core")));
+    lists_member
+        && read(project_root.join("aida-core").join("Cargo.toml"))
+            .and_then(|v| Some(v.get("package")?.get("name")?.as_str()? == "aida-core"))
+            .unwrap_or(false)
+}
+
+/// The `permissions.allow` entries the scaffold emits for `project_root`:
+/// the reviewer entries, plus the dev entries only in the AIDA repository.
+/// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub fn scaffold_permissions_allow(project_root: &std::path::Path) -> Vec<&'static str> {
+    let mut allow = REVIEWER_ALLOW_ENTRIES.to_vec();
+    if is_aida_repository(project_root) {
+        allow.extend_from_slice(AIDA_DEV_ALLOW_ENTRIES);
+    }
+    allow
 }
 
 impl Scaffolder {
@@ -289,7 +316,7 @@ impl Scaffolder {
         // BUG-014: without these a contained reviewer's `aida` calls are
         // denied and it exits with no verdict.
         // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
-        let allow = template_permissions_allow()
+        let allow = scaffold_permissions_allow(&self.project_root)
             .iter()
             .map(|entry| format!("      {}", json_string_literal(entry)))
             .collect::<Vec<_>>()
@@ -338,22 +365,54 @@ mod tests {
             .unwrap_or_else(|e| panic!("settings.json output is not valid JSON: {}\n\n{}", e, s))
     }
 
-    /// BUG-014: the scaffold carries the template master's allow entries,
-    /// which include the reviewer's, and the contained template parses.
+    /// BUG-014: an adopted repo gets only the reviewer entries; the AIDA
+    /// repository also gets its dev entries, and together they are exactly
+    /// the template master's list. The contained template parses.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
     #[test]
-    fn bug_014_scaffold_carries_template_allow_and_contained_hosts() {
-        let v = parse_json(&build(ScaffoldConfig::default()));
-        let allow: Vec<&str> = v["permissions"]["allow"]
+    fn bug_014_scaffold_allows_only_reviewer_entries_outside_aida() {
+        let allow = |json: &str| -> Vec<String> {
+            parse_json(json)["permissions"]["allow"]
+                .as_array()
+                .expect("permissions.allow emitted")
+                .iter()
+                .filter_map(|e| e.as_str().map(str::to_string))
+                .collect()
+        };
+        assert_eq!(
+            allow(&build(ScaffoldConfig::default())),
+            REVIEWER_ALLOW_ENTRIES
+        );
+
+        let aida = tempfile::tempdir().unwrap();
+        std::fs::write(
+            aida.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"aida-core\"]\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(aida.path().join("aida-core")).unwrap();
+        std::fs::write(
+            aida.path().join("aida-core/Cargo.toml"),
+            "[package]\nname = \"aida-core\"\n",
+        )
+        .unwrap();
+        let dev = allow(
+            &Scaffolder::new(aida.path().to_path_buf(), ScaffoldConfig::default())
+                .generate_claude_settings_json(),
+        );
+        let template: Vec<String> = serde_json::from_str::<serde_json::Value>(
+            crate::templates::EMBEDDED_TEMPLATES
+                .get("settings.json")
+                .unwrap(),
+        )
+        .unwrap()["permissions"]["allow"]
             .as_array()
-            .expect("permissions.allow emitted")
+            .unwrap()
             .iter()
-            .filter_map(|e| e.as_str())
+            .filter_map(|e| e.as_str().map(str::to_string))
             .collect();
-        assert_eq!(allow, template_permissions_allow());
-        for entry in REVIEWER_ALLOW_ENTRIES {
-            assert!(allow.contains(entry), "{entry} missing from {allow:?}");
-        }
+        assert_eq!(dev, template);
+
         let hosts = template_contained_allowed_hosts();
         assert!(hosts.iter().any(|h| h == "api.github.com"), "{hosts:?}");
         assert!(hosts.iter().any(|h| h == "api.anthropic.com"), "{hosts:?}");

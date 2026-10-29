@@ -605,6 +605,8 @@ pub(crate) fn handle_scaffold_command(
             if seeded > 0 {
                 println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
             }
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+            crate::ensure_contained_reviewer_config(&root)?;
             // TASK-1233: refresh is an existing-project setup pass too. Keep
             // it read-only unless an interactive operator accepts the same
             // contained-posture repair offered by `aida init`.
@@ -643,7 +645,7 @@ pub(crate) fn handle_scaffold_command(
             // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
             if crate::ensure_contained_allowed_hosts(&root, *dry_run)? {
                 println!(
-                    "  {} {} [contained] allowed_hosts in .aida/config.toml",
+                    "  {} {} [contained] allowed_hosts to the project config",
                     "+".green(),
                     if *dry_run { "would add" } else { "added" }
                 );

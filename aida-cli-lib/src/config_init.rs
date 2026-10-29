@@ -671,6 +671,59 @@ pub(crate) fn ensure_contained_allowed_hosts(
     Ok(true)
 }
 
+/// Add the reviewer allow entries to an existing `.claude/settings.json`,
+/// keeping every entry and key the project already has (the same additive
+/// slot merge `aida scaffold upgrade` applies). A missing, symlinked, or
+/// unparseable file is left alone: the scaffold owns creating it, and a
+/// symlink points at a master this must not write through. Returns whether
+/// entries were added (or, on `dry_run`, would be).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub(crate) fn ensure_reviewer_allow_entries(
+    project_root: &std::path::Path,
+    dry_run: bool,
+) -> anyhow::Result<bool> {
+    let path = project_root.join(".claude").join("settings.json");
+    if std::fs::symlink_metadata(&path).map_or(true, |m| !m.is_file()) {
+        return Ok(false);
+    }
+    let Ok(user) = serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path)?)
+    else {
+        return Ok(false);
+    };
+    let aida = serde_json::json!({
+        "permissions": {"allow": aida_core::scaffolding::scaffold_permissions_allow(project_root)}
+    });
+    let (merged, changes) =
+        aida_core::scaffolding::slot_merge(&user, &aida, &["/permissions/allow"]);
+    if changes.is_empty() {
+        return Ok(false);
+    }
+    if !dry_run {
+        std::fs::write(&path, serde_json::to_string_pretty(&merged)? + "\n")?;
+    }
+    Ok(true)
+}
+
+/// The refresh paths' reviewer-config step: both `ensure_*` helpers, with a
+/// line per change. trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub(crate) fn ensure_contained_reviewer_config(
+    project_root: &std::path::Path,
+) -> anyhow::Result<()> {
+    if ensure_contained_allowed_hosts(project_root, false)? {
+        println!(
+            "  {} added [contained] allowed_hosts to the project config",
+            "+".green()
+        );
+    }
+    if ensure_reviewer_allow_entries(project_root, false)? {
+        println!(
+            "  {} added the reviewer allow entries to .claude/settings.json",
+            "+".green()
+        );
+    }
+    Ok(())
+}
+
 /// The `[worktree]` scaffold section. AIDA-created worktrees are expected to be
 /// ready for builds, so recursive submodule initialization is default-on with a
 /// visible opt-out.
