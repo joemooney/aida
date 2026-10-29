@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:37.514912096Z
-modified_at: 2026-10-29T06:42:22.778733785Z
+modified_at: 2026-10-29T06:42:26.596656676Z
 req_type: Task
 tags:
 - zen-ready
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-07-22T02:25:54.046048427Z
   modified_at: 2026-07-22T02:25:54.046048427Z
   session_id: d7909c1f-6457-4cf7-b374-59df8ef5424b
+- id: 01a18665-46a4-70d0-9ff9-0d08d7bf49a3
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject: empty stub; re-file with evidence.'
+  created_at: 2026-10-29T06:42:26.596656676Z
+  modified_at: 2026-10-29T06:42:26.596656676Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18665-2f14-7c81-b4e9-b5f159608570
   author: joe
