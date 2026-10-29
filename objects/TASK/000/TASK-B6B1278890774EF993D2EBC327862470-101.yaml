@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T12:04:29.744420943Z
-modified_at: 2026-10-29T18:08:06.576650057Z
+modified_at: 2026-10-29T18:32:31.098544020Z
 req_type: Task
 tags:
 - docs:impacted
@@ -61,6 +61,12 @@ comments:
     TASK-B6B1278890774EF993D2EBC327862470-101. Open for advisor review and shipping; no merge or auto-merge requested by this implementer.
   created_at: 2026-10-29T18:04:21.643477700Z
   modified_at: 2026-10-29T18:04:21.643477700Z
+- id: 01a188ef-5e7a-75b2-a3c2-3c43ed427aed
+  author: joe
+  content: 'Advisor rule-once (2026-10-29): PR-3094 review''s two cosmetic findings (aria-label on role-less hero div; 8px mono captions) ACCEPTED as-is, cosmetic, non-blocking for a showcase page; no follow-up PR.'
+  created_at: 2026-10-29T18:32:31.098544020Z
+  modified_at: 2026-10-29T18:32:31.098544020Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
 history:
 - id: 01a188c9-71c8-7d00-b7d2-4faaaa6020f5
   author: joe
