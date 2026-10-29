@@ -13,6 +13,10 @@ tags:
 - docs:impacted
 - documentation-review
 - showcase
+relationships:
+- rel_type: Parent
+  target_id: 01a188d8-d1c2-77d3-a30b-220a95022694
+  created_at: 2026-10-29T18:08:09.887375313Z
 comments:
 - id: 01a188bd-a250-71e3-b886-8fb844368b1e
   author: joe
@@ -20,6 +24,11 @@ comments:
     Operator clarification, 2026-10-29: add a top-level Metrics tab and cover the full What is AIDA overview. The product includes people as developers, reviewers and collaborators. Its entry path is continuing normal conversational work with an agent while AIDA preserves requirements, decisions and implementation intent in the background. The lasting outputs are the working system and a durable intent record for maintenance, enhancement and collaboration. Full factory/autonomous delivery is optional, not a prerequisite for adoption. Implementing this clarification in docs/what-is-aida.md, its standalone HTML, the homepage/onboarding/workflow/brief and a new Metrics page. Reporting capabilities and coverage gaps stay explicit; historical numbers are dated, not displayed as live metrics.
   created_at: 2026-10-29T17:38:11.664286944Z
   modified_at: 2026-10-29T17:38:11.664286944Z
+history:
+- id: 01a188d9-2570-7371-9263-443539ea244d
+  author: joe
+  timestamp: 2026-10-29T18:08:14.704468708Z
+  changes: []
 filed_at:
   code_sha: b74166aba21293380f163f21e5df6137a79dbcce
   branch: main
