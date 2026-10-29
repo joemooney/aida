@@ -86140,5 +86140,35 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6730
+- id: 01a188d9-3fab-7092-9412-2a687d70b92d
+  target_id: 01a188d9-3821-7c82-855c-e9bf18c6e7bc
+  author: aida
+  node_id: '1'
+  lamport: 6731
+  timestamp: 2026-10-29T18:08:21.419810393Z
+  kind: !Create
+    title: Explain configurable agents protocols and delivery policy
+    description: |
+      Slice 2 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Give a team lead an end-to-end configuration story: a maintained configuration guide, a dedicated site page, and a useful visual/explorer backed by existing settings.
+
+      ## Acceptance
+      - [ ] Cover per-spec execution modes, supported vendor/launch defaults, editable type/lane META protocols, workflow policy, project footprints and reporting preferences.
+      - [ ] Explain feature-specific project/clone/machine trust scopes without inventing one universal precedence order. Mode selection or an alias must not be described as granting authority.
+      - [ ] Protocol precedence and pickup behavior match source; vendor containment/model/effort support is not implied to be identical.
+      - [ ] Site navigation, an original accessible graphic and any configuration explorer agree with the guide. Illustrative policy requests are explicitly not live configuration writes.
+
+      ## Layers / boundaries
+      Verified configuration references -> maintained narrative guide -> navigable product page and illustrative interaction. No configuration implementation, runtime defaults, trust policy or template behavior is changed.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6731
 node_id: '1'
