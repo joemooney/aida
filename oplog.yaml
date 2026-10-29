@@ -87117,5 +87117,39 @@ operations:
     req_type: Faq
     status: Completed
     priority: Medium
-clock: 6798
+- id: 01a1895f-b878-78b1-a073-6f6219a9e649
+  target_id: 01a1895f-b4b5-7893-8ed2-d6bdf609c9a3
+  author: aida
+  node_id: '1'
+  lamport: 6799
+  timestamp: 2026-10-29T20:35:14.168471165Z
+  kind: !Create
+    title: Where does scaffold status get the templates it compares against?
+    description: |
+      **Scaffolding compares against the templates shipped in the running AIDA binary; it does not automatically download the latest templates from a forge.**
+
+      ## Why
+
+      Pulling the AIDA source checkout and upgrading a consuming project's scaffolding are separate operations. Templates in `aida-core/templates/` are compiled into AIDA. An older executable can therefore report scaffolding as current relative to its own older templates.
+
+      ## How
+
+      ```bash
+      aida --path
+      aida --version
+      ```
+
+      After updating the primary AIDA source checkout, run `aida dev build` there to build, smoke-test, and promote the updated binary. Then run `aida scaffold status` and `aida scaffold upgrade --dry-run` in the consuming project.
+
+      ## Caveat
+
+      Check for deliberately configured template customizations when the generated output differs from stock templates. "Current" describes the selected binary/template source, not the latest remote commit.
+
+      ## See also
+
+      FAQ-25 and FAQ-27.
+    req_type: Faq
+    status: Completed
+    priority: Medium
+clock: 6799
 node_id: '1'
