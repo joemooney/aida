@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:19.667769905Z
-modified_at: 2026-10-29T06:40:24.247039315Z
+modified_at: 2026-10-29T06:40:31.312484624Z
 req_type: Bug
 tags:
 - aida:queue
@@ -36,6 +36,12 @@ comments:
     Close as completed/verified by TASK-270.
   created_at: 2026-10-02T06:35:57.721229815Z
   modified_at: 2026-10-02T06:35:57.721229815Z
+- id: 01a18663-8450-7bd1-91c4-d51e5b32641c
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as superseded by TASK-270. Reason: Triage verified covered by TASK-270/TASK-322.'
+  created_at: 2026-10-29T06:40:31.312484624Z
+  modified_at: 2026-10-29T06:40:31.312484624Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18663-5138-79c0-b6a1-4ca13a463323
   author: joe
