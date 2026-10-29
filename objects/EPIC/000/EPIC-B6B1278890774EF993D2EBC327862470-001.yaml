@@ -1,0 +1,82 @@
+id: 01a18655-d0c9-7490-ba48-bfdd8b1a30bc
+spec_id: EPIC-b6b1278890774ef993d2ebc327862470-001
+title: Separate sharing policy from recoverable distributed ID allocation
+description: |
+  ## Purpose and status
+  Capture Joe's 2026-10-28 proposal for advisor review and decomposition: readable identifiers, safe reserved-block allocation, independent remote sharing policies, and recoverable authority replacement. This is a draft epic, not implementation approval.
+
+  ## Existing behavior and constraints
+  BUG-2017 prevents uncoordinated global allocation in partitioned stores. Ordinary WORK clones currently issue opaque UUID node-local IDs; global allocation/promotion requires explicitly authoritative HOME enrollment, even when local block records exist. STORY-1742 separately governs restricted transport. Preserve those safety properties until replacement policies are designed and approved. The historical motivation for HOME/WORK must be checked against those specs; the conversation's interpretation is not established history.
+
+  A requirement has its own permanent UUID, separate from its textual spec_id and from the allocating clone's node UUID. Current new node bindings use UUID v4. Existing spec_id fields are strings, not a dedicated Rust SpecId type.
+
+  ## Proposed behavior
+  ### Independent sharing and allocation policies
+  Replace overloaded HOME/WORK terminology with explicit policies. Configure sharing per remote: receive specs and publish specs independently. A workplace clone may receive public upstream specs, forbid publication to that upstream, and share with internal or private backup remotes. A backup remote does not automatically become an allocation authority.
+
+  Configure allocation domain, reservation source, permission to consume a confirmed block, and permission to grant/subdivide blocks separately. A copied ledger, a friendly alias, or a Git remote name grants no authority. Private specs remain within their sharing domain and are not automatically promoted into a public namespace. Define unambiguous lookup when different domains both contain BUG-999.
+
+  ### Reserved blocks first, node-local fallback
+  A clone with a valid exclusive reservation and trustworthy persistent counters should allocate short IDs directly, e.g. BUG-1100 from its confirmed BUG 1100–1199 block. Consuming a grant is distinct from obtaining or issuing grants. When no valid block exists or it is exhausted, use TYPE-<node UUID>-NNN so offline work continues.
+
+  Each allocation domain has one logical root authority, explicitly identified independently of Git upstream topology. Authorities can delegate disjoint subranges of ranges they own, but cannot also consume or re-delegate those same ranges. Intermediate authorities may subdivide only their own reservations.
+
+  Both aida pull and aida push are proposed opportunities to replenish low blocks using one common grant operation. Only confirmed grants are spendable. Ordinary Git ref transfer does not execute an upstream allocator: select and review a concrete atomic protocol, such as a service or compare-and-swap ledger updates, covering concurrency, retries and outages.
+
+  ### Promotion and friendly aliases
+  Where sharing and allocation policy permit, promote fallback IDs after pull and before push, publishing canonical short IDs with the new specs. Preserve requirement UUIDs and original node-local lookup aliases. Restricted/ref-only transport must not implicitly acquire lifecycle side effects.
+
+  Add a friendly node mapping such as HOME -> b6b1278890774ef993d2ebc327862470, displaying/accepting SPIKE-HOME-001 while retaining canonical underlying identity. HOME here is only a label. Favor unique domain/project-shared mappings with no silent reassignment. Full IDs continue working. Resolve inputs fallibly using alias context; an infallible Into conversion is insufficient. Dedicated Rust input/canonical/display types are a design option, not a mandated repository-wide refactor. Decide JSON/MCP contracts explicitly.
+
+  ### Authority replacement and conflict repair
+  Existing confirmed reservations remain usable during an authority outage. Unconfirmed new grants are not spendable. Electing a replacement from uncertain state explicitly accepts potential conflicts if the old authority returns; do not claim strict global short-ID uniqueness through that scenario.
+
+  On reunion, detect overlapping grants, stop spending disputed ranges, withdraw conflicting short IDs and restore permanent node-local forms in store references and affected current code traces. Reconcile records by requirement UUID, preserving distinct requirements. Ambiguous withdrawn IDs must not silently select one requirement or be recycled. Preserve grant provenance and an auditable recovery record; do not automatically rewrite Git history. Automatically edit only references with established attribution; legacy ambiguous traces need human resolution.
+
+  Define replacement authorization, authority lineage, handling of unused overlapping blocks, and stopping further grants by a superseded authority. A stale snapshot or the highest existing requirement ID cannot prove that all outstanding reservations are known.
+
+  ### Cheap permanent trace identity
+  Add a compact same-line annotation to existing traces, for example:
+  // trace:BUG-999 | uid:6f28c0a39d21472d9ef47130e5a8b602 | ai:codex
+
+  uid is the requirement UUID, not the node UUID. It remains stable when readable IDs change and enables mechanical repair. Detect ID/UUID mismatches. Preserve legacy trace compatibility and define parser/tool coverage and migration. Retain full 128-bit identity; syntax and encoding remain advisor decisions.
+
+  Consider UUID v7 for NEW requirement UUIDs for approximate creation-time ordering. Preserve existing v4 identities. Mixed versions remain valid but do not sort globally by date; machine clock skew prevents strict chronology. This candidate is independent of annotation support and does not require changing node UUIDs.
+
+  ## Primary callers and acceptance outcomes
+  Primary callers: interactive and non-TTY/headless CLI, plus MCP clients. Sync may also run from hooks. Behavior must hold across linked worktrees, restart, concurrent writers, offline clones and multi-remote setups. Only deliberately authorized authority-management operations may require a human TTY.
+
+  - Proven exclusive grants can be consumed without general root authority, with persistent counters preventing double spending across processes/worktrees/restarts.
+  - Remote publication policy prevents private data leakage through normal sync, promotion/replenishment and reachable Git history, including applicable comments, relationships, attachments and coordination data. Filtering current YAML alone is insufficient; choose separate stores or an explicit export/import boundary.
+  - Hierarchical/concurrent grant tests prove disjoint ownership and no parent/child double use. No confirmed grant yields node-local fallback.
+  - Authorized promotion occurs after pull and before push without changing restricted transport behavior.
+  - Alias input/output round-trips consistently; canonical forms remain accepted; conflicting mappings refuse and machine contracts are explicit.
+  - Failover/reunion fixtures cover stale snapshots, outstanding offline reservations, overlapping blocks, conflicting short IDs, annotated traces and ambiguous legacy references. Recovery preserves records and edits only attributable references.
+  - Existing identities and trace consumers remain compatible through documented migration.
+
+  ## Advisor decisions and suggested slices
+  Review BUG-2017 and STORY-1742 before proposing policy changes. Decompose into domain/sharing/capability model and migration; atomic reservation protocol and block consumption; sync replenishment/promotion; human aliases; stable trace annotations and optional v7 creation; authority replacement/reconciliation.
+
+  Open decisions: block sizes/low-water marks, durable ownership evidence, remote/domain binding, private-history isolation, alias governance, lookup qualification, trace syntax, API contracts, failover authorization and recovery workflow. Privacy and failover warrant explicit design review before implementation.
+
+  ## Intake evaluation
+  This scope is intentionally an epic. Goals and observable outcomes are captured; protocol and migration completeness depends on advisor decisions above. Do not approve as one implementation task. Filing authorizes no enrollment, remote-policy change, automatic trace rewrite, or weakening of current safety gates.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T06:25:33.385598367Z
+modified_at: 2026-10-29T06:25:33.385598367Z
+req_type: Epic
+tags:
+- advisor-review
+- id-allocation
+- privacy
+- traceability
+filed_at:
+  code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a470735bfed
+  vendor: codex
