@@ -84520,5 +84520,13 @@ operations:
   timestamp: 2026-10-29T06:41:13.904085589Z
   kind: !SetStatus
     status: Rejected
-clock: 6599
+- id: 01a18664-5889-7783-b33a-c469ac11bb6a
+  target_id: 019ed3f5-94a5-7f12-807a-ffbd0ce83393
+  author: aida
+  node_id: '1'
+  lamport: 6600
+  timestamp: 2026-10-29T06:41:25.641994931Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6600
 node_id: '1'
