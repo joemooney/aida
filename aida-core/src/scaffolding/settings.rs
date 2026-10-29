@@ -14,6 +14,47 @@ use super::*;
 const STATUSLINE_COMMAND: &str =
     "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"";
 
+/// The `[contained]` config section `aida init` scaffolds, from its template
+/// master. trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub const CONTAINED_CONFIG_TEMPLATE: &str = include_str!("../../templates/contained.toml");
+
+/// The allow entries a contained reviewer needs to run `aida` at all. Every
+/// other reviewer command (`git log`, `gh pr diff`) runs under the contained
+/// sandbox; `aida` is what the permission layer denied in an adopted repo.
+/// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub const REVIEWER_ALLOW_ENTRIES: &[&str] = &["Bash(aida)", "Bash(aida *)"];
+
+/// `[contained] allowed_hosts` from the template master.
+/// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub fn template_contained_allowed_hosts() -> Vec<String> {
+    toml::from_str::<toml::Value>(CONTAINED_CONFIG_TEMPLATE)
+        .ok()
+        .and_then(|v| {
+            v.get("contained")?
+                .get("allowed_hosts")?
+                .as_array()
+                .cloned()
+        })
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|h| h.as_str().map(str::to_string))
+        .collect()
+}
+
+/// `permissions.allow` from the `settings.json` template master — the same
+/// entries the AIDA repository's own settings carry.
+/// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub fn template_permissions_allow() -> Vec<String> {
+    crate::templates::EMBEDDED_TEMPLATES
+        .get("settings.json")
+        .and_then(|body| serde_json::from_str::<serde_json::Value>(body).ok())
+        .and_then(|v| v.pointer("/permissions/allow")?.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|e| e.as_str().map(str::to_string))
+        .collect()
+}
+
 impl Scaffolder {
     /// Generate Claude Code settings.json content. Hook commands use
     /// `$CLAUDE_PROJECT_DIR/...` so they resolve regardless of CWD when
@@ -245,7 +286,21 @@ impl Scaffolder {
             format!("  \"hooks\": {{\n{}\n  }}", hooks.join(",\n"))
         };
 
-        format!("{{\n{},\n{}\n}}", hooks_block, status_line_block)
+        // BUG-014: without these a contained reviewer's `aida` calls are
+        // denied and it exits with no verdict.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+        let allow = template_permissions_allow()
+            .iter()
+            .map(|entry| format!("      {}", json_string_literal(entry)))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        let permissions_block =
+            format!("  \"permissions\": {{\n    \"allow\": [\n{allow}\n    ]\n  }}");
+
+        format!(
+            "{{\n{},\n{},\n{}\n}}",
+            hooks_block, status_line_block, permissions_block
+        )
     }
 }
 
@@ -281,6 +336,27 @@ mod tests {
     fn parse_json(s: &str) -> serde_json::Value {
         serde_json::from_str(s)
             .unwrap_or_else(|e| panic!("settings.json output is not valid JSON: {}\n\n{}", e, s))
+    }
+
+    /// BUG-014: the scaffold carries the template master's allow entries,
+    /// which include the reviewer's, and the contained template parses.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    #[test]
+    fn bug_014_scaffold_carries_template_allow_and_contained_hosts() {
+        let v = parse_json(&build(ScaffoldConfig::default()));
+        let allow: Vec<&str> = v["permissions"]["allow"]
+            .as_array()
+            .expect("permissions.allow emitted")
+            .iter()
+            .filter_map(|e| e.as_str())
+            .collect();
+        assert_eq!(allow, template_permissions_allow());
+        for entry in REVIEWER_ALLOW_ENTRIES {
+            assert!(allow.contains(entry), "{entry} missing from {allow:?}");
+        }
+        let hosts = template_contained_allowed_hosts();
+        assert!(hosts.iter().any(|h| h == "api.github.com"), "{hosts:?}");
+        assert!(hosts.iter().any(|h| h == "api.anthropic.com"), "{hosts:?}");
     }
 
     /// Default config produces both hooks AND statusLine.

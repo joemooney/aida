@@ -31,7 +31,14 @@ pub use aida_md::{
     merge_memory_reflex_block, AgentsMdBlockMerge, MemoryReflexBlockMerge,
 };
 pub use claude_md::{claude_md_has_import, insert_claude_md_import, CLAUDE_AIDA_IMPORT};
-pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub use managed_merge::{
+    slot_merge, slot_value_matches, slots_for_file, SlotChange, SlotChangeKind,
+};
+pub use settings::{
+    template_contained_allowed_hosts, template_permissions_allow, CONTAINED_CONFIG_TEMPLATE,
+    REVIEWER_ALLOW_ENTRIES,
+};
 
 /// Slot-level diff for ManagedMerge files. Parses both sides as JSON, walks
 /// the AIDA-owned slot list, and reports only slots whose parsed sub-value
@@ -64,7 +71,11 @@ fn diff_slice_managed_merge(expected: &str, actual: &str, slots: &[&str]) -> Dif
     // Find which slots actually differ (by parsed value, not text).
     let mut differing: Vec<&str> = Vec::new();
     for slot in slots {
-        if expected_v.pointer(slot) != actual_v.pointer(slot) {
+        if !managed_merge::slot_value_matches(
+            slot,
+            actual_v.pointer(slot),
+            expected_v.pointer(slot),
+        ) {
             differing.push(slot);
         }
     }
