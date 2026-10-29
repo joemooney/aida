@@ -529,7 +529,9 @@ fn run_claim(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    let args = <ClaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let mut args = <ClaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    crate::spec_arg::canonicalize(&mut args.spec);
     let ClaimArgs { spec, worktree } = &args;
     return handle_claim(spec, worktree.as_deref());
 }
@@ -563,7 +565,9 @@ fn run_unclaim(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    let args = <UnclaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let mut args = <UnclaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    crate::spec_arg::canonicalize(&mut args.spec);
     let UnclaimArgs { spec } = &args;
     return handle_unclaim(spec);
 }

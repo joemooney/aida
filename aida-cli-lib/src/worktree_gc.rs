@@ -3695,7 +3695,13 @@ fn run_worktree(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    let args = <WorktreeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let mut args = <WorktreeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    if let WorktreeCommand::Add { target, .. } | WorktreeCommand::Enter { target, .. } =
+        &mut args.inner
+    {
+        crate::spec_arg::canonicalize(target);
+    }
     let wt_cmd = &args.inner;
     return handle_worktree_command(wt_cmd);
 }

@@ -531,3 +531,108 @@ fn node_alias_label_refused_when_a_stored_id_uses_it() {
     ]);
     assert!(message.trim().ends_with("(BUG-JM-001)"), "{message}");
 }
+
+/// Spec-scope commands resolve an alias argument to the canonical id and act
+/// on it: queue entries, claim leases, worktree branches and the `aida add`
+/// confirmation. An unknown label stays a not-found that names it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+#[test]
+fn node_alias_spec_scope_commands_act_on_the_canonical_id() {
+    let f = Fixture::new();
+    f.ok(&["add", "--title", "aliased story", "--type", "story"]);
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .unwrap()
+        .node_id
+        .to_ascii_uppercase();
+    let canonical = format!("STORY-{node}-001");
+    f.ok(&["node", "alias", "set", "HOME"]);
+
+    // `aida add` confirms with the display form; --canonical-ids keeps it raw.
+    let added = f.ok(&["add", "--title", "second story", "--type", "story"]);
+    assert!(added.starts_with("Added: STORY-HOME-002 - "), "{added}");
+    let raw = f.ok(&[
+        "--canonical-ids",
+        "add",
+        "--title",
+        "third",
+        "--type",
+        "story",
+    ]);
+    assert!(
+        raw.starts_with(&format!("Added: STORY-{node}-003 - ")),
+        "{raw}"
+    );
+
+    // Queue: the alias and canonical forms name one entry, stored canonical.
+    let queued = |f: &Fixture| -> Vec<String> {
+        let list: serde_json::Value =
+            serde_json::from_str(&f.ok(&["queue", "list", "--json", "--all"])).unwrap();
+        list.as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|e| e["spec_id"].as_str().map(str::to_ascii_uppercase))
+            .collect()
+    };
+    f.ok(&["queue", "add", "story-home-001", "--for", "advisor"]);
+    assert_eq!(queued(&f), vec![canonical.clone()]);
+    f.ok(&["queue", "add", &canonical, "--for", "advisor"]);
+    assert_eq!(queued(&f), vec![canonical.clone()]);
+    // The scope matcher resolves the alias (a draft may still be refused as
+    // un-pickable, but never as an unknown id).
+    let plan = f.aida(&[
+        "queue",
+        "work",
+        "STORY-HOME-001",
+        "--role",
+        "implementer",
+        "--dry-run",
+    ]);
+    let plan =
+        String::from_utf8_lossy(&plan.stderr).into_owned() + &String::from_utf8_lossy(&plan.stdout);
+    assert!(!plan.contains("doesn't match any queued entry"), "{plan}");
+
+    // Claim: the lease scope is the canonical id; unclaim by alias releases it.
+    let claimed = f.ok(&["claim", "STORY-HOME-001"]);
+    assert!(
+        claimed.to_ascii_uppercase().contains(&canonical),
+        "{claimed}"
+    );
+    let leases_dir = f.root.join(".aida/sessions");
+    let scopes = || -> Vec<String> {
+        fs::read_dir(&leases_dir)
+            .map(|d| {
+                d.flatten()
+                    .filter_map(|e| fs::read_to_string(e.path()).ok())
+                    .filter_map(|t| {
+                        t.lines()
+                            .find_map(|l| l.strip_prefix("scope = "))
+                            .map(|s| s.trim_matches('"').to_ascii_uppercase())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    assert_eq!(scopes(), vec![canonical.clone()]);
+    f.ok(&["unclaim", "story-home-001"]);
+    assert!(scopes().is_empty(), "{:?}", scopes());
+
+    // Unknown label: still a not-found that names what was typed.
+    for args in [
+        &["claim", "STORY-NOPE-001"][..],
+        &[
+            "queue",
+            "work",
+            "STORY-NOPE-001",
+            "--role",
+            "implementer",
+            "--dry-run",
+        ][..],
+    ] {
+        let out = f.aida(args);
+        assert!(!out.status.success(), "{args:?} must refuse");
+        let err = String::from_utf8_lossy(&out.stderr).into_owned()
+            + &String::from_utf8_lossy(&out.stdout);
+        assert!(err.contains("STORY-NOPE-001"), "{args:?}: {err}");
+    }
+}

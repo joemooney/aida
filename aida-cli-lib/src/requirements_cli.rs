@@ -3382,9 +3382,12 @@ fn run_add(
 
                     {
                         let last = &added;
+                        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
                         println!(
                             "Added: {} - {}",
-                            last.spec_id.as_deref().unwrap_or("?"),
+                            aida_core::node_alias::display_spec_id(
+                                last.spec_id.as_deref().unwrap_or("?")
+                            ),
                             last.title
                         );
                         // TASK-647 (ADR-3): note that a requested approved+ status was
@@ -3530,8 +3533,12 @@ fn run_add(
                             backend.update_requirement(&parent_mut)?;
                             println!(
                                 "  Linked: {} → parent of {}",
-                                parent_req.spec_id.as_deref().unwrap_or("?"),
-                                last.spec_id.as_deref().unwrap_or("?")
+                                aida_core::node_alias::display_spec_id(
+                                    parent_req.spec_id.as_deref().unwrap_or("?")
+                                ),
+                                aida_core::node_alias::display_spec_id(
+                                    last.spec_id.as_deref().unwrap_or("?")
+                                )
                             );
                         }
 
@@ -3547,7 +3554,8 @@ fn run_add(
                                     Ok(Some(pdisp)) => {
                                         println!(
                                             "  Linked: {} → parent of {} (from parent: tag)",
-                                            pdisp, sid
+                                            aida_core::node_alias::display_spec_id(&pdisp),
+                                            aida_core::node_alias::display_spec_id(sid)
                                         )
                                     }
                                     Ok(None) => {}
@@ -8844,7 +8852,8 @@ fn run_edit(
                                     Ok(Some(pdisp)) => {
                                         println!(
                                             "  Linked: {} → parent of {} (from parent: tag)",
-                                            pdisp, sid
+                                            aida_core::node_alias::display_spec_id(&pdisp),
+                                            aida_core::node_alias::display_spec_id(sid)
                                         )
                                     }
                                     Ok(None) => {}

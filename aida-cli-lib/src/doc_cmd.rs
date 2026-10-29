@@ -135,9 +135,10 @@ pub(crate) fn handle_doc_command(
                 // trace:STORY-1674 | ai:codex — the backend persisted the stamped row.
             }
 
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
             println!(
                 "Added: {} - {}",
-                written.spec_id.as_deref().unwrap_or("?"),
+                aida_core::node_alias::display_spec_id(written.spec_id.as_deref().unwrap_or("?")),
                 written.title
             );
             if !about_targets.is_empty() {

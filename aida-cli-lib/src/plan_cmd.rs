@@ -760,10 +760,16 @@ fn plan_fan_out(
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the requirement store"))?;
 
-    let selector = match (batch, epic, specs.is_empty()) {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    let specs: Vec<String> = specs
+        .iter()
+        .map(|s| crate::spec_arg::canonical(s))
+        .collect();
+    let epic = epic.map(crate::spec_arg::canonical);
+    let selector = match (batch, epic.as_deref(), specs.is_empty()) {
         (Some(b), None, true) => FanOutSelector::Batch(b),
         (None, Some(e), true) => FanOutSelector::Epic(e),
-        (None, None, false) => FanOutSelector::Specs(specs),
+        (None, None, false) => FanOutSelector::Specs(&specs),
         (None, None, true) => {
             anyhow::bail!("specify a selection: SPEC-IDs, --batch NAME, or --epic ID")
         }

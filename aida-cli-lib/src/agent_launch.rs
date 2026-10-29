@@ -5903,12 +5903,38 @@ pub(crate) struct SessionArgs {
     pub inner: crate::cli::SessionCommand,
 }
 
+/// Rewrite the spec-ID arguments of a session verb from a friendly node alias
+/// to the canonical id, so the lease scope and branch name stay canonical.
+/// `session end <id>` also takes a session id or branch name; neither is
+/// alias-shaped, so both pass through unchanged.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+fn canonicalize_session_spec_args(cmd: &mut SessionCommand) {
+    use crate::cli::SessionManifestCommand;
+    use crate::spec_arg::{canonicalize, canonicalize_csv, canonicalize_opt};
+    match cmd {
+        SessionCommand::End { id, spec, .. } => {
+            canonicalize_opt(id);
+            canonicalize_opt(spec);
+        }
+        SessionCommand::Start { owns, .. } => canonicalize(owns),
+        SessionCommand::HarnessWorktreeRegister { scope, .. } => canonicalize_opt(scope),
+        SessionCommand::Manifest { cmd } => match cmd {
+            SessionManifestCommand::Write { items, .. } => canonicalize_csv(items),
+            SessionManifestCommand::MarkStarted { spec_id, .. }
+            | SessionManifestCommand::MarkCompleted { spec_id, .. } => canonicalize(spec_id),
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
 // trace:FR-1-043 | ai:claude
 fn run_session(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    let args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let mut args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    canonicalize_session_spec_args(&mut args.inner);
     let session_cmd = &args.inner;
     return handle_session_command(session_cmd);
 }
