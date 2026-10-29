@@ -85235,5 +85235,21 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 6665
+- id: 01a1877e-1893-7952-98ad-295e1758994a
+  target_id: 01a1877d-83f8-7ae2-9c4a-8ed64bac557f
+  author: aida
+  node_id: '1'
+  lamport: 6666
+  timestamp: 2026-10-29T11:49:10.419056576Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a1877e-1965-76d0-bf3a-5651ba1c2ec9
+  target_id: 01a1877d-83f8-7ae2-9c4a-8ed64bac557f
+  author: aida
+  node_id: '1'
+  lamport: 6667
+  timestamp: 2026-10-29T11:49:10.629168735Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 6667
 node_id: '1'
