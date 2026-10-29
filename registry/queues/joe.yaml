@@ -5,3 +5,11 @@
   note: Promoted from finding TASK-1-205 via `aida findings promote`
   added_at: 2026-10-06T02:04:51.350629190Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 01a18552-2ade-7962-a467-419ac6b629c8
+  position: 5000
+  added_by: joe
+  note: auto-queued by `aida pr` ((no-sess); covers 0 specs
+  added_at: 2026-10-29T01:42:08.313861677Z
+  for_role: reviewer
+  added_by_machine: imac
