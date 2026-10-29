@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:32:49.802440083Z
-modified_at: 2026-10-29T22:17:28.617420030Z
+modified_at: 2026-10-29T22:35:08.775057923Z
 req_type: Bug
 comments:
 - id: 01a189bc-9300-7c81-81ce-82c887cb81c5
@@ -42,6 +42,12 @@ comments:
   modified_at: 2026-10-29T22:16:39.424511710Z
   session_id: 01a189a86be7
   harness_version: 2.1.312 (Claude Code)
+- id: 01a189cd-8067-7cd3-be3b-24df69d19fd7
+  author: joe
+  content: 'Advisor rule-once 2026-10-29 (operator: do not over-invest; this machine is shared with builds): PR-3105 ships the real fix (~700 ms store-wide scan removed from read lookups). Reviewer findings ACCEPTED, no follow-up specs: (1) stale-snapshot-under-write-lock not-found is a narrow race, and the read still falls back correctly on the next call; (2) SQLite WAL checkpoint-on-close cost and (3) show --format json git-log cost are accepted as machine-load costs. The show budget is being loosened deliberately (see the operator ruling); further latency work only if the loosened guard trips.'
+  created_at: 2026-10-29T22:35:08.775057923Z
+  modified_at: 2026-10-29T22:35:08.775057923Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
 history:
 - id: 01a1898a-223d-7a12-aa81-a0c628ae69be
   author: joe
