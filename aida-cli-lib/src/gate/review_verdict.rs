@@ -1923,6 +1923,18 @@ pub(crate) fn verdict_file_refused(path: &Path) -> bool {
     read_verdict_body(path).is_err() && std::fs::symlink_metadata(path).is_ok()
 }
 
+/// TASK-2137: for a refused verdict file (see [`verdict_file_refused`]),
+/// whether it was modified at or after `since`. `None` when the file is not
+/// refused. A refused file with no readable mtime (a link) counts as stale.
+// trace:TASK-2137 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn refused_verdict_file_fresh_since(
+    path: &Path,
+    since: std::time::SystemTime,
+) -> Option<bool> {
+    verdict_file_refused(path)
+        .then(|| verdict_file_modified(path).is_some_and(|mtime| mtime >= since))
+}
+
 /// TASK-1460: the archived round of the verdict file at `path` for commit
 /// `sha` (never the current file itself), newest recording first when more
 /// than one archive file matches a short sha.
