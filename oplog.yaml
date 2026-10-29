@@ -86780,5 +86780,31 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6776
+- id: 01a1890c-a7e4-70d0-9bf7-0c170914e6b1
+  target_id: 01a1890c-a0a4-7510-824e-7d901d24e111
+  author: aida
+  node_id: '1'
+  lamport: 6777
+  timestamp: 2026-10-29T19:04:30.436404253Z
+  kind: !Create
+    title: 'Review PR-3100: [AI:codex] docs(metrics): add evidence based Metrics navigation and reporting (TASK-B6B1278890774EF993D2EBC327862470-110)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a18901`) for branch `task-b6b1278890774ef993d2ebc327862470-110-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3100>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-110-work` → `task-b6b1278890774ef993d2ebc327862470-109-work`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-110
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3100` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6777
 node_id: '1'
