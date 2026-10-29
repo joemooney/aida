@@ -2,12 +2,12 @@ id: 01a18620-1ddb-7e12-8e5a-7e1969c7e0c7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-095
 title: Publish the What is AIDA overview under docs/
 description: Operator-requested overview doc (md + self-contained html), spec IDs anonymized
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T05:26:54.171557407Z
-modified_at: 2026-10-29T05:46:07.697489597Z
+modified_at: 2026-10-29T05:51:36.570674110Z
 req_type: Task
 relationships:
 - rel_type:
@@ -40,6 +40,20 @@ history:
   timestamp: 2026-10-29T05:46:08.550158943Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a18636-bc76-72c0-81fb-8e25b3a77984
+  author: aida-auto-bump
+  timestamp: 2026-10-29T05:51:36.566503699Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a18636-bc7a-74e1-a6bb-95b570353d36
+  timestamp: 2026-10-29T05:51:36.570667448Z
+  agent: aida
+  commit_sha: 68d5196a2033c821e3ab3197005add141bbc5819
+  summary: 'Docs-only: docs/what-is-aida.md + self-contained html (CSP default-src none, no external refs, anchors resolve, full text parity with md) + README link; no internal spec IDs in prose; CI run 40824715783 green at head; merge-hold-gate red only due to operator hold label'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
@@ -49,11 +63,7 @@ filed_at:
   aida_build_sha: a470735bfed
   vendor: claude
   session: 950d0de9-9ab4-4d83-b6d0-e9d580715520
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Docs-only PR: md + self-contained HTML are present, match each other, and carry no external resources; spec IDs are mostly anonymized. Two factual or cross-reference errors in prose and one partial-anonymization inconsistency need a quick rework.'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-095 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T05:35:50.935484065Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T05:51:36.566499732Z
+  completion_sha: 68d5196a2033c821e3ab3197005add141bbc5819
