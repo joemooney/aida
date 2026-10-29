@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:57:23.950805313Z
-modified_at: 2026-10-29T13:49:28.697571825Z
+modified_at: 2026-10-29T14:31:17.959804969Z
 req_type: Story
 relationships:
 - rel_type:
@@ -41,6 +41,12 @@ comments:
   content: 'Round 3 review (advisor, 2026-10-29 06:55) for PR-3091 at 37d5a96. Judge ONLY against the advisor''s ''PR-3091 ROUND 2 ruling'' Steps 1-4 at the end of BUG-HOME-015''s description, and record each unmet step as its own finding with exact files: (1) a test that walks Cli::command() and fails on any spec-ID arg lacking spec_arg::spec_id (a hand-listed per-arg test does NOT satisfy this); (2) every arg that walk would flag uses the parser, explicitly including commit --spec and ship [SPEC]; (3) canonicalize_queue_spec_args, canonicalize_session_spec_args, the claim.rs canonicalization and the handler-side canonical() calls are deleted; (4) end-to-end tests that review record by alias keys the verdict canonically and commit --spec by alias writes the canonical trailer. Those findings will drive the final rework.'
   created_at: 2026-10-29T13:49:28.697571825Z
   modified_at: 2026-10-29T13:49:28.697571825Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18812-86c7-7a61-9075-3a5c069a9a4a
+  author: joe
+  content: 'Round 4 review (advisor, 2026-10-29 07:36) for PR-3091 at e0c37845eb4f37586b22d637e9f59be4eddd6bdc. Check ONLY the round-2 ruling Steps 1-4 in BUG-HOME-015''s description (Cli::command() walk ratchet; parser on every flagged spec arg incl. ship [SPEC] and commit --spec; post-parse helpers deleted; e2e: review record by alias keys canonically, commit --spec by alias writes canonical trailer) plus CI at this head. Each unmet step = its own finding; minors rule-once.'
+  created_at: 2026-10-29T14:31:17.959804969Z
+  modified_at: 2026-10-29T14:31:17.959804969Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18785-c540-7ef0-b847-a91c07a5f203
