@@ -90,7 +90,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T22:37:50.032504672Z
+modified_at: 2026-10-29T23:55:03.231469005Z
 req_type: Story
 tags:
 - architecture
@@ -648,6 +648,36 @@ comments:
     - None; the 15:45 ruling settles scope.
   created_at: 2026-10-29T22:37:50.032504672Z
   modified_at: 2026-10-29T22:37:50.032504672Z
+  session_id: 01a189cf0e41
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18a16-a8bf-7373-9c6b-f6d6a06b0c0b
+  author: joe
+  content: |-
+    ## Round-1 rework (ec65dd9): all ruling items in one push
+
+    | # | Finding | Fix | Test |
+    |---|---|---|---|
+    | 6 (blocking) | Launcher collect refused as "contained" from an uncontained shell | Cause: `aida queue work` resolves containment from the `[agents] contained` knob, and `apply_queue_work_contained_env` `set_var`'d `AIDA_CONTAINED=1` on the launcher's **own** process for its reviewer child. The fix is `session::set_contained_env_for_children`, which keeps the inherited value. The ledger checks `session::process_contained()`, which answers for this process. A contained parent stays contained. | `the_launchers_export_for_its_reviewer_does_not_contain_its_own_collection` |
+    | 2 | Uncontained reviewer's ledger-only verdict was not collected | `collect_standalone_verdict` also takes the change's newest ledger record written after the launch, under the same PR, head and child-grant checks. The caller then arms the refusal hold from it. | `an_uncontained_reviewers_ledger_only_refusal_is_collected_and_holds_the_pr` |
+    | 3 | `arm_collected_refusal` untested | Split into `place_collected_refusal` (the ledger hold) and the label sync | `a_contained_reviewers_refusal_is_armed_by_the_launcher_and_its_hand_off_removed` |
+    | 4 | Templates and docs read `PR-N.json` | take-prompt, aida-review step 6a, workflow-patterns, git-sync-and-review, machinery-glossary (plus the generated `docs/cli/12-glossary.md`) and autonomous-drain now point at `aida review verdict PR-N --json` or the ledger | check-templates, glossary gate |
+    | 5a | A failed mandate release still posted "released" | Returns before the note, comment, event and unlabel | — (needs a forge mock; the code path is a plain early return) |
+    | 5b | Malformed `AIDA_CONTAINED` read as uncontained | `process_contained` treats a malformed value as contained (BUG-2146) | same test as item 6 |
+    | 5c | Hand-off file left in the seat clone | Worktree candidates are removed after a successful collection | the item 3 test |
+    | 5d | `verdicts_for_sha` ordered by key | Ordered by ledger (`at`, `seq`) | `verdicts_at_a_commit_keep_the_newest_record_per_key_in_ledger_order` |
+    | 1 | Red cli-0, lib-0, lib-1 | **cli:** `bug_2187` asserts the ledger, and passes locally. `bug_2201` needed no change: it failed on item 6 and passes now. **lib:** `bug_1452`, `story_1417`, `story_1655` (isolated), `task_1458` x2 (isolated) and the `orchestrator_leases` forge-seam fixtures were retargeted to ledger state, with no assertion removed. `story_1687 auto_release_*` raced sibling tests that set `AIDA_CONTAINED`; in the test binary, `process_contained` now reads the env only under the env lock. | see below |
+
+    **Local runs (this seat cannot read CI logs):**
+    - Full `aida-cli-lib --lib` run, then targeted reruns: `gate::ledger bug_2149 review_verdict merge_hold rework_hold_release containment pr_merge_gate drain_gate bug_1452 story_1417 forge_seam` gave 417 passed and 21 failed.
+    - Of those 21, 17 are isolated (BUG-1642) tests. Re-run in child mode with a writable TMPDIR, plus the 3 retargeted isolated tests, 19 of 20 pass.
+    - `story_1655 solo_self_approval…` fails here only because its handshake anchor resolves to the real primary checkout, which is read-only in this seat. CI runs it.
+    - The other 4 of the 21 are `contained launch refused … not a seat clone the host recorded`, caused by this seat clone's own `.git` layout: compete, session spawn, bug_2166, bug_2171.
+    - `cargo test -p aida-cli --test bug_2187_reviewer_record_identity --test bug_2201_outside_project_reviewer` gave 4 passed.
+    - `make check-ci-fast` passed.
+
+    Accepted per ruling: item 7 (label-sync growth) and item 10 (hold-lock path during rollout).
+  created_at: 2026-10-29T23:55:03.231469005Z
+  modified_at: 2026-10-29T23:55:03.231469005Z
   session_id: 01a189cf0e41
   harness_version: 2.1.312 (Claude Code)
 history:
