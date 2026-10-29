@@ -3,12 +3,12 @@ spec_id: TASK-916
 agreed_id: TASK-916
 title: '**Harvest (the actual study).** Run real opt-in drains over weeks; periodically `aida field-study violations`. The deliverable is the *data*, not just the sensor'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:07.259989719Z
-modified_at: 2026-10-29T06:39:33.053874296Z
+modified_at: 2026-10-29T06:39:36.808221914Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,3 +22,11 @@ history:
   timestamp: 2026-10-29T06:39:33.886553127Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18662-af68-7201-ab90-4359d27f9380
+  author: joe
+  timestamp: 2026-10-29T06:39:36.808220233Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
