@@ -87157,5 +87157,13 @@ operations:
       ## SLICE 2 continuation (advisor, 2026-10-29 13:40)
       Continue from branch head e87ae08 and the "Slice 2 handoff" comment (the newest comment). Do not restart or re-sketch. Retarget each of the ~119 failing tests in `.slice2-failing.txt` to assert the equivalent LEDGER state (event appended, projection value, hold open or released). Never delete a test to make it pass, and never weaken an assertion. Fail-closed expectations (TASK-1801, bug_775) stay byte-identical. Run tests with `env -u AIDA_CONTAINED`. Delete `.slice2-failing.txt`, run make check-ci-fast, then open the PR with `(Refs <this spec>)`. The handoff's 4 "findings to file" are RULED here, so do not file them: (a) by-spec ledger for unindexed specs is accepted for slice 2; slice 3 binds it to the change. (b) backfill-shas legacy rewrite is accepted; it is the operator's exemption. (c) list_holds full scan is accepted (perf, revisit if measured). (d) collected untyped legacy markers keeping legacy=true is a defect: fix it in this slice.
       If context runs low again, push the WIP and update the handoff comment before stopping.
-clock: 6798
+- id: 01a18960-d3e6-7013-af72-06f548685f6e
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6799
+  timestamp: 2026-10-29T20:36:26.726793030Z
+  kind: !SetStatus
+    status: Approved
+clock: 6799
 node_id: '1'

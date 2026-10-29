@@ -69,12 +69,12 @@ description: |
   ## SLICE 2 continuation (advisor, 2026-10-29 13:40)
   Continue from branch head e87ae08 and the "Slice 2 handoff" comment (the newest comment). Do not restart or re-sketch. Retarget each of the ~119 failing tests in `.slice2-failing.txt` to assert the equivalent LEDGER state (event appended, projection value, hold open or released). Never delete a test to make it pass, and never weaken an assertion. Fail-closed expectations (TASK-1801, bug_775) stay byte-identical. Run tests with `env -u AIDA_CONTAINED`. Delete `.slice2-failing.txt`, run make check-ci-fast, then open the PR with `(Refs <this spec>)`. The handoff's 4 "findings to file" are RULED here, so do not file them: (a) by-spec ledger for unindexed specs is accepted for slice 2; slice 3 binds it to the change. (b) backfill-shas legacy rewrite is accepted; it is the operator's exemption. (c) list_holds full scan is accepted (perf, revisit if measured). (d) collected untyped legacy markers keeping legacy=true is a defect: fix it in this slice.
   If context runs low again, push the WIP and update the handoff comment before stopping.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T20:36:21.683439410Z
+modified_at: 2026-10-29T20:36:25.724443856Z
 req_type: Story
 tags:
 - architecture
@@ -855,6 +855,14 @@ history:
   timestamp: 2026-10-29T20:36:22.535178415Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
   changes: []
+- id: 01a18960-cffc-7260-aca8-127087078753
+  author: joe
+  timestamp: 2026-10-29T20:36:25.724441985Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
