@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:48:30.918246081Z
-modified_at: 2026-10-29T06:37:02.364900196Z
+modified_at: 2026-10-29T06:37:10.338147680Z
 req_type: Story
 tags:
 - advisor
@@ -22,6 +22,13 @@ relationships:
   target_id: 01a0ba9e-f4f2-79b2-8a58-7df3a9234667
   created_at: 2026-10-29T06:37:02.364896386Z
   created_by: joe
+comments:
+- id: 01a18660-7342-7f01-bb19-b39df08d6f7f
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as superseded by STORY-1353. Reason: Superseded by STORY-1353 (product seat has dispatch authority).'
+  created_at: 2026-10-29T06:37:10.338147680Z
+  modified_at: 2026-10-29T06:37:10.338147680Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18660-395a-7f10-9bcc-90af8824fbbb
   author: joe
