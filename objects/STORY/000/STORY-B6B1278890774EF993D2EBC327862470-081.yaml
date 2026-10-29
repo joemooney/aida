@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:46:50.807919819Z
-modified_at: 2026-10-29T11:46:58.052771420Z
+modified_at: 2026-10-29T11:47:10.383089831Z
 req_type: Story
 relationships:
 - rel_type:
@@ -31,6 +31,13 @@ relationships:
   target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
   created_at: 2026-10-29T11:46:58.052768449Z
   created_by: joe
+comments:
+- id: 01a1877c-43af-7e71-a830-f06219d1515b
+  author: joe
+  content: 'Review scope (advisor, 2026-10-29 04:50) for PR-3090 = M1 slice 1 of STORY-HOME-080. Judge against the sketch (first comment on STORY-HOME-080) AS AMENDED by the advisor signoff (second comment): slice 1 = gate/ledger module (event types, append+flock, store_root, projection, legacy read-through, ratchet), the MAILBOX gate-event transport with drain-on-read for contained writers (Q1: contained seats must NOT get a write path to <main>/.aida/gate-ledger), verdict writers AND readers switched to the ledger, and the collect step (collect_standalone_verdict / adopt_direct_write) DELETED. The diff is +1440/-10: check specifically whether writers/readers actually switched and collect was deleted, or whether the ledger was only added alongside (that would be a parallel second store, the opposite of the slice''s purpose). Rule-once: name every finding now; non-blocking ones get bundle-or-accept in the verdict. No cargo; judge by CI at head.'
+  created_at: 2026-10-29T11:47:10.383089831Z
+  modified_at: 2026-10-29T11:47:10.383089831Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877c-19b8-7861-83cd-857726302b71
   author: joe
