@@ -21,12 +21,12 @@ description: |
 
   ## Non-goals
   Signatures or key enrollment; defending against a malicious writer to an upstream ref (trust = push permission on that ref); reclaiming unused ranges from dead nodes (later).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:47:20.232117001Z
-modified_at: 2026-10-29T22:49:43.906396757Z
+modified_at: 2026-10-29T22:52:52.294547242Z
 req_type: Story
 tags:
 - architecture
@@ -110,6 +110,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a189dd-bac6-7283-b37f-818adc0df96c
+  author: aida-session-start
+  timestamp: 2026-10-29T22:52:52.294544602Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
