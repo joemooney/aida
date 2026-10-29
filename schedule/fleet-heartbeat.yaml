@@ -1,8 +1,8 @@
 job: fleet-heartbeat
-last_run: 2026-10-29T07:18:48.412998038Z
+last_run: 2026-10-29T08:18:10.374893919Z
 last_by:
   seat: advisor
   session: 59349e57-271d-4b9e-b662-8585b949736a
   vendor: claude
 result: done
-note: '0 running; slice-1 lane (STORY-…-078) active in contained seat, committed 3cd5d3b 00:13; 0 open PRs; 4 blocked relays all >5d old on completed specs (residue); acted: closed 47, approved+dispatched slice 1; waits on human: none; next: ship slice-1 PR'
+note: '1 lane (slice-1 rework, 21 files touched, active 01:05); 1 open PR #3089 changes-requested round 1, rework in flight; relays: 4 stale residue on completed specs; human-waits: none; next: delta re-review + ship'
