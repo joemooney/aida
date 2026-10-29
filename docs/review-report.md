@@ -113,3 +113,9 @@ The eight main/brief pages were checked in Chromium at 390, 768 and 1440 pixels 
 Contrast findings were corrected and the main/brief pages rechecked with axe-core WCAG A/AA and WCAG 2.1 AA rules: no automated violations were detected. This is a scoped automated check, not a claim of full accessibility certification. Desktop and mobile pages were also visually inspected.
 
 All 104 integrated reference pages were also opened at mobile width. One long-heading overflow in the repository guide was corrected and rechecked. The generated product-library routes point to the integrated pages rather than requiring a GitHub detour.
+
+## Human-inclusive intent framing and Metrics tab — 2026-10-29
+
+Added Metrics to shared navigation and footer, with reporting availability, coverage limits, derived/proposed measures and source references. The overview and its standalone HTML now lead with people and agents building together and keeping both the implementation and durable intent. Onboarding starts with normal conversational coding and configured background capture; full delivery orchestration is optional. The homepage, workflow, start page and executive brief carry that framing. A coverage map links the overview’s principal topics into the product site.
+
+Corrected stale effort-estimate prose against requirements_cli.rs (filing), queue_cmd_args.rs (pickup) and effort_calibration.rs. Dated repository metric examples remain explicitly historical. Updated a stale autonomy link exposed by the full generated-site anchor check.

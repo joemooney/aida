@@ -385,49 +385,72 @@ td code { font-size: 0.84em; }
 <header class="masthead">
   <div class="masthead-inner">
     <h1>What is AIDA?</h1>
-    <p class="lead-callout">AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.</p>
+    <p class="lead-callout">AIDA keeps a durable record of intent alongside the system people and agents build together, and adds a governed software factory with selectable autonomy when the work needs it.</p>
     <p class="dateline"><time datetime="2026-10">October 2026</time></p>
   </div>
 </header>
 <div class="layout">
 <nav class="toc" aria-label="Table of contents">
   <h2 class="toc-title">Contents</h2>
-  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</a><ol><li><a href="#four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</a></li><li><a href="#where-a-dark-factory-fits">Where a dark factory fits</a></li></ol></li><li><a href="#configurable-by-design">Configurable by design</a></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
+  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#onboarding-keep-working-the-way-you-already-work">Onboarding: keep working the way you already work</a></li><li><a href="#a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</a><ol><li><a href="#four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</a></li><li><a href="#where-a-dark-factory-fits">Where a dark factory fits</a></li></ol></li><li><a href="#configurable-by-design">Configurable by design</a></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
 </nav>
 <main id="content">
 <section class="intro" aria-label="Introduction">
-<p>AIDA is a governed software factory with selectable autonomy: a coordination and enforcement layer for a software team made of AI agents, with explicit choices about where people stay involved.</p>
-<p>AI coding agents can now write real code. On their own, though, several agents on one codebase tend to lose track of what has been decided, collide on the same files, review their own work, and leave no record of why a change was made. AIDA's aim is to give them a shared record, defined roles, independent review, and limits that a human sets, so their combined output can be checked and trusted.</p>
-
+<p>AIDA helps people and coding agents build a system while preserving a durable record of its intent: what it should do, why decisions were made, and how that intent connects to the implementation.</p>
+<p>You keep working with your conversational, agentic coding assistant as you already do—discussing an idea, implementing a feature, reviewing a change or fixing a bug. With AIDA's guidance and tools enabled, the agent maintains requirements, decisions and code-to-intent links in the background as that work progresses. People remain authors, developers, reviewers and collaborators; their work and decisions stay connected to the implementation.</p>
+<p>The result is <strong>both the system you developed and a project-owned record of why it works that way</strong>. That record helps you maintain and enhance the system, resume after a break, and work with other people and agents without starting the explanation over.</p>
 </section>
-<section class="major" id="sec-in-short" aria-labelledby="in-short">
-<h2 id="in-short"><a class="anchor" href="#in-short" aria-label="Link to this section">#</a>In short</h2>
+<section class="major" id="sec-in-short" aria-labelledby="in-short"><h2 id="in-short">In short</h2>
 <p><strong>What it is.</strong> A governed software factory operated primarily by agents through the <code>aida</code> CLI, with typed MCP tools available through <code>aida mcp-serve</code>. People describe outcomes, resolve decisions and inspect results through their AIDA-aware agent. Operators can also use the CLI directly for setup, inspection and troubleshooting. Requirements, decisions, comments, mail and lease records live in git on an orphan <code>aida-store</code> branch. Operational records such as review verdicts, merge holds, dispatch requests, handoff notes and standing orders live in local, git-ignored files under <code>.aida/</code>, and mandates live under <code>~/.aida/</code>. AIDA controls how AI agents pick up work, review each other, and merge.</p>
 <p><strong>Who it is for.</strong></p>
 <ul>
-<li>A developer who runs several AI coding agents (Claude Code, Codex CLI, Antigravity, or anything with a shell) on one codebase at the same time.</li>
+<li>A person developing with a conversational coding agent who wants the intent behind the system to survive beyond a chat session.</li>
+<li>People maintaining, enhancing or joining an existing system who need to understand its requirements and design decisions.</li>
+<li>Teams of people and agents collaborating across sessions, tools and handoffs.</li>
 <li>Anyone who wants agents to work for hours without supervision while keeping control of what gets merged.</li>
-<li>Teams that need to answer, later, &quot;why does this code exist, who approved it, and on what evidence?&quot;</li>
+<li>Teams that need to answer, later, "why does this code exist, who approved it, and on what evidence?"</li>
 </ul>
 <p><strong>What it does, in plain terms:</strong></p>
 <ul>
 <li><strong>One shared source of truth.</strong> Requirements, decisions, bugs and design rulings are stored as versioned spec objects. Agents are told to read them before acting (through the project's instructions and skills), and <code>// trace:&lt;SPEC-ID&gt;</code> comments link code back to the spec that justified it.</li>
-<li><strong>Separation of duties.</strong> AIDA refuses an approval recorded by a session it identifies as the change's author, and if it cannot establish who the author is, it refuses. The one exception is an opt-in, audited &quot;solo human&quot; mode, in which a human verified at a terminal may approve their own work. The review is recorded against written acceptance criteria. Changes to the gate code itself (<code>aida-cli-lib/src/gate/</code>) and to <code>.aida/config.toml</code> are on a protected list that a mandate cannot ship, so they need a human merge.</li>
+<li><strong>Separation of duties.</strong> AIDA refuses an approval recorded by a session it identifies as the change's author, and if it cannot establish who the author is, it refuses. The one exception is an opt-in, audited "solo human" mode, in which a human verified at a terminal may approve their own work. The review is recorded against written acceptance criteria. Changes to the gate code itself (<code>aida-cli-lib/src/gate/</code>) and to <code>.aida/config.toml</code> are on a protected list that a mandate cannot ship, so they need a human merge.</li>
 <li><strong>Roles.</strong> An advisor plans and rules on designs, implementers build, reviewers check, and an integrator lands the work. Seat grants and gate checks enforce the key authorities: who may record a review, ship, clear a hold, or start a mandate.</li>
 <li><strong>Delegated autonomy with limits.</strong> A human at a terminal can start a time-boxed mandate (8 hours by default, at most 24) that lets the advisor seat ship held PRs and queue dispatch work while the human is away. Work outside the mandate's scope waits for the human, and specs marked operator-only are never covered.</li>
-<li><strong>A recorded trail.</strong> Review verdicts are recorded against exact commits. Mandate-driven actions, dispatch requests and their results, and spec status history are also recorded, so most &quot;who decided this, on what evidence?&quot; questions have a written answer.</li>
+<li><strong>A recorded trail.</strong> Review verdicts are recorded against exact commits. Mandate-driven actions, dispatch requests and their results, and spec status history are also recorded, so most "who decided this, on what evidence?" questions have a written answer.</li>
 </ul>
 <p><strong>Why it matters.</strong> The bottleneck in AI-assisted software is shifting from writing code to trust and coordination. AIDA is built so that a team, from a single developer up to a larger group, can supervise many agents working in parallel without losing control of quality or accountability. Multi-human use is still being hardened: today everything runs under one Unix user, and AIDA treats a same-user process that forges its files as outside its threat model, so separating one human from another is not yet a security boundary.</p>
-
-<section class="sub callout callout-sentence" aria-labelledby="in-one-sentence">
 <h3 id="in-one-sentence">In one sentence</h3>
-<p><strong>AIDA is an operating system for AI engineering teams: it decides what agents may do, remembers what they did, and proves what they shipped.</strong></p>
+<p><strong>AIDA keeps a durable record of intent alongside the system people and agents build together, and adds a governed software factory with selectable autonomy when the work needs it.</strong></p>
 <p>AIDA also acts as an operating system for AI engineering teams: it grants authority, keeps shared state, and stops parallel workers from trampling each other. The coding agents write the code; AIDA coordinates and checks their work.</p>
-<p>In plain terms: AIDA gives a team of AI coding agents shared memory, defined roles, independent review and human-set limits, so that what they ship can be checked the way you would check a well-run engineering team's work.</p>
+<p>In plain terms: keep working conversationally with your coding agent. AIDA helps it preserve the requirements and decisions behind the work, so both you and the next collaborator can understand and extend the result. Shared memory, configurable roles, independent review and human-set limits support deeper delegation when needed.</p>
 <p>AIDA is alpha software and supports Linux only (README; internal spec).</p>
-
-
-</section>
+<hr />
+<h2 id="onboarding-keep-working-the-way-you-already-work">Onboarding: keep working the way you already work</h2>
+<p>After the one-time project/agent setup, continue the conversation with your coding agent. You do not need to become a requirements clerk or learn <code>aida add</code> before requesting a feature. The agent uses AIDA's CLI or MCP tools while you discuss and implement the system.</p>
+<p>For example: “Let's add login throttling. Keep the behavior consistent with our earlier decisions.” The agent can consult the recorded intent, surface an unresolved choice and preserve the resulting requirement or decision as the implementation develops. You can write code yourself, pair with the agent, or delegate more of the work; AIDA's record supports all three.</p>
+<p>This is structured capture through the configured agent workflow, not a promise that every utterance or unobserved action is automatically recorded. The useful outcome is a maintained record of requirements, decisions, alternatives and links to code—not a duplicate chat transcript.</p>
+<h3 id="two-lasting-outcomes">Two lasting outcomes</h3>
+<table>
+<thead>
+<tr class="header">
+<th>What you keep</th>
+<th>What it enables</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>The working system: code, tests and integrated changes</td>
+<td>The behavior and capability you set out to develop.</td>
+</tr>
+<tr class="even">
+<td>The durable intent record: requirements, rationale, decisions and implementation links</td>
+<td>Maintenance, impact assessment, enhancement and collaboration after the original conversation ends.</td>
+</tr>
+</tbody>
+</table>
+<p>Ask “why was this done?”, “what would this change affect?” or “what does the next collaborator need to know?” The record gives people and agents shared context to investigate those questions, rather than requiring them to reconstruct every decision from code.</p>
+<p>The <a href="positioning/memory-lane.md">memory lane</a> supports this quieter entry path before adopting queues, autonomous delivery or a full agent team. Those are additional capabilities, not the price of keeping intent.</p>
+<hr />
 </section>
 <section class="major" id="sec-a-governed-software-factory-with-selectable-autonomy" aria-labelledby="a-governed-software-factory-with-selectable-autonomy">
 <h2 id="a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</h2>
@@ -575,18 +598,17 @@ td code { font-size: 0.84em; }
 
 
 </section>
-<section class="major" id="sec-what-aida-can-measure-and-support-for-engineering-management" aria-labelledby="what-aida-can-measure-and-support-for-engineering-management">
-<h2 id="what-aida-can-measure-and-support-for-engineering-management"><a class="anchor" href="#what-aida-can-measure-and-support-for-engineering-management" aria-label="Link to this section">#</a>What AIDA can measure and support for engineering management</h2>
-<p>AIDA was built to coordinate agents, not to be a metrics product. Because it sits on every pickup, review and merge, though, it already records a fair amount of management data. The status column uses three values:</p>
+<section class="major" id="sec-what-aida-can-measure-and-support-for-engineering-management" aria-labelledby="what-aida-can-measure-and-support-for-engineering-management"><h2 id="what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</h2>
+<p>AIDA records evidence about intent, implementation and supported delivery workflows. Its metrics help people inspect flow, traceability, usage and reliability. They do not require people to operate the reporting CLI themselves: an agent can run the reports and explain their coverage. The status column uses three values:</p>
 <ul>
-<li class="legend-item"><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span>: AIDA captures the data and has a command that reports it.</li>
-<li class="legend-item"><span class="pill pill-derivable"><span class="pill-icon" aria-hidden="true">&#9670;</span>DERIVABLE</span>: AIDA stores the raw data, but nothing reports it yet.</li>
-<li class="legend-item"><span class="pill pill-unsupported"><span class="pill-icon" aria-hidden="true">&#9675;</span>NOT SUPPORTED</span>: AIDA has neither the data nor the report.</li>
+<li><strong>RECORDS TODAY</strong>: AIDA captures the data and has a command that reports it.</li>
+<li><strong>DERIVABLE</strong>: AIDA stores the raw data, but nothing reports it yet.</li>
+<li><strong>NOT SUPPORTED</strong>: AIDA has neither the data nor the report.</li>
 </ul>
-<p>All figures are from this repository on 28 October 2026.</p>
-<div class="table-wrap" role="region" tabindex="0" aria-label="What AIDA can measure and support for engineering management (scrollable table)"><table>
+<p>The numerical examples below are a <strong>dated repository snapshot from 28 October 2026</strong>, not current performance promises or live dashboard values. Reporting availability is distinct from completeness of coverage. The site’s <a href="showcase/metrics.html">Metrics page</a> summarizes the capabilities without presenting that snapshot as live data.</p>
+<div class="table-wrap" role="region" tabindex="0" aria-label="Metrics and proposed extensions"><table>
 <thead>
-<tr>
+<tr class="header">
 <th scope="col">Need</th>
 <th scope="col">What AIDA provides</th>
 <th scope="col">Evidence / how</th>
@@ -594,95 +616,95 @@ td code { font-size: 0.84em; }
 </tr>
 </thead>
 <tbody>
-<tr>
+<tr class="odd">
 <td>Token usage</td>
 <td>A local, per-message token ledger built from Claude Code transcripts and Codex session logs, attributed to a spec, phase, vendor, model and review round where it can be.</td>
 <td><code>aida usage rebuild</code>, then <code>aida usage show &lt;SPEC&gt;</code>. Coverage is the weak point. A message is attributed only when AIDA launched the session and wrote a pickup or hand-off receipt. Antigravity logs are not read. In this repo the ledger was last rebuilt on 22 Sep and holds 18 records.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span> (partial coverage)</td>
+<td>RECORDS TODAY (partial coverage)</td>
 </tr>
-<tr>
+<tr class="even">
 <td>API cost</td>
-<td>An offline cost estimate computed from the token ledger and a dated rate table built into the binary. Models missing from the table are reported as unpriced, never as zero. Output is labelled &quot;not billing&quot;.</td>
+<td>An offline cost estimate computed from the token ledger and a dated rate table built into the binary. Models missing from the table are reported as unpriced, never as zero. Output is labelled "not billing".</td>
 <td><code>aida usage show &lt;SPEC&gt; --cost</code>. The table, dated 2026-09-22, prices only two older Claude models, so today's models come out unpriced until it is updated.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span> (estimate; rate table out of date)</td>
+<td>RECORDS TODAY (estimate; rate table out of date)</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Cycle time and where time goes</td>
 <td>Per-activity time (implementing, queued, awaiting approval, parked, awaiting merge) with p50 and p90 values, a work vs wait split, and the slowest items.</td>
 <td><code>aida metrics cycle-time</code>, rebuilt from the timestamped status changes on every spec plus the local drain log. Over the last week: 255 specs, 5% work, 71% wait, 23% unknown.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span></td>
+<td>RECORDS TODAY</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Autonomous-run success</td>
 <td>Success rate for unattended runs, with failure causes, and the split between autonomous and human activity.</td>
-<td><code>aida metrics agent-lift</code>, <code>aida usage drains</code>. The last 30 days show 40% success over 45 runs. The tool itself flags a gap: sessions that finished their work but were scored as failed. The &quot;human invocations&quot; figure counts every CLI call, agents' included.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span></td>
+<td><code>aida metrics agent-lift</code>, <code>aida usage drains</code>. The last 30 days show 40% success over 45 runs. The tool itself flags a gap: sessions that finished their work but were scored as failed. The "human invocations" figure counts every CLI call, agents' included.</td>
+<td>RECORDS TODAY</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Traceability</td>
 <td>The share of commits that carry a spec trailer, and the commits and files linked to each spec.</td>
 <td><code>aida metrics ai-lift</code> (77.6% of 4,085 commits), <code>aida show &lt;SPEC&gt;</code>, <code>aida criteria &lt;SPEC&gt;</code>.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span></td>
+<td>RECORDS TODAY</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Specification quality</td>
 <td>A deterministic 0–100 readiness score for each spec, an optional requirements-wording lint, and coverage of acceptance criteria by tests.</td>
 <td><code>aida spec dryrun &lt;SPEC&gt;</code>, <code>aida lint</code>, <code>aida criteria coverage</code> (the last took more than 2 minutes here). These are on-demand checks; no quality trend is stored.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span> (on demand)</td>
+<td>RECORDS TODAY (on demand)</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Rework</td>
 <td>Every review verdict, kept per commit, with its findings, plus a count of defect classes across all reviews.</td>
 <td>Files in <code>.aida/review-verdicts/</code>, <code>aida review classes</code> (top classes: untested path, contract drift, fail-open; 503 findings classified, 2,723 not). On 27–28 Oct there were 51 request-changes verdicts against 59 approvals.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span> (raw); <span class="pill pill-derivable"><span class="pill-icon" aria-hidden="true">&#9670;</span>DERIVABLE</span> as a ratio</td>
+<td>RECORDS TODAY (raw); DERIVABLE as a ratio</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Review rounds per change, rework ratio</td>
-<td>Not reported. The cycle-time report's &quot;reviewer bounce&quot; figure reads 0 of 0 here, because it does not use the verdict files.</td>
+<td>Not reported. The cycle-time report's "reviewer bounce" figure reads 0 of 0 here, because it does not use the verdict files.</td>
 <td>Computable from the per-commit verdict files and the follow-up tasks filed from review findings. What's missing is a report that joins them per spec.</td>
-<td><span class="pill pill-derivable"><span class="pill-icon" aria-hidden="true">&#9670;</span>DERIVABLE</span></td>
+<td>DERIVABLE</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Effort estimate</td>
-<td>After the fact only. The reviewer records an effort bucket (15m, 1h, 4h, 1d or 1w) from the diff they reviewed, and a complexity rating.</td>
-<td><code>implementation_effort</code> and <code>implementation_complexity</code> in verdict files (129 verdicts since June), copied to <code>.aida/effort-calibration/</code>. A planning-time <code>weight</code> field exists in the schema, but none of 300 sampled specs set it. &quot;Heft&quot; is a relationship-graph score, not an estimate.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span> (post-hoc)</td>
+<td>Effort buckets can be captured at filing (<code>aida add --effort</code>), pickup (<code>queue work --effort</code>) and review.</td>
+<td><code>requirements_cli.rs</code>, <code>queue_cmd_args.rs</code> and <code>effort_calibration.rs</code>; buckets are 15m, 1h, 4h, 1d and 1w. These are estimates, not measured equivalent human work.</td>
+<td>RECORDS TODAY (recording depends on workflow)</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Estimate vs actual</td>
 <td>Not reported.</td>
-<td>The reviewer's effort bucket could be compared with measured implementer time from the cycle-time report. A true comparison needs an estimate captured at planning time (see the proposals below).</td>
-<td><span class="pill pill-derivable"><span class="pill-icon" aria-hidden="true">&#9670;</span>DERIVABLE</span> (weak)</td>
+<td>The reviewer's effort bucket could be compared with measured implementer time from the cycle-time report. A meaningful comparison needs the recorded estimate touchpoint and measured execution coverage; do not infer missing estimates or treat agent time as human effort.</td>
+<td>DERIVABLE (weak)</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Forecast of feature duration</td>
 <td>Nothing.</td>
 <td>No forecasting model or report exists.</td>
-<td><span class="pill pill-unsupported"><span class="pill-icon" aria-hidden="true">&#9675;</span>NOT SUPPORTED</span></td>
+<td>NOT SUPPORTED</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Code quality</td>
 <td>Defect classes found in review, CI failure rate (in the cycle-time report), the doctor checks, and ratchet tests that stop banned patterns coming back.</td>
 <td><code>aida review classes</code>, <code>aida metrics cycle-time</code>, <code>aida doctor check &lt;category&gt;</code>. No code-coverage or complexity metrics were found.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span> (review-based); coverage <span class="pill pill-unsupported"><span class="pill-icon" aria-hidden="true">&#9675;</span>NOT SUPPORTED</span></td>
+<td>RECORDS TODAY (review-based); coverage NOT SUPPORTED</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Lines changed per spec</td>
 <td>Not reported.</td>
 <td>Computable from git, because trailers link commits to specs.</td>
-<td><span class="pill pill-derivable"><span class="pill-icon" aria-hidden="true">&#9670;</span>DERIVABLE</span></td>
+<td>DERIVABLE</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Tool latency and reliability</td>
 <td>Duration, exit code, phase timings and build for every <code>aida</code> command, plus latency budgets that can fail a scheduled job.</td>
 <td><code>~/.aida/usage.jsonl</code>, <code>aida usage slowest|errors|timeline</code>, <code>aida doctor check performance</code>.</td>
-<td><span class="pill pill-records"><span class="pill-icon" aria-hidden="true">&#9679;</span>RECORDS TODAY</span></td>
+<td>RECORDS TODAY</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Hours saved, equivalent human effort</td>
 <td>Cannot be measured directly. There is no record of how long a human would have taken.</td>
 <td>The closest proxy is the reviewer's effort bucket summed per period, set against measured agent work time and review rounds. Treat it as indicative only: the bucket is an AI reviewer's guess, it is coarse, and it says nothing about the human time spent supervising.</td>
-<td><span class="pill pill-unsupported"><span class="pill-icon" aria-hidden="true">&#9675;</span>NOT SUPPORTED</span> (proxy only)</td>
+<td>NOT SUPPORTED (proxy only)</td>
 </tr>
 </tbody>
 </table></div>
@@ -692,13 +714,11 @@ td code { font-size: 0.84em; }
 <li><strong>Network containment:</strong> for agent sessions launched in contained mode, an opt-in <code>[contained] allowed_hosts</code> setting restricts outbound network access.</li>
 <li><strong>The coding agents are the limit:</strong> AIDA launches Claude Code, Codex CLI or Antigravity, and those CLIs need their model APIs. An air-gapped deployment therefore needs on-premises or local models that the vendor CLI itself can be pointed at. AIDA has no model layer of its own for coding agents. The only built-in local-model option is that the spec evaluator can call an OpenAI-compatible local endpoint (Ollama or vLLM, set with <code>AIDA_LOCAL_LLM_ENDPOINT</code>).</li>
 </ul>
-
-<section class="sub not-built" aria-labelledby="proposed-extensions-not-built">
-<h3 id="proposed-extensions-not-built">Proposed extensions (not built)<span class="pill pill-notbuilt"><span class="pill-icon" aria-hidden="true">&#9888;</span>Not built</span></h3>
+<h3 id="proposed-extensions-not-built">Proposed extensions (not built)</h3>
 <p>These are proposals only. None of them exists today.</p>
-<div class="table-wrap short" role="region" tabindex="0" aria-label="Proposed extensions (not built) (scrollable table)"><table>
+<div class="table-wrap" role="region" tabindex="0" aria-label="Metrics and proposed extensions"><table>
 <thead>
-<tr>
+<tr class="header">
 <th scope="col">Need</th>
 <th scope="col">Proposal</th>
 <th scope="col">Data it would build on</th>
@@ -706,23 +726,23 @@ td code { font-size: 0.84em; }
 </tr>
 </thead>
 <tbody>
-<tr>
+<tr class="odd">
 <td>Estimate vs actual</td>
-<td><strong>Estimate at planning.</strong> Record heft or story points when a spec is approved, and freeze that value at approval so later edits can't rewrite it.</td>
+<td><strong>Approval-time baseline.</strong> Existing effort touchpoints can capture estimates. A separate proposed policy would freeze a selected planning baseline at approval so later changes cannot silently rewrite the comparison.</td>
 <td>The unused <code>weight</code> field and the timestamped approval in each spec's status history.</td>
-<td><span class="pill pill-proposed"><span class="pill-icon" aria-hidden="true">&#9671;</span>PROPOSED</span></td>
+<td>PROPOSED</td>
 </tr>
-<tr>
+<tr class="even">
 <td>Per-spec history metrics</td>
 <td><strong>History backfill</strong> (illustrative name <code>aida metrics backfill</code>), dry-run by default and idempotent. For each spec it would compute: time from first commit to merge; review rounds and changes-requested count; follow-up and carried-forward tasks (rework); lines changed; and lane-hours. It would write these as separate derived records in the store and never rewrite history.</td>
 <td>Trailers in git; per-commit verdict files; status history; the lease records already on the store branch; the local usage and drain logs.</td>
-<td><span class="pill pill-proposed"><span class="pill-icon" aria-hidden="true">&#9671;</span>PROPOSED</span></td>
+<td>PROPOSED</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Tokens and cost per spec</td>
 <td>Extend the token ledger to attribute sessions to specs by matching a session's working directory and branch to the spec's lease, instead of only by launch receipts.</td>
 <td>Verified fields. Each Claude Code assistant message has <code>message.usage</code>, with <code>input_tokens</code>, <code>output_tokens</code>, <code>cache_creation_input_tokens</code> and <code>cache_read_input_tokens</code>, alongside <code>message.model</code>, <code>cwd</code>, <code>gitBranch</code>, <code>sessionId</code>, <code>isSidechain</code> and a timestamp. Codex <code>token_count</code> events carry <code>input_tokens</code>, <code>cached_input_tokens</code>, <code>cache_write_input_tokens</code>, <code>output_tokens</code>, <code>reasoning_output_tokens</code> and <code>total_tokens</code>.</td>
-<td><span class="pill pill-proposed"><span class="pill-icon" aria-hidden="true">&#9671;</span>PROPOSED</span></td>
+<td>PROPOSED</td>
 </tr>
 </tbody>
 </table></div>
@@ -734,9 +754,7 @@ td code { font-size: 0.84em; }
 <li>Subagent messages (<code>isSidechain</code>) and headless runs can live in other files and must be included without being counted twice.</li>
 <li>Transcripts are local and may be pruned, so a backfill can only cover what is still on disk.</li>
 </ul>
-
-
-</section>
+<hr />
 </section>
 <section class="major" id="sec-capabilities-and-when-to-use-each" aria-labelledby="capabilities-and-when-to-use-each">
 <h2 id="capabilities-and-when-to-use-each"><a class="anchor" href="#capabilities-and-when-to-use-each" aria-label="Link to this section">#</a>Capabilities, and when to use each</h2>

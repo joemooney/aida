@@ -359,7 +359,7 @@ trace:TASK-1201 | ai:codex
 
 For the short map across all autonomy surfaces — headless cron, live
 `/aida-solo`, `--zen`, and the `[intake]` / `[autopilot]` / risk knobs — run
-`aida autonomy` or see [`docs/aida-power-features.md`](aida-power-features.md#the-autonomy-ladder-in-one-command).
+`aida autonomy` or see [`docs/aida-power-features.md`](aida-power-features.md#select-the-human-handoff).
 
 `--no-human` is the far end of a three-mode ladder. The middle rung,
 `--zen`, exists because "is a human present" and "what does the human want

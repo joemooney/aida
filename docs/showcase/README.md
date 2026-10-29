@@ -9,6 +9,7 @@ A professional product introduction for newcomers and engineering management, ce
 - [Autonomy](autonomy.html): the four delivery modes and separate decision stop.
 - [Configure](configure.html): six configuration layers, interactive explorer and illustrative policy requests.
 - [Trust](trust.html): authority, independent review, evidence and current limits.
+- [Metrics](metrics.html): reporting capabilities, coverage, derivable measures and unsupported claims.
 - [Start](start.html): human-first adoption journey, with operator setup kept separate.
 - [Documentation](resources.html): searchable integrated reference library.
 - [Executive brief](executive-brief.html): printable meeting handout.

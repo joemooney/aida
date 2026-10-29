@@ -17,7 +17,7 @@ from urllib.parse import unquote
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 REPO = "https://github.com/joemooney/aida/blob/docs/product-site/"
-NAV_ITEMS = [("workflow.html", "The product"), ("autonomy.html", "Autonomy"), ("configure.html", "Configure"), ("trust.html", "Trust"), ("resources.html", "Docs")]
+NAV_ITEMS = [("workflow.html", "The product"), ("autonomy.html", "Autonomy"), ("configure.html", "Configure"), ("trust.html", "Trust"), ("metrics.html", "Metrics"), ("resources.html", "Docs")]
 
 
 def header(active="", prefix=""):
@@ -28,7 +28,7 @@ def header(active="", prefix=""):
 
 
 def footer(prefix=""):
-    return f'''<footer class="shell site-footer"><div><a class="brand" href="{prefix}index.html"><span class="brand-symbol" aria-hidden="true">✳</span>AIDA</a><p>People set the intent.<br>Agents operate the factory.</p></div><div><span class="mono">EXPLORE</span><a href="{prefix}workflow.html">The product</a><a href="{prefix}configure.html">Configurability</a><a href="{prefix}autonomy.html">Selectable autonomy</a></div><div><span class="mono">UNDERSTAND</span><a href="{prefix}trust.html">Trust &amp; boundaries</a><a href="{prefix}resources.html">Documentation</a><a href="{prefix}executive-brief.html">Executive brief ↗</a></div><div><span class="mono">BUILD</span><a href="{prefix}start.html">Getting started</a><a href="https://github.com/joemooney/aida" target="_blank" rel="noopener">Source repository ↗</a><span class="footer-note">Alpha · Linux only · MIT</span></div></footer>'''
+    return f'''<footer class="shell site-footer"><div><a class="brand" href="{prefix}index.html"><span class="brand-symbol" aria-hidden="true">✳</span>AIDA</a><p>People set the intent.<br>Agents operate the factory.</p></div><div><span class="mono">EXPLORE</span><a href="{prefix}workflow.html">The product</a><a href="{prefix}configure.html">Configurability</a><a href="{prefix}autonomy.html">Selectable autonomy</a></div><div><span class="mono">UNDERSTAND</span><a href="{prefix}trust.html">Trust &amp; boundaries</a><a href="{prefix}metrics.html">Metrics &amp; evidence</a><a href="{prefix}resources.html">Documentation</a><a href="{prefix}executive-brief.html">Executive brief ↗</a></div><div><span class="mono">BUILD</span><a href="{prefix}start.html">Getting started</a><a href="https://github.com/joemooney/aida" target="_blank" rel="noopener">Source repository ↗</a><span class="footer-note">Alpha · Linux only · MIT</span></div></footer>'''
 
 
 def page(title, description, body, active="", prefix="", extra=""):
@@ -136,6 +136,7 @@ def main():
       'trust.svg':svg_diagram('Autonomy and authority are separate','Human authorization and spec readiness feed execution; review and CI gate the resulting merge.',[(35,45,260,80,'Human authorization','grants / mandates / limits','orange'),(35,220,260,80,'Spec readiness','criteria / decisions / mode','light'),(365,130,260,90,'Agent execution','within the selected contract','dark'),(700,45,260,80,'Independent review','verdict at exact commit','light'),(700,220,260,80,'Merge gates','CI / holds / authority','orange')],[(295,85,363,155,True),(295,260,363,195,True),(625,155,698,85,False),(830,125,830,218,False)],height=350),
       'storage.svg':svg_diagram('A project-owned record with distinct operational layers','The canonical Git-backed spec graph is separate from rebuildable cache and local operational evidence.',[(45,65,270,90,'Code repository','source + code traces','light'),(365,65,270,90,'Git-backed spec graph','canonical project intent','orange'),(685,65,270,90,'Agent interfaces','CLI primary / MCP typed','dark'),(365,235,270,80,'Read projection','rebuildable SQLite cache','light'),(685,235,270,80,'Operational evidence','local review / dispatch state','light')],[(315,110,363,110,True),(635,110,683,110,False),(500,155,500,233,True),(820,155,820,233,True)],height=360),
     }
+    diagrams['measurement.svg']=svg_diagram('From intent and implementation to management evidence','Requirements, execution and review records feed reports; people and agents use them to investigate flow, traceability and reliability.',[(35,35,250,75,'Intent record','requirements / decisions','orange'),(35,140,250,75,'Execution evidence','history / usage / CI','light'),(35,245,250,75,'Review evidence','verdicts / findings','light'),(375,125,250,95,'Scoped reports','coverage stays visible','dark'),(715,125,250,95,'People + agents','investigate / decide / improve','orange')],[(285,72,373,150,True),(285,177,373,172,True),(285,282,373,197,True),(625,172,713,172,False)],height=355)
     assets=out/'assets';assets.mkdir(exist_ok=True)
     for name,body in diagrams.items():(assets/name).write_text(body)
     count=build_reference(out)

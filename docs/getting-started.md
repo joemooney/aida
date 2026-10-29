@@ -1,6 +1,6 @@
 # Getting started with AIDA
 
-People describe the work. Agents operate AIDA. This guide separates one-time operator setup from the normal conversation with an AIDA-aware coding agent.
+Keep working with your conversational coding agent as you already do. Once AIDA is enabled in the project, the agent maintains a durable record of requirements, decisions and implementation intent alongside the system you are developing. People can write code, pair, review and collaborate; a full autonomous factory is optional. This guide separates one-time setup from that ordinary working conversation.
 
 AIDA is alpha software for Linux x86_64 and arm64. You need Git and a supported coding-agent CLI for agent execution; authentication and model access are configured with that vendor. AIDA does not supply a coding model or eliminate its API requirements.
 
@@ -43,7 +43,7 @@ If a normal initialized project needs its local agent scaffolding, use its docum
 
 With an AIDA-aware agent in the project, try:
 
-> I want failed login attempts to be rate limited. Check the existing requirements, help me define the behavior, and record the work in AIDA. Prepare it for my review before implementation.
+> I want failed login attempts to be rate limited, consistent with our earlier decisions. Help me settle the behavior and prepare the implementation for my review.
 
 The agent should check the graph, identify missing decisions, create or update a draft spec, and present the acceptance criteria. It performs the CLI or MCP calls. Spec approval and queueing still require the appropriate authority; asking an unprivileged agent does not grant it that authority.
 

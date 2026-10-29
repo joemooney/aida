@@ -1,8 +1,10 @@
 # What is AIDA?
 
-AIDA is a governed software factory with selectable autonomy: a coordination and enforcement layer for a software team made of AI agents, with explicit choices about where people stay involved.
+AIDA helps people and coding agents build a system while preserving a durable record of its intent: what it should do, why decisions were made, and how that intent connects to the implementation.
 
-AI coding agents can now write real code. On their own, though, several agents on one codebase tend to lose track of what has been decided, collide on the same files, review their own work, and leave no record of why a change was made. AIDA's aim is to give them a shared record, defined roles, independent review, and limits that a human sets, so their combined output can be checked and trusted.
+You keep working with your conversational, agentic coding assistant as you already do—discussing an idea, implementing a feature, reviewing a change or fixing a bug. With AIDA's guidance and tools enabled, the agent maintains requirements, decisions and code-to-intent links in the background as that work progresses. People remain authors, developers, reviewers and collaborators; their work and decisions stay connected to the implementation.
+
+The result is **both the system you developed and a project-owned record of why it works that way**. That record helps you maintain and enhance the system, resume after a break, and work with other people and agents without starting the explanation over.
 
 ## In short
 
@@ -10,7 +12,9 @@ AI coding agents can now write real code. On their own, though, several agents o
 
 **Who it is for.**
 
-- A developer who runs several AI coding agents (Claude Code, Codex CLI, Antigravity, or anything with a shell) on one codebase at the same time.
+- A person developing with a conversational coding agent who wants the intent behind the system to survive beyond a chat session.
+- People maintaining, enhancing or joining an existing system who need to understand its requirements and design decisions.
+- Teams of people and agents collaborating across sessions, tools and handoffs.
 - Anyone who wants agents to work for hours without supervision while keeping control of what gets merged.
 - Teams that need to answer, later, "why does this code exist, who approved it, and on what evidence?"
 
@@ -26,13 +30,34 @@ AI coding agents can now write real code. On their own, though, several agents o
 
 ### In one sentence
 
-**AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.**
+**AIDA keeps a durable record of intent alongside the system people and agents build together, and adds a governed software factory with selectable autonomy when the work needs it.**
 
 AIDA also acts as an operating system for AI engineering teams: it grants authority, keeps shared state, and stops parallel workers from trampling each other. The coding agents write the code; AIDA coordinates and checks their work.
 
-In plain terms: AIDA gives a team of AI coding agents shared memory, defined roles, independent review and human-set limits, so that what they ship can be checked the way you would check a well-run engineering team's work.
+In plain terms: keep working conversationally with your coding agent. AIDA helps it preserve the requirements and decisions behind the work, so both you and the next collaborator can understand and extend the result. Shared memory, configurable roles, independent review and human-set limits support deeper delegation when needed.
 
 AIDA is alpha software and supports Linux only (README; internal spec).
+
+---
+
+## Onboarding: keep working the way you already work
+
+After the one-time project/agent setup, continue the conversation with your coding agent. You do not need to become a requirements clerk or learn `aida add` before requesting a feature. The agent uses AIDA's CLI or MCP tools while you discuss and implement the system.
+
+For example: “Let's add login throttling. Keep the behavior consistent with our earlier decisions.” The agent can consult the recorded intent, surface an unresolved choice and preserve the resulting requirement or decision as the implementation develops. You can write code yourself, pair with the agent, or delegate more of the work; AIDA's record supports all three.
+
+This is structured capture through the configured agent workflow, not a promise that every utterance or unobserved action is automatically recorded. The useful outcome is a maintained record of requirements, decisions, alternatives and links to code—not a duplicate chat transcript.
+
+### Two lasting outcomes
+
+| What you keep | What it enables |
+|---|---|
+| The working system: code, tests and integrated changes | The behavior and capability you set out to develop. |
+| The durable intent record: requirements, rationale, decisions and implementation links | Maintenance, impact assessment, enhancement and collaboration after the original conversation ends. |
+
+Ask “why was this done?”, “what would this change affect?” or “what does the next collaborator need to know?” The record gives people and agents shared context to investigate those questions, rather than requiring them to reconstruct every decision from code.
+
+The [memory lane](positioning/memory-lane.md) supports this quieter entry path before adopting queues, autonomous delivery or a full agent team. Those are additional capabilities, not the price of keeping intent.
 
 ---
 
@@ -114,12 +139,12 @@ There is some overlap. Approval decisions used to be made in more than one place
 
 ## What AIDA can measure and support for engineering management
 
-AIDA was built to coordinate agents, not to be a metrics product. Because it sits on every pickup, review and merge, though, it already records a fair amount of management data. The status column uses three values:
+AIDA records evidence about intent, implementation and supported delivery workflows. Its metrics help people inspect flow, traceability, usage and reliability. They do not require people to operate the reporting CLI themselves: an agent can run the reports and explain their coverage. The status column uses three values:
 - **RECORDS TODAY**: AIDA captures the data and has a command that reports it.
 - **DERIVABLE**: AIDA stores the raw data, but nothing reports it yet.
 - **NOT SUPPORTED**: AIDA has neither the data nor the report.
 
-All figures are from this repository on 28 October 2026.
+The numerical examples below are a **dated repository snapshot from 28 October 2026**, not current performance promises or live dashboard values. Reporting availability is distinct from completeness of coverage. The site’s [Metrics page](showcase/metrics.html) summarizes the capabilities without presenting that snapshot as live data.
 
 | Need | What AIDA provides | Evidence / how | Status |
 |---|---|---|---|
@@ -131,8 +156,8 @@ All figures are from this repository on 28 October 2026.
 | Specification quality | A deterministic 0–100 readiness score for each spec, an optional requirements-wording lint, and coverage of acceptance criteria by tests. | `aida spec dryrun <SPEC>`, `aida lint`, `aida criteria coverage` (the last took more than 2 minutes here). These are on-demand checks; no quality trend is stored. | RECORDS TODAY (on demand) |
 | Rework | Every review verdict, kept per commit, with its findings, plus a count of defect classes across all reviews. | Files in `.aida/review-verdicts/`, `aida review classes` (top classes: untested path, contract drift, fail-open; 503 findings classified, 2,723 not). On 27–28 Oct there were 51 request-changes verdicts against 59 approvals. | RECORDS TODAY (raw); DERIVABLE as a ratio |
 | Review rounds per change, rework ratio | Not reported. The cycle-time report's "reviewer bounce" figure reads 0 of 0 here, because it does not use the verdict files. | Computable from the per-commit verdict files and the follow-up tasks filed from review findings. What's missing is a report that joins them per spec. | DERIVABLE |
-| Effort estimate | After the fact only. The reviewer records an effort bucket (15m, 1h, 4h, 1d or 1w) from the diff they reviewed, and a complexity rating. | `implementation_effort` and `implementation_complexity` in verdict files (129 verdicts since June), copied to `.aida/effort-calibration/`. A planning-time `weight` field exists in the schema, but none of 300 sampled specs set it. "Heft" is a relationship-graph score, not an estimate. | RECORDS TODAY (post-hoc) |
-| Estimate vs actual | Not reported. | The reviewer's effort bucket could be compared with measured implementer time from the cycle-time report. A true comparison needs an estimate captured at planning time (see the proposals below). | DERIVABLE (weak) |
+| Effort estimate | Effort buckets can be captured at filing (`aida add --effort`), pickup (`queue work --effort`) and review. | `requirements_cli.rs`, `queue_cmd_args.rs` and `effort_calibration.rs`; buckets are 15m, 1h, 4h, 1d and 1w. These are estimates, not measured equivalent human work. | RECORDS TODAY (recording depends on workflow) |
+| Estimate vs actual | Not reported. | The reviewer's effort bucket could be compared with measured implementer time from the cycle-time report. A meaningful comparison needs the recorded estimate touchpoint and measured execution coverage; do not infer missing estimates or treat agent time as human effort. | DERIVABLE (weak) |
 | Forecast of feature duration | Nothing. | No forecasting model or report exists. | NOT SUPPORTED |
 | Code quality | Defect classes found in review, CI failure rate (in the cycle-time report), the doctor checks, and ratchet tests that stop banned patterns coming back. | `aida review classes`, `aida metrics cycle-time`, `aida doctor check <category>`. No code-coverage or complexity metrics were found. | RECORDS TODAY (review-based); coverage NOT SUPPORTED |
 | Lines changed per spec | Not reported. | Computable from git, because trailers link commits to specs. | DERIVABLE |
@@ -150,7 +175,7 @@ These are proposals only. None of them exists today.
 
 | Need | Proposal | Data it would build on | Status |
 |---|---|---|---|
-| Estimate vs actual | **Estimate at planning.** Record heft or story points when a spec is approved, and freeze that value at approval so later edits can't rewrite it. | The unused `weight` field and the timestamped approval in each spec's status history. | PROPOSED |
+| Estimate vs actual | **Approval-time baseline.** Existing effort touchpoints can capture estimates. A separate proposed policy would freeze a selected planning baseline at approval so later changes cannot silently rewrite the comparison. | The unused `weight` field and the timestamped approval in each spec's status history. | PROPOSED |
 | Per-spec history metrics | **History backfill** (illustrative name `aida metrics backfill`), dry-run by default and idempotent. For each spec it would compute: time from first commit to merge; review rounds and changes-requested count; follow-up and carried-forward tasks (rework); lines changed; and lane-hours. It would write these as separate derived records in the store and never rewrite history. | Trailers in git; per-commit verdict files; status history; the lease records already on the store branch; the local usage and drain logs. | PROPOSED |
 | Tokens and cost per spec | Extend the token ledger to attribute sessions to specs by matching a session's working directory and branch to the spec's lease, instead of only by launch receipts. | Verified fields. Each Claude Code assistant message has `message.usage`, with `input_tokens`, `output_tokens`, `cache_creation_input_tokens` and `cache_read_input_tokens`, alongside `message.model`, `cwd`, `gitBranch`, `sessionId`, `isSidechain` and a timestamp. Codex `token_count` events carry `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` and `total_tokens`. | PROPOSED |
 
