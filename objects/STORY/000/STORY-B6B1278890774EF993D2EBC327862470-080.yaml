@@ -54,12 +54,12 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 6 (advisor, 2026-10-29 09:45): make CI green, nothing else
   Two existing fail-closed tests regressed since 7dac907: review_gates::bug_775_commits_ahead_tests::a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites (bug_775_commits_ahead_tests.rs:701) and gate::review_verdict::review_verdict_tests::task1801_ship_and_phase_gates_refuse_linked_verdicts (review_verdict_tests.rs:2118). Restore their fail-closed behavior: a current verdict path that exists but is unreadable or a link must make ship and phase-3 gates REFUSE, even when the ledger has a readable record. Do not edit the tests' expectations. Fix the rustdoc ordering at lib_part5.rs:951-965 (cosmetic, bundled). Run exactly: cargo test -p aida-cli-lib --lib bug_775_commits_ahead task1801 review_verdict, plus make check-ci-fast.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T17:35:03.471565802Z
+modified_at: 2026-10-29T17:58:23.212527508Z
 req_type: Story
 tags:
 - architecture
@@ -386,6 +386,20 @@ comments:
   created_at: 2026-10-29T17:35:03.471562264Z
   modified_at: 2026-10-29T17:35:03.471562264Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a188d0-1057-79e3-bd11-7b5a41093e63
+  author: joe
+  content: |-
+    ## Round-7 rework (5d6bcbd): reader ratchet restored
+
+    | # | Finding | Fix | Test |
+    |---|---|---|---|
+    | 1 | Round 6 added a third `verdict_file_modified` call in `phase_gates.rs` (allowed 2), so `gate::ledger::tests::legacy_verdict_files_are_read_only_through_the_ledger_projection` failed on CI lib-1 | The fresh-refused-file check moved into `gate::review_verdict::refused_verdict_file_fresh_since` (reviewer's option 2). `phase_gates.rs` is back to 2 calls and the `ALLOWED` table is unchanged. Phase-3 behavior is unchanged: fresh refused → `NoVerdict`, linked or old → `Ok(None)` | The ratchet test, `a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites`, `task1801_ship_and_phase_gates_refuse_linked_verdicts`, `a_refused_current_file_keeps_the_phase3_archive_fallback_closed` |
+
+    `cargo test --profile agent -p aida-cli-lib --lib -- gate::ledger a_fresh_unreadable_verdict task1801 review_verdict phase_gates`: 219 passed, 5 failed. All 5 failures panic at test_env.rs:93 with "BUG-1642: could not install the hermetic test HOME: Read-only file system" (sandbox only; CI runs them). `make check-ci-fast`: 35 gates passed.
+  created_at: 2026-10-29T17:58:19.479206491Z
+  modified_at: 2026-10-29T17:58:19.479206491Z
+  session_id: 01a188bc0a1c
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -627,6 +641,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a188d0-1f4f-7f23-9efd-974d64114b80
+  author: joe
+  timestamp: 2026-10-29T17:58:23.311569180Z
+  session_id: 01a188bc0a1c
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
