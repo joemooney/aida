@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:08:39.022770176Z
-modified_at: 2026-10-29T18:43:56.528036275Z
+modified_at: 2026-10-29T18:44:04.849534766Z
 req_type: Task
 tags:
 - advisor-review
@@ -52,6 +52,19 @@ relationships:
   target_id: 01a188f9-1e6a-7d80-b299-16f63bee74a1
   created_at: 2026-10-29T18:43:25.767465032Z
   created_by: ai:codex:joe
+comments:
+- id: 01a188f9-f471-7572-bc8d-eae8422001a3
+  author: ai:codex:joe
+  content: |
+    Newcomers can follow a change from conversation and captured intent through owned implementation, validation, independent review and authorized integration. The guide distinguishes code history, canonical intent, the derived cache and local operational evidence, and explains maintenance/handoff value without promising transcript capture.
+
+    Adds docs/product-workflow.md, generated workflow.html and an original accessible two-part SVG; extends shared guide navigation and product entry links. Sources include models, cache/storage, session lifecycle and command help. The diagrams are operating models, not live telemetry.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed. A spawned author checker ran its own source/help/diff evidence commands; findings are resolved before handoff. No storage, synchronization, lease, orchestration or gate changes.
+
+    Stacked on PR #3097 for a separate slice diff. TASK-B6B1278890774EF993D2EBC327862470-108.
+  created_at: 2026-10-29T18:44:04.849534766Z
+  modified_at: 2026-10-29T18:44:04.849534766Z
 history:
 - id: 01a188d9-9ab1-7cf1-b9b2-2ec05f969c1b
   author: joe
