@@ -2,12 +2,12 @@ id: 01a18967-cddf-7d20-9641-ff761894270a
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-019
 title: 'aida add in a fresh clone of an AIDA project fails with a bare ''requirement ID allocation failed: No such file or directory'' instead of saying to run aida init'
 description: 'Repro (advisor reviewer, 2026-10-29): aida init a project, push to a bare hub, clone it. In the clone aida list works, but aida add --title X --type bug fails: error: "requirement ID allocation failed: No such file or directory (os error 2); no metadata or object was written". After aida init in the clone, add succeeds. work_binding::bootstrap is only called from init (init_cmd.rs handle_init_post_clone) and legacy node.toml migration. Fix: detect the missing work binding before allocation and say ''this clone has no AIDA node binding yet; run aida init (or aida node acquire)''. Consider bootstrapping automatically.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:03.935600642Z
-modified_at: 2026-10-29T21:22:37.999828309Z
+modified_at: 2026-10-29T21:32:57.723060982Z
 req_type: Bug
 history:
 - id: 01a1898a-30bb-70a3-84e1-b0059f871681
@@ -25,6 +25,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18994-9260-7093-816d-77a5609838a5
+  author: joe
+  timestamp: 2026-10-29T21:32:57.824956819Z
+  session_id: 01a1898b1964
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main
@@ -33,3 +42,7 @@ filed_at:
   aida_build_sha: 5fbe1e39c0d
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-29T21:32:57.723060982Z
+  implemented_by: joe

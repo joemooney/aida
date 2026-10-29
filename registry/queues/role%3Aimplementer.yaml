@@ -123,9 +123,3 @@
   added_by: role:implementer
   added_at: 2026-10-29T20:00:58.951367061Z
   for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a18967-cddf-7d20-9641-ff761894270a
-  position: 492000
-  added_by: role:implementer
-  added_at: 2026-10-29T21:21:55.746268433Z
-  for_role: implementer
