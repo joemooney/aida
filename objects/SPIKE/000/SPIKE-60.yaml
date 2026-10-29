@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T05:56:01.315522672Z
-modified_at: 2026-10-29T06:36:29.785452555Z
+modified_at: 2026-10-29T06:36:32.932193615Z
 req_type: Spike
 tags:
 - advisor
@@ -20,7 +20,9 @@ history:
   timestamp: 2026-10-29T06:36:30.622052291Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
-deferred: true
-deferred_at: 2026-07-20T04:46:48.342019390Z
-deferred_until: durable advisor-watch supervisor design revisit
+- id: 01a1865f-e46e-7d60-b014-343dc780db09
+  author: joe
+  timestamp: 2026-10-29T06:36:33.774210475Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 human_only: true
