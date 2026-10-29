@@ -23,6 +23,38 @@ pub(crate) fn git_command() -> std::process::Command {
     command
 }
 
+/// Make `dir` a git repository holding one empty commit and return that
+/// commit's full sha — for a fixture that must record against a commit git
+/// can resolve.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+#[allow(dead_code)]
+pub(crate) fn commit_fixture(dir: &std::path::Path) -> String {
+    let run = |args: &[&str]| {
+        let out = git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("run git");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    run(&["init", "-q", "-b", "main"]);
+    run(&[
+        "-c",
+        "user.name=fixture",
+        "-c",
+        "user.email=fixture@localhost",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "--no-verify",
+        "-m",
+        "fixture",
+    ]);
+    run(&["rev-parse", "HEAD"])
+}
+
 /// The template's `config`: automatic maintenance off, for both the local
 /// side and a bare remote's `receive-pack`.
 #[allow(dead_code)]

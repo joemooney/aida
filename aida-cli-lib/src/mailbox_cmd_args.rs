@@ -12,11 +12,14 @@ use std::path::PathBuf;
 pub enum MailboxCommand {
     /// Read bounded unread message IDs without bodies or acknowledgement.
     // trace:TASK-2347 | ai:codex
+    // trace:STORY-1843 | ai:claude
     WakeSnapshot {
-        /// Local checkout whose mailbox is inspected (defaults to the main checkout).
+        /// Checkout the logical mail view is read from (defaults to the main
+        /// checkout); every worktree of its repository is included.
         #[clap(long)]
         local_root: Option<PathBuf>,
-        /// Exact inbox identity; does not inherit the caller's identity union.
+        /// One of this process's own inboxes; narrows, never widens, the
+        /// audience a notice would read.
         #[clap(long, default_value = "advisor")]
         recipient: String,
         /// Print the versioned read-only envelope as JSON.
