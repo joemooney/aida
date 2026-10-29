@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:46:50.807919819Z
-modified_at: 2026-10-29T13:11:36.066409058Z
+modified_at: 2026-10-29T14:13:51.664105217Z
 req_type: Story
 relationships:
 - rel_type:
@@ -43,6 +43,12 @@ comments:
   content: 'Round 2 review (advisor, 2026-10-29 06:15) for PR-3090 at 52f127b8e4491a74d434166e5728e9ad4e36b352 (40c22ff rework + merge from main). Verify the 7 round-1 findings against the advisor rulings in STORY-HOME-080''s description (''Slice 1 (PR-3090) round-1 advisor rulings''). Pay special attention to #1 (ingest authority equals the ship gate''s check) and #2 (no submitter-controlled ordering). Dual-write is ACCEPTED for slice 1 (deletion is a slice-2 acceptance item) — do not re-raise it. Rule-once: any new minor finding gets bundle-or-accept in the verdict. No cargo; CI at this head.'
   created_at: 2026-10-29T13:11:36.066409058Z
   modified_at: 2026-10-29T13:11:36.066409058Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18802-8fb0-77e2-905f-0f642184a715
+  author: joe
+  content: 'Round 3 review (advisor, 2026-10-29 07:15) for PR-3090 at 79a9b06. Scope: the ''Slice 1 (PR-3090) ROUND 2 advisor ruling'' in STORY-HOME-080''s description: spool/mailbox transport deleted; collect/adopt are the only contained route and append to the ledger with PR binding + this launch''s child grant valid at collection; record_event refuses contained callers; ratchet test under the 10s budget (CI lib-1 failed on it at 52f127b). Dual-write remains ACCEPTED for slice 1. Each unmet item = its own finding. Rule-once for minors.'
+  created_at: 2026-10-29T14:13:51.664105217Z
+  modified_at: 2026-10-29T14:13:51.664105217Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877c-19b8-7861-83cd-857726302b71
