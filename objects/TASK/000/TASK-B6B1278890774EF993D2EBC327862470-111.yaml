@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:50.634186933Z
-modified_at: 2026-10-29T19:16:49.864422819Z
+modified_at: 2026-10-29T19:16:54.187403298Z
 req_type: Task
 tags:
 - advisor-review
@@ -60,6 +60,20 @@ comments:
     The build stays static and source-derived. No hosted publication or access change is part of this PR; the existing owner-private hosted preview remains unchanged. This is a provisional curation choice for advisor review, not a claim that the advisor separately approved every document in an expanded handbook.
   created_at: 2026-10-29T19:05:45.997886861Z
   modified_at: 2026-10-29T19:05:45.997886861Z
+- id: 01a18918-012b-7173-a2a0-bd717ddc324c
+  author: ai:codex:joe
+  content: |
+    Adds a curated, searchable library over six explicitly selected product guides. Human/operator filters, content snippets, clear/reset, empty states and source links work without a server API; all guide links remain available without JavaScript. The build uses tracked Markdown sources, content hashes and stable output; runtime/untracked/internal material is excluded from the index.
+
+    Files: showcase publication.json allowlist, library-template.html/library.html, library.js/search-data.js, shared build.py/layout styles/navigation and regenerated guide headers; README documents Python3 + Git, source ownership, build and publication scope. Existing technical references remain source links rather than silently republished handbook pages.
+
+    Publication-scope question is on the spec for advisor review, as the human explicitly requested without blocking. The provisional scope is these six product guides only; broader CLI/history curation is deferred. No hosting deployment or audience change; the existing owner-private preview is unchanged.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed; unchanged-input rebuild stability checked; fresh spawned author checker ran its own read-only source/manifest/search/navigation/link evidence commands and found no findings. This is author self-checking, not independent review. No new product CLI/API or runtime/gate changes.
+
+    Stacked on PR #3100. TASK-B6B1278890774EF993D2EBC327862470-111.
+  created_at: 2026-10-29T19:16:54.187403298Z
+  modified_at: 2026-10-29T19:16:54.187403298Z
 history:
 - id: 01a188da-b290-7ce2-8311-53cf834c1f5a
   author: joe
