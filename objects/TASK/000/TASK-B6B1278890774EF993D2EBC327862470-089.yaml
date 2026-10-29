@@ -1,0 +1,29 @@
+id: 01a185de-3b0a-7c83-b74c-4607acebadc0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-089
+title: '(minor, non-blocking) docs/conformance/story-1843.md:125 section E: ''Ruling on …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1843, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (minor, non-blocking) docs/conformance/story-1843.md:125 section E: 'Ruling on TASK-082 (2026-10-28 15:56)' does not resolve (aida show TASK-082 -> not found, suggests TASK-1082). The ruling is on TASK-b6b1278890774ef993d2ebc327862470-082; use the full ID.
+
+  PR: #3083
+  Reviewed sha: dbd42f983f586ef04cb82420b3cd8e9c133c8ced
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T04:14:56.266636681Z
+modified_at: 2026-10-29T04:14:56.266636681Z
+req_type: Task
+tags:
+- carried-from:STORY-1843
+- finding-hash:30556b88
+- from-review:PR-3083
+- kind:carried-forward
+filed_at:
+  code_sha: 3b3d89ae3b08ede89ff290429902a25807062f8a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 457c8c60cf0
+  vendor: claude
