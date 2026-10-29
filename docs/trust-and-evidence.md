@@ -12,7 +12,7 @@ Acceptance criteria describe the agreed outcome. Code traces and spec-bearing co
 
 The ordinary review path requires a reviewer independent of the change's author. Verdict evidence identifies the reviewed commit, and shipping evaluates applicable evidence against the current head. An old approval is not permission to ship arbitrary later work.
 
-There is an explicit, opt-in and audited solo-human self-approval exception for a verified person at a terminal. This does not turn an implementing agent's self-check into independent approval. The [reporting reference](cli/08-reporting.md) and current review command help describe the exact evidence and exception contracts.
+There is an explicit, opt-in and audited solo-human self-approval exception for a verified person at a terminal. This does not turn an implementing agent's self-check into independent approval. The [review process](review-process.md) and current review command help describe the exact evidence and exception contracts.
 
 ## CI and holds
 

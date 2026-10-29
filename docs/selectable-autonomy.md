@@ -13,7 +13,7 @@ AIDA is a governed software factory with selectable autonomy. The choice is made
 
 Autonomous delivery is AIDA's dark factory mode. It removes routine human intervention from the execution path for work that is eligible and authorized. It does not grant authority, resolve product decisions, promise every task will succeed or deploy software to production. Whether a whole organization operates without routine intervention depends on how it assigns work and handles exceptions.
 
-The interactive selector below is generated from the same bounded selector used on the product landing page. Delivery labels are descriptions; the stored values are the execution modes above. Keyboard users can use arrow keys, Home and End. Without JavaScript, the initial autonomous explanation remains readable.
+The interactive selector on the autonomy page is generated from the same bounded selector used on the product landing page. Delivery labels are descriptions; the stored values are the execution modes above. Keyboard users can use arrow keys, Home and End. Without JavaScript, the initial autonomous explanation remains readable.
 
 ## Decisions are a separate block
 
