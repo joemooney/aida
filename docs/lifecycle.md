@@ -3,7 +3,7 @@
 <!-- trace:TASK-273 | ai:claude -->
 
 Every spec in AIDA travels the same path from "filed an idea" to "users have
-it." The README has the [diagram and tables at a glance](../README.md#spec-lifecycle);
+it." The README has the [diagram and tables at a glance](#the-lifecycle-states);
 this document is the full treatment — the prose behind each state, the precise
 verb for each transition, and the edge cases (cluster PRs, parallel
 pipelining, autonomous drains) that the README's map leaves out.
@@ -424,6 +424,8 @@ the [`/aida-punt`](#the-off-mainline-state-needs-attention) skill and
 
 ### 4 · The three autonomy modes
 
+> **Terminology:** this section compares launch/presence options (`default`, `--zen`, `--no-human`), not the per-spec execution-mode enum. The execution choices are `operator`, `guided`, `drive` and `drain`; `decide` is an execution block. See [the product overview](what-is-aida.md#four-execution-modes-plus-a-decision-stop).
+
 *How much does the human stay in the loop?* The same lifecycle runs at three
 levels of human presence. They differ only in **where the human stands**, not
 in the states a spec passes through.
@@ -810,7 +812,7 @@ lives in [`autonomous-drain.md`](autonomous-drain.md).
 
 ## See also
 
-- [README — Spec lifecycle](../README.md#spec-lifecycle) — the diagram and
+- [README — Spec lifecycle](#the-lifecycle-states) — the diagram and
   tables at a glance
 - [`docs/git-workflow.md`](git-workflow.md) — branch, PR, and divergent-branch
   recovery mechanics

@@ -102,7 +102,7 @@ is a transport.
   directive, and punt-response writes go through `write_atomic` (write to
   `.tmp-<uuid>`, then `rename`) so a crash mid-write leaves the previous
   file intact. The `concurrent_*` and `*_recovery` tests in
-  `aida-cli/src/mcp.rs` cover both contention and torn-write cases.
+  `aida-cli-lib/src/mcp.rs` cover both contention and torn-write cases.
 - **No new lock primitives**. The MCP tools acquire the same file-level
   semantics the file-direct path already uses. There is no global MCP lock,
   no in-memory queue, no daemon-internal state that could diverge from the

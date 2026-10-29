@@ -16,6 +16,8 @@ Speaker notes live in HTML comments under each slide. Live-demo cues are marked 
 The runbook (exact commands, timing, fallbacks) is docs/presentation/demo-runbook.md.
 -->
 
+> **Dated presentation / perspective:** this material retains its original context and examples; counts and external vendor features are not a current capability contract. For the current product story and human/agent journey, use [the product site](../showcase/index.html) and [configuration](../configuration.md).
+
 # AIDA
 
 ### The agent-collaboration layer

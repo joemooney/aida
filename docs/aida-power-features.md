@@ -1,201 +1,39 @@
-# What you can now do with AIDA
+# What you can do with AIDA
 
-You have a thought. You type it. The next time you look, it's *merged on main* — implemented, reviewed, and traceable back to the words you started with.
+AIDA is a configurable, governed software factory. The human describes outcomes and resolves decisions; agents normally perform the CLI/MCP operations. These examples are requests to an AIDA-aware agent, not commands every newcomer must learn.
 
-```
-$ aida zen "let me filter requirements by a date range"
-```
+## Preserve project intent
 
-That's it. That's the headline. One plain-English sentence in, one gated-and-reviewed merge out. No spec to write first, no ceremony to learn. You describe what you want; AIDA does the rest of the trip.
+> Record this decision and the alternatives we rejected. Before changing the cache, check whether an earlier requirement already explains the behavior.
 
-The rest of this page shows you that front door — and the three other ways to make the same trip when you want your hands more on the wheel.
+Agents can query and maintain the Git-backed spec graph. Code traces and commit trailers connect implementation to intent. The [memory lane](positioning/memory-lane.md) is the entry path when durable context is enough and delivery orchestration is not yet needed.
 
----
+## Select the human handoff
 
-## The front door: tell AIDA a thought
+> Build this feature through CI and stop for my review. Keep architectural questions interactive. Recommend autonomous delivery for bounded fixes only when the criteria and authority permit it.
 
-Most tools make you translate your idea into *their* format before anything happens. AIDA skips that. Hand `aida zen` a sentence in plain words and it:
+The per-spec modes are operator, guided, drive and drain. Decide blocks work pending a decision. Drain is the dark-factory lifecycle through implementation, CI, independent review and merge, within the applicable gates. A mode does not grant permission. See [the overview](what-is-aida.md) and [autonomy reference](cli/03-work-autonomy.md).
 
-1. **Drafts a real spec from your thought** — an AI-written title, description, and acceptance criteria, so the idea becomes something durable instead of a throwaway prompt.
-2. **Files it as a Draft and runs it past the approve-gate** — your advisor sees it, or it auto-approves within the limits you set. A careless midnight thought can't silently ship itself.
-3. **Drives it all the way to merged** — queue, implement, CI, independent review, merge, pull — and bumps it to Completed the moment it lands on main.
+## Configure the operating model
 
-```
-$ aida zen "warn me when two specs claim the same file"
-```
+> Show the agent defaults, work protocols and queue policy for this project. Propose changes in the right trust scope before applying them.
 
-A raw thought becomes gated, reviewed, merged code — in one line.
+Supported settings include vendor/launch defaults, editable type/lane protocols, queue selection/order, review/integration behavior, footprints and reporting. They do not all share one precedence order. See [configuration](configuration.md).
 
-**Want to look before you leap?** `--dry-run` renders the actual spec it *would* draft from your thought — AI-written title, description, and acceptance criteria — without filing anything:
+## Coordinate concurrent work
 
-```
-$ aida zen "warn me when two specs claim the same file" --dry-run
+> Identify independent approved work and propose isolated sessions. Report conflicts, unresolved decisions and anything that needs my attention.
 
-▸ would draft + file + drive a new Draft from your thought:
+AIDA combines queues, roles, worktrees, leases and handoffs. Concurrency is controlled by the selected launcher and current locks; independent worktrees are not permission to start unlimited competing drains. See [work and autonomy](cli/03-work-autonomy.md) and [sessions](cli/06-roles-sessions.md).
 
-  ◯ Warn when two specs claim the same file
-  ▸ Description:
-    ...
-  ▸ Acceptance (N items):
-    • ...
-  ✓ AI-drafted from your thought.
-```
+## Inspect the result
 
-**Prefer to skip the AI draft?** Set `AIDA_ZEN_NO_AI=1` and your sentence becomes the spec title verbatim — a fast, offline fallback when you'd rather word it yourself.
+> Show the acceptance criteria, implementation links, validation results, review verdict and remaining issues for this change.
 
-This is the *"tell your agents a thought"* front door: the lowest-friction way in, with none of the safety quietly removed underneath.
+Review evidence is tied to commits; lifecycle and usage views provide additional context. Data coverage and attribution have limits. See [reporting](cli/08-reporting.md) and [the token ledger](token-usage-ledger.md). A merged change is not automatically a production deployment.
 
----
+## Agent and operator references
 
-## The same trip, four ways
+The CLI contains launch, sync, queue, review and inspection commands. Agents choose the operation appropriate to their task and authority; operators use the same reference for setup and diagnosis. Begin with [the command manual](cli/README.md), rather than treating older one-line launch recipes as a guarantee of unattended delivery in every environment.
 
-Every change — typed thought or hand-written code — goes through the same chain: **implement → CI → review → merge → pull**. The only real question is *who does which links, and how many at once.* AIDA gives you one command for each honest answer:
-
-| You want to… | Run | Who writes the code | How much you watch |
-|---|---|---|---|
-| Ship **a thought**, start to finish | `aida zen "<your idea>"` | **AIDA** (drafts the spec too) | Nothing — headless all the way to main |
-| Hand off **one spec you've already filed** | `aida zen <spec>` | **AIDA** | Nothing — headless all the way to main |
-| Finish **one spec you just coded** | `aida ship <spec>` | **You** | You did the work; AIDA does the paperwork |
-| Walk away from a **whole batch** | `aida burndown run` | **AIDA**, in parallel | Goodnight. Read the results over coffee |
-| Keep a **queue draining forever** | `aida queue integrate --watch` | (already done) | It merges finished work as it lands |
-
-Pick the row that matches your mood today. The top one needs nothing but a sentence; the rest let you keep more of the trip in your own hands.
-
-### The autonomy ladder in one command
-
-Run `aida autonomy` when the surfaces blur together. It names the ladder and the dials in one place:
-
-| Rung | Use | Meaning |
-|---|---|---|
-| **Headless cron** | `aida groom --apply --then-drain` | Always-on unattended grooming and draining: approve the safe fence, work what is ready, park the rest. |
-| **Live solo** | `/aida-solo` | Supervised warm loop: this session grooms, implements, and integrates spec after spec with your live judgment. |
-| **Zen drain** | `aida queue work --zen` | Advisor-on-standby: mechanical prompts resolve automatically; real design forks still surface. |
-| **One-shot zen** | `aida zen <spec>` or `aida zen "<thought>"` | One item, headless, to a gated merge. |
-
-The relationship is deliberate: **cron = always-on headless**, **`/aida-solo` = live supervised**, and **`[intake]` / `[autopilot]` / `--risk` / `--mode` = the safety dials** that decide what AIDA may do unattended. `--no-human` and `--zen` tune the drain side; `[presence].current_solo` tightens policy while a solo posture is active.
-
-### `aida zen` — from a thought, or from a spec
-
-You've already met the headline use: pass free text and AIDA drafts the spec for you. But `zen` takes a spec id just as happily — when the idea is already filed and approved, point it straight at the work:
-
-```
-$ aida zen <spec>
-```
-
-Either way, **it's fully headless by default** — *tell your agents goodnight.* The implementer runs headless, an independent reviewer always runs as its own gate before the merge, and the change drives all the way to main with nobody in the loop.
-
-Want to keep your hands on the keyboard for the actual coding? `--supervised` lets **you** drive the implementer interactively, while the reviewer and merge stay autonomous behind you:
-
-```
-$ aida zen <spec> --supervised
-```
-
-Got several independent ideas? Fire several `zen`s, each in its own worktree, and let them run in parallel. Fire-and-forget, by design.
-
-### `aida ship` — you implemented it; let AIDA do the rest
-
-Sometimes you *want* to write the code yourself. You're in a worktree, you're done thinking — but there's still the tedious part: commit it with the right trailer, rebase onto the latest main, push, open the PR, babysit CI, squash-merge, pull, tear the worktree down.
-
-```
-$ aida ship
-```
-
-One command, the whole closing ceremony. It figures out which spec you're on from your branch. Want to stop early? `--no-merge` opens the PR and leaves it for a human; `--no-pr` just rebases and pushes. `--dry-run` shows you the plan first.
-
-This is the everyday workhorse for hand-written work: **you keep the fun part (writing the code), AIDA takes the chores.**
-
-### `aida burndown run` — drain a whole set while you sleep
-
-`zen` is one idea. `burndown run` is *the backlog*. It takes your advisor-blessed ready set, fans out parallel implementers, integrates each PR as it goes, and loops until there's nothing left to do.
-
-```
-$ aida burndown run            # drain the blessed set; --dry-run to preview first
-$ aida burndown status         # is a drain running, and what's it doing?
-```
-
-Only queued, pickable, unblocked, decision-free work is eligible — so it never guesses on something that needed your judgment. You bless the set; it burns it down.
-
-### `aida queue integrate --watch` — the tap that never closes
-
-The other three *produce* finished work. This one *consumes* it. Point it at your project and it watches for any spec that's Done-with-an-open-PR, then merges them onto main one at a time, in order — forever, or until you stop it.
-
-```
-$ aida queue integrate --watch
-```
-
-Your implementers (you, agents, teammates) ship in parallel and never fight over main. The integrator is the single, calm, serial merge authority. Producers produce; this consumes. No coordination meeting required.
-
----
-
-## Why this is more than a clever wrapper
-
-Anyone can string `git` commands behind one alias. Anyone can pipe a sentence into a code model. What makes the hand-off *trustworthy* is what's underneath: AIDA isn't driving loose prompts — it turns your thought into a tracked requirement and drives *that*.
-
-- **Stable IDs.** The moment your sentence becomes a spec, it gets a durable identifier that doesn't shift as the backlog churns. The autonomous drive always knows *which* thing it's shipping.
-- **Code ↔ spec traces.** Inline `trace:` breadcrumbs tie the shipped code back to the thought that asked for it, so "why does this exist?" always has an answer — even for a one-liner you barely remember typing.
-- **The approve-gate.** A free-text thought lands as a *Draft* and passes the approve-gate before anything builds. The convenience of a single sentence, without the danger of a careless one auto-shipping.
-- **A real lifecycle.** Draft → Approved → In Progress → Done → Completed isn't decoration; it's the substrate the autonomy reads. "Done" means *finished on a branch*; "Completed" means *merged to main* — and the merge promotes it for you.
-
-That's the difference between *automation* and *coordination*. Your thought becomes traceable, ordered, and safe to hand off — not a prompt you have to hold in your head.
-
----
-
-## Your first autonomous drive (about 2 minutes)
-
-Try the whole loop on something tiny and real.
-
-**1. Tell AIDA what you want.** One plain sentence — anything small and safe:
-
-```
-$ aida zen "add a short -V flag as an alias for --version"
-```
-
-That single line drafts a spec from your words, files it, runs it past the approve-gate, then queues it, spins up an implementer in an isolated worktree, waits for CI, reviews, merges the PR, and pulls — promoting the spec to **Completed** the moment the merge lands on main.
-
-(Curious before committing? Add `--dry-run` to see what it *would* draft and drive without filing a thing.)
-
-**2. Watch it land.**
-
-```
-$ aida burndown status     # what's running right now
-$ aida list --status completed   # there it is, on main
-```
-
-That's it. You described a change in one line and the next time you looked, it was merged. Now imagine pointing that at a backlog.
-
----
-
-## Which command when
-
-| Situation | Reach for |
-|---|---|
-| "I have an idea — just build it." | `aida zen "<your idea>"` |
-| "Show me what that thought would become first." | `aida zen "<your idea>" --dry-run` |
-| "Build this spec I already filed, don't ask me anything." | `aida zen <spec>` |
-| "Build it, but let *me* write the code." | `aida zen <spec> --supervised` |
-| "I just finished coding this — close it out." | `aida ship` |
-| "Open the PR but let a human merge." | `aida ship --no-merge` |
-| "Drain the whole ready backlog overnight." | `aida burndown run` |
-| "Keep merging finished work onto main as it shows up." | `aida queue integrate --watch` |
-| "Wait — what's actually running?" | `aida burndown status` · `aida ps` |
-
-Start at the top, where a sentence is all it takes. Slide down the list as the rhythm gets familiar and you want more of the trip in your own hands. The power was always there — now the front door is a single thought you can type.
-
-## Driving one spec, supervising the loop, or walking away
-
-The tables above are about *autonomy* — how much AIDA does unattended. There's a second axis that trips people up: **how much you stay in the loop across a *sequence* of specs.** These are the four honest answers, from most hands-on to least:
-
-| Your mode | Run | What you do | What it costs you |
-|---|---|---|---|
-| **Drive one spec by hand** | `aida queue work <spec>` | You sit in the worktree, implement (or watch an agent), then finish it. | You do this once *per spec* — and every spec boundary is manual: exit, close the session, launch the next. |
-| **Supervise the whole loop** | `/aida-solo` | *This* session becomes both advisor and integrator and runs groom → implement → integrate, spec after spec, with your live judgment — keystones parked for you. | Your attention, but none of the plumbing: no copy-paste between seats, no exit-and-relaunch. |
-| **Walk away from a batch** | `aida burndown run` | Nothing. It fans out, ships, and loops until the ready set is drained. | You give up per-spec review (you read the PRs after). |
-| **Ship one thing unattended** | `aida zen <spec>` | Nothing. One spec, headless, to a gated merge. | Same — no review mid-flight; good for a single obvious change. |
-
-**The anti-pattern this fixes.** If your rhythm is *"work a spec in an interactive `aida queue work` session → paste the results to an advisor → exit → paste the advisor's next commands → launch the next `queue work`"*, you are **hand-executing the supervised loop.** That copy-paste-and-relaunch dance is exactly what `/aida-solo` collapses into one warm session: the advisor and the implementer are the *same* context (nothing to paste), and it walks to the next spec on its own (nothing to relaunch). You keep the judgment; you drop the juggling.
-
-**So which?** Reach for **`aida queue work`** only when you genuinely want to hand-drive *one* spec in isolation. The moment you're doing it *repeatedly with an advisor in between*, switch to **`/aida-solo`**. Go to **`aida burndown run`** when a batch is routine enough to not watch, and **`aida zen`** for a single fire-and-forget change. `zen` is *not* the fix for a too-manual `queue work` loop — it removes the very judgment you were reaching for; `/aida-solo` is.
-
----
-
-**What changed lately?** See [`whats-new-2026-06.md`](release-notes/2026-06.md) for the June 2026 round of refinements — organized by who benefits (human, agent, cockpit).
+<!-- trace:EPIC-b6b1278890774ef993d2ebc327862470-002 | ai:codex -->

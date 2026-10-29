@@ -23,13 +23,15 @@ This split is the leverage point for the **resume capability** (TASK-112): even 
 
 ## The phases
 
+> **Scope:** the diagram below is an agent/operator workflow sketch, not a guaranteed sequence for every current launcher. Supported pickup preflights and refusal behavior are defined in [the roles/session reference](cli/06-roles-sessions.md) and [queue operations](cli/03-work-autonomy.md). Older plan-injection notes retain their original status; do not infer a shipped feature from a planned item.
+
 A typical implementer→reviewer→merge run looks like:
 
 ```
   ┌──────────────────────────────────────────────────────────────────────┐
   │ 1. PICKUP                                                            │
   │    aida queue work STORY-86                                          │
-  │    ├─ aida fetch (planned TASK-107) — refresh remote view            │
+  │    ├─ aida fetch (TASK-107)         — refresh remote view            │
   │    ├─ git pull code branch (TASK-99) — start from fresh base         │
   │    ├─ aida session start — claim lease, create worktree              │
   │    ├─ session manifest seeded — may include plan from docs/plans/    │
@@ -77,7 +79,7 @@ Each transition has been a source of friction at some point. The remainder of th
 
 ---
 
-## Transition 1→2: Pickup is base-fresh
+## Transition 1→2: Pickup and base freshness
 
 The implementer session must start on a *fresh* base — otherwise every commit accumulates rebase debt that surfaces at PR time. AIDA's defenses:
 

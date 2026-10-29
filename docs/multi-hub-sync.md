@@ -167,9 +167,9 @@ native multi-pushurl (leg 3) so the *code* leg fans out automatically too.
 (squash-merged once its checks pass; main is never pushed directly), tags the merged
 commit and pushes the tag to `origin`, then mirrors the `vN` tag to each remote in `[store.sync] mirror_remotes`. Mirror failures warn and do
 not fail the GitHub release. GitLab receives the mirrored tag and runs its release stage:
-Linux tarballs are built on GitLab runners, Darwin tarballs are copied from the GitHub
-release until a macOS GitLab runner is available, and a GitLab Release links all four
-assets from the GitLab package registry.
+Only Linux x86_64 and arm64 release artifacts are supported. GitLab release behavior
+is defined by the current CI and release scripts; do not expect Darwin artifacts or
+a macOS runner. Inspect the release result before distributing an installation link.
 
 GitLab-track installers can opt in without changing the default GitHub path:
 

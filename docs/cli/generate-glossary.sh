@@ -86,6 +86,9 @@ fi
   printf '%s\n' "$GLOSSARY" \
     | sed -E \
         -e 's/^# (Machinery glossary|Lifecycle vocabulary)$/## \1/' \
+        -e 's/\]\((machinery-glossary|lifecycle-vocabulary)\.md#([^)]*)\)/](#\2)/g' \
+        -e 's/\]\(machinery-glossary\.md\)/](#machinery-glossary)/g' \
+        -e 's/\]\(lifecycle-vocabulary\.md\)/](#lifecycle-vocabulary)/g' \
         -e 's/[[:space:]]*trace:[A-Za-z0-9_| :+-]*$//' \
         -e 's/\b(STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|PRIN|VIS|CON|TERM|CR)-[0-9]+/`<spec-id>`/g'
 } >"$TMP"

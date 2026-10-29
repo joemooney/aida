@@ -15,6 +15,8 @@ FORMAT: outcome-first, almost no CLI. Speaker notes in HTML comments. Numbers re
 COMPANION DECKS: developer-deep-dive, administrator-guide, user-walkthrough.
 -->
 
+> **Dated presentation / perspective:** this material retains its original context and examples; counts and external vendor features are not a current capability contract. For the current product story and human/agent journey, use [the product site](../showcase/index.html) and [configuration](../configuration.md).
+
 # AIDA
 
 ### The agent-collaboration layer

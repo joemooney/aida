@@ -46,27 +46,18 @@ applies. The branch-local copy is *never* used as a fallback.
 | `run_acceptance_commands`, `acceptance_command_allow` | `[review]` | **Yes** — gate on the spec-authored commands graded review runs via `bash -c` | **Machine-global `~/.aida/config.toml` only** (repo copy — branch-local and default-branch — ignored; fail-closed to denied) |
 | `solo_human_self_approval` | `[review]` | **Yes** — lets a human at a terminal approve work their own session claimed | **Machine-global `~/.aida/config.toml` only** (a project value is ignored with a warning; never applies in the AIDA repository) |
 
-`[pr-rebase] smoke_check` is the **only** `.aida/config.toml` field that AIDA's
-own drain/CI code reads from the *repo* and then executes as a shell command.
-The graded-review opt-in is stricter still: because the commands it gates are
-written into specs in the shared store, and because an unattended-drain PR
-could merge a repo-level opt-in through the very review it enables, it is read
-only from the reviewing machine's `~/.aida/config.toml` (see
-`acceptance_command_policy_global` in `aida-cli-lib/src/lib.rs` and the
-`[review]` section of `docs/autonomous-drain.md`). The agent backend
-is not a per-project config value — it is hardcoded (`claude`) and gated by the
-machine-global `~/.aida/agents.toml`, which is local-trusted and not under a
-pushed branch's control. Git hooks (`.git/hooks/*`) are invoked by git itself,
-not by AIDA's drain code, and are likewise not checked into the branch.
+The table records the original threat-model inventory, not an exhaustive list of every current launch/configuration surface. Agent vendor and launch posture are configurable; see [per-agent launch configuration](../agents/per-agent-config.md). The maintained [configuration trust inventory](../../scripts/config-trust.toml) and each feature's reader define the current source and trust requirements. Do not infer that a new command-launching field is safe merely because it is absent from this table.
+
+The graded-review opt-in remains machine-global: inspect `acceptance_command_policy_global` and the [review configuration](../autonomous-drain.md) before enabling stored acceptance commands. Project guidance does not grant execution authority.
 
 ## Where it lives in code
 
-- `aida-cli/src/trusted_config.rs` — the trust anchor:
+- `aida-cli-lib/src/trusted_config.rs` — the trust anchor:
   `trusted_default_branch_sha` (resolve `origin/<default>` → SHA) and
   `read_trusted_config_toml` (`git show <sha>:.aida/config.toml`, `None`
   fail-closed). Does not interpret fields; each consumer keeps its own
   executing-vs-not classification.
-- `aida-cli/src/pr_rebase.rs` — `read_pr_rebase_config` now sources
+- `aida-cli-lib/src/pr_rebase.rs` — `read_pr_rebase_config` now sources
   `smoke_check` through `trusted_config`; `pr_rebase_config_from_trusted` is
   the pure, unit-tested `Some(body)→parse / None→fail-closed` selection.
 - `aida-cli/src/main.rs` — `pr_rebase_handler` step 7 runs the resolved
@@ -85,10 +76,10 @@ program name, or a path to a script the drain executes:
 
 ## Tests
 
-- `aida-cli/src/trusted_config.rs` — a real-git fixture proves the trusted
+- `aida-cli-lib/src/trusted_config.rs` — a real-git fixture proves the trusted
   read returns the **default-branch** body even when the checked-out branch's
   working copy holds a hostile `smoke_check`, plus fail-closed cases (no git
   repo; file absent on the default branch).
-- `aida-cli/src/pr_rebase.rs` — `pr_rebase_config_from_trusted` selection:
+- `aida-cli-lib/src/pr_rebase.rs` — `pr_rebase_config_from_trusted` selection:
   trusted body is honored; `None` fail-closes to the default config; a hostile
   command can only reach execution via the trusted body (which it cannot).

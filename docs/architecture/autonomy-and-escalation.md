@@ -265,7 +265,7 @@ mode BUG-241 closed. The discipline is phase-agnostic: reality wins over
 "did the artifact I poll for appear?"
 
 Trace anchor: STORY-276, STORY-278, STORY-306, BUG-241,
-`aida-cli/src/auto_complete.rs`, `aida-cli/src/punt.rs`.
+`aida-cli-lib/src/auto_complete.rs`, `aida-cli-lib/src/punt.rs`.
 
 ---
 
@@ -487,7 +487,7 @@ producers, names that survive `ls`**.
 ### The orchestrator as mediator
 
 The orchestrator (`aida queue work --auto-complete` in
-`aida-cli/src/auto_complete.rs`) is the only process that **spawns** the
+`aida-cli-lib/src/auto_complete.rs`) is the only process that **spawns** the
 other tiers. It owns:
 
 - the child PID (via `std::process::Command`)
@@ -939,15 +939,15 @@ that divergence is the point of a dated record.
 |---------|-------------|
 | Three-mode taxonomy | `docs/autonomous-drain.md`, `docs/aida/discipline/skill-prompt-kinds.md`, STORY-287 |
 | Provenance corroboration | `aida zen status`, `aida orchestrator status`, BUG-233, BUG-237 |
-| Punt mechanics | `aida-cli/src/punt.rs`, `.claude/skills/aida-punt/SKILL.md`, STORY-332 |
-| Advisor tier | `aida-cli/src/auto_complete.rs::run_advisor`, `.claude/skills/aida-advise/SKILL.md`, STORY-306 |
+| Punt mechanics | `aida-cli-lib/src/punt.rs`, `.claude/skills/aida-punt/SKILL.md`, STORY-332 |
+| Advisor tier | `aida-cli-lib/src/auto_complete.rs::run_advisor`, `.claude/skills/aida-advise/SKILL.md`, STORY-306 |
 | Type A/B/C calibration | `.claude/skills/aida-advise/SKILL.md`, STORY-347 |
-| Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/archive/spikes/2026-05-20-spike-11-session-forking.md` |
+| Fork-from-live | `aida-cli-lib/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/archive/spikes/2026-05-20-spike-11-session-forking.md` |
 | File-based comms | `.aida/` (gitignored), TASK-329, `docs/architecture/mcp-coordination-surface.md` |
 | Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-0435, TASK-0436, TASK-0437 |
 | Advisor autopilot envelope | `aida-cli-lib/src/autopilot.rs`, `aida autopilot inspect/audit/challenge`, EPIC-0428, TASK-0429, TASK-1007, TASK-1020, TASK-1147 |
 | Autopilot's one wired executor | `aida-cli-lib/src/zen_drive.rs::run_draft_gate` (`aida zen <draft>`), TASK-1037 |
-| Reconcile-against-reality | `aida-cli/src/auto_complete.rs`, BUG-241 |
+| Reconcile-against-reality | `aida-cli-lib/src/auto_complete.rs`, BUG-241 |
 | Findings surfaces | `aida findings list`, `aida findings calibration`, STORY-278, STORY-285 |
 
 For machinery vocabulary — orchestrator, phase, drain, lease, role, scope,

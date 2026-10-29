@@ -2,12 +2,9 @@
 
 Start here. This index orders the docs by where you are in the journey — from
 *"what is this?"* to running it for a team to extending it. Not sure AIDA is for
-you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
+you at all? Jump to [Deciding whether to adopt](#3-deciding-whether-to-adopt).
 
-> New to AIDA? The three-doc on-ramp is **[Why AIDA?](WHY-AIDA.md)** →
-> **[Getting started](getting-started.md)** → **[First project](first-project.md)**.
-> That's the 15-minute path from "why does this exist" to a merged spec graph on
-> your own machine.
+> New to AIDA? Start with the **[visual product site](showcase/index.html)** or **[What is AIDA?](what-is-aida.md)**, then [Getting started](getting-started.md) and [Your first project](first-project.md). People describe intent and resolve decisions; agents normally perform the CLI/MCP operations. Operator setup and command references are labeled separately.
 
 > **How this library is organized.** Sections 1–6 are the **user-facing manual** — guides and reference you read to *use* AIDA (these are the docs destined for the unified "AIDA Book"). Section 7 is **working & internal artifacts** — plans, competitive analysis, spikes — generated *by* running the project. They're indexed here so they're findable, but they are **not manual material** and aren't curated for the book.
 
@@ -17,21 +14,22 @@ you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
 
 | Doc | What it gives you |
 |-----|-------------------|
+| [configuration.md](configuration.md) | Autonomy, agent selection, editable protocols, workflow policy and configuration trust scopes. |
 | [WHY-AIDA.md](WHY-AIDA.md) | The problem statement — *why this exists* before *how it works*. |
-| [getting-started.md](getting-started.md) | Install (cargo / binary / Docker / source), `aida init`, your first requirement. |
-| [first-project.md](first-project.md) | The follow-along: a TODO CLI from a blank repo to a six-spec graph with two features driven to *Completed*. The best "see what it's *for*" doc. |
+| [getting-started.md](getting-started.md) | Linux setup, agent connection, and your first conversation with an AIDA-aware agent. |
+| [first-project.md](first-project.md) | An illustrative human/agent journey from product intent through scoped, reviewed work. |
 | [using-aida-with-claude-code.md](using-aida-with-claude-code.md) | How AIDA and Claude Code fit together (skills, MCP, the daily loop). |
 
 ## 2. Daily use
 
 | Doc | What it gives you |
 |-----|-------------------|
-| **[cli/](cli/README.md)** | **The CLI reference manual** — *when and why* to use every command and option (not just *what*, which is `aida <cmd> --help`), with a lifecycle journey spine. 11 chapters; readable as an mdBook (`mdbook serve docs/cli`). The deepest day-to-day reference. |
+| **[cli/](cli/README.md)** | **The CLI reference manual** — *when and why* to use every command and option (not just *what*, which is `aida <cmd> --help`), with a lifecycle journey spine. 12 chapters; readable as an mdBook (`mdbook serve docs/cli`). The deepest day-to-day reference. |
 | [user-guide.md](user-guide.md) | *Retired* — a stale `v0.1.0`-era duplicate; now a pointer to the docs above. |
 | [requirement-types.md](requirement-types.md) | What each of the 19 requirement types is *for* and how to write one well — the intent + best-practice layer over the enum's reference list. |
 | [lifecycle.md](lifecycle.md) | The Draft → Approved → Planned → In Progress → Done → Completed → Released state machine, the verb for each transition, and the edge cases. |
 | [review-process.md](review-process.md) | **Who reviews, by execution mode** — the advisor-by-hand / reviewer-phase / headless-tier topology, the fasttrack-vs-review tag split, and the completion handoff loop. The authoritative source for the review/escalation model. |
-| [autonomous-drain.md](autonomous-drain.md) | The hands-off backlog drain + the three autonomy modes (interactive / `--zen` / `--no-human`), escalation, and calibration. |
+| [autonomous-drain.md](autonomous-drain.md) | The hands-off backlog drain, launch/presence options, escalation and calibration. Execution modes are a separate per-spec choice. |
 | [mailbox.md](mailbox.md) | The inter-agent mailbox — peer↔peer messaging, briefs vs conversation, and the git-canonical sync. |
 | [git-workflow.md](git-workflow.md) | Commit/branch conventions, the `(SPEC-ID)` trailer, and the two-leg code+store sync. |
 
@@ -50,7 +48,7 @@ These cut through the *"should I even use this?"* question honestly.
 
 | Doc | What it gives you |
 |-----|-------------------|
-| [admin-guide.md](admin-guide.md) | Storage backends, migration, multi-user setup. |
+| [admin-guide.md](admin-guide.md) | Operator configuration, data layers, backup, identity and maintenance boundaries. |
 | [storage-modes.md](storage-modes.md) | Distributed (git-canonical) vs the legacy modes — the full comparison. |
 | [multi-user-setup.md](multi-user-setup.md) | PostgreSQL-backed shared projection deployment. |
 | [multi-node.md](multi-node.md) | Distributed node identity, IDs, and the merge gate. |

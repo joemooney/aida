@@ -156,7 +156,7 @@ This is the pair the chapter intro warned about. Read both entries together once
 ## Where to go next
 
 You've now seen how the graph reaches *outward* — to agents, trackers, remote servers, and rendered docs. Related threads:
-- **[Chapter 7 — Project setup](07-project-setup.md)**: `aida init` (which registers the MCP server and scaffolds `.mcp.json`), plus `scaffold` and `memories` — the rest of the agent-integration furniture.
+- **[Chapter 7 — Project setup](07-project-setup.md)**: `aida init --with-mcp` (the explicit opt-in that scaffolds MCP registration), plus `scaffold` and `memories` — the rest of the agent-integration furniture.
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: the *git* side of GitHub/GitLab (PRs, merges) that the issue bridges here deliberately don't touch.
 - **[Chapter 2 — Specs](02-specs.md)**: the typed graph (`decision`/`principle`/`vision`/`term`) that the `docs` projection renders — get the types right there and the docs tree fills itself in.
 - For MCP client setup across editors, see [`docs/agents/aida-mcp-install-matrix.md`](../agents/aida-mcp-install-matrix.md).

@@ -25,7 +25,7 @@ almost-reproduce. This page is the canonical definition for each.
 
 Lifecycle verbs (committed / pushed / merged / completed / released) are
 *not* in scope here — those live in
-[`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) and the two pages
+[`lifecycle-vocabulary.md`](#lifecycle-vocabulary) and the two pages
 cross-reference rather than duplicate.
 
 ## The terms
@@ -421,9 +421,9 @@ These show up in the same sentences but live in other pages:
 
 - **committed / pushed / PR-opened / reviewed / merged / completed /
   released** — lifecycle verbs. See
-  [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md).
+  [`lifecycle-vocabulary.md`](#lifecycle-vocabulary).
 - **Needs Attention / punt** — off-mainline status. See
-  [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md#the-off-mainline-state-needs-attention).
+  [`lifecycle-vocabulary.md`](#the-off-mainline-state-needs-attention).
 - **finding** — a captured observation awaiting triage (`aida findings`).
   Friction surfaced during a session, not the same as a *spec*.
 - **trace comment** — `// trace:SPEC-ID | ai:claude` linking code to a
@@ -445,7 +445,7 @@ machinery concept:
    `aida` invocations as the template.
 4. **Cross-reference, don't duplicate.** When a term touches another's
    territory, link to it (`[term](#term)` or
-   `[lifecycle-vocabulary.md](lifecycle-vocabulary.md)`).
+   `[lifecycle-vocabulary.md](#lifecycle-vocabulary)`).
 5. **Keep it terse.** One paragraph plus optional bullets. Long-form
    discussion belongs in a dedicated doc, not the glossary.
 
@@ -560,7 +560,7 @@ commit history, and the requirement graph all survive.
 - `lifecycle:*` tags change which orchestrator phases run; they do not change
   the spec-state vocabulary. A spec still becomes **Done** when the PR opens
   and **Completed** when a referenced commit lands on main. See
-  [`machinery-glossary.md`](machinery-glossary.md#lifecycle-short-circuit-tags)
+  [`machinery-glossary.md`](#lifecycle-short-circuit-tags)
   for the phase-skip contract.
 
 Better phrasing:

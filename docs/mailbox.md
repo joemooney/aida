@@ -111,7 +111,7 @@ stdout must be JSON, so the relay names the event and wraps the notice as an
 injected system message). Its session-start run also ends dead agent-registry
 rows host-side, so they stop counting as unverified mail readers. Every turn
 re-surfaces unread mail until you act — a
-[substrate-as-bouncer](aida/discipline/substrate-as-bouncer.md) nudge, not a
+[substrate-as-bouncer](../aida-core/templates/.aida/discipline/substrate-as-bouncer.md) nudge, not a
 reminder you have to remember to poll. It is a thin relay around
 `aida mailbox notice` (it does not reimplement the logic). The `/aida-read-mail`
 skill is the on-demand companion: peek → interpret → read/ack → act.

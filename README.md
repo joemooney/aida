@@ -1,10 +1,15 @@
 # AIDA
 
-AIDA is an agent-collaboration substrate for a codebase. It gives humans and
-coding agents (Claude Code, Codex CLI, and any harness with a shell) one shared,
-project-owned record of what is being built and why, plus the coordination
-machinery that lets several agents work in the same repository without
-stepping on each other.
+AIDA is a **governed software factory with selectable autonomy**. People describe
+outcomes, resolve decisions and set delegation limits. Coding agents use its CLI
+and MCP tools to maintain shared requirements, coordinate work, and move changes
+through implementation, validation, independent review and merge.
+
+The CLI is primarily the agent interface. Operators can use it directly for
+setup, inspection and troubleshooting; stakeholders do not need to learn a
+sequence of mutation commands to request work. Start with the [product
+showcase](docs/showcase/index.html), [the overview](docs/what-is-aida.md), or
+[the human/agent walkthrough](docs/first-project.md).
 
 It is alpha software, Linux-only, and released under the MIT licence.
 
@@ -69,13 +74,14 @@ cargo install --path aida-cli
 No external `protoc` is needed: protobuf definitions are compiled with the
 pure-Rust `protox` crate.
 
-## Quick start
+## Operator setup and agent interface
 
 ```bash
 cd my-project
 git init                      # if it is not already a git repository
 aida init                     # orphan-branch store, cache, agent skills, commit hooks
 
+# The following operations are normally performed by your agent:
 aida add --type story --title "Rate-limit the login endpoint"
 aida list
 aida show <SPEC-ID>
@@ -97,7 +103,10 @@ fn throttle_login(ip: IpAddr) -> Result<()> { /* ... */ }
 aida why src/auth.rs:42
 ```
 
-From there, a spec moves through its lifecycle: approve it
+In ordinary use, describe the desired behavior to the agent and review its
+proposed acceptance criteria. The agent handles the underlying lifecycle calls
+within its authority. For agent integration and operator inspection, those calls
+include approving it
 (`aida edit <SPEC-ID> --status approved`), queue it (`aida queue add <SPEC-ID>`),
 and pick it up in an isolated worktree (`aida queue work`). The
 [getting-started guide](docs/getting-started.md) and
@@ -131,6 +140,7 @@ Useful starting points:
 
 ## Documentation
 
+- [docs/configuration.md](docs/configuration.md): configure autonomy, agents, work protocols and policy
 - [OVERVIEW.md](OVERVIEW.md): vision, architecture, and feature surface in depth
 - [docs/what-is-aida.md](docs/what-is-aida.md): What is AIDA? (overview for managers and newcomers; a self-contained `what-is-aida.html` beside it is for offline reading)
 - [docs/getting-started.md](docs/getting-started.md): setup and first steps

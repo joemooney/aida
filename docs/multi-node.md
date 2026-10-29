@@ -1,187 +1,48 @@
-# Multi-node AIDA: keeping the queue and store consistent across machines
+# AIDA across clones and machines
 
-*Last updated: 2026-05-22 — trace:BUG-220*
+People work with agents; agents use AIDA's CLI or MCP to inspect and synchronize the project record. This operator reference describes the boundaries that matter when work moves between clones.
 
-You have AIDA on more than one machine — typically a home box and a work box
-sharing the same git remote. `aida queue list` on machine B comes back empty
-even though you queued work on machine A. This doc names the two ways that
-happens and the durable workflow that prevents it.
+## Code, store and local state are different
 
-For the single-node identity rule (queue keyed off shell `$USER`, not node
-identity), see `CLAUDE.md` § *Queue identity (BUG-89)*. For the storage model
-(orphan branch + cache) see `OVERVIEW.md`.
+The ordinary Git-canonical setup has a code branch and an orphan `aida-store` branch. AIDA's normal sync commands distinguish those two legs. The attached `.aida-store/` worktree exposes the canonical graph locally; `.aida/cache.db` is a derived read cache.
 
-## TL;DR
+Not all runtime state travels on the store branch. Machine-global role queues and grants, local operational files and active process ownership must not be treated as remote-shared state. Project queues have a different storage scope from role-global queues. See [queue behavior](cli/03-work-autonomy.md) and [roles/sessions](cli/06-roles-sessions.md).
 
-```bash
-# On machine A — before you walk away from the keyboard:
-aida db sync --push       # push any orphan-store commits
+## Ask the agent to establish the facts
 
-# On machine B — at the start of a session:
-aida pull                 # fetches code + orphan store + runs merge-gate
-```
+> Inspect both code and store sync state. Show me local-only changes, remote divergence, the selected queue/user identity and any restricted transport policy before synchronizing. Do not discard local work.
 
-That is the whole pattern. Everything below explains *why* it works and how to
-diagnose when it doesn't.
+For direct operator inspection, `aida status`, `aida queue list`, `aida config allocation show`, and `aida config transport show` provide supported views. Read-only status does not prove that another offline clone has published all its work.
 
-## The two failure modes
+## Clone identity and spec IDs
 
-The queue is one YAML file per shell user, stored in the orphan `aida-store`
-branch at `registry/queues/<user_id>.yaml`. `<user_id>` resolves in this order:
-`--user <id>` flag → `AIDA_USER` env → `USER` env → `USERNAME` env → `"default"`
-(see `current_user_id` in `aida-cli/src/main.rs`).<!-- trace:TASK-476 | ai:claude --> Queue reads and writes
-go through the git backend directly — **not** through the SQLite cache (which
-holds `aida list` / `aida search` projections only). So a stale cache cannot
-make the queue look empty; only two things can:
+Ordinary clones default to WORK allocation: an opaque UUID node binding and persistent per-type counters in the common Git directory. Linked worktrees share that binding. Read-only use does not require minting a new identity; supported init/acquire lifecycle establishes the binding before allocation.
 
-### A · Shell `$USER` differs across machines
+Node-local IDs have a form such as `BUG-<node UUID>-001`. Friendly node aliases provide readable display/input forms while canonical IDs remain stored. An alias confers no authority. Current HOME enrollment is a separate direct-human workflow that permits global allocation and promotion; copied block records do not confer that permission.
 
-If machine A's shell sees `USER=joe` and machine B's shell sees `USER=joseph`
-(or `jmooney`, or anything else), the two are writing and reading **different**
-YAML files in the same orphan store. Queue items are there — just under the
-other name.
+See [clone-local allocation authority](cli/07-project-setup.md#clone-local-allocation-authority) for the current contract. Broader per-remote sharing and hierarchical allocation proposals are not described here as shipped behavior.
 
-Verify:
+## Normal synchronization
 
-```bash
-echo "USER=$USER  AIDA_USER=$AIDA_USER"
-ls .aida-store/registry/queues/
-```
+For ordinary clones, agents use the documented `aida pull` and `aida push` operations, or the supported scope-specific alternatives. Pull can reconcile store history and run authorized lifecycle processing. WORK/HUB post-pull processing skips agreed-ID promotion; HOME promotion retains native lookup aliases.
 
-Fix: pin `AIDA_USER` per-shell so both nodes resolve to the same id, regardless
-of the shell's `$USER`:
+Do not assume an operation is read-only because it is called a pull or a dry run. The [Git lifecycle reference](cli/04-git-lifecycle.md) defines current flags, remote handling, wait behavior and failures.
 
-```bash
-# Add to ~/.bashrc / ~/.zshrc on every machine you work from:
-export AIDA_USER=joe
-```
+## Restricted transport is a separate policy
 
-The `--user <id>` flag works for one-off invocations.
+An explicitly enrolled restricted transport profile has a pinned destination and reviewed trust policy. Its store-only push and fast-forward-only pull intentionally avoid ordinary lifecycle side effects. It is not a general-purpose object filter or a guarantee that arbitrary private history can be published safely.
 
-### B · Orphan store on machine A is unpushed (the usual culprit)
+Read the [transport contract](cli/07-project-setup.md#aida-config-transport) before enrolling or changing it. Different sharing intentions require deliberate store/history boundaries, not a label on a node.
 
-This is what catches everyone. The orphan `aida-store` branch is committed
-locally on every `aida add` / `aida edit` / `aida queue add`, but push to
-`origin/aida-store` is **manual by default**. Machine A's local branch can sit
-arbitrarily far ahead of origin; machine B's `aida pull` faithfully pulls the
-stale origin and sees nothing new.
+## When a queue looks empty
 
-The 2026-05-18 incident this doc was filed against: machine A was nine commits
-ahead of `origin/aida-store`. Machine B saw an empty queue not because the
-queue was empty — because the queued items had never left machine A.
+Have the agent distinguish:
 
-Verify on the machine you suspect is the writer:
+1. A different resolved shell user, role or queue scope.
+2. Canonical changes that have not been published or received.
+3. Local role-global queue state that does not travel with the project store.
+4. Cache/read-context freshness where the particular command uses a projection.
 
-```bash
-git -C .aida-store fetch origin aida-store --quiet
-git -C .aida-store log --oneline origin/aida-store..aida-store
-```
+Use supported command output rather than assuming one historical on-disk path still describes every queue. A cache rebuild cannot fetch another machine's unpublished commits or recreate its local grants.
 
-Non-empty output → the writer hasn't pushed. Fix:
-
-```bash
-aida db sync --push
-```
-
-On the reader machine after the push:
-
-```bash
-aida pull        # code + orphan store
-# or
-aida db sync --pull
-```
-
-## Auto-push modes (so you don't have to remember)
-
-`.aida/config.toml`:
-
-```toml
-[store.sync]
-auto_push = "session-end"   # push when `aida session end` runs
-# auto_push = "per-write"   # push after every queue/spec mutation
-# auto_push = "manual"      # default — explicit `aida db sync --push` required
-# auto_push = "periodic"    # reserved for aida-worker (EPIC-30) — falls back to manual today
-```
-
-`session-end` is the recommended setting on a multi-node workstation: every
-time you wrap up an AIDA session, the store gets pushed automatically. The
-cost is one network call per session-end; the value is never being the writer
-who left commits stranded.
-
-`per-write` is the strict mode — every mutation pushes. Useful if you actively
-move between machines mid-session.
-
-## Diagnostic checklist
-
-Run on the node that sees an empty / stale queue:
-
-```bash
-echo "USER=$USER  AIDA_USER=$AIDA_USER"     # (A) — does the user id match?
-aida cache status                            # is the cache fresh? (auto-rebuilt anyway)
-ls .aida-store/registry/queues/              # whose queue files actually exist?
-aida pull                                    # fetch+merge code + orphan store
-git -C .aida-store log --oneline -5          # what was the last orphan-store commit?
-aida queue list --sync                       # one-shot pull-then-list
-```
-
-Then run on the *other* node (the suspected writer):
-
-```bash
-git -C .aida-store fetch origin aida-store --quiet
-git -C .aida-store log --oneline origin/aida-store..aida-store
-# non-empty → you're the unpushed writer; run `aida db sync --push`
-```
-
-## Reproducing the two-node setup on one machine
-
-You can simulate two nodes against the same origin with two clones in
-different directories — useful for testing changes to the sync surface:
-
-```bash
-# Clone A (the writer)
-git clone git@github.com:joemooney/aida.git /tmp/aida-node-a
-cd /tmp/aida-node-a
-git worktree add -B aida-store .aida-store origin/aida-store
-# … queue some work …
-aida queue add SPEC-123 --for implementer
-# (Without `aida db sync --push`, node B will not see this.)
-
-# Clone B (the reader)
-git clone git@github.com:joemooney/aida.git /tmp/aida-node-b
-cd /tmp/aida-node-b
-git worktree add -B aida-store .aida-store origin/aida-store
-aida queue list                # empty — node A hasn't pushed yet
-
-# Now push from A:
-cd /tmp/aida-node-a
-aida db sync --push
-
-# And pull from B:
-cd /tmp/aida-node-b
-aida pull
-aida queue list                # populated
-```
-
-The same recipe applies across actual machines — `/tmp/aida-node-a` is just
-another path that pretends to be a different node.
-
-## What doesn't matter (so you don't chase it)
-
-- **`~/.aida/node.toml`** — the per-machine node identity. Used for HLC
-  timestamps and short-ID assignment in the merge gate; **not** used in queue
-  routing. Different nodes can write queue items routed to the same shell
-  user without any node-id conflict.
-- **`.aida/cache.db`** — silently auto-rebuilt by `ensure_cache_fresh()` on
-  every list/search/load (`aida-core/src/db/cached_git_backend.rs:85`). Stale
-  cache cannot cause an empty queue because queue reads bypass it entirely.
-- **Local `aida-store` worktree state** — a fresh `git worktree add` against
-  `origin/aida-store` reconstructs everything. The orphan branch on origin is
-  the source of truth; the local worktree is convenience.
-
-## See also
-
-- `CLAUDE.md` § *Queue identity (BUG-89)* — the single-node identity rule
-- `CLAUDE.md` § *Storage model (EPIC-1-001)* — orphan branch + cache layout
-- `CLAUDE.md` § *Divergent-branch recovery* — when `aida pull` refuses
-- `docs/session-lifecycle.md` — where `auto_push = "session-end"` fits in
-- BUG-89, STORY-284, BUG-220
+<!-- trace:EPIC-b6b1278890774ef993d2ebc327862470-002 | ai:codex -->

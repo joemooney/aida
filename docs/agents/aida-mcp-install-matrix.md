@@ -6,6 +6,8 @@
 
 This matrix is operational, not marketing. It records how to connect each client to `aida mcp-serve`, what instruction file or marketplace surface the client expects, and which AIDA MCP profile should be safe by default.
 
+> **Audience and freshness:** the CLI is the primary interface for shell-capable agents; MCP is an explicit typed alternative. The client-specific matrix below retains its per-row verification dates and is not a claim that every vendor UI was re-tested in the 2026-10 documentation review. Verify a client's current setup before rollout.
+
 ## Tool profiles (STORY-474)
 
 `aida mcp-serve` now gates its tool surface behind a named **profile** — a capability tier where each higher tier is a strict superset of the one below:

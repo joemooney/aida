@@ -182,7 +182,7 @@ remote-tracking ref. Local hook-profile installation/verification is the existin
 policy; it does not change the canonical store.
 
 **Sanitization is refusal-only.** A reviewed policy (below) gates every push
-and every store write; see [sanitized intake](#sanitized-intake-aida-add---sanitized).
+and every store write; see [sanitized intake](#sanitized-intake).
 It can only refuse known shapes and listed tokens, so keep work-filed defects
 generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
@@ -243,14 +243,14 @@ ID counters and other remotes are untouched by the transport.
 
 **One line** — manage this clone's *node identity* in the shared multi-clone registry.
 
-**Mental model.** Every clone of a distributed AIDA project gets a unique **node id**, and that id is the namespace for node-aware spec ids (`FR-<node>-NNN`) until the merge gate promotes them to short agreed-ids. `aida node` is how a clone *acquires* its id (a CAS push-loop on the shared registry), *shows* it, *lists* all registered clones, or *releases* it. `aida init` does the acquire for you on a normal bootstrap; you reach for `node` directly only in the fresh-clone / multi-machine cases.
+**Mental model.** Every clone of a distributed AIDA project gets a unique **node id**, and that id is the namespace for node-aware spec ids (`FR-<node>-NNN`) until the merge gate promotes them to short agreed-ids. `aida node` is how a clone *acquires* its id (an opaque local binding for ordinary WORK clones; authoritative registration has a separate path), *shows* it, *lists* all registered clones, or *releases* it. `aida init` does the acquire for you on a normal bootstrap; you reach for `node` directly only in the fresh-clone / multi-machine cases.
 
 **Reach for it when** — you cloned an existing AIDA project on a new machine and need to *write* new spec ids (a read-only clone auto-attaches the store, but minting ids needs a node — `aida node acquire`); or you want to see which clones are registered (`node list`, current marked `*`).
 
 **Don't reach for it when** — you ran the full `aida init` (it acquired a node already); or you only *read* the store (reads don't need a node). And don't `release` casually — releasing does **not** invalidate ids already issued by that node, and the id is never reused.
 
 **Key options (rationale only).**
-- `acquire` — the CAS-loop claim of the next sequential node id; defaults pull `git config user.email` and the hostname for the registry stamp. The one you need on a fresh clone that will *write*.
+- `acquire` — initializes or retains this clone's bound node identity through the supported lifecycle. Ordinary WORK clones use an opaque UUID binding and persistent counters; they do not claim a sequential global registry ID. See [allocation authority](#clone-local-allocation-authority) for HOME enrollment and legacy behavior.
 - `release` — removes the registry entry but is deliberately *non-destructive to issued ids*. Reach for it only when retiring a clone for good.
 - `alias set <LABEL> [--node <uuid>]` / `alias rename <OLD> <NEW>` / `alias list` / `alias show <LABEL|uuid>` — give a node a short label so its node-local ids read as `TASK-HOME-095` instead of `TASK-<32-hex-node>-095`. Any command that takes a spec id accepts the label form in any case, and human and agent output shows it; `--format json` keeps `spec_id` canonical and adds `display_id`. Pass `--canonical-ids` (or set `AIDA_CANONICAL_IDS=1`) to show canonical ids instead. Labels are for display and input only: AIDA always stores and writes the canonical id. A label is never moved to another node. `rename` retires the old label, which keeps resolving to the same node, and there is no delete. Labels are 2–8 letters or digits starting with a letter; labels made only of hex digits and labels equal to a type prefix are refused.
 
@@ -551,6 +551,8 @@ changes rescan from the original root; receipts never cache scan results or
 turn tracking refs into trusted evidence. An uncertain push leaves the receipt
 unchanged. If publication succeeds but receipt persistence or policy
 revalidation fails, the command reports that partial result and does not retry.
+
+<a id="sanitized-intake"></a>
 
 ### `aida add --sanitized` (sanitized intake)
 

@@ -216,7 +216,7 @@ See `aida-server --help` for all auth options.
 
 ## Switching Between Modes
 
-Both modes use the same requirement format, so migration is lossless. The two helpers below — `db export-git` and `db migrate` — are **archived legacy commands** kept for one-shot moves on and off the centralized backend; they are not part of day-to-day operation.
+Validate compatibility and the resulting data before changing the deployment; sharing a model does not prove every field or metadata block can be migrated losslessly. The two helpers below — `db export-git` and `db migrate` — are **archived legacy commands** kept for one-shot moves on and off the centralized backend; they are not part of day-to-day operation.
 
 ### PostgreSQL → git-canonical (the default)
 
@@ -278,7 +278,7 @@ ss -tlnp | grep 5432
 
 ### Slow queries with many requirements
 
-PostgreSQL handles 100K+ requirements without issues. If queries are slow:
+Capacity depends on schema, workload and deployment resources; this guide does not provide a validated requirement-count benchmark. If queries are slow:
 
 ```bash
 # Check if indexes exist

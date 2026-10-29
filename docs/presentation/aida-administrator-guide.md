@@ -15,6 +15,8 @@ COMPANION DECKS: executive-briefing, developer-deep-dive, user-walkthrough.
 Verify every command against `aida <cmd> --help` before presenting.
 -->
 
+> **Dated presentation / perspective:** this material retains its original context and examples; counts and external vendor features are not a current capability contract. For the current product story and human/agent journey, use [the product site](../showcase/index.html) and [configuration](../configuration.md).
+
 # AIDA — Administrator Guide
 
 ### Stand it up, configure it, keep it healthy

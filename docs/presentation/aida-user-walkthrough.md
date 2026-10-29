@@ -14,6 +14,8 @@ AUDIENCE: developers who will USE AIDA day to day. GOAL: "I know the loop and th
 COMPANION DECKS: executive-briefing, developer-deep-dive, administrator-guide.
 -->
 
+> **Dated presentation / perspective:** this material retains its original context and examples; counts and external vendor features are not a current capability contract. For the current product story and human/agent journey, use [the product site](../showcase/index.html) and [configuration](../configuration.md).
+
 # AIDA — daily use
 
 ### File it · queue it · ship it · keep code tied to intent

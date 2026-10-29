@@ -4,7 +4,7 @@
 
 Sister documents:
 
-- [README.md](../../README.md#what-makes-aida-distinct) — the elevator pitch: AIDA's defensible niche in eight bullets. <!-- trace:TASK-289 | ai:claude -->
+- [README.md](../../README.md#what-it-provides) — the elevator pitch: AIDA's defensible niche in eight bullets. <!-- trace:TASK-289 | ai:claude -->
 - [OVERVIEW.md](../../OVERVIEW.md) — the big-picture vision.
 - [WHY-AIDA.md](../WHY-AIDA.md) — narrative for "why does this exist?"
 - [competitive-analysis/](../competitive-analysis/README.md) — the living landscape tracking; its dated snapshots are in [`../archive/competitive-analysis/`](../archive/competitive-analysis/).
@@ -49,20 +49,18 @@ The short reading path:
    memory before queues, drains, roles, hooks, or orchestrators. <!-- trace:TASK-1216 | ai:codex -->
 4. [composition.md](composition.md) for how AIDA layers with Spec Kit, Agent
    Teams, MCP editors, GitHub Issues, and plain markdown.
-5. [../aida/discipline/agent-agnostic-vs-claude-specific.md](../aida/discipline/agent-agnostic-vs-claude-specific.md)
+5. [../../aida-core/templates/.aida/discipline/agent-agnostic-vs-claude-specific.md](../../aida-core/templates/.aida/discipline/agent-agnostic-vs-claude-specific.md)
    for the universal-discipline vs per-agent-convenience split.
 
 ---
 
-## The defensible niche statement
+## Current product framing
 
-AIDA is **the agent-collaboration layer for project intent.** Not a replacement for project management tools, not a replacement for code review tools, not a replacement for documentation generators. The defensible thing AIDA brings is the *stable, queryable graph of what exists, who depends on it, and why* — served to agents through a token-efficient CLI (the primary agent surface), to MCP-native clients through typed MCP tools, and to humans through the same small CLI. *(Refresh 2026-07-19: this line previously read "served to AI through MCP" — the 2026-06-29 SPIKE-73 benchmark found MCP ~2× the CLI's cost at equal-or-lower success, so the CLI is primary and MCP is the typed option.)*
+AIDA is a **governed software factory with selectable autonomy**. People communicate intent, resolve decisions and set limits; agents operate the CLI/MCP and the delivery workflow. Configurable agent defaults, editable work protocols and per-spec execution modes let a project adopt the operating model it needs.
 
-> Karpathy-style "structured markdown queryable by Claude" is the floor; Spec Kit's spec-driven workflow is the ceiling. AIDA sits between them as the **durable index** — a small invisible kernel that captures what exists, plus optional layered modules for everything else.
->
-> *— [OVERVIEW.md](../../OVERVIEW.md)*
+The durable, Git-backed graph remains the foundation: it preserves what the system is for and connects that intent to code and review evidence. The broader factory includes roles, queue/session coordination, independent review and authority gates. See [the product overview](../what-is-aida.md), [configuration](../configuration.md) and [the human/agent walkthrough](../first-project.md).
 
-Everything in this directory is in service of making that scope honest. If a comparison reads as *"AIDA replaces X,"* it's probably wrong. The right framing is almost always *"AIDA composes with X, and here's the seam."*
+The comparisons below are dated evidence about neighboring tools. Do not use them as current claims about competitors, adoption numbers or feature availability without a fresh source check.
 
 ---
 

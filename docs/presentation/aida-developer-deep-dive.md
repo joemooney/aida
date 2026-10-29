@@ -15,6 +15,8 @@ DEPTH: code-level. File:symbol refs are in speaker notes so the slide stays read
 COMPANION DECKS: executive-briefing, administrator-guide, user-walkthrough.
 -->
 
+> **Dated presentation / perspective:** this material retains its original context and examples; counts and external vendor features are not a current capability contract. For the current product story and human/agent journey, use [the product site](../showcase/index.html) and [configuration](../configuration.md).
+
 # AIDA — under the hood
 
 ### A developer's tour of the substrate
@@ -111,7 +113,7 @@ agreed (short) id FR-048           the canonical id, collision-checked
 ```
 
 <!--
-aida-core/src/hlc.rs (HlcTimestamp), node.rs (validate_node_id), dispenser.rs (Centralized vs Distributed modes). Pre-allocated blocks (`aida db block claim`) let a clone reserve a contiguous range of short IDs up front so trace comments use the short form immediately, even offline.
+aida-core/src/hlc.rs (HlcTimestamp), node.rs (validate_node_id), dispenser.rs (Centralized vs Distributed modes). Current allocation is authority-gated: ordinary WORK clones issue opaque node-local IDs; only explicitly enrolled HOME clones may claim global blocks and promote short IDs. A copied block ledger is not allocation authority. See docs/cli/07-project-setup.md.
 -->
 
 ---
@@ -152,7 +154,7 @@ aida-core/src/models.rs: HistoryEntry { id, author, timestamp, changes: Vec<Fiel
 > The agent holds **structured context** — not a flat file it re-parses every session.
 
 <!--
-aida-cli/src/mcp.rs. The MCP server self-respawns after a handled request when the on-disk `aida --version` reports a newer build, so long-running clients pick up upgrades.
+aida-cli-lib/src/mcp.rs. The MCP server self-respawns after a handled request when the on-disk `aida --version` reports a newer build, so long-running clients pick up upgrades.
 -->
 
 ---
@@ -199,7 +201,7 @@ The (SPEC-ID) trailer auto-completes that spec on merge — so you only trailer 
 - The phases sit behind a **`PhaseDriver` trait**, so the sequencing is unit-tested against a mock.
 
 <!--
-aida-cli/src/auto_complete.rs: enum Phase (index = 1..6 = the failure exit code), trait PhaseDriver, orchestrate_with_lifecycle_skip. The two judgment phases are Claude; everything else is deterministic — that's why it runs unattended.
+aida-cli-lib/src/auto_complete.rs: enum Phase (index = 1..6 = the failure exit code), trait PhaseDriver, orchestrate_with_lifecycle_skip. The two judgment phases are Claude; everything else is deterministic — that's why it runs unattended.
 -->
 
 ---

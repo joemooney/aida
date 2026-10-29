@@ -4,7 +4,9 @@
 
 # Getting started
 
+- [What is AIDA?](what-is-aida.md)
 - [Why AIDA?](WHY-AIDA.md)
+- [Configure the factory](configuration.md)
 - [Getting started](getting-started.md)
 - [Your first project](first-project.md)
 - [The memory lane](positioning/memory-lane.md)

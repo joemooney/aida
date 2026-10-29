@@ -94,14 +94,9 @@ AIDA is low-infrastructure (one binary, a git branch, a local cache) but it is
 you *why this code exists* six months later — only exists because that habit fed
 it.
 
-If you won't maintain even a structured `REQUIREMENTS.md` by hand, AIDA's graph
-won't maintain itself either. The
-["structured markdown an agent can read"](../archive/positioning/vs-karpathy-md.md) approach is the
-floor; AIDA adds the relationship graph, stable IDs, and enforcement *on top of*
-a discipline you're already willing to keep. No discipline, no graph.
+The routine bookkeeping belongs to the agents, not the stakeholder. AIDA still needs explicit intent, maintained acceptance criteria and reliable validation. If neither the team nor its agents will maintain that record, adding a database does not fix the operating model.
 
-**Use instead:** nothing — or a single hand-kept markdown file — until the habit
-is something you actually want. AIDA rewards the discipline; it can't supply it.
+**Use instead:** the existing agent and tests for a bounded one-off task. Adopt AIDA when durable intent, handoffs or controlled delegation justify the additional structure.
 
 ---
 

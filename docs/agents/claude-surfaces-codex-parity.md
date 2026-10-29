@@ -101,7 +101,7 @@ shortcuts (`/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`,
 This is the **highest-risk gap**. AIDA's autonomous drain and headless advisor
 tier hardcode `claude -p`. The orchestrator phases (implementer, CI wait,
 reviewer, advisor) are driven by Claude-specific spawn helpers in
-`aida-cli/src/session.rs`.
+`aida-cli-lib/src/session.rs`.
 
 | Surface (code) | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
@@ -221,7 +221,7 @@ bite — everything else is convenience or already covered.
 - `docs/agents/per-agent-config.md` — per-agent permission posture + `os_wrap`
 - `docs/agents/claude-bubblewrap-sandbox.md` — `os_wrap` outer OS boundary
 - `aida-core/src/scaffolding/codex_md.rs` — `.codex/config.toml` + `AGENTS.md` scaffolding
-- `aida-cli/src/session.rs` — `spawn_claude_headless`, `claude_headless_args`, `os_wrap` helpers
-- `aida-cli/src/auto_complete.rs` — orchestrator drain phases
-- `aida-cli/src/compete.rs` — existing `codex exec` vendor adapter (reusable prior art)
+- `aida-cli-lib/src/session.rs` — `spawn_claude_headless`, `claude_headless_args`, `os_wrap` helpers
+- `aida-cli-lib/src/auto_complete.rs` — orchestrator drain phases
+- `aida-cli-lib/src/compete.rs` — existing `codex exec` vendor adapter (reusable prior art)
 - `aida-tui/src/pty.rs`, `aida-tui/src/app.rs` — TUI PTY host + hosted argv

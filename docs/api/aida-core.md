@@ -20,7 +20,7 @@ Only two workspace crates link against `aida-core`:
 
 | Consumer | What it is | How it uses the API |
 |----------|-----------|---------------------|
-| `aida-cli` | the `aida` binary | the heaviest consumer — store, backends, ID system, graph, scaffolding, integrations. **Includes the MCP server** (`aida-cli/src/mcp.rs`), which consumes a deliberately narrow slice: `Requirement`, `RequirementsStore`, `RequirementType`, `RequirementStatus`, `RequirementPriority`, `RelationshipType`, `Comment`, `Storage`, `PuntCategory`, `graph_walk`, `mailbox`, `forbidden_attention_transition`. |
+| `aida-cli` | the `aida` binary | the heaviest consumer — store, backends, ID system, graph, scaffolding, integrations. **Includes the MCP server** (`aida-cli-lib/src/mcp.rs`), which consumes a deliberately narrow slice: `Requirement`, `RequirementsStore`, `RequirementType`, `RequirementStatus`, `RequirementPriority`, `RelationshipType`, `Comment`, `Storage`, `PuntCategory`, `graph_walk`, `mailbox`, `forbidden_attention_transition`. |
 | `aida-server` | REST + gRPC service (port 8080) | a narrower slice: the data model (`Requirement`/`RequirementsStore`/the `models` enums), the `db` backends, `ai`, `analytics`, and `determine_requirements_path`. |
 
 **`aida-tui` does NOT depend on `aida-core`.** The PTY-hosting terminal shell

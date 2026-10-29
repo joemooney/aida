@@ -34,7 +34,7 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 AIDA's MCP server exposes **58 tools** in six clusters:
 
-**Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
+**Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli-lib/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
 ### Cluster 1 — Spec graph (12 tools)
 

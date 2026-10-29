@@ -392,7 +392,7 @@ td code { font-size: 0.84em; }
 <div class="layout">
 <nav class="toc" aria-label="Table of contents">
   <h2 class="toc-title">Contents</h2>
-  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</a><ol><li><a href="#four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</a></li><li><a href="#where-a-dark-factory-fits">Where a dark factory fits</a></li></ol></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
+  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</a><ol><li><a href="#four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</a></li><li><a href="#where-a-dark-factory-fits">Where a dark factory fits</a></li></ol></li><li><a href="#configurable-by-design">Configurable by design</a></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
 </nav>
 <main id="content">
 <section class="intro" aria-label="Introduction">
@@ -402,7 +402,7 @@ td code { font-size: 0.84em; }
 </section>
 <section class="major" id="sec-in-short" aria-labelledby="in-short">
 <h2 id="in-short"><a class="anchor" href="#in-short" aria-label="Link to this section">#</a>In short</h2>
-<p><strong>What it is.</strong> A command-line tool (<code>aida</code>) plus an MCP server (<code>aida mcp-serve</code>) that sits inside a git repository. Requirements, decisions, comments, mail and lease records live in git on an orphan <code>aida-store</code> branch. Operational records such as review verdicts, merge holds, dispatch requests, handoff notes and standing orders live in local, git-ignored files under <code>.aida/</code>, and mandates live under <code>~/.aida/</code>. AIDA controls how AI agents pick up work, review each other, and merge.</p>
+<p><strong>What it is.</strong> A governed software factory operated primarily by agents through the <code>aida</code> CLI, with typed MCP tools available through <code>aida mcp-serve</code>. People describe outcomes, resolve decisions and inspect results through their AIDA-aware agent. Operators can also use the CLI directly for setup, inspection and troubleshooting. Requirements, decisions, comments, mail and lease records live in git on an orphan <code>aida-store</code> branch. Operational records such as review verdicts, merge holds, dispatch requests, handoff notes and standing orders live in local, git-ignored files under <code>.aida/</code>, and mandates live under <code>~/.aida/</code>. AIDA controls how AI agents pick up work, review each other, and merge.</p>
 <p><strong>Who it is for.</strong></p>
 <ul>
 <li>A developer who runs several AI coding agents (Claude Code, Codex CLI, Antigravity, or anything with a shell) on one codebase at the same time.</li>
@@ -483,6 +483,46 @@ td code { font-size: 0.84em; }
 <p>Selecting autonomy does not grant authority to bypass reviews, CI, merge holds or protected operations. Mandates and seat grants determine which actions are authorized and for how long; the execution mode determines how the work is carried out. A stopped gate or unresolved decision can still require a person. Here, delivery means reaching the merged code state; production deployment requires its own policy and automation.</p>
 <p>For management, this supports a practical adoption path: start with supervised delivery, retain collaborative delivery for design-heavy work, and delegate well-specified work to autonomous delivery as its validation and operating evidence justify it. The goal is to choose the human attention each change needs and retain a record of what happened.</p>
 <!-- trace:TASK-b6b1278890774ef993d2ebc327862470-100 | ai:codex -->
+</section>
+<section class="major" id="sec-configurable-by-design" aria-labelledby="configurable-by-design">
+<h2 id="configurable-by-design">Configurable by design</h2>
+<p>AIDA lets a team shape its operating model instead of adopting one fixed automation level. Configuration includes per-spec autonomy, coding-agent launch defaults, editable work protocols, queue policy, review/integration settings and reporting preferences.</p>
+<div class="table-wrap" role="region" tabindex="0" aria-label="Configuration choices"><table>
+<thead>
+<tr class="header">
+<th scope="col">Configure</th>
+<th scope="col">What that means for a team</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Human involvement</td>
+<td>Choose human-led, collaborative, supervised or autonomous delivery for each spec.</td>
+</tr>
+<tr class="even">
+<td>Agent execution</td>
+<td>Select supported vendors and launch defaults; harness/model/effort capabilities depend on the selected runtime.</td>
+</tr>
+<tr class="odd">
+<td>Work contracts</td>
+<td>Edit type protocols and lane overlays in the spec graph so agents receive the project's own expectations.</td>
+</tr>
+<tr class="even">
+<td>Workflow policy</td>
+<td>Configure supported queue ordering, review/integration behavior and escalation controls.</td>
+</tr>
+<tr class="odd">
+<td>Project footprint</td>
+<td>Use the appropriate full, memory-oriented, sibling-store or adopted-project setup.</td>
+</tr>
+<tr class="even">
+<td>Presentation and reporting</td>
+<td>Choose supported output formats, history layouts, hints and status views.</td>
+</tr>
+</tbody>
+</table></div>
+<p>People state the desired policy; agents inspect and apply the supported settings within their authority. Settings have different project, clone and machine trust scopes. Configuration cannot grant a seat, bypass a decision block or make unsupported vendor containment available. See <a href="configuration.md">Configuring AIDA</a> for the map to authoritative references.</p>
+<p>The CLI examples in the technical documentation primarily describe operations an agent performs. A newcomer can begin with a request such as: “Record this requirement, help me settle the acceptance criteria, then build it for my review.” AIDA is not a separate chat service; the agent uses installed guidance, skills and tool interfaces to carry out that request.</p>
 </section>
 <section class="major" id="sec-how-big-is-it-and-why" aria-labelledby="how-big-is-it-and-why">
 <h2 id="how-big-is-it-and-why"><a class="anchor" href="#how-big-is-it-and-why" aria-label="Link to this section">#</a>How big is it, and why</h2>

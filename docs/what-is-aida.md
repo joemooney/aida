@@ -6,7 +6,7 @@ AI coding agents can now write real code. On their own, though, several agents o
 
 ## In short
 
-**What it is.** A command-line tool (`aida`) plus an MCP server (`aida mcp-serve`) that sits inside a git repository. Requirements, decisions, comments, mail and lease records live in git on an orphan `aida-store` branch. Operational records such as review verdicts, merge holds, dispatch requests, handoff notes and standing orders live in local, git-ignored files under `.aida/`, and mandates live under `~/.aida/`. AIDA controls how AI agents pick up work, review each other, and merge.
+**What it is.** A governed software factory operated primarily by agents through the `aida` CLI, with typed MCP tools available through `aida mcp-serve`. People describe outcomes, resolve decisions and inspect results through their AIDA-aware agent. Operators can also use the CLI directly for setup, inspection and troubleshooting. Requirements, decisions, comments, mail and lease records live in git on an orphan `aida-store` branch. Operational records such as review verdicts, merge holds, dispatch requests, handoff notes and standing orders live in local, git-ignored files under `.aida/`, and mandates live under `~/.aida/`. AIDA controls how AI agents pick up work, review each other, and merge.
 
 **Who it is for.**
 
@@ -66,6 +66,25 @@ Selecting autonomy does not grant authority to bypass reviews, CI, merge holds o
 For management, this supports a practical adoption path: start with supervised delivery, retain collaborative delivery for design-heavy work, and delegate well-specified work to autonomous delivery as its validation and operating evidence justify it. The goal is to choose the human attention each change needs and retain a record of what happened.
 
 <!-- trace:TASK-b6b1278890774ef993d2ebc327862470-100 | ai:codex -->
+
+---
+
+## Configurable by design
+
+AIDA lets a team shape its operating model instead of adopting one fixed automation level. Configuration includes per-spec autonomy, coding-agent launch defaults, editable work protocols, queue policy, review/integration settings and reporting preferences.
+
+| Configure | What that means for a team |
+|---|---|
+| Human involvement | Choose human-led, collaborative, supervised or autonomous delivery for each spec. |
+| Agent execution | Select supported vendors and launch defaults; harness/model/effort capabilities depend on the selected runtime. |
+| Work contracts | Edit type protocols and lane overlays in the spec graph so agents receive the project's own expectations. |
+| Workflow policy | Configure supported queue ordering, review/integration behavior and escalation controls. |
+| Project footprint | Use the appropriate full, memory-oriented, sibling-store or adopted-project setup. |
+| Presentation and reporting | Choose supported output formats, history layouts, hints and status views. |
+
+People state the desired policy; agents inspect and apply the supported settings within their authority. Settings have different project, clone and machine trust scopes. Configuration cannot grant a seat, bypass a decision block or make unsupported vendor containment available. See [Configuring AIDA](configuration.md) for the map to authoritative references.
+
+The CLI examples in the technical documentation primarily describe operations an agent performs. A newcomer can begin with a request such as: “Record this requirement, help me settle the acceptance criteria, then build it for my review.” AIDA is not a separate chat service; the agent uses installed guidance, skills and tool interfaces to carry out that request.
 
 ---
 

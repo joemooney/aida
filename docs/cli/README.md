@@ -1,5 +1,7 @@
 # AIDA CLI Reference Manual
 
+> **Audience:** this is the command reference for agents and operators. In the normal product workflow, people describe outcomes to an AIDA-aware agent and the agent performs these operations. Start with [Getting started](../getting-started.md) for that human journey; use this manual for integration, setup, inspection and troubleshooting.
+
 > **What this is.** `aida <command> --help` tells you *what* a command does and *which* flags exist. This manual tells you **when and why** — the mental model behind each command, when to reach for it, when *not* to (and what to use instead), and how the commands chain into one coherent lifecycle. It's the difference between a parts list and an owner's manual.
 >
 > **Who it's for.** A new AIDA user who wants to understand the whole shape before diving in; an experienced user who hit a command and thought "wait, when would I actually use *this*?"; a reviewer who wants to see that the surface is coherent, not accreted.

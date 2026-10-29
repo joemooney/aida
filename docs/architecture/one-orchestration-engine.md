@@ -5,7 +5,7 @@
 ## The invariant
 
 There is **ONE per-spec orchestration engine**:
-`auto_complete::orchestrate_with_resume` in `aida-cli/src/auto_complete.rs`. It
+`auto_complete::orchestrate_with_resume` in `aida-cli-lib/src/auto_complete.rs`. It
 runs the fixed per-spec lifecycle:
 
 ```
@@ -62,7 +62,7 @@ outside the engine requires a new ADR.
 
 A prose rule did not hold — zen slice-1 re-forked despite the lifecycle being
 "obvious". So the invariant is a **CI gate**:
-`aida-cli/src/orchestration_routing.rs` is a registry classifying every per-spec
+`aida-cli-lib/src/orchestration_routing.rs` is a registry classifying every per-spec
 driver, with tests that assert:
 
 - each non-exception driver routes through the engine, tied to the **real**
@@ -104,5 +104,5 @@ in the child sessions, not the parent engine.
 
 - ADR-7 (the decision), ADR-9 (guardrail), ADR-10 (autonomy parameter)
 - TASK-1049 (zen reviewer phase), STORY-721 (zen), STORY-520 (integrate loop)
-- `aida-cli/src/auto_complete.rs` (engine), `orchestration_routing.rs` (guardrail)
+- `aida-cli-lib/src/auto_complete.rs` (engine), `orchestration_routing.rs` (guardrail)
 - `docs/plans/2026-06-30-adr-7-one-orchestration-engine.md`

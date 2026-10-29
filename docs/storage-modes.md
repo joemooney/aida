@@ -24,8 +24,8 @@ Legacy SQLite-canonical (deprecated):         aida init --centralized
 
 | Mode | IDs | Offline? | Multi-user? | Status |
 |------|-----|----------|-------------|--------|
-| [Git worktree (default)](#git-worktree-default) | `FR-1-001` → `FR-1` | Yes | Yes (via git) | **Recommended** |
-| [Git sibling](#git-sibling-repo) | `FR-1-001` → `FR-1` | Yes | Yes (via git) | Recommended for multi-repo |
+| [Git worktree (default)](#git-worktree-default) | `FR-<node>-001`; HOME may promote | Yes | Yes (via git) | **Recommended** |
+| [Git sibling](#git-sibling-repo) | `FR-<node>-001`; HOME may promote | Yes | Yes (via git) | Recommended for multi-repo |
 | [PostgreSQL](#postgresql-opt-in) | `FR-001` | No | Yes | Opt-in (feature flag) |
 | [Legacy SQLite](#legacy-sqlite-deprecated) | `FR-001` | Yes (solo) | Limited | Deprecated |
 | [Legacy YAML](#legacy-yaml-deprecated) | `FR-001` | Yes (solo) | No | Deprecated |
@@ -47,9 +47,9 @@ aida init
 - One YAML file per requirement: `objects/<TYPE>/000/SPEC-ID.yaml`
 - A worktree at `.aida-store/` (gitignored) is the live working copy
 - A SQLite read cache at `.aida/cache.db` (gitignored, auto-rebuilt) projects summary fields for fast list/filter/search
-- Writes go to git first, then the cache (write-through). Stale-detection compares the cache's HEAD SHA against the orphan branch's HEAD; mismatch triggers rebuild on next read.
-- IDs are node-namespaced (`FR-1-001`); short agreed IDs (`FR-1`) get assigned at merge-to-trunk via `aida db merge-gate`
-- When using pre-allocated short-ID blocks, `aida add` pulls the store before
+- Canonical writes are recorded in the store. Cache freshness is checked against store history. Supported read paths use bounded refresh behavior and may label stale/deferred derived context; a read does not universally promise a synchronous full rebuild. Explicit cache operations remain strict.
+- Ordinary WORK clones allocate opaque node-local IDs (`FR-<node UUID>-001`). Only explicitly enrolled HOME clones may allocate global IDs or run agreed-ID promotion. See [allocation authority](cli/07-project-setup.md#clone-local-allocation-authority).
+- On an explicitly authoritative clone using pre-allocated short-ID blocks, `aida add` pulls the store before
   allocation and pushes the newly allocated ID immediately when an `origin`
   remote is available. `aida pull` / `aida db sync --pull` also scan for
   duplicate `SPEC-ID` claims. If two clones already wrote different objects

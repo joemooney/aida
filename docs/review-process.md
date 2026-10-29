@@ -2,19 +2,13 @@
 
 <!-- trace:STORY-553 trace:STORY-587 trace:STORY-522 trace:STORY-569 | ai:claude -->
 
-Every code change in AIDA is reviewed by **a different entity than the one that
-wrote it**. That invariant never changes. What *does* change — by execution
-mode — is *who* that reviewer is, how deliberate the review is, and how much of
-it a human sees. This doc maps the review topology across the three modes you'll
-actually use, and when to pick each.
+The normal code-review path separates the author from the reviewer and records evidence against the reviewed commit. A restricted, explicit solo-human self-approval exception exists; see [the gate and clearance reference](cli/08-reporting.md). Do not describe the normal separation rule as an unconditional guarantee across every opt-in workflow.
 
-The one rule that holds everywhere:
+This page describes three **review topologies**, not the per-spec execution-mode enum. The execution choices are operator, guided, drive and drain, with decide as a separate block. See [the product overview](what-is-aida.md#four-execution-modes-plus-a-decision-stop).
 
-> **The implementer never reviews its own work.** Self-review is worthless — an
-> agent that just wrote the code is the worst-placed entity to find its flaws.
-> This is why agents open PRs but never self-merge.
+An implementer's summary is not independent review evidence. Follow the current attribution, grant and merge-gate policy for the active path.
 
-## The three modes
+## The three review topologies
 
 ### 1. Manual brief fan-out → **the advisor reviews, by hand**
 
@@ -25,9 +19,8 @@ verifies it against the spec's acceptance criteria, checks CI, builds the
 combined `main`, and merges — serially.
 
 The implementer's PR summary is an **assertion, not a review**. The advisor
-trusts the diff, not the prose. This is the highest-assurance mode: a deliberate
-line-by-line read by a separate agent with you present. It catches subtle
-defects an automated pass waves through — provenance rewrites, specs marked Done
+trusts the diff, not the prose. This provides a deliberate
+line-by-line read by a separate agent with you present. It is intended to catch defects that an automated pass might miss — provenance rewrites, specs marked Done
 with no implementing code, semantic conflicts that break `main` even when each
 PR's own CI was green.
 

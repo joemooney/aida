@@ -355,6 +355,8 @@ trace:TASK-1201 | ai:codex
 
 ## The three autonomy modes
 
+> **Terminology:** this section compares launch/presence options (`default`, `--zen`, `--no-human`), not the per-spec execution-mode enum. The execution choices are `operator`, `guided`, `drive` and `drain`; `decide` is an execution block. See [the product overview](what-is-aida.md#four-execution-modes-plus-a-decision-stop).
+
 For the short map across all autonomy surfaces — headless cron, live
 `/aida-solo`, `--zen`, and the `[intake]` / `[autopilot]` / risk knobs — run
 `aida autonomy` or see [`docs/aida-power-features.md`](aida-power-features.md#the-autonomy-ladder-in-one-command).
@@ -1379,7 +1381,7 @@ are now split: **`2` = shelved / parked-and-advanced (recoverable, re-drivable),
 `3` = hard unrecoverable failure.** This holds for *both* the single-spec drive
 and the batch drain. The `2` contract is preserved exactly; `3` is the new code.
 The same table is the doc-comment on `DRIVE_EXIT_CLEAN` / `DRIVE_EXIT_SHELVED` /
-`DRIVE_EXIT_HARD_FAIL` in `aida-cli/src/auto_complete.rs`.
+`DRIVE_EXIT_HARD_FAIL` in `aida-cli-lib/src/auto_complete.rs`.
 
 ### Triage path
 
