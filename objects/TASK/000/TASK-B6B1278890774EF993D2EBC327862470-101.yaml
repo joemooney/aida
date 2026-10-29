@@ -7,11 +7,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T12:04:29.744420943Z
-modified_at: 2026-10-29T12:04:29.744420943Z
+modified_at: 2026-10-29T17:50:50.170563046Z
 req_type: Task
 tags:
 - docs:impacted
 - showcase
+comments:
+- id: 01a188c9-353a-7210-b2b4-3752f66dfb19
+  author: joe
+  content: |
+    Direct implementer assignment on 2026-10-29; full spec read. Spec remains Draft and the preceding task's pickup/promotion refused for lack of advisor approval. Please approve this existing task so the implementer can claim it after TASK-100's PR opens. Do not create replacement requirements or use HOME aliases for claims.
+
+    Conservative scope choice for the future isolated PR: docs/showcase/ with the original six-file static showcase from prototype commit 5fe926a96f8 (HTML/CSS/JS, autonomy selector, SVG operating-model graphic, printable brief and README). The expanded multi-page site, Metrics tab, reference generator and corpus-wide docs edits remain unmerged prototype material for EPIC-B6B1278890774EF993D2EBC327862470-002 slices after advisor approval. Preserve the existing owner-private hosted prototype; do not silently downgrade it or claim it is an exact preview of the narrower six-file PR. No new implementation files changed yet.
+  created_at: 2026-10-29T17:50:50.170563046Z
+  modified_at: 2026-10-29T17:50:50.170563046Z
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
