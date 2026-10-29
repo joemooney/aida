@@ -6,12 +6,12 @@ description: |-
 
   non-blocking/process: the merge-hold-gate check fails at 5f0c66d ('Require recorded clearance for every previously held PR'). Merging needs operator/advisor merge-hold clearance; this is not a code defect.
   Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T10:37:57.154113309Z
-modified_at: 2026-10-29T10:46:56.645507573Z
+modified_at: 2026-10-29T10:46:59.357281851Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-29T10:46:56.645507573Z
   modified_at: 2026-10-29T10:46:56.645507573Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+history:
+- id: 01a18745-2a1d-7343-859f-bca40f269995
+  author: joe
+  timestamp: 2026-10-29T10:46:59.357279934Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
