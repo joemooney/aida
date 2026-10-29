@@ -10676,16 +10676,16 @@ pub(crate) fn rework_findings_block_for_spec(
         }
     }
 
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let mut blocking = std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
-        .filter_map(|path| {
-            let body = crate::gate::review_verdict::read_verdict_body(&path).ok()?;
-            let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body)?;
-            verdict.kind.blocks_done().then_some((path, verdict))
+    // M1: every key with a verdict, the ledger's included, each read as the
+    // gates weigh it. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut blocking = crate::gate::review_verdict::list_active_verdicts(project_root)
+        .into_iter()
+        .filter(|(_, verdict)| verdict.kind.blocks_done())
+        .map(|(key, verdict)| {
+            (
+                crate::gate::review_verdict::verdict_path(project_root, &key),
+                verdict,
+            )
         })
         .collect::<Vec<_>>();
     blocking.sort_by(|a, b| a.0.cmp(&b.0));
@@ -13795,10 +13795,11 @@ pub(crate) fn run_standalone_reviewer(
         .unwrap_or_default();
 
     // BUG-2149: a contained reviewer can only write inside its review
-    // worktree, so its `aida review record` lands there and the launcher's
-    // canonical PR-N.json never appears. Collect it (and mirror the
-    // spec-keyed records) into the launcher project, where `aida review
-    // verdict` and `aida pr ship` read. trace:BUG-2149 | ai:claude
+    // worktree, so its `aida review record` lands there and never reaches
+    // the primary side. Collect it onto the PR's gate ledger, where `aida
+    // review verdict` and `aida pr ship` read: the launcher is the ledger's
+    // only writer for a contained seat. trace:BUG-2149 | ai:claude
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let head_sha = standalone_review_pr_head(project_root, pr);
     // trace:BUG-2187 | ai:claude
     let record_template =
@@ -13820,10 +13821,9 @@ pub(crate) fn run_standalone_reviewer(
     );
     match &collected {
         Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
-            "  {} collected the reviewer's verdict from {} into {}",
+            "  {} collected the reviewer's verdict from {} onto the PR-{pr} gate ledger",
             crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
             worktree.display(),
-            verdict_path.display()
         ),
         Ok(_) => {}
         Err(why) => eprintln!(
@@ -13886,7 +13886,10 @@ pub(crate) fn run_standalone_reviewer(
         )
     });
     if !quiet {
-        let verdict_json = crate::gate::review_verdict::read_verdict_body(verdict_path).ok();
+        // A collected verdict is on the ledger only: the file may be absent,
+        // or a previous round's, so the newer of the two is this review's.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let verdict_json = crate::gate::review_verdict::current_verdict_body_at(verdict_path);
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),
@@ -15383,19 +15386,15 @@ pub(crate) fn probe_pr_integration_state(
     // trace:BUG-1581 | ai:codex
     let (local_request_changes, review_integrity_unproven) = item
         .map(|i| {
-            let n = i.number;
-            let paths = [
-                crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{n}")),
-                crate::gate::review_verdict::verdict_path(project_root, spec_id),
-            ];
-            let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
-            let bodies: Vec<String> = match existing
-                .iter()
-                // trace:TASK-1801 | ai:claude
-                .map(|path| crate::gate::review_verdict::read_verdict_body(path))
-                .collect::<Result<_, _>>()
-            {
-                Ok(bodies) => bodies,
+            // The merge chokepoint's corpus, gate ledger included (M1).
+            // trace:TASK-1801 | ai:claude
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let bodies: Vec<String> = match crate::gate::merge_hold_core::corpus_gate_bodies(
+                &[project_root],
+                i.number,
+                &[spec_id.to_string()],
+            ) {
+                Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
                 Err(_) => return (false, true),
             };
             if bodies.is_empty() {

@@ -174,7 +174,8 @@ pub fn verdict_notice_line(v: &RecordedVerdict) -> String {
 // trace:BUG-1505 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NonCanonicalVerdict {
-    /// File name under `.aida/review-verdicts/`.
+    /// File name under `.aida/review-verdicts/`, or `<ledger file>#<seq>`
+    /// when the key's current record is on the gate ledger.
     pub file: String,
     /// The verdict word as written (empty when absent/unreadable).
     pub raw: String,
@@ -237,18 +238,30 @@ pub fn audit_verdict_body(body: &str) -> (String, VerdictKind, Vec<String>) {
 /// the non-canonical ones, sorted by file name. Per-sha archives are not
 /// walked — they are copies of rounds whose live file is audited here.
 // trace:BUG-1505 | ai:claude
+///
+/// M1: each key is audited as the gates read it ([`current_verdict`]), so a
+/// ledger-only record (a collected verdict) is audited too and is named by
+/// its ledger location instead of a file name.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-    let mut out: Vec<NonCanonicalVerdict> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
-        .filter_map(|p| {
-            let file = p.file_name()?.to_str()?.to_string();
-            let body = read_verdict_body(&p).unwrap_or_default();
+    let mut out: Vec<NonCanonicalVerdict> = verdict_keys(project_root)
+        .into_iter()
+        .filter_map(|key| {
+            // The file the key names as found on disk: `verdict_path`
+            // uppercases, which misses a mixed-case stem (`PR-1979-advisor`).
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let path = verdict_path(project_root, "x").with_file_name(format!("{key}.json"));
+            let current = current_verdict_at(&path);
+            let (file, body) = match current {
+                Some(CurrentVerdict {
+                    body,
+                    source: source @ VerdictSource::Ledger { .. },
+                    ..
+                }) => (source.display(), body),
+                Some(current) => (path.file_name()?.to_str()?.to_string(), current.body),
+                None if path.is_file() => (path.file_name()?.to_str()?.to_string(), String::new()),
+                None => return None,
+            };
             let (raw, kind, issues) = audit_verdict_body(&body);
             (!issues.is_empty()).then_some(NonCanonicalVerdict {
                 file,

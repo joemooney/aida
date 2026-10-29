@@ -1492,8 +1492,10 @@ fn close_on_merge_archives_a_pre_archive_refusal_closed() {
 }
 
 // trace:TASK-1460 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
-fn a_direct_skill_write_is_adopted_into_the_archive() {
+fn a_direct_skill_write_is_adopted_into_the_archive_and_the_gate_ledger() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let path = verdict_path(root, "PR-40");
@@ -1505,6 +1507,12 @@ fn a_direct_skill_write_is_adopted_into_the_archive() {
     adopt_direct_write(&path).unwrap();
     adopt_direct_write(&path).unwrap(); // idempotent
     assert_eq!(archive_files(root, "PR-40"), vec![format!("{SHA_R2}.json")]);
+    let on_ledger = crate::gate::ledger::project::verdict_events_at(root, "PR-40", SHA_R2);
+    assert_eq!(
+        on_ledger.len(),
+        1,
+        "one verdict event, however often adopted"
+    );
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
         body,
@@ -1516,11 +1524,12 @@ fn a_direct_skill_write_is_adopted_into_the_archive() {
         "the current file answers first when it is at the sha"
     );
 
-    // No reviewed commit → unidentifiable → not archived.
+    // No reviewed commit → unidentifiable → not archived, not adopted.
     let bare = verdict_path(root, "PR-41");
     std::fs::write(&bare, r#"{"verdict":"Approved"}"#).unwrap();
     adopt_direct_write(&bare).unwrap();
     assert!(!verdict_archive_dir(&bare).unwrap().exists());
+    assert!(crate::gate::ledger::project::newest_verdict(root, "PR-41").is_none());
 }
 
 // trace:TASK-1460 | ai:claude

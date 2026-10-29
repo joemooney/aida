@@ -351,9 +351,11 @@ aida queue work PR-<n> --role reviewer --no-human --vendor claude
 It creates a PR-scoped lease and review worktree, mints a child reviewer
 grant, starts the reviewer headless with the AIDA-generated review prompt, and
 waits. The reviewer records its own verdict with `aida review record`. Read it
-from `.aida/review-verdicts/PR-<n>.json` only when the command exits 0 with a
+with `aida review verdict PR-<n> --json` only when the command exits 0 with a
 `verdict:` line; exit 30 or any other non-zero exit means no verified verdict,
-even if the file exists.
+whatever a verdict file says. The launcher collects a contained reviewer's
+verdict onto the PR's gate ledger, so `.aida/review-verdicts/PR-<n>.json` can
+be missing or a previous round's.
 `aida pr ship` accepts only an approval recorded this way.
 
 - Pass `--vendor claude`: under `AIDA_CONTAINED` the codex vendor refuses.

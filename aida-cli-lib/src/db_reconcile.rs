@@ -1184,13 +1184,11 @@ pub(crate) fn read_review_verdict_for_record(
     project_root: &std::path::Path,
     spec_id: &str,
 ) -> Option<reviewer_summary::VerdictFile> {
-    let path = project_root
-        .join(".aida")
-        .join("review-verdicts")
-        .join(format!("{spec_id}.json"));
+    // M1: the record the gates weigh, so a collected (ledger-only) verdict
+    // is promoted too. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     // trace:TASK-1801 | ai:claude
-    let body = crate::gate::review_verdict::read_verdict_body(path).ok()?;
-    reviewer_summary::parse_verdict_file(&body)
+    let current = crate::gate::review_verdict::current_verdict(project_root, spec_id)?;
+    reviewer_summary::parse_verdict_file(&current.body)
 }
 
 /// STORY-582: find the most recent brief (pending `.md` or acked

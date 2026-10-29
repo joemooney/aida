@@ -1993,6 +1993,17 @@ pub(crate) fn emit_nonblocking_findings_on_completion(
     }
 }
 
+/// The verdict whose non-blocking findings a completed spec files as
+/// successors. M1: a collected review's spec record is on the gate ledger
+/// only, so this is the record the gates weigh, not just the file.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn completion_verdict(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Option<crate::gate::review_verdict::RecordedVerdict> {
+    crate::gate::review_verdict::read_recorded_verdict(project_root, spec_id)
+}
+
 /// Idempotent worker for [`emit_nonblocking_findings_on_completion`]. Keyed on
 /// the source spec plus a hash of the finding text (`carried-from:<SPEC>` +
 /// `finding-hash:<hex>` tags), so a re-run of the auto-bump scan over an
@@ -2019,11 +2030,7 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     sha: &str,
     pr_hint: Option<u64>,
 ) -> anyhow::Result<usize> {
-    let verdict_file = crate::gate::review_verdict::verdict_path(project_root, spec_id);
-    let Ok(body) = crate::gate::review_verdict::read_verdict_body(&verdict_file) else {
-        return Ok(0);
-    };
-    let Some(verdict) = crate::gate::review_verdict::parse_recorded_verdict(&body) else {
+    let Some(verdict) = completion_verdict(project_root, spec_id) else {
         return Ok(0);
     };
     // Cheap pre-check against an empty history: if nothing would ever be filed

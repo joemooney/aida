@@ -26,10 +26,9 @@ pub(crate) struct ReviewAwaiting {
 /// the same verdict-file convention the orchestrator-resume probe reads:
 /// `.aida/review-verdicts/PR-{n}.json`. trace:STORY-611 | ai:claude
 pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bool {
-    let path = project_root
-        .join(".aida")
-        .join("review-verdicts")
-        .join(format!("PR-{pr_number}.json"));
+    // M1: read through the gate ledger, where a collected verdict lives.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let path = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
     matches!(
         read_verdict_file(&path),
         Ok(auto_complete::ReviewerOutcome::Verdict(
@@ -136,22 +135,11 @@ pub(crate) fn latest_review_comment_verdict(
         .max_by_key(|(kind, at)| (*at, !kind.approves()))
 }
 
-/// BUG-1672: when a verdict file was last written, as UTC. `None` when the
-/// file is missing or the filesystem gives no modification time.
-// trace:BUG-1672 | ai:claude
-pub(crate) fn verdict_file_written_at(
-    path: &std::path::Path,
-) -> Option<chrono::DateTime<chrono::Utc>> {
-    // trace:TASK-1801 | ai:claude
-    let modified = crate::gate::review_verdict::verdict_file_modified(path)?;
-    Some(chrono::DateTime::<chrono::Utc>::from(modified))
-}
-
 /// BUG-1672: has an open PR for `req` already been approved by an independent
 /// review? The one predicate `reviews_awaiting_human` uses to split
 /// awaiting-review from awaiting-merge. Three records can approve:
-///  1. the drain's PR-keyed verdict file (`PR-<n>.json`, the original signal);
-///  2. the spec-keyed verdict file `aida review <SPEC>` records (not one a
+///  1. the drain's PR-keyed verdict (`PR-<n>`, the original signal);
+///  2. the spec-keyed verdict `aida review <SPEC>` records (not one a
 ///     merge has already closed out);
 ///  3. the latest review comment on the spec (the fresh-reviewer flow posts
 ///     only a comment).
@@ -159,7 +147,7 @@ pub(crate) fn verdict_file_written_at(
 /// The newest review wins across all eligible sources. An approval must be
 /// strictly newer than every blocking candidate; ties or missing timestamps
 /// cannot clear a blocker. File times remain filesystem mtimes (BUG-1681 owns
-/// switching to recorded_at).
+/// switching to recorded_at); a gate-ledger record's time is its order time.
 // trace:BUG-1672 | ai:codex
 pub(crate) fn spec_review_approved(
     project_root: &std::path::Path,
@@ -172,14 +160,26 @@ pub(crate) fn spec_review_approved(
         candidates.push((kind.approves(), Some(at)));
     }
 
-    let pr_path =
-        crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
-    if pr_path.is_file() {
+    // M1: each key contributes ONE candidate, the record the gates weigh for
+    // it: the legacy file, or the gate ledger's record where that is newer
+    // (`ledger_supersedes`; a collected verdict is on the ledger only). A
+    // superseded file never competes, so its later mtime cannot block a newer
+    // ledger approval. Its time is the file's mtime or the ledger's order time.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let pr_key = format!("PR-{pr_number}");
+    if let Some(current) = crate::gate::review_verdict::current_verdict(project_root, &pr_key) {
         // Preserve the drain reader's conflict/escalation checks. An unknown
         // or unreadable verdict is blocking evidence, never an approval.
         candidates.push((
-            pr_has_approved_verdict(project_root, pr_number),
-            verdict_file_written_at(&pr_path),
+            matches!(
+                crate::phase_gates::outcome_of_verdict_body(&current.body),
+                Ok(auto_complete::ReviewerOutcome::Verdict(
+                    auto_complete::Verdict::Approved
+                ))
+            ),
+            current
+                .written_at
+                .map(chrono::DateTime::<chrono::Utc>::from),
         ));
     }
 
@@ -188,23 +188,24 @@ pub(crate) fn spec_review_approved(
         req.agreed_id.as_deref(),
         req.spec_id.as_deref(),
     ];
-    for path in ids
+    for id in ids
         .into_iter()
         .flatten()
         .filter(|id| !id.trim().is_empty() && *id != "???")
-        .map(|id| crate::gate::review_verdict::verdict_path(project_root, id))
-        .filter(|p| p.is_file())
     {
+        let Some(current) = crate::gate::review_verdict::current_verdict(project_root, id) else {
+            continue;
+        };
         // trace:TASK-1801 | ai:claude
-        let record = crate::gate::review_verdict::read_verdict_body(&path)
-            .ok()
-            .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body));
+        let record = crate::gate::review_verdict::parse_recorded_verdict(&current.body);
         if record.as_ref().is_some_and(|v| v.is_closed()) {
             continue;
         }
         candidates.push((
             record.is_some_and(|v| v.kind.approves()),
-            verdict_file_written_at(&path),
+            current
+                .written_at
+                .map(chrono::DateTime::<chrono::Utc>::from),
         ));
     }
     review_candidates_approved(&candidates)
@@ -228,10 +229,9 @@ pub(crate) fn review_candidates_approved(
 /// back into fresh reviewer work merely because GitHub has no decision.
 // trace:BUG-1291 | ai:codex
 pub(crate) fn pr_has_local_verdict(project_root: &std::path::Path, pr_number: u64) -> bool {
-    let path = project_root
-        .join(".aida")
-        .join("review-verdicts")
-        .join(format!("PR-{pr_number}.json"));
+    // M1: read through the gate ledger, where a collected verdict lives.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let path = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
     matches!(
         read_verdict_file(&path),
         Ok(auto_complete::ReviewerOutcome::Verdict(_))

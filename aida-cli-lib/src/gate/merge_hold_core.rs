@@ -1303,10 +1303,39 @@ pub(crate) fn corpus_gate_bodies(
             keys.push(id);
         }
     }
+    // M1: a verdict collected from a contained reviewer is on the change's
+    // gate ledger only. Each key's newest ledger record is weighed in place
+    // of a file it is newer than (round 3: a file must not hide a newer
+    // ledger-only verdict) and alone for a key with no file under any root,
+    // so a ledger-only refusal still blocks. Each record counts once.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut stores: Vec<PathBuf> = Vec::new();
+    for root in roots {
+        if let Ok(store) = crate::gate::ledger::store_root(root) {
+            if !stores.contains(&store) {
+                stores.push(store);
+            }
+        }
+    }
+    let ledger: Vec<(String, Vec<crate::gate::ledger::GateEvent>)> = keys
+        .iter()
+        .map(|key| {
+            let events = stores
+                .iter()
+                .filter_map(|store| crate::gate::ledger::project::newest_verdict_event(store, key))
+                .collect();
+            (key.clone(), events)
+        })
+        .collect();
+    let ledger_body = |event: &crate::gate::ledger::GateEvent| -> Result<String, String> {
+        serde_json::to_string(event.verdict_record().unwrap_or(&Default::default()))
+            .map_err(|e| e.to_string())
+    };
+    let mut counted: Vec<(String, usize)> = Vec::new();
     let mut seen: Vec<PathBuf> = Vec::new();
     let mut out = Vec::new();
     for root in roots {
-        for key in &keys {
+        for (key, events) in &ledger {
             let path = crate::gate::review_verdict::verdict_path(root, key);
             if std::fs::symlink_metadata(&path).is_err() {
                 continue;
@@ -1317,15 +1346,38 @@ pub(crate) fn corpus_gate_bodies(
             }
             seen.push(canon);
             // trace:TASK-1801 | ai:claude
-            match crate::gate::review_verdict::read_verdict_body(&path) {
-                Ok(body) => out.push((key.clone(), body)),
+            let body = match crate::gate::review_verdict::read_verdict_body(&path) {
+                Ok(body) => body,
                 Err(e) => {
                     return Err(format!(
                         "verdict artifact {} exists but could not be read ({e})",
                         path.display()
                     ))
                 }
+            };
+            // An unparseable file stays as written: the gate fails closed on it.
+            let file = crate::gate::review_verdict::parse_recorded_verdict(&body);
+            let newer = file.as_ref().and_then(|file| {
+                events.iter().position(|event| {
+                    crate::gate::review_verdict::ledger_supersedes(&path, Some(file), event)
+                })
+            });
+            match newer {
+                Some(i) if counted.contains(&(key.clone(), i)) => {}
+                Some(i) => {
+                    counted.push((key.clone(), i));
+                    out.push((key.clone(), ledger_body(&events[i])?));
+                }
+                None => out.push((key.clone(), body)),
             }
+        }
+    }
+    for (key, events) in &ledger {
+        if out.iter().any(|(k, _)| k == key) {
+            continue;
+        }
+        for event in events {
+            out.push((key.clone(), ledger_body(event)?));
         }
     }
     Ok(out)

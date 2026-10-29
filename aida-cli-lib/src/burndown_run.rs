@@ -1059,23 +1059,21 @@ pub(crate) fn local_verdict_blocks_merge(
     spec: &str,
     current_sha: Option<&str>,
 ) -> bool {
-    let paths = [
-        crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}")),
-        crate::gate::review_verdict::verdict_path(project_root, spec),
-    ];
-    let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
-    if existing.is_empty() {
-        return false;
-    }
-    let bodies: Vec<String> = match existing
-        .iter()
-        // trace:TASK-1801 | ai:claude
-        .map(|path| crate::gate::review_verdict::read_verdict_body(path))
-        .collect::<Result<_, _>>()
-    {
-        Ok(bodies) => bodies,
+    // The merge chokepoint's own corpus: the PR and spec files, and the gate
+    // ledger where it is newer or alone (M1: a collected verdict is ledger-only).
+    // trace:TASK-1801 | ai:claude
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let bodies: Vec<String> = match crate::gate::merge_hold_core::corpus_gate_bodies(
+        &[project_root],
+        pr_number,
+        &[spec.to_string()],
+    ) {
+        Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
         Err(_) => return true,
     };
+    if bodies.is_empty() {
+        return false;
+    }
     let Some(current_sha) = current_sha else {
         return true;
     };

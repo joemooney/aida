@@ -598,7 +598,11 @@ fn auto_merge_tree(
 /// The single merge base of `base_tip` and `sha`; criss-cross history (more
 /// than one) refuses rather than picking one.
 // trace:TASK-1960 | ai:claude
-fn single_merge_base(repo: &Path, base_tip: &str, sha: &str) -> Result<String, CarryOverRefusal> {
+pub(crate) fn single_merge_base(
+    repo: &Path,
+    base_tip: &str,
+    sha: &str,
+) -> Result<String, CarryOverRefusal> {
     let out = git(repo, &["merge-base", "--all", base_tip, sha])?;
     match out.split_whitespace().collect::<Vec<_>>().as_slice() {
         [one] => Ok(one.to_string()),
@@ -696,7 +700,7 @@ fn resolve_sha_fetching(repo: &Path, sha: &str) -> Option<String> {
         .filter(|full| full.starts_with(&sha))
 }
 
-fn resolve_commit(repo: &Path, rev: &str) -> Option<String> {
+pub(crate) fn resolve_commit(repo: &Path, rev: &str) -> Option<String> {
     git(
         repo,
         &[

@@ -938,8 +938,264 @@ fn surviving_against_previous_round(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    let body = read_verdict_body(verdict_path(project_root, spec)).ok()?;
-    parse_recorded_verdict(&body)
+    let path = verdict_path(project_root, spec);
+    let legacy = read_verdict_body(&path)
+        .ok()
+        .and_then(|body| parse_recorded_verdict(&body));
+    let ledger = crate::gate::ledger::project::newest_verdict_event(project_root, spec);
+    newer_of(&path, legacy, ledger.as_ref())
+}
+
+/// A verdict record carried on the gate ledger, parsed like a file body.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
+    parse_recorded_verdict(&serde_json::to_string(record).ok()?)
+}
+
+/// Read-through while the legacy files are still written (M1 slice 1): the
+/// ledger answers only where it knows something the file does not — the file
+/// is missing (a contained reviewer's verdict that never reached it) or
+/// strictly older.
+///
+/// Order uses primary-side time only. A ledger verdict counts as of the
+/// earlier of the ledger's own `at` (stamped on append) and the record's
+/// `recorded_at`: the `at` bound stops a reviewer's future-dated record from
+/// shadowing later verdicts, the `recorded_at` bound stops a late collection
+/// from passing off an old round as new. The same round on both sides (equal
+/// `recorded_at`) keeps the file, which may carry a later annotation
+/// (`closed_by_merge`). `path` is the file `legacy` was read from, or the
+/// key's current file when there is no legacy record ([`ledger_supersedes`]).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn newer_of(
+    path: &Path,
+    legacy: Option<RecordedVerdict>,
+    ledger: Option<&crate::gate::ledger::GateEvent>,
+) -> Option<RecordedVerdict> {
+    match ledger {
+        Some(event) if ledger_supersedes(path, legacy.as_ref(), event) => {
+            event.verdict_record().and_then(parse_ledger_record)
+        }
+        _ => legacy,
+    }
+}
+
+/// [`newer_of`]'s ordering as a predicate: does the ledger verdict `event`
+/// answer instead of `file`, the parsed legacy record read from `path`
+/// (`None` = the reader holds no record; `path` is then the key's current
+/// file)? Every reader that sees both a file and the ledger asks this one
+/// question, so the rules hold everywhere (M1 rounds 3 and 8):
+/// - a stale file does not hide a newer ledger-only verdict;
+/// - a file at `path` that exists but the anchored reader refuses
+///   (TASK-1801), or that does not parse, is evidence every gate fails
+///   closed on, and the ledger never answers in its place;
+/// - a file with no `recorded_at` is dated by its mtime, so a hand-written
+///   file newer than the ledger's round is not outranked by it; with no
+///   readable mtime either, the file is kept.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 trace:TASK-1801 | ai:claude
+pub(crate) fn ledger_supersedes(
+    path: &Path,
+    file: Option<&RecordedVerdict>,
+    event: &crate::gate::ledger::GateEvent,
+) -> bool {
+    if verdict_file_refused(path) {
+        return false;
+    }
+    let Some(led) = event.verdict_record().and_then(parse_ledger_record) else {
+        return false;
+    };
+    let Some(file) = file else {
+        let unparseable = read_verdict_body(path)
+            .ok()
+            .is_some_and(|body| parse_recorded_verdict(&body).is_none());
+        return !unparseable;
+    };
+    if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
+        return false;
+    }
+    let file_time = rfc3339(file.recorded_at.as_deref()).or_else(|| {
+        verdict_file_modified(path)
+            .map(|mtime| chrono::DateTime::<chrono::Utc>::from(mtime).fixed_offset())
+    });
+    match (file_time, ledger_order_time(event)) {
+        (Some(f), Some(l)) => l > f,
+        _ => false,
+    }
+}
+
+fn rfc3339(s: Option<&str>) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    s.and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok())
+}
+
+/// When a ledger verdict counts as recorded, in primary-side time only: the
+/// earlier of the ledger's own `at` (stamped on append) and the record's
+/// `recorded_at`, so neither a future-dated record nor a late collection of
+/// an old round can pass as newer than it is.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn ledger_order_time(
+    event: &crate::gate::ledger::GateEvent,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let recorded = event
+        .verdict_record()
+        .and_then(|r| r.get("recorded_at"))
+        .and_then(|v| v.as_str());
+    match (rfc3339(Some(&event.at)), rfc3339(recorded)) {
+        (Some(at), Some(recorded)) => Some(at.min(recorded)),
+        (at, recorded) => at.or(recorded),
+    }
+}
+
+/// The body a single-key reader should weigh for `key`: the legacy file's
+/// `file_body` unless the ledger (shared by `start`) holds a newer verdict
+/// ([`ledger_supersedes`]), or the ledger's record when there is no file. A
+/// file that exists but does not parse is kept: it is evidence the reader
+/// must fail closed on, and the ledger does not paper over it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_body(
+    start: &Path,
+    key: &str,
+    file_body: Option<String>,
+) -> Option<String> {
+    choose_current(start, key, verdict_path(start, key), file_body).map(|c| c.body)
+}
+
+/// [`current_verdict_body`] for the verdict file at `path`
+/// (`<root>/.aida/review-verdicts/<KEY>.json`); `None` when neither the file
+/// nor the ledger holds a record.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_body_at(path: &Path) -> Option<String> {
+    current_verdict_at(path).map(|c| c.body)
+}
+
+/// Where the record a reader weighed came from.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VerdictSource {
+    /// The legacy verdict file at this path.
+    File(PathBuf),
+    /// Event `seq` on the change's gate ledger file.
+    Ledger { file: PathBuf, seq: u64 },
+}
+
+impl VerdictSource {
+    /// `path` for a file, `path#seq` for a ledger event.
+    pub(crate) fn display(&self) -> String {
+        match self {
+            Self::File(path) => path.display().to_string(),
+            Self::Ledger { file, seq } => format!("{}#{seq}", file.display()),
+        }
+    }
+
+    pub(crate) fn is_ledger(&self) -> bool {
+        matches!(self, Self::Ledger { .. })
+    }
+}
+
+/// The record a single-key reader weighs ([`current_verdict_body`]'s
+/// choice), with where it came from and when it counts as written: the
+/// file's mtime, or the ledger event's primary-side order time
+/// ([`ledger_order_time`]).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct CurrentVerdict {
+    pub body: String,
+    pub source: VerdictSource,
+    pub written_at: Option<std::time::SystemTime>,
+}
+
+/// The current verdict for `key`, read from `start` (any checkout sharing
+/// the ledger): the newer of the legacy file and the ledger.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict(start: &Path, key: &str) -> Option<CurrentVerdict> {
+    let path = verdict_path(start, key);
+    let file_body = read_verdict_body(&path).ok();
+    choose_current(start, key, path, file_body)
+}
+
+/// [`current_verdict`] for the verdict file at `path`. Only the canonical
+/// layout `<root>/.aida/review-verdicts/<KEY>.json` has a ledger
+/// counterpart; any other path (a per-commit archive, a sibling checkout's
+/// file) is read as the file alone.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_at(path: &Path) -> Option<CurrentVerdict> {
+    let file_body = read_verdict_body(path).ok();
+    match canonical_verdict_key(path) {
+        Some((root, key)) => choose_current(&root, &key, path.to_path_buf(), file_body),
+        None => file_body.map(|body| CurrentVerdict {
+            body,
+            written_at: verdict_file_modified(path),
+            source: VerdictSource::File(path.to_path_buf()),
+        }),
+    }
+}
+
+/// [`current_verdict_at`] for a review launched at `since`: a ledger record
+/// written before `since` is a previous round, not this review's answer, and
+/// yields `None`. A review clears the verdict file before the reviewer runs,
+/// so a file is always this round's; the ledger is never cleared. `None` for
+/// `since` applies no bound.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_since(
+    path: &Path,
+    since: Option<std::time::SystemTime>,
+) -> Option<CurrentVerdict> {
+    let current = current_verdict_at(path)?;
+    let stale = since.is_some_and(|since| current.written_at.is_none_or(|at| at < since));
+    if current.source.is_ledger() && stale {
+        return None;
+    }
+    Some(current)
+}
+
+/// The root and key of a verdict path in the canonical layout.
+pub(crate) fn canonical_verdict_key(path: &Path) -> Option<(PathBuf, String)> {
+    let key = path.file_stem()?.to_str()?.to_string();
+    let dir = path.parent()?;
+    let aida = dir.parent()?;
+    if dir.file_name()? != "review-verdicts" || aida.file_name()? != ".aida" {
+        return None;
+    }
+    Some((aida.parent()?.to_path_buf(), key))
+}
+
+fn choose_current(
+    start: &Path,
+    key: &str,
+    path: PathBuf,
+    file_body: Option<String>,
+) -> Option<CurrentVerdict> {
+    // A current file that exists but the anchored reader refuses (unreadable,
+    // or a linked file or directory) is not evidence, and the ledger must not
+    // answer in its place: every gate fails closed on it (TASK-1801).
+    // trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if file_body.is_none() && std::fs::symlink_metadata(&path).is_ok() {
+        return None;
+    }
+    let parsed = file_body.as_deref().map(parse_recorded_verdict);
+    let from_file = |body: String| CurrentVerdict {
+        body,
+        written_at: verdict_file_modified(&path),
+        source: VerdictSource::File(path.clone()),
+    };
+    if matches!(parsed, Some(None)) {
+        return file_body.map(from_file);
+    }
+    let parsed = parsed.flatten();
+    let ledger = crate::gate::ledger::project::newest_verdict_event(start, key)
+        .filter(|event| ledger_supersedes(&path, parsed.as_ref(), event))
+        .and_then(|event| {
+            let body = serde_json::to_string(event.verdict_record()?).ok()?;
+            let change = crate::gate::ledger::ChangeKey::parse(&event.change)?;
+            let store = crate::gate::ledger::store_root(start).ok()?;
+            Some(CurrentVerdict {
+                body,
+                written_at: ledger_order_time(&event).map(std::time::SystemTime::from),
+                source: VerdictSource::Ledger {
+                    file: crate::gate::ledger::store::ledger_file(&store, change),
+                    seq: event.seq,
+                },
+            })
+        });
+    ledger.or_else(|| file_body.map(from_file))
 }
 
 /// Read the recorded verdict trying several id forms (agreed id, spec id) —
@@ -1408,6 +1664,30 @@ pub(crate) fn write_verdict_object(
     path: &Path,
     obj: &serde_json::Map<String, serde_json::Value>,
 ) -> std::io::Result<()> {
+    write_verdict_object_for_spec(path, obj, None)
+}
+
+/// [`write_verdict_object`], naming the spec the verdict concerns so the
+/// gate ledger can index a PR-keyed record by it. An uncontained PR-keyed
+/// write also lands on the change's gate ledger; a contained one stays in
+/// its seat clone for the launcher to collect. The file stays the
+/// compatibility record in slice 1.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn write_verdict_object_for_spec(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+    spec: Option<&str>,
+) -> std::io::Result<()> {
+    crate::gate::ledger::before_verdict_write(path);
+    write_verdict_file(path, obj)?;
+    crate::gate::ledger::mirror_verdict_write(path, obj, spec);
+    Ok(())
+}
+
+fn write_verdict_file(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> std::io::Result<()> {
     // TASK-1460: files recorded before the per-sha archive existed are
     // migrated into it once, lazily, the first time anything records here —
     // BEFORE this write, so the migration sees the pre-existing state.
@@ -1607,10 +1887,17 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
 // trace:BUG-1539 | ai:claude
 // trace:TASK-1460 | ai:claude
 pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<RecordedVerdict> {
-    let path = verdict_file_for_sha(project_root, key, sha)?;
-    read_verdict_body(path)
-        .ok()
-        .and_then(|b| parse_recorded_verdict(&b))
+    let file = verdict_file_for_sha(project_root, key, sha);
+    let legacy = file
+        .as_ref()
+        .and_then(|path| read_verdict_body(path).ok())
+        .and_then(|b| parse_recorded_verdict(&b));
+    // A refused current file yields no file above and keeps the ledger out
+    // too: `ledger_supersedes` is asked about the key's current file.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let path = file.unwrap_or_else(|| verdict_path(project_root, key));
+    let ledger = crate::gate::ledger::project::verdict_events_at(project_root, key, sha);
+    newer_of(&path, legacy, ledger.first())
 }
 
 /// TASK-1460: the FILE holding the verdict recorded under `key` for commit
@@ -1625,11 +1912,10 @@ pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
     // (linked file or directory) is not evidence, and it must not let an
     // archived round answer for the key either. Same rule as the merge gate.
     // trace:TASK-1801 | ai:claude
-    let body = read_verdict_body(&path);
-    if body.is_err() && std::fs::symlink_metadata(&path).is_ok() {
+    if verdict_file_refused(&path) {
         return None;
     }
-    let current_at_sha = body
+    let current_at_sha = read_verdict_body(&path)
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
         .and_then(|v| v.reviewed_sha)
@@ -1638,6 +1924,26 @@ pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
         return Some(path);
     }
     archived_verdict_file_for_sha(&path, sha)
+}
+
+/// Does a verdict file exist at `path` that the anchored reader refuses (a
+/// linked file or directory, TASK-1801)? Such a file is not evidence, and no
+/// other record (an archived round, the ledger) may answer in its place.
+// trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn verdict_file_refused(path: &Path) -> bool {
+    read_verdict_body(path).is_err() && std::fs::symlink_metadata(path).is_ok()
+}
+
+/// TASK-2137: for a refused verdict file (see [`verdict_file_refused`]),
+/// whether it was modified at or after `since`. `None` when the file is not
+/// refused. A refused file with no readable mtime (a link) counts as stale.
+// trace:TASK-2137 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn refused_verdict_file_fresh_since(
+    path: &Path,
+    since: std::time::SystemTime,
+) -> Option<bool> {
+    verdict_file_refused(path)
+        .then(|| verdict_file_modified(path).is_some_and(|mtime| mtime >= since))
 }
 
 /// TASK-1460: the archived round of the verdict file at `path` for commit
@@ -1704,10 +2010,18 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
 /// TASK-1460: archive a verdict file that was written OUTSIDE the record
 /// path — the `/aida-review` skill writes `AIDA_REVIEW_VERDICT_FILE` with a
 /// shell heredoc — so its round lands in the per-sha archive exactly as a
-/// recorded one would. The current file is left byte-for-byte as written.
-/// A file with no verdict or no reviewed commit is unidentifiable and is not
-/// archived (the same refusal the record path makes). Idempotent.
+/// recorded one would, and (a PR-keyed path) on the change's gate ledger.
+/// The current file is left byte-for-byte as written. A file with no verdict
+/// or no reviewed commit is unidentifiable and is not archived (the same
+/// refusal the record path makes). Idempotent.
+///
+/// M1 slice 1: the archive write is the same primary-side dual write the
+/// record path keeps until slice 2 moves its readers (retained history,
+/// BUG-2186; the phase-3 archive fallback) onto the ledger. A contained
+/// reviewer never reaches this: its verdict arrives by collection, which
+/// writes the ledger only.
 // trace:TASK-1460 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
     let Some(obj) = read_verdict_body(path)
         .ok()
@@ -1716,18 +2030,27 @@ pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
     else {
         return Ok(());
     };
-    archive_round_by_sha(path, &obj)
+    archive_round_by_sha(path, &obj)?;
+    let identified = round_sha(&obj).is_some()
+        && obj
+            .get("verdict")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| !v.trim().is_empty());
+    if identified {
+        crate::gate::ledger::adopt_verdict_file(path, &obj)?;
+    }
+    Ok(())
 }
 
 /// BUG-2149: what [`collect_standalone_verdict`] found and where it put it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CollectedVerdict {
-    /// The verdict now present at the launcher's canonical PR-keyed path.
+    /// The verdict now on the change's gate ledger.
     pub verdict: RecordedVerdict,
-    /// Spec-keyed records (upper-case ids) written into the launcher project.
+    /// Spec ids (upper-case) the collected verdict was recorded for.
     pub spec_records: Vec<String>,
-    /// True when the canonical PR-keyed file was written by the collector
-    /// rather than in place by the reviewer.
+    /// True when the verdict came from the reviewer's worktree rather than
+    /// a file it wrote in place in the launcher checkout.
     pub collected_from_worktree: bool,
 }
 
@@ -2015,11 +2338,18 @@ pub trait VerdictCollectionChecks {
 ///   identity-checked source on verdict and reviewed commit.
 ///
 /// Any mismatch collects nothing and returns `Err(reason)`. On success the
-/// newest identity-checked record is written to `canonical` unless the
-/// reviewer already wrote it in place, and the spec-keyed records for
-/// `spec_ids` (the specs the PR credits) — and no others — are mirrored into
-/// the launcher project unless it already holds one written during this run.
+/// newest identity-checked record, and one record for each of `spec_ids`
+/// (the specs the PR credits, and no others), are appended to the change's
+/// gate ledger from this — the uncontained launcher's — side (M1). Nothing
+/// is written to the legacy verdict files, and the ledger already holding a
+/// record (the reviewer wrote it in place) appends nothing new.
+///
+/// This is the only route from a contained seat to the ledger, and it is
+/// origin-authenticated: the launcher reads the exact worktree it launched,
+/// the record must be for the launched PR at its current head, and its
+/// recording grant must be that launch's own child grant, valid now.
 // trace:BUG-2149 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn collect_standalone_verdict(
     launcher_root: &Path,
     worktree: &Path,
@@ -2118,36 +2448,32 @@ pub fn collect_standalone_verdict(
         }
     }
 
-    // Mirror. Never overwrite a file written during this run.
-    let mut collected_from_worktree = false;
-    if canonical_in_place.is_none() {
-        write_verdict_atomic(canonical, &source.body)
-            .map_err(|e| format!("could not write {}: {e}", canonical.display()))?;
-        let _ = adopt_direct_write(canonical);
-        collected_from_worktree = true;
-    }
-    let mut spec_records = Vec::new();
-    for id in spec_ids {
-        let target = verdict_path(launcher_root, &id);
-        if fresh_candidate(&target, since).is_some() {
-            continue;
-        }
-        let body = worktree_specs
-            .iter()
-            .find(|c| {
-                c.path
-                    .file_stem()
-                    .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&id))
-            })
-            .map(|c| c.body.clone())
-            .unwrap_or_else(|| source.body.clone());
-        // Archive the round being replaced before overwriting it.
-        let _ = adopt_direct_write(&target);
-        write_verdict_atomic(&target, &body)
-            .map_err(|e| format!("could not write {}: {e}", target.display()))?;
-        let _ = adopt_direct_write(&target);
-        spec_records.push(id);
-    }
+    let change = crate::gate::ledger::legacy::change_of_verdict_path(canonical)
+        .map(|(_, change)| change)
+        .ok_or_else(|| format!("{} does not name a change", canonical.display()))?;
+    let spec_bodies: Vec<(String, JsonObj)> = spec_ids
+        .iter()
+        .map(|id| {
+            let body = worktree_specs
+                .iter()
+                .find(|c| {
+                    c.path
+                        .file_stem()
+                        .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(id))
+                })
+                .map_or_else(|| source.obj.clone(), |c| c.obj.clone());
+            (id.clone(), body)
+        })
+        .collect();
+    crate::gate::ledger::record_collected_verdict(launcher_root, change, &source.obj, &spec_bodies)
+        .map_err(|e| {
+            format!(
+                "could not record the verdict on the {} gate ledger: {e}",
+                change.as_key()
+            )
+        })?;
+    let collected_from_worktree = canonical_in_place.is_none();
+    let spec_records = spec_ids;
 
     Ok(CollectedVerdict {
         verdict: source.verdict,
@@ -2734,24 +3060,73 @@ pub fn short_sha(sha: &str) -> &str {
     }
 }
 
-pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
+/// How many review rounds `key` has: the per-commit archive's recordings
+/// and the gate ledger's verdict records (M1: a collected round is on the
+/// ledger only), a round recorded in both places counted once.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn recorded_round_count(project_root: &Path, key: &str) -> usize {
+    let identity = |v: &serde_json::Value| {
+        let field = |k: &str| {
+            v.get(k)
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+        (
+            field("reviewed_sha"),
+            field("recorded_at"),
+            field("verdict"),
+        )
     };
-    let mut out: Vec<(String, RecordedVerdict)> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
-        .filter_map(|p| {
-            let spec = p.file_stem()?.to_str()?.to_string();
-            let body = read_verdict_body(&p).unwrap_or_default();
-            let verdict = parse_recorded_verdict(&body)?;
-            Some((spec, verdict))
+    let mut seen = std::collections::HashSet::new();
+    archived_recordings(&verdict_path(project_root, key))
+        .unwrap_or_default()
+        .iter()
+        .map(identity)
+        .chain(
+            crate::gate::ledger::project::verdict_records(project_root, key)
+                .into_iter()
+                .map(|r| identity(&serde_json::Value::Object(r))),
+        )
+        .filter(|id| seen.insert(id.clone()))
+        .count()
+}
+
+/// Every key's current verdict (`aida review list`): each legacy file's key
+/// and each key the gate ledger holds, read through [`current_verdict`] so a
+/// ledger-only verdict is listed and a stale file does not hide a newer one.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
+    let mut out: Vec<(String, RecordedVerdict)> = verdict_keys(project_root)
+        .into_iter()
+        .filter_map(|key| {
+            let verdict = parse_recorded_verdict(&current_verdict(project_root, &key)?.body)?;
+            Some((key, verdict))
         })
         .collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
+}
+
+/// Every key with a verdict: the stems of the top-level legacy files under
+/// `.aida/review-verdicts/` unioned with the keys the gate ledger holds.
+/// Directory-scanning readers walk this instead of the directory.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn verdict_keys(project_root: &Path) -> Vec<String> {
+    let dir = verdict_path(project_root, "x")
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    let file_keys = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|p| Some(p.file_stem()?.to_str()?.to_string()))
+        .collect();
+    crate::gate::ledger::project::keys_with_ledger(project_root, file_keys)
 }
 
 // STORY-1889: moved from `queue_cmd.rs`.
