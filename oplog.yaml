@@ -84942,5 +84942,21 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6644
+- id: 01a1873c-dbad-7d02-b89b-b81b7de58696
+  target_id: 01a1873c-d483-74b3-8ab7-e17ec287a32c
+  author: aida
+  node_id: '1'
+  lamport: 6645
+  timestamp: 2026-10-29T10:37:54.989808357Z
+  kind: !Create
+    title: 'non-blocking/minor: refuse_node_id_colliding_with_label (node_alias.rs:571) use…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      non-blocking/minor: refuse_node_id_colliding_with_label (node_alias.rs:571) uses load_strict, so a malformed node_aliases.toml blocks every node registration (aida node acquire/init) until the alias file is fixed. This fails closed and the error is explicit, but it couples node acquisition to the health of the alias file.
+      Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6645
 node_id: '1'
