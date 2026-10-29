@@ -85068,5 +85068,24 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 6653
+- id: 01a1874c-5bf9-7743-8e77-53ed9273eb42
+  target_id: 01a1874c-239a-7f73-afc0-c9a87b8256d8
+  author: aida
+  node_id: '1'
+  lamport: 6654
+  timestamp: 2026-10-29T10:54:50.873082808Z
+  kind: !SetDescription
+    description: |
+      ## Problem
+      STORY-B6B1278890774EF993D2EBC327862470-078 (friendly node aliases, PR-3089) promised that every surface taking a spec ID accepts TYPE-<LABEL>-NNN. `aida queue work STORY-HOME-080 --role implementer --no-human --dry-run` refuses with "`STORY-HOME-080` doesn't match any queued entry or known requirement", while `aida show STORY-HOME-080` and `aida edit STORY-HOME-080` resolve it (HOME bound 2026-10-29). The queue scope matcher compares raw strings instead of going through the shared literal-first resolver.
+
+      ## Acceptance
+      - `aida queue work`, `aida queue add/rm/done`, `aida claim`, `aida worktree add`, `aida session end --spec` and `aida pr auto-queue-review` resolve TYPE-<LABEL>-NNN through `aida_core::node_alias::resolve_literal_first`, and act on the canonical ID (leases, branch names and queue entries stay canonical).
+      - A test per command family: with a label bound, the alias form and the canonical form produce the same lease/queue entry; unknown label stays a not-found that names it.
+      - Audit the remaining spec-ID argument parsers in aida-cli-lib (grep clap args named spec/id/scope) and route any others found through the resolver in the same PR; list them in the PR body.
+
+      ## Test tier
+      LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
+      - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
+clock: 6654
 node_id: '1'
