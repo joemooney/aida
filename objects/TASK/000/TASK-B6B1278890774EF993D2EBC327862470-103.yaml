@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T12:29:16.193177525Z
-modified_at: 2026-10-29T12:29:16.193177525Z
+modified_at: 2026-10-29T12:35:26.521734246Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-016
 - finding-hash:d93d592b
 - from-review:PR-3092
 - kind:carried-forward
+comments:
+- id: 01a187a8-74b9-7922-b54b-5c2473f9f423
+  author: joe
+  content: 'Closed: already ruled ACCEPTED (not reworked) by the advisor on 2026-10-29 05:30 under the rule-once order; the reason for each finding is recorded in the comment on BUG-HOME-016. This draft was auto-carried forward after that ruling.'
+  created_at: 2026-10-29T12:35:26.521734246Z
+  modified_at: 2026-10-29T12:35:26.521734246Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 filed_at:
   code_sha: b74166aba21293380f163f21e5df6137a79dbcce
   branch: main
