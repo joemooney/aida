@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T12:04:29.744420943Z
-modified_at: 2026-10-29T18:04:12.435857973Z
+modified_at: 2026-10-29T18:04:16.359875767Z
 req_type: Task
 tags:
 - docs:impacted
@@ -54,6 +54,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a188d5-85c1-7b92-99de-85996b50579d
+  author: joe
+  timestamp: 2026-10-29T18:04:17.217823636Z
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -65,3 +69,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T18:04:12.435857973Z
   implemented_by: joe
+interface_changes:
+  other:
+  - Portable product showcase and printable executive brief
