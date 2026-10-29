@@ -7,10 +7,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:51:35.369252268Z
-modified_at: 2026-10-29T11:51:35.369252268Z
+modified_at: 2026-10-29T17:50:47.668700414Z
 req_type: Task
 tags:
 - docs:impacted
+comments:
+- id: 01a188c9-2b74-72b2-9e9b-4d89d391c31a
+  author: joe
+  content: |
+    Direct implementer assignment on 2026-10-29. Read AGENTS.md/CLAUDE.md and the full spec. The required `aida worktree add TASK-B6B1278890774EF993D2EBC327862470-100 --role implementer` refused because this spec is Draft. The repo's direct-assignment promotion attempt also refused: this session has no advisor authority. Advisor approval is required before the implementation lease can be claimed; no bypass or primary-source edit was attempted.
+
+    Conservative scope decision: reuse only the two overview-file changes from prototype commits 6461bda05cc and 687c5f5a2ac. Later combined-branch documentation/metrics/library refactors belong to the epic's future approved slices, not this task. Source verification: ExecutionMode variants and ranks in aida-core/src/models.rs, human contracts/override rules in aida-cli-lib/src/do_dispatch.rs, and aida do --help.
+
+    Preliminary read-only spawned self-check (not independent review) found that the old prototype's HTML In one sentence paragraph still retains the operating-system tagline while Markdown and masthead use governed-factory wording. Correct that mismatch after claim. Also name --force explicitly for a less-human one-shot override. No factual issue was found in the new four-mode/decide descriptions. The checker changed no files or state.
+  created_at: 2026-10-29T17:50:47.668700414Z
+  modified_at: 2026-10-29T17:50:47.668700414Z
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
