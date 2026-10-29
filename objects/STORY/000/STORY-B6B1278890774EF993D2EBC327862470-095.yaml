@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T22:47:20.232117001Z
-modified_at: 2026-10-29T22:48:07.316961621Z
+modified_at: 2026-10-29T22:49:36.336336297Z
 req_type: Story
 tags:
 - architecture
@@ -84,6 +84,23 @@ comments:
   created_at: 2026-10-29T22:48:07.316961621Z
   modified_at: 2026-10-29T22:48:07.316961621Z
   session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+- id: 01a189da-bd50-7940-aee7-b6304bbcbc23
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF on SKETCH v1 (2026-10-29 15:55): APPROVED with the rulings below. Implement slice 1 next. Do not write another sketch; these rulings amend it.
+
+    R1 (data model, blocking): no mutable free-lists. pools.yaml must not carry a `ranges[]` that claims shrink. A pool is an IMMUTABLE grant record {pool_id, type_prefix, range, parent_pool_id, holder_node, home_ref}. A claim is an IMMUTABLE child block or pool record whose range lies inside its parent's range. Free space is DERIVED as the parent range minus its children. Reason: the store reaches two hubs and `aida remote reconcile` union-merges them. Append-only records union cleanly; a shrinking list does not, and a concurrent pair of claims could each see the same "free" range after a merge. This is the gate-ledger lesson (M1): append, never rewrite. The preflight then checks the invariant: children are disjoint and inside their parent. Two overlapping children = conflict, listed and never auto-resolved.
+    R2 (one mutation ref per pool, blocking): every pool records its `home_ref`, the single remote ref where claims against it are CAS-pushed. The root pool's home is HOME's own store (origin). The hub pool's home is gitlab/aida-store. HOME never carves from the hub pool, and WORK never carves from the root pool. Mirroring (reconcile, mirror_remotes) only copies records and never creates one. That is what makes "GitLab is a mirror for HOME but the upstream for WORK" consistent.
+    R3 (ranges are per type everywhere): drop `type_prefix|*`. IDs number per type, so every pool and block names exactly one type prefix. A new type gets its pool lazily from its parent on the first claim.
+    R4 (open question: who claims): `aida push` claims (threshold-gated, one-line notice), and so does an explicit `aida node claim [--type T]`. `aida pull` never writes to a remote; it only prints the low-water notice. Reason: a pull that pushes surprises people, and push already runs often enough.
+    R5 (open question: sizes): leaf block 100 per type, hub pool 1000 per type, LOW_THRESHOLD = 20% of the block remaining. Put them in config ([allocation] leaf_block, hub_pool, low_water_pct) with these defaults. No per-level tuning beyond that.
+    R6 (open question: self-promotion): allowed, but EXPLICIT in slice 3: `aida node promote --dry-run` then apply, only for this node's own node-local IDs, idempotent, with the old ID kept as an alias (resolvable by show, search, why, and in commit trailers). It is not automatic on push. Revisit automation after it has run cleanly for a while. HOME's existing renumbering of other nodes' IDs is unchanged.
+    R7 (root transfer): fine as sketched. Add one rule: a claim carrying a stale epoch is REFUSED with "root moved; run aida pull", never silently recarved.
+    R8 (slices): as sketched. Slice 1 includes R1's record shapes and the derived-free-space function with its disjointness invariant (unit-tested), even though claims only arrive in slice 2. Tests per the sketch's failure-mode list, including "two claims union-merged from two hubs never overlap" (R1/R2). Test tier: LIGHT for slices 1-2, STRICT for slice 3 (renumbering).
+    Architecture gate: these rulings are the advisor signoff. The operator filed the story (from-operator), so this needs no further operator gate.
+  created_at: 2026-10-29T22:49:36.336336297Z
+  modified_at: 2026-10-29T22:49:36.336336297Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
