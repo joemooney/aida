@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:57:23.950805313Z
-modified_at: 2026-10-29T13:02:09.214617770Z
+modified_at: 2026-10-29T13:49:28.697571825Z
 req_type: Story
 relationships:
 - rel_type:
@@ -35,6 +35,12 @@ comments:
   content: 'Round 2 review (advisor, 2026-10-29 06:05) for PR-3091 at 650203c07cb (6649ab1 rework + merge from main for #3092). Judge against the advisor''s round-1 ruling appended to BUG-HOME-015''s description: ONE clap value parser on every spec-ID arg + ONE command-tree walk test as the ratchet + end-to-end checks only for review record keying, queue work dry-run plan, queue rm/done by alias, and auto-queue-review trailers. Verify all round-1 findings are closed by that mechanism. Rule-once: name every finding now; minor ones get bundle-or-accept in the verdict. No cargo; judge by CI at this head.'
   created_at: 2026-10-29T13:02:09.214617770Z
   modified_at: 2026-10-29T13:02:09.214617770Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a187ec-3cf9-75b0-8e72-80dc0f3f2252
+  author: joe
+  content: 'Round 3 review (advisor, 2026-10-29 06:55) for PR-3091 at 37d5a96. Judge ONLY against the advisor''s ''PR-3091 ROUND 2 ruling'' Steps 1-4 at the end of BUG-HOME-015''s description, and record each unmet step as its own finding with exact files: (1) a test that walks Cli::command() and fails on any spec-ID arg lacking spec_arg::spec_id (a hand-listed per-arg test does NOT satisfy this); (2) every arg that walk would flag uses the parser, explicitly including commit --spec and ship [SPEC]; (3) canonicalize_queue_spec_args, canonicalize_session_spec_args, the claim.rs canonicalization and the handler-side canonical() calls are deleted; (4) end-to-end tests that review record by alias keys the verdict canonically and commit --spec by alias writes the canonical trailer. Those findings will drive the final rework.'
+  created_at: 2026-10-29T13:49:28.697571825Z
+  modified_at: 2026-10-29T13:49:28.697571825Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18785-c540-7ef0-b847-a91c07a5f203
