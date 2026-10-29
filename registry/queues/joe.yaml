@@ -5,19 +5,3 @@
   note: Promoted from finding TASK-1-205 via `aida findings promote`
   added_at: 2026-10-06T02:04:51.350629190Z
   for_role: advisor
-- user_id: joe
-  requirement_id: 01a185b7-1de3-7b11-a41e-18abd918f73f
-  position: 14000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-10-29T05:34:01.861590533Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a18625-6530-7a80-9440-bf81421ee1bc
-  position: 15000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-10-29T05:40:38.813188770Z
-  for_role: reviewer
-  added_by_machine: imac
