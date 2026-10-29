@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-29T02:27:05.103550348Z
+modified_at: 2026-10-29T02:31:37.687994344Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1401,6 +1401,12 @@ comments:
   content: 'ADVISOR RULING 2026-10-28 18:16 MST on the E SKETCH (Gap 1, mail watcher). BUILD the fix slice before E; do not rule it a known limitation (signoff 48 #3 requires every watcher reader to use the logical view, and the goal is no deferrals). Slice W, Refs STORY-1843: ''aida mailbox wake-snapshot'' builds its result from the core logical snapshot (the same audience resolution as notice, Notice mode, and the non-blocking bind rules from F4 unchanged): unread = not receipted in the common-Git anchor; cohort mail owned by other UUIDs is excluded; a partial source is reported as partial (the watcher wakes with partial=true rather than guessing). scripts/codex-mail-wake.py stops unioning per-worktree state and consumes only the snapshot''s JSON. Tests: no wake for mail read in a since-removed worktree; no wake for another reader''s cohort mail; partial is flagged. Then E fills in the row.'
   created_at: 2026-10-29T01:14:33.417979041Z
   modified_at: 2026-10-29T01:14:33.417979041Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a1857f-a5d8-7451-98d8-078e6b20a769
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 18:49 MST (recorded here 19:32; it was first sent to the W lane directly), amending the slice-W ruling (18:16) after the #3079 round-1 review: wake-snapshot NEVER binds queued deliveries. It is a pure read of the logical view, so it cannot attach role mail to whatever session runs it. Queued deliveries are reported as an envelope ''pending'' count; binding stays with explicit reads and the per-turn notice. The adapter clears all inherited session-identity variables. The lane''s addition (one ID-less notice per episode when pending > 0 and nothing new is listed) is ACCEPTED, so queued advisor mail does not sit unseen.'
+  created_at: 2026-10-29T02:31:37.687994344Z
+  modified_at: 2026-10-29T02:31:37.687994344Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
