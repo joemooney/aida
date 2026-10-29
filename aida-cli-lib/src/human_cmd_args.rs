@@ -81,6 +81,7 @@ pub enum HumanCommand {
     // trace:STORY-611 | ai:claude
     Answer {
         /// The spec carrying the pending decision (SPEC-ID or UUID).
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// The choice to record (1-based index, or the choice label).
         choice: String,
@@ -95,6 +96,7 @@ pub enum HumanCommand {
     // trace:STORY-611 | ai:claude
     Decide {
         /// The spec carrying the pending decision (SPEC-ID or UUID).
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// The choice to record (1-based index, or the choice label).
         choice: String,
@@ -110,6 +112,7 @@ pub enum HumanCommand {
     // trace:STORY-611 | ai:claude
     Review {
         /// The spec to review (SPEC-ID or UUID).
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// Skip launching the reviewer agent — just report the surface.
         #[clap(long)]

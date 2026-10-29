@@ -207,6 +207,8 @@ mod tests {
 #[clap(name = "ultraplan")]
 pub(crate) struct UltraplanArgs {
     /// SPEC-ID (or UUID) to assemble the planning prompt for.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     /// Print the assembled prompt to stdout instead of copying it to

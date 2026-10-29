@@ -78,7 +78,7 @@ pub enum QueueCommand {
         /// scope_tags/scope_status filters — different axis.
         // trace:TASK-52, STORY-57 | ai:claude
         // trace:TASK-487 | ai:claude
-        #[clap(long, value_name = "CSV")]
+        #[clap(long, value_name = "CSV", value_parser = crate::spec_arg::spec_id_csv)]
         scope: Option<String>,
         /// Group entries by their parent EPIC for a visual cluster view.
         /// EPICs are sorted by item count desc; unscoped items appear
@@ -148,7 +148,7 @@ pub enum QueueCommand {
         /// alias.
         // trace:TASK-923 | ai:claude
         // trace:TASK-1953 | ai:claude — names the current `aida graph tree` spelling.
-        #[clap(long, visible_alias = "parent", value_name = "ID")]
+        #[clap(long, visible_alias = "parent", value_name = "ID", value_parser = crate::spec_arg::spec_id)]
         epic: Option<String>,
         /// Ignore the active focus for this listing — show the whole queue
         /// instead of the focused subtree. No-op when no focus is set or when
@@ -159,6 +159,7 @@ pub enum QueueCommand {
     /// Add a requirement to your queue
     Add {
         /// Requirement ID (UUID or SPEC-ID)
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
         /// Add to top of queue
         #[clap(long)]
@@ -186,7 +187,7 @@ pub enum QueueCommand {
         /// --no-scope is passed. Pairs with --for so two implementer
         /// sessions don't see each other's incoming work.
         // trace:STORY-57 | ai:claude
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         scope: Option<String>,
         /// Restrict routing to one specific session, by 8+ char lease id
         /// prefix. Mutually exclusive with --no-scope (passing both is
@@ -226,6 +227,7 @@ pub enum QueueCommand {
     /// Remove a requirement from your queue
     Remove {
         /// Requirement ID (UUID or SPEC-ID)
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -242,6 +244,7 @@ pub enum QueueCommand {
     /// Move a queue item to a new position
     Move {
         /// Requirement ID (UUID or SPEC-ID)
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
         /// User ID whose queue to reorder (defaults to AIDA_USER or the
         /// shell's $USER), matching every other queue verb (add/remove/list).
@@ -271,7 +274,7 @@ pub enum QueueCommand {
         #[clap(long, value_name = "N", conflicts_with_all = ["top", "bottom", "before", "after"])]
         to: Option<usize>,
         /// Move before this requirement ID
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         before: Option<String>,
         /// Move immediately after this requirement ID — symmetric to
         /// `--before`. Useful for "put X right after Y" reasoning, and
@@ -280,7 +283,7 @@ pub enum QueueCommand {
         /// anchor.
         // trace:STORY-72 | ai:claude
         // trace:TASK-318 | ai:claude
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         after: Option<String>,
         /// Allow moving an entry whose spec has terminal status
         /// (Completed/Rejected). The default refuses with an error so
@@ -433,6 +436,7 @@ pub enum QueueCommand {
     // trace:STORY-566 | ai:claude
     Advance {
         /// Advance just this queued spec; omit to walk the whole queue.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: Option<String>,
         /// Non-interactive: take only the unambiguous autonomous step per
         /// item, skip anything needing a human.
@@ -447,6 +451,7 @@ pub enum QueueCommand {
     /// loop. Equivalent to: `aida edit <id> --status done && aida queue remove <id>`.
     Done {
         /// Requirement ID (UUID or SPEC-ID)
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -539,6 +544,7 @@ pub enum QueueCommand {
         /// role's queue.
         // trace:TASK-293 | ai:claude — plain `//` so the marker stays out
         // of `--help` output (TASK-268 user-facing-text convention).
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: Option<String>,
         /// Count for the `next` keyword's spaced form — `aida queue work
         /// next 3` is equivalent to the compact `aida queue work next3`.
@@ -1287,6 +1293,7 @@ pub enum QueueCommand {
         /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
         /// specs one keystroke each.
         // trace:STORY-1429 | ai:claude
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: Option<String>,
         /// Also launch a session for the spec (chains `aida queue work`).
         /// Without this, rework is metadata-only: reset to a claimable status
@@ -1364,6 +1371,7 @@ pub enum QueueCommand {
     ///   • PR merged / spec done   → pull / nothing to do (already shipped)
     Recover {
         /// Spec to recover (UUID or SPEC-ID).
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
         /// Print the inspection result + recommended recovery plan WITHOUT
         /// executing anything. The safe way to see the state read before acting.
@@ -1450,7 +1458,7 @@ pub enum QueueCommand {
         /// only PRs under that subtree are integrated. Overrides the per-worktree
         /// `aida focus` marker / AIDA_FOCUS for this run. Omit to use the active
         /// focus (if any), else scan the whole project.
-        #[clap(long, value_name = "ID")]
+        #[clap(long, value_name = "ID", value_parser = crate::spec_arg::spec_id)]
         focus: Option<String>,
         // trace:TASK-1036 | ai:claude
         /// Idle backstop for `--watch`, in minutes: the longest the loop waits

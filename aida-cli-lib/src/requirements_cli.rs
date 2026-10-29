@@ -2559,10 +2559,12 @@ pub(crate) struct AddArgs {
     /// `--depends-on`). Creates the BlockedBy edge + the inverse Blocks
     /// edge atomically, so the pickability gate holds pickup until the
     /// blocker is Completed.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
     #[clap(
         long = "blocked-by",
         visible_alias = "depends-on",
-        value_name = "SPEC-ID"
+        value_name = "SPEC-ID",
+        value_parser = crate::spec_arg::spec_id
     )]
     pub blocked_by: Vec<String>,
 
@@ -3382,9 +3384,12 @@ fn run_add(
 
                     {
                         let last = &added;
+                        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
                         println!(
                             "Added: {} - {}",
-                            last.spec_id.as_deref().unwrap_or("?"),
+                            aida_core::node_alias::display_spec_id(
+                                last.spec_id.as_deref().unwrap_or("?")
+                            ),
                             last.title
                         );
                         // TASK-647 (ADR-3): note that a requested approved+ status was
@@ -3530,8 +3535,12 @@ fn run_add(
                             backend.update_requirement(&parent_mut)?;
                             println!(
                                 "  Linked: {} → parent of {}",
-                                parent_req.spec_id.as_deref().unwrap_or("?"),
-                                last.spec_id.as_deref().unwrap_or("?")
+                                aida_core::node_alias::display_spec_id(
+                                    parent_req.spec_id.as_deref().unwrap_or("?")
+                                ),
+                                aida_core::node_alias::display_spec_id(
+                                    last.spec_id.as_deref().unwrap_or("?")
+                                )
                             );
                         }
 
@@ -3547,7 +3556,8 @@ fn run_add(
                                     Ok(Some(pdisp)) => {
                                         println!(
                                             "  Linked: {} → parent of {} (from parent: tag)",
-                                            pdisp, sid
+                                            aida_core::node_alias::display_spec_id(&pdisp),
+                                            aida_core::node_alias::display_spec_id(sid)
                                         )
                                     }
                                     Ok(None) => {}
@@ -7572,7 +7582,8 @@ pub(crate) struct EditArgs {
     /// `--status superseded` unless --status says otherwise, so
     /// `aida edit <old-spec> --superseded-by <new-spec>` is the whole
     /// move.
-    #[clap(long = "superseded-by", value_name = "SPEC-ID")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(long = "superseded-by", value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
     pub superseded_by: Option<String>,
 
     // trace:STORY-1434 | ai:claude — plain `//` keeps the id out of --help.
@@ -7596,7 +7607,7 @@ pub(crate) struct EditArgs {
     pub carve_out: Option<String>,
 
     /// The spec that now carries the criterion named by --carve-out.
-    #[clap(long = "carve-into", value_name = "SPEC-ID", requires = "carve_out")]
+    #[clap(long = "carve-into", value_name = "SPEC-ID", requires = "carve_out", value_parser = crate::spec_arg::spec_id)]
     pub carve_into: Option<String>,
 
     /// Optional reason recorded in the carve-out comment (why the
@@ -7652,16 +7663,18 @@ pub(crate) struct EditArgs {
     /// Add a BlockedBy edge to this spec (repeatable; alias
     /// `--depends-on`). Creates the BlockedBy edge + inverse Blocks edge
     /// atomically; idempotent on a re-add.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
     #[clap(
         long = "blocked-by",
         visible_alias = "depends-on",
-        value_name = "SPEC-ID"
+        value_name = "SPEC-ID",
+        value_parser = crate::spec_arg::spec_id
     )]
     pub blocked_by: Vec<String>,
 
     /// Remove a BlockedBy edge from this spec (repeatable). Removes both
     /// the BlockedBy edge and the inverse Blocks edge; no-op if absent.
-    #[clap(long = "remove-blocked-by", value_name = "SPEC-ID")]
+    #[clap(long = "remove-blocked-by", value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
     pub remove_blocked_by: Vec<String>,
 
     // trace:STORY-476 | ai:claude
@@ -8844,7 +8857,8 @@ fn run_edit(
                                     Ok(Some(pdisp)) => {
                                         println!(
                                             "  Linked: {} → parent of {} (from parent: tag)",
-                                            pdisp, sid
+                                            aida_core::node_alias::display_spec_id(&pdisp),
+                                            aida_core::node_alias::display_spec_id(sid)
                                         )
                                     }
                                     Ok(None) => {}

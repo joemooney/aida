@@ -12,6 +12,7 @@ pub enum PuntsCommand {
     List {
         /// Filter by spec (display ID or UUID)
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Filter by category (e.g. design-fork, ambiguous-spec, missing-context)
@@ -38,6 +39,7 @@ pub enum PuntsCommand {
     /// response AND closes the ledger record
     Resolve {
         /// The spec ID of the punted record
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
 
         /// The decision / answer to record
@@ -57,6 +59,7 @@ pub enum PuntsCommand {
     /// record without resuming an implementer
     Dismiss {
         /// The spec ID of the punted record
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
 
         /// Optional note on why it was dismissed
@@ -69,6 +72,7 @@ pub enum PuntsCommand {
     /// AND closes the ledger record as escalated-to-human
     Escalate {
         /// The spec ID of the punted record
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
 
         /// Why a human is needed (audit trail)
@@ -88,12 +92,14 @@ pub enum PuntsCommand {
     /// Print the full ledger record for a spec
     Read {
         /// The spec ID to read
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
     },
 
     /// Extract a pattern from a punt into a new memory pack entry
     Promote {
         /// The spec ID of the punt record to promote
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
 
         /// The name of the memory file (e.g., 'discipline/operator_curation.md')

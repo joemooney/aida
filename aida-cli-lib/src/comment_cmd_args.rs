@@ -9,6 +9,8 @@ pub enum CommentCommand {
     /// Add a comment to a requirement
     Add {
         /// Requirement ID (UUID or SPEC-ID)
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
 
         /// Comment content. Prefer the positional `[CONTENT]`; this flag is a
@@ -57,13 +59,15 @@ pub enum CommentCommand {
     /// List all comments for a requirement
     List {
         /// Requirement ID (UUID or SPEC-ID)
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: String,
     },
 
     /// Edit a comment
     Edit {
         /// Requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         req_id: String,
 
         /// Comment ID to edit
@@ -92,7 +96,7 @@ pub enum CommentCommand {
     /// Delete a comment
     Delete {
         /// Requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         req_id: String,
 
         /// Comment ID to delete

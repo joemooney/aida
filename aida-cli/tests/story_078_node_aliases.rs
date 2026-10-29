@@ -3,6 +3,8 @@
 //! alias input resolving to the canonical requirement, the JSON `display_id`
 //! contract, `--canonical-ids`, and the stored object never carrying a label.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[allow(dead_code)]
+mod support;
 #[path = "support/test_git.rs"]
 mod test_git;
 use std::{
@@ -109,6 +111,33 @@ impl Fixture {
 
     fn ok(&self, args: &[&str]) -> String {
         let out = self.aida(args);
+        assert!(
+            out.status.success(),
+            "aida {args:?}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    /// [`Self::ok`] under an advisor seat grant, which holds queue dispatch
+    /// authority.
+    fn ok_as_advisor(&self, args: &[&str]) -> String {
+        self.ok_as("advisor", &["implementer"], args)
+    }
+
+    /// [`Self::ok`] under a `role` seat grant.
+    fn ok_as(&self, role: &str, grants: &[&str], args: &[&str]) -> String {
+        let grant = support::ensure_seat(&self.home, &self.root, role, grants)
+            .expect("fixture has .aida/config.toml");
+        let out = self
+            .command(false, args)
+            .env("AIDA_SESSION_ROLE", role)
+            .env("AIDA_SESSION_GRANT", grant)
+            .env("AIDA_AGENT_TYPE", "claude")
+            .env("AIDA_AGENT_NAME", format!("claude-{role}"))
+            .output()
+            .unwrap();
         assert!(
             out.status.success(),
             "aida {args:?}\nstdout:\n{}\nstderr:\n{}",
@@ -530,4 +559,222 @@ fn node_alias_label_refused_when_a_stored_id_uses_it() {
         "BUG-JM-001",
     ]);
     assert!(message.trim().ends_with("(BUG-JM-001)"), "{message}");
+}
+
+/// Spec-scope commands resolve an alias argument to the canonical id and act
+/// on it: queue entries, claim leases, worktree branches and the `aida add`
+/// confirmation. An unknown label stays a not-found that names it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+#[test]
+fn node_alias_spec_scope_commands_act_on_the_canonical_id() {
+    let f = Fixture::new();
+    f.ok(&["add", "--title", "aliased story", "--type", "story"]);
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .unwrap()
+        .node_id
+        .to_ascii_uppercase();
+    let canonical = format!("STORY-{node}-001");
+    f.ok(&["node", "alias", "set", "HOME"]);
+
+    // `aida add` confirms with the display form; --canonical-ids keeps it raw.
+    let added = f.ok(&["add", "--title", "second story", "--type", "story"]);
+    assert!(added.starts_with("Added: STORY-HOME-002 - "), "{added}");
+    let raw = f.ok(&[
+        "--canonical-ids",
+        "add",
+        "--title",
+        "third",
+        "--type",
+        "story",
+    ]);
+    assert!(
+        raw.starts_with(&format!("Added: STORY-{node}-003 - ")),
+        "{raw}"
+    );
+
+    // Queue: the alias and canonical forms name one entry, stored canonical.
+    let queued = |f: &Fixture| -> Vec<String> {
+        let list: serde_json::Value =
+            serde_json::from_str(&f.ok(&["queue", "list", "--json", "--all"])).unwrap();
+        list.as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|e| e["spec_id"].as_str().map(str::to_ascii_uppercase))
+            .collect()
+    };
+    f.ok(&["queue", "add", "story-home-001", "--for", "advisor"]);
+    assert_eq!(queued(&f), vec![canonical.clone()]);
+    f.ok(&["queue", "add", &canonical, "--for", "advisor"]);
+    assert_eq!(queued(&f), vec![canonical.clone()]);
+    // The scope matcher resolves the alias: the dry-run plan for the alias is
+    // the plan for the canonical id, and names that spec.
+    let plan = |id: &str| {
+        let out = f.aida(&["queue", "work", id, "--role", "implementer", "--dry-run"]);
+        let text = String::from_utf8_lossy(&out.stderr).into_owned()
+            + &String::from_utf8_lossy(&out.stdout);
+        assert!(!text.contains("doesn't match any queued entry"), "{text}");
+        // The lines naming the spec (the session id is fresh per run).
+        text.lines()
+            .map(str::trim)
+            .filter(|l| {
+                [
+                    "anchor:",
+                    "scope:",
+                    "skill:",
+                    "branch:",
+                    "worktree:",
+                    "lease:",
+                ]
+                .iter()
+                .any(|k| l.starts_with(k))
+            })
+            .map(str::to_ascii_uppercase)
+            .collect::<Vec<_>>()
+    };
+    let alias_plan = plan("STORY-HOME-001");
+    assert!(
+        alias_plan.contains(&format!("SCOPE:   {canonical}")),
+        "{alias_plan:?}"
+    );
+    assert_eq!(alias_plan, plan(&canonical));
+
+    // Remove and done by alias act on the canonical entry.
+    f.ok_as_advisor(&["queue", "remove", "story-home-001", "--for", "advisor"]);
+    assert!(queued(&f).is_empty(), "{:?}", queued(&f));
+    f.ok(&["queue", "add", "STORY-HOME-001", "--for", "advisor"]);
+    assert_eq!(queued(&f), vec![canonical.clone()]);
+    f.ok_as_advisor(&["queue", "done", "STORY-HOME-001"]);
+    assert!(queued(&f).is_empty(), "{:?}", queued(&f));
+
+    // Claim: the lease scope is the canonical id; unclaim by alias releases it.
+    let claimed = f.ok(&["claim", "STORY-HOME-001"]);
+    assert!(
+        claimed.to_ascii_uppercase().contains(&canonical),
+        "{claimed}"
+    );
+    let leases_dir = f.root.join(".aida/sessions");
+    let scopes = || -> Vec<String> {
+        fs::read_dir(&leases_dir)
+            .map(|d| {
+                d.flatten()
+                    .filter_map(|e| fs::read_to_string(e.path()).ok())
+                    .filter_map(|t| {
+                        t.lines()
+                            .find_map(|l| l.strip_prefix("scope = "))
+                            .map(|s| s.trim_matches('"').to_ascii_uppercase())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    assert_eq!(scopes(), vec![canonical.clone()]);
+    f.ok(&["unclaim", "story-home-001"]);
+    assert!(scopes().is_empty(), "{:?}", scopes());
+
+    // Unknown label: still a not-found that names what was typed.
+    for args in [
+        &["claim", "STORY-NOPE-001"][..],
+        &[
+            "queue",
+            "work",
+            "STORY-NOPE-001",
+            "--role",
+            "implementer",
+            "--dry-run",
+        ][..],
+    ] {
+        let out = f.aida(args);
+        assert!(!out.status.success(), "{args:?} must refuse");
+        let err = String::from_utf8_lossy(&out.stderr).into_owned()
+            + &String::from_utf8_lossy(&out.stdout);
+        assert!(err.contains("STORY-NOPE-001"), "{args:?}: {err}");
+    }
+}
+
+/// Every file under `dir`, recursively.
+fn files_under(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(files_under(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// `aida review record STORY-<LABEL>-NNN` keys the verdict file and the PR
+/// ledger entry under the canonical id; the alias is never written.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+#[test]
+fn node_alias_review_record_keys_the_verdict_under_the_canonical_id() {
+    let f = Fixture::new();
+    f.ok(&["add", "--title", "reviewed story", "--type", "story"]);
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .unwrap()
+        .node_id
+        .to_ascii_uppercase();
+    let canonical = format!("STORY-{node}-001");
+    f.ok(&["node", "alias", "set", "HOME"]);
+
+    // A refusing verdict insists on `--pr`; pin the sha to HEAD so no forge
+    // lookup is needed.
+    let head = f.git(&["rev-parse", "HEAD"]);
+    let out = f.ok_as(
+        "reviewer",
+        &[],
+        &[
+            "review",
+            "record",
+            "story-home-001",
+            "--verdict",
+            "request-changes",
+            "--pr",
+            "1",
+            "--sha",
+            &head,
+            "--summary",
+            "fixture refusal",
+        ],
+    );
+    assert!(out.to_ascii_uppercase().contains(&canonical), "{out}");
+
+    let verdicts = f.root.join(".aida/review-verdicts");
+    let verdict_file = verdicts.join(format!("{canonical}.json"));
+    assert!(
+        verdict_file.is_file(),
+        "no verdict under the canonical id: {:?}",
+        files_under(&verdicts)
+    );
+    // The PR ledger and every other record name the canonical id, never the
+    // alias.
+    let written = files_under(&f.root.join(".aida"));
+    let ledger_hits: Vec<_> = written
+        .iter()
+        .filter(|p| {
+            fs::read_to_string(p)
+                .map(|t| t.to_ascii_uppercase().contains(&canonical))
+                .unwrap_or(false)
+        })
+        .filter(|p| **p != verdict_file)
+        .collect();
+    assert!(
+        !ledger_hits.is_empty(),
+        "no PR ledger entry names {canonical}: {written:?}"
+    );
+    for path in &written {
+        let text = fs::read_to_string(path).unwrap_or_default();
+        assert!(
+            !text.to_ascii_uppercase().contains("STORY-HOME-001"),
+            "{} records the alias:\n{text}",
+            path.display()
+        );
+    }
+    // Reading back by alias finds the verdict recorded under the canonical id.
+    let shown = f.ok(&["review", "verdict", "STORY-HOME-001", "--json"]);
+    assert!(shown.contains("fixture refusal"), "{shown}");
 }

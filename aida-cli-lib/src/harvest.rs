@@ -1857,6 +1857,8 @@ mod tests {
 #[clap(name = "harvest")]
 pub(crate) struct HarvestArgs {
     /// Requirement ID (UUID or SPEC-ID) the diff implements.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     /// Confirm candidates from a file (e.g. a `reconstitute` probe's

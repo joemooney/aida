@@ -220,7 +220,8 @@ pub(crate) struct ImportPlanArgs {
 
     /// SPEC-ID this plan targets. If omitted, AIDA tries to detect it
     /// from the filename (a `TYPE-N` pattern like `task-42`).
-    #[clap(long, value_name = "SPEC-ID")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Land the plan as awaiting-master-review rather than canonical:

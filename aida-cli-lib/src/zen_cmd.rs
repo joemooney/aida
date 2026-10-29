@@ -190,7 +190,8 @@ pub(crate) struct ZenArgs {
     /// into a spec and drive. Free text is drafted into a title +
     /// description + acceptance criteria, filed as a draft, then routed
     /// through the approve-gate before driving.
-    #[clap(value_name = "SPEC")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_name = "SPEC", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Supervised drive: YOU drive the implementer interactively, and the

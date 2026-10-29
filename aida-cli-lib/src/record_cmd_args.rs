@@ -12,6 +12,7 @@ pub enum RecordCommand {
     /// when no id is given).
     List {
         /// Spec id to inspect. Omit to walk every spec with a record.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
     },
 
@@ -21,6 +22,7 @@ pub enum RecordCommand {
     Prune {
         /// Restrict to one spec. Omit to sweep every spec.
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Drop records older than this many days (e.g. `90`). When omitted,

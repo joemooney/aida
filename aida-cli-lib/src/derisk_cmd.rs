@@ -11,7 +11,8 @@ use anyhow::Result;
 #[clap(name = "derisk")]
 pub(crate) struct DeriskArgs {
     /// Requirement identifier to de-risk.
-    #[clap(value_name = "ID")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_name = "ID", value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 }
 

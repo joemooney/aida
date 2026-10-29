@@ -294,7 +294,8 @@ pub(crate) static ORCHESTRATOR: crate::command_registry::CommandReg =
 #[clap(name = "state-snapshot", hide = true)]
 pub(crate) struct StateSnapshotArgs {
     /// SPEC-ID whose title + status appear on the Spec row.
-    #[clap(long)]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(long, value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     /// Free-form summary of the last `cargo test` run, used as the

@@ -128,7 +128,8 @@ pub enum DbCommand {
         /// Limit the replay to a single spec. Faster than the full
         /// scan when you know which spec is stuck. The same default-
         /// branch + status-Done guards apply.
-        #[clap(long, value_name = "SPEC-ID")]
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Show what would flip without writing anything. Pairs with
