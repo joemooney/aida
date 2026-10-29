@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-29T18:26:41.084953189Z
+modified_at: 2026-10-29T18:29:16.130137871Z
 req_type: Task
 tags:
 - advisor-review
@@ -67,6 +67,15 @@ relationships:
   target_id: 01a188db-2c65-74b2-b493-e7a754ce37d3
   created_at: 2026-10-29T18:10:35.771962659Z
   created_by: joe
+comments:
+- id: 01a188ec-64e2-7c93-8e31-7f017c3d246d
+  author: ai:codex:joe
+  content: |
+    Implementation uses the thinnest source-guide renderer and shared static layout for one onboarding page. Main newcomer guidance is conversational; operator setup is separate, and capture is conditional on configured agent behavior.
+
+    Dependencies TASK-B6B1278890774EF993D2EBC327862470-100 and -101 are Done/in independent review. The explicitly requested worktree add --role implementer succeeded. To keep implementation separate without merging those PRs, this branch is stacked on task-b6b1278890774ef993d2ebc327862470-101-work (PR #3094); the PR base will be that branch. Overview intro edits are limited to human-inclusive onboarding and should be preserved when #3093 is integrated. No gate/authority runtime changes. Broader operator-reference correctness belongs to slice 112; publication scope belongs to slice 111.
+  created_at: 2026-10-29T18:29:16.130137871Z
+  modified_at: 2026-10-29T18:29:16.130137871Z
 history:
 - id: 01a188d8-e7f2-7920-ae16-f28e478dd331
   author: joe
