@@ -87364,5 +87364,37 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 6814
+- id: 01a189c5-61a1-7741-af56-2f1ba7d5b92a
+  target_id: 01a189c5-5a49-7571-ae31-d175f5f26bc0
+  author: aida
+  node_id: '1'
+  lamport: 6815
+  timestamp: 2026-10-29T22:26:16.609282950Z
+  kind: !Create
+    title: How do I create a custom command like 'git lg' in aida?
+    description: |
+      **Use `aida alias add` for a fixed expansion, or put an `aida-<name>` script on your PATH for anything that needs scripting.**
+
+      ## Why
+      AIDA works like git here. `aida alias` matches `git config alias.*`, and the PATH lookup for `aida-<name>` matches git's `git-<name>`. AIDA has no `!` shell aliases. That's deliberate: a git-tracked project alias file that runs shell commands would execute whatever was committed on every clone.
+
+      ## How
+      ```bash
+      aida alias add --global mine list --user me --status open    # personal: ~/.aida/aliases.toml
+      aida alias add --project triage list draft                   # project: .aida/aliases.toml (commit it)
+      aida mine
+      aida alias list            # built-in shortcuts plus your aliases
+      aida alias remove mine
+      ```
+      - Put `--global` or `--project` before the name. Everything after the name is stored exactly as typed.
+      - An alias cannot shadow a real subcommand.
+      - Extra arguments go on the end: with `aida alias add sf show --full`, typing `aida sf TASK-1` runs `aida show --full TASK-1`.
+      - `$1`/`$2` placeholders are not supported. If an argument has to go mid-command or appear twice, write a script instead. If AIDA doesn't recognise `aida blocks`, it runs `aida-blocks` from PATH and passes the arguments.
+
+      ## See also
+      TASK-877, STORY-667, STORY-1641
+    req_type: Faq
+    status: Completed
+    priority: Medium
+clock: 6815
 node_id: '1'

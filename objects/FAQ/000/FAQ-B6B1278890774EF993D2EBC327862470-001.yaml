@@ -1,0 +1,45 @@
+id: 01a189c5-5a49-7571-ae31-d175f5f26bc0
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-001
+title: How do I create a custom command like 'git lg' in aida?
+description: |
+  **Use `aida alias add` for a fixed expansion, or put an `aida-<name>` script on your PATH for anything that needs scripting.**
+
+  ## Why
+  AIDA works like git here. `aida alias` matches `git config alias.*`, and the PATH lookup for `aida-<name>` matches git's `git-<name>`. AIDA has no `!` shell aliases. That's deliberate: a git-tracked project alias file that runs shell commands would execute whatever was committed on every clone.
+
+  ## How
+  ```bash
+  aida alias add --global mine list --user me --status open    # personal: ~/.aida/aliases.toml
+  aida alias add --project triage list draft                   # project: .aida/aliases.toml (commit it)
+  aida mine
+  aida alias list            # built-in shortcuts plus your aliases
+  aida alias remove mine
+  ```
+  - Put `--global` or `--project` before the name. Everything after the name is stored exactly as typed.
+  - An alias cannot shadow a real subcommand.
+  - Extra arguments go on the end: with `aida alias add sf show --full`, typing `aida sf TASK-1` runs `aida show --full TASK-1`.
+  - `$1`/`$2` placeholders are not supported. If an argument has to go mid-command or appear twice, write a script instead. If AIDA doesn't recognise `aida blocks`, it runs `aida-blocks` from PATH and passes the arguments.
+
+  ## See also
+  TASK-877, STORY-667, STORY-1641
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T22:26:14.729555974Z
+modified_at: 2026-10-29T22:26:14.729555974Z
+req_type: Faq
+tags:
+- audience:user
+- topic:cli
+filed_at:
+  code_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 24b61036ae0
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T22:26:14.729574486Z
