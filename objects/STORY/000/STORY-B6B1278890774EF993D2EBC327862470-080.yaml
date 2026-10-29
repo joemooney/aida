@@ -22,18 +22,107 @@ description: |
 
   ## Test tier
   STRICT for the final slice (gate code, heft >= 7): targeted cargo tests for gate:: plus the ship/mandate integration binaries; LIGHT for earlier slices. Never `cargo test --workspace` or `make check-ci` locally.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T10:55:19.069139282Z
+modified_at: 2026-10-29T10:57:27.852062895Z
 req_type: Story
 tags:
 - architecture
 - dedup
 - gate
 - regroup
+comments:
+- id: 01a1874e-a272-7ee2-959b-719772d45194
+  author: joe
+  content: |-
+    ## M1 architecture sketch: one gate ledger (needs advisor signoff before implementation)
+
+    This is the first deliverable the spec asks for. No code has been written. Written by the implementer seat after reading `gate/{review_verdict,review_marker,merge_hold_core,rework_hold_release,approval}.rs`, `review_carryover.rs`, `seat_clone::main_for`, `contained_boundary.rs` and the live state in the primary checkout. In that checkout today: 2,717 verdict files (1,626 keyed `PR-N`, about 1,090 keyed by spec), 9 clearances, and 7 carry-over directories.
+
+    ### 1. Location
+    - Ledger root: `<main>/.aida/gate-ledger/`, with one file per change: `PR-<N>.jsonl` (an MR on another forge would be `MR-<N>.jsonl`; the key is `forge-kind + number`).
+    - `<main>` is resolved exactly once, through a new `gate::ledger::store_root(start)`. It reads the common Git dir from disk (`.git` → `gitdir:` → `commondir`, as `merge_hold_core::primary_checkout_from_files` already does). For a contained seat clone it uses `seat_clone::main_for` → `Verified(main)`. That case matters: a seat clone has its own `.git`, so its common dir is the clone itself, not the main checkout. `hold_store_root` (BUG-2176) becomes this function and is deleted from `merge_hold_core`.
+    - **Unverified seat clone → writes are refused**, not redirected to a local directory. Today `local_hold_path` is a worktree-local fallback, and AC5 removes it.
+    - Spec index: `<main>/.aida/gate-ledger/by-spec/<SPEC>.json` holds `{changes: [PR-N, ...]}`. It is a derived cache that can be rebuilt from the ledgers (every verdict and hold event carries `spec`). It is never authority, and never a place where state is stored.
+
+    ### 2. Event schema (one JSON object per line, append-only, `O_APPEND` + `flock` on `PR-<N>.lock`)
+    Common fields: `v:1`, `seq` (monotonic per file), `at` (RFC3339), `kind`, `change` (`PR-N`), `head` (full sha), `patch_id` (see §3; null when it cannot be computed, e.g. empty diff), `base_ref`, `base_tip`, `spec` (optional index), and `actor`. `actor` reuses the existing `RecorderAttestation`: seat, grant_id, human_at_tty, and session/lease tokens.
+
+    | kind | extra fields | replaces |
+    |---|---|---|
+    | `verdict` | `verdict` (VerdictKind), `findings[]`, `round`, `tier` (STORY-1683), `inherited_from_round` (TASK-1316 fix: set only by the stamp path, never on the same round) | `.aida/review-verdicts/{SPEC,PR-N}.json` + archive sidecars |
+    | `review-start` / `review-end` | `ttl`, `host`, `pid` | `.aida/review-in-progress/PR-N` (review_marker) |
+    | `hold` | `reason_kind` (HoldReasonKind), `detail`, `routed_to`, `recused`, `target_head`, `release_condition`, `verdict_ref` (seq of the refusing verdict) | `.aida/merge-holds/PR-N` |
+    | `hold-release` | `released_hold_seq`, `by` (human / rework-auto / mandate), `verdict_ref` | file deletion + `.aida/merge-hold-clearances/PR-N.json` |
+    | `mandate-cover` | `mandate_id`, `gates_passed` | `record_mandate_clearance` |
+    | `carry-over-proof` | the full `CarryOver` struct (approved_sha, new_head, ranges, both patch ids, merge_commits) | `.aida/review-carryover/PR-N/<head>.json` |
+    | `label-sync` | `labels` observed or applied | `record_label_state` |
+    | `merged` / `closed` | `merge_sha` | `close_verdict_on_merge` |
+
+    State is a pure fold: `gate::ledger::project(events) -> GateState { verdict_at(head), open_holds, hold_history, review_in_progress, carry_over(head) }`. Every gate reads this projection.
+
+    ### 3. Patch identity
+    `patch_id = review_carryover::patch_id(merge-base(protected_base, head), head)`: the same `git patch-id --verbatim` as today, with the same diff flags, against the PROTECTED base (`protected_base`, not the PR's retargetable base). It is computed once per (change, head) by the event writer and stored in the event. Readers never recompute it.
+
+    ### 4. Carry-over (AC4)
+    - When a gate asks for "approval at head H" and the newest approving verdict is at A ≠ H, the gate checks the ledger for a `carry-over-proof` event with `new_head == H`. If there is none, it runs `prove_carry_over` once and appends the result: either a proof, or a `carry-over-refused` event with the reason, so that a refusal is not recomputed either.
+    - Ship, mandate and auto-release read that event. Net effect: one proof per (change, head) instead of about 4 per ship (TASK-1992 / TASK-2008).
+    - **merge-hold-gate CI check:** CI cannot see the local ledger and keeps reading labels only. The ledger writer is the only component that changes labels (`label-sync`), so the label becomes a projection of the ledger. No change to the CI workflow file.
+    - The proof stays "structure + patch identity". The stored event is now authority for the head it names; it is no longer re-verified on every read. That is a deliberate change from TASK-1960's "evidence, never authority", and it needs signoff (Q3).
+
+    ### 5. Writers from any worktree or seat (AC5) — the hard part
+    - Contained seats currently **cannot write `<main>/.aida`**. The only exceptions are `.aida-store`, `cache.db*` and `mailbox` (contained_boundary.rs, BUG-1929 / BUG-2218, by operator ruling). Verified from this seat: `touch /home/joe/ai/aida/.aida/review-verdicts/x` fails.
+    - Proposed: add `<main>/.aida/gate-ledger` (that directory alone, symlinks refused, like `contained_mailbox_write_paths`) to the contained write set. Authority is kept by the reader, not the filesystem. A `verdict` / `hold-release` / `mandate-cover` event counts only if its `actor` attestation validates against the grant/seat rules that `rework_hold_release::approval_attested` and `review_authority` apply today. An implementer forging an approving line for its own PR is then ignored by every gate and flagged by `aida doctor`.
+    - Once that holds, `collect_standalone_verdict`, `adopt_direct_write` (4 call sites), the BUG-2149 "collected the reviewer's verdict" step and `local_hold_path` / `local_clearance_path` are deleted.
+
+    ### 6. Migration (AC6)
+    - **Read-through, not a one-time import.** `ledger::project` seeds from legacy files when the ledger file for that change has no `legacy-imported` event. On the first write to a change it appends a synthesized `legacy-imported` event (verdict/hold/clearance/carry-over bodies preserved verbatim in `legacy:{path, body}`), then the new event. Legacy files are never deleted by code; an operator can archive them once `aida doctor` reports none unimported.
+    - Spec-keyed legacy verdicts are mapped to a change through the PR whose head they name (`reviewed_sha` → `gh`/forge cache lookup). If none is found, the verdict is kept in `by-spec/<SPEC>.legacy` and the projection surfaces it as an orphan, so nothing is lost.
+    - Ratchet test: `gate/tests/ledger_legacy_write_ratchet.rs` greps non-test sources for writes (`write`, `rename`, `create_dir_all`, `hard_link`, `remove_file`) whose path is built from `"review-verdicts"`, `"merge-holds"`, `"merge-hold-clearances"`, `"review-carryover"` or `"review-in-progress"` outside `gate/ledger/legacy.rs`, which only reads. Baseline 0.
+
+    ### 7. Call sites that switch over (from `rg`, non-test)
+    - Verdict writers: `lib_part5.rs`, `phase_gates.rs`, `stranded_sweep.rs`, `pr_merge_gate.rs`, `needs_attention_lens.rs`, `queue_cmd.rs` (collect), `orchestrator_leases.rs`, `phase_driver_trait.rs`, and `stamp_pr_review_verdict` users (`status_awaiting.rs`, `merge_hold_core.rs`).
+    - Hold writers: `write_hold` / `write_typed_hold` / `write_marker` / `place_hand_hold` in `burndown_run`, `needs_attention_lens`, `merge_hold`, `phase_driver(_trait)`, `lib_part5`, `upgrade_release`, `pr_claim_surface`, `pending_approval`, `agent_launch`, `doctor_cmd`, `pr_cmd`, `merge_hold_cmd`.
+    - Release: `clear_hold` / `record_clearance*` in `pr_cmd`, `pr_ship_batch` (both copies), `rework_hold_release`, `mandate_ship`, `merge_hold_cmd`.
+    - Readers: about 22 files reading holds and 11 reading verdicts (list in the slice-1 PR). They move to `ledger::project` behind the existing function names first, then the names are inlined.
+
+    ### 8. What gets deleted
+    The `review_verdict.rs` file-keyed storage half (path, atomic publish, archive sidecars, collect, adopt, SHA backfill, about 1,200 lines). `merge_hold_core` path/lock/clearance/local-path code. `review_marker` file I/O. `review_carryover::{record_path, read_record, record_carry_over}`. `rework_hold_release`'s duplicate attestation lookup (it reads the projection). The parsing and policy (VerdictKind, HoldReasonKind, approval decision, corpus gate) stay and operate on projected state.
+
+    ### 9. Slices (each its own PR, `(Refs STORY-…-080)`; the last uses the plain trailer)
+    1. `gate/ledger/` module: event types, append+lock, `store_root`, projection, legacy read-through, ratchet at its current count, and the contained write path. Verdict writers and readers switch over; the `collect` step is deleted. LIGHT.
+    2. Holds, releases, review-in-progress, mandate-cover, label-sync. Delete `merge_hold_core` storage, local paths and clearance files; `aida awaiting` and the ship-held mandate read hold history. LIGHT.
+    3. Carry-over-proof event plus single computation; ratchet baseline to 0; supersede TASK-1992, TASK-1316, STORY-1375, TASK-2008, STORY-1683. STRICT.
+
+    ---
+
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1 (unit, `gate::ledger`):** appending each event kind round-trips; `seq` stays monotonic under two concurrent appenders (thread test with `flock`); every event carries `head` + `patch_id`; the path resolved from a linked worktree and from a verified seat-clone fixture is `<main>/.aida/gate-ledger`.
+    - **AC2 (unit):** a verdict recorded with `spec=X, change=PR-7` and a query by spec X or by PR-7 return the same event. No API writes by spec alone (compile-level: the writer requires a `ChangeKey`).
+    - **AC3 (command-level):** `aida merge-hold clear` appends `hold-release`; the file still contains the `hold`; the mandate-ship and `aida awaiting` projections report "held then cleared".
+    - **AC4 (fixture, git repo):** approve at A, merge base into the PR → head H with the same patch id → the ship gate approves H, and exactly one `carry-over-proof` event exists after ship + mandate + auto-release run (counted via a test hook on `prove_carry_over`).
+    - **AC5 (command-level):** from a linked-worktree fixture, `aida review record` writes the main ledger; no `collect` code path exists (ratchet/grep test). Contained-seat write permission: a unit test on `contained_ledger_write_paths`.
+    - **AC6 (fixture + ratchet):** legacy verdict/hold/clearance/carry-over files project identically before and after the first ledger write; ratchet test fails on a new legacy-path writer.
+    - **AC7 (no automated test):** "fewer gate code paths" is checked by line or function counts reported in the final PR body, not by a test.
+
+    ### Expected files
+    `aida-cli-lib/src/gate/ledger/{mod,event,store,project,legacy}.rs` (new), `gate/{review_verdict,merge_hold_core,review_marker,rework_hold_release,approval,mandate_ship,ship}.rs`, `review_carryover.rs`, `contained_boundary.rs`, plus the writer and reader call sites listed in §7, `gate/tests/*` and `.github/workflows` (unchanged).
+
+    ### Ambiguities / conflicts as questions
+    - **Q1 (security, blocking):** may contained seats get write access to `<main>/.aida/gate-ledger`, with authority enforced by attestation on read (§5)? Alternatives: route writes through the mailbox to a primary-side applier, or keep a launcher-side collect step. AC5 says "writes the shared ledger directly", but the BUG-1929 ruling limits contained writes to store, cache and mailbox.
+    - **Q2:** should the ledger live under `<main>/.aida/` (proposed) or under the common Git dir itself (`<main>/.git/aida/gate-ledger`)? AC5's "resolve from the common Git dir" could mean either. `.git/` is denied to contained seats outright (contained_store_deny_write_paths), so I lean `.aida/`.
+    - **Q3:** may a stored `carry-over-proof` be authority for its head? AC4 says yes ("computed once… read by every gate"); TASK-1960 says "evidence, never authority".
+    - **Q4:** is read-through (no bulk import, no deletion of legacy files) acceptable for AC6's "no loss"? Or do you want a one-shot `aida gate migrate` that rewrites all 2,717 files?
+    - **Q5:** for spec-keyed legacy verdicts with no resolvable PR, is the "orphan, surfaced, not lost" handling enough?
+  created_at: 2026-10-29T10:57:19.986814666Z
+  modified_at: 2026-10-29T10:57:19.986814666Z
+  session_id: 01a1874cc693
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -51,6 +140,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1874e-c12c-71e3-a56f-661bf6a4cc46
+  author: joe
+  timestamp: 2026-10-29T10:57:27.852076345Z
+  session_id: 01a1874cc693
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -59,3 +157,9 @@ filed_at:
   aida_build_sha: 8e45449d340
   vendor: claude
   session: 59349e57-271d-4b9e-b662-8585b949736a
+attention_reason:
+  category: design-fork
+  detail: 'Architecture change: spec requires advisor signoff on the sketch before any implementation. Sketch posted as a comment on this spec. Blocking fork Q1: AC5 wants contained seats to write the shared gate ledger directly, but the BUG-1929/BUG-2218 operator ruling limits contained writes in <main> to .aida-store, cache.db* and mailbox. Either grant <main>/.aida/gate-ledger with authority enforced by attestation on read, or route writes through a primary-side applier. Also Q2-Q5 (ledger under .aida vs .git, stored carry-over proof as authority vs TASK-1960, read-through migration, orphan spec-keyed verdicts).'
+  lean: 'Sign off the sketch as written: ledger at <main>/.aida/gate-ledger/PR-N.jsonl; grant contained write to that dir only, with every event attested and verified on read; stored carry-over proof is authority for its head; legacy read-through with a legacy-imported event; 3 slices as listed.'
+  raised_by: implementer
+  raised_at: 2026-10-29T10:57:27.852062895Z
