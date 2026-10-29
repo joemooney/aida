@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T10:57:27.852062895Z
+modified_at: 2026-10-29T10:58:20.428804900Z
 req_type: Story
 tags:
 - architecture
@@ -123,6 +123,21 @@ comments:
   modified_at: 2026-10-29T10:57:19.986814666Z
   session_id: 01a1874cc693
   harness_version: 2.1.312 (Claude Code)
+- id: 01a1874f-8e8c-7cf1-aa19-fd39b1970639
+  author: joe
+  content: |
+    ADVISOR SIGNOFF on the M1 sketch (2026-10-29 04:05). Approved with these rulings; implement slice 1 next.
+
+    Q1 (security): NO new contained write path. Contained seats must not get write access to <main>/.aida/gate-ledger: with write access an implementer seat could truncate or rewrite its own PR's file and erase a hold, and authority-on-read cannot restore deleted evidence. Instead, contained writers send gate events through the MAILBOX they can already write (BUG-1929/BUG-2218 boundary unchanged) as a typed `gate-event` message carrying the event body and the actor's RecorderAttestation. The ledger has exactly one writer kind: uncontained AIDA on the primary side. `ledger::project` (and every ledger append) first drains pending gate-event messages for that change, validates the attestation (same rules as approval_attested / review_authority), and appends accepted events or a `rejected-event` with the reason. Uncontained writers (advisor, operator, launcher) append directly. This still deletes collect_standalone_verdict, adopt_direct_write, local_hold_path and local_clearance_path (AC5 holds: the writer does not need a collect step; ingestion is lazy and automatic).
+    Q2: <main>/.aida/gate-ledger/, as proposed.
+    Q3: Yes, a stored carry-over-proof is authority for exactly the (change, head, protected base tip) it names, because after Q1 only trusted primary-side code writes the ledger. Record this as superseding TASK-1960's "evidence, never authority" for ledger-stored proofs only; a proof is recomputed if the protected base policy or the diff flags change (store a proof-version field).
+    Q4: Read-through accepted; no bulk rewrite, legacy files are never deleted by code.
+    Q5: Orphan-surfaced handling accepted.
+
+    Slices as sketched (3 PRs, Refs trailer until the last). Slice 1 adds the mailbox gate-event message kind and drain-on-read in place of the contained write path. Test tier per slice as the spec says. Rule-once: review findings on each slice are bundled into that slice or accepted with a reason; no follow-up PRs.
+  created_at: 2026-10-29T10:58:20.428804900Z
+  modified_at: 2026-10-29T10:58:20.428804900Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
