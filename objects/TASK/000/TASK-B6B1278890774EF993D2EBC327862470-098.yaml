@@ -11,13 +11,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T10:37:53.155796727Z
-modified_at: 2026-10-29T10:37:53.155796727Z
+modified_at: 2026-10-29T10:46:49.745901330Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
 - finding-hash:f0e32f3b
 - from-review:STORY-B6B1278890774EF993D2EBC327862470-078
 - kind:carried-forward
+comments:
+- id: 01a18745-0491-7a63-8cc0-6f8584a34185
+  author: joe
+  content: 'Advisor ruling (2026-10-29 03:50, 16:19 rule-once order): ACCEPTED, not reworked. Fail-closed is the intended design: alias-file writes already refuse a malformed file, and the error names the file, so a broken alias file must be fixed before identity changes rather than silently ignored.'
+  created_at: 2026-10-29T10:46:49.745901330Z
+  modified_at: 2026-10-29T10:46:49.745901330Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
