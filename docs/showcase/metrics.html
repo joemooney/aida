@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metrics — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html">✳ AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html" aria-current="page">Metrics</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><figure><img class="guide-graphic" src="assets/metrics.svg" alt="Metrics diagram; details follow in the source guide"></figure><h1 id="measure-the-flow-inspect-the-evidence">Measure the flow. Inspect the evidence.</h1>
+<p>AIDA&#x27;s reports help a team inspect delivery flow, traceability, recorded usage and tool reliability. They describe the evidence available to the configured tools. They do not measure every conversation, every human intervention or the value of the resulting software.</p>
+<p>This capability map was checked against source and command help on 29 October 2026. It contains no live dashboard values or claimed savings. People continue developing and reviewing conversationally; the agent maintains structured intent and uses reporting tools in the background when configured to do so.</p>
+<h2 id="reported-today">Reported today</h2>
+<ul>
+<li><strong>Cycle time:</strong> <code>aida metrics cycle-time</code> aggregates per-activity durations and work, wait and unknown time, with percentiles, rework signals and excluded-item reasons. It reconstructs timelines from store transitions and the local drain feed; it does not fetch forge timestamps. Unknown time is unaccounted time, not productive work or zero.</li>
+<li><strong>Traceability and spec evidence:</strong> <code>aida metrics ai-lift</code> reports commit-trailer attribution signals. <code>aida show</code> connects a spec to implementation; <code>aida criteria</code> inspects acceptance evidence. Trailer or test-trace coverage is not a proof of correctness or a complete code-coverage percentage.</li>
+<li><strong>Drain outcomes:</strong> <code>aida metrics agent-lift</code> and <code>aida usage drains</code> report recorded autonomous-run outcomes. Read their coverage and failure classifications before comparing windows. The invocation split is a CLI activity measure; agent-issued CLI calls must not be read as human productivity.</li>
+<li><strong>Effort and load:</strong> <code>aida load report</code> summarizes available estimates and <code>aida load calibration</code> compares captured buckets. The capture model supports open, plan, implementation/ship and review touchpoints. Open and pickup estimates are supported through <code>--effort</code>; shipping captures the implementer&#x27;s declared effort, and review has its own assessment. Calibration uses the ship bucket as its actual value, not a stopwatch or measured equivalent human work. Missing touchpoints limit coverage.</li>
+<li><strong>Tool reliability:</strong> with local telemetry enabled, usage reports show command-shape counts, durations and exit results. <code>aida usage slowest</code>, <code>aida usage errors</code> and <code>aida usage timeline</code> address different questions. Telemetry can be disabled and local logs may be absent; invocation counts do not measure developer output.</li>
+</ul>
+<h2 id="recorded-with-incomplete-coverage">Recorded with incomplete coverage</h2>
+<p>Token attribution is supported through <code>aida usage rebuild</code> and <code>aida usage show</code>, using retained Claude Code and Codex artifacts with attributable session evidence. Coverage depends on available artifacts and launch/handoff evidence; it is not a complete account of all agent work. The built-in ledger does not parse Antigravity artifacts. Provenance output distinguishes known write/session context from missing model, harness or usage evidence.</p>
+<p><code>aida usage show --cost</code> adds an offline estimate using the binary&#x27;s pinned, dated rate table. The bundled table is versioned 2026-09-22.1 and covers a limited model set. Unpriced models or token classes remain unpriced; they are not zero-cost usage. Cache-read, cache-write and uncached input are distinct classes. The estimate is not billing and should not be presented as a complete project cost.</p>
+<p>Review artifacts record judgments and findings against commits; <code>aida review classes</code> summarizes classified findings. Optional classification and local artifact availability limit coverage. Review artifacts and cycle-time bounce counters are separate sources; do not assume one is a complete report of the other.</p>
+<h2 id="derivable-without-a-finished-joined-report">Derivable without a finished joined report</h2>
+<p>Git links and review artifacts can support additional analysis such as lines changed per spec or review rounds joined across a change&#x27;s history. That requires a defined join, deduplication and coverage accounting. AIDA does not provide a complete joined business-performance report merely because some inputs exist. This is distinct from the implemented effort-calibration and cycle-time reports above.</p>
+<h2 id="not-supported-as-a-product-claim">Not supported as a product claim</h2>
+<p>There is no supported report proving hours saved against equivalent human work, a return on investment, or a reliable feature-duration forecast. Effort buckets are coarse declarations or assessments. Heft describes graph relationships, not a measured human-time estimate. Neither bucket sums, invocation counts nor token volume establish business value.</p>
+<p>Proposals for richer attribution and joined historical reporting remain proposals until their implementation and evidence are available. The <a href="../what-is-aida.md">overview</a> keeps these categories separate; historical repository counts elsewhere in that assessment are dated snapshots, not current product performance promises.</p>
+<h2 id="ask-a-useful-management-question">Ask a useful management question</h2>
+<p>Ask: &quot;Where is work waiting, what remains unknown, and which records explain the delay?&quot; Then inspect a bounded reporting window and its exclusions. Ask the agent to explain changes in coverage before attributing changes in a metric to the process itself. Keep quality judgment and human discussion alongside quantitative signals.</p>
+<h2 id="source-and-inspection">Source and inspection</h2>
+<pre><code>aida metrics cycle-time --help
+aida metrics agent-lift --help
+aida metrics ai-lift --help
+aida usage show --help
+aida load report --help
+aida load calibration --help
+aida review classes --help</code></pre>
+<p>Contributors can inspect <a href="../../aida-cli-lib/src/metrics_cycle_time.rs">cycle-time aggregation</a>, <a href="../../aida-cli-lib/src/token_ledger.rs">token attribution and costing</a>, <a href="../../aida-cli-lib/src/effort_calibration.rs">effort capture and calibration</a>, and the <a href="../../data/token-rates/v1.toml">pinned rate table</a>. Use the <a href="../cli/08-reporting.md">reporting reference</a> for operational detail and <a href="workflow.html">workflow guide</a> for record scopes.</p></main>
+<footer class="guide-footer"><p>Generated from <a href="../metrics-guide.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>
