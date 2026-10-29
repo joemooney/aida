@@ -86744,5 +86744,23 @@ operations:
   timestamp: 2026-10-29T18:53:57.030211354Z
   kind: !SetStatus
     status: Completed
-clock: 6774
+- id: 01a18903-2e81-7f81-bfaf-1961be764ee8
+  target_id: 01a18903-2618-7141-b4af-0a03ff5c1597
+  author: aida
+  node_id: '1'
+  lamport: 6775
+  timestamp: 2026-10-29T18:54:09.537081006Z
+  kind: !Create
+    title: 'cosmetic: docs/showcase/index.html:26 aria-label on a role-less <div class=hero…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-101, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      cosmetic: docs/showcase/index.html:26 aria-label on a role-less <div class=hero-art> is ignored by assistive tech (the inner SVG already has role=img + title); drop it or add role=group.
+
+      PR: #3094
+      Reviewed sha: 32bebfab93f9df469f443fdfb019a12f9d7053bc
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6775
 node_id: '1'
