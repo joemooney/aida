@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:24:40.273837836Z
-modified_at: 2026-10-29T06:42:54.293428351Z
+modified_at: 2026-10-29T06:42:57.948846328Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-18-story-1226-aida-cron.md
@@ -23,6 +23,12 @@ comments:
   created_at: 2026-09-19T05:27:06.101382020Z
   modified_at: 2026-09-19T05:27:06.101382020Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a18665-c11c-73c2-a289-51375b3a7a14
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Shim already on main (#1946).'
+  created_at: 2026-10-29T06:42:57.948846328Z
+  modified_at: 2026-10-29T06:42:57.948846328Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18665-aa94-7cf3-9ea7-7ad7135112ad
   author: joe
