@@ -1,0 +1,28 @@
+id: 01a1873c-b453-7e31-ba63-6b3a1a9d079e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-096
+title: 'non-blocking/traceability: all 7 criteria show as untraced in aida criteria. Th…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/traceability: all 7 criteria show as untraced in aida criteria. The tests carry spec-level trace:STORY-...-078 tags (node_alias_tests.rs, story_078_node_aliases.rs) but no per-criterion tags, so criterion coverage is visible only from the review record.
+  Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T10:37:44.915314330Z
+modified_at: 2026-10-29T10:37:44.915314330Z
+req_type: Task
+tags:
+- carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
+- finding-hash:382dfdba
+- from-review:STORY-B6B1278890774EF993D2EBC327862470-078
+- kind:carried-forward
+filed_at:
+  code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a470735bfed
+  vendor: claude
+  session: 59349e57-271d-4b9e-b662-8585b949736a
