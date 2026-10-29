@@ -183,18 +183,24 @@ pub trait DatabaseBackend: Send + Sync {
     /// user input verbatim.
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
         let store = self.load()?;
-        Ok(store
-            .requirements
-            .iter()
-            .find(|r| {
-                r.spec_id
-                    .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                    || r.agreed_id
+        let matches = |id: &str| {
+            store
+                .requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id
                         .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-            })
-            .cloned())
+                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                        || r.agreed_id
+                            .as_deref()
+                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                })
+                .cloned()
+        };
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        Ok(crate::node_alias::resolve_literal_first_opt(
+            spec_id, matches,
+        ))
     }
 
     /// Resolve `id` for a WRITE (or any caller that must not act on a

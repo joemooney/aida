@@ -222,12 +222,13 @@ pub(crate) fn toon_list_cell(
 ) -> String {
     let (in_flight, blocked, queued) = routing;
     match field {
-        "id" => r
-            .agreed_id
-            .as_deref()
-            .or(r.spec_id.as_deref())
-            .unwrap_or("")
-            .to_string(),
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        "id" => aida_core::node_alias::display_spec_id(
+            r.agreed_id
+                .as_deref()
+                .or(r.spec_id.as_deref())
+                .unwrap_or(""),
+        ),
         "title" => r.title.clone(),
         // BUG-781: the agent surface reports the TERMINAL truth for an accepted
         // decision — `accepted`, the recognized ADR verb — not the `approved`
@@ -385,3 +386,8 @@ mod task_2205_list_fields_tests;
 #[cfg(test)]
 #[path = "tests/bug_1813_toon_hint_tests.rs"]
 mod bug_1813_toon_hint_tests;
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[cfg(test)]
+#[path = "tests/node_alias_display_ratchet_tests.rs"]
+mod node_alias_display_ratchet_tests;

@@ -1051,7 +1051,8 @@ pub(crate) fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         for relationship in &req.relationships {
             let target = store.get_requirement_by_id(&relationship.target_id);
             if let Some(target_req) = target {
-                let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                let target_spec = target_req.friendly_id();
 
                 // TASK-102: shared phrase mapping (STORY-333 added typed
                 // blocked-by/blocks prose; now via `relationship_phrase`).
@@ -5291,6 +5292,8 @@ fn run_list(
                         #[derive(serde::Serialize)]
                         struct ListJsonRow<'a> {
                             spec_id: &'a str,
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                            display_id: String,
                             title: &'a str,
                             req_type: &'a str,
                             // BUG-1520: `type` is what `--fields`, the human header and
@@ -5365,12 +5368,14 @@ fn run_list(
                                 let rework = rework_ids.contains(&r.id);
                                 let (status_label, status_lens) =
                                     list_json_status_label_lens(rework, parked_lens.as_ref());
+                                let spec_id = r
+                                    .agreed_id
+                                    .as_deref()
+                                    .or(r.spec_id.as_deref())
+                                    .unwrap_or("");
                                 ListJsonRow {
-                                    spec_id: r
-                                        .agreed_id
-                                        .as_deref()
-                                        .or(r.spec_id.as_deref())
-                                        .unwrap_or(""),
+                                    spec_id,
+                                    display_id: aida_core::node_alias::display_spec_id(spec_id),
                                     title: r.title.as_str(),
                                     req_type: r.req_type.as_str(),
                                     r#type: r.req_type.as_str(),
@@ -6270,6 +6275,8 @@ fn run_show(
                                 struct RelJson {
                                     rel_type: String,
                                     id: String,
+                                    // Canonical `id` plus the friendly form. // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                                    display_id: String,
                                     title: String,
                                 }
                                 #[derive(serde::Serialize)]
@@ -6320,6 +6327,7 @@ fn run_show(
                                         };
                                         RelJson {
                                             rel_type: rel_type_label(&rel.rel_type),
+                                            display_id: aida_core::node_alias::display_spec_id(&id),
                                             id,
                                             title,
                                         }
@@ -6431,9 +6439,12 @@ fn run_show(
                                 let object = out.as_object_mut().ok_or_else(|| {
                                     anyhow::anyhow!("serialized requirement was not a JSON object")
                                 })?;
+                                // `spec_id` stays canonical; `display_id` carries
+                                // the friendly node label when one applies.
+                                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                                 object.insert(
                                     "display_id".to_string(),
-                                    serde_json::Value::String(req.display_id()),
+                                    serde_json::Value::String(req.friendly_id()),
                                 );
                                 object.insert(
                                     "uuid".to_string(),
@@ -6580,7 +6591,15 @@ fn run_show(
                             // mirroring `--card` density. trace:TASK-964
                             if agent_output_mode() && !*card {
                                 let mut lines: Vec<String> = Vec::new();
-                                lines.push(crate::toon::scalar("id", &req.display_id()));
+                                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                                let friendly = req.friendly_id();
+                                lines.push(crate::toon::scalar("id", &friendly));
+                                if !friendly.eq_ignore_ascii_case(&req.display_id()) {
+                                    lines.push(crate::toon::scalar(
+                                        "canonical_id",
+                                        &req.display_id().to_ascii_uppercase(),
+                                    ));
+                                }
                                 if let Some(origin) = req.spec_id.as_deref() {
                                     if origin != req.display_id() {
                                         lines.push(crate::toon::scalar("origin_id", origin));
@@ -6742,7 +6761,7 @@ fn run_show(
                                     for rel in &req.relationships {
                                         let label = rel_type_label(&rel.rel_type);
                                         let (tid, ttitle) = match read_target(&rel.target_id) {
-                                            Ok(Some(t)) => (t.display_id(), t.title.clone()),
+                                            Ok(Some(t)) => (t.friendly_id(), t.title.clone()),
                                             _ => ("(unknown)".to_string(), String::new()),
                                         };
                                         rows.push(vec![label, tid, ttitle]);
@@ -6775,7 +6794,7 @@ fn run_show(
                                                     RequirementStatus::Completed
                                                 );
                                                 (
-                                                    blocker.display_id(),
+                                                    blocker.friendly_id(),
                                                     blocker.status.to_string(),
                                                     satisfied,
                                                 )
@@ -6852,7 +6871,7 @@ fn run_show(
                                 let mut rels: Vec<CardRel> = Vec::new();
                                 for rel in &req.relationships {
                                     let (rid, rtitle) = match read_target(&rel.target_id) {
-                                        Ok(Some(t)) => (t.display_id(), t.title.clone()),
+                                        Ok(Some(t)) => (t.friendly_id(), t.title.clone()),
                                         _ => ("(unknown)".to_string(), String::new()),
                                     };
                                     rels.push(CardRel::new(&rel.rel_type, rid, rtitle));
@@ -6870,7 +6889,16 @@ fn run_show(
                                 }
                                 return crate::command_registry::returned(Ok(()));
                             }
-                            println!("{}: {}", "ID".bold(), req.display_id());
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                            let friendly = req.friendly_id();
+                            println!("{}: {}", "ID".bold(), friendly);
+                            if !friendly.eq_ignore_ascii_case(&req.display_id()) {
+                                println!(
+                                    "{}: {}",
+                                    "Canonical ID".bold(),
+                                    req.display_id().to_ascii_uppercase()
+                                );
+                            }
                             // Only show Agreed ID / Origin ID when they actually
                             // differ from the canonical display id — otherwise it's
                             // three lines of the same string. trace:BUG-29
@@ -7055,7 +7083,8 @@ fn run_show(
                                 let total = req.relationships.len();
                                 const INLINE_THRESHOLD: usize = 5;
                                 const TRUNCATE_AT: usize = 10;
-                                let spec_label = req.spec_id.as_deref().unwrap_or(id);
+                                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                                let spec_label = req.friendly_id();
                                 if *rels || total <= INLINE_THRESHOLD {
                                     println!("{}:", "Relations".bold());
                                     for rel in req.relationships.iter().take(TRUNCATE_AT) {
@@ -7065,7 +7094,7 @@ fn run_show(
                                                 "  {} {} {} ({})",
                                                 crate::glyph(crate::glyphs::Glyph::SubArrow),
                                                 phrase.cyan(),
-                                                t.spec_id.as_deref().unwrap_or("?").yellow(),
+                                                t.friendly_id().yellow(),
                                                 t.title
                                             ),
                                             None => println!(
@@ -7133,13 +7162,7 @@ fn run_show(
                                         Some(b) => {
                                             let satisfied =
                                                 matches!(b.status, RequirementStatus::Completed);
-                                            (
-                                                b.spec_id
-                                                    .clone()
-                                                    .unwrap_or_else(|| "?".to_string()),
-                                                format!("{}", b.status),
-                                                satisfied,
-                                            )
+                                            (b.friendly_id(), format!("{}", b.status), satisfied)
                                         }
                                         None => (target.to_string(), "missing".to_string(), false),
                                     };

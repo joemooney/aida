@@ -144,7 +144,8 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     eprintln!(
         "{} {} held — branch `{}` pushed, PR deliberately not opened{}",
         "⏸".yellow().bold(),
-        spec.bold(),
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        aida_core::node_alias::display_spec_id(&spec).bold(),
         branch,
         reason.map(|r| format!(" ({r})")).unwrap_or_default(),
     );
@@ -1419,7 +1420,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     eprintln!(
         "{} aida ship — {} on branch {}",
         "→".cyan().bold(),
-        spec.bold(),
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        aida_core::node_alias::display_spec_id(&spec).bold(),
         branch
     );
 
@@ -1560,7 +1562,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             eprintln!(
                 "{} aida ship — {} rebased + pushed (--no-pr; no PR opened)",
                 crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-                spec.bold()
+                aida_core::node_alias::display_spec_id(&spec).bold()
             );
             Ok(())
         }
@@ -1595,7 +1597,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                  or finish with `aida ship`.",
                 "⏸".yellow().bold(),
                 pr,
-                spec.bold()
+                aida_core::node_alias::display_spec_id(&spec).bold()
             );
             Ok(())
         }
@@ -2734,10 +2736,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     };
     if !supervised.is_empty() {
         for (id, label) in &supervised {
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
             eprintln!(
-                "{} {id} is marked {label} — auto-merge refused; merge requires \
+                "{} {} is marked {label} — auto-merge refused; merge requires \
                  human/advisor review",
                 "⏸".yellow().bold(),
+                aida_core::node_alias::display_spec_id(id),
             );
         }
         eprintln!(
@@ -5813,6 +5817,9 @@ pub(crate) fn complete_rebase_final_slice_specs(
             }
         };
         let display_id = req.display_id();
+        // Messages show the friendly label; the completion record keeps the
+        // canonical id. trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let shown = req.friendly_id();
         match crate::completion::transition_to_completed_atomically(
             &backend,
             &req,
@@ -5834,7 +5841,7 @@ pub(crate) fn complete_rebase_final_slice_specs(
                 eprintln!(
                     "  {} completed {} via final-slice rebase merge of PR-{}",
                     crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    display_id,
+                    shown,
                     pr_number
                 );
             }
@@ -5842,7 +5849,7 @@ pub(crate) fn complete_rebase_final_slice_specs(
                 eprintln!(
                     "  {} {} is already Completed (PR-{})",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    display_id,
+                    shown,
                     pr_number
                 );
             }
@@ -5850,7 +5857,7 @@ pub(crate) fn complete_rebase_final_slice_specs(
                 eprintln!(
                     "  {} could not complete {} after PR-{}: spec is in terminal status {}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    display_id,
+                    shown,
                     pr_number,
                     status
                 );
@@ -5859,7 +5866,7 @@ pub(crate) fn complete_rebase_final_slice_specs(
                 eprintln!(
                     "  {} could not complete {} after PR-{}: spec disappeared before write",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    display_id,
+                    shown,
                     pr_number
                 );
             }
@@ -5867,7 +5874,7 @@ pub(crate) fn complete_rebase_final_slice_specs(
                 eprintln!(
                     "  {} could not complete {} after final-slice rebase merge of PR-{}: {e}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    display_id,
+                    shown,
                     pr_number
                 );
             }

@@ -1832,12 +1832,15 @@ pub(crate) fn handle_queue_command(
                                 return None;
                             }
                         }
-                        let id = s
-                            .agreed_id
-                            .as_deref()
-                            .or(s.spec_id.as_deref())
-                            .unwrap_or("")
-                            .to_string();
+                        // The friendly label still resolves as input, so the
+                        // next-step hint built from this cell keeps working.
+                        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                        let id = aida_core::node_alias::display_spec_id(
+                            s.agreed_id
+                                .as_deref()
+                                .or(s.spec_id.as_deref())
+                                .unwrap_or(""),
+                        );
                         let reviewer_state = if e.for_role.as_deref() == Some("reviewer") {
                             reviewer_ctx
                                 .as_ref()
@@ -2516,9 +2519,16 @@ pub(crate) fn handle_queue_command(
                             let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                             // TASK-91: PR-N (STORY-NNN) for auto-queued review
                             // stories. trace:TASK-91 | ai:claude
-                            let (display_id_owned, title_owned) =
-                                format_review_story_display(display_id, title)
-                                    .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                            let (display_id_owned, title_owned) = format_review_story_display(
+                                display_id, title,
+                            )
+                            .unwrap_or_else(|| {
+                                (
+                                    aida_core::node_alias::display_spec_id(display_id),
+                                    title.to_string(),
+                                )
+                            });
                             let status = req
                                 .map(|r| format!("{}", r.status))
                                 .unwrap_or_else(|| "Unknown".to_string());
@@ -2620,7 +2630,7 @@ pub(crate) fn handle_queue_command(
                                 let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
                                 match format_review_story_display(raw_id, raw_title) {
                                     Some((expanded, _)) => expanded.len(),
-                                    None => raw_id.len(),
+                                    None => aida_core::node_alias::display_spec_id(raw_id).len(),
                                 }
                             })
                             .max()
@@ -2654,10 +2664,11 @@ pub(crate) fn handle_queue_command(
                                 .or(entry.spec_id.as_deref())
                                 .unwrap_or("???");
                             let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                             println!(
                                 "  {} {}  {}  {}",
                                 glyph.dimmed(),
-                                display_id.bold(),
+                                aida_core::node_alias::display_spec_id(display_id).bold(),
                                 title,
                                 format!("[origin:{}]", entry.project_name).dimmed(),
                             );
@@ -2699,9 +2710,14 @@ pub(crate) fn handle_queue_command(
                     let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                     // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
                     // trace:TASK-91 | ai:claude
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                     let (display_id_owned, title_owned) =
-                        format_review_story_display(display_id, title)
-                            .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                        format_review_story_display(display_id, title).unwrap_or_else(|| {
+                            (
+                                aida_core::node_alias::display_spec_id(display_id),
+                                title.to_string(),
+                            )
+                        });
                     let status = req
                         .map(|r| format!("{}", r.status))
                         .unwrap_or_else(|| "Unknown".to_string());
@@ -4863,9 +4879,14 @@ pub(crate) fn handle_queue_command(
                 let title = entry.title.as_deref().unwrap_or("(no cached title)");
                 // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
                 // trace:TASK-91 | ai:claude
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                 let (display_id_owned, title_owned) =
-                    format_review_story_display(display_id, title)
-                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
+                    format_review_story_display(display_id, title).unwrap_or_else(|| {
+                        (
+                            aida_core::node_alias::display_spec_id(display_id),
+                            title.to_string(),
+                        )
+                    });
                 println!("{}", "Next up:".bold());
                 println!(
                     "  {}: {}",
@@ -4909,9 +4930,14 @@ pub(crate) fn handle_queue_command(
                     let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                     // TASK-91: PR-N (STORY-NNN) for auto-queued review
                     // stories. trace:TASK-91 | ai:claude
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                     let (display_id_owned, title_owned) =
-                        format_review_story_display(spec_id, title)
-                            .unwrap_or_else(|| (spec_id.to_string(), title.to_string()));
+                        format_review_story_display(spec_id, title).unwrap_or_else(|| {
+                            (
+                                aida_core::node_alias::display_spec_id(spec_id),
+                                title.to_string(),
+                            )
+                        });
                     let status = req
                         .map(|r| format!("{}", r.status))
                         .unwrap_or_else(|| "Unknown".to_string());
@@ -7999,7 +8025,8 @@ pub(crate) fn rework_triage_loop(
             format!("Parked in Needs Attention ({})", parks.len()).bold()
         );
         for r in &parks {
-            let did = r.display_id();
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            let did = r.friendly_id();
             let route = current_queue_route(storage, r.id);
             let preview = requeue_preview(r, Some(&store), route.as_deref(), clear_escalation);
             println!("  {:<14} {}", did, park_reason_line(r));
@@ -9375,7 +9402,7 @@ pub(crate) fn resolve_queue_work_plan(
             }
             anyhow::bail!(
                 "`{}` is not pickable for fresh work: {}",
-                req.display_id(),
+                req.friendly_id(),
                 reason
             );
         }
@@ -9585,7 +9612,7 @@ pub(crate) fn resolve_queue_work_plan(
                     "  {} cluster {} — skipping un-pickable {} ({})",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     anchor_id_upper,
-                    req.display_id(),
+                    req.friendly_id(),
                     reason,
                 );
                 continue;

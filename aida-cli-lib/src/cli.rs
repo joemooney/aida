@@ -174,6 +174,13 @@ pub struct GlobalArgs {
     /// settable via AIDA_OUTPUT_FORMAT (the flag wins).
     #[clap(long, global = true, value_enum, value_name = "FORMAT")]
     pub format: Option<OutputFormat>,
+
+    /// Show node-local spec IDs in their canonical form instead of the
+    /// node's friendly label (for scripts). Also settable via
+    /// AIDA_CANONICAL_IDS=1.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    #[clap(long, global = true)]
+    pub canonical_ids: bool,
 }
 
 // trace:FR-1-043 | ai:claude

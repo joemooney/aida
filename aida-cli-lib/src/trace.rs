@@ -23,6 +23,10 @@ pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
     if !first_alpha || !spec.contains('-') {
         return None;
     }
+    // A hand-written `trace:TASK-<LABEL>-NNN` names the canonical id.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let expanded = aida_core::node_alias::expand_or_keep(spec);
+    let spec = expanded.as_str();
     if rest[spec_end..].starts_with('.') {
         let suffix_rest = &rest[spec_end + 1..];
         let suffix_end = suffix_rest

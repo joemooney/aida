@@ -1550,3 +1550,50 @@ fn cluster_squash_subject_is_idempotent() {
     assert_eq!(once, title);
     assert_eq!(twice, title);
 }
+
+/// A hand-written `TYPE-<LABEL>-NNN` in a completion trailer, a `Refs` group,
+/// or a `trace:` comment parses as the canonical node-local id.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[test]
+fn node_alias_trailers_and_traces_expand_to_canonical() {
+    let node = "fedcba9876543210fedcba9876543210";
+    let mut map = aida_core::node_alias::NodeAliasMap::default();
+    map.set("ZQX9", node).unwrap();
+    let _map = aida_core::node_alias::install_for_thread(map);
+    let canonical = format!("TASK-{node}-095").to_ascii_uppercase();
+
+    // A generated squash subject never carries the label, even when the PR
+    // title was typed with one; prose outside the trailer group is untouched.
+    assert_eq!(
+        squash_subject_with_spec_ids(
+            "[AI:claude] fix: HOME task-zqx9-095 (TASK-ZQX9-095) (#12)",
+            std::slice::from_ref(&canonical)
+        ),
+        format!("[AI:claude] fix: HOME task-zqx9-095 ({canonical}) (#12)")
+    );
+    assert_eq!(
+        squash_subject_with_spec_ids(
+            "[AI:claude] fix: x (Refs TASK-ZQX9-095)",
+            std::slice::from_ref(&canonical)
+        ),
+        format!("[AI:claude] fix: x (Refs {canonical})")
+    );
+
+    assert_eq!(
+        extract_trailing_spec_ids_from_subject("[AI:claude] fix: x (task-zqx9-095) (#12)"),
+        vec![canonical.clone()]
+    );
+    assert_eq!(
+        extract_trailing_refs_spec_ids_from_subject("[AI:claude] fix: x (Refs TASK-ZQX9-095)"),
+        vec![canonical.clone()]
+    );
+    assert_eq!(
+        crate::parse_trace_id_token("trace:TASK-ZQX9-095 | ai:claude").as_deref(),
+        Some(canonical.as_str())
+    );
+    // Unknown labels and ordinary ids pass through unchanged.
+    assert_eq!(
+        extract_trailing_spec_ids_from_subject("fix: y (TASK-NOPE-001, TASK-12)"),
+        vec!["TASK-NOPE-001".to_string(), "TASK-12".to_string()]
+    );
+}

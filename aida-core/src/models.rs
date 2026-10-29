@@ -4779,6 +4779,15 @@ impl Requirement {
             .to_string()
     }
 
+    /// [`Self::display_id`] as human and TOON surfaces show it: a node-local
+    /// ID takes its node's friendly label (`TASK-HOME-095`) and is otherwise
+    /// upper-cased. Display only — never persist this value; stored data and
+    /// generated traces/trailers use [`Self::display_id`].
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    pub fn friendly_id(&self) -> String {
+        crate::node_alias::display_spec_id(&self.display_id())
+    }
+
     /// Check if this requirement matches a given ID string.
     /// Matches against spec_id, agreed_id, or UUID.
     pub fn matches_id(&self, id: &str) -> bool {
@@ -6189,6 +6198,11 @@ impl RequirementsStore {
     /// first, then `agreed_id`.
     // trace:BUG-1535 | ai:claude
     fn spec_id_index(&self, id: &str) -> Option<usize> {
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        crate::node_alias::resolve_literal_first_opt(id, |id| self.spec_id_index_exact(id))
+    }
+
+    fn spec_id_index_exact(&self, id: &str) -> Option<usize> {
         let native = self.requirements.iter().position(|r| {
             r.spec_id
                 .as_deref()
@@ -6217,6 +6231,16 @@ impl RequirementsStore {
         if let Ok(uuid) = uuid::Uuid::parse_str(id.trim()) {
             return Ok(self.requirements.iter().position(|r| r.id == uuid));
         }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        crate::node_alias::resolve_literal_first(id, |id| self.resolve_unambiguous_index_exact(id))
+    }
+
+    /// [`Self::resolve_unambiguous_index`] for a spec/agreed id exactly as
+    /// given (no node-alias expansion).
+    fn resolve_unambiguous_index_exact(
+        &self,
+        id: &str,
+    ) -> Result<Option<usize>, crate::id_collisions::AmbiguousIdError> {
         let rows: Vec<crate::id_collisions::IdRow> = self
             .requirements
             .iter()

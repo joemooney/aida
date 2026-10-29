@@ -101,12 +101,17 @@ fn add_relationship(
         .get_requirement_by_id(&to_id)
         .ok_or_else(|| anyhow::anyhow!("Target requirement not found"))?;
 
+    // Display only (friendly node label); the edge stores the target uuid.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
     let from_spec = from_req
         .spec_id
-        .clone()
-        .unwrap_or_else(|| "N/A".to_string());
+        .as_deref()
+        .map_or_else(|| "N/A".to_string(), aida_core::node_alias::display_spec_id);
     let from_title = from_req.title.clone();
-    let to_spec = to_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
+    let to_spec = to_req
+        .spec_id
+        .as_deref()
+        .map_or_else(|| "N/A".to_string(), aida_core::node_alias::display_spec_id);
     let to_title = to_req.title.clone();
 
     // BUG-64: terminal-status guard on the parent end of a parent/child
@@ -237,8 +242,9 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Requirement not found"))?;
 
     println!("{}: {}", "Requirement".blue(), req.title);
-    if let Some(spec_id) = &req.spec_id {
-        println!("{}: {}", "SPEC-ID".blue(), spec_id);
+    if req.spec_id.is_some() {
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        println!("{}: {}", "SPEC-ID".blue(), req.friendly_id());
     }
     println!("{}: {}", "UUID".blue(), req.id);
     println!();
@@ -252,7 +258,8 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
     for relationship in &req.relationships {
         let target = store.get_requirement_by_id(&relationship.target_id);
         if let Some(target_req) = target {
-            let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            let target_spec = target_req.friendly_id();
 
             // Format the relationship description based on type
             let description = match &relationship.rel_type {

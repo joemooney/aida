@@ -140,4 +140,51 @@ pub enum NodeCommand {
     /// hidden top-level `aida whoami`.
     // trace:TASK-851 | ai:claude
     Whoami,
+
+    /// Friendly labels for node-local spec IDs: bind `HOME` to a node so
+    /// `TASK-<node>-095` can be typed and shown as `TASK-HOME-095`. Labels
+    /// are display and input only; stored data keeps the canonical ID.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    Alias {
+        #[clap(subcommand)]
+        cmd: NodeAliasCommand,
+    },
+}
+
+/// `aida node alias` subcommands. There is no delete: a label can be retired
+/// by `rename`, never freed for another node.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum NodeAliasCommand {
+    /// Bind LABEL to a node (default: this clone's node). A label that names,
+    /// or once named, another node is refused.
+    Set {
+        /// 2-8 letters or digits, starting with a letter (e.g. HOME).
+        label: String,
+        /// Node UUID to label (default: this clone's node).
+        #[clap(long)]
+        node: Option<String>,
+    },
+    /// Change a node's label. OLD is retired: it keeps resolving to the same
+    /// node for input and can never name another node.
+    Rename {
+        /// The node's current label.
+        old: String,
+        /// The new label.
+        new: String,
+    },
+    /// List every label, current and retired.
+    List {
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Show the node a label names, or the labels a node has.
+    Show {
+        /// A label (current or retired) or a node UUID.
+        target: String,
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
 }

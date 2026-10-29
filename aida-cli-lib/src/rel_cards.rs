@@ -1869,7 +1869,8 @@ pub(crate) fn render_spec_card(
     no_git: bool,
     verbose: bool,
 ) {
-    let id = req.display_id();
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let id = req.friendly_id();
     let req_type = req.req_type.to_string();
     let priority = req.effective_priority();
 

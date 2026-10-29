@@ -550,11 +550,49 @@ pub fn format_dry_run_trailer_provenance(trailer: Result<&SquashTrailer, &str>) 
     }
 }
 
+/// Rewrite every friendly `TYPE-<LABEL>-NNN` inside a parenthesized group of
+/// `subject` (the trailer / `Refs` groups) to its canonical node-local id, so
+/// a squash subject written to main never carries a node label even when the
+/// PR title was typed with one. A label-shaped id that exists literally in the
+/// store is kept. Text outside parentheses is untouched.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+pub fn canonicalize_node_label_ids(subject: &str) -> String {
+    fn flush(out: &mut String, token: &mut String, in_group: bool) {
+        // Literal-first: a stored id that is label-shaped stays as written.
+        if in_group {
+            out.push_str(&aida_core::node_alias::expand_or_keep(token));
+        } else {
+            out.push_str(token);
+        }
+        token.clear();
+    }
+    let mut out = String::with_capacity(subject.len());
+    let mut token = String::new();
+    let mut depth = 0usize;
+    for c in subject.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '$' {
+            token.push(c);
+            continue;
+        }
+        flush(&mut out, &mut token, depth > 0);
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        out.push(c);
+    }
+    flush(&mut out, &mut token, depth > 0);
+    out
+}
+
 /// Ensure the squash subject carries every derived spec ID exactly once.
 /// Existing well-formed subjects are left untouched.
 // trace:SPEC-410 BUG-339 | ai:codex
 pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
-    let subject = subject.trim();
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let canonical = canonicalize_node_label_ids(subject.trim());
+    let subject = canonical.as_str();
     if ids.is_empty() || subject.is_empty() {
         return subject.to_string();
     }
@@ -771,7 +809,11 @@ fn refs_group_spec_ids(inner: &str) -> Vec<String> {
     }
     let rest = inner[word_len..].trim_start();
     let rest = rest.strip_prefix(':').unwrap_or(rest);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
     extract_spec_ids_from_text(rest)
+        .iter()
+        .map(|id| aida_core::node_alias::expand_or_keep(id))
+        .collect()
 }
 
 fn append_spec_ids_before_pr_suffix(subject: &str, joined_ids: &str) -> String {
@@ -809,7 +851,9 @@ fn parse_spec_id_group(inner: &str) -> Vec<String> {
         tok_count += 1;
         let ids = extract_spec_ids_from_text(tok);
         if ids.len() == 1 && ids[0].eq_ignore_ascii_case(tok) {
-            out.push(ids[0].clone());
+            // A hand-written `TASK-<LABEL>-NNN` counts as the canonical id.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            out.push(aida_core::node_alias::expand_or_keep(&ids[0]));
         } else {
             return Vec::new();
         }

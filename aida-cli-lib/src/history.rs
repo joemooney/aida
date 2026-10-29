@@ -1761,7 +1761,8 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
                     "edit"
                 };
                 vec![
-                    e.spec_id.clone(),
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                    aida_core::node_alias::display_spec_id(&e.spec_id),
                     display_type_name(&e.req_type).to_string(),
                     e.status.clone(),
                     short_clock(&e.last_ts_iso),
@@ -1782,7 +1783,12 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     // Width-align spec_id column so the rest reads as a table.
-    let id_w = entries.iter().map(|e| e.spec_id.len()).max().unwrap_or(8);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let shown_ids: Vec<String> = entries
+        .iter()
+        .map(|e| aida_core::node_alias::display_spec_id(&e.spec_id))
+        .collect();
+    let id_w = shown_ids.iter().map(String::len).max().unwrap_or(8);
     let status_w = entries.iter().map(|e| e.status.len()).max().unwrap_or(10);
     // Time column needs to fit the widest rendered value (today's HH:MM
     // collapses to 5 chars; older "MM-DD HH:MM" is 11). Compute once.
@@ -1808,7 +1814,7 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     );
     println!("{}", header.dimmed());
 
-    for e in &entries {
+    for (e, shown_id) in entries.iter().zip(&shown_ids) {
         // Inline marker per row: "+" for added in window, "−" for deleted,
         // "·" for edited. Keeps the C-column noise out and makes the
         // "what's new" answer immediately visible.
@@ -1826,7 +1832,7 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         // Pad PLAIN text first, THEN apply color — Rust's `{:<width$}`
         // counts bytes (including ANSI escape codes) so colorizing before
         // padding produces visibly misaligned columns.
-        let id_padded = format!("{:<id_w$}", e.spec_id, id_w = id_w);
+        let id_padded = format!("{:<id_w$}", shown_id, id_w = id_w);
         let type_padded = format!("{:<8}", display_type_name(&e.req_type));
         let status_padded = format!("{:<status_w$}", e.status, status_w = status_w);
         let time_padded = format!("{:<time_w$}", time, time_w = time_w);

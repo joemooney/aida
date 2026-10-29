@@ -44,6 +44,23 @@ class GateBehaviorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("doc-impact marked on: TASK-185", result.stdout)
 
+    # trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    def test_node_local_spec_id_resolves(self):
+        node = "b6b1278890774ef993d2ebc327862470"
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._create_synthetic_repo(
+                repo,
+                f"spec_id: STORY-{node}-078\ntags:\n  - docs:impacted\n",
+                filename=f"STORY-{node.upper()}-078.yaml",
+                referenced_id=f"STORY-{node.upper()}-078",
+            )
+
+            result = self._run_gate(repo)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(f"doc-impact marked on: STORY-{node.upper()}-078", result.stdout)
+
     # trace:BUG-1582 | ai:codex
     def test_native_spec_id_still_resolves(self):
         with tempfile.TemporaryDirectory() as tmp:

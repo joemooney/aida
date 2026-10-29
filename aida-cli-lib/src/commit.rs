@@ -53,6 +53,15 @@ pub(crate) fn handle_commit_command(args: &CommitArgs) -> Result<()> {
         );
     }
 
+    // A friendly `TASK-<LABEL>-NNN` (from --spec or an inferred staged trace)
+    // is written as the canonical id: a generated trailer never carries a node
+    // label. This command runs before store dispatch, so it loads the label
+    // map itself.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    if let Some(store) = aida_core::store_locate::detect_distributed_store_from(&root) {
+        aida_core::node_alias::install_from_store(&store);
+    }
+
     // Gather the staged-trace context once: it drives both REQ-ID inference and
     // the AI-prefix decision (the hook only requires `[AI:tool]` when an
     // AI-authored trace is staged).
@@ -242,16 +251,20 @@ pub(crate) fn validate_message(message: &str, has_ai_trace: bool) -> Result<(), 
 /// Normalize a user-supplied spec id to upper-case (the storage canonical form
 /// the hook matches against). Strips a leading `(`/trailing `)` if pasted.
 fn normalize_spec(s: &str) -> String {
-    s.trim()
+    let id = s
+        .trim()
         .trim_start_matches('(')
         .trim_end_matches(')')
         .trim()
-        .to_uppercase()
+        .to_uppercase();
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    aida_core::node_alias::expand_or_keep(&id)
 }
 
 /// Collect the distinct SPEC-IDs referenced by `trace:` comments in the staged
 /// diff. With `all`, also considers unstaged tracked changes (since `-a` will
-/// commit them). Returns upper-cased ids.
+/// commit them). Returns upper-cased canonical ids: a node-label form counts
+/// as the same spec as its canonical form.
 fn staged_trace_specs(root: &Path, all: bool) -> BTreeSet<String> {
     let diff = diff_text(root, all);
     let re = Regex::new(r"(?i)trace:([A-Z]+(-[A-Z0-9_]+)?-[0-9]+)").expect("valid trace regex");
@@ -263,7 +276,8 @@ fn staged_trace_specs(root: &Path, all: bool) -> BTreeSet<String> {
         // working-tree scan.
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(1) {
-                out.insert(m.as_str().to_uppercase());
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                out.insert(normalize_spec(m.as_str()));
             }
         }
     }
