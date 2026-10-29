@@ -1,0 +1,40 @@
+id: 01a1895f-fd76-7111-84c3-55964f578d82
+spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-007
+title: How should I identify portable intent promoted between independent requirement stores?
+description: |
+  **Promoting sanitized intent between separate stores creates independent requirement records; their local display IDs are not a shared global identity.**
+
+  ## Why
+
+  A source store and a receiving store allocate independently. Preserving the same bare STORY number can collide with an unrelated allocation. Keep source and target handles qualified by store namespace, and record the mapping explicitly.
+
+  For the checksum-envelope workflow, the full envelope digest identifies the exact transferred artifact. A short INTENT label is convenient for display, but use the full digest for verification. The receiving requirement becomes the implementation handle; the source remains provenance.
+
+  ## Caveat
+
+  An envelope checksum proves integrity, not sanitization or approval. Re-exporting with a new timestamp or edited content produces a new artifact digest; it is not inherently a permanent identity for the evolving idea. Keep a promotion receipt and reviewed mapping. Independent stores must not claim globally reserved node/block IDs without a common allocation authority.
+
+  ## See also
+
+  BUG-2017 and FAQ-10.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T20:35:31.830619395Z
+modified_at: 2026-10-29T20:35:31.830619395Z
+req_type: Faq
+tags:
+- audience:user
+- topic:ids
+- topic:transport
+filed_at:
+  code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5fbe1e39c0
+  vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T20:35:31.830628311Z
