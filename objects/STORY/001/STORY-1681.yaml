@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:07:37.629452703Z
-modified_at: 2026-10-29T06:35:51.235768880Z
+modified_at: 2026-10-29T06:35:57.689951640Z
 req_type: Story
 tags:
 - architecture
@@ -62,6 +62,13 @@ relationships:
   target_id: 01a143cb-9959-7f23-9a06-d33bfe3bd458
   created_at: 2026-10-29T06:35:51.235764832Z
   created_by: joe
+comments:
+- id: 01a1865f-5779-73f0-a888-91877f41d5d1
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as superseded by BUG-2169. Reason: Likely superseded by BUG-2169 seat clones (completed); advisor to confirm.'
+  created_at: 2026-10-29T06:35:57.689951640Z
+  modified_at: 2026-10-29T06:35:57.689951640Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a15cbb-535c-7842-9a3d-0c587abcf9fc
   author: joe
