@@ -1011,9 +1011,13 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
     if slots.is_empty() {
         return crate::scaffolding::generated_text_matches(actual, expected);
     }
-    slots
-        .iter()
-        .all(|slot| actual_v.pointer(slot) == expected_v.pointer(slot))
+    slots.iter().all(|slot| {
+        crate::scaffolding::slot_value_matches(
+            slot,
+            actual_v.pointer(slot),
+            expected_v.pointer(slot),
+        )
+    })
 }
 
 fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {

@@ -536,6 +536,8 @@ mod remote_create;
 mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+mod reviewer_preflight;
 mod reviewer_summary;
 // trace:STORY-1417 | ai:claude
 mod review_classes;

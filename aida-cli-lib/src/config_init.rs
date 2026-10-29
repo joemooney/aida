@@ -632,6 +632,98 @@ pub(crate) fn init_capture_config_section() -> &'static str {
      # criterion_test_floor_pct = 50\n"
 }
 
+/// The `[contained]` scaffold section, verbatim from its template master, so
+/// a contained reviewer in an adopted repo can reach the forge and record a
+/// verdict. `aida scaffold upgrade` adds the same hosts to an older config
+/// ([`ensure_contained_allowed_hosts`]).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub(crate) fn init_contained_config_section() -> String {
+    format!("\n{}", aida_core::scaffolding::CONTAINED_CONFIG_TEMPLATE)
+}
+
+/// Give a config with no `[contained] allowed_hosts` the template master's
+/// hosts. An allowlist already present is the project's choice and is left
+/// alone. Returns whether the key was added (or, on `dry_run`, would be).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub(crate) fn ensure_contained_allowed_hosts(
+    project_root: &std::path::Path,
+    dry_run: bool,
+) -> anyhow::Result<bool> {
+    // An absent or unparseable config is left to `aida init` / the operator.
+    let Some(cfg) = crate::read_project_config_value(project_root) else {
+        return Ok(false);
+    };
+    let config_path = crate::config_path_for_project(project_root);
+    if crate::config_lookup(Some(&cfg), "contained", "allowed_hosts").is_some() {
+        return Ok(false);
+    }
+    if !dry_run {
+        let hosts: toml_edit::Array = aida_core::scaffolding::template_contained_allowed_hosts()
+            .into_iter()
+            .collect();
+        crate::config_edit::set_kv(
+            &config_path,
+            "contained",
+            "allowed_hosts",
+            toml_edit::Value::Array(hosts),
+        )?;
+    }
+    Ok(true)
+}
+
+/// Add the reviewer allow entries to an existing `.claude/settings.json`,
+/// keeping every entry and key the project already has (the same additive
+/// slot merge `aida scaffold upgrade` applies). A missing, symlinked, or
+/// unparseable file is left alone: the scaffold owns creating it, and a
+/// symlink points at a master this must not write through. Returns whether
+/// entries were added (or, on `dry_run`, would be).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub(crate) fn ensure_reviewer_allow_entries(
+    project_root: &std::path::Path,
+    dry_run: bool,
+) -> anyhow::Result<bool> {
+    let path = project_root.join(".claude").join("settings.json");
+    if std::fs::symlink_metadata(&path).map_or(true, |m| !m.is_file()) {
+        return Ok(false);
+    }
+    let Ok(user) = serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path)?)
+    else {
+        return Ok(false);
+    };
+    let aida = serde_json::json!({
+        "permissions": {"allow": aida_core::scaffolding::scaffold_permissions_allow(project_root)}
+    });
+    let (merged, changes) =
+        aida_core::scaffolding::slot_merge(&user, &aida, &["/permissions/allow"]);
+    if changes.is_empty() {
+        return Ok(false);
+    }
+    if !dry_run {
+        std::fs::write(&path, serde_json::to_string_pretty(&merged)? + "\n")?;
+    }
+    Ok(true)
+}
+
+/// The refresh paths' reviewer-config step: both `ensure_*` helpers, with a
+/// line per change. trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub(crate) fn ensure_contained_reviewer_config(
+    project_root: &std::path::Path,
+) -> anyhow::Result<()> {
+    if ensure_contained_allowed_hosts(project_root, false)? {
+        println!(
+            "  {} added [contained] allowed_hosts to the project config",
+            "+".green()
+        );
+    }
+    if ensure_reviewer_allow_entries(project_root, false)? {
+        println!(
+            "  {} added the reviewer allow entries to .claude/settings.json",
+            "+".green()
+        );
+    }
+    Ok(())
+}
+
 /// The `[worktree]` scaffold section. AIDA-created worktrees are expected to be
 /// ready for builds, so recursive submodule initialization is default-on with a
 /// visible opt-out.

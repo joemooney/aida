@@ -1,0 +1,12 @@
+# Contained-launch egress allowlist. The native sandbox PROMPTS on a new
+# network domain, and a headless contained launch auto-denies that prompt, so
+# `gh` / `git fetch` / `aida review record` fail inside a contained reviewer
+# unless the hosts AIDA work needs are pre-allowed here. Every other host stays
+# denied. Add your own forge host (a self-hosted GitLab, say) when you use one.
+[contained]
+allowed_hosts = [
+  "github.com", "api.github.com", "objects.githubusercontent.com", "codeload.github.com",
+  "api.anthropic.com", "statsig.anthropic.com",
+  "static.crates.io", "index.crates.io", "crates.io",
+  "registry.npmjs.org",
+]

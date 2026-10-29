@@ -4907,6 +4907,8 @@ pub(crate) fn handle_init_distributed_worktree(
     let config_content = config_content + init_store_mirror_config_section();
     // TASK-1522: commented [capture] intent-capture floor stub.
     let config_content = config_content + init_capture_config_section();
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    let config_content = config_content + &init_contained_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -5363,6 +5365,8 @@ fn handle_init_post_clone(
     let config_content = config_content + init_store_mirror_config_section();
     // TASK-1522: commented [capture] intent-capture floor stub.
     let config_content = config_content + init_capture_config_section();
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    let config_content = config_content + &init_contained_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -5958,6 +5962,8 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_store_mirror_config_section();
     // TASK-1522: commented [capture] intent-capture floor stub.
     let config_content = config_content + init_capture_config_section();
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    let config_content = config_content + &init_contained_config_section();
     // STORY-1467: repo-fact capabilities (class, CI) land in the scaffold
     // commit, so the end-of-init refresh leaves the tracked config clean.
     // trace:STORY-1467 | ai:claude
@@ -7028,6 +7034,10 @@ fn run_init(
     if *refresh && init_footprint == cli::InitFootprint::Full {
         let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None)?;
         scaffold_refresh::print_refresh_summary(&packs);
+        // BUG-014: the contained egress allowlist and reviewer allow entries
+        // reach an existing project on refresh, not only on scaffold upgrade.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+        crate::ensure_contained_reviewer_config(&statusline_project_root())?;
         // Seed into THIS project's store: the distributed store first, then
         // a local legacy store. Never the registry's ambient default, which
         // could be an unrelated project's database. trace:BUG-1603 | ai:claude
