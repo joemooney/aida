@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-21T06:40:47.560777622Z
+modified_at: 2026-10-29T06:44:11.412818074Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -55,6 +55,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0c1a8-0aaf-7c00-a17a-42be2007d594
   created_at: 2026-09-21T01:50:31.200851007Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a0bc45-3637-7822-961c-e0789df2ab4a
+  created_at: 2026-10-29T06:44:11.412813722Z
   created_by: joe
 comments:
 - id: 01a0ba8a-2904-71d1-9ef4-ca6911907bbe
@@ -123,6 +127,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a18666-e65f-7c71-94ca-4ae3d552800a
+  author: joe
+  timestamp: 2026-10-29T06:44:13.023275290Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 processing_record:
 - id: 01a0c2b2-1bc8-7db3-bc71-719df099af73
   timestamp: 2026-09-21T06:40:47.560776377Z
