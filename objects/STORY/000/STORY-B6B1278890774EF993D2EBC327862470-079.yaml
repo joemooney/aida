@@ -1,0 +1,33 @@
+id: 01a1868f-a5b5-7943-831c-3752f1faa72e
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-079
+title: 'Review PR-3089: [AI:claude] feat(node): friendly node aliases for node-local spec IDs (STORY-B6B1278890774EF993D2EBC327862470-078)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-078`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3089>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-078` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-078
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3089` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T07:28:43.445144261Z
+modified_at: 2026-10-29T07:28:43.445144261Z
+req_type: Story
+filed_at:
+  code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a470735bfed
+  vendor: claude
+  session: 59349e57-271d-4b9e-b662-8585b949736a

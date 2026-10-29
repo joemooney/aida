@@ -84804,5 +84804,31 @@ operations:
   timestamp: 2026-10-29T07:27:39.852268178Z
   kind: !SetStatus
     status: Done
-clock: 6631
+- id: 01a1868f-ac87-79d1-9724-7504a3dce70a
+  target_id: 01a1868f-a5b5-7943-831c-3752f1faa72e
+  author: aida
+  node_id: '1'
+  lamport: 6632
+  timestamp: 2026-10-29T07:28:45.191133699Z
+  kind: !Create
+    title: 'Review PR-3089: [AI:claude] feat(node): friendly node aliases for node-local spec IDs (STORY-B6B1278890774EF993D2EBC327862470-078)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-078`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3089>
+      - Branch: `story-b6b1278890774ef993d2ebc327862470-078` → `main`
+
+      ## Covers
+
+      - STORY-B6B1278890774EF993D2EBC327862470-078
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3089` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6632
 node_id: '1'
