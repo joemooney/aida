@@ -26,12 +26,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T18:10:27.557602584Z
-modified_at: 2026-10-29T18:10:27.557602584Z
+modified_at: 2026-10-29T18:10:31.530620420Z
 req_type: Task
 tags:
 - advisor-review
 - docs:impacted
 - vertical-slice
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a188d8-d1c2-77d3-a30b-220a95022694
+  created_at: 2026-10-29T18:10:31.530616692Z
+  created_by: joe
+history:
+- id: 01a188db-422f-7a63-aa54-4ee293059e7c
+  author: joe
+  timestamp: 2026-10-29T18:10:33.135165304Z
+  changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
