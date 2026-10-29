@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: 'Shipped #3092 (BUG-016). #3091 rework pushed, updated from main, round-2 review running at 650203c. #3090 M1 slice-1 rework in flight. Live binary promoted clean b74166a (redundant .codex line discarded). Codex-filed docs items (EPIC-HOME-002, TASK-HOME-100/101) left to that session. Mandate expires ~07:43.'
+due_since: 2026-10-29T14:03:45.568595227Z
+due_reason: every 1h
