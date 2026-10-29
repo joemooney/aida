@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-078",
+  "publishes": [
+    {
+      "at": "2026-10-29T10:37:43.677403011Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-29T06:46:25.848506216Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T06:49:14.172127922Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T07:33:59.157941293Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T07:33:59.173945428Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T08:36:09.702782576Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T08:36:09.720753206Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T09:03:44.473712973Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T09:03:44.514815468Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T10:02:11.113566835Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T10:02:11.146015564Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T10:35:03.498263874Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-29T10:36:50.305324133Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-078",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-078",
+        "branch": "story-b6b1278890774ef993d2ebc327862470-078",
+        "first_seen": "2026-10-29T10:36:50.305264433+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-29T10:37:30.014192036Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-078",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3089
+      }
+    },
+    {
+      "ts": "2026-10-29T10:37:43.552325760Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-078",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8e45449d340ae17d6439a8417f7a816c7341cd2e",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
