@@ -27,9 +27,11 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
         ("AIDA_DRIVE_ROOT", Some(root_str)),
         ("AIDA_REVIEW_VERDICT_FILE", None),
     ]);
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+    let head = crate::test_git::commit_fixture(root.path());
     let mut m = crate::gate::review_marker::Marker::for_this_process(
         14051,
-        Some("abc1234"),
+        Some(&head),
         Some("BUG-14051"),
         "reviewer seat",
     );
@@ -37,7 +39,7 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
     m.ttl_secs = crate::gate::review_marker::CLAIM_TTL_SECS;
     crate::gate::review_marker::write(root.path(), &m).unwrap();
     assert!(matches!(
-        crate::gate::review_marker::merge_gate(root.path(), 14051, || Some("abc1234".into())),
+        crate::gate::review_marker::merge_gate(root.path(), 14051, || Some(head.clone())),
         crate::gate::review_marker::MergeGate::UnderReview(_)
     ));
 
@@ -57,7 +59,7 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
                 root.path().to_path_buf(),
                 "BUG-14051",
                 "approved",
-                Some("abc1234"),
+                Some(&head),
                 Some("bug-14051-work"),
                 Some("looks right"),
                 &[],
@@ -91,6 +93,13 @@ fn record_with_anchor(
         ("AIDA_REVIEW_VERDICT_FILE", Some(anchor.to_str().unwrap())),
         ("AIDA_CONTAINED", contained),
     ]);
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(worktree)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("rev-parse");
+    let head = String::from_utf8_lossy(&head.stdout).trim().to_string();
     let subject = ReviewPrSubject {
         head_ref: "bug-14053-work".into(),
         commit_subjects: vec![],
@@ -105,7 +114,7 @@ fn record_with_anchor(
                 worktree.to_path_buf(),
                 "BUG-14053",
                 "approved",
-                Some("abc1234"),
+                Some(&head),
                 Some("bug-14053-work"),
                 Some("looks right"),
                 &[],
@@ -139,6 +148,8 @@ fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
         restore(&anchor_dir);
         return;
     }
+    // BUG-b6b1278890774ef993d2ebc327862470-013: the recorded `--sha` must resolve in the worktree.
+    let head = crate::test_git::commit_fixture(&worktree);
     let anchor = anchor_dir.join("PR-14053.json");
     let fallback = worktree.join(".aida/review-verdicts/PR-14053.json");
 
@@ -157,7 +168,7 @@ fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
     let body: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&fallback).unwrap()).unwrap();
     assert_eq!(body["mode"], "orchestrator-phase-3", "{body}");
-    assert_eq!(body["reviewed_sha"], "abc1234", "{body}");
+    assert_eq!(body["reviewed_sha"], head.as_str(), "{body}");
 }
 
 #[test]
