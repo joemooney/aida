@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-013
 title: Reviewer verdict stores a model-typed head SHA; a typo discards a complete review
 description: |
   A headless reviewer's verdict was rejected at collection because the reviewer typed the head SHA wrong. On aida-relay PR #98 on 2026-10-28, the verdict file recorded reviewed_sha 'cfbd4bd2' while the head was cfbd4bdcbec8…, so 'aida queue work PR-98 --role reviewer' reported "it reviewed cfbd4bd2, but PR-98's head is now cfbd4bdc…" and discarded a complete review. The SHA is copied by the model, not resolved by the tool. Acceptance: `aida review record` (and any verdict-writing path) takes the reviewed SHA from git: default to the checked-out review worktree HEAD; if a SHA or prefix is given, resolve it with rev-parse and refuse unless it equals HEAD; always store the full 40-hex SHA. Collection keeps refusing a genuinely different head. Regression test: a prefix that resolves to HEAD records the full SHA; a mistyped SHA is refused at record time with a clear message, not silently written.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T03:02:24.395927496Z
-modified_at: 2026-10-29T04:32:58.705154081Z
+modified_at: 2026-10-29T04:50:53.775205952Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-10-29T04:32:59.606168092Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a185ff-26ca-74e3-be95-068d79dd9306
+  author: aida-auto-bump
+  timestamp: 2026-10-29T04:50:53.770978154Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a185ff-26cf-7211-8d6d-a7da8da5a09f
+  timestamp: 2026-10-29T04:50:53.775200243Z
+  agent: aida
+  commit_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
+  summary: 'All acceptance met: --sha resolved via git rev-parse, refused unless it equals the head under review, full 40-hex stored; collection check unchanged; regression tests for prefix/typo/non-head; CI green at 29f2116.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: c832ed71e03db1a6c9d1535b2063f6fd36e276a2
@@ -68,11 +82,7 @@ filed_at:
   aida_build_sha: c832ed71e03
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fix logic meets every BUG-013 acceptance criterion, but PR CI is red (lib-0, cli-0): fixtures still pass unresolvable/stale --sha values that the new refusal now rejects'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-013 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T03:58:46.094188196Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T04:50:53.770973616Z
+  completion_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
