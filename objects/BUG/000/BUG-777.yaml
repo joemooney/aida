@@ -24,12 +24,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:08:25.171027028Z
-modified_at: 2026-07-22T03:12:31.791257959Z
+modified_at: 2026-10-29T06:40:45.289611646Z
 req_type: Bug
 tags:
 - lease
 - session
 - workflow
+relationships:
+- rel_type: Supersedes
+  target_id: 019f8a76-f0fe-7b43-ad09-8493ca7acd1d
+  created_at: 2026-10-29T06:40:45.289605478Z
+  created_by: joe
 comments:
 - id: 019f87c2-a437-7791-8d21-6754e4edaf18
   author: joe
@@ -45,6 +50,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a18663-c146-7722-9b0c-426d71eab58e
+  author: joe
+  timestamp: 2026-10-29T06:40:46.918534119Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 processing_record:
 - id: 019f87cf-842f-7e82-86c5-ca11c0ca0fd2
   timestamp: 2026-07-22T03:12:31.791256591Z
