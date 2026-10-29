@@ -70,7 +70,7 @@ A completeness check (filed as a slice of this effort) asserts that **every comm
 
 AIDA's commands feel like a pile until you see the one path they're all arranged around: **an idea becomes an approved spec, an approved spec becomes queued work, queued work becomes a branch, a branch becomes a merged PR, a merge becomes a completed spec, and a completed spec — eventually — becomes a released version.** Every command is a verb somewhere on that path, or a lens onto it. Here is that path, once, end to end.
 
-**0 · Set up** — `aida init` turns a git repo into an AIDA project: it creates the store (an orphan `aida-store` branch holding one YAML per spec), a rebuildable cache, the MCP server registration, and the scaffolding (skills, hooks, templates). You do this once. *(→ Ch.1, Ch.7)*
+**0 · Set up** — `aida init` turns a git repo into an AIDA project: it creates the store (an orphan `aida-store` branch holding one YAML per spec), a rebuildable cache and selected agent scaffolding (skills, hooks, templates). MCP registration is opt-in with `--with-mcp`; agent selection defaults to PATH detection. You do this once. *(→ Ch.1, Ch.7)*
 
 **1 · Capture the idea** — a thought becomes a spec with `aida add`. At this moment it's a **Draft** — captured, not blessed. Capturing is cheap and you should do it freely; the gate that matters comes later. *(→ Ch.1)*
 
