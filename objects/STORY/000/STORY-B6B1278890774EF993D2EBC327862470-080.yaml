@@ -1,33 +1,16 @@
 id: 01a1874b-b26a-7d50-af2e-102a5512f699
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-080
 title: 'M1: one gate ledger keyed by change and head, with patch-identity carry-over'
-description: |
-  ## Problem
-  Review and merge-gate state lives in two key spaces and several places: ~2,700 files in `.aida/review-verdicts/` keyed by spec OR by `PR-N`, holds in `.aida/merge-holds/PR-N`, and verdict/hold files that reviewer lanes write into their own worktrees and that the launcher must "collect" back into the primary checkout. Consequences seen repeatedly (most recently PR-3089 on 2026-10-29, four review rounds): an approval under `PR-N` does not release a hold under the spec key (BUG-2221 class); releasing a hold deletes the marker the ship-held mandate needs as evidence; removing a reviewer worktree can lose state (BUG-2176); the carry-over proof is recomputed ~4 times per ship (TASK-1992). This is regroup move M1 (.aida/regroup-draft.md), the prerequisite for M2 (merge train by default).
+description: |2
 
-  ## Acceptance
-  1. One append-only gate ledger per change (PR/MR) in the primary checkout's shared state, never in a worktree. Events: verdict, hold, hold-release, mandate-cover, carry-over-proof. Each event names the head SHA and the change's patch identity (diff of the change's own commits against its merge base).
-  2. The change is the only primary key. A spec ID is an index to changes, never a second state location. A verdict recorded for the spec of PR-N and one recorded as PR-N are the same record.
-  3. Release appends an event; nothing deletes evidence. The ship-held mandate and `aida awaiting` read "a hold existed and was cleared" from the ledger.
-  4. Carry-over: after a base-only update whose patch identity is unchanged, the prior approval applies at the new head automatically. The proof is computed once, stored as an event, and read by every gate (ship, mandate, merge-hold-gate CI check).
-  5. Writers resolve the ledger location from the common Git dir, so a reviewer or implementer in any worktree or contained seat clone writes the shared ledger directly; the "collected the reviewer's verdict" step and worktree-local hold markers are removed.
-  6. Migration: existing `.aida/review-verdicts/*` and `.aida/merge-holds/*` are read as legacy input (one-time import or read-through) with no loss; old writers are deleted, not kept in parallel. A ratchet test fails if new code writes either legacy path.
-  7. All of this lives in `aida-cli-lib/src/gate/` (STORY-1889 boundary). Net effect is fewer gate code paths: the review_verdict / review_marker / merge_hold_core / rework_hold_release / approval duplication collapses onto the ledger.
-
-  ## Process (architecture change)
-  FIRST deliverable is a SKETCH posted as a comment on this spec: ledger format and location, event schema, patch-identity computation, legacy migration, the list of gate call sites that switch over, and what gets deleted. No implementation before advisor signoff on the sketch. Then implement in at most 3 vertical slices, each its own PR with `(Refs <this spec>)`; only the final slice uses the plain trailer.
-
-  ## Subsumes (supersede on completion)
-  TASK-1992, TASK-1316, STORY-1375, TASK-2008 (carry-over part), STORY-1683 (tier becomes a recorded field). Not in scope: the merge train itself (M2), risk-tier policy, STORY-1156.
-
-  ## Test tier
-  STRICT for the final slice (gate code, heft >= 7): targeted cargo tests for gate:: plus the ship/mandate integration binaries; LIGHT for earlier slices. Never `cargo test --workspace` or `make check-ci` locally.
+  ## Sketch status
+  The sketch is posted as the first comment and SIGNED OFF (second comment, 2026-10-29 04:05). Do not write another sketch; implement SLICE 1 per the sketch as amended by the signoff (Q1: mailbox gate-event transport, no contained write path to the ledger).
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T10:58:24.436048480Z
+modified_at: 2026-10-29T10:58:34.608834598Z
 req_type: Story
 tags:
 - architecture
@@ -178,6 +161,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1874f-c911-7610-bb09-1c7681b528ea
+  author: joe
+  timestamp: 2026-10-29T10:58:35.409519891Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main

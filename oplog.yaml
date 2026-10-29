@@ -85135,5 +85135,16 @@ operations:
   timestamp: 2026-10-29T10:58:25.368189255Z
   kind: !SetStatus
     status: Approved
-clock: 6660
+- id: 01a1874f-c97a-70a2-ba07-7a526803dda6
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6661
+  timestamp: 2026-10-29T10:58:35.514701544Z
+  kind: !SetDescription
+    description: |2
+
+      ## Sketch status
+      The sketch is posted as the first comment and SIGNED OFF (second comment, 2026-10-29 04:05). Do not write another sketch; implement SLICE 1 per the sketch as amended by the signoff (Q1: mailbox gate-event transport, no contained write path to the ledger).
+clock: 6661
 node_id: '1'
