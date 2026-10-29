@@ -85313,5 +85313,13 @@ operations:
       6. Import the legacy file BEFORE the file write (or dedupe by record identity) so the first write is not recorded twice; delete verdict_history or give it a real caller.
       7. Memoize store_root() like hold_store_root.
       ACCEPTED deviation (reason: switching every verdict writer/reader and deleting collect in the same slice whose own review depends on reviewers recording verdicts is the riskier order): slice 1 may dual-write. SLICE 2 acceptance now additionally REQUIRES: verdict writers stop writing legacy files, all verdict readers read the ledger projection, collect_standalone_verdict / adopt_direct_write are deleted, and the ratchet baseline for verdict writers drops to 0. The story cannot complete with dual writes in place.
-clock: 6670
+- id: 01a18784-b8b8-7fb2-bef6-5d744db232cb
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6671
+  timestamp: 2026-10-29T11:56:24.632514491Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6671
 node_id: '1'
