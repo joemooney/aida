@@ -456,9 +456,13 @@ fn a_future_dated_ledger_record_cannot_shadow_a_later_file_verdict() {
     );
     on_ledger.at = ts(0);
     assert_eq!(
-        rv::newer_of(rv::parse_ledger_record(&later), Some(&on_ledger))
-            .unwrap()
-            .kind,
+        rv::newer_of(
+            Path::new("/nonexistent/PR-19.json"),
+            rv::parse_ledger_record(&later),
+            Some(&on_ledger)
+        )
+        .unwrap()
+        .kind,
         rv::VerdictKind::RequestChanges
     );
 }
@@ -1050,6 +1054,104 @@ fn a_refused_current_file_keeps_the_phase3_archive_fallback_closed() {
     assert!(
         crate::phase_gates::phase3_head_archive_fallback(&path, Some(HEAD), started).is_none(),
         "a refused current file must not let the archive answer"
+    );
+}
+
+/// Round 8, finding 1: a current file that is refused (a link, TASK-1801) or
+/// does not parse keeps the ledger out of the single-key readers, so neither
+/// `aida pr ship`'s refusal release nor the dispatch-flow fast path takes a
+/// ledger approval in its place.
+#[cfg(unix)]
+#[test]
+fn a_refused_or_unparseable_file_keeps_the_ledger_out_of_every_reader() {
+    use crate::gate::merge_hold_core::{typed_hold, HoldReasonKind, RefusalRelease};
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    ledger_holds(&root, ChangeKey::pr(50), record("approved", &ts(-60), None));
+    let hold = typed_hold(50, HoldReasonKind::Rework, "CHANGES REQUESTED", None);
+    let approved_by_every_reader = || {
+        let release = crate::pr_cmd::ship_refusal_release(&[&root], &hold, Some(HEAD));
+        let dispatch = crate::gate::dispatch_authority::verdict_at_head(&root, 50, HEAD);
+        (
+            rv::read_recorded_verdict(&root, "PR-50").is_some(),
+            rv::read_verdict_for_sha(&root, "PR-50", HEAD).is_some(),
+            matches!(release, RefusalRelease::Released(_)),
+            dispatch == Some(rv::VerdictKind::Approved),
+        )
+    };
+    assert_eq!(
+        approved_by_every_reader(),
+        (true, true, true, true),
+        "precondition: with no file the ledger approval answers"
+    );
+
+    let path = rv::verdict_path(&root, "PR-50");
+    let real = root.join("elsewhere.json");
+    std::fs::write(
+        &real,
+        serde_json::to_string(&record("approved", &ts(0), None)).unwrap(),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(&real, &path).unwrap();
+    assert!(rv::verdict_file_refused(&path));
+    assert_eq!(approved_by_every_reader(), (false, false, false, false));
+
+    std::fs::remove_file(&path).unwrap();
+    std::fs::write(&path, "{not json").unwrap();
+    assert_eq!(approved_by_every_reader(), (false, false, false, false));
+}
+
+/// Round 8, finding 2: a file with no `recorded_at` is dated by its mtime
+/// at both merge gates and in `newer_of`, so an older ledger approval does
+/// not replace a newer hand-written request-changes file; a ledger round
+/// newer than the file's mtime still answers.
+#[test]
+fn an_undated_file_is_dated_by_its_mtime_at_both_merge_gates() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    ledger_holds(
+        &root,
+        ChangeKey::pr(51),
+        record("approved", &ts(-3600), None),
+    );
+    let mut undated = record("request-changes", &ts(0), None);
+    undated.remove("recorded_at");
+    file_holds(&root, "PR-51", &undated);
+    let path = rv::verdict_path(&root, "PR-51");
+
+    let gates = || {
+        let candidates =
+            crate::gate::ship::merge_gate_verdict_candidates(&[&root], 51, &[], Some(HEAD));
+        let bodies = crate::gate::merge_hold_core::corpus_gate_bodies(&[&root], 51, &[]).unwrap();
+        assert_eq!(candidates.len(), 1, "{candidates:?}");
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        (
+            candidates[0].kind,
+            bodies[0].1.contains("request-changes"),
+            rv::read_recorded_verdict(&root, "PR-51").unwrap().kind,
+        )
+    };
+    assert_eq!(
+        gates(),
+        (
+            rv::VerdictKind::RequestChanges,
+            true,
+            rv::VerdictKind::RequestChanges
+        ),
+        "a newer undated file keeps the older ledger approval out"
+    );
+
+    let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(two_hours_ago)
+        .unwrap();
+    assert_eq!(
+        gates(),
+        (rv::VerdictKind::Approved, false, rv::VerdictKind::Approved),
+        "a ledger round newer than the undated file's mtime answers"
     );
 }
 

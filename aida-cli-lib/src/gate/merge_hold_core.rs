@@ -1359,7 +1359,7 @@ pub(crate) fn corpus_gate_bodies(
             let file = crate::gate::review_verdict::parse_recorded_verdict(&body);
             let newer = file.as_ref().and_then(|file| {
                 events.iter().position(|event| {
-                    crate::gate::review_verdict::ledger_supersedes(Some(file), event)
+                    crate::gate::review_verdict::ledger_supersedes(&path, Some(file), event)
                 })
             });
             match newer {

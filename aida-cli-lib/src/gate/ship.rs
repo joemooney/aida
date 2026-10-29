@@ -1071,7 +1071,11 @@ pub(crate) fn merge_gate_verdict_candidates(
             });
             let current = match ledger {
                 Some((seen_key, event))
-                    if crate::gate::review_verdict::ledger_supersedes(file.as_ref(), &event) =>
+                    if crate::gate::review_verdict::ledger_supersedes(
+                        &path,
+                        file.as_ref(),
+                        &event,
+                    ) =>
                 {
                     if seen.contains(&seen_key) {
                         None
