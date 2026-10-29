@@ -212,7 +212,7 @@ pub enum SessionCommand {
         ///   - `FR-N` (any spec id)
         ///   - `src/scaffolding/**` (path glob — stored, not validated)
         ///   - `feature:auth` (free-form tag)
-        #[clap(long, alias = "spec", value_name = "SCOPE")]
+        #[clap(long, alias = "spec", value_name = "SCOPE", value_parser = crate::spec_arg::spec_id)]
         owns: String,
 
         /// Branch name for the new worktree (default: derived from --owns).
@@ -354,7 +354,7 @@ pub enum SessionCommand {
         agent_type: Option<String>,
         #[clap(long)]
         branch: Option<String>,
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         scope: Option<String>,
     },
 
@@ -411,13 +411,17 @@ pub enum SessionCommand {
         /// (e.g. `task-<n>` — treated as `--branch`) when the lease
         /// covering cwd isn't the one you want to end.
         // trace:TASK-489 | ai:claude
+        // A session id or branch name is not alias-shaped, so the spec-ID
+        // parser keeps it as typed.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         id: Option<String>,
 
         /// Resolve the lease by spec ID. Errors when zero or multiple
         /// leases own the spec; in the multi-match case lists them so
         /// you can disambiguate with the lease id.
         // trace:TASK-489 | ai:claude
-        #[clap(long, conflicts_with = "branch")]
+        #[clap(long, conflicts_with = "branch", value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Resolve the lease by branch name. Errors when zero or
@@ -799,7 +803,7 @@ pub enum SessionManifestCommand {
     Write {
         /// Comma-separated SPEC-IDs in planned order (position derives
         /// from order in the list, starting at 1).
-        #[clap(long, value_name = "SPEC-IDS")]
+        #[clap(long, value_name = "SPEC-IDS", value_parser = crate::spec_arg::spec_id_csv)]
         items: String,
 
         /// Plan source — typically "user prompt" (user-confirmed cluster)
@@ -819,6 +823,7 @@ pub enum SessionManifestCommand {
     // trace:STORY-98 | ai:claude
     MarkStarted {
         /// SPEC-ID to mark.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec_id: String,
 
         /// Target session id (8-char prefix accepted). Defaults to the
@@ -833,6 +838,7 @@ pub enum SessionManifestCommand {
     // trace:STORY-98 | ai:claude
     MarkCompleted {
         /// SPEC-ID to mark.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec_id: String,
 
         /// Target session id (8-char prefix accepted). Defaults to the

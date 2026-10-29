@@ -338,11 +338,12 @@ pub(crate) struct GoalArgs {
 
     /// Condition: all direct children of EPIC/STORY `<ID>` reach a
     /// terminal status.
-    #[clap(long, value_name = "ID")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(long, value_name = "ID", value_parser = crate::spec_arg::spec_id)]
     pub epic: Option<String>,
 
     /// Condition: spec `<SPEC-ID>` reaches status Completed.
-    #[clap(long, value_name = "SPEC-ID")]
+    #[clap(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Condition: PR `<N>` is merged.

@@ -211,6 +211,8 @@ pub(crate) struct LintArgs {
 
     /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
     /// specs.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Lint every spec of this kind instead of a single SPEC-ID. One of

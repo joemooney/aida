@@ -16926,51 +16926,12 @@ pub(crate) struct QueueArgs {
     pub inner: crate::cli::QueueCommand,
 }
 
-/// Rewrite every spec-ID argument of a queue verb from a friendly node alias
-/// to its canonical id, so queue entries, leases and branch names stay
-/// canonical and the scope matchers compare like with like.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-pub(crate) fn canonicalize_queue_spec_args(cmd: &mut QueueCommand) {
-    use crate::spec_arg::{canonicalize, canonicalize_csv_opt, canonicalize_opt};
-    match cmd {
-        QueueCommand::List { scope, epic, .. } => {
-            canonicalize_csv_opt(scope);
-            canonicalize_opt(epic);
-        }
-        QueueCommand::Add { id, scope, .. } => {
-            canonicalize(id);
-            canonicalize_opt(scope);
-        }
-        QueueCommand::Remove { id, .. }
-        | QueueCommand::Done { id, .. }
-        | QueueCommand::Recover { id, .. } => canonicalize(id),
-        QueueCommand::Move {
-            id, before, after, ..
-        } => {
-            canonicalize(id);
-            canonicalize_opt(before);
-            canonicalize_opt(after);
-        }
-        QueueCommand::Advance { id, .. }
-        | QueueCommand::Work { id, .. }
-        | QueueCommand::Rework { id, .. } => canonicalize_opt(id),
-        QueueCommand::Integrate { focus, .. } => canonicalize_opt(focus),
-        QueueCommand::Load { .. }
-        | QueueCommand::Clear { .. }
-        | QueueCommand::Prune { .. }
-        | QueueCommand::Gc { .. }
-        | QueueCommand::Next { .. }
-        | QueueCommand::Progress { .. } => {}
-    }
-}
-
 fn run_queue(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
-    let mut args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    canonicalize_queue_spec_args(&mut args.inner);
+    let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
@@ -17039,6 +17000,8 @@ pub(crate) static QUEUE: crate::command_registry::CommandReg =
 pub(crate) struct ReworkArgs {
     /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
     /// specs one keystroke each.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub id: Option<String>,
     /// Also launch a session for the spec.
     #[clap(long)]
@@ -17083,9 +17046,7 @@ fn run_rework(
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
-    let mut args = <ReworkArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-    crate::spec_arg::canonicalize_opt(&mut args.id);
+    let args = <ReworkArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {

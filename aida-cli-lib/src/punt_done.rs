@@ -1275,6 +1275,8 @@ fn punts_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdP
 #[clap(name = "done")]
 pub(crate) struct DoneArgs {
     /// The spec to mark done.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 }
 

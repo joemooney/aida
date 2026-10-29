@@ -31,21 +31,18 @@ pub(crate) fn canonical(id: &str) -> String {
     aida_core::node_alias::expand_or_keep(id)
 }
 
-/// [`canonical`] in place.
-pub(crate) fn canonicalize(slot: &mut String) {
-    *slot = canonical(slot);
+/// clap `value_parser` for a spec-ID argument: the handler only ever sees the
+/// [`canonical`] id, so keys it writes (verdicts, ledgers, leases) and string
+/// comparisons it makes stay canonical. This parser is the single resolution
+/// point for spec arguments — handlers do not re-resolve. Never fails.
+pub(crate) fn spec_id(raw: &str) -> Result<String, String> {
+    Ok(canonical(raw))
 }
 
-/// [`canonical`] in place, for an optional argument.
-pub(crate) fn canonicalize_opt(slot: &mut Option<String>) {
-    if let Some(id) = slot.as_mut() {
-        canonicalize(id);
-    }
-}
-
-/// [`canonical`] applied to each entry of a comma-separated list argument.
-pub(crate) fn canonicalize_csv(slot: &mut String) {
-    *slot = slot
+/// [`spec_id`] for a comma-separated list argument: each entry resolves,
+/// spacing around unchanged entries is kept.
+pub(crate) fn spec_id_csv(raw: &str) -> Result<String, String> {
+    Ok(raw
         .split(',')
         .map(|part| {
             let trimmed = part.trim();
@@ -55,28 +52,7 @@ pub(crate) fn canonicalize_csv(slot: &mut String) {
             }
         })
         .collect::<Vec<_>>()
-        .join(",");
-}
-
-/// clap `value_parser` for a spec-ID argument: the handler only ever sees the
-/// [`canonical`] id, so keys it writes (verdicts, ledgers, leases) and string
-/// comparisons it makes stay canonical. Never fails.
-pub(crate) fn spec_id(raw: &str) -> Result<String, String> {
-    Ok(canonical(raw))
-}
-
-/// [`spec_id`] for a comma-separated list argument.
-pub(crate) fn spec_id_csv(raw: &str) -> Result<String, String> {
-    let mut list = raw.to_string();
-    canonicalize_csv(&mut list);
-    Ok(list)
-}
-
-/// [`canonicalize_csv`] for an optional argument.
-pub(crate) fn canonicalize_csv_opt(slot: &mut Option<String>) {
-    if let Some(list) = slot.as_mut() {
-        canonicalize_csv(list);
-    }
+        .join(","))
 }
 
 #[cfg(test)]

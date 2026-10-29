@@ -524,7 +524,8 @@ pub(crate) struct CommitCmdArgs {
     pub message: String,
     /// Spec id for the (REQ-ID) trailer, e.g. `--spec BUG-N`. When omitted,
     /// inferred from staged trace comments if exactly one spec is present.
-    #[clap(long)]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(long, value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
     /// AI tool for the [AI:tool] prefix (default: claude when AI-authored
     /// traces are staged). Use --no-ai to force it off.

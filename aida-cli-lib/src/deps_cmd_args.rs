@@ -18,7 +18,8 @@ pub enum DepsCommand {
     Sweep {
         /// Limit the sweep to a single source spec (SPEC-ID or UUID)
         /// instead of every spec in the store.
-        #[clap(long, value_name = "SPEC")]
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(long, value_name = "SPEC", value_parser = crate::spec_arg::spec_id)]
         for_spec: Option<String>,
 
         /// Emit the result as JSON for agents / scripts.

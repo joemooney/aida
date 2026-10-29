@@ -684,3 +684,86 @@ fn node_alias_spec_scope_commands_act_on_the_canonical_id() {
         assert!(err.contains("STORY-NOPE-001"), "{args:?}: {err}");
     }
 }
+
+/// Every file under `dir`, recursively.
+fn files_under(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(files_under(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// `aida review record STORY-<LABEL>-NNN` keys the verdict file and the PR
+/// ledger entry under the canonical id; the alias is never written.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+#[test]
+fn node_alias_review_record_keys_the_verdict_under_the_canonical_id() {
+    let f = Fixture::new();
+    f.ok(&["add", "--title", "reviewed story", "--type", "story"]);
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .unwrap()
+        .node_id
+        .to_ascii_uppercase();
+    let canonical = format!("STORY-{node}-001");
+    f.ok(&["node", "alias", "set", "HOME"]);
+
+    // A refusing verdict insists on `--pr`; pin the sha to HEAD so no forge
+    // lookup is needed.
+    let head = f.git(&["rev-parse", "HEAD"]);
+    let out = f.ok(&[
+        "review",
+        "record",
+        "story-home-001",
+        "--verdict",
+        "request-changes",
+        "--pr",
+        "1",
+        "--sha",
+        &head,
+        "--summary",
+        "fixture refusal",
+    ]);
+    assert!(out.to_ascii_uppercase().contains(&canonical), "{out}");
+
+    let verdicts = f.root.join(".aida/review-verdicts");
+    let verdict_file = verdicts.join(format!("{canonical}.json"));
+    assert!(
+        verdict_file.is_file(),
+        "no verdict under the canonical id: {:?}",
+        files_under(&verdicts)
+    );
+    // The PR ledger and every other record name the canonical id, never the
+    // alias.
+    let written = files_under(&f.root.join(".aida"));
+    let ledger_hits: Vec<_> = written
+        .iter()
+        .filter(|p| {
+            fs::read_to_string(p)
+                .map(|t| t.to_ascii_uppercase().contains(&canonical))
+                .unwrap_or(false)
+        })
+        .filter(|p| **p != verdict_file)
+        .collect();
+    assert!(
+        !ledger_hits.is_empty(),
+        "no PR ledger entry names {canonical}: {written:?}"
+    );
+    for path in &written {
+        let text = fs::read_to_string(path).unwrap_or_default();
+        assert!(
+            !text.to_ascii_uppercase().contains("STORY-HOME-001"),
+            "{} records the alias:\n{text}",
+            path.display()
+        );
+    }
+    // Reading back by alias finds the same verdict.
+    let shown = f.ok(&["review", "verdict", "STORY-HOME-001", "--json"]);
+    assert!(shown.to_ascii_uppercase().contains(&canonical), "{shown}");
+}

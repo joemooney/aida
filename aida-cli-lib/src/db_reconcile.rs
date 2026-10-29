@@ -3117,9 +3117,6 @@ pub(crate) fn handle_db_reconcile_status(
     dry_run: bool,
 ) -> Result<()> {
     use std::process::Command as ProcessCommand;
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-    let spec = spec.map(crate::spec_arg::canonical);
-    let spec = spec.as_deref();
 
     let project_root = store_path
         .parent()

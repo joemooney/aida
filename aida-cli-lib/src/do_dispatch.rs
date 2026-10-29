@@ -464,6 +464,8 @@ mod tests {
 #[clap(name = "do")]
 pub(crate) struct DoArgs {
     /// Requirement ID (UUID or SPEC-ID) to dispatch.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     // trace:STORY-776 | ai:claude

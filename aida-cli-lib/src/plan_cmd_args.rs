@@ -86,6 +86,8 @@ pub enum PlanCommand {
     FanOut {
         /// Explicit SPEC-IDs to fan out over. Mutually exclusive with
         /// --batch / --epic; pick exactly one selection mode.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         specs: Vec<String>,
 
         /// Select every Approved spec tagged `batch:NAME`.
@@ -94,7 +96,7 @@ pub enum PlanCommand {
 
         /// Select every Approved spec tagged `parent:ID` (the epic/story
         /// rollup convention).
-        #[clap(long, conflicts_with_all = ["batch", "specs"])]
+        #[clap(long, conflicts_with_all = ["batch", "specs"], value_parser = crate::spec_arg::spec_id)]
         epic: Option<String>,
 
         /// Include low-priority specs in the fan-out. Off by default so

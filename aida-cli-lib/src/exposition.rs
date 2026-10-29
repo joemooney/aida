@@ -871,6 +871,8 @@ fn render_human_exposition(sidecar: &ExpositionSidecar, is_stale: bool, current_
 #[clap(name = "explain")]
 pub(crate) struct ExplainArgs {
     /// Requirement ID (UUID or SPEC-ID)
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     /// Target audience persona (operator, executive, implementer, contributor)

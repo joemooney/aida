@@ -160,6 +160,8 @@ pub(crate) struct BriefArgs {
     pub agent: Option<String>,
 
     /// Requirement id for brief creation.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Optional operator context. Use '-' to read a multi-line note from stdin.

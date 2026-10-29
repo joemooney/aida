@@ -94,6 +94,8 @@ pub(crate) fn handle_decide_command(
 #[clap(name = "decide")]
 pub(crate) struct DecideArgs {
     /// The spec (SPEC-ID or UUID) to resolve.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 }
 

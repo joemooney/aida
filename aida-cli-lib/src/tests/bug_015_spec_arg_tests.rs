@@ -39,45 +39,20 @@ fn non_alias_arguments_pass_through_unchanged() {
 }
 
 #[test]
-fn in_place_helpers_rewrite_each_slot() {
+fn value_parsers_resolve_single_and_csv_ids() {
     let _map = bind_home();
-    let mut single = "STORY-HOME-001".to_string();
-    canonicalize(&mut single);
-    assert_eq!(single, canonical_of("001"));
-
-    let mut opt = Some("story-home-002".to_string());
-    canonicalize_opt(&mut opt);
-    assert_eq!(opt.as_deref(), Some(canonical_of("002").as_str()));
-
-    let mut none: Option<String> = None;
-    canonicalize_opt(&mut none);
-    assert_eq!(none, None);
-
-    let mut list = Some("STORY-HOME-003, TASK-9,story-home-004".to_string());
-    canonicalize_csv_opt(&mut list);
+    assert_eq!(spec_id("STORY-HOME-001").unwrap(), canonical_of("001"));
     assert_eq!(
-        list.as_deref(),
-        Some(format!("{}, TASK-9,{}", canonical_of("003"), canonical_of("004")).as_str())
+        spec_id_csv("STORY-HOME-003, TASK-9,story-home-004").unwrap(),
+        format!("{}, TASK-9,{}", canonical_of("003"), canonical_of("004"))
     );
 }
 
 #[test]
 fn queue_verbs_carry_the_canonical_id() {
     use crate::cli::QueueCommand;
-    use clap::Parser;
-    #[derive(Parser)]
-    struct Q {
-        #[clap(subcommand)]
-        cmd: QueueCommand,
-    }
     let _map = bind_home();
-    let parse = |args: &[&str]| {
-        let mut q = Q::try_parse_from(std::iter::once("queue").chain(args.iter().copied()))
-            .unwrap()
-            .cmd;
-        crate::queue_cmd::canonicalize_queue_spec_args(&mut q);
-        q
-    };
+    let parse = |args: &[&str]| parse_sub::<QueueCommand>(args);
     let want = canonical_of("080");
     match parse(&["add", "STORY-HOME-080"]) {
         QueueCommand::Add { id, .. } => assert_eq!(id, want),
@@ -145,11 +120,7 @@ fn worktree_add_and_enter_target_the_canonical_id() {
 fn session_verbs_carry_the_canonical_id() {
     use crate::cli::{SessionCommand, SessionManifestCommand};
     let _map = bind_home();
-    let parse = |args: &[&str]| {
-        let mut cmd: SessionCommand = parse_sub(args);
-        crate::agent_launch::canonicalize_session_spec_args(&mut cmd);
-        cmd
-    };
+    let parse = |args: &[&str]| parse_sub::<SessionCommand>(args);
     let want = canonical_of("080");
     match parse(&["end", "--spec", "STORY-HOME-080"]) {
         SessionCommand::End { spec, .. } => assert_eq!(spec.as_deref(), Some(want.as_str())),
@@ -404,4 +375,94 @@ fn review_coverage_trailers_resolve_to_the_canonical_id() {
     assert_eq!(cov.delivered, vec![want]);
     assert_eq!(cov.slice_refs, vec![canonical_of("081")]);
     assert_eq!(cov.referenced, vec![canonical_of("082")]);
+}
+
+/// Argument ids / value names that name a spec. Compared case-insensitively.
+const SPEC_ARG_NAMES: &[&str] = &[
+    "spec",
+    "specs",
+    "spec_id",
+    "owns",
+    "req",
+    "req_id",
+    "epic",
+    "epic_or_spec",
+];
+
+/// Spec-named arguments that are deliberately not spec ids, with the reason.
+/// The two `--scope` entries are not matched by name today; they are listed
+/// so a rename to a spec-like value name keeps them deliberate.
+const NOT_A_SPEC_ID: &[(&str, &str)] = &[
+    (
+        "questions sweep --scope",
+        "a status keyword (backlog, approved, all, ...)",
+    ),
+    ("triage --scope", "a subsystem name"),
+    ("burndown readiness --specs", "a count of expected specs"),
+];
+
+/// Ratchet: every argument in the real command tree whose id or value name
+/// names a spec resolves an alias through [`spec_id`] / [`spec_id_csv`].
+/// Checked by behavior — the arg's value parser must turn `STORY-HOME-080`
+/// into the canonical id — so a new or missed spec arg fails here.
+#[test]
+fn every_spec_named_argument_in_the_tree_resolves_aliases() {
+    let _map = bind_home();
+    let want = canonical_of("080");
+    let root = crate::command_registry::built_command();
+    let mut failures = Vec::new();
+    walk_spec_args(&root, "", &want, &mut failures);
+    assert!(
+        failures.is_empty(),
+        "spec arguments that keep an alias as typed (add `value_parser = \
+         crate::spec_arg::spec_id` or list them in NOT_A_SPEC_ID):\n{}",
+        failures.join("\n")
+    );
+}
+
+fn names_a_spec(arg: &clap::Arg) -> bool {
+    let id = arg.get_id().as_str().replace('-', "_");
+    let value_names = arg.get_value_names().unwrap_or_default();
+    std::iter::once(id)
+        .chain(value_names.iter().map(|v| v.as_str().replace('-', "_")))
+        .any(|name| SPEC_ARG_NAMES.iter().any(|s| s.eq_ignore_ascii_case(&name)))
+}
+
+/// What `arg`'s own value parser makes of `STORY-HOME-080`, probed through a
+/// one-argument command (the parser's direct entry point is crate-private to
+/// clap). `None` when it fails or is not a `String`.
+fn parses_to(arg: &clap::Arg) -> Option<String> {
+    let probe = clap::Arg::new("v")
+        .required(true)
+        .value_parser(arg.get_value_parser().clone());
+    clap::Command::new("probe")
+        .arg(probe)
+        .try_get_matches_from(["probe", "STORY-HOME-080"])
+        .ok()?
+        .try_get_one::<String>("v")
+        .ok()
+        .flatten()
+        .cloned()
+}
+
+fn walk_spec_args(cmd: &clap::Command, path: &str, want: &str, failures: &mut Vec<String>) {
+    for arg in cmd.get_arguments() {
+        if !names_a_spec(arg) || !arg.get_action().takes_values() {
+            continue;
+        }
+        let label = match arg.get_long() {
+            Some(long) => format!("{path} --{long}"),
+            None => format!("{path} <{}>", arg.get_id()),
+        };
+        if NOT_A_SPEC_ID.iter().any(|(l, _)| *l == label) {
+            continue;
+        }
+        if parses_to(arg).as_deref() != Some(want) {
+            failures.push(label);
+        }
+    }
+    for sub in cmd.get_subcommands() {
+        let sub_path = format!("{path} {}", sub.get_name());
+        walk_spec_args(sub, sub_path.trim_start(), want, failures);
+    }
 }
