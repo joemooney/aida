@@ -2,12 +2,12 @@ id: 01a18507-5221-7581-b3d2-531da5fc2fe1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-087
 title: Refresh README.md and fix stale CLAUDE.md call-graph note
 description: Rewrite README.md to match the current product and correct the CLAUDE.md codegraph 1 MiB note.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T00:20:11.937843862Z
-modified_at: 2026-10-29T00:56:06.198718935Z
+modified_at: 2026-10-29T01:02:20.369407478Z
 req_type: Task
 relationships:
 - rel_type:
@@ -15,6 +15,13 @@ relationships:
   target_id: 01a1850b-5cf5-7f83-8246-c7234ddd8cb9
   created_at: 2026-10-29T00:24:48.019307531Z
   created_by: joe
+comments:
+- id: 01a1852d-e6d1-75a1-9403-5453e8040b2d
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (c832ed7) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-29T01:02:20.369406443Z
+  modified_at: 2026-10-29T01:02:20.369406443Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a1850b-8ef7-7120-b151-b768c916348d
   author: joe
@@ -26,6 +33,14 @@ history:
   timestamp: 2026-10-29T00:56:07.009552159Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1852d-e6d1-75a1-9403-544ccd6cdd71
+  author: aida-auto-bump
+  timestamp: 2026-10-29T01:02:20.369405623Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 28bbe9d540b26f761d1b796b3f003b65ee9c2a15
