@@ -46,12 +46,12 @@ description: |
   2. Point collect/adopt at ledger append, keeping StandaloneVerdictChecks::check_record (PR binding, child-grant check at collection time). Tests: a verdict naming PR-B collected from PR-A's reviewer seat is refused; an expired/revoked grant at collection is refused.
   3. Make legacy_gate_writers_do_not_gain_call_sites fast (<10s; scan once, cached file list) or add a justified entry to scripts/test-time-budget.toml — CI lib-1 currently fails on this budget.
   Findings 3 (backdating) and 4 (rejected-event size) disappear with the spool; no further action. Slice 2's acceptance items stand (legacy writers to 0, readers on the ledger).
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T13:23:18.621442044Z
+modified_at: 2026-10-29T13:23:22.800630751Z
 req_type: Story
 tags:
 - architecture
@@ -237,6 +237,12 @@ comments:
   modified_at: 2026-10-29T13:10:39.308100743Z
   session_id: 01a187857966
   harness_version: 2.1.312 (Claude Code)
+- id: 01a187d4-5830-7aa3-a30d-87b70a04d44b
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 2-7 fixed with tests (#2 deviation accepted). One new blocking security defect: mailbox ingest re-validates attestations using only data the submission itself carries, so a contained seat can forge a reviewer approval. Ingest is also unbound to the change. AC1/AC6/AC7 partial-for-slice, AC2 verified, AC3/AC4 n/a (slices 2-3), AC5 PARTIAL. CI at review: cli-0/cli-1/contracts/rest pass, lib-0/lib-1/gates pending, merge-hold-gate fail (hold label).. No triage reason was given.'
+  created_at: 2026-10-29T13:23:22.800626364Z
+  modified_at: 2026-10-29T13:23:22.800626364Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -334,6 +340,14 @@ history:
   timestamp: 2026-10-29T13:23:19.441660531Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a187d4-5830-7aa3-a30d-87a2e66c2165
+  author: joe
+  timestamp: 2026-10-29T13:23:22.800615143Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -346,11 +360,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 findings 2-7 fixed with tests (#2 deviation accepted). One new blocking security defect: mailbox ingest re-validates attestations using only data the submission itself carries, so a contained seat can forge a reviewer approval. Ingest is also unbound to the change. AC1/AC6/AC7 partial-for-slice, AC2 verified, AC3/AC4 n/a (slices 2-3), AC5 PARTIAL. CI at review: cli-0/cli-1/contracts/rest pass, lib-0/lib-1/gates pending, merge-hold-gate fail (hold label).'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-080 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T13:21:00.464259250Z

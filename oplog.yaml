@@ -85696,5 +85696,13 @@ operations:
       2. Point collect/adopt at ledger append, keeping StandaloneVerdictChecks::check_record (PR binding, child-grant check at collection time). Tests: a verdict naming PR-B collected from PR-A's reviewer seat is refused; an expired/revoked grant at collection is refused.
       3. Make legacy_gate_writers_do_not_gain_call_sites fast (<10s; scan once, cached file list) or add a justified entry to scripts/test-time-budget.toml — CI lib-1 currently fails on this budget.
       Findings 3 (backdating) and 4 (rejected-event size) disappear with the spool; no further action. Slice 2's acceptance items stand (legacy writers to 0, readers on the ledger).
-clock: 6696
+- id: 01a187d4-5bf6-7161-bfc4-c3d6fea28ef9
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6697
+  timestamp: 2026-10-29T13:23:23.766292650Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6697
 node_id: '1'
