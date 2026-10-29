@@ -1,0 +1,32 @@
+id: 01a188ce-661e-7481-9abd-d129e2f06ae4
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-084
+title: 'Review PR-3093: [AI:codex] docs(overview): explain selectable autonomy (TASK-B6B1278890774EF993D2EBC327862470-100)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188c9`) for branch `task-b6b1278890774ef993d2ebc327862470-100-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3093>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-100-work` → `main`
+
+  ## Covers
+
+  - TASK-B6B1278890774EF993D2EBC327862470-100
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3093` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T17:56:30.366493194Z
+modified_at: 2026-10-29T17:56:30.366493194Z
+req_type: Story
+filed_at:
+  code_sha: 9bb1164fe1e9184967770694cb1a32c53e707d72
+  branch: task-b6b1278890774ef993d2ebc327862470-100-work
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b74166aba21
+  vendor: codex
