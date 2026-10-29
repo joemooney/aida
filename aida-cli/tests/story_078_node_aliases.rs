@@ -123,12 +123,19 @@ impl Fixture {
     /// [`Self::ok`] under an advisor seat grant, which holds queue dispatch
     /// authority.
     fn ok_as_advisor(&self, args: &[&str]) -> String {
-        let grant = support::ensure_seat(&self.home, &self.root, "advisor", &["implementer"])
+        self.ok_as("advisor", &["implementer"], args)
+    }
+
+    /// [`Self::ok`] under a `role` seat grant.
+    fn ok_as(&self, role: &str, grants: &[&str], args: &[&str]) -> String {
+        let grant = support::ensure_seat(&self.home, &self.root, role, grants)
             .expect("fixture has .aida/config.toml");
         let out = self
             .command(false, args)
-            .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_ROLE", role)
             .env("AIDA_SESSION_GRANT", grant)
+            .env("AIDA_AGENT_TYPE", "claude")
+            .env("AIDA_AGENT_NAME", format!("claude-{role}"))
             .output()
             .unwrap();
         assert!(
@@ -717,19 +724,23 @@ fn node_alias_review_record_keys_the_verdict_under_the_canonical_id() {
     // A refusing verdict insists on `--pr`; pin the sha to HEAD so no forge
     // lookup is needed.
     let head = f.git(&["rev-parse", "HEAD"]);
-    let out = f.ok(&[
-        "review",
-        "record",
-        "story-home-001",
-        "--verdict",
-        "request-changes",
-        "--pr",
-        "1",
-        "--sha",
-        &head,
-        "--summary",
-        "fixture refusal",
-    ]);
+    let out = f.ok_as(
+        "reviewer",
+        &[],
+        &[
+            "review",
+            "record",
+            "story-home-001",
+            "--verdict",
+            "request-changes",
+            "--pr",
+            "1",
+            "--sha",
+            &head,
+            "--summary",
+            "fixture refusal",
+        ],
+    );
     assert!(out.to_ascii_uppercase().contains(&canonical), "{out}");
 
     let verdicts = f.root.join(".aida/review-verdicts");
@@ -763,7 +774,7 @@ fn node_alias_review_record_keys_the_verdict_under_the_canonical_id() {
             path.display()
         );
     }
-    // Reading back by alias finds the same verdict.
+    // Reading back by alias finds the verdict recorded under the canonical id.
     let shown = f.ok(&["review", "verdict", "STORY-HOME-001", "--json"]);
-    assert!(shown.to_ascii_uppercase().contains(&canonical), "{shown}");
+    assert!(shown.contains("fixture refusal"), "{shown}");
 }
