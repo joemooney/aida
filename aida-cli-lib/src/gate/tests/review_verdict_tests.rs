@@ -8,6 +8,61 @@ use super::*;
 use crate::review_verdict_display::*;
 use tempfile::TempDir;
 
+/// M1 slice 2: the current record for `key`, as the gates weigh it (the
+/// gate ledger, legacy files read through). The record path writes no
+/// `.aida/review-verdicts/` file, so tests read what the gates read.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn current_body(root: &Path, key: &str) -> String {
+    current_verdict(root, key).expect("a current verdict").body
+}
+
+/// [`current_body`] for a verdict key path.
+fn current_at(path: &Path) -> String {
+    current_verdict_at(path).expect("a current verdict").body
+}
+
+/// The reviewed commits with a recorded round for `key` on the gate
+/// ledger, sorted and deduplicated: the ledger form of the per-sha archive.
+fn rounds_by_sha(root: &Path, key: &str) -> Vec<String> {
+    let mut shas: Vec<String> = crate::gate::ledger::project::verdict_records(root, key)
+        .iter()
+        .filter_map(|r| r.get("reviewed_sha").and_then(|v| v.as_str()))
+        .map(str::to_string)
+        .collect();
+    shas.sort();
+    shas.dedup();
+    shas
+}
+
+/// The legacy pair an older binary left for `key`: the current file and its
+/// per-commit archive entry at `sha`, both holding `body`. M1 slice 2 writes
+/// neither, so the legacy read-through tests build them by hand.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn legacy_pair(root: &Path, key: &str, sha: &str, body: &str) -> (PathBuf, PathBuf) {
+    let file = verdict_path(root, key);
+    let archive = verdict_archive_dir(&file).unwrap();
+    std::fs::create_dir_all(&archive).unwrap();
+    std::fs::write(&file, body).unwrap();
+    let entry = archive.join(format!("{sha}.json"));
+    std::fs::write(&entry, body).unwrap();
+    (file, entry)
+}
+
+/// What a merge close is checked against: for the key's current file, the
+/// current record (gate ledger, legacy file read through); for an archive
+/// entry, the round the commit's view reports for that key (the ledger's
+/// round at `sha`, or the legacy entry it has not superseded).
+// trace:TASK-1951 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn closed_view(root: &Path, key: &str, sha: &str, path: &Path) -> String {
+    if path == verdict_path(root, key) {
+        return current_at(path);
+    }
+    match crate::gate::ledger::project::verdict_events_at(root, key, sha).first() {
+        Some(event) => serde_json::to_string(event.verdict_record().unwrap()).unwrap(),
+        None => std::fs::read_to_string(path).unwrap(),
+    }
+}
+
 fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
     RecordedVerdict {
         kind: VerdictKind::parse(kind_raw),
@@ -104,7 +159,7 @@ fn record_round_trips_and_preserves_unknown_fields() {
     )
     .unwrap();
 
-    let body = std::fs::read_to_string(verdict_path(root, "TASK-5")).unwrap();
+    let body = current_body(root, "TASK-5");
     assert!(
         body.contains("comment_url"),
         "the reviewer's own fields must survive an update: {body}"
@@ -345,7 +400,7 @@ fn recording_a_second_round_archives_the_first_instead_of_destroying_it() {
     )
     .unwrap();
 
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-1")).unwrap();
+    let body = current_body(tmp.path(), "PR-1");
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
 
     // current round stays at the top level — existing readers untouched
@@ -377,7 +432,7 @@ fn a_finding_repeated_across_rounds_is_reported_as_surviving() {
         )
         .unwrap();
     }
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-2")).unwrap();
+    let body = current_body(tmp.path(), "PR-2");
     let survivors = findings_surviving_round(&body);
     assert_eq!(survivors, vec!["share the marker constant".to_string()]);
 }
@@ -404,7 +459,7 @@ fn a_finding_raised_for_the_first_time_is_not_reported_as_surviving() {
         )
         .unwrap();
     }
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-3")).unwrap();
+    let body = current_body(tmp.path(), "PR-3");
     assert!(findings_surviving_round(&body).is_empty());
 }
 
@@ -427,7 +482,7 @@ fn re_recording_the_same_round_does_not_manufacture_a_survivor() {
         "reviewer",
     )
     .unwrap();
-    let first = std::fs::read_to_string(verdict_path(tmp.path(), "PR-4")).unwrap();
+    let first = current_body(tmp.path(), "PR-4");
     let recorded_at = serde_json::from_str::<serde_json::Value>(&first).unwrap()["recorded_at"]
         .as_str()
         .unwrap()
@@ -452,7 +507,7 @@ fn re_recording_the_same_round_does_not_manufacture_a_survivor() {
     )
     .unwrap();
 
-    let body = std::fs::read_to_string(&path).unwrap();
+    let body = current_at(&path);
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     let rounds = v["rounds"].as_array().map(|a| a.len()).unwrap_or(0);
     // Exact, not `<= 1`: the permissive form admits 1, which is precisely the
@@ -494,7 +549,7 @@ fn a_finding_fixed_then_regressed_is_not_reported_as_surviving() {
         )
         .unwrap();
     }
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-5")).unwrap();
+    let body = current_body(tmp.path(), "PR-5");
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(
         v["rounds"].as_array().map(|a| a.len()),
@@ -540,7 +595,7 @@ fn the_older_head_key_identifies_a_round_too() {
     )
     .unwrap();
 
-    let body = std::fs::read_to_string(&path).unwrap();
+    let body = current_at(&path);
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(
         v["rounds"].as_array().map(|a| a.len()),
@@ -629,7 +684,7 @@ fn a_second_reviewer_at_the_same_head_does_not_destroy_the_first_verdict() {
     )
     .unwrap();
 
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-9")).unwrap();
+    let body = current_body(tmp.path(), "PR-9");
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     let rounds = v["rounds"].as_array().cloned().unwrap_or_default();
     assert_eq!(rounds.len(), 1, "the overwritten verdict must be retained");
@@ -908,7 +963,7 @@ fn explicit_path_writer_preserves_displaced_reviewer_evidence() {
     )
     .unwrap();
 
-    let body = std::fs::read_to_string(path).unwrap();
+    let body = current_at(&path);
     let value: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(value["rounds"][0]["recorded_by"], "reviewer-a");
     assert_eq!(value["rounds"][0]["verdict"], "approved");
@@ -1202,9 +1257,12 @@ fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
     }
 
     let tmp = TempDir::new().unwrap();
-    let locked_dir = tmp.path().join(".aida/review-verdicts");
+    let path = tmp.path().join(".aida/review-verdicts/PR-9001.json");
+    // M1 slice 2: the record lands on the gate ledger, so that is the
+    // directory that refuses the write.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let locked_dir = tmp.path().join(".aida/gate-ledger");
     std::fs::create_dir_all(&locked_dir).unwrap();
-    let path = locked_dir.join("PR-9001.json");
 
     let mut perms = std::fs::metadata(&locked_dir).unwrap().permissions();
     perms.set_mode(0o555); // read + execute, no write
@@ -1232,7 +1290,7 @@ fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
         "the failure must name the artefact that did not land: {message}"
     );
     assert!(
-        !path.exists(),
+        !path.exists() && current_verdict_at(&path).is_none(),
         "the artefact must genuinely be absent when the write is reported as failed"
     );
 }
@@ -1254,9 +1312,10 @@ fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_o
     }
 
     let tmp = TempDir::new().unwrap();
-    let locked_dir = tmp.path().join(".aida/review-verdicts");
+    let path = tmp.path().join(".aida/review-verdicts/PR-9002.json");
+    // M1 slice 2: the gate ledger is the directory that refuses the write.
+    let locked_dir = tmp.path().join(".aida/gate-ledger");
     std::fs::create_dir_all(&locked_dir).unwrap();
-    let path = locked_dir.join("PR-9002.json");
 
     let obj = build_verdict_object(
         tmp.path(),
@@ -1283,7 +1342,10 @@ fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_o
         err.to_string().contains("PR-9002.json"),
         "the failure must name the artefact that did not land: {err}"
     );
-    assert!(!path.exists(), "the artefact must genuinely be absent");
+    assert!(
+        !path.exists() && current_verdict_at(&path).is_none(),
+        "the artefact must genuinely be absent"
+    );
 }
 
 // ── BUG-1539: every round archived by reviewed sha ─────────────────────────
@@ -1306,18 +1368,6 @@ fn record_pr(root: &Path, pr: &str, verdict: &str, sha: &str, by: &str, findings
     .unwrap();
 }
 
-fn archive_files(root: &Path, key: &str) -> Vec<String> {
-    let dir = verdict_archive_dir(&verdict_path(root, key)).unwrap();
-    let mut names: Vec<String> = std::fs::read_dir(dir)
-        .unwrap()
-        .flatten()
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|n| n.ends_with(".json"))
-        .collect();
-    names.sort();
-    names
-}
-
 // trace:BUG-1539 | ai:claude
 #[test]
 fn two_rounds_on_different_shas_keep_both() {
@@ -1334,8 +1384,8 @@ fn two_rounds_on_different_shas_keep_both() {
     record_pr(root, "PR-2049", "approved", SHA_R2, "drain reviewer", &[]);
 
     assert_eq!(
-        archive_files(root, "PR-2049"),
-        vec![format!("{SHA_R1}.json"), format!("{SHA_R2}.json")]
+        rounds_by_sha(root, "PR-2049"),
+        vec![SHA_R1.to_string(), SHA_R2.to_string()]
     );
     let r1 = read_verdict_for_sha(root, "PR-2049", SHA_R1).expect("round 1 survives");
     assert_eq!(r1.kind, VerdictKind::RequestChanges);
@@ -1356,12 +1406,14 @@ fn same_sha_recorded_twice_is_idempotent() {
     record_pr(root, "PR-7", "request-changes", SHA_R1, "reviewer-a", &f);
     record_pr(root, "PR-7", "request-changes", SHA_R1, "reviewer-a", &f);
 
-    assert_eq!(archive_files(root, "PR-7"), vec![format!("{SHA_R1}.json")]);
-    let archive = verdict_archive_dir(&verdict_path(root, "PR-7"))
-        .unwrap()
-        .join(format!("{SHA_R1}.json"));
-    let v: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&archive).unwrap()).unwrap();
+    assert_eq!(rounds_by_sha(root, "PR-7"), vec![SHA_R1.to_string()]);
+    let at_sha = || crate::gate::ledger::project::verdict_events_at(root, "PR-7", SHA_R1);
+    assert_eq!(
+        at_sha().len(),
+        1,
+        "an identical re-record is not a second event"
+    );
+    let v = serde_json::Value::Object(at_sha()[0].verdict_record().unwrap().clone());
     assert!(
         v.get("rounds").is_none(),
         "an identical re-record must not manufacture a round: {v}"
@@ -1370,9 +1422,8 @@ fn same_sha_recorded_twice_is_idempotent() {
     // A DIFFERENT reviewer at the same sha is not a duplicate: one commit,
     // two recordings, the first kept in the archive's own rounds.
     record_pr(root, "PR-7", "approved", SHA_R1, "reviewer-b", &[]);
-    assert_eq!(archive_files(root, "PR-7"), vec![format!("{SHA_R1}.json")]);
-    let v: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&archive).unwrap()).unwrap();
+    assert_eq!(rounds_by_sha(root, "PR-7"), vec![SHA_R1.to_string()]);
+    let v = serde_json::Value::Object(at_sha().last().unwrap().verdict_record().unwrap().clone());
     assert_eq!(v["recorded_by"], "reviewer-b");
     assert_eq!(v["rounds"].as_array().unwrap().len(), 1);
     assert_eq!(v["rounds"][0]["recorded_by"], "reviewer-a");
@@ -1398,18 +1449,17 @@ fn current_file_readers_are_unchanged_by_the_archive() {
     let current = read_recorded_verdict(root, "PR-11").expect("current file");
     assert_eq!(current.kind, VerdictKind::Approved);
     assert_eq!(current.reviewed_sha.as_deref(), Some(SHA_R2));
-    let body = std::fs::read_to_string(verdict_path(root, "PR-11")).unwrap();
+    let body = current_body(root, "PR-11");
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(v["rounds"][0]["reviewed_sha"], SHA_R1);
 
-    // The archive directory is invisible to `*.json` walkers of the dir.
-    let top: Vec<_> = std::fs::read_dir(root.join(".aida/review-verdicts"))
-        .unwrap()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-        .collect();
-    assert_eq!(top, vec![verdict_path(root, "PR-11")]);
+    // M1 slice 2: nothing lands in the legacy directory for `*.json`
+    // walkers of it to see; both rounds are on the gate ledger.
+    assert!(!root.join(".aida/review-verdicts").exists());
+    assert_eq!(
+        rounds_by_sha(root, "PR-11"),
+        vec![SHA_R1.to_string(), SHA_R2.to_string()]
+    );
 
     // The TASK-1448 merge-gate candidate set is unchanged: one PR-keyed record.
     let cands = crate::gate::ship::merge_gate_verdict_candidates(&[root], 11, &[], None);
@@ -1485,10 +1535,15 @@ fn close_on_merge_archives_a_pre_archive_refusal_closed() {
     assert!(read_verdict_for_sha(root, "BUG-9", SHA_R1)
         .unwrap()
         .is_closed());
-    let archive = verdict_archive_dir(&verdict_path(root, "BUG-9"))
-        .unwrap()
-        .join(format!("{SHA_R1}.json"));
-    assert!(archive.is_file());
+    // M1 slice 2: the closed round is recorded on the gate ledger.
+    let closed = crate::gate::ledger::project::verdict_records(root, "BUG-9");
+    assert!(
+        closed
+            .last()
+            .and_then(|r| r.get("closed_by_merge"))
+            .is_some(),
+        "{closed:?}"
+    );
 }
 
 // trace:TASK-1460 | ai:claude
@@ -1506,7 +1561,7 @@ fn a_direct_skill_write_is_adopted_into_the_archive_and_the_gate_ledger() {
     std::fs::write(&path, &body).unwrap();
     adopt_direct_write(&path).unwrap();
     adopt_direct_write(&path).unwrap(); // idempotent
-    assert_eq!(archive_files(root, "PR-40"), vec![format!("{SHA_R2}.json")]);
+    assert_eq!(rounds_by_sha(root, "PR-40"), vec![SHA_R2.to_string()]);
     let on_ledger = crate::gate::ledger::project::verdict_events_at(root, "PR-40", SHA_R2);
     assert_eq!(
         on_ledger.len(),
@@ -1710,8 +1765,7 @@ fn bug_1505_writer_persists_the_canonical_spelling() {
             "test",
         )
         .unwrap();
-        let v: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&current_at(&path)).unwrap();
         assert_eq!(v["verdict"], want, "{raw}");
     }
 }
@@ -1725,16 +1779,15 @@ fn bug_1505_verdictless_stamp_canonicalizes_the_word_on_disk() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, r#"{"verdict":"CHANGES REQUESTED","summary":"s"}"#).unwrap();
     record_verdict(tmp.path(), "PR-7", None, None, None, None, &[], "drain").unwrap();
-    let v: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&current_at(&path)).unwrap();
     assert_eq!(v["verdict"], "request-changes");
 
     // An unknown word is left verbatim for a human.
     let odd = r#"{"verdict":"APPROVED pending cross-platform green","summary":"s"}"#;
-    std::fs::write(&path, odd).unwrap();
-    record_verdict(tmp.path(), "PR-7", None, None, None, None, &[], "drain").unwrap();
-    let v: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let odd_path = verdict_path(tmp.path(), "PR-8");
+    std::fs::write(&odd_path, odd).unwrap();
+    record_verdict(tmp.path(), "PR-8", None, None, None, None, &[], "drain").unwrap();
+    let v: serde_json::Value = serde_json::from_str(&current_at(&odd_path)).unwrap();
     assert_eq!(v["verdict"], "APPROVED pending cross-platform green");
 }
 
@@ -1758,7 +1811,7 @@ fn fix_day_recorded_rounds_keep_actual_recorder_and_timestamp() {
         )
         .unwrap();
     }
-    let body = std::fs::read_to_string(&path).unwrap();
+    let body = current_at(&path);
     let value: serde_json::Value = serde_json::from_str(&body).unwrap();
     for (round, recorder) in [
         (&value, "second reviewer"),
@@ -1801,7 +1854,13 @@ fn fix_day_empty_recorder_fails_before_writing_or_archiving() {
         "actual reviewer",
     )
     .unwrap();
-    let before = std::fs::read(&path).unwrap();
+    // M1 slice 2: the record is a gate-ledger event; the ledger file is
+    // what a failed recording must leave untouched.
+    let ledger = crate::gate::ledger::store::ledger_file(
+        tmp.path(),
+        crate::gate::ledger::ChangeKey::pr(2435),
+    );
+    let before = std::fs::read(&ledger).unwrap();
     let error = record_verdict_at_path(
         tmp.path(),
         &path,
@@ -1814,7 +1873,8 @@ fn fix_day_empty_recorder_fails_before_writing_or_archiving() {
     )
     .unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
-    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert_eq!(std::fs::read(&ledger).unwrap(), before);
+    assert!(!path.exists());
 }
 
 #[test]
@@ -1830,9 +1890,9 @@ fn fix_day_review_template_uses_provenance_writer_for_verdicts() {
 // trace:BUG-2136 | ai:claude
 fn record_and_describe(root: &Path, verdict: &str, sha: &str, findings: &[String]) -> String {
     let path = verdict_path(root, "BUG-77");
-    let before = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+    // M1 slice 2: the snapshot is the current record (the gate ledger).
+    let before = current_verdict_at(&path)
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c.body).ok())
         .and_then(|v| v.as_object().cloned());
     let obj = build_verdict_object(
         root,
@@ -1908,9 +1968,7 @@ fn task1801_verdict_readers_reject_linked_files_and_directories() {
     std::fs::create_dir_all(&dir).unwrap();
     let sha = "0123456789abcdef0123456789abcdef01234567";
     let body = format!(r#"{{"verdict":"approved","reviewed_sha":"{sha}"}}"#);
-    let file = dir.join("STORY-77.json");
-    std::fs::write(&file, &body).unwrap();
-    adopt_direct_write(&file).unwrap();
+    let (file, _) = legacy_pair(tmp.path(), "STORY-77", sha, &body);
     assert!(read_recorded_verdict(tmp.path(), "STORY-77").is_some());
     assert!(read_verdict_for_sha(tmp.path(), "STORY-77", sha).is_some());
     assert_eq!(verdicts_for_sha(tmp.path(), sha).len(), 1);
@@ -1926,7 +1984,7 @@ fn task1801_verdict_readers_reject_linked_files_and_directories() {
     std::fs::remove_file(tmp.path().join("archive-link")).unwrap();
     std::fs::remove_file(tmp.path().join("current-link")).unwrap();
 
-    // A linked archive directory cannot redirect archive reads or adoption.
+    // A linked archive directory cannot redirect archive reads.
     let archive_dir = archive.parent().unwrap();
     let moved_archive = tmp.path().join("moved-archive");
     std::fs::rename(archive_dir, &moved_archive).unwrap();
@@ -2023,8 +2081,15 @@ fn task1801_ship_and_phase_gates_refuse_linked_verdicts() {
     use std::os::unix::fs::symlink;
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
-    record_pr(root, "PR-30", "approved", SHA_R1, "reviewer", &[]);
-    let path = verdict_path(root, "PR-30");
+    // The verdict as an older binary left it: the legacy pair, read through.
+    let (path, _) = legacy_pair(
+        root,
+        "PR-30",
+        SHA_R1,
+        &format!(
+            r#"{{"verdict":"approved","reviewed_sha":"{SHA_R1}","recorded_by":"reviewer","recorded_at":"2026-10-29T00:00:00Z"}}"#
+        ),
+    );
     let dir = root.join(".aida/review-verdicts");
     let gates_accept = || {
         let cands =
@@ -2234,11 +2299,16 @@ fn per_sha_archive_carries_unarchived_rounds() {
         "y",
     )
     .unwrap();
-    let archive = verdict_archive_dir(&path)
-        .unwrap()
-        .join(format!("{SHA_R1}.json"));
-    let obj: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+    // M1 slice 2: the ledger's round at the sha is the per-sha record.
+    let at_sha = || {
+        serde_json::Value::Object(
+            crate::gate::ledger::project::verdict_events_at(root, "PR-77", SHA_R1)[0]
+                .verdict_record()
+                .unwrap()
+                .clone(),
+        )
+    };
+    let obj = at_sha();
     assert_eq!(
         obj.get("unarchived_rounds").and_then(|v| v.as_u64()),
         Some(1)
@@ -2246,8 +2316,7 @@ fn per_sha_archive_carries_unarchived_rounds() {
 
     // A later recording at the same sha whose current file has lost the count
     // (rewritten by a writer that predates it) does not erase it from the archive.
-    let mut current: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut current: serde_json::Value = serde_json::from_str(&current_at(&path)).unwrap();
     current.as_object_mut().unwrap().remove("unarchived_rounds");
     std::fs::write(&path, current.to_string()).unwrap();
     record_verdict_at_path(
@@ -2261,11 +2330,7 @@ fn per_sha_archive_carries_unarchived_rounds() {
         "z",
     )
     .unwrap();
-    let archive = verdict_archive_dir(&path)
-        .unwrap()
-        .join(format!("{SHA_R1}.json"));
-    let obj: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+    let obj = at_sha();
     assert_eq!(
         obj.get("unarchived_rounds").and_then(|v| v.as_u64()),
         Some(1)
@@ -2280,11 +2345,10 @@ fn task1801_retained_history_rejects_linked_archive_entries_and_directories() {
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join(".aida/review-verdicts");
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("STORY-77.json");
     let sha = "0123456789abcdef0123456789abcdef01234567";
     let body = format!(r#"{{"verdict":"request-changes","reviewed_sha":"{sha}"}}"#);
-    std::fs::write(&file, &body).unwrap();
-    adopt_direct_write(&file).unwrap();
+    let (file, _) = legacy_pair(tmp.path(), "STORY-77", sha, &body);
+    let _ = &dir;
     assert_eq!(RetainedHistory::beside(&file).unwrap().archived.len(), 1);
     let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
     let link = tmp.path().join("archive-link");
@@ -2330,8 +2394,13 @@ fn task1801_record_refuses_to_rewrite_a_refused_archive_entry() {
             by,
         )
     };
-    record("first refusal", "reviewer-a").unwrap();
-    record("second refusal", "reviewer-b").unwrap();
+    // The first two refusals as an older binary recorded them: the second
+    // at the top level, the first in its `rounds`, current and archived.
+    let older = format!(
+        r#"{{"verdict":"request-changes","reviewed_sha":"{sha}","summary":"second refusal","recorded_by":"reviewer-b","recorded_at":"2026-10-29T00:00:02Z","rounds":[{{"verdict":"request-changes","reviewed_sha":"{sha}","summary":"first refusal","recorded_by":"reviewer-a","recorded_at":"2026-10-29T00:00:01Z"}}]}}"#
+    );
+    legacy_pair(tmp.path(), "PR-77", sha, &older);
+    let _ = &record;
     let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
     let archive_before = std::fs::read(&archive).unwrap();
     let current_before = std::fs::read(&file).unwrap();
@@ -2345,7 +2414,9 @@ fn task1801_record_refuses_to_rewrite_a_refused_archive_entry() {
 
     std::fs::remove_file(&link).unwrap();
     record("third refusal", "reviewer-c").unwrap();
-    let history = RetainedHistory::beside(&file).unwrap();
+    // M1 slice 2: the retained history is the legacy archive plus the
+    // gate ledger's rounds.
+    let history = RetainedHistory::projected(tmp.path(), "PR-77").unwrap();
     assert_eq!(history.archived.len(), 3, "{:?}", history.archived);
 }
 
@@ -2422,19 +2493,18 @@ fn task1801_archived_recordings_enumerates_every_entry_once() {
     let dir = tmp.path().join(".aida/review-verdicts");
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("PR-80.json");
+    // Five archived rounds as an older binary left them (M1 slice 2 writes
+    // no archive; this is the legacy enumeration the read-through relies on).
     for n in 0..5 {
         let sha = format!("{n}123456789abcdef0123456789abcdef01234567");
-        record_verdict_at_path(
+        legacy_pair(
             tmp.path(),
-            &file,
-            Some("request-changes"),
-            Some(&sha),
-            None,
-            None,
-            &[],
-            "reviewer-a",
-        )
-        .unwrap();
+            "PR-80",
+            &sha,
+            &format!(
+                r#"{{"verdict":"request-changes","reviewed_sha":"{sha}","recorded_by":"reviewer-a"}}"#
+            ),
+        );
     }
     assert_eq!(archived_recordings(&file).unwrap().len(), 5);
 }
@@ -2447,18 +2517,14 @@ fn task_1951_merge_close_writes_nothing_when_the_archive_entry_is_refused() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    let file = record_verdict(
+    let (file, archive) = legacy_pair(
         root,
         "STORY-9",
-        Some("request-changes"),
-        Some(sha),
-        None,
-        Some("blocking"),
-        &[],
-        "reviewer-a",
-    )
-    .unwrap();
-    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
+        sha,
+        &format!(
+            r#"{{"verdict":"request-changes","reviewed_sha":"{sha}","summary":"blocking","recorded_by":"reviewer-a","recorded_at":"2026-10-29T00:00:00Z"}}"#
+        ),
+    );
     let current_before = std::fs::read(&file).unwrap();
     let link = tmp.path().join("archive-link");
     std::fs::hard_link(&archive, &link).unwrap();
@@ -2474,7 +2540,7 @@ fn task_1951_merge_close_writes_nothing_when_the_archive_entry_is_refused() {
     assert!(close_verdict_on_merge(root, "STORY-9", "cccccccccccc").unwrap());
     let closed = |path: &std::path::Path| {
         let v: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+            serde_json::from_str(&closed_view(root, "STORY-9", sha, path)).unwrap();
         v["closed_by_merge"] == "cccccccccccc"
     };
     assert!(closed(&file));
@@ -2490,25 +2556,19 @@ fn task_1951_merge_close_rerun_closes_an_archive_left_open() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    let file = record_verdict(
-        root,
-        "STORY-10",
-        Some("request-changes"),
-        Some(sha),
-        None,
-        Some("blocking"),
-        &[],
-        "reviewer-a",
-    )
-    .unwrap();
-    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
-    let open_archive = std::fs::read(&archive).unwrap();
-    assert!(close_verdict_on_merge(root, "STORY-10", "dddddddddddd").unwrap());
-    // Model the I/O failure: the current file closed, the archive did not.
-    std::fs::write(&archive, &open_archive).unwrap();
+    let open = format!(
+        r#"{{"verdict":"request-changes","reviewed_sha":"{sha}","summary":"blocking","recorded_by":"reviewer-a","recorded_at":"2026-10-29T00:00:00Z"}}"#
+    );
+    let (file, archive) = legacy_pair(root, "STORY-10", sha, &open);
+    // Model the I/O failure an older binary hit: it closed the current
+    // file at `dddddddddddd` and failed to close the archive entry.
+    let mut closed_current: serde_json::Value = serde_json::from_str(&open).unwrap();
+    closed_current["closed_by_merge"] = "dddddddddddd".into();
+    closed_current["closed_at"] = "2026-10-29T00:00:01Z".into();
+    std::fs::write(&file, closed_current.to_string()).unwrap();
     let closed = |path: &std::path::Path| {
         let v: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+            serde_json::from_str(&closed_view(root, "STORY-10", sha, path)).unwrap();
         v["closed_by_merge"] == "dddddddddddd"
     };
     assert!(closed(&file) && !closed(&archive));

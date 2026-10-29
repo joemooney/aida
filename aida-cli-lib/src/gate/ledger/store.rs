@@ -37,6 +37,30 @@ pub(crate) fn with_lock<T>(
     out
 }
 
+/// Open a ledger file for appending. A symlink in its place is refused, so
+/// an append can never land outside the ledger directory.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn open_append(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    options.open(path).map_err(|e| {
+        let linked = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+        if linked {
+            std::io::Error::new(
+                e.kind(),
+                format!("refusing to append to {}: it is a symlink", path.display()),
+            )
+        } else {
+            e
+        }
+    })
+}
+
 /// Every parseable event on the change's ledger, in file order. A line that
 /// does not parse (a torn final write) is skipped, never fatal.
 pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
@@ -64,6 +88,22 @@ pub(crate) fn append(
     with_lock(&lock_file(root, change), || {
         append_locked(root, change, events, false)
     })
+    .map_err(|e| named(&ledger_file(root, change), e))
+}
+
+/// `e`, naming the ledger file that did not take the write (BUG-1571: a
+/// failed write names the artefact that did not land).
+fn named(file: &Path, e: std::io::Error) -> std::io::Error {
+    if e.to_string().contains(&file.display().to_string()) {
+        return e;
+    }
+    std::io::Error::new(
+        e.kind(),
+        format!(
+            "could not append to the gate ledger {}: {e}",
+            file.display()
+        ),
+    )
 }
 
 /// Append the change's `legacy-imported` event now if it has none, so the
@@ -126,10 +166,7 @@ fn write_events(
         lines.push_str(&line);
         lines.push('\n');
     }
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(ledger_file(root, change))?;
+    let mut file = open_append(&ledger_file(root, change))?;
     file.write_all(lines.as_bytes())?;
     file.sync_data()?;
     for event in pending.iter() {
@@ -217,12 +254,10 @@ pub(crate) fn append_unbound(
         event.at = chrono::Utc::now().to_rfc3339();
         let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
         line.push('\n');
-        let mut out = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&file)?;
+        let mut out = open_append(&file)?;
         out.write_all(line.as_bytes())?;
         out.sync_data()?;
         Ok(Delivered::Appended)
     })
+    .map_err(|e| named(&file, e))
 }

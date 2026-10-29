@@ -304,8 +304,12 @@ fn the_first_verdict_write_is_recorded_once() {
     assert_eq!(events[1].verdict_record(), Some(&rec));
 }
 
+/// M1 slice 2 (brief item 3): a spec-only verdict goes onto the ledger too,
+/// on the spec's unbound entry while no change is indexed for it; slice 1
+/// left it in the legacy file only.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
-fn a_pr_keyed_verdict_write_lands_on_the_ledger_and_a_spec_keyed_one_does_not() {
+fn a_pr_keyed_verdict_write_lands_on_the_change_and_a_spec_keyed_one_on_the_spec() {
     // An uncontained writer, as the primary side runs it.
     let _env = uncontained();
     let (_tmp, root) = root();
@@ -315,8 +319,13 @@ fn a_pr_keyed_verdict_write_lands_on_the_ledger_and_a_spec_keyed_one_does_not() 
         .unwrap();
     rv::write_verdict_object(&rv::verdict_path(&root, "STORY-8"), &rec).unwrap();
     assert_eq!(project::newest_verdict(&root, "PR-15"), Some(rec.clone()));
-    assert_eq!(project::newest_verdict(&root, "STORY-7"), Some(rec));
-    assert_eq!(project::newest_verdict(&root, "STORY-8"), None);
+    assert_eq!(project::newest_verdict(&root, "STORY-7"), Some(rec.clone()));
+    assert_eq!(project::newest_verdict(&root, "STORY-8"), Some(rec));
+    assert!(
+        !rv::verdict_path(&root, "STORY-8").exists(),
+        "no legacy file is written for a spec-only verdict"
+    );
+    assert!(store::unbound_file(&root, "STORY-8").is_file());
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -1025,18 +1034,18 @@ fn a_refused_current_file_keeps_the_phase3_archive_fallback_closed() {
     let (_tmp, root) = root();
     let path = rv::verdict_path(&root, "PR-49");
     let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    // Two rounds as an older binary left them: the current file at
+    // OTHER_HEAD and a per-commit archive entry for each head (M1 slice 2
+    // writes neither; the phase-3 fallback reads them through).
+    let archive = rv::verdict_archive_dir(&path).unwrap();
+    std::fs::create_dir_all(&archive).unwrap();
     for sha in [HEAD, OTHER_HEAD] {
-        rv::record_verdict_at_path(
-            &root,
-            &path,
-            Some("approved"),
-            Some(sha),
-            None,
-            None,
-            &[],
-            "reviewer",
-        )
-        .unwrap();
+        let body = format!(
+            r#"{{"verdict":"approved","reviewed_sha":"{sha}","recorded_by":"reviewer","recorded_at":"{}"}}"#,
+            chrono::Utc::now().to_rfc3339()
+        );
+        std::fs::write(archive.join(format!("{sha}.json")), &body).unwrap();
+        std::fs::write(&path, &body).unwrap();
     }
     // The ledger's current round is at OTHER_HEAD, like the file's.
     let mut rec = record("approved", &ts(0), None);
@@ -1691,4 +1700,36 @@ fn label_sync_and_release_authorization_are_ledger_events() {
         st.open.is_some(),
         "a withdrawn authorization leaves the hold armed"
     );
+}
+
+/// A worktree marker collected onto the ledger is no longer a legacy marker:
+/// an untyped one is recorded as the typed Rework hold it stood for, so the
+/// ship gate and rework auto-release treat it like any reviewer refusal. A
+/// typed marker is collected as written.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_collected_untyped_marker_becomes_a_typed_rework_hold() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let untyped = mh::parse_hold_marker(Ok("changes requested by the reviewer\n".into()), 76)
+        .expect("an untyped marker parses");
+    assert!(untyped.legacy);
+    mh::collect_legacy_hold(&root, &untyped).unwrap();
+    let held = mh::read_hold_record(&root, 76).expect("the collected hold is open");
+    assert!(
+        !held.legacy,
+        "a collected hold is a ledger hold, not a legacy one"
+    );
+    assert_eq!(held.schema_version, 2);
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Rework);
+    assert!(held.is_refusal(), "it is still read as a reviewer refusal");
+    assert_eq!(held.detail, "changes requested by the reviewer");
+    assert!(held.release_condition.is_some());
+
+    let typed = mh::typed_hold(77, mh::HoldReasonKind::Supervision, "supervised", None);
+    mh::collect_legacy_hold(&root, &typed).unwrap();
+    let held = mh::read_hold_record(&root, 77).expect("open");
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Supervision);
+    assert!(!held.legacy);
 }

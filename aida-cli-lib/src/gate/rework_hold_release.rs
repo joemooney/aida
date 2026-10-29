@@ -424,8 +424,11 @@ fn release_with(
                 && v.get("also_released_by")
                     .unwrap_or(&Value::Array(Vec::new()))
                     == &also_json
-                && v.get("audit_comment_posted") == Some(&Value::Bool(true))
         });
+        let posted = same
+            && existing
+                .as_ref()
+                .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)));
         let mut approved_hold = hold.clone();
         approved_hold.target_head_sha = verdict.reviewed_sha.clone();
         // trace:STORY-1697 trace:BUG-2123 | ai:claude
@@ -438,8 +441,25 @@ fn release_with(
         if !also.is_empty() {
             clearance.insert("also_released_by".into(), also_json.clone());
         }
-        clearance.insert("audit_comment_posted".into(), Value::Bool(true));
+        let authorize = |posted: bool| -> Result<()> {
+            let mut clearance = clearance.clone();
+            clearance.insert("audit_comment_posted".into(), Value::Bool(posted));
+            crate::gate::ledger::hold::append(
+                root,
+                hold.pr,
+                crate::gate::ledger::EventBody::ReleaseAuthorized { clearance },
+                verdict.reviewed_sha.as_deref(),
+                None,
+            )?;
+            Ok(())
+        };
+        // The authorization is recorded before its audit comment is posted,
+        // and marked posted after, so a failed comment is retried and a
+        // failed record never leaves a comment claiming one.
         if !same {
+            authorize(false)?;
+        }
+        if !posted {
             let specs = match &release.mandate {
                 None => "covered specs require no human signoff".to_string(),
                 Some(id) => format!(
@@ -460,16 +480,9 @@ fn release_with(
             };
             comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}",
                 verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
-            crate::gate::ledger::hold::append(
-                root,
-                hold.pr,
-                crate::gate::ledger::EventBody::ReleaseAuthorized {
-                    clearance: clearance.clone(),
-                },
-                verdict.reviewed_sha.as_deref(),
-                None,
-            )?;
+            authorize(true)?;
         }
+        clearance.insert("audit_comment_posted".into(), Value::Bool(true));
         let second = validate().and_then(|head| {
             ensure!(
                 Some(head.as_str()) == verdict.reviewed_sha.as_deref(),
@@ -477,11 +490,27 @@ fn release_with(
             );
             Ok(())
         });
+        let now = crate::gate::ledger::hold::state(root, hold.pr);
+        if now.open.is_none() {
+            // trace:TASK-1951 trace:TASK-2285 | ai:claude
+            let why = anyhow::anyhow!(
+                "a concurrent release already removed the hold; its clearance stands"
+            );
+            return Err(match second {
+                Err(second) => second.context(why),
+                Ok(()) => why,
+            });
+        }
         if let Err(why) = second {
             // trace:TASK-1951 trace:TASK-1757 | ai:claude
             withdraw_authorization(root, hold.pr, &why, &comment);
             return Err(why);
         }
+        ensure!(
+            now.authorized.is_some(),
+            "the auto-release clearance was withdrawn by a concurrent release; the hold \
+             stays armed (re-run `aida merge-hold auto-release`)"
+        );
         labels()?;
         crate::gate::ledger::hold::release(root, hold.pr, clearance)?;
         // BUG-2216: the release path's event, as ship's release emits it —

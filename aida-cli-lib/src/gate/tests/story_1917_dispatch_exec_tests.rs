@@ -1125,14 +1125,19 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
 
     cleanup_dead_reviewer_worktree(&f.root, 77).unwrap();
     assert!(!rev_wt.exists(), "dead reviewer worktree must be removed");
-    let main_hold = f.root.join(".aida/merge-holds/PR-77");
+    // M1 slice 2: the hold is preserved on the PR's gate ledger in the main
+    // worktree's shared state, not as a copied marker file.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let preserved = crate::gate::merge_hold_core::read_hold_record(&f.root, 77)
+        .expect("merge hold from dead reviewer worktree must be preserved in main worktree");
+    let first_hold = first_ledger_hold(&f.root, 77);
     assert_eq!(
-        std::fs::read_to_string(&main_hold).unwrap(),
-        hold_payload,
+        first_hold, preserved,
         "merge hold from dead reviewer worktree must be preserved in main worktree"
     );
+    assert!(!f.root.join(".aida/merge-holds/PR-77").exists());
 
-    // 2. No-clobber check: if main worktree already has a hold marker, a different
+    // 2. No-clobber check: if main worktree already has a hold, a different
     //    marker in the dead worktree must not overwrite it.
     git(
         &f.root,
@@ -1151,8 +1156,12 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
 
     cleanup_dead_reviewer_worktree(&f.root, 77).unwrap();
     assert_eq!(
-        std::fs::read_to_string(&main_hold).unwrap(),
-        hold_payload,
+        first_ledger_hold(&f.root, 77),
+        first_hold,
+        "existing main worktree merge hold must never be clobbered"
+    );
+    assert!(
+        hold_carries(&f.root, 77, &first_hold),
         "existing main worktree merge hold must never be clobbered"
     );
 
@@ -2218,17 +2227,20 @@ fn f4_reviewer_hold_preservation_failure_aborts_cleanup_and_concurrent_destinati
         "reviewer worktree and source hold must remain intact when source hold is unreadable"
     );
 
-    // 1b. Invalid/unwritable destination directory (`.aida/merge-holds` is a regular file) ->
-    //     preservation fails and aborts worktree removal.
-    let main_hold_dir = f.root.join(".aida/merge-holds");
+    // 1b. Invalid/unwritable destination directory (the gate ledger directory is a
+    //     regular file) -> preservation fails and aborts worktree removal.
+    // M1 slice 2: the destination is the PR's gate ledger, not a marker file.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let main_hold_dir = f.root.join(".aida/gate-ledger");
+    std::fs::create_dir_all(f.root.join(".aida")).unwrap();
     std::fs::write(&main_hold_dir, "blocking-file").unwrap();
     let err1b = cleanup_dead_reviewer_worktree(&f.root, 78).unwrap_err();
     std::fs::remove_file(&main_hold_dir).unwrap();
     std::fs::create_dir_all(&main_hold_dir).unwrap();
     let err1b_full = format!("{err1b:#}");
     assert!(
-        err1b_full.contains("cannot create")
-            || err1b_full.contains("cannot stage")
+        err1b_full.contains("cannot collect")
+            || err1b_full.contains("cannot create")
             || err1b_full.contains("File exists"),
         "expected hold destination error, got: {err1b_full}"
     );
@@ -2249,12 +2261,12 @@ fn f4_reviewer_hold_preservation_failure_aborts_cleanup_and_concurrent_destinati
         "reviewer worktree must not be removed when source hold is empty/corrupt"
     );
 
-    // 3. Symlink at destination `.aida/merge-holds/PR-78` -> no-clobber verification refuses
+    // 3. Symlink at destination `.aida/gate-ledger/PR-78.jsonl` -> the append refuses
     //    because destination is a symlink, aborting worktree removal.
     std::fs::write(&src_hold, hold_payload).unwrap();
     let outside_target = f._tmp.path().join("outside-hold-target");
     std::fs::write(&outside_target, "outside").unwrap();
-    let main_hold = main_hold_dir.join("PR-78");
+    let main_hold = main_hold_dir.join("PR-78.jsonl");
     std::os::unix::fs::symlink(&outside_target, &main_hold).unwrap();
 
     let err3 = cleanup_dead_reviewer_worktree(&f.root, 78).unwrap_err();
@@ -2267,22 +2279,69 @@ fn f4_reviewer_hold_preservation_failure_aborts_cleanup_and_concurrent_destinati
         rev_wt.exists(),
         "reviewer worktree must not be removed when destination hold is a symlink"
     );
+    assert_eq!(
+        std::fs::read_to_string(&outside_target).unwrap(),
+        "outside",
+        "nothing is appended through the symlink"
+    );
     std::fs::remove_file(&main_hold).unwrap();
 
-    // 4. Valid existing destination hold -> atomic no-clobber (`AlreadyExists`) verifies
-    //    the existing destination hold and preserves it without overwriting.
-    let winner_payload = r#"{"pr":78,"reason":"existing-winner-hold"}"#;
-    std::fs::write(&main_hold, winner_payload).unwrap();
+    // 4. Valid existing destination hold -> the collected hold composes with it and
+    //    the existing destination hold is preserved without being overwritten.
+    let winner = crate::gate::merge_hold_core::typed_hold(
+        78,
+        crate::gate::merge_hold_core::HoldReasonKind::Decision,
+        "existing-winner-hold",
+        None,
+    );
+    crate::gate::merge_hold_core::place_hold(&f.root, &winner).unwrap();
     cleanup_dead_reviewer_worktree(&f.root, 78).unwrap();
     assert!(
         !rev_wt.exists(),
         "dead reviewer worktree should be removed once hold is verified"
     );
+    let winner_on_ledger = first_ledger_hold(&f.root, 78);
     assert_eq!(
-        std::fs::read_to_string(&main_hold).unwrap(),
-        winner_payload,
+        winner_on_ledger.detail, "existing-winner-hold",
         "existing destination hold must win without clobber"
     );
+    assert!(
+        hold_carries(&f.root, 78, &winner_on_ledger),
+        "existing destination hold must win without clobber"
+    );
+}
+
+/// The first `hold` event on PR `pr`'s gate ledger: append-only, so a later
+/// placement can never rewrite it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn first_ledger_hold(
+    root: &std::path::Path,
+    pr: u64,
+) -> crate::gate::merge_hold_core::MergeHoldRecord {
+    crate::gate::ledger::store::read_file(root, crate::gate::ledger::ChangeKey::pr(pr))
+        .into_iter()
+        .find_map(|e| match e.body {
+            crate::gate::ledger::EventBody::Hold { hold, .. } => Some(hold),
+            _ => None,
+        })
+        .expect("a hold event on the ledger")
+}
+
+/// Whether PR `pr`'s open hold still carries `hold`: as the primary record,
+/// or composed under a stricter one (BUG-1691).
+fn hold_carries(
+    root: &std::path::Path,
+    pr: u64,
+    hold: &crate::gate::merge_hold_core::MergeHoldRecord,
+) -> bool {
+    let Some(open) = crate::gate::merge_hold_core::read_hold_record(root, pr) else {
+        return false;
+    };
+    (open.reason_kind == hold.reason_kind && open.detail == hold.detail)
+        || open
+            .absorbed
+            .iter()
+            .any(|a| a.reason_kind == hold.reason_kind && a.detail == hold.detail)
 }
 
 // trace:STORY-1917 | ai:agy

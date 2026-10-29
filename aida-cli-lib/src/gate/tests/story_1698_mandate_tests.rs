@@ -1345,7 +1345,10 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
         "operator review",
         None,
     );
-    let path = crate::gate::merge_hold_core::hold_path(tmp.path(), 45);
+    // M1 slice 2: the re-arm is a `hold` event; a directory in place of the
+    // PR's gate ledger file makes that write fail.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let path = crate::gate::merge_hold_core::hold_ledger_file(tmp.path(), 45);
     std::fs::create_dir_all(&path).unwrap();
     let before = crate::events::read_all(tmp.path()).len();
     let mut label_tried = false;

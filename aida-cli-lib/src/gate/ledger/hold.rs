@@ -69,6 +69,9 @@ pub(crate) fn fold(events: &[GateEvent]) -> HoldState {
                 st.open = Some(hold.clone());
                 st.open_source = Some(OpenSource::Ledger);
                 st.release = None;
+                // A (re-)placement changes the hold an authorization was
+                // recorded for, so it voids that authorization.
+                st.authorized = None;
                 st.on_ledger = true;
             }
             EventBody::HoldRelease { clearance } => {

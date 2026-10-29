@@ -152,7 +152,8 @@ fn label_definition_failure_keeps_the_local_hold_marker() {
         Ok((false, "'aida:merge-hold-cleared' not found".into()))
     })
     .unwrap_err();
-    assert!(hold_path(dir.path(), 44).exists());
+    // M1 slice 2: the hold is open on the gate ledger.
+    assert!(hold_is_open(dir.path(), 44));
     assert!(read_hold(dir.path(), 44).is_some());
     assert!(matches!(
         read_label_state(dir.path(), 44),
@@ -275,7 +276,10 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
         .expect("clear handler must remain inspectable");
     let floor = clear.find("has_integrity_floor_authority()").unwrap();
     let read = clear.find("merge_hold::fetch_pinned_change(").unwrap();
-    let recorded = clear.rfind("merge_hold_core::record_clearance(").unwrap();
+    // M1 slice 2: the clearance is recorded by `release_hold` (a
+    // `hold-release` event on the gate ledger).
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let recorded = clear.rfind("merge_hold_core::release_hold(").unwrap();
     assert!(
         floor < read && read < recorded,
         "floor, then forge read, then record"
@@ -288,12 +292,19 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
     // "nothing to clear" early return a missing marker would otherwise
     // take. trace:BUG-1693 | ai:claude
     let squashed = clear.split_whitespace().collect::<Vec<_>>().join(" ");
+    let tampering = squashed
+        .find(".or_else(|| tampering_record.as_ref().map(|(r, a)| (r, a, None)))")
+        .expect("clear must RECORD a clearance for a hold whose marker went missing");
     let door = squashed
         .find(
-            "if let Some((record, actor)) = &tampering_record { \
-             crate::gate::merge_hold_core::record_clearance( &root, record, actor, )?; }",
+            "if let Some((record, actor, verdict)) = release { \
+             crate::gate::merge_hold_core::release_hold(&root, record, actor, verdict)?; }",
         )
         .expect("clear must RECORD a clearance for a hold whose marker went missing");
+    assert!(
+        tampering < door,
+        "the tampering record feeds the recorded release"
+    );
     // TASK-2152: the no-hold return now lives in `finish_clear`, which
     // runs after every clearance is recorded. trace:TASK-1951 | ai:claude
     let no_hold = squashed
@@ -385,7 +396,8 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
         Some("claude-reviewer-1".into()),
     ));
     place_hold(root, &hold).unwrap();
-    let before = std::fs::read(hold_path(root, 2049)).unwrap();
+    // M1 slice 2: the hold lives on the PR's gate ledger.
+    let before = std::fs::read(hold_ledger_file(root, 2049)).unwrap();
     let release = |head: Option<&str>| {
         refusal_release(
             &hold,
@@ -479,7 +491,7 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
     .unwrap();
     assert!(matches!(release(Some(HEAD)), RefusalRelease::Held(_)));
     // Deciding the condition never touches the marker.
-    assert_eq!(std::fs::read(hold_path(root, 2049)).unwrap(), before);
+    assert_eq!(std::fs::read(hold_ledger_file(root, 2049)).unwrap(), before);
 }
 
 // TASK-1801: a current verdict file the anchored reader refuses (here an
@@ -490,7 +502,7 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
 #[test]
 fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
     use crate::gate::review_verdict::{
-        archived_verdict_file_for_sha, read_recorded_verdict, read_verdict_for_sha, record_verdict,
+        archived_verdict_file_for_sha, read_recorded_verdict, read_verdict_for_sha,
         verdict_file_for_sha, verdict_path,
     };
     const HEAD: &str = "cd21a1dc0a9e1111111111111111111111111111";
@@ -508,18 +520,18 @@ fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
         None,
         Some("claude-reviewer-1".into()),
     ));
-    record_verdict(
-        root,
-        "TASK-1801",
-        Some("approved"),
-        Some(HEAD),
-        None,
-        None,
-        &[],
-        "claude-reviewer-1",
-    )
-    .unwrap();
+    // M1 slice 2: the record path writes the gate ledger only, so the
+    // current file and its per-sha archive are the legacy pair an older
+    // binary left, read through.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let current = verdict_path(root, "TASK-1801");
+    let body = format!(
+        r#"{{"verdict":"approved","reviewed_sha":"{HEAD}","recorded_by":"claude-reviewer-1","recorded_at":"2026-10-29T00:00:00Z"}}"#
+    );
+    let archive = crate::gate::review_verdict::verdict_archive_dir(&current).unwrap();
+    std::fs::create_dir_all(&archive).unwrap();
+    std::fs::write(&current, &body).unwrap();
+    std::fs::write(archive.join(format!("{HEAD}.json")), &body).unwrap();
     assert!(
         archived_verdict_file_for_sha(&current, HEAD).is_some(),
         "the fixture needs an archive that could answer for the head"
@@ -609,7 +621,8 @@ fn marker_references_its_verdict_and_carries_a_release_condition() {
     record.release_condition = Some("1. approved at head 2. squash names BUG-1460".into());
     record.spec = Some("BUG-1460".into());
     place_hold(dir.path(), &record).unwrap();
-    let body = std::fs::read_to_string(hold_path(dir.path(), 7)).unwrap();
+    // M1 slice 2: the hold is a `hold` event on the PR's gate ledger.
+    let body = std::fs::read_to_string(hold_ledger_file(dir.path(), 7)).unwrap();
     assert!(body.contains("\"verdict_ref\""), "{body}");
     let back = read_hold_record(dir.path(), 7).unwrap();
     assert_eq!(back.verdict_ref.as_ref().unwrap().key, "BUG-1460");
@@ -627,6 +640,8 @@ fn marker_references_its_verdict_and_carries_a_release_condition() {
     );
     // A pre-BUG-1532 typed marker (no new fields) still parses.
     let old = r#"{"schema_version":2,"pr":8,"reason_kind":"supervision","detail":"d","routing_state":"pending"}"#;
+    // A legacy marker file, read through.
+    std::fs::create_dir_all(hold_path(dir.path(), 8).parent().unwrap()).unwrap();
     std::fs::write(hold_path(dir.path(), 8), old).unwrap();
     let back = read_hold_record(dir.path(), 8).unwrap();
     assert_eq!(back.reason_kind, HoldReasonKind::Supervision);

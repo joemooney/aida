@@ -137,6 +137,14 @@ pub(crate) fn store_root(start: &Path) -> std::io::Result<PathBuf> {
     Ok(resolved)
 }
 
+/// Whether this process runs in a contained seat, which never writes the
+/// gate ledger (its launcher collects what it records). The gate's verdict
+/// writer asks here, beside the rule it enforces.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn contained() -> bool {
+    crate::session::aida_contained_env().unwrap_or(false)
+}
+
 /// What recording an event did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Delivered {

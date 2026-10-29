@@ -79,7 +79,7 @@ pub(in crate::gate) fn preserve_reviewer_worktree_hold(
         }
     }
 
-    let wt_hold_dir = crate::gate::ledger::legacy::marker_dir(rev_wt);
+    let wt_hold_dir = crate::gate::hold_collect::marker_dir(rev_wt);
     match std::fs::symlink_metadata(&wt_hold_dir) {
         Ok(m) if m.file_type().is_symlink() || !m.is_dir() => {
             bail!(
@@ -126,20 +126,21 @@ pub(in crate::gate) fn preserve_reviewer_worktree_hold(
         .strip_prefix("PR-")
         .and_then(|n| n.parse::<u64>().ok())
         .with_context(|| format!("reviewer merge-hold scope {pr_scope} names no PR"))?;
-    let record = crate::gate::merge_hold_core::parse_hold_marker(
-        Ok(String::from_utf8_lossy(&wt_bytes).into_owned()),
+    let collected = crate::gate::hold_collect::collect_marker(
+        main_worktree,
         pr,
+        &String::from_utf8_lossy(&wt_bytes),
     )
-    .with_context(|| format!("reviewer merge-hold {} did not parse", wt_hold.display()))?;
-    crate::gate::merge_hold_core::collect_legacy_hold(main_worktree, &record).with_context(
-        || {
-            format!(
-                "cannot collect reviewer merge-hold {} onto the PR-{pr} gate ledger",
-                wt_hold.display()
-            )
-        },
-    )?;
-    if crate::gate::merge_hold_core::read_hold_record(main_worktree, pr).is_none() {
+    .with_context(|| {
+        format!(
+            "cannot collect reviewer merge-hold {} onto the PR-{pr} gate ledger",
+            wt_hold.display()
+        )
+    })?;
+    if !collected {
+        bail!("reviewer merge-hold {} did not parse", wt_hold.display());
+    }
+    if !crate::gate::hold_collect::hold_is_open(main_worktree, pr) {
         bail!(
             "the PR-{pr} gate ledger does not hold the collected merge-hold {}; refusing reviewer worktree cleanup",
             wt_hold.display()

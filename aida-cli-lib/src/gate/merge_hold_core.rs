@@ -1600,9 +1600,11 @@ pub(crate) fn append_hold_with_route(
 }
 
 /// Collect a hold read from a legacy marker file a reviewer worktree still
-/// carries onto the PR's gate ledger, composed with any open hold and kept
-/// as it was read (an untyped marker stays `legacy`, which the ship gate
-/// reads as a refusal). The caller removes the worktree copy afterwards.
+/// carries onto the PR's gate ledger, composed with any open hold. Once on
+/// the ledger it is no longer a legacy marker: an untyped one (a reviewer's
+/// refusal, which the ship gate read as one) is recorded as the typed Rework
+/// hold it stood for, so it releases like any other refusal. The caller
+/// removes the worktree copy afterwards.
 // trace:BUG-2176 trace:STORY-1917 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn collect_legacy_hold(
@@ -1615,12 +1617,37 @@ pub(crate) fn collect_legacy_hold(
             "a merge hold needs a PR number",
         ));
     }
+    let record = &collected_hold(record);
     with_hold_lock(project_root, record.pr, || {
         let composed = match compose_with_existing(project_root, record) {
             Composed::Placed(r) | Composed::Preserved(r) => r,
         };
         append_hold_record(project_root, &composed, false)
     })?
+}
+
+/// The ledger form of a collected worktree marker: an untyped (`legacy`)
+/// marker becomes a typed Rework hold carrying its text; a typed or
+/// unreadable one is kept as read (an unreadable one stays Unknown and holds
+/// for safety).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn collected_hold(record: &MergeHoldRecord) -> MergeHoldRecord {
+    if !record.legacy {
+        return record.clone();
+    }
+    let mut typed = typed_hold(
+        record.pr,
+        HoldReasonKind::Rework,
+        record.detail.clone(),
+        record.target_head_sha.clone(),
+    );
+    typed.label_state = record.label_state.clone();
+    typed.spec = record.spec.clone();
+    typed.release_condition = Some(format!(
+        "a fresh APPROVED verdict recorded at PR #{}'s current head by an independent reviewer releases it",
+        record.pr
+    ));
+    typed
 }
 
 /// Append `record` as a `hold` event and record its placement in the

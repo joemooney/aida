@@ -9,6 +9,20 @@ const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 fn no_mandate() -> Result<String> {
     bail!("no mandate is active")
 }
+/// M1 slice 2 ledger readings of what the marker and clearance files said:
+/// the open hold record, a recorded release, a pending authorization.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn open_hold_bytes(root: &std::path::Path) -> Vec<u8> {
+    serde_json::to_vec(&crate::gate::ledger::hold::state(root, 37).open).unwrap()
+}
+fn released(root: &std::path::Path) -> bool {
+    mh::recorded_clearance(root, 37).is_some()
+}
+fn authorized(root: &std::path::Path) -> bool {
+    crate::gate::ledger::hold::state(root, 37)
+        .authorized
+        .is_some()
+}
 struct Fixture {
     hold: mh::MergeHoldRecord,
     body: Value,
@@ -89,9 +103,13 @@ fn current_independent_newer_approval_releases_with_audit() {
                 body.contains(PRINCIPAL) && body.contains(HEAD) && body.contains("fresh reviewer")
             );
             assert!(body.contains(".aida/review-verdicts/TASK-37.json"));
-            let audit: Value =
-                serde_json::from_slice(&std::fs::read(mh::clearance_path(root.path(), 37))?)
-                    .unwrap();
+            // M1 slice 2: the clearance is the recorded authorization on
+            // the ledger until the release event appends it.
+            let audit = Value::Object(
+                crate::gate::ledger::hold::state(root.path(), 37)
+                    .authorized
+                    .expect("authorization recorded before the audit comment"),
+            );
             assert_eq!(audit["cleared_by"], PRINCIPAL);
             assert_eq!(audit["target_head_sha"], HEAD);
             assert_eq!(
@@ -102,13 +120,13 @@ fn current_independent_newer_approval_releases_with_audit() {
             Ok(())
         },
         || {
-            assert!(mh::hold_path(root.path(), 37).exists());
+            assert!(mh::hold_is_open(root.path(), 37));
             labels.set(labels.get() + 1);
             Ok(())
         },
     )
     .unwrap();
-    assert!(!mh::hold_path(root.path(), 37).exists());
+    assert!(!mh::hold_is_open(root.path(), 37));
     assert_eq!(comments.get(), 1);
     assert_eq!(labels.get(), 1);
 }
@@ -323,7 +341,7 @@ fn moved_head_before_release_preserves_marker_and_labels() {
     )
     .unwrap_err();
     assert!(error.to_string().contains("head moved"));
-    assert!(mh::hold_path(root.path(), 37).exists());
+    assert!(mh::hold_is_open(root.path(), 37));
 }
 #[test]
 fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() {
@@ -341,7 +359,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         || panic!()
     )
     .is_err());
-    assert!(mh::hold_path(root.path(), 37).exists());
+    assert!(mh::hold_is_open(root.path(), 37));
     assert!(release_with(
         root.path(),
         &f.hold,
@@ -352,7 +370,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         || bail!("labels failed")
     )
     .is_err());
-    assert!(mh::hold_path(root.path(), 37).exists());
+    assert!(mh::hold_is_open(root.path(), 37));
     release_with(
         root.path(),
         &f.hold,
@@ -363,14 +381,21 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         || Ok(()),
     )
     .unwrap();
-    assert!(!mh::hold_path(root.path(), 37).exists());
+    assert!(!mh::hold_is_open(root.path(), 37));
 }
 #[test]
 fn failed_clearance_write_keeps_hold() {
     let f = Fixture::new();
     let root = tempfile::tempdir().unwrap();
     mh::place_hold(root.path(), &f.hold).unwrap();
-    std::fs::create_dir_all(mh::clearance_path(root.path(), 37)).unwrap();
+    // M1 slice 2: the clearance is a ledger event; a ledger that refuses the
+    // append is the failed clearance write.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let ledger = mh::hold_ledger_file(root.path(), 37);
+        std::fs::set_permissions(&ledger, std::fs::Permissions::from_mode(0o444)).unwrap();
+    }
     assert!(release_with(
         root.path(),
         &f.hold,
@@ -381,7 +406,7 @@ fn failed_clearance_write_keeps_hold() {
         || panic!()
     )
     .is_err());
-    assert!(mh::hold_path(root.path(), 37).exists());
+    assert!(mh::hold_is_open(root.path(), 37));
 }
 
 #[test]
@@ -539,7 +564,7 @@ fn auto_release_fixture(change: ReleaseChange) {
     let verdict_path = rv::verdict_path(root.path(), "TASK-37");
     std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
     std::fs::write(&verdict_path, serde_json::to_vec(&f.body).unwrap()).unwrap();
-    let original_marker = std::fs::read(mh::hold_path(root.path(), 37)).unwrap();
+    let original_marker = open_hold_bytes(root.path());
     let expected_marker = std::cell::RefCell::new(original_marker);
     let mut store = aida_core::RequirementsStore::default();
     store.requirements.push(f.req.clone());
@@ -642,16 +667,13 @@ fn auto_release_fixture(change: ReleaseChange) {
                         || change.hold_field.is_some())
                 {
                     if change.absorbed_kind.is_some() || change.hold_field.is_some() {
-                        // Model an atomic marker replacement, without promoting the
-                        // primary kind: the entire absorbed record must be compared.
-                        aida_core::fs_atomic::write_atomic(
-                            &mh::hold_path(root.path(), 37),
-                            &serde_json::to_vec_pretty(&expected_hold)?,
-                        )?;
+                        // Model a raw hold replacement on the ledger, without promoting
+                        // the primary kind: the entire absorbed record must be compared.
+                        crate::gate::ledger::hold::place(root.path(), &expected_hold, false)?;
                     } else {
                         mh::place_hold(root.path(), &expected_hold)?;
                     }
-                    *expected_marker.borrow_mut() = std::fs::read(mh::hold_path(root.path(), 37))?;
+                    *expected_marker.borrow_mut() = open_hold_bytes(root.path());
                 }
                 let changing = head_reads.get() >= change_at;
                 if changing && change.missing_change {
@@ -688,8 +710,7 @@ fn auto_release_fixture(change: ReleaseChange) {
                     // Exercise each exact-comparison field independently. The
                     // real reader separately normalizes unsupported schema/PR
                     // records to Unknown; that would mask a dropped field here.
-                    serde_json::from_slice(&std::fs::read(mh::hold_path(root.path(), 37)).unwrap())
-                        .ok()
+                    crate::gate::ledger::hold::state(root.path(), 37).open
                 } else {
                     mh::read_hold_record(root.path(), 37)
                 }
@@ -966,7 +987,9 @@ fn auto_release_fixture(change: ReleaseChange) {
         let error = result.unwrap_err().to_string();
         assert!(error.contains(refusal), "{error}");
         let retained_hold: mh::MergeHoldRecord = if change.hold_field.is_some() {
-            serde_json::from_slice(&std::fs::read(mh::hold_path(root.path(), 37)).unwrap()).unwrap()
+            crate::gate::ledger::hold::state(root.path(), 37)
+                .open
+                .unwrap()
         } else {
             mh::read_hold_record(root.path(), 37).unwrap()
         };
@@ -980,16 +1003,13 @@ fn auto_release_fixture(change: ReleaseChange) {
         } else {
             assert_eq!(retained_hold, expected_hold);
         }
-        assert_eq!(
-            std::fs::read(mh::hold_path(root.path(), 37)).unwrap(),
-            *expected_marker.borrow()
-        );
+        assert_eq!(open_hold_bytes(root.path()), *expected_marker.borrow());
         if change.after_audit {
             // A real re-arm invalidates the prior clearance itself. TASK-1757
             // (3): any other refused second pass supersedes the clearance it
             // wrote and says so on the PR; none mirror the release.
             // trace:TASK-1951 trace:TASK-1757 | ai:claude
-            assert!(!mh::clearance_path(root.path(), 37).exists());
+            assert!(!released(root.path()) && !authorized(root.path()));
             let rearmed = change.stricter_hold || change.changed_rework;
             let comments = comments.borrow();
             assert_eq!(comments.len(), if rearmed { 1 } else { 2 }, "{comments:?}");
@@ -1000,7 +1020,7 @@ fn auto_release_fixture(change: ReleaseChange) {
                 );
             }
         } else {
-            assert!(!mh::clearance_path(root.path(), 37).exists());
+            assert!(!released(root.path()) && !authorized(root.path()));
             assert!(comments.borrow().is_empty());
         }
         assert_eq!(*labels.borrow(), original_labels);
@@ -1011,8 +1031,8 @@ fn auto_release_fixture(change: ReleaseChange) {
         }
     } else {
         assert_eq!(result.unwrap(), Outcome::Released { mandate: None });
-        assert!(!mh::hold_path(root.path(), 37).exists());
-        assert!(mh::clearance_path(root.path(), 37).is_file());
+        assert!(!mh::hold_is_open(root.path(), 37));
+        assert!(released(root.path()));
         assert_eq!(comments.borrow().len(), 1);
         assert!(labels.borrow().is_empty());
         assert_eq!(head_reads.get(), 3);
