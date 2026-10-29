@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:25.953259931Z
-modified_at: 2026-10-29T19:05:01.784666441Z
+modified_at: 2026-10-29T19:05:06.322450793Z
 req_type: Task
 tags:
 - advisor-review
@@ -49,6 +49,21 @@ relationships:
   target_id: 01a1890c-a0a4-7510-824e-7d901d24e111
   created_at: 2026-10-29T19:04:43.554396449Z
   created_by: ai:codex:joe
+comments:
+- id: 01a1890d-3412-72e0-b737-d9d092c2ec39
+  author: ai:codex:joe
+  content: |
+    Metrics is now a top-level destination in desktop and mobile navigation. The new source guide, generated page and original graphic distinguish reported, partially covered, derivable and unsupported measures. Both overview formats now agree with current effort capture/load calibration rather than claiming effort is post-hoc only or estimate-vs-actual has no report.
+
+    Covers cycle time/work-wait-unknown, traceability, token attribution and dated offline costing, drain outcomes, spec/review evidence, effort touchpoints and tool reliability. No live dashboard values, ROI, forecasts or equivalent-human-hours claims. Existing unrelated air-gap guidance and remaining proposals are preserved.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed. Fresh spawned author checker ran independent evidence commands against the spec/source/help/diff and found no findings. This is author self-checking, not independent review. No telemetry, pricing, report, ledger, gate or hosting implementation changed.
+
+    Files: docs/metrics-guide.md; docs/what-is-aida.md and .html; showcase metrics.html/assets/metrics.svg; shared build/navigation/styles and regenerated guide navigation. Stacked on PR #3099.
+
+    TASK-B6B1278890774EF993D2EBC327862470-110.
+  created_at: 2026-10-29T19:05:06.322450793Z
+  modified_at: 2026-10-29T19:05:06.322450793Z
 history:
 - id: 01a188da-516b-7ca3-a052-e38c4cb388b5
   author: joe
