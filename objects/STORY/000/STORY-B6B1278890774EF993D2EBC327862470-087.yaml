@@ -1,0 +1,32 @@
+id: 01a188f0-16d4-7be3-83e1-b9421a108f5c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-087
+title: 'Review PR-3096: [AI:codex] docs(onboarding): start with conversational development (TASK-B6B1278890774EF993D2EBC327862470-106)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188ea`) for branch `task-b6b1278890774ef993d2ebc327862470-106-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3096>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-106-work` → `task-b6b1278890774ef993d2ebc327862470-101-work`
+
+  ## Covers
+
+  - TASK-B6B1278890774EF993D2EBC327862470-106
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3096` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T18:33:18.292920276Z
+modified_at: 2026-10-29T18:33:18.292920276Z
+req_type: Story
+filed_at:
+  code_sha: 120226d4d2bc6eec8362f0c3bc2615649f711545
+  branch: task-b6b1278890774ef993d2ebc327862470-106-work
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b74166aba21
+  vendor: codex
