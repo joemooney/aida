@@ -85087,5 +85087,21 @@ operations:
       ## Test tier
       LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
       - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
-clock: 6654
+- id: 01a1874c-cd55-7410-abd5-f7aa422ee11b
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6655
+  timestamp: 2026-10-29T10:55:19.893840995Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a1874c-ce24-73c2-96b4-abb730650114
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6656
+  timestamp: 2026-10-29T10:55:20.100792601Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 6656
 node_id: '1'
