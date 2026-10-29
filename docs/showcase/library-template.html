@@ -1,0 +1,13 @@
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-111 | ai:codex -->
+<h1>Find the context<br>for your next change.</h1>
+<p>Explore current product guides for people and operators. Search the source content, then follow a guide into its evidence and references.</p>
+<p>Technical references remain linked from the guides. Historical and internal evidence material is excluded from this curated library.</p>
+<form class="library-search" role="search" id="library-search">
+<div><label for="query">Search guide content</label><input type="search" id="query" name="q" placeholder="Try intent, review, cost or configuration" autocomplete="off"></div>
+<div><label for="category">Audience</label><select id="category"><option value="all">All guides</option><option value="human">Human guides</option><option value="operator">Operator guides</option></select></div>
+<button type="reset">Clear filters</button>
+</form>
+<p id="search-status" role="status" aria-live="polite">All curated guides are listed below. Enable JavaScript for content search and filters.</p>
+<p id="search-empty" hidden>No matching guides. Try fewer words or choose all audiences.</p>
+<div class="library-grid">{{cards}}</div>
+<noscript><p>All guide links and source files remain available above.</p></noscript>
