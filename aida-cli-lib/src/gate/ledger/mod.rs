@@ -142,7 +142,7 @@ pub(crate) fn store_root(start: &Path) -> std::io::Result<PathBuf> {
 /// writer asks here, beside the rule it enforces.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn contained() -> bool {
-    crate::session::aida_contained_env().unwrap_or(false)
+    crate::session::process_contained()
 }
 
 /// What recording an event did.
@@ -159,7 +159,7 @@ pub(crate) enum Delivered {
 /// the ledger.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn record_event(start: &Path, event: GateEvent) -> std::io::Result<Delivered> {
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "a contained seat cannot write the gate ledger; the launcher that started it collects its verdict",
@@ -188,7 +188,7 @@ pub(crate) fn record_verdict_at(
                 format!("{} is not a verdict key path", path.display()),
             )
         })?;
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "a contained seat cannot write the gate ledger; the launcher that started it collects its verdict",
@@ -217,7 +217,7 @@ pub(crate) fn adopt_verdict_file(
     path: &Path,
     record: &crate::gate::review_verdict::JsonObj,
 ) -> std::io::Result<()> {
-    if crate::session::aida_contained_env().unwrap_or(false)
+    if crate::session::process_contained()
         || crate::gate::review_verdict::canonical_verdict_key(path).is_none()
     {
         return Ok(());
@@ -235,7 +235,7 @@ pub(crate) fn record_collected_verdict(
     record: &crate::gate::review_verdict::JsonObj,
     spec_records: &[(String, crate::gate::review_verdict::JsonObj)],
 ) -> std::io::Result<usize> {
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "a contained seat cannot collect a verdict onto the gate ledger",

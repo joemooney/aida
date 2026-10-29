@@ -11058,12 +11058,10 @@ pub(crate) fn honour_auto_complete_sandbox(
 }
 
 // trace:BUG-2006 | ai:antigravity
+// The launcher keeps its own posture: the export is for its children only.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn apply_queue_work_contained_env(contained: bool) {
-    if contained {
-        std::env::set_var("AIDA_CONTAINED", "1");
-    } else {
-        std::env::remove_var("AIDA_CONTAINED");
-    }
+    session::set_contained_env_for_children(contained);
 }
 
 /// BUG-2010: true when caller is working the lease itself (self-claim under `--no-launch`).

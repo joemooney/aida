@@ -713,8 +713,11 @@ aida review record <SPEC-ID> --pr <N> --verdict approved \
 # --finding "<concrete finding>" for each finding.
 ```
 
-Read back `AIDA_REVIEW_VERDICT_FILE` and verify the verdict, reviewed SHA,
-recorder, and timestamp before reporting success. A writer failure stops the
+Read the verdict back with `aida review verdict PR-<N> --json` and verify the
+verdict, reviewed SHA, recorder, and timestamp before reporting success. The
+record lives on the PR's gate ledger (`record_source` names it); a contained
+reviewer's record is a hand-off its launcher collects onto the ledger, so
+there it is `AIDA_REVIEW_VERDICT_FILE` that you read back. A writer failure stops the
 review handoff. Never replace the file with a raw JSON verdict afterward.
 Optional advisory fields or `merge` escalation may be added to the recorded
 object while preserving all provenance fields and retained rounds; this is

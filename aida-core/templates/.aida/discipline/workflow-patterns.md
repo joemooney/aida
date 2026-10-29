@@ -2183,7 +2183,7 @@ When the user proposes a design and the advisor finds existing prior art (a prim
 **Why:** `mergeable` is a git property (no conflicts) and the check rollup is a CI property. Neither encodes review state, and AIDA keeps the verdict OUTSIDE GitHub's review API — in `.aida/review-verdicts/PR-N.json` — so `gh pr view --json reviewDecision` is usually empty too and looks like "nobody objected". Three surfaces all say "fine" and none of them is the one that decides. Recommending a merge on that basis pushes unreviewed findings onto main.
 
 **How to apply:**
-- Before calling any PR ready/mergeable/unblocked, read `.aida/review-verdicts/PR-<N>.json`: `verdict`, `findings`, `reviewed_sha`, `recorded_at`.
+- Before calling any PR ready/mergeable/unblocked, read `aida review verdict PR-<N> --json` (the PR's gate ledger, with legacy `.aida/review-verdicts/` files read through): `verdict`, `findings`, `reviewed_sha`, `recorded_at`.
 - Check `reviewed_sha` against the CURRENT head. A verdict recorded against an older sha is not a verdict about what would merge. A verdict file with no `reviewed_sha`/`recorded_at` predates that field and must be re-verified against the head, never assumed.
 - "No verdict file" ≠ approved. It means never reviewed — a distinct state from held, and one that goes unnoticed because nothing flags it.
 - A PR can be unheld AND unreviewed AND green all at once; that combination looks maximally ready and is the least safe.

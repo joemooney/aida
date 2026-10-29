@@ -1960,7 +1960,17 @@ pub fn archived_verdict_file_for_sha(path: &Path, sha: &str) -> Option<PathBuf> 
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn verdicts_for_sha(project_root: &Path, sha: &str) -> Vec<RecordedVerdict> {
     let mut ledger: std::collections::BTreeMap<String, RecordedVerdict> = Default::default();
-    for event in crate::gate::ledger::project::all_verdict_events(project_root) {
+    // A key keeps its newest event in the ledger's own order (append time,
+    // then seq), not the order the ledger files are walked in: one spec's
+    // records can sit on several changes' files.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut events = crate::gate::ledger::project::all_verdict_events(project_root);
+    events.sort_by(|a, b| {
+        rfc3339(Some(&a.at))
+            .cmp(&rfc3339(Some(&b.at)))
+            .then(a.seq.cmp(&b.seq))
+    });
+    for event in events {
         if !event
             .head
             .as_deref()
@@ -2330,6 +2340,37 @@ fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictC
     })
 }
 
+/// The newest ledger verdict for `canonical`'s change, read from
+/// `launcher_root`, when the ledger recorded it at or after `since` (primary-
+/// side time, [`ledger_order_time`]): an uncontained reviewer's record of
+/// this run. An older ledger round is never a candidate.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn fresh_ledger_candidate(
+    launcher_root: &Path,
+    canonical: &Path,
+    since: std::time::SystemTime,
+) -> Option<VerdictCandidate> {
+    let (_, key) = canonical_verdict_key(canonical)?;
+    let event = crate::gate::ledger::project::newest_verdict_event(launcher_root, &key)?;
+    let modified: std::time::SystemTime = ledger_order_time(&event)?.into();
+    if modified < since {
+        return None;
+    }
+    let obj = event.verdict_record()?.clone();
+    let body = serde_json::to_string_pretty(&obj).ok()?;
+    let verdict = parse_recorded_verdict(&body).unwrap_or_default();
+    let file = crate::gate::ledger::store_root(launcher_root)
+        .map(|root| crate::gate::ledger::project::event_file(&root, &event))
+        .unwrap_or_else(|_| canonical.to_path_buf());
+    Some(VerdictCandidate {
+        path: PathBuf::from(format!("{}#{}", file.display(), event.seq)),
+        body,
+        obj,
+        verdict,
+        modified,
+    })
+}
+
 /// BUG-2149: the checks a collected verdict must pass, supplied by the caller
 /// (they need the forge and the seat-grant store, which this filesystem-only
 /// module does not touch).
@@ -2429,8 +2470,21 @@ pub fn collect_standalone_verdict(
     for id in &spec_ids {
         candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
     }
+    // An uncontained reviewer's `aida review record` writes the ledger, not a
+    // file: its record for this change, appended after the reviewer started,
+    // is a candidate under the same checks.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let from_ledger = if canonical_in_place.is_none() {
+        fresh_ledger_candidate(launcher_root, canonical, since)
+    } else {
+        None
+    };
+    candidates.extend(from_ledger.clone());
     if candidates.is_empty() {
-        return Err("the reviewer wrote no verdict file after it started".to_string());
+        return Err(
+            "the reviewer wrote no verdict file after it started, and recorded none on the ledger"
+                .to_string(),
+        );
     }
 
     for c in &candidates {
@@ -2491,7 +2545,24 @@ pub fn collect_standalone_verdict(
                 change.as_key()
             )
         })?;
-    let collected_from_worktree = canonical_in_place.is_none();
+    // The seat's hand-off files are collected: none stays in the worktree.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let worktree_files: Vec<&PathBuf> = candidates
+        .iter()
+        .map(|c| &c.path)
+        .filter(|p| separate && p.parent() == Some(worktree_dir.as_path()))
+        .collect();
+    for path in &worktree_files {
+        if let Err(err) = std::fs::remove_file(path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "  warning: collected {} but could not remove it from the review worktree: {err}",
+                    path.display()
+                );
+            }
+        }
+    }
+    let collected_from_worktree = canonical_in_place.is_none() && from_ledger.is_none();
     let spec_records = spec_ids;
 
     Ok(CollectedVerdict {

@@ -3229,7 +3229,7 @@ pub(crate) fn handle_review_record_at(
             resolved_sha.clone(),
             Some(recorded_by.clone()),
         );
-        if crate::session::aida_contained_env().unwrap_or(false) {
+        if crate::session::process_contained() {
             eprintln!(
                 "  {} PR-{n}'s merge hold is armed by the launcher when it collects this verdict",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -3461,7 +3461,7 @@ pub(crate) fn handle_review_record_at(
                     err.kind(),
                     std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
                 );
-                let contained = refused && crate::session::aida_contained_env().unwrap_or(false);
+                let contained = refused && crate::session::process_contained();
                 let Some(fallback) =
                     contained_handshake_fallback(&project_root, &handshake, contained)
                 else {
@@ -3925,9 +3925,21 @@ mod bug_1452_refusal_aftermath_tests {
             root.path().display(),
             handshake.display()
         );
+        // M1 slice 2: the handshake is recorded on the PR's gate ledger in
+        // this test's own tempdir, not as a file.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let ledger = crate::gate::ledger::store::ledger_file(
+            root.path(),
+            crate::gate::ledger::ChangeKey::pr(1452),
+        );
         assert!(
-            handshake.is_file(),
+            ledger.starts_with(root.path()) && ledger.is_file(),
             "the phase-3 handshake must be on disk at {}",
+            ledger.display()
+        );
+        assert!(
+            crate::gate::review_verdict::current_verdict_at(&handshake).is_some(),
+            "the phase-3 handshake must be readable at {}",
             handshake.display()
         );
     }

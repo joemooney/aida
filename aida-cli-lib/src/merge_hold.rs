@@ -39,6 +39,23 @@ pub(crate) fn arm_collected_refusal(
     pr: u64,
     collected: &crate::gate::review_verdict::CollectedVerdict,
 ) -> std::io::Result<bool> {
+    if !place_collected_refusal(project_root, pr, collected)? {
+        return Ok(false);
+    }
+    if let Err(err) = sync_label(project_root, pr, true) {
+        eprintln!("  warning: merge-hold label not applied on PR-{pr}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`");
+    }
+    Ok(true)
+}
+
+/// The ledger half of [`arm_collected_refusal`]: place the Rework hold for a
+/// blocking collected verdict. Returns whether a hold was placed.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn place_collected_refusal(
+    project_root: &Path,
+    pr: u64,
+    collected: &crate::gate::review_verdict::CollectedVerdict,
+) -> std::io::Result<bool> {
     let kind = collected.verdict.kind;
     if !kind.blocks_done() {
         return Ok(false);
@@ -56,9 +73,6 @@ pub(crate) fn arm_collected_refusal(
         collected.verdict.recorded_by.clone(),
     );
     place_hold(project_root, &hold)?;
-    if let Err(err) = sync_label(project_root, pr, true) {
-        eprintln!("  warning: merge-hold label not applied on PR-{pr}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`");
-    }
     Ok(true)
 }
 

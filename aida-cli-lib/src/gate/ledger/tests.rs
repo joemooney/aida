@@ -1746,3 +1746,219 @@ fn a_collected_untyped_marker_becomes_a_typed_rework_hold() {
     assert_eq!(held.reason_kind, mh::HoldReasonKind::Supervision);
     assert!(!held.legacy);
 }
+
+/// PR-3106 round 1, item 2: an uncontained reviewer's `aida review record`
+/// writes the ledger and no file, so the launcher collects that ledger record
+/// (under the same PR, head and grant checks) and arms the refusal's hold
+/// from it. A ledger round from before the launch is not this run's verdict.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn an_uncontained_reviewers_ledger_only_refusal_is_collected_and_holds_the_pr() {
+    use crate::gate::merge_hold_core as mh;
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    std::fs::create_dir_all(&worktree).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let canonical = rv::verdict_path(&launcher, "PR-40");
+    let child = a.grant_id.clone().unwrap();
+
+    // Before the reviewer writes anything there is nothing to collect.
+    let err = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 40, &child),
+    )
+    .unwrap_err();
+    assert!(err.contains("no verdict"), "{err}");
+
+    let rec = record("request-changes", &ts(1), Some(&a));
+    record_verdict_at(&canonical, &rec, None).unwrap();
+    assert!(!canonical.exists(), "the reviewer wrote the ledger only");
+
+    // A launch that started after that record does not collect it.
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    assert!(rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        later,
+        &checks(&launcher, 40, &child),
+    )
+    .is_err());
+
+    let before = store::read_file(&launcher, ChangeKey::pr(40)).len();
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 40, &child),
+    )
+    .expect("the ledger-only verdict is collected");
+    assert_eq!(got.verdict.kind, rv::VerdictKind::RequestChanges);
+    assert!(!got.collected_from_worktree);
+    assert_eq!(
+        store::read_file(&launcher, ChangeKey::pr(40)).len(),
+        before,
+        "the record is already on the ledger: nothing is appended twice"
+    );
+
+    // The same grant check applies: another launch's grant is refused.
+    assert!(rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 40, "some-other-grant"),
+    )
+    .is_err());
+
+    assert!(crate::merge_hold::place_collected_refusal(&launcher, 40, &got).unwrap());
+    let held = mh::read_hold_record(&launcher, 40).expect("the refusal holds the PR");
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Rework);
+    assert!(held.is_refusal());
+}
+
+/// PR-3106 round 1, items 3 and 9: a contained reviewer cannot write hold
+/// state, so the launcher arms the refusal's Rework hold from the verdict it
+/// collected; the seat's hand-off file does not outlive the collection. An
+/// approval arms nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_contained_reviewers_refusal_is_armed_by_the_launcher_and_its_hand_off_removed() {
+    use crate::gate::merge_hold_core as mh;
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let child = a.grant_id.clone().unwrap();
+    let canonical = rv::verdict_path(&launcher, "PR-41");
+    let rec = record("request-changes", &ts(1), Some(&a));
+    reviewer_wrote(&worktree, "PR-41", &rec);
+    let hand_off = worktree.join(".aida/review-verdicts/PR-41.json");
+
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 41, &child),
+    )
+    .unwrap();
+    assert!(got.collected_from_worktree);
+    assert!(
+        !hand_off.exists(),
+        "no verdict state persists in the seat after collection"
+    );
+    assert!(mh::read_hold_record(&launcher, 41).is_none());
+    assert!(crate::merge_hold::place_collected_refusal(&launcher, 41, &got).unwrap());
+    let held = mh::read_hold_record(&launcher, 41).expect("armed by the launcher");
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Rework);
+    assert!(kinds(&store::read_file(&launcher, ChangeKey::pr(41))).contains(&"hold"));
+
+    let approved = rv::CollectedVerdict {
+        verdict: rv::parse_recorded_verdict(
+            &serde_json::to_string(&record("approved", &ts(1), Some(&a))).unwrap(),
+        )
+        .unwrap(),
+        spec_records: Vec::new(),
+        collected_from_worktree: true,
+    };
+    assert!(!crate::merge_hold::place_collected_refusal(&launcher, 42, &approved).unwrap());
+    assert!(mh::read_hold_record(&launcher, 42).is_none());
+}
+
+/// PR-3106 round 1, item 6: `aida queue work --role reviewer` resolves
+/// containment from the `[agents] contained` knob and exports
+/// `AIDA_CONTAINED=1` for the reviewer it launches. That export must not
+/// contain the launcher itself: run from a shell with no `AIDA_CONTAINED`,
+/// its collection still writes the ledger. A contained parent stays
+/// contained, and a malformed value reads as contained (BUG-2146).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn the_launchers_export_for_its_reviewer_does_not_contain_its_own_collection() {
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let child = a.grant_id.clone().unwrap();
+    let canonical = rv::verdict_path(&launcher, "PR-43");
+    reviewer_wrote(&worktree, "PR-43", &record("approved", &ts(1), Some(&a)));
+
+    crate::queue_cmd::apply_queue_work_contained_env(true);
+    assert!(
+        crate::session::aida_contained_env().unwrap(),
+        "the reviewer the launcher spawns inherits AIDA_CONTAINED=1"
+    );
+    assert!(!crate::session::process_contained());
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 43, &child),
+    );
+    crate::queue_cmd::apply_queue_work_contained_env(false);
+    assert!(got.is_ok(), "{got:?}");
+    assert_eq!(
+        project::newest_verdict(&launcher, "PR-43")
+            .and_then(|r| r.get("verdict").cloned())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .as_deref(),
+        Some("approved")
+    );
+
+    // The guard above holds the env lock and restores AIDA_CONTAINED.
+    std::env::set_var("AIDA_CONTAINED", "1");
+    crate::queue_cmd::apply_queue_work_contained_env(true);
+    assert!(crate::session::process_contained(), "a contained parent");
+    std::env::set_var("AIDA_CONTAINED", "ture");
+    assert!(crate::session::process_contained(), "fail closed");
+    let err = record_verdict_at(&canonical, &record("approved", &ts(1), None), None).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+    std::env::remove_var("AIDA_CONTAINED");
+    crate::queue_cmd::apply_queue_work_contained_env(false);
+}
+
+/// PR-3106 round 1, item 5: one spec's records on two changes' ledgers are
+/// weighed in the ledger's own order, not the order the files are walked in.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn verdicts_at_a_commit_keep_the_newest_record_per_key_in_ledger_order() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    store::append_one(
+        &root,
+        verdict(
+            ChangeKey::pr(51),
+            Some("STORY-9"),
+            record("approved", &ts(0), None),
+        ),
+    )
+    .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    store::append_one(
+        &root,
+        verdict(
+            ChangeKey::pr(50),
+            Some("STORY-9"),
+            record("request-changes", &ts(0), None),
+        ),
+    )
+    .unwrap();
+    let got = rv::verdicts_for_sha(&root, HEAD);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].kind, rv::VerdictKind::RequestChanges);
+}

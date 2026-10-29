@@ -198,7 +198,7 @@ pub(crate) fn append(
     head: Option<&str>,
     spec: Option<&str>,
 ) -> std::io::Result<GateEvent> {
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "a contained seat cannot write merge-hold state; the launcher that started it arms \

@@ -534,11 +534,8 @@ pub(crate) fn release_hold_under_mandate(
 ) {
     use colored::Colorize;
     let pr = hold_record.pr;
-    eprintln!(
-        "  {} PR-{pr}: merge-hold {}",
-        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        crate::gate::mandate::release_note(&cover.id)
-    );
+    // A release the ledger did not record leaves the hold open: nothing may
+    // announce it as released (no note, comment, event or label removal).
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     if let Err(err) = crate::gate::merge_hold_core::release_hold_under_mandate(
         hold_root,
@@ -548,10 +545,16 @@ pub(crate) fn release_hold_under_mandate(
         released_by_verdict,
     ) {
         eprintln!(
-            "  {} could not record the mandate release on PR-{pr}: {err}",
+            "  {} could not record the mandate release on PR-{pr}, so its merge hold stays armed: {err}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
+        return;
     }
+    eprintln!(
+        "  {} PR-{pr}: merge-hold {}",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        crate::gate::mandate::release_note(&cover.id)
+    );
     let _ = crate::forge::forge_for(hold_root).comment(
         change,
         &format!(
