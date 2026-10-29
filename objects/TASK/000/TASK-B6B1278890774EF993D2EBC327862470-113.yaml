@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:27.557602584Z
-modified_at: 2026-10-29T19:38:55.517176909Z
+modified_at: 2026-10-29T19:46:42.285391668Z
 req_type: Task
 tags:
 - advisor-review
@@ -64,6 +64,19 @@ relationships:
 - rel_type: Child
   target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
   created_at: 2026-10-29T18:11:18.988251281Z
+comments:
+- id: 01a18933-49ed-7730-a9ad-5a956514f1c6
+  author: ai:codex:joe
+  content: |
+    This is a pre-integration audit of the approved content stack at b2c511eb9eec6d4932c9a2ba04ad3f2818517c90, with bounded fixes in this PR. Earlier slices are Done on their own branches/PRs; this does not declare the epic merged or completed. The explicit worktree claim succeeded. The final audit is independently reviewable as its own PR, stacked on PR #3102.
+
+    The inventory covers every tracked docs/ path plus Markdown/reStructuredText/AsciiDoc across the repository, including template masters and mirrors, with file hashes/classification/Git freshness metadata. Automated local-link candidates are distinguished from confirmed semantic findings. Historical/decision/evidence records are preserved, not rewritten as current guidance. The report explicitly identifies substantive source/help checks and remaining context/external/client verification gaps.
+
+    Generated glossary content is not hand-edited: two small compatibility navigation pages preserve its valid pack-relative filenames and link back to the existing generated sections, without duplicating definitions or changing templates. The curated site remains seven verified guides; broader publication scope remains the advisor question on slice 111. Hosting is unchanged.
+
+    PR #3090 is still OPEN, now at eb306b090cd8b71bf1d9c0c0658c7befa10d7eab. The post-land trust verification from slice 109 remains an integration/reviewer follow-up. Preserve the independently merged #3093 overview changes when retargeting the PR stack. No protected/runtime implementation is edited and no self-merge is performed.
+  created_at: 2026-10-29T19:46:42.285391668Z
+  modified_at: 2026-10-29T19:46:42.285391668Z
 history:
 - id: 01a188db-422f-7a63-aa54-4ee293059e7c
   author: joe
