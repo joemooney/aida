@@ -1,0 +1,29 @@
+id: 01a185de-2bb5-75f0-9711-c5bab0827412
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-088
+title: '(minor, non-blocking) docs/conformance/story-1843.md:32 slice table: PR3 row li…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1843, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (minor, non-blocking) docs/conformance/story-1843.md:32 slice table: PR3 row lists 94124569c9b and 84f0642f339 but only #2909; 84f0642f339 merged via #2965 (gh api commits/84f0642f339/pulls). Should read '#2909, #2965'.
+
+  PR: #3083
+  Reviewed sha: dbd42f983f586ef04cb82420b3cd8e9c133c8ced
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T04:14:52.341930384Z
+modified_at: 2026-10-29T04:14:52.341930384Z
+req_type: Task
+tags:
+- carried-from:STORY-1843
+- finding-hash:05f951b0
+- from-review:PR-3083
+- kind:carried-forward
+filed_at:
+  code_sha: 3b3d89ae3b08ede89ff290429902a25807062f8a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 457c8c60cf0
+  vendor: claude

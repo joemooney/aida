@@ -83877,5 +83877,23 @@ operations:
   timestamp: 2026-10-29T04:14:48.236467939Z
   kind: !SetStatus
     status: Completed
-clock: 6542
+- id: 01a185de-32b9-7af2-b999-da2d0ae91d50
+  target_id: 01a185de-2bb5-75f0-9711-c5bab0827412
+  author: aida
+  node_id: '1'
+  lamport: 6543
+  timestamp: 2026-10-29T04:14:54.137595027Z
+  kind: !Create
+    title: '(minor, non-blocking) docs/conformance/story-1843.md:32 slice table: PR3 row li…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-1843, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      (minor, non-blocking) docs/conformance/story-1843.md:32 slice table: PR3 row lists 94124569c9b and 84f0642f339 but only #2909; 84f0642f339 merged via #2965 (gh api commits/84f0642f339/pulls). Should read '#2909, #2965'.
+
+      PR: #3083
+      Reviewed sha: dbd42f983f586ef04cb82420b3cd8e9c133c8ced
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6543
 node_id: '1'
