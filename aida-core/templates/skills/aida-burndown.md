@@ -236,7 +236,8 @@ single Bash call, so don't split the launch and the wait across calls.
 
 - **Exit 0 and a `verdict:` line** (not `UNKNOWN`): the launcher checked the
   verdict against the PR head and this launch's reviewer grant. Only now
-  read `.aida/review-verdicts/PR-<n>.json`.
+  read it with `aida review verdict PR-<n> --json` (the PR's gate ledger;
+  `.aida/review-verdicts/PR-<n>.json` can be missing or a previous round's).
 - **Exit 30, or any other non-zero exit**: no verified verdict. Read the
   log and launch a new reviewer; never record one yourself.
 

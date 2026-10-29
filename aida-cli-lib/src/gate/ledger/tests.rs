@@ -662,6 +662,165 @@ fn a_direct_write_is_adopted_onto_the_ledger_once() {
     );
 }
 
+/// Round 3, finding 5: a grant that expired between the review and the
+/// collection collects nothing, like a revoked one.
+#[test]
+fn an_expired_grant_is_refused_at_collection() {
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let child = a.grant_id.clone().unwrap();
+    reviewer_wrote(&worktree, "STORY-1", &record("approved", &ts(1), Some(&a)));
+    let mut grant = crate::gate::seat_authority::read_grant(&child).unwrap();
+    grant.expires_at = chrono::Utc::now() - chrono::Duration::seconds(1);
+    std::fs::write(
+        crate::gate::seat_authority::grant_dir()
+            .unwrap()
+            .join(format!("{child}.json")),
+        serde_json::to_vec_pretty(&grant).unwrap(),
+    )
+    .unwrap();
+    let canonical = rv::verdict_path(&launcher, "PR-30");
+
+    let expired = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &["STORY-1".to_string()],
+        since(),
+        &checks(&launcher, 30, &child),
+    )
+    .unwrap_err();
+    assert!(expired.contains("is not valid"), "{expired}");
+    assert!(!store::ledger_file(&launcher, ChangeKey::pr(30)).exists());
+}
+
+/// A legacy file at `key` holding `rec`.
+fn file_holds(root: &Path, key: &str, rec: &JsonObj) {
+    let path = rv::verdict_path(root, key);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, serde_json::to_string(rec).unwrap()).unwrap();
+}
+
+/// A ledger-only verdict for `change`, as collection leaves it.
+fn ledger_holds(root: &Path, change: ChangeKey, rec: JsonObj) {
+    store::append(root, change, vec![verdict(change, None, rec)]).unwrap();
+}
+
+/// Round 3, finding 1: a same-head re-review collected onto the ledger
+/// (request-changes) outranks the previous round's approval still in the
+/// file, at both merge gates; an older ledger record does not outrank a
+/// newer file.
+#[test]
+fn a_newer_ledger_verdict_outranks_the_file_at_both_merge_gates() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let change = ChangeKey::pr(40);
+    file_holds(&root, "PR-40", &record("approved", &ts(-3600), None));
+    ledger_holds(&root, change, record("request-changes", &ts(-60), None));
+
+    let candidates =
+        crate::gate::ship::merge_gate_verdict_candidates(&[&root], 40, &[], Some(HEAD));
+    let kinds: Vec<_> = candidates.iter().map(|v| v.kind).collect();
+    assert_eq!(kinds, [rv::VerdictKind::RequestChanges], "{candidates:?}");
+
+    let bodies = crate::gate::merge_hold_core::corpus_gate_bodies(&[&root], 40, &[]).unwrap();
+    assert_eq!(bodies.len(), 1, "{bodies:?}");
+    assert!(bodies[0].1.contains("request-changes"), "{bodies:?}");
+    assert!(!bodies[0].1.contains("\"approved\""), "{bodies:?}");
+
+    // The file re-recorded after the ledger round answers again.
+    file_holds(&root, "PR-40", &record("approved", &ts(0), None));
+    let candidates =
+        crate::gate::ship::merge_gate_verdict_candidates(&[&root], 40, &[], Some(HEAD));
+    let kinds: Vec<_> = candidates.iter().map(|v| v.kind).collect();
+    assert_eq!(kinds, [rv::VerdictKind::Approved], "{candidates:?}");
+    let bodies = crate::gate::merge_hold_core::corpus_gate_bodies(&[&root], 40, &[]).unwrap();
+    assert!(bodies[0].1.contains("\"approved\""), "{bodies:?}");
+}
+
+/// Round 3, finding 1: a ledger record is weighed once, even when two roots
+/// sharing the ledger each hold a file it outranks.
+#[test]
+fn a_ledger_verdict_counts_once_across_roots() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let other = root.join("wt");
+    std::fs::create_dir_all(&other).unwrap();
+    file_holds(&root, "PR-41", &record("approved", &ts(-3600), None));
+    ledger_holds(
+        &root,
+        ChangeKey::pr(41),
+        record("request-changes", &ts(-60), None),
+    );
+    let bodies =
+        crate::gate::merge_hold_core::corpus_gate_bodies(&[&root, &root], 41, &[]).unwrap();
+    assert_eq!(bodies.len(), 1, "{bodies:?}");
+}
+
+/// Round 3, findings 2-4: single-key readers (launcher summary, calibration,
+/// awaiting) get the newer of file and ledger; an unparseable file is kept
+/// as the blocking evidence it is.
+#[test]
+fn single_key_readers_get_the_newer_of_file_and_ledger() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let path = rv::verdict_path(&root, "PR-42");
+    assert_eq!(rv::current_verdict_body_at(&path), None);
+
+    ledger_holds(
+        &root,
+        ChangeKey::pr(42),
+        record("request-changes", &ts(-60), None),
+    );
+    let only_ledger = rv::current_verdict_body_at(&path).unwrap();
+    assert!(only_ledger.contains("request-changes"), "{only_ledger}");
+
+    file_holds(&root, "PR-42", &record("approved", &ts(-3600), None));
+    let stale_file = rv::current_verdict_body_at(&path).unwrap();
+    assert!(stale_file.contains("request-changes"), "{stale_file}");
+
+    file_holds(&root, "PR-42", &record("approved", &ts(0), None));
+    let newer_file = rv::current_verdict_body_at(&path).unwrap();
+    assert!(newer_file.contains("\"approved\""), "{newer_file}");
+
+    std::fs::write(&path, "{not json").unwrap();
+    assert_eq!(
+        rv::current_verdict_body_at(&path).as_deref(),
+        Some("{not json")
+    );
+}
+
+/// Round 3, finding 4 (rework auto-release): the ledger's rounds join the
+/// retained history, so a ledger-only arming refusal is found with no file.
+#[test]
+fn retained_history_includes_the_ledger_rounds() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    ledger_holds(
+        &root,
+        ChangeKey::pr(43),
+        record("request-changes", &ts(-120), None),
+    );
+    ledger_holds(&root, ChangeKey::pr(43), record("approved", &ts(-60), None));
+    let history =
+        crate::gate::rework_hold_release::RetainedHistory::with_ledger(None, &root, "PR-43")
+            .unwrap();
+    let verdicts: Vec<_> = history
+        .archived
+        .iter()
+        .map(|r| r["verdict"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(verdicts, ["request-changes", "approved"]);
+    assert!(
+        history.location.contains("gate ledger"),
+        "{}",
+        history.location
+    );
+}
+
 /// Every non-test source file under `src/` with its body, read once per
 /// test process and shared by both ratchets (they scan ~1,000 files).
 fn non_test_sources() -> &'static [(PathBuf, String)] {

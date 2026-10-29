@@ -968,29 +968,97 @@ pub(crate) fn newer_of(
     legacy: Option<RecordedVerdict>,
     ledger: Option<&crate::gate::ledger::GateEvent>,
 ) -> Option<RecordedVerdict> {
-    let time =
-        |s: Option<&str>| s.and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok());
-    let ledger = ledger.and_then(|event| {
-        let verdict = parse_ledger_record(event.verdict_record()?)?;
-        let at = match (time(Some(&event.at)), time(verdict.recorded_at.as_deref())) {
-            (Some(at), Some(recorded)) => Some(at.min(recorded)),
-            (at, recorded) => at.or(recorded),
-        };
-        Some((verdict, at))
-    });
-    match (legacy, ledger) {
-        (Some(file), Some((led, led_at))) => {
-            if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
-                return Some(file);
-            }
-            match (time(file.recorded_at.as_deref()), led_at) {
-                (Some(f), Some(l)) if l > f => Some(led),
-                (None, Some(_)) => Some(led),
-                _ => Some(file),
-            }
-        }
-        (file, led) => file.or(led.map(|(v, _)| v)),
+    let led = ledger.and_then(|event| parse_ledger_record(event.verdict_record()?));
+    match (legacy, ledger, led) {
+        (file, Some(event), Some(led)) if ledger_supersedes(file.as_ref(), event) => Some(led),
+        (file, _, led) => file.or(led),
     }
+}
+
+/// [`newer_of`]'s ordering as a predicate: does the ledger verdict `event`
+/// answer instead of `file` (the parsed legacy file; `None` = no file)? Every
+/// reader that sees both a file and the ledger asks this, so none of them
+/// lets a stale file hide a newer ledger-only verdict (M1 round 3).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn ledger_supersedes(
+    file: Option<&RecordedVerdict>,
+    event: &crate::gate::ledger::GateEvent,
+) -> bool {
+    let Some(led) = event.verdict_record().and_then(parse_ledger_record) else {
+        return false;
+    };
+    let Some(file) = file else {
+        return true;
+    };
+    if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
+        return false;
+    }
+    match (
+        rfc3339(file.recorded_at.as_deref()),
+        ledger_order_time(event),
+    ) {
+        (Some(f), Some(l)) => l > f,
+        (None, Some(_)) => true,
+        _ => false,
+    }
+}
+
+fn rfc3339(s: Option<&str>) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    s.and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok())
+}
+
+/// When a ledger verdict counts as recorded, in primary-side time only: the
+/// earlier of the ledger's own `at` (stamped on append) and the record's
+/// `recorded_at`, so neither a future-dated record nor a late collection of
+/// an old round can pass as newer than it is.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn ledger_order_time(
+    event: &crate::gate::ledger::GateEvent,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let recorded = event
+        .verdict_record()
+        .and_then(|r| r.get("recorded_at"))
+        .and_then(|v| v.as_str());
+    match (rfc3339(Some(&event.at)), rfc3339(recorded)) {
+        (Some(at), Some(recorded)) => Some(at.min(recorded)),
+        (at, recorded) => at.or(recorded),
+    }
+}
+
+/// The body a single-key reader should weigh for `key`: the legacy file's
+/// `file_body` unless the ledger (shared by `start`) holds a newer verdict
+/// ([`ledger_supersedes`]), or the ledger's record when there is no file. A
+/// file that exists but does not parse is kept: it is evidence the reader
+/// must fail closed on, and the ledger does not paper over it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_body(
+    start: &Path,
+    key: &str,
+    file_body: Option<String>,
+) -> Option<String> {
+    let parsed = file_body.as_deref().map(parse_recorded_verdict);
+    if matches!(parsed, Some(None)) {
+        return file_body;
+    }
+    let event = crate::gate::ledger::project::newest_verdict_event(start, key);
+    match event {
+        Some(event) if ledger_supersedes(parsed.flatten().as_ref(), &event) => event
+            .verdict_record()
+            .and_then(|r| serde_json::to_string(r).ok())
+            .or(file_body),
+        _ => file_body,
+    }
+}
+
+/// [`current_verdict_body`] for the verdict file at `path`
+/// (`<root>/.aida/review-verdicts/<KEY>.json`); `None` when neither the file
+/// nor the ledger holds a record.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_body_at(path: &Path) -> Option<String> {
+    let file_body = read_verdict_body(path).ok();
+    let key = path.file_stem()?.to_str()?;
+    let root = path.parent()?.parent()?.parent()?;
+    current_verdict_body(root, key, file_body)
 }
 
 /// Read the recorded verdict trying several id forms (agreed id, spec id) —

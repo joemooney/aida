@@ -1092,18 +1092,15 @@ pub(crate) fn probe_resume_facts(
             let Some(head) = current_head.as_deref() else {
                 return false;
             };
-            let paths = [
-                crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{n}")),
-                crate::gate::review_verdict::verdict_path(project_root, spec),
-            ];
-            let bodies: Vec<String> = match paths
-                .iter()
-                .filter(|path| path.exists())
-                // trace:TASK-1801 | ai:claude
-                .map(crate::gate::review_verdict::read_verdict_body)
-                .collect::<Result<Vec<String>, _>>()
-            {
-                Ok(bodies) if !bodies.is_empty() => bodies,
+            // The merge chokepoint's corpus, gate ledger included (M1).
+            // trace:TASK-1801 | ai:claude
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let bodies: Vec<String> = match crate::gate::merge_hold_core::corpus_gate_bodies(
+                &[project_root],
+                u64::from(n),
+                &[spec.to_string()],
+            ) {
+                Ok(found) if !found.is_empty() => found.into_iter().map(|(_, body)| body).collect(),
                 _ => return false,
             };
             matches!(

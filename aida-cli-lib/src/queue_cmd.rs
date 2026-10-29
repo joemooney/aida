@@ -13884,14 +13884,14 @@ pub(crate) fn run_standalone_reviewer(
         )
     });
     if !quiet {
-        // A collected verdict is on the ledger only; the file may be absent.
+        // A collected verdict is on the ledger only: the file may be absent,
+        // or a previous round's, so the newer of the two is this review's.
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-        let verdict_json = crate::gate::review_verdict::read_verdict_body(verdict_path)
-            .ok()
-            .or_else(|| {
-                crate::gate::ledger::project::newest_verdict(project_root, &format!("PR-{pr}"))
-                    .and_then(|record| serde_json::to_string(&record).ok())
-            });
+        let verdict_json = crate::gate::review_verdict::current_verdict_body(
+            project_root,
+            &format!("PR-{pr}"),
+            crate::gate::review_verdict::read_verdict_body(verdict_path).ok(),
+        );
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),
@@ -15388,19 +15388,15 @@ pub(crate) fn probe_pr_integration_state(
     // trace:BUG-1581 | ai:codex
     let (local_request_changes, review_integrity_unproven) = item
         .map(|i| {
-            let n = i.number;
-            let paths = [
-                crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{n}")),
-                crate::gate::review_verdict::verdict_path(project_root, spec_id),
-            ];
-            let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
-            let bodies: Vec<String> = match existing
-                .iter()
-                // trace:TASK-1801 | ai:claude
-                .map(|path| crate::gate::review_verdict::read_verdict_body(path))
-                .collect::<Result<_, _>>()
-            {
-                Ok(bodies) => bodies,
+            // The merge chokepoint's corpus, gate ledger included (M1).
+            // trace:TASK-1801 | ai:claude
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let bodies: Vec<String> = match crate::gate::merge_hold_core::corpus_gate_bodies(
+                &[project_root],
+                i.number,
+                &[spec_id.to_string()],
+            ) {
+                Ok(found) => found.into_iter().map(|(_, body)| body).collect(),
                 Err(_) => return (false, true),
             };
             if bodies.is_empty() {

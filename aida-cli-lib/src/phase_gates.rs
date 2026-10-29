@@ -837,7 +837,9 @@ pub(crate) fn capture_review_calibration_for_spec(
     verdict_path: &std::path::Path,
     spec: &str,
 ) {
-    let Ok(body) = crate::gate::review_verdict::read_verdict_body(verdict_path) else {
+    // M1: a collected verdict is on the gate ledger only, so the file can be
+    // missing or a previous round's. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let Some(body) = crate::gate::review_verdict::current_verdict_body_at(verdict_path) else {
         return;
     };
     let Some(verdict) = reviewer_summary::parse_verdict_file(&body) else {

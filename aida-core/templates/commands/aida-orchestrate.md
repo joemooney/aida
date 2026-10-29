@@ -44,7 +44,7 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
 5. Give every branch a fresh reviewer as a separate process launched from
    Bash: `aida queue work PR-<n> --role reviewer --no-human --vendor claude`
    (under `AIDA_CONTAINED` the codex vendor refuses). Only when it exits 0
-   with a `verdict:` line, read `.aida/review-verdicts/PR-<n>.json`; any
+   with a `verdict:` line, read it with `aida review verdict PR-<n> --json`; any
    non-zero exit (30 = no verified verdict) means launch a new reviewer. If
    it refuses with "branch pr-<n> is held by worktree ...", run
    `aida session end --spec PR-<n> --remove --skip-ci --yes` and

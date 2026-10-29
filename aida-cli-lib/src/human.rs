@@ -188,6 +188,43 @@ pub(crate) fn spec_review_approved(
         req.agreed_id.as_deref(),
         req.spec_id.as_deref(),
     ];
+    // M1: a collected verdict is on the gate ledger only. Its newest record
+    // for each key competes as a candidate wherever it is newer than the file
+    // (or there is none), so a stale file decides nothing on its own.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let pr_key = format!("PR-{pr_number}");
+    for key in std::iter::once(pr_key.as_str()).chain(ids.into_iter().flatten()) {
+        if key.trim().is_empty() || key == "???" {
+            continue;
+        }
+        let Some(event) = crate::gate::ledger::project::newest_verdict_event(project_root, key)
+        else {
+            continue;
+        };
+        let path = crate::gate::review_verdict::verdict_path(project_root, key);
+        let file = crate::gate::review_verdict::read_verdict_body(&path)
+            .ok()
+            .map(|body| crate::gate::review_verdict::parse_recorded_verdict(&body));
+        // An unreadable or unparseable file keeps its own blocking say.
+        if path.exists() && !matches!(file, Some(Some(_))) {
+            continue;
+        }
+        if !crate::gate::review_verdict::ledger_supersedes(file.flatten().as_ref(), &event) {
+            continue;
+        }
+        let Some(led) = event
+            .verdict_record()
+            .and_then(crate::gate::review_verdict::parse_ledger_record)
+        else {
+            continue;
+        };
+        candidates.push((
+            led.kind.approves() && !led.is_closed(),
+            crate::gate::review_verdict::ledger_order_time(&event)
+                .map(|t| t.with_timezone(&chrono::Utc)),
+        ));
+    }
+
     for path in ids
         .into_iter()
         .flatten()

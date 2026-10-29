@@ -133,6 +133,28 @@ impl RetainedHistory {
             .map_err(|why| anyhow::anyhow!("retained verdict history is unreadable: {why}"))?;
         Ok(Self { archived, location })
     }
+
+    /// The archive beside the verdict file at `file` (when there is one) plus
+    /// every round the gate ledger holds for `key` (M1: a collected verdict
+    /// is ledger-only). Neither source alone is required.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    pub(crate) fn with_ledger(file: Option<&Path>, root: &Path, key: &str) -> Result<Self> {
+        let mut history = match file {
+            Some(path) => Self::beside(path)?,
+            None => Self {
+                archived: Vec::new(),
+                location: format!("no verdict file for {key}"),
+            },
+        };
+        let ledger = crate::gate::ledger::project::verdict_records(root, key);
+        if !ledger.is_empty() {
+            history.location = format!("{} and the {key} gate ledger", history.location);
+            history
+                .archived
+                .extend(ledger.into_iter().map(Value::Object));
+        }
+        Ok(history)
+    }
 }
 
 /// Where this build of the writer keeps round history, named in refusals.
@@ -609,14 +631,24 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     .context("covered spec store is unreadable; human clear required")?;
                 Ok((ids, store))
             },
+            // M1: a contained reviewer's collected approval is on the gate
+            // ledger only, so the newer of file and ledger is the latest
+            // verdict, and the ledger's rounds join the retained history.
             // trace:TASK-1801 | ai:claude
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
             read_body: &|key| {
-                Ok(serde_json::from_str(&rv::read_verdict_body(
-                    verdict_file(key)?,
-                )?)?)
+                let file = match verdict_file(key) {
+                    Ok(path) => Some(rv::read_verdict_body(path)?),
+                    Err(_) => None,
+                };
+                let body = rv::current_verdict_body(&root, key, file)
+                    .with_context(|| format!("arming verdict {key} is missing"))?;
+                Ok(serde_json::from_str(&body)?)
             },
             // trace:BUG-2186 | ai:claude
-            read_history: &|key| RetainedHistory::beside(&verdict_file(key)?),
+            read_history: &|key| {
+                RetainedHistory::with_ledger(verdict_file(key).ok().as_deref(), &root, key)
+            },
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
             },

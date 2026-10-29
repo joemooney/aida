@@ -106,6 +106,20 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     verdict_events(&root, key).pop()
 }
 
+/// Every verdict record the ledger holds for `key`, oldest first: the round
+/// history a reader of a ledger-only verdict needs (the rework hold's
+/// arming refusal, BUG-2186).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn verdict_records(start: &Path, key: &str) -> Vec<JsonObj> {
+    let Ok(root) = store_root(start) else {
+        return Vec::new();
+    };
+    verdict_events(&root, key)
+        .into_iter()
+        .filter_map(|e| e.verdict_record().cloned())
+        .collect()
+}
+
 /// The newest verdict record the ledger holds for `key`.
 pub(crate) fn newest_verdict(start: &Path, key: &str) -> Option<JsonObj> {
     newest_verdict_event(start, key).and_then(|e| e.verdict_record().cloned())

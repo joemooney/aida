@@ -1053,23 +1053,36 @@ pub(crate) fn merge_gate_verdict_candidates(
                 continue;
             }
             // M1: a verdict collected from a contained reviewer is on the
-            // change's gate ledger only; with no file, the ledger's newest
-            // record for the key is the current one (once per ledger).
+            // change's gate ledger only. The ledger's newest record for the
+            // key is the current one when there is no file or it is newer
+            // than the file (round 3: a file must not hide a newer
+            // ledger-only verdict). Counted once per ledger; a file the
+            // ledger has already outranked adds nothing.
             // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-            let mut ledger_current = || {
-                let store = crate::gate::ledger::store_root(root).ok()?;
-                let seen_key = store.join(".aida").join("gate-ledger").join(key);
-                if seen.contains(&seen_key) {
-                    return None;
-                }
-                seen.push(seen_key);
-                crate::gate::ledger::project::newest_verdict(&store, key)
-                    .and_then(|record| crate::gate::review_verdict::parse_ledger_record(&record))
-            };
-            let current = match body {
+            let file = match body {
                 Ok(body) => crate::gate::review_verdict::parse_recorded_verdict(&body),
-                Err(_) if !file_exists => ledger_current(),
                 Err(_) => None,
+            };
+            let ledger_applies = file.is_some() || !file_exists;
+            let ledger = ledger_applies.then_some(()).and_then(|()| {
+                let store = crate::gate::ledger::store_root(root).ok()?;
+                let event = crate::gate::ledger::project::newest_verdict_event(&store, key)?;
+                Some((store.join(".aida").join("gate-ledger").join(key), event))
+            });
+            let current = match ledger {
+                Some((seen_key, event))
+                    if crate::gate::review_verdict::ledger_supersedes(file.as_ref(), &event) =>
+                {
+                    if seen.contains(&seen_key) {
+                        None
+                    } else {
+                        seen.push(seen_key);
+                        event
+                            .verdict_record()
+                            .and_then(crate::gate::review_verdict::parse_ledger_record)
+                    }
+                }
+                _ => file,
             };
             let current_at_head = match (&current, head) {
                 (Some(v), Some(h)) => v

@@ -719,11 +719,13 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
                 let spec = worktree_lease::spec_id_from_branch(&pr.head_branch);
                 let mut keys = vec![format!("PR-{}", pr.number)];
                 keys.extend(spec.clone());
+                // Each key's current body, gate ledger included (M1).
+                // trace:TASK-1801 | ai:claude
+                // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
                 let bodies = keys
                     .iter()
                     .map(|key| crate::gate::review_verdict::verdict_path(project_root, key))
-                    // trace:TASK-1801 | ai:claude
-                    .filter_map(|path| crate::gate::review_verdict::read_verdict_body(path).ok())
+                    .filter_map(|path| crate::gate::review_verdict::current_verdict_body_at(&path))
                     .collect();
                 let spec_completed = spec.as_deref().is_some_and(|id| {
                     status_by_spec
