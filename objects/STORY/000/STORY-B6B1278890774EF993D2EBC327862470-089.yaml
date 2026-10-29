@@ -1,0 +1,32 @@
+id: 01a188f9-1e6a-7d80-b299-16f63bee74a1
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-089
+title: 'Review PR-3098: [AI:codex] docs(workflow): explain the collaboration loop and durable records (TASK-B6B1278890774EF993D2EBC327862470-108)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188f5`) for branch `task-b6b1278890774ef993d2ebc327862470-108-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3098>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-108-work` → `task-b6b1278890774ef993d2ebc327862470-107-work`
+
+  ## Covers
+
+  - TASK-B6B1278890774EF993D2EBC327862470-108
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3098` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T18:43:10.058909614Z
+modified_at: 2026-10-29T18:43:10.058909614Z
+req_type: Story
+filed_at:
+  code_sha: 2e6e624efdbfa5265d83b335bfd18025e4a33719
+  branch: task-b6b1278890774ef993d2ebc327862470-108-work
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00500cf82ce
+  vendor: codex
