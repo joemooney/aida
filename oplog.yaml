@@ -86562,5 +86562,31 @@ operations:
   timestamp: 2026-10-29T18:34:08.252053012Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6758
+- id: 01a188f4-bc34-7a92-ad69-53bc809731b5
+  target_id: 01a188f4-b4fb-70c2-8b12-aafe1bea9209
+  author: aida
+  node_id: '1'
+  lamport: 6759
+  timestamp: 2026-10-29T18:38:22.772235716Z
+  kind: !Create
+    title: 'Review PR-3097: [AI:codex] docs(configuration): explain configurable operating models (TASK-B6B1278890774EF993D2EBC327862470-107)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188f0`) for branch `task-b6b1278890774ef993d2ebc327862470-107-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3097>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-107-work` → `task-b6b1278890774ef993d2ebc327862470-106-work`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-107
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3097` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6759
 node_id: '1'
