@@ -74,7 +74,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T20:41:17.069076859Z
+modified_at: 2026-10-29T21:19:52.648134108Z
 req_type: Story
 tags:
 - architecture
@@ -549,6 +549,48 @@ comments:
   created_at: 2026-10-29T20:35:05.818778036Z
   modified_at: 2026-10-29T20:35:05.818778036Z
   session_id: 01a189412b5b
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18988-9748-7ab3-8f2f-9912c5069abd
+  author: joe
+  content: |-
+    ## Slice 2 handoff #2 (implementer seat rotation, 2026-10-29 14:20). WIP; no PR open yet.
+
+    Branch `story-b6b1278890774ef993d2ebc327862470-080` pushed at **4f924d0** (on top of e87ae08/c023934). `.slice2-failing.txt` is deleted. The approach comment and the 13:40 ruling stay valid; do not re-sketch.
+
+    **Not yet compiled.** The last green `--no-run` build predates about half of 4f924d0's edits. First step: `env -u AIDA_CONTAINED cargo test --profile agent -p aida-cli-lib --lib --no-run` and fix any compile errors.
+
+    **Running isolated (BUG-1642) tests in this sandbox works in child mode:** `env -i PATH="$PATH" HOME=<tmp home with .gitconfig> TMPDIR="$TMPDIR" GIT_CONFIG_NOSYSTEM=1 AIDA_TEST_PATH_CHILD=<name> <test-bin> --exact --nocapture --test-threads=1 <name>`. 16 isolated tests were in the failing set; only `drain_gate::bug_2139...` and `story_1917_native_pr_ship_fixture...` were checked (both pass). Background builds: use the harness `run_in_background`; `setsid`/`&` jobs get killed.
+
+    ### What 4f924d0 adds
+    - Ruling (d) fixed: `merge_hold_core::collected_hold` turns a collected untyped worktree marker into a typed Rework hold (`legacy=false`). Test: `a_collected_untyped_marker_becomes_a_typed_rework_hold`.
+    - `ledger::hold::fold`: a new `hold` event voids a pending `release-authorized`.
+    - `rework_hold_release::release_with`:
+      - restores record-then-comment order: authorize(posted=false), comment, then authorize(posted=true);
+      - after the second pass it refuses "already removed the hold" when the hold is gone, and "withdrawn by a concurrent release" when the authorization was withdrawn (TASK-2285 parity).
+    - `ledger::store`:
+      - an append refuses a symlinked ledger file (O_NOFOLLOW);
+      - append errors name the ledger file (BUG-1571).
+    - `review_verdict`:
+      - `refuse_unsafe_legacy_history`: the writer and `close_verdict_on_merge` fail closed on a linked verdict dir or a refused legacy archive entry (TASK-1801);
+      - `close_legacy_archive_left_open` handles TASK-2135;
+      - `carry_unarchived_rounds` handles TASK-1766;
+      - `verdicts_for_sha` is now ledger-aware. It was legacy-archive-only, which meant `aida awaiting`/mandate_drive approved_at_head never saw slice-2 verdicts;
+      - the same-round tie-break is flipped to the ledger (brief item 3);
+      - `crate::gate::ledger::contained()` replaces direct `crate::session` reach (story_1888 kernel ratchet).
+    - New `gate/hold_collect.rs`: `dispatch_reviewer_hold` reaches hold collection through it, so `gate/dispatch_*` no longer names `merge_hold_core`/`ledger` (story_1888 dispatch ratchet). Stale `orchestrator_leaves` entries are removed.
+    - Tests retargeted to ledger state:
+      - story_1687 (36), story_1697 (14), bug_2186 (8), bug_2123 (8), merge_hold_core (5), review_verdict (~30), story_1917 exec (2);
+      - pr_ship_gate source needles: `clear_hold` → `release_hold(`;
+      - pr_merge_gate (2), mandate task_1790, review_marker 1405, and ledger tests (2).
+      - TASK-1801/1951 tests keep their assertions. Their fixtures hand-build the legacy current+archive pair through a new `legacy_pair` helper. One retained-history read moved from `beside` to `projected`.
+
+    ### Remaining
+    1. Compile. Then run `gate:: drain_gate pr_merge_gate` (the failing set was 121 real + 16 isolated), and the isolated tests in child mode.
+    2. Not yet looked at: `story_1917...::task_2344_q2...` ("advisor seat grant ... no grant record"; possibly ambient env), and `same_tree_under_a_second_pr_number_finds_the_review` (should pass now that `verdicts_for_sha` reads the ledger).
+    3. Run the wider filters from the first handoff, then `make check-ci-fast`, then open the PR with `(Refs <spec>)`. The PR body should flag the `beside`→`projected` change in `task1801_record_refuses_to_rewrite_a_refused_archive_entry` and the new `gate/hold_collect.rs` module for the reviewer.
+  created_at: 2026-10-29T21:19:52.648134108Z
+  modified_at: 2026-10-29T21:19:52.648134108Z
+  session_id: 01a189653e4a
   harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
