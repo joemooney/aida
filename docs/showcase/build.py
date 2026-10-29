@@ -11,7 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / 'docs/showcase'
-PAGES = [('getting-started.md', 'getting-started.html', 'Get started')]
+PAGES = [('getting-started.md', 'getting-started.html', 'Get started'),
+         ('configuration-guide.md', 'configuration.html', 'Configuration')]
 
 
 def inline(text):
@@ -86,7 +87,9 @@ def main():
     for source, output, title in PAGES:
         content = (ROOT / 'docs' / source).read_text()
         nav = ''.join(f'<a href="{dest}"' + (' aria-current="page"' if dest == output else '') + f'>{html.escape(label)}</a>' for _, dest, label in PAGES)
-        page = template.replace('{{title}}', html.escape(title)).replace('{{nav}}', nav).replace('{{source}}', '../' + source).replace('{{content}}', render(content))
+        graphic_path = SITE / 'assets' / (Path(output).stem + '.svg')
+        graphic = f'<figure><img class="guide-graphic" src="assets/{graphic_path.name}" alt="{html.escape(title)} diagram; details follow in the source guide"></figure>' if graphic_path.exists() else ''
+        page = template.replace('{{graphic}}', graphic).replace('{{title}}', html.escape(title)).replace('{{nav}}', nav).replace('{{source}}', '../' + source).replace('{{content}}', render(content))
         (SITE / output).write_text(page)
 
 
