@@ -28,7 +28,7 @@ Generated files are committed and can be read directly from disk.
 ## Curated library and publication scope
 
 `publication.json` is the explicit source allowlist and audience classification.
-It currently selects six tracked product guides, classified as human or operator
+It currently selects seven tracked product guides, classified as human or operator
 reading. Technical references remain links; historical, internal, archived,
 plan/spike/security/agent material and runtime data are not republished or indexed.
 The manifest keeps publication scope explicit; adding a source requires checking its audience, currentness and references.

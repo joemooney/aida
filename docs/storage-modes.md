@@ -1,6 +1,8 @@
 # AIDA Storage Modes
 
-**Last updated**: 2026-05-02 (Phase 3 of EPIC-1-001 — git-canonical is now the default)
+**Setup/storage review**: 29 October 2026. Start with the [operator guide](operator-setup.md); backend-specific legacy details remain scoped below.
+
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-112 | ai:codex -->
 
 AIDA's recommended deployment is **git-canonical with a SQLite read cache**. Other modes exist for specific scenarios (PostgreSQL for shared server-backed deployments) or backwards compatibility (legacy single-file YAML / standalone SQLite). This document explains all options and how to choose.
 
@@ -24,8 +26,8 @@ Legacy SQLite-canonical (deprecated):         aida init --centralized
 
 | Mode | IDs | Offline? | Multi-user? | Status |
 |------|-----|----------|-------------|--------|
-| [Git worktree (default)](#git-worktree-default) | `FR-1-001` → `FR-1` | Yes | Yes (via git) | **Recommended** |
-| [Git sibling](#git-sibling-repo) | `FR-1-001` → `FR-1` | Yes | Yes (via git) | Recommended for multi-repo |
+| [Git worktree (default)](#git-worktree-default) | Clone-local IDs; global IDs require enrollment | Yes | Yes (via git) | **Recommended** |
+| [Git sibling](#git-sibling-repo) | Clone-local IDs; global IDs require enrollment | Yes | Yes (via git) | Recommended for multi-repo |
 | [PostgreSQL](#postgresql-opt-in) | `FR-001` | No | Yes | Opt-in (feature flag) |
 | [Legacy SQLite](#legacy-sqlite-deprecated) | `FR-001` | Yes (solo) | Limited | Deprecated |
 | [Legacy YAML](#legacy-yaml-deprecated) | `FR-001` | Yes (solo) | No | Deprecated |
@@ -47,16 +49,10 @@ aida init
 - One YAML file per requirement: `objects/<TYPE>/000/SPEC-ID.yaml`
 - A worktree at `.aida-store/` (gitignored) is the live working copy
 - A SQLite read cache at `.aida/cache.db` (gitignored, auto-rebuilt) projects summary fields for fast list/filter/search
-- Writes go to git first, then the cache (write-through). Stale-detection compares the cache's HEAD SHA against the orphan branch's HEAD; mismatch triggers rebuild on next read.
-- IDs are node-namespaced (`FR-1-001`); short agreed IDs (`FR-1`) get assigned at merge-to-trunk via `aida db merge-gate`
-- When using pre-allocated short-ID blocks, `aida add` pulls the store before
-  allocation and pushes the newly allocated ID immediately when an `origin`
-  remote is available. `aida pull` / `aida db sync --pull` also scan for
-  duplicate `SPEC-ID` claims. If two clones already wrote different objects
-  with the same `SPEC-ID`, AIDA refuses to continue with paste-ready recovery
-  guidance instead of letting a rebase-skip cascade silently drop one side.
-  The online retry budget defaults to 3 and can be raised with
-  `[store.allocation] retry_max = N` in `.aida/config.toml`.
+- Writes persist through the git-canonical backend and its derived cache. Cache freshness is checked against store revisions; bounded reads may label stale/deferred/busy context rather than promise a synchronous full rebuild.
+- Default WORK clones allocate UUID-bound, per-type node-local IDs. Only an explicitly enrolled HOME clone may consume global blocks or promote IDs; cached blocks and shared metadata are not authority. These are clone allocation names, not privacy profiles or physical locations.
+- Clone-local identity, counters and transport policy are shared by linked worktrees through the common Git directory. Store history, the cache and local operational evidence have different recovery and backup requirements.
+- Read the [allocation and transport reference](cli/07-project-setup.md) for source-backed policy and limitations; do not assume a pull/push automatically promotes IDs or provides a future hierarchical allocation/sharing protocol.
 
 **Files**:
 ```
@@ -83,8 +79,7 @@ aida db sync --pull --push
 **New developer setup**:
 ```bash
 git clone <repo>
-git worktree add .aida-store aida-store    # check out the orphan branch
-aida list                                  # cache rebuilds on first run
+aida list                                  # attaches available store history; inspect freshness labels
 ```
 
 ---
@@ -100,7 +95,7 @@ aida init --sibling --registry-remote git@github.com:org/aida-registry.git
 
 **How it works**:
 - The store lives in `../aida-store/` as a separate git repo, not as an orphan branch in your code repo
-- All other behavior matches git worktree mode (cache, write-through, agreed IDs, sync)
+- The cache and canonical-store distinction still applies. Use `--attach` with the configured store path to join an existing sibling store without reseeding it; inspect allocation and transport for this exact attachment.
 
 **Files**:
 ```
@@ -162,7 +157,7 @@ aida init --centralized
 
 **Status**: Deprecated. The standalone `requirements.yaml` mode predates SQLite-canonical and predates git-canonical by a wider margin.
 
-**Why you shouldn't use it**: A monolithic YAML file forces full reload + full rewrite for every operation; merge conflicts on shared branches are guaranteed. The git-canonical store gives you per-object YAML files (still diffable, no merge conflicts) plus the cache for query speed.
+**Why you shouldn't use it**: A monolithic YAML file forces full reload + full rewrite for every operation; concurrent edits can conflict. The git-canonical store gives you per-object YAML files (still diffable, with conflict handling for concurrent edits) plus the cache for query speed.
 
 ---
 
@@ -243,3 +238,9 @@ aida github pull                # imports GitHub issues as requirements
 ```
 
 **Git store + GitLab / Jira sync**: same pattern via `aida gitlab` and `aida jira` subcommands (require corresponding feature flags).
+
+### Allocation retry and duplicate-ID safeguards
+
+The online store-allocation retry budget defaults to three attempts. Set a positive `[store.allocation] retry_max = N` in `.aida/config.toml` to change it. This is a retry control; it does not grant a WORK clone HOME allocation authority.
+
+Store synchronization checks for duplicate `SPEC-ID` claims. If different objects claim the same ID, AIDA refuses to continue and prints recovery guidance rather than silently discarding one object's content. Preserve both objects and follow that guidance before retrying synchronization.

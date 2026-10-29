@@ -204,6 +204,14 @@ This enables administrators to enforce naming conventions across the team.
 
 ## Storage Backends
 
+For the current supported setup route, start with the [operator guide](operator-setup.md).
+AIDA supports Linux x86_64 and arm64 only. MCP registration is opt-in with
+`aida init --with-mcp`; everyday conversational use does not require people to
+learn tracking commands. Adopted projects and sibling stores have separate
+setup paths described in that guide.
+
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-112 | ai:codex -->
+
 **As of EPIC-1-001 (2026-05-02), AIDA's canonical model is git-orphan-branch + SQLite cache view.** New projects (`aida init`) get this by default. Other modes are either alternatives for specific scenarios (PostgreSQL for shared server-backed deployments, sibling repo for multi-repo workspaces) or deprecated legacy paths (standalone YAML, standalone SQLite-canonical).
 
 For the full mode comparison, when to use each, and migration guidance, see **[Storage Modes](storage-modes.md)**.
@@ -227,7 +235,7 @@ aida cache status      # Compare cache HEAD vs git HEAD; show counts; report FRE
 aida cache rebuild     # Force a full rebuild from git
 ```
 
-The cache rebuilds automatically on the next read whenever its recorded HEAD SHA differs from the orphan branch's actual HEAD (e.g., after `git pull` brings in remote requirement changes).
+Reads compare cache and store revisions, but bounded read paths may return labeled stale, deferred or busy context. Use explicit cache maintenance when a strict rebuild is required. Rebuilding the cache cannot restore unpublished store history, local grants or other operational evidence.
 
 ### Backend auto-detection
 

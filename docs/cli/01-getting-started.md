@@ -1,6 +1,6 @@
 # Chapter 1 — Getting started & the daily drivers
 
-The commands you touch on day one and then every day after: `init` once, then `add` / `list` / `show` / `edit` / `done` constantly. Master these six and you can use AIDA; everything in the later chapters is depth on top of this floor.
+A command reference for agents and operators: initialize the project, then capture, inspect and update its graph. People can begin with the [conversational getting-started guide](../getting-started.md); they do not need to memorize these mutation commands.
 
 > Reminder on the manual's contract: this chapter explains *when and why*. For the exact flag list and defaults, `aida <command> --help` is the source of truth — we don't copy it here (that's how reference docs rot). We cover only the options whose *rationale* isn't obvious from their name.
 
@@ -10,20 +10,23 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 **One line** — turns a git repo into an AIDA project.
 
-**Mental model.** `init` is a *one-time, per-project* bootstrap. It creates four things: the **store** (an orphan `aida-store` branch holding one YAML file per spec — versioned alongside your code but not cluttering your working tree), a rebuildable **cache** (`.aida/cache.db`, gitignored, makes `list`/`search` instant), the **MCP server** registration (so coding agents can query the graph), and the **scaffolding** (skills, hooks, templates, the discipline pack). On the *first* `init` on a machine it also sets machine-global defaults (the role set, the agent permission posture).
+**Mental model.** `init` establishes the default git-canonical store and rebuildable cache, then scaffolds selected agent profiles according to the chosen footprint. CLI-capable agents use the CLI by default; MCP registration is explicit opt-in with `--with-mcp`. First-machine setup can offer role and permission-posture configuration at a terminal. Adopted projects project their existing adoption plane instead of writing ordinary product scaffolding; see the [operator guide](../operator-setup.md).
 
 **Reach for it when** — you're starting AIDA in a repo for the first time, *after* `git init` (AIDA's store needs a git repo to live in).
 
-**Don't reach for it when** — the project is already initialized (you'll be refused unless you pass `--force`); or you want to *re-scaffold updated templates* into an existing project — that's `--refresh` flows, not a fresh `init`. And don't reach for `--centralized`: it's the deprecated SQLite-canonical mode, kept only for legacy projects; new projects want the git-canonical default.
+**Don't reach for it when** — you only want to inspect existing state or refresh installed template packs. Use the relevant read command or documented `--refresh` workflow. Before running setup in an existing clone, inspect its attachment and adoption mode; `--force` can overwrite files. The deprecated `--centralized` path is for legacy SQLite-canonical projects, not the default route.
 
 **Key options (rationale only).**
-- `--sibling` — use a separate repo for the store instead of an orphan branch. The whole point is *multi-repo workspaces*: several code repos sharing one requirement graph. A single-repo project should not use this.
-- `--agent claude|codex|both` — which agent profiles to scaffold skills for. Default `both` is right unless you know you'll only ever use one.
-- `--name` — sets the project's display name; defaults to the directory basename, which is usually what you want — set it explicitly only when the folder name is ugly.
-- `--with-memories` — opt into the starter memory pack (generic AIDA-using discipline). Worth it for a project you'll run agents in heavily; skippable for a quick trial.
-- `--no-skills` / `--no-hooks` / `--no-roles` / `--no-agent-config` — escape hatches for "I want the store but not the Claude Code furniture." Most users want all of it.
+- `--sibling` — use a separate store repository; useful for multi-repository workspaces or an independently managed store.
+- `--attach` / `--store-path` — join an existing sibling store at the intended path without reseeding its contents.
+- `--agent` — explicitly choose supported profiles (Claude, Codex, Antigravity, combinations or all); omitted selection uses PATH detection. `both` means Claude and Codex, not every vendor.
+- `--with-mcp` — explicitly scaffold MCP registrations for selected supported profiles.
+- `--footprint` — choose full, minimal or memory-lane adoption; the separate `--minimal` demonstration flag is a different workflow.
+- `--name` — set the project display name; defaults to the directory basename.
+- `--with-memories` — opt into the starter memory pack.
+- `--no-skills` / `--no-hooks` / `--no-roles` / `--no-agent-config` — skip the documented setup categories. Inspect help for the exact footprint interaction.
 
-**Gotchas.** It refuses to initialize *over a workspace of nested git repos* (it would capture the whole tree) — that's a feature, not a bug; use `--sibling` for that shape. Non-interactive `init` never prompts (so it's CI-safe), which means the first-machine permission-posture prompt is silently skipped — fine, it defaults to the faithful posture.
+**Gotchas.** Non-interactive init does not prompt for first-machine permission posture. Inspect `aida config permissions show` afterward rather than assuming a prompt was answered. A workspace of nested repositories needs deliberate store attachment, not an accidental parent-project initialization.
 
 **Outside a project.** Run from a directory that isn't inside an AIDA project, `add`, `list`, `edit` and the other store commands refuse with setup guidance instead of guessing a store. A legacy `default_project` entry in the old project registry (`~/.aida.config` / `~/.requirements.config`) is no longer used implicitly, because it could point at an unrelated project. To target a store on purpose, pass `--file <path>` or `-p <project>`, or set `AIDA_STORE` or `REQ_DB_NAME`.
 

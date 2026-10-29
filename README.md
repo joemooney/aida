@@ -90,8 +90,10 @@ git clone <repo-url> && cd <repo>
 aida list
 ```
 
-Before creating specs in a new clone, run `aida init` (or `aida node acquire`)
-to claim a node ID so your spec IDs do not collide with other clones.
+Before creating specs, follow the [operator setup guide](docs/operator-setup.md)
+for the project's attachment and clone-local identity. Allocation defaults to
+UUID-bound WORK IDs; global allocation requires explicit HOME enrollment. These
+policy names do not describe a person's physical workplace or sharing policy.
 
 ## Finding your way around
 

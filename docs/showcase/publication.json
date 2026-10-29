@@ -37,6 +37,12 @@
       "output": "metrics.html",
       "label": "Metrics",
       "category": "operator"
+    },
+    {
+      "source": "operator-setup.md",
+      "output": "setup.html",
+      "label": "Setup",
+      "category": "operator"
     }
   ]
 }

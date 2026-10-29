@@ -8,7 +8,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ### `aida init`
 
-*(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + MCP registration + scaffolding, plus first-machine-global defaults. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
+*(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + selected agent scaffolding, plus first-machine-global defaults. MCP registration is explicit opt-in with `--with-mcp`; the CLI is the default surface for CLI-capable agents. See the [operator route](../operator-setup.md) for adopted projects and sibling-store setup. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
 
 ---
 
@@ -613,8 +613,8 @@ legacy single-file storage and store initialization. A server discards the
 refused change from its in-memory state instead of reporting success; if it
 cannot reload, it refuses further saves until a reload succeeds.
 
-**Remaining acceptance:** actual recoverable FF pull is not available in this
-slice. The client guard does not enforce hub receiving hooks or PUBLIC
+**Boundary:** recoverable fast-forward store pull is implemented as described
+above. The client guard does not enforce hub receiving hooks or PUBLIC
 forwarding, and raw Git, other AIDA writers that do not go through the store
 backend, and foreign writers can bypass it. No history rewrite, clean export,
 live hub hook or automatic forwarding is provided.
