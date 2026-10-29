@@ -3,12 +3,12 @@ spec_id: BUG-785
 agreed_id: BUG-785
 title: 'queue list --batch ignores filter / queue work --batch over-strict (quizdom #1 — UNVERIFIED, likely misdiagnosed mechanism)'
 description: 'Quizdom #1 (2026-07-19, aida sha 0b0555a8): queue list --batch A returned B''s items; queue work --batch B failed ''no queued items tagged batch:B'' while show confirmed the tag. UNVERIFIED on current main (a7cd68909) — no covering spec found, and the mechanism may be misdiagnosed: ''filter ignored on list'' + ''over-strict on work'' could be a queue-scope/user-id issue (batch tag on the SPEC vs the QUEUE ENTRY, or a $USER mismatch, BUG-89 family) rather than the batch filter. Needs a clean repro on current main to know which. Revisit trigger records that. Do NOT implement a fix until the mechanism is confirmed.'
-status: Approved
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:19.667769905Z
-modified_at: 2026-10-29T06:40:17.401156031Z
+modified_at: 2026-10-29T06:40:21.067519127Z
 req_type: Bug
 tags:
 - aida:queue
@@ -37,4 +37,12 @@ history:
   timestamp: 2026-10-29T06:40:18.232886649Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18663-5c4b-7cc0-a565-d87b152866e8
+  author: joe
+  timestamp: 2026-10-29T06:40:21.067517373Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 execution_mode: drive
