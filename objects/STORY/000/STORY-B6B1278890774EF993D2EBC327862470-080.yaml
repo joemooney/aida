@@ -50,12 +50,12 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
   BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T15:04:39.105392224Z
+modified_at: 2026-10-29T15:36:01.259543366Z
 req_type: Story
 tags:
 - architecture
@@ -302,6 +302,25 @@ comments:
   created_at: 2026-10-29T15:04:39.105388296Z
   modified_at: 2026-10-29T15:04:39.105388296Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a1884d-b9d2-7be0-85f1-7d54a11066f0
+  author: joe
+  content: |-
+    ## Round-4 rework (7dac907): all four findings fixed in this slice
+
+    | # | Finding | Fix | Test |
+    |---|---|---|---|
+    | 1 | `aida review verdict --json` printed the file body | New `review_verdict::current_verdict(_at)` returns the weighed record plus its source (`File` or `Ledger{file,seq}`) and write time. `--json` prints that record with `actionability` and `record_source {kind, location}`; the text `record:` line names the ledger location when the ledger answered | `review_verdict_json_prints_the_selected_record_and_its_source` (ledger-only key, stale file + newer ledger, newer file) |
+    | 2 | Round-3 ruling: no direct legacy readers; no reader ratchet | Routed: `human::pr_has_approved_verdict`/`pr_has_local_verdict` and the phase-3 handshake (`read_verdict_file(_for_head)`, `spec_verdict_fallback_for_phase3`, `phase3_head_archive_fallback`, with the ledger's round at the head as the archive fallback), `db_reconcile::read_review_verdict_for_record`, `list_active_verdicts`, the rework-findings scan, the stranded/stalled sweeps, `audit_verdict_dir`, `review_classes`, the needs-attention round count, and two `lib_part5` reads. Directory scans walk `verdict_keys` (file stems unioned with the ledger's change and spec keys). The handshake counts a ledger record only when it was written during the review session, because the ledger, unlike the file, is not cleared before the reviewer runs. New ratchet `legacy_verdict_files_are_read_only_through_the_ledger_projection`: non-test calls of `read_verdict_body`, `archived_recordings`, `archived_verdict_file_for_sha`, `verdict_file_for_sha` and `verdict_file_modified` outside `gate/review_verdict.rs` and `gate/ledger/legacy.rs` must appear on an allowlist, and each of its 8 entries states a reason (merge-gate corpora that already weigh `ledger_supersedes`, rework retained history, the class corpus, BUG-809 sibling-checkout evidence, archive freshness). Inline `#[cfg(test)]` modules are stripped before counting | `scanning_and_handshake_readers_see_ledger_only_verdicts`, `test_modules_are_stripped_but_code_after_them_is_kept`, the ratchet |
+    | 3 | [regression] findings_gate read only the spec file | `completion_verdict` → `read_recorded_verdict` (ledger-aware) | `a_ledger_only_spec_record_still_files_its_findings_on_completion` |
+    | 4 | `spec_review_approved` kept a superseded file as a candidate | Each key (PR and spec ids) adds ONE candidate from `current_verdict`. Its time is the file mtime or the ledger order time. The unused `verdict_file_written_at` is deleted | `awaiting_you_drops_a_file_the_ledger_supersedes` |
+
+    Tests: `cargo test --profile agent -p aida-cli-lib --lib -- gate::ledger review_verdict_tests merge_hold_core gate::ship rework_hold_release bug_2149 story_1417 needs_attention` gave 349 passed and 16 failed. All 16 failures are `could not install the hermetic test HOME: Read-only file system`, isolated tests this sandboxed seat cannot run; CI runs them. A run over phase_gates, human and findings_gate passed apart from the same sandbox class. `make check-ci-fast` passed.
+
+    Known limit: the ratchet counts calls of the read primitives. A raw `std::fs::read_to_string` on a hand-built verdict path is not caught by it; the existing `"review-verdicts"` literal ratchet still bounds those.
+  created_at: 2026-10-29T15:35:57.650271245Z
+  modified_at: 2026-10-29T15:35:57.650271245Z
+  session_id: 01a18831dbbf
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -464,6 +483,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1884d-c845-7c42-ad8f-0693d750f581
+  author: joe
+  timestamp: 2026-10-29T15:36:01.349825576Z
+  session_id: 01a18831dbbf
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
