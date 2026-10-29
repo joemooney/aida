@@ -5,6 +5,10 @@
     {
       "at": "2026-10-29T18:54:01.817116936Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-29T18:54:03.409577579Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -47,6 +51,16 @@
     {
       "ts": "2026-10-29T18:54:01.546437524Z",
       "spec": "TASK-B6B1278890774EF993D2EBC327862470-101",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8c0adc8fe0776cdc8eb53eb7061cbc65c5302682",
+        "pr": 3094,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-29T18:54:03.273232265Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-101",
       "kind": {
         "event": "SpecCompleted",
         "commit": "8c0adc8fe0776cdc8eb53eb7061cbc65c5302682",
