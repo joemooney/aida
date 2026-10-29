@@ -85496,5 +85496,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6683
+- id: 01a187a2-e57d-7751-87d5-59f6d7d46d14
+  target_id: 01a187a2-de0a-7030-9947-05ee3d16d7ac
+  author: aida
+  node_id: '1'
+  lamport: 6684
+  timestamp: 2026-10-29T12:29:22.173032435Z
+  kind: !Create
+    title: 'minor (non-blocking): no test covers a broken link at .aida/config.toml (shares…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking): no test covers a broken link at .aida/config.toml (shares settings code path)
+
+      PR: #3092
+      Reviewed sha: 7eb3e940b01ab9130ddbafa26791956868f6d0ab
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6684
 node_id: '1'
