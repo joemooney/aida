@@ -36,12 +36,22 @@ description: |
   6. Import the legacy file BEFORE the file write (or dedupe by record identity) so the first write is not recorded twice; delete verdict_history or give it a real caller.
   7. Memoize store_root() like hold_store_root.
   ACCEPTED deviation (reason: switching every verdict writer/reader and deleting collect in the same slice whose own review depends on reviewers recording verdicts is the riskier order): slice 1 may dual-write. SLICE 2 acceptance now additionally REQUIRES: verdict writers stop writing legacy files, all verdict readers read the ledger projection, collect_standalone_verdict / adopt_direct_write are deleted, and the ratchet baseline for verdict writers drops to 0. The story cannot complete with dual writes in place.
+
+
+  ## Slice 1 (PR-3090) ROUND 2 advisor ruling, 2026-10-29 06:35 — REVERSES signoff Q1; final rework push for slice 1
+  Finding: mailbox submissions are not origin-authenticated. Grant files (id + binding) are readable from contained seats, so ingest cannot tell the real reviewer from a seat that copied its grant, and ingest is not bound to the PR. The mailbox gate-event transport is therefore WITHDRAWN.
+  New rule for contained writers: the ONLY route from a contained seat to the ledger is the launcher-side collect, which is origin-authenticated (the uncontained launcher reads the verdict from the exact seat clone it launched, requires the record's pr == the launched PR, and requires the grant to be that launch's own child grant, valid at COLLECTION time). collect_standalone_verdict / adopt_direct_write are KEPT but rewritten to append a `verdict` event to the ledger (no legacy file write on that path). AC5 is amended accordingly: "no verdict/hold state persists in a worktree or seat clone after collection; the ledger is written only by uncontained primary-side code".
+  Do in this push:
+  1. Delete gate/ledger/spool.rs, the mailbox gate-event kind and drain-on-read; projection reads only the ledger (+ legacy read-through).
+  2. Point collect/adopt at ledger append, keeping StandaloneVerdictChecks::check_record (PR binding, child-grant check at collection time). Tests: a verdict naming PR-B collected from PR-A's reviewer seat is refused; an expired/revoked grant at collection is refused.
+  3. Make legacy_gate_writers_do_not_gain_call_sites fast (<10s; scan once, cached file list) or add a justified entry to scripts/test-time-budget.toml — CI lib-1 currently fails on this budget.
+  Findings 3 (backdating) and 4 (rejected-event size) disappear with the spool; no further action. Slice 2's acceptance items stand (legacy writers to 0, readers on the ledger).
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T13:21:00.464259250Z
+modified_at: 2026-10-29T13:23:18.621442044Z
 req_type: Story
 tags:
 - architecture
@@ -319,6 +329,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a187d4-4b11-70a3-8eb5-42ba49530275
+  author: joe
+  timestamp: 2026-10-29T13:23:19.441660531Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
