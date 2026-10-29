@@ -87519,5 +87519,17 @@ operations:
   timestamp: 2026-10-29T22:36:52.484024798Z
   kind: !SetStatus
     status: In Progress
-clock: 6820
+- id: 01a189cf-5e0b-7d63-b28e-60492b9ab6de
+  target_id: 01a189cf-5677-7063-80cc-cc0d0f2ed1f7
+  author: aida
+  node_id: '1'
+  lamport: 6821
+  timestamp: 2026-10-29T22:37:11.051909889Z
+  kind: !Create
+    title: Loosen the aida show latency budget to 2000 ms (keep the 5000 ms ceiling and 10% tolerance)
+    description: 'Operator ruling 2026-10-29 15:37 (agreed in session): this host is shared with continuous cargo builds, so the 1000 ms show budget trips on load, not regressions (BUG-HOME-018; the real 700 ms scan was removed in PR-3105). Change ONLY .aida/config.toml [performance.budgets] show = { budget_ms = 2000, ceiling_ms = 5000 }. Add a comment line above it: the operator raised the budget deliberately on 2026-10-29 for a build-loaded host; the ceiling still catches a hung call (ADR-53). If the init scaffold (aida-cli-lib/src/init_cmd.rs) writes the same default for new projects, leave it unchanged: this is a host decision. FASTTRACK: make check-ci-fast only, no cargo. Commit with the plain trailer for this task.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6821
 node_id: '1'
