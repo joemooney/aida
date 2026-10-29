@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T02:09:21.637021687Z
-modified_at: 2026-10-29T06:38:27.431777967Z
+modified_at: 2026-10-29T06:38:31.568823965Z
 req_type: Story
 tags:
 - accessibility
@@ -20,6 +20,13 @@ relationships:
 - rel_type: Child
   target_id: 01a0a7f8-cbb1-77c1-9387-cfe0540e5139
   created_at: 2026-09-16T02:09:24.352988321Z
+comments:
+- id: 01a18661-b090-7e31-be0c-f55c8d166ea8
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject: no evidence one-shot `--plain` is insufficient.'
+  created_at: 2026-10-29T06:38:31.568823965Z
+  modified_at: 2026-10-29T06:38:31.568823965Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18661-97d7-7e30-91f3-7c388170c0b8
   author: joe
