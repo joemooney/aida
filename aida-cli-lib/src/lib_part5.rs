@@ -955,6 +955,21 @@ pub(crate) fn review_spec_launch_reviewer(
 /// and lets the human decide (approve / request changes / open the diff /
 /// defer). NEVER auto-merges — that would defeat the review:draft-only gate
 /// (cf. STORY-529 self-merge bug-class).
+/// The verdict `aida review <SPEC>` presents and re-records for the reviewer
+/// it launched at `launched_at`. M1: read through the gate ledger, as every
+/// gate does, but a ledger record written before the launch is an earlier
+/// round (or another change's review of this spec), not this review's answer:
+/// the verdict file was cleared before the launch and the ledger is not, so
+/// without the bound a stale verdict would be re-recorded at the current head.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn review_spec_verdict(
+    verdict_path: &std::path::Path,
+    launched_at: std::time::SystemTime,
+) -> Option<reviewer_summary::VerdictFile> {
+    crate::gate::review_verdict::current_verdict_since(verdict_path, Some(launched_at))
+        .and_then(|current| reviewer_summary::parse_verdict_file(&current.body))
+}
+
 pub(crate) fn handle_review_spec(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -1397,6 +1412,7 @@ pub(crate) fn handle_review_spec(
     // trace:BUG-1607 | ai:claude
     let vendor = review_vendor
         .expect("review_vendor is Some whenever no_agent is false (already returned above)");
+    let launched_at = std::time::SystemTime::now();
     let status: std::process::ExitStatus =
         review_spec_launch_reviewer(vendor, &name, &prompt, &session_id)?;
     if !status.success() {
@@ -1412,10 +1428,7 @@ pub(crate) fn handle_review_spec(
     // (when it names a commit) before the record below stamps provenance.
     // trace:TASK-1460 | ai:claude
     let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
-    // M1: read through the gate ledger, as every gate does.
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    let verdict = crate::gate::review_verdict::current_verdict_body_at(&verdict_path)
-        .and_then(|body| reviewer_summary::parse_verdict_file(&body));
+    let verdict = review_spec_verdict(&verdict_path, launched_at);
 
     // BUG-775: stamp WHICH COMMIT this review looked at (and when) onto the
     // verdict record. The reviewer skill writes the verdict word; only AIDA

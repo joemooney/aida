@@ -247,8 +247,11 @@ pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
     let mut out: Vec<NonCanonicalVerdict> = verdict_keys(project_root)
         .into_iter()
         .filter_map(|key| {
-            let path = verdict_path(project_root, &key);
-            let current = current_verdict(project_root, &key);
+            // The file the key names as found on disk: `verdict_path`
+            // uppercases, which misses a mixed-case stem (`PR-1979-advisor`).
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let path = verdict_path(project_root, "x").with_file_name(format!("{key}.json"));
+            let current = current_verdict_at(&path);
             let (file, body) = match current {
                 Some(CurrentVerdict {
                     body,

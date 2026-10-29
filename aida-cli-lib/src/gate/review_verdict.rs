@@ -1109,6 +1109,24 @@ pub(crate) fn current_verdict_at(path: &Path) -> Option<CurrentVerdict> {
     }
 }
 
+/// [`current_verdict_at`] for a review launched at `since`: a ledger record
+/// written before `since` is a previous round, not this review's answer, and
+/// yields `None`. A review clears the verdict file before the reviewer runs,
+/// so a file is always this round's; the ledger is never cleared. `None` for
+/// `since` applies no bound.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_since(
+    path: &Path,
+    since: Option<std::time::SystemTime>,
+) -> Option<CurrentVerdict> {
+    let current = current_verdict_at(path)?;
+    let stale = since.is_some_and(|since| current.written_at.is_none_or(|at| at < since));
+    if current.source.is_ledger() && stale {
+        return None;
+    }
+    Some(current)
+}
+
 /// The root and key of a verdict path in the canonical layout.
 pub(crate) fn canonical_verdict_key(path: &Path) -> Option<(PathBuf, String)> {
     let key = path.file_stem()?.to_str()?.to_string();
@@ -1135,8 +1153,22 @@ fn choose_current(
     if matches!(parsed, Some(None)) {
         return file_body.map(from_file);
     }
+    let parsed = parsed.flatten();
+    // A file with no `recorded_at` is dated by its mtime: a hand-written or
+    // malformed current file newer than the ledger's round is evidence the
+    // reader must fail closed on, not an older round the ledger outranks.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let undated_file_mtime = parsed
+        .as_ref()
+        .filter(|file| rfc3339(file.recorded_at.as_deref()).is_none())
+        .and_then(|_| verdict_file_modified(&path));
     let ledger = crate::gate::ledger::project::newest_verdict_event(start, key)
-        .filter(|event| ledger_supersedes(parsed.flatten().as_ref(), event))
+        .filter(|event| ledger_supersedes(parsed.as_ref(), event))
+        .filter(|event| {
+            undated_file_mtime.is_none_or(|mtime| {
+                ledger_order_time(event).is_some_and(|at| std::time::SystemTime::from(at) > mtime)
+            })
+        })
         .and_then(|event| {
             let body = serde_json::to_string(event.verdict_record()?).ok()?;
             let change = crate::gate::ledger::ChangeKey::parse(&event.change)?;
@@ -1862,11 +1894,10 @@ pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
     // (linked file or directory) is not evidence, and it must not let an
     // archived round answer for the key either. Same rule as the merge gate.
     // trace:TASK-1801 | ai:claude
-    let body = read_verdict_body(&path);
-    if body.is_err() && std::fs::symlink_metadata(&path).is_ok() {
+    if verdict_file_refused(&path) {
         return None;
     }
-    let current_at_sha = body
+    let current_at_sha = read_verdict_body(&path)
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
         .and_then(|v| v.reviewed_sha)
@@ -1875,6 +1906,14 @@ pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
         return Some(path);
     }
     archived_verdict_file_for_sha(&path, sha)
+}
+
+/// Does a verdict file exist at `path` that the anchored reader refuses (a
+/// linked file or directory, TASK-1801)? Such a file is not evidence, and no
+/// other record (an archived round, the ledger) may answer in its place.
+// trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn verdict_file_refused(path: &Path) -> bool {
+    read_verdict_body(path).is_err() && std::fs::symlink_metadata(path).is_ok()
 }
 
 /// TASK-1460: the archived round of the verdict file at `path` for commit

@@ -962,6 +962,97 @@ fn scanning_and_handshake_readers_see_ledger_only_verdicts() {
     assert!(crate::db_reconcile::read_review_verdict_for_record(&root, "STORY-47").is_some());
 }
 
+/// Round 5, finding 1: `aida review <SPEC>` clears the spec's verdict file
+/// before it launches the reviewer, but not the ledger. A ledger record for
+/// the spec from before the launch (an earlier round, or another PR's review
+/// of this spec) is not this review's verdict and must not be re-recorded at
+/// the current head; a verdict the reviewer writes after the launch is.
+#[test]
+fn review_spec_ignores_a_ledger_verdict_from_before_the_launch() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    store::append(
+        &root,
+        ChangeKey::pr(48),
+        vec![verdict(
+            ChangeKey::pr(48),
+            Some("STORY-48"),
+            record("approved", &ts(-120), None),
+        )],
+    )
+    .unwrap();
+    let path = rv::verdict_path(&root, "STORY-48");
+    let launched_at = std::time::SystemTime::now() - std::time::Duration::from_secs(30);
+    assert!(
+        crate::review_spec_verdict(&path, launched_at).is_none(),
+        "an earlier round on the ledger is not this review's verdict"
+    );
+    let earlier_launch = std::time::SystemTime::now() - std::time::Duration::from_secs(600);
+    assert_eq!(
+        crate::review_spec_verdict(&path, earlier_launch).map(|v| v.verdict),
+        Some("approved".to_string()),
+        "a ledger record written after the launch is the review's answer"
+    );
+
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        serde_json::to_string(&record("request-changes", &ts(0), None)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::review_spec_verdict(&path, launched_at).map(|v| v.verdict),
+        Some("request-changes".to_string()),
+        "the verdict the reviewer wrote after the launch answers"
+    );
+}
+
+/// Round 5, finding 2: a current verdict file the anchored reader refuses
+/// (TASK-1801) is not evidence, so the phase-3 archive fallback stays closed
+/// even when the ledger holds a record that would otherwise let it answer.
+#[cfg(unix)]
+#[test]
+fn a_refused_current_file_keeps_the_phase3_archive_fallback_closed() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let path = rv::verdict_path(&root, "PR-49");
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    for sha in [HEAD, OTHER_HEAD] {
+        rv::record_verdict_at_path(
+            &root,
+            &path,
+            Some("approved"),
+            Some(sha),
+            None,
+            None,
+            &[],
+            "reviewer",
+        )
+        .unwrap();
+    }
+    // The ledger's current round is at OTHER_HEAD, like the file's.
+    let mut rec = record("approved", &ts(0), None);
+    rec.insert(
+        "reviewed_sha".to_string(),
+        serde_json::Value::String(OTHER_HEAD.to_string()),
+    );
+    let mut event = verdict(ChangeKey::pr(49), None, rec);
+    event.head = Some(OTHER_HEAD.to_string());
+    store::append(&root, ChangeKey::pr(49), vec![event]).unwrap();
+    assert!(
+        crate::phase_gates::phase3_head_archive_fallback(&path, Some(HEAD), started).is_some(),
+        "precondition: the archived round answers for HEAD while the file is readable"
+    );
+    let real = root.join("elsewhere.json");
+    std::fs::rename(&path, &real).unwrap();
+    std::os::unix::fs::symlink(&real, &path).unwrap();
+    assert!(rv::verdict_file_refused(&path));
+    assert!(
+        crate::phase_gates::phase3_head_archive_fallback(&path, Some(HEAD), started).is_none(),
+        "a refused current file must not let the archive answer"
+    );
+}
+
 /// Round 3 ruling: no reader opens a legacy verdict file directly. Non-test
 /// calls of the file-reading primitives are allowed in the storage owner
 /// (`gate/review_verdict.rs`: the read-through itself, the writers' own

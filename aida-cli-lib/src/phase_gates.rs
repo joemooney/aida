@@ -587,6 +587,13 @@ pub(crate) fn phase3_head_archive_fallback(
     // current file already at `head` keep their original error (PRIN-5,
     // TASK-1169) — an older archived approval must never paper over them.
     // trace:TASK-1460 | ai:claude
+    // A current file that exists but the anchored reader refuses (a linked
+    // file or directory, TASK-1801) is not evidence; neither the ledger nor
+    // an archived round may answer in its place (as in `verdict_file_for_sha`).
+    // trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if crate::gate::review_verdict::verdict_file_refused(path) {
+        return None;
+    }
     let current = crate::gate::review_verdict::current_verdict_at(path)?;
     outcome_of_verdict_body(&current.body).ok()?;
     let current_sha = crate::gate::review_verdict::parse_recorded_verdict(&current.body)
@@ -741,12 +748,9 @@ fn handshake_body(
     // Anchored read: a linked verdict directory or a hard-linked file is no
     // verdict at all, so phase 4 can never merge on redirected evidence.
     // trace:TASK-1801 | ai:claude
-    let current = crate::gate::review_verdict::current_verdict_at(path).ok_or_else(no_verdict)?;
-    let stale = since.is_some_and(|since| current.written_at.is_none_or(|at| at < since));
-    if current.source.is_ledger() && stale {
-        return Err(no_verdict());
-    }
-    Ok(current.body)
+    crate::gate::review_verdict::current_verdict_since(path, since)
+        .map(|current| current.body)
+        .ok_or_else(no_verdict)
 }
 
 /// [`read_verdict_file`], counting a gate-ledger record only when it was
