@@ -15,12 +15,12 @@ description: |-
   - Legacy (AIDA_TUI_REDESIGN=0) path unchanged.
 
   Binding acceptance addition (groom 2026-07-18): the badges MUST target the EPIC-54 redesign cockpit (the current default TUI surface) - verify the default entry dispatch before building. Do NOT build against the legacy board.rs surface (the STORY-701 mistake this note exists to prevent).
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:27.417997980Z
-modified_at: 2026-10-29T06:38:47.219841253Z
+modified_at: 2026-10-29T06:38:50.393769698Z
 req_type: Story
 tags:
 - parent:SPIKE-77
@@ -35,3 +35,11 @@ history:
   timestamp: 2026-10-29T06:38:48.020731480Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18661-fa19-72b3-b5f4-b6d0dfc049df
+  author: joe
+  timestamp: 2026-10-29T06:38:50.393767652Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
