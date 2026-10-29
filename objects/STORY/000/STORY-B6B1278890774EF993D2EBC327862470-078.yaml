@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T07:32:19.049000556Z
+modified_at: 2026-10-29T07:33:45.616351345Z
 req_type: Story
 tags:
 - docs:impacted
@@ -95,6 +95,24 @@ comments:
     Also note for the rework: the implementer could not file draft TASKs because the seat's ID counter is read-only; that is expected under BUG-2017 containment, not a defect in this slice.
   created_at: 2026-10-29T07:29:10.370773520Z
   modified_at: 2026-10-29T07:29:10.370773520Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18694-4210-7d42-b406-659391a13c4c
+  author: joe
+  content: |
+    REWORK BRIEF: PR-3089 round 1 → one push (advisor, 2026-10-29 00:40). Verdict: .aida/review-verdicts/PR-3089.json at c398bf506a2. Bundle ALL 7 findings plus the 00:35 deviation ruling into ONE push; no follow-up PR, no draft TASKs.
+
+    Advisor ruling on finding 4 (precedence): LITERAL FIRST, everywhere. One shared aida_core::node_alias function does "exact native spec_id → agreed_id → alias expansion", and every resolver calls it (RequirementsStore::spec_id_index + resolve_unambiguous_index, DatabaseBackend trait default, GitBackend::get_requirement_by_spec_id, CachedGitBackend::resolve). Delete the per-backend orderings. In addition, `set` and `rename` refuse a label L when any stored spec_id or agreed_id already matches ^[A-Z]+-L-[0-9]+$ (case-insensitive), naming one example ID. That plus the nodes.toml check (finding 5) is one shared validator called by both set and rename inside the CAS mutation.
+
+    Work list:
+    1. Display (findings 1, 2): route queue list rows, ps, awaiting, ship/merge messages, history and the show relationship/related-id rows (human + TOON) through display_spec_id. Add the ratchet: a test that counts remaining raw spec-id print sites in aida-cli-lib and fails if the count rises (baseline = count after your migration, stored with the other ratchet baselines).
+    2. MCP (findings 3, 7): add an additive display_id field to the JSON payloads of list/search/queue tools and fix display_id_of (mcp.rs ~4114). Reload the alias map when the MCP server refreshes its store (or on each request if it is cheap); test that a label set after startup resolves.
+    3. Precedence + guard (findings 4, 5): as ruled above; test BUG-JM-001-style literal passthrough with label JM bound refuses at set time, and rename to a registered node id refuses.
+    4. Test gaps (finding 6): alias input via an MCP tool argument, a relationship target (`aida rel add` and `--parent`), and a CLI flag; a relationship written via an alias stores the canonical ID; a generated trailer (pr ship squash subject) stays canonical while HOME is bound.
+
+    Gate (LIGHT): `cargo test -p aida-cli --test story_078_node_aliases` + `cargo test -p aida-core --lib node_alias` + `make check-ci-fast`. This touches >10 files, so also `make test-touched` once before pushing. Never `cargo test --workspace` or `make check-ci`.
+    Push to the existing branch story-b6b1278890774ef993d2ebc327862470-078 (same PR); the delta gets a scoped re-review.
+  created_at: 2026-10-29T07:33:45.616351345Z
+  modified_at: 2026-10-29T07:33:45.616351345Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
