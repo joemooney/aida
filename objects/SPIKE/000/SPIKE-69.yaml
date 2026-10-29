@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:45.785458081Z
-modified_at: 2026-10-29T06:41:41.652159103Z
+modified_at: 2026-10-29T06:41:45.407375796Z
 req_type: Spike
 tags:
 - ablation
@@ -22,6 +22,13 @@ relationships:
 - rel_type: Child
   target_id: 019eddc4-96f5-7ad3-bda0-345e1218dd73
   created_at: 2026-06-30T16:36:05.847598576Z
+comments:
+- id: 01a18664-a5bf-77f3-9757-5277200d5780
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Obsolete: trigger was EPIC-50, which was rejected.'
+  created_at: 2026-10-29T06:41:45.407375796Z
+  modified_at: 2026-10-29T06:41:45.407375796Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18664-8ca2-72d1-8c8c-64ee393c67af
   author: joe
