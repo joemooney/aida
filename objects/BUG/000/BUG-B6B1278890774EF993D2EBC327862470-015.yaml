@@ -30,12 +30,12 @@ description: |
   STEP 3 — DELETE the post-parse helpers: canonicalize_queue_spec_args (queue_cmd.rs), canonicalize_session_spec_args (agent_launch.rs), the run_claim/run_unclaim canonicalization (claim.rs), and handler-side canonical() calls at db_reconcile.rs:3120, plan_cmd.rs:763 and queue rework. ship::resolve_spec and commit normalize_spec must receive already-canonical IDs.
   STEP 4 — end-to-end, exactly two tests: `review record STORY-<LABEL>-NNN` writes its verdict under the canonical ID; `aida commit --spec STORY-<LABEL>-NNN` produces the canonical (SPEC-ID) trailer. worktree add / session end staying parse-level is ACCEPTED (reason: the parser is the only resolution point once Step 3 lands, and the tree test proves it is attached).
   Advisor cap: this is the last round; the next review checks Steps 1-4 and green CI only.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T13:55:07.739161111Z
+modified_at: 2026-10-29T17:26:15.311997404Z
 req_type: Bug
 tags:
 - id-allocation
@@ -228,6 +228,21 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a188b2-b40c-77d3-97ca-e8e49d41240e
+  author: aida-auto-bump
+  timestamp: 2026-10-29T17:26:15.308337074Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a188b2-b40f-7c83-86ee-f48535c88988
+  timestamp: 2026-10-29T17:26:15.311988132Z
+  agent: aida
+  commit_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
+  summary: 'Advisor round-2 Steps 1-4 met: Cli tree-walk ratchet (every_spec_named_argument_in_the_tree_resolves_aliases) with commented allowlist; spec_arg::spec_id/spec_id_csv attached to every flagged arg; post-parse helpers deleted; review-record alias e2e keys verdict canonically, commit --spec canonical trailer covered by existing story_078 test. CI run 40892160688 green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -240,6 +255,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T11:56:47.497371016Z
   implemented_by: joe
+  completed_at: 2026-10-29T17:26:15.308332603Z
+  completion_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
 interface_changes:
   cli:
   - Spec-scope commands (queue, rework, claim/unclaim, worktree add/enter, session end/start/manifest, plan fan-out, db reconcile-status) accept a friendly node alias TYPE-<LABEL>-NNN and act on the canonical id
