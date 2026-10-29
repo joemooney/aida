@@ -87495,5 +87495,13 @@ operations:
       ACCEPTED (reason: one-time or cosmetic): label-sync events piling up on unchanged state; the hold-lock path change across old and new binaries during rollout.
       6. NEW, found by the advisor, a slice-1 regression on the shipped collect route: on 2026-10-29 both `aida queue work PR-N --role reviewer --no-human` launches (PR-3105, PR-3106), run from an UNCONTAINED operator shell with no AIDA_CONTAINED in its env, failed at collect with "a contained seat cannot collect a verdict onto the gate ledger" (gate/ledger/mod.rs:242 record_collected_verdict). So the launcher process acquires AIDA_CONTAINED itself before collecting (suspect: it sources .aida/session-env.sh or sets the child's env on its own process). Find the cause and fix it so the launcher's collect runs uncontained. Add a test that launcher collect succeeds when the parent env has no AIDA_CONTAINED. This is BLOCKING: without it, no reviewer verdict reaches the gate.
       Test tier LIGHT plus the cli tests named in item 1. Run tests with env -u AIDA_CONTAINED. Push, and stop early rather than run out of context.
-clock: 6817
+- id: 01a189cd-f257-76f2-ab12-bf61f0c73621
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6818
+  timestamp: 2026-10-29T22:35:37.943052743Z
+  kind: !SetStatus
+    status: Approved
+clock: 6818
 node_id: '1'
