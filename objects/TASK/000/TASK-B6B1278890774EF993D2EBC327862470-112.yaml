@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-29T19:17:53.271445482Z
+modified_at: 2026-10-29T19:23:32.407289716Z
 req_type: Task
 tags:
 - advisor-review
@@ -40,6 +40,17 @@ relationships:
   target_id: 01a188db-2c65-74b2-b493-e7a754ce37d3
   created_at: 2026-10-29T18:11:15.088470250Z
   created_by: joe
+comments:
+- id: 01a1891e-14b7-7c02-aa8b-5e14224c03cc
+  author: ai:codex:joe
+  content: |
+    Conservative setup slice: one verified operator guide plus targeted corrections in administrator/storage/multi-node/multi-hub/setup references and root orientation docs. The source templates contain no master of these hand-maintained references, so no generated agent/template mirror is edited.
+
+    Source inspection found transport_profile dispatching transport_pull and the existing sanitized-write contract, although AGENTS/OVERVIEW and the tail of the setup chapter still called them pending. Those stale documentation statements are corrected; no transport, allocator, grant, store, gate, review or ledger implementation is edited. No real HOME enrollment or configuration mutation is performed.
+
+    The separately approved operator-setup guide is added as the seventh curated product guide; it is source-verified narrative, not a bulk CLI/manual/history publication. This extends the narrow product-guide allowlist only. Broader publication scope remains the advisor question on slice 111. No hosted publication/access change.
+  created_at: 2026-10-29T19:23:32.407289716Z
+  modified_at: 2026-10-29T19:23:32.407289716Z
 history:
 - id: 01a188db-04e1-7113-a4de-4d5e2010ac1b
   author: joe
