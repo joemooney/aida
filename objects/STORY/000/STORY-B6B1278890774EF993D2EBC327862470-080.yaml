@@ -59,7 +59,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T16:43:21.211431764Z
+modified_at: 2026-10-29T17:08:33.995449483Z
 req_type: Story
 tags:
 - architecture
@@ -364,6 +364,22 @@ comments:
   created_at: 2026-10-29T16:43:21.211426535Z
   modified_at: 2026-10-29T16:43:21.211426535Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a188a2-824b-7662-b359-7f471cd40570
+  author: joe
+  content: |-
+    ## Round-6 rework (267d293): CI fail-closed regressions fixed
+
+    | Item | Fix |
+    |---|---|
+    | `a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites` | `spec_verdict_fallback_for_phase3` checks `verdict_file_refused` first: a fresh refused file is `Err(NoVerdict)` naming the file; a refused file whose mtime is unreadable (a link) or older than the session is `Ok(None)`. The ledger never answers for it. |
+    | `task1801_ship_and_phase_gates_refuse_linked_verdicts` | `choose_current` returns no record when the current file exists but the anchored reader refuses it, so `current_verdict(_at/_since)` and the phase-3/4 handshake no longer fall back to the ledger. `handshake_body` refuses with a NoVerdict naming the file. The ship-side gates already skipped/failed on a refused file. |
+    | rustdoc at lib_part5.rs:951-965 | STORY-553 doc moved back onto `handle_review_spec`; `review_spec_verdict` keeps its own doc. |
+
+    Test expectations unchanged. `cargo test --profile agent -p aida-cli-lib --lib -- bug_775_commits_ahead task1801 review_verdict`: 133 passed, 1 failed. The failure is `task1801_replacing_validated_verdict_with_fifo_reads_open_inode`, which cannot install its hermetic HOME on this seat (BUG-1642, read-only FS); CI runs it. Both named tests pass. `make check-ci-fast`: 35 gates passed.
+  created_at: 2026-10-29T17:08:33.995449483Z
+  modified_at: 2026-10-29T17:08:33.995449483Z
+  session_id: 01a1888c5c0a
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
