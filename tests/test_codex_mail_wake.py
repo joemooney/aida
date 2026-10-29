@@ -65,9 +65,9 @@ class WatcherTests(unittest.TestCase):
             calls.append((argv, kwargs))
             return json.dumps({"version": 1, "messages": [{"id": "replica"}, {"id": "private"}],
                                "acknowledged_ids": ["replica"], "partial": False,
-                               "partial_codes": []}).encode()
+                               "partial_codes": [], "pending": 0}).encode()
         with patch.object(wake, "worktrees") as inventory_probe, patch.object(wake, "command", side_effect=fake):
-            inventory, acknowledged, partial = wake.scan(self.root, "fixture-aida")
+            inventory, acknowledged, partial, role_pending = wake.scan(self.root, "fixture-aida")
             inventory_probe.assert_not_called()
         self.assertEqual(len(calls), 1, "AIDA's snapshot covers every worktree")
         argv, kwargs = calls[0]
@@ -78,6 +78,9 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(inventory, {"private": {str(self.root)}})
         self.assertEqual(acknowledged, {"replica"})
         self.assertFalse(partial)
+        self.assertEqual(role_pending, 0)
+        for key in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "AIDA_SESSION_GRANT", "AIDA_HANDLE"):
+            self.assertNotIn(key, kwargs["env"])
         self.tick({"replica": {str(self.root)}})
         with patch.object(wake, "command") as command:
             self.tick({}, now=110, acknowledged=acknowledged)
@@ -115,14 +118,62 @@ class WatcherTests(unittest.TestCase):
     # trace:STORY-1843 | ai:claude
     def test_partial_flag_is_read_from_the_snapshot(self):
         envelope = {"version": 1, "messages": [], "acknowledged_ids": [], "partial": True,
-                    "partial_codes": ["Worktree"]}
+                    "partial_codes": ["Worktree"], "pending": 2}
         with patch.object(wake, "command", return_value=json.dumps(envelope).encode()):
-            self.assertEqual(wake.scan(self.root, "fixture-aida"), ({}, set(), True))
+            self.assertEqual(wake.scan(self.root, "fixture-aida"), ({}, set(), True, 2))
+
+    # trace:STORY-1843 | ai:claude
+    def test_partial_wake_creation_failure_backs_off_and_retries(self):
+        with patch.object(wake, "command", side_effect=wake.CreationFailure):
+            result = self.tick({}, batch_seconds=0, partial=True)
+        self.assertFalse(result["queue_submitted"])
+        self.assertGreater(result["retry_after"], 100)
+        self.assertNotIn("partial_notified", self.ledger, "nothing reached Codex")
+        self.assertEqual(self.ledger["failures"], 1)
+        with patch.object(wake, "command", return_value=b"accepted") as cmd:
+            self.assertFalse(self.tick({}, now=101, batch_seconds=0, partial=True)["queue_submitted"])
+            cmd.assert_not_called()
+            self.assertTrue(self.tick({}, now=200, batch_seconds=0, partial=True)["queue_submitted"])
+        self.assertTrue(self.ledger["partial_notified"])
+        self.assertEqual(self.ledger["failures"], 0)
+
+    # trace:STORY-1843 | ai:claude
+    def test_partial_wake_uncertain_result_is_recorded_as_sent(self):
+        with patch.object(wake, "command", side_effect=wake.Refusal("post-spawn failure")):
+            result = self.tick({}, batch_seconds=0, partial=True)
+        self.assertFalse(result["queue_submitted"])
+        self.assertTrue(result["partial_wake_uncertain"])
+        self.assertTrue(self.ledger["partial_notified"])
+        self.assertIsNone(self.ledger["inflight"], "no recovery is required")
+        wake.validate(self.state.read(), self.root, THREAD)
+        with patch.object(wake, "command") as cmd:
+            self.tick({}, now=110, batch_seconds=0, partial=True)
+            cmd.assert_not_called()
+
+    # trace:STORY-1843 | ai:claude
+    def test_validate_refuses_a_non_true_partial_notified(self):
+        for bad in (False, None, 1, "yes"):
+            ledger = dict(self.ledger, partial_notified=bad)
+            with self.assertRaises(wake.Refusal):
+                wake.validate(ledger, self.root, THREAD)
+        wake.validate(dict(self.ledger, partial_notified=True), self.root, THREAD)
+
+    # trace:STORY-1843 | ai:claude
+    def test_queued_role_mail_wakes_once_without_ids(self):
+        with patch.object(wake, "command", return_value=b"accepted") as cmd:
+            self.assertTrue(self.tick({}, batch_seconds=0, role_pending=1)["queue_submitted"])
+            self.assertIn("queued", cmd.call_args.args[0][-1])
+            self.assertNotIn("partial (some", cmd.call_args.args[0][-1])
+            self.assertFalse(self.tick({}, now=110, batch_seconds=0, role_pending=1)["queue_submitted"])
+            self.tick({}, now=120, batch_seconds=0)
+            self.assertNotIn("partial_notified", self.ledger)
+            self.assertEqual(cmd.call_count, 1)
 
     def test_snapshot_without_read_evidence_refuses(self):
         for raw in (b'{"version":1,"messages":[]}',
                     # An envelope from before the logical view has no `partial`.
-                    b'{"version":1,"messages":[],"acknowledged_ids":[]}'):
+                    b'{"version":1,"messages":[],"acknowledged_ids":[]}',
+                    b'{"version":1,"messages":[],"acknowledged_ids":[],"partial":false}'):
             with patch.object(wake, "command", return_value=raw):
                 with self.assertRaises(wake.Refusal):
                     wake.scan(self.root, "fixture-aida")
@@ -266,7 +317,7 @@ class WatcherTests(unittest.TestCase):
         with patch.object(wake, "command", side_effect=wake.Refusal("scan failed")):
             with self.assertRaises(wake.Refusal):
                 wake.scan(self.root, "fixture-aida")
-        bad = {"version": 1, "messages": [{"id": "../x"}], "acknowledged_ids": [], "partial": False}
+        bad = {"version": 1, "messages": [{"id": "../x"}], "acknowledged_ids": [], "partial": False, "pending": 0}
         with patch.object(wake, "command", return_value=json.dumps(bad).encode()):
             with self.assertRaises(wake.Refusal):
                 wake.scan(self.root, "fixture-aida")
@@ -963,7 +1014,7 @@ class WatcherTests(unittest.TestCase):
         (sibling / ".aida/mailbox").mkdir(parents=True)
         (repo / ".aida/mailbox").mkdir(parents=True)
         fake_aida = self.root / "fixture-aida"
-        fake_aida.write_text("#!/usr/bin/env python3\nimport json\nprint(json.dumps({'version':1,'messages':[{'id':'fixture-message'}],'acknowledged_ids':[],'partial':False}))\n")
+        fake_aida.write_text("#!/usr/bin/env python3\nimport json\nprint(json.dumps({'version':1,'messages':[{'id':'fixture-message'}],'acknowledged_ids':[],'partial':False,'pending':0}))\n")
         fake_aida.chmod(0o700)
         capture = self.root / "queue.json"
         fake_codex = self.root / "fixture-codex"

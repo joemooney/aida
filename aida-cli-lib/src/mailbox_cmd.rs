@@ -213,9 +213,10 @@ pub(crate) fn handle_mailbox_command(
             recipient,
             json: _,
         } => {
-            // STORY-1843 W: the notice's audience and bind rules over the
-            // logical view; the watcher's own caller budget is the explicit
-            // read profile. trace:STORY-1843 | ai:claude
+            // STORY-1843 W: the notice's audience over the logical view, as a
+            // pure read (never binds queued role mail); the watcher's own
+            // caller budget is the explicit read profile.
+            // trace:STORY-1843 | ai:claude
             let root = local_root.as_deref().unwrap_or(project_root);
             let audience =
                 crate::mailbox_wake::audience_for(&crate::mailbox_view::own_audience(), recipient)?;

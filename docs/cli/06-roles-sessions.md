@@ -355,7 +355,8 @@ store, with read state from the common-Git receipt anchor. `--recipient` must be
 one of the calling process's own inboxes (the audience `mailbox notice`
 resolves); it narrows and never widens. `partial: true` (with safe
 `partial_codes`) means some source was not fully read, so more mail may exist.
-It never acknowledges mail. `--local-root` selects the checkout the view is read
+`pending` counts queued role mail no reader has taken; the snapshot never takes
+it. It never acknowledges mail. `--local-root` selects the checkout the view is read
 from. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
 for opt-in setup, deduplication, and uncertain-delivery recovery.
 <!-- trace:STORY-1843 | ai:claude -->

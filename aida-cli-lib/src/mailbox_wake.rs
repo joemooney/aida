@@ -1,22 +1,25 @@
 //! Bounded, non-consuming mailbox envelope for host notification adapters.
 //!
 //! STORY-1843 slice W: the envelope is built from the core logical snapshot
-//! ([`crate::mailbox_view`]), with the audience a notice resolves, the
-//! notice's non-blocking bind pass and one snapshot across every product
-//! worktree and the canonical store. Unread means no receipt in the
+//! ([`crate::mailbox_view`]), with the audience a notice resolves and one
+//! snapshot across every product worktree and the canonical store. It is a
+//! pure read: it never binds a queued role delivery (in any mode), so it
+//! cannot attach role mail to whatever session it runs under. Queued
+//! deliveries are counted as `pending`; binding stays with explicit reads
+//! and the per-turn notice. Unread means no receipt in the
 //! common-Git anchor (or any other read evidence the snapshot holds), so a
 //! read in a since-removed worktree stays read. Cohort mail owned by another
 //! recipient UUID is not in the audience's view. A partial view is reported
 //! as `partial: true`, never as an empty inbox.
 // trace:TASK-2347 | ai:codex
 // trace:STORY-1843 | ai:claude
-use crate::mailbox_view::{read_own_mail_binding, BindWait, Coverage, OwnMail, ReadState};
+use crate::mailbox_view::{read_own_mail, Coverage, OwnMail, ReadState};
 use aida_core::mailbox_logical::{ReadLimits, ResolvedAudience};
 use anyhow::{bail, Result};
 use serde::Serialize;
 use std::path::Path;
 
-/// Version 1, extended additively: `partial` and `partial_codes` are new;
+/// Version 1, extended additively: `partial`, `partial_codes` and `pending` are new;
 /// `messages` and `acknowledged_ids` keep their meaning over the logical view.
 #[derive(Serialize)]
 pub(crate) struct Snapshot {
@@ -27,6 +30,9 @@ pub(crate) struct Snapshot {
     partial: bool,
     /// Safe source error codes (no paths, IDs or recipients).
     partial_codes: Vec<String>,
+    /// Queued role deliveries waiting for a reader to take them (not bound
+    /// here; their IDs stay out of `messages` until a binding read).
+    pending: usize,
 }
 #[derive(Serialize)]
 struct Envelope {
@@ -62,13 +68,14 @@ pub(crate) fn audience_for(own: &ResolvedAudience, recipient: &str) -> Result<Re
 }
 
 /// Read `audience`'s logical view from `root` and project it to IDs.
+/// Never binds: see the module docs.
 pub(crate) fn snapshot(
     root: &Path,
     store: &Path,
     audience: &ResolvedAudience,
     limits: &ReadLimits,
 ) -> Result<Snapshot> {
-    let view = read_own_mail_binding(root, store, audience, limits, BindWait::Notice);
+    let view = read_own_mail(root, store, audience, limits);
     envelope(&view)
 }
 
@@ -108,6 +115,7 @@ fn envelope(view: &OwnMail) -> Result<Snapshot> {
         acknowledged_ids: acknowledged.into_iter().collect(),
         partial,
         partial_codes,
+        pending: view.pending_deliveries(),
     })
 }
 
@@ -237,5 +245,40 @@ mod tests {
             "what was read is still listed"
         );
         assert!(!value.to_string().contains(r.sib.to_str().unwrap()));
+    }
+    // Ruling on PR-3079 F1: a wake snapshot run under another session (here a
+    // registered reviewer session with the role forced to advisor, as the
+    // adapter's environment does) binds nothing: queued advisor role mail
+    // stays queued and is only counted as pending.
+    #[test]
+    fn story1843_w_wake_snapshot_under_a_non_advisor_session_binds_nothing() {
+        use crate::mailbox_view::tests::{register_self_as_reviewer, D1_SESSION};
+        let r = mail_repo();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+            ("AIDA_HANDLE", None),
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_HOOK_PAYLOAD", None),
+            ("CODEX_THREAD_ID", Some(D1_SESSION)),
+        ]);
+        let own = register_self_as_reviewer(&r.main);
+        assert!(own.recipient().is_some(), "the session owns a UUID");
+        let audience = audience_for(&own, "advisor").unwrap();
+        let sidecar = aida_core::mailbox_delivery::DeliverySidecar::queued("queued", "advisor", 5);
+        crate::mailbox_store::write_message_with_deliveries(
+            &r.sib,
+            &mail("queued", "advisor", 5, false),
+            Some(&sidecar),
+        )
+        .unwrap();
+
+        for _ in 0..2 {
+            let value = wake(&r.main, &r.store, &audience);
+            assert!(unread(&value).is_empty(), "{value}");
+            assert_eq!(value["pending"], 1, "{value}");
+        }
+        let view = read_own_mail(&r.main, &r.store, &audience, &explicit_limits());
+        assert_eq!(view.pending_deliveries(), 1, "still queued, never bound");
+        assert!(view.records().is_empty());
     }
 }

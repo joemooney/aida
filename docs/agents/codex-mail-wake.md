@@ -218,25 +218,33 @@ from the main project. AIDA builds the envelope from its logical mail view,
 which already covers every worktree of the repository and the canonical store.
 The adapter keeps no per-worktree union of its own. The snapshot resolves the
 audience a notice in an advisor session would, so the adapter runs it with
-`AIDA_SESSION_ROLE=advisor` and clears inherited handle and agent variables.
-Role mail that another reader has already taken (owned by another recipient)
-is not in the advisor's view and never wakes. The envelope contains unread
+`AIDA_SESSION_ROLE=advisor` and clears every inherited session-identity
+variable (handle, agent name and type, launch token, session grant, id and
+purpose, hook payload, and the Claude and Codex native session variables).
+The snapshot is a pure read: it never takes (binds) queued role mail, in any
+mode, so a run from an agent shell cannot attach advisor role mail to that
+session. Queued role mail that no reader has taken yet is counted in
+`pending`; taking it stays with explicit reads and the per-turn notice. Role
+mail that another reader has already taken (owned by another recipient) is
+not in the advisor's view and never wakes. The envelope contains unread
 message IDs and acknowledged IDs, without moving read state. Replicated IDs
 cause one notification. Failed scans do not record acceptance and retry at the
 next interval. Scans have per-command time and output bounds.
 
 When AIDA reports the view as partial (some mailbox source could not be fully
 read), the watcher does not treat it as an empty inbox. The next wake says the
-view is partial. If a partial view lists no new IDs, the watcher queues one
-partial-only notice per episode; a complete scan ends the episode. A partial
-scan never prunes accepted IDs. A partial-only notice carries no IDs, so an
-uncertain queue result for it is recorded as sent instead of requiring
-recovery.
+view is partial, and says when role mail is queued for a reader. If a scan
+lists no new IDs but is partial or has queued role mail, the watcher queues
+one notice without IDs per episode; a complete scan with nothing queued ends
+the episode. A partial scan never prunes accepted IDs. A notice without IDs
+carries nothing to recover, so an uncertain queue result for it is recorded
+as sent instead of requiring recovery.
 
-The envelope stays at version 1 with two added fields: `partial` (boolean) and
-`partial_codes` (safe source error codes, with no paths or IDs). The adapter
-refuses an envelope without `partial`, because an older AIDA binary reads only
-one checkout. `--local-root` now selects the checkout the logical view is read
+The envelope stays at version 1 with three added fields: `partial` (boolean),
+`partial_codes` (safe source error codes, with no paths or IDs) and `pending`
+(the number of queued role deliveries no reader has taken). The adapter
+refuses an envelope without `partial` or `pending`, because an older AIDA
+binary reads only one checkout. `--local-root` now selects the checkout the logical view is read
 from, not one mailbox to inspect.
 
 Successful queue submissions are committed atomically under a permanent exclusive
