@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:08:59.000484888Z
-modified_at: 2026-10-29T18:51:10.621761886Z
+modified_at: 2026-10-29T18:51:17.426305321Z
 req_type: Task
 tags:
 - advisor-review
@@ -61,6 +61,18 @@ comments:
     PR #3090 remains OPEN at e1bca90b80884a4cc9c25e3ff6a50476fe9b1c52. Claims are intentionally limited to the existing execution modes, exact-head review, grants/mandates, CI/holds and documented identity limits; no new ledger functionality is advertised. The acceptance request to recheck against the base after that lane lands remains an integration/review follow-up, since it has not landed. Please recheck these docs when incorporating that lane. The branch is stacked on PR #3098; no runtime implementation or self-merge is included.
   created_at: 2026-10-29T18:46:32.129547215Z
   modified_at: 2026-10-29T18:46:32.129547215Z
+- id: 01a18900-8e32-7113-9d1c-85f4410e9d7f
+  author: ai:codex:joe
+  content: |
+    Adds dedicated selectable-autonomy and trust/evidence guides, generated product pages and an original accessible trust graphic. The autonomy page reuses the landing selector/app.js; it does not introduce competing mode definitions. It covers operator/guided/drive/drain, non-overridable decide, one-shot override rules, independent review at a commit, CI/holds, grants/mandates and documented human/identity/deployment limits.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed; current source/help inspected; spawned author self-check ran its own evidence commands and found no findings, including the responsive navigation adjustment. No protected runtime, policy, template or hosting changes.
+
+    PR #3090 remains OPEN at e1bca90b80884a4cc9c25e3ff6a50476fe9b1c52. The spec comment records that its post-land verification must happen during integration/review; these pages advertise no new ledger functionality. Claims match the existing source baseline, and the reviewer should recheck when incorporating that lane. This is the one deferred acceptance follow-up.
+
+    Stacked on PR #3098. TASK-B6B1278890774EF993D2EBC327862470-109.
+  created_at: 2026-10-29T18:51:17.426305321Z
+  modified_at: 2026-10-29T18:51:17.426305321Z
 history:
 - id: 01a188d9-e7e3-7b30-acb6-b8ed8552107c
   author: joe
