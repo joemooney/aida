@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T07:28:43.445144261Z
-modified_at: 2026-10-29T09:57:24.571648943Z
+modified_at: 2026-10-29T10:18:03.615792486Z
 req_type: Story
 relationships:
 - rel_type:
@@ -47,6 +47,12 @@ comments:
   content: 'Final review (advisor, 2026-10-29 03:05) at 3b9cf4e0ed1: verify ONLY round-3 items (1) literal-first text parsers via resolve_literal_first and (2) node registration refuses current/retired labels; plus CI at this exact head. CI cli-0 is red here and at 786989948 on aida-cli/tests/bug_1502_format_json_audit.rs:479 ''regenerate the BUG-1502 audit'' (new node alias list/show --json leaves missing from docs/cli-format-json-audit.md; fix = run scripts/generate-format-json-audit.py and commit). If (1) and (2) hold, the verdict must name that audit regeneration as the ONLY required change. Advisor cap: any other finding is accepted with a reason, not reworked.'
   created_at: 2026-10-29T09:57:24.571648943Z
   modified_at: 2026-10-29T09:57:24.571648943Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a1872a-addf-7ce1-990f-0e3cf14b2f86
+  author: joe
+  content: 'Closing review (advisor, 2026-10-29 03:20) at 5f0c66dc076. The prior verdict at 3b9cf4e verified both round-3 items and named ONE required change: regenerate docs/cli-format-json-audit.md. Delta 3b9cf4e..5f0c66d is that doc only (+5 generated rows, no code). Verify the delta, and that CI at 5f0c66d is green (poll in <=60s steps up to your budget; if still running when you must exit, record the verdict as approved-pending-CI only if the delta is correct, and say so — the advisor ships only on green at this head). Advisor cap in force: no new rework items.'
+  created_at: 2026-10-29T10:18:03.615792486Z
+  modified_at: 2026-10-29T10:18:03.615792486Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1868f-c9a0-73c2-9cbc-cc5b250bc2e3
