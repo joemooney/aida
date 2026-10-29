@@ -1,0 +1,19 @@
+id: 01a18507-5221-7581-b3d2-531da5fc2fe1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-087
+title: Refresh README.md and fix stale CLAUDE.md call-graph note
+description: Rewrite README.md to match the current product and correct the CLAUDE.md codegraph 1 MiB note.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T00:20:11.937843862Z
+modified_at: 2026-10-29T00:20:11.937843862Z
+req_type: Task
+filed_at:
+  code_sha: 28bbe9d540b26f761d1b796b3f003b65ee9c2a15
+  branch: docs/readme-claude-refresh
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 8767e9accd8
+  vendor: claude
+  session: a7d49522-0598-443a-bb01-3114c17c7e90

@@ -83595,5 +83595,17 @@ operations:
   timestamp: 2026-10-29T00:17:05.597690251Z
   kind: !SetStatus
     status: Completed
-clock: 6520
+- id: 01a18507-5903-7191-b736-8a7ff0ec19e7
+  target_id: 01a18507-5221-7581-b3d2-531da5fc2fe1
+  author: aida
+  node_id: '1'
+  lamport: 6521
+  timestamp: 2026-10-29T00:20:13.699629123Z
+  kind: !Create
+    title: Refresh README.md and fix stale CLAUDE.md call-graph note
+    description: Rewrite README.md to match the current product and correct the CLAUDE.md codegraph 1 MiB note.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6521
 node_id: '1'
