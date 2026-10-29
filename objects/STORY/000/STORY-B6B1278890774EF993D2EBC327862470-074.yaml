@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T03:32:12.899394612Z
-modified_at: 2026-10-29T03:32:12.899394612Z
+modified_at: 2026-10-29T03:32:26.179510251Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1859b-f0bf-7762-a241-ce0954a6cc05
+  created_at: 2026-10-29T03:32:26.179507072Z
+  created_by: joe
+history:
+- id: 01a185b7-5871-7ec3-8590-cba4c64810cf
+  author: joe
+  timestamp: 2026-10-29T03:32:27.889837315Z
+  session_id: 2668ad8a-ede4-4393-a3a3-410d9d89930b
+  changes: []
 filed_at:
   code_sha: 09593abc0df4e1c72332ac25d12e524b983151c2
   branch: fix/adopted-repo-reviewer-config
