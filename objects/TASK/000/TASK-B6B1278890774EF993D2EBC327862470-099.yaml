@@ -11,13 +11,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T10:37:57.154113309Z
-modified_at: 2026-10-29T10:37:57.154113309Z
+modified_at: 2026-10-29T10:46:56.645507573Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
 - finding-hash:2d051b50
 - from-review:STORY-B6B1278890774EF993D2EBC327862470-078
 - kind:carried-forward
+comments:
+- id: 01a18745-1f85-77a1-bfb1-d7d0d4b4592e
+  author: joe
+  content: 'Advisor ruling (2026-10-29 03:50, 16:19 rule-once order): ACCEPTED, not reworked. Process note, not a defect: the hold was cleared by shipping under the operator''s ship-held mandate, and PR-3089 merged.'
+  created_at: 2026-10-29T10:46:56.645507573Z
+  modified_at: 2026-10-29T10:46:56.645507573Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
