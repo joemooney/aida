@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T11:00:22.582146010Z
+modified_at: 2026-10-29T11:30:57.748186018Z
 req_type: Story
 tags:
 - architecture
@@ -147,6 +147,45 @@ comments:
   created_at: 2026-10-29T10:58:24.436044716Z
   modified_at: 2026-10-29T10:58:24.436044716Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18754-38d5-7112-98d4-d88a1ed018f2
+  author: joe
+  content: |-
+    ## Implementer approach — slice 1 (per signed-off sketch + Q1 ruling)
+
+    ### Acceptance criteria as tests (slice-1 share)
+    - **AC1 (unit, `gate::ledger`)**: `verdict` / `legacy-imported` / `rejected-event` events round-trip; `seq` monotonic under concurrent appenders (thread test, flock); each event carries `head` + `patch_id` (null when uncomputable); `store_root` from a linked-worktree fixture resolves to `<main>`, an unverified seat clone is refused.
+    - **AC2 (unit)**: a verdict appended for change PR-7 with spec X is returned by a read keyed `PR-7` and by a read keyed `X` (spec index → change), same record.
+    - **AC5 (unit)**: contained writers never open the ledger: `submit` writes a spool entry under `<main>/.aida/mailbox/gate-events/`; the next primary-side append/project drains it, appends accepted events, and appends `rejected-event` for an unattested / sha-mismatched entry (validated with `RecorderAttestation::authorizes`; read-side approval re-validation is unchanged).
+    - **AC6 (unit + ratchet)**: legacy `PR-N.json` + archive rounds are read through before the first ledger write and preserved verbatim in a `legacy-imported` event on it; a ratchet test counts legacy-path literals in non-test sources and fails above today's count.
+    - **Readers (unit)**: `read_recorded_verdict(_any)` / `read_verdict_for_sha` prefer the ledger only when it is strictly newer than the legacy file (or the legacy file is absent), so a contained reviewer's spooled verdict is visible without collect.
+
+    ### Expected files
+    `aida-cli-lib/src/gate/ledger/{mod,event,store,spool,legacy,project,tests}.rs` (new), `gate/mod.rs`, `gate/review_verdict.rs` (write funnel + central readers), `lib_part5.rs` (spec index on `aida review record --pr`).
+
+    ### Ambiguities / conflicts as questions
+    - Slice 1 keeps the legacy verdict file write and the launcher collect step **as a compatibility mirror**: ~200 production call sites (136 `verdict_path` uses in 34 files) still read the files directly, so deleting the writer/collect now would hide verdicts from them. Proposal: the reader switch-over + collect deletion move to slice 2 alongside holds; the ratchet pins the legacy count now and slice 3 drives it to 0. Flagged as a deviation finding.
+    - Spec-only verdicts (no `--pr`) have no change key and stay legacy-only until slice 2 resolves spec→PR.
+  created_at: 2026-10-29T11:03:26.165143619Z
+  modified_at: 2026-10-29T11:03:26.165143619Z
+  session_id: 01a187516826
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a1876d-6c54-7aa3-b919-fec8b7c174c8
+  author: joe
+  content: |-
+    ## Implementer findings — slice 1 (filed as a comment: `aida add` refused in this contained seat, "requirement ID allocation failed: Read-only file system")
+
+    1. **kind:deviation · major — legacy verdict file write + launcher collect kept as a compatibility mirror.** Sketch §9 said that in slice 1 verdict writers and readers switch over and collect is deleted. As shipped:
+       - Every PR-keyed verdict write lands on the ledger (`review_verdict::write_verdict_object_for_spec` → `gate::ledger::mirror_verdict_write`).
+       - `read_recorded_verdict` and `read_verdict_for_sha` read through the ledger.
+       - The `.aida/review-verdicts` file is still written, and `collect_standalone_verdict` / `adopt_direct_write` remain.
+
+       Why: about 200 production call sites (136 `verdict_path` uses in 34 files) read the files directly. Collect also runs StandaloneVerdictChecks (launcher/child grants), which ingest does not yet replicate. Proposal: slice 2 moves those readers onto `gate::ledger::project` and deletes collect together with the hold work. The ratchet pins today's counts.
+    2. **kind:design-choice · minor — read-through tie-break.** `review_verdict::newer_of` keeps the file on a `recorded_at` tie and uses the ledger only when the file is missing or strictly older. Reason: `close_verdict_on_merge` still annotates the file in place, and there is no merged/closed ledger event until slice 2. Flip the tie-break to ledger-only when the writer switches. Spec-only verdicts (no `--pr`) stay legacy-only in slice 1.
+    3. **kind:design-choice · minor (security) — spool ingest validation and residual exposure.** Ingest accepts only `verdict` events whose actor attestation `authorizes()` the head, equals the record's attestation, and has `reviewed_sha == head`. Anything else becomes a `rejected-event` that keeps the submitted body. Symlinked or >1 MiB submissions are refused. Read-side grant re-validation is unchanged. Residual: a contained seat can delete other seats' pending submissions before ingest. That is withholding, not forgery, and is the same exposure mailbox messages have today. Consider eager ingest in slice 2.
+  created_at: 2026-10-29T11:30:57.748186018Z
+  modified_at: 2026-10-29T11:30:57.748186018Z
+  session_id: 01a187516826
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
