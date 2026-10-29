@@ -30,12 +30,12 @@ description: |
 
   ## Test tier
   LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T10:28:03.212592507Z
+modified_at: 2026-10-29T10:37:35.614298058Z
 req_type: Story
 tags:
 - docs:impacted
@@ -318,6 +318,21 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1873c-8ffa-7943-b9f5-383dd7f81c05
+  author: aida-auto-bump
+  timestamp: 2026-10-29T10:37:35.610116007Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1873c-8ffe-73c3-9fca-4920e0535b8c
+  timestamp: 2026-10-29T10:37:35.614294821Z
+  agent: aida
+  commit_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
+  summary: 'Round 5 (advisor-capped, verify-only): the 02:35 addendum is applied (docs/cli-format-json-audit.md regenerated with the aida node alias rows), and PR CI run 40855752729 is green on all 7 lanes plus Build at 5f0c66d. Both round-3 items were verified in round 4. AC1 verified by node_alias_tests (validation, rebind refusal naming both bindings, rename retires forever, node_id_registration_refuses_current_and_retired_labels) + git_ops test_node_registration_refuses_a_node_label + story_078 node_alias_set_resolve_display_and_rename. AC2 verified by story_078 node_alias_input_through_flags_relationships_and_mcp_writes_canonical + node_alias_text_parsers_keep_a_stored_literal_id + node_alias_round_trip_and_case (unknown label is not-found). AC3 verified by node_alias_display_ratchet_tests + story_078 display_id/--canonical-ids JSON assertions. AC4 verified by story_078 inferred-trailer and pr-ship squash-subject canonical tests. AC5 verified by node_alias_round_trip_and_case (uppercase canonical display). AC6 verified by story_078 set/list/show/rename run without a TTY; no delete subcommand exists. AC7 verified by node_alias_round_trip_and_case + collision guards in both directions. The findings are non-blocking and accepted under the advisor''s round-3 cap. The merge-hold-gate check is red because of an operator clearance, not code.'
+  review_verdict: approved
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
@@ -330,3 +345,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T07:27:38.939022556Z
   implemented_by: joe
+  completed_at: 2026-10-29T10:37:35.610112134Z
+  completion_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
