@@ -1562,7 +1562,12 @@ pub(crate) fn format_review_story_display(
     if pr_n.is_empty() || !pr_n.chars().all(|c| c.is_ascii_digit()) {
         return None;
     }
-    let combined = format!("PR-{} ({})", pr_n, display_id);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let combined = format!(
+        "PR-{} ({})",
+        pr_n,
+        aida_core::node_alias::display_spec_id(display_id)
+    );
     let trimmed = after.trim_start().to_string();
     Some((combined, trimmed))
 }

@@ -334,6 +334,9 @@ pub(crate) fn ensure_spec_done_after_pr(
     // `ensure_pr_open_spec_attribution` for why this caller keeps the two
     // collapsed rather than adopting the finer three-way split the
     // branch-swap seam uses).
+    // Messages below show the friendly label; lookups keep `spec`.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let shown = aida_core::node_alias::display_spec_id(spec);
     if let Err(e) = ensure_pr_open_spec_attribution(repo, branch, spec) {
         if !json {
             eprintln!(
@@ -341,7 +344,7 @@ pub(crate) fn ensure_spec_done_after_pr(
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 pr,
                 branch,
-                spec,
+                shown,
             );
         }
         return;
@@ -374,7 +377,7 @@ pub(crate) fn ensure_spec_done_after_pr(
                     "  {} {} was still In Progress after PR-{} opened — marked Done (the \
                      implementer skipped `aida queue done`)",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    spec,
+                    shown,
                     pr,
                 );
             }
@@ -386,7 +389,7 @@ pub(crate) fn ensure_spec_done_after_pr(
                     "  {} could not assert {} Done after PR-{} ({e}) — the review envelope \
                      still forces the reviewer seat",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    spec,
+                    shown,
                     pr,
                 );
             }

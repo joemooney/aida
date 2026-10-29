@@ -209,3 +209,209 @@ fn node_alias_set_resolve_display_and_rename() {
     // Persistence: the stored object never carries a label.
     assert_eq!(fs::read_to_string(&object_path).unwrap(), object_before);
 }
+
+/// A running `aida mcp-serve`, driven one JSON-RPC request at a time.
+struct Mcp {
+    child: std::process::Child,
+    out: std::io::BufReader<std::process::ChildStdout>,
+    next_id: u64,
+}
+
+impl Mcp {
+    fn spawn(f: &Fixture) -> Self {
+        let mut child = f
+            .command(false, &["mcp-serve"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let out = std::io::BufReader::new(child.stdout.take().unwrap());
+        Self {
+            child,
+            out,
+            next_id: 0,
+        }
+    }
+
+    /// Call `tool` and return its text content (error results included).
+    fn call(&mut self, tool: &str, arguments: serde_json::Value) -> String {
+        use std::io::{BufRead, Write};
+        self.next_id += 1;
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": self.next_id,
+            "method": "tools/call",
+            "params": {"name": tool, "arguments": arguments},
+        });
+        let stdin = self.child.stdin.as_mut().unwrap();
+        writeln!(stdin, "{request}").unwrap();
+        stdin.flush().unwrap();
+        loop {
+            let mut line = String::new();
+            assert!(
+                self.out.read_line(&mut line).unwrap() > 0,
+                "mcp-serve exited"
+            );
+            let Ok(response) = serde_json::from_str::<serde_json::Value>(&line) else {
+                continue;
+            };
+            if response["id"] == self.next_id {
+                return response["result"]["content"][0]["text"]
+                    .as_str()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| response.to_string());
+            }
+        }
+    }
+}
+
+impl Drop for Mcp {
+    fn drop(&mut self) {
+        drop(self.child.stdin.take());
+        let _ = self.child.wait();
+    }
+}
+
+/// Alias input works through CLI flags (`--parent`, `rel add --from/--to`),
+/// relationship targets and MCP tool arguments — including a label set while
+/// the MCP server is already running — and everything written stays
+/// canonical: relationship edges, stored objects and generated commit
+/// trailers. Read surfaces (show human/TOON relationship rows, MCP rows)
+/// carry the friendly form; JSON keeps the canonical id plus `display_id`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[test]
+fn node_alias_input_through_flags_relationships_and_mcp_writes_canonical() {
+    let f = Fixture::new();
+    f.ok(&["add", "--title", "parent story", "--type", "story"]);
+    f.ok(&["add", "--title", "aliased defect", "--type", "bug"]);
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .unwrap()
+        .node_id
+        .to_ascii_uppercase();
+    let story = format!("STORY-{node}-001");
+    let bug = format!("BUG-{node}-001");
+    let task = format!("TASK-{node}-001");
+    let uuid_of = |id: &str| f.show_json(&[id])["uuid"].as_str().unwrap().to_string();
+    let story_uuid = uuid_of(&story);
+
+    // The MCP server starts BEFORE the label exists and still resolves it.
+    let mut mcp = Mcp::spawn(&f);
+    f.ok(&["node", "alias", "set", "HOME"]);
+    let shown = mcp.call(
+        "show_requirement",
+        serde_json::json!({"id": "bug-home-001"}),
+    );
+    assert!(
+        shown.to_ascii_uppercase().contains(&bug) && shown.contains("BUG-HOME-001"),
+        "{shown}"
+    );
+    let listed = mcp.call("list_requirements", serde_json::json!({}));
+    assert!(
+        listed
+            .to_ascii_uppercase()
+            .contains(&format!("{bug} (DISPLAY_ID: BUG-HOME-001)")),
+        "{listed}"
+    );
+    let added = mcp.call(
+        "add_relationship",
+        serde_json::json!({
+            "spec_id": "BUG-HOME-001",
+            "relationship_type": "references",
+            "target_spec_id": "story-home-001",
+        }),
+    );
+    assert!(!added.to_lowercase().contains("not found"), "{added}");
+    drop(mcp);
+
+    // CLI flags: `--parent` and `rel add --from/--to` take the alias form.
+    f.ok(&[
+        "add",
+        "--title",
+        "child task",
+        "--type",
+        "task",
+        "--parent",
+        "STORY-HOME-001",
+    ]);
+    f.ok(&[
+        "rel",
+        "add",
+        "--from",
+        "task-home-001",
+        "--to",
+        "BUG-HOME-001",
+        "--type",
+        "references",
+    ]);
+
+    // Every edge stores the target's uuid; no object carries the label.
+    for (id, target) in [(&bug, &story_uuid), (&task, &story_uuid)] {
+        let path = f.store.join(format!(
+            "objects/{}/000/{id}.yaml",
+            id.split('-').next().unwrap()
+        ));
+        let yaml = fs::read_to_string(&path).unwrap();
+        assert!(yaml.contains(target.as_str()), "{id} edge missing:\n{yaml}");
+        assert!(!yaml.contains("HOME"), "{id} stored a label:\n{yaml}");
+    }
+
+    // Relationship rows show the friendly form on human and TOON surfaces;
+    // JSON keeps the canonical id and adds display_id.
+    let human = f.ok(&["show", "TASK-HOME-001", "--no-git", "--format", "human"]);
+    assert!(
+        human.contains("STORY-HOME-001") && human.contains("BUG-HOME-001"),
+        "{human}"
+    );
+    let toon = f.ok(&["show", "TASK-HOME-001", "--no-git", "--format", "toon"]);
+    assert!(toon.contains("STORY-HOME-001"), "{toon}");
+    let json = f.show_json(&["TASK-HOME-001"]);
+    let rels = json["relationships"].as_array().unwrap();
+    assert!(
+        rels.iter().any(|r| r["id"]
+            .as_str()
+            .is_some_and(|id| id.eq_ignore_ascii_case(&story))
+            && r["display_id"] == "STORY-HOME-001"),
+        "{json}"
+    );
+
+    // A generated commit trailer is canonical even when --spec uses the label.
+    let message = f.ok(&[
+        "commit",
+        "--dry-run",
+        "--type",
+        "fix",
+        "--message",
+        "aliased spec",
+        "--spec",
+        "task-home-001",
+    ]);
+    assert!(message.trim().ends_with(&format!("({task})")), "{message}");
+
+    // A label equal to a registered node id is refused on rename as on set.
+    let nodes = f.store.join("registry/nodes.toml");
+    let mut roster = fs::read_to_string(&nodes).unwrap_or_default();
+    roster.push_str(
+        "\n[[nodes]]\nid = \"w2\"\nuser_id = 9\nhostname = \"h\"\nregistered = \"2026-01-01T00:00:00Z\"\n",
+    );
+    fs::create_dir_all(nodes.parent().unwrap()).unwrap();
+    fs::write(&nodes, roster).unwrap();
+    for args in [
+        &["node", "alias", "rename", "HOME", "W2"][..],
+        &[
+            "node",
+            "alias",
+            "set",
+            "W2",
+            "--node",
+            "0123456789abcdef0123456789abcdef",
+        ][..],
+    ] {
+        let refused = f.aida(args);
+        assert!(!refused.status.success(), "{args:?} must refuse");
+        let err = String::from_utf8_lossy(&refused.stderr).into_owned()
+            + &String::from_utf8_lossy(&refused.stdout);
+        assert!(err.contains("registered node id"), "{err}");
+    }
+}

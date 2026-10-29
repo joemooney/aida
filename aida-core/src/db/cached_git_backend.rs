@@ -215,16 +215,24 @@ impl CachedGitBackend {
 
     // trace:BUG-1535 trace:BUG-1670 | ai:claude
     fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
+        // A friendly `TYPE-<LABEL>-NNN` resolves as the canonical id it
+        // expands to only when nothing answers to it literally: an existing
+        // agreed/initials id such as `BUG-JM-001` always wins over label JM.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        if let Some(req) = self.resolve_unambiguous_exact(id, strict)? {
+            return Ok(Some(req));
+        }
+        match crate::node_alias::expand_spec_id(id) {
+            Some(canonical) => self.resolve_unambiguous_exact(&canonical, strict),
+            None => Ok(None),
+        }
+    }
+
+    /// [`Self::resolve_unambiguous`] for `id` exactly as given (no node-alias
+    /// expansion).
+    fn resolve_unambiguous_exact(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
-        }
-        // A friendly `TYPE-<LABEL>-NNN` resolves as the canonical id it
-        // expands to (whose node segment is never itself a label).
-        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        if let Some(canonical) = crate::node_alias::expand_spec_id(id) {
-            if let Some(req) = self.resolve_unambiguous(&canonical, strict)? {
-                return Ok(Some(req));
-            }
         }
         let scanned = if strict {
             self.id_candidates_strict(id)
@@ -2189,6 +2197,99 @@ mod tests {
 
     // The whole-store transaction the doc/burndown/findings commands use:
     // the returned store, the object on disk and the cache row all carry the
+    /// An existing literal id (an agreed/initials id like `BUG-ZQ-001`) wins
+    /// over a node label of the same middle segment on EVERY resolver: the
+    /// git backend, the cached checked resolvers (read and write), the
+    /// trait's spec lookup and the in-memory store. Alias expansion applies
+    /// only when nothing answers to the id as given.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    #[test]
+    fn story078_literal_id_wins_over_node_label_on_every_resolver() {
+        const ALIASED: &str = "b6b1278890774ef993d2ebc327862470";
+        const OTHER: &str = "0123456789abcdef0123456789abcdef";
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = home_fixture_cached(&store_root, &dir.path().join("cache.db")).unwrap();
+        let mut literal = sample_req(&format!("BUG-{OTHER}-005").to_ascii_uppercase(), "Literal");
+        literal.agreed_id = Some("BUG-ZQ-001".into());
+        let aliased = sample_req(
+            &format!("BUG-{ALIASED}-001").to_ascii_uppercase(),
+            "Aliased",
+        );
+        let objects = store_root.join("objects");
+        for r in [&literal, &aliased] {
+            crate::object_store::write_object(&objects, r).unwrap();
+            backend.cache.upsert_requirement(r).unwrap();
+        }
+        let mut map = crate::node_alias::NodeAliasMap::default();
+        map.set("ZQ", ALIASED).unwrap();
+        let guard = crate::node_alias::install_for_thread(map);
+
+        let title = |r: Option<Requirement>| r.map(|r| r.title).unwrap_or_default();
+        assert_eq!(
+            title(
+                backend
+                    .inner
+                    .get_requirement_by_spec_id("BUG-ZQ-001")
+                    .unwrap()
+            ),
+            "Literal"
+        );
+        assert_eq!(
+            title(DatabaseBackend::get_requirement_by_spec_id(&backend, "bug-zq-001").unwrap()),
+            "Literal"
+        );
+        assert_eq!(
+            title(backend.get_requirement_unambiguous("BUG-ZQ-001").unwrap()),
+            "Literal"
+        );
+        assert_eq!(
+            title(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-ZQ-001")
+                    .unwrap()
+            ),
+            "Literal"
+        );
+        let store = backend.inner.load().unwrap();
+        assert_eq!(
+            store
+                .get_requirement_by_spec_id("BUG-ZQ-001")
+                .unwrap()
+                .title,
+            "Literal"
+        );
+        let idx = store
+            .resolve_unambiguous_index("BUG-ZQ-001")
+            .unwrap()
+            .unwrap();
+        assert_eq!(store.requirements[idx].title, "Literal");
+
+        // With no literal owner, the label expands to the aliased node's spec.
+        let mut map = crate::node_alias::NodeAliasMap::default();
+        map.set("ZQX", ALIASED).unwrap();
+        drop(guard);
+        let _guard = crate::node_alias::install_for_thread(map);
+        assert_eq!(
+            title(
+                backend
+                    .inner
+                    .get_requirement_by_spec_id("BUG-ZQX-001")
+                    .unwrap()
+            ),
+            "Aliased"
+        );
+        assert_eq!(
+            title(
+                backend
+                    .get_requirement_unambiguous_for_read("bug-zqx-001")
+                    .unwrap()
+            ),
+            "Aliased"
+        );
+    }
+
     // write event's session context. trace:STORY-1674 | ai:claude
     #[test]
     fn story1674_update_atomically_returns_and_caches_stamped_rows() {

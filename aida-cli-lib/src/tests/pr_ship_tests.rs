@@ -1559,8 +1559,25 @@ fn node_alias_trailers_and_traces_expand_to_canonical() {
     let node = "fedcba9876543210fedcba9876543210";
     let mut map = aida_core::node_alias::NodeAliasMap::default();
     map.set("ZQX9", node).unwrap();
-    aida_core::node_alias::install(map);
+    let _map = aida_core::node_alias::install_for_thread(map);
     let canonical = format!("TASK-{node}-095").to_ascii_uppercase();
+
+    // A generated squash subject never carries the label, even when the PR
+    // title was typed with one; prose outside the trailer group is untouched.
+    assert_eq!(
+        squash_subject_with_spec_ids(
+            "[AI:claude] fix: HOME task-zqx9-095 (TASK-ZQX9-095) (#12)",
+            std::slice::from_ref(&canonical)
+        ),
+        format!("[AI:claude] fix: HOME task-zqx9-095 ({canonical}) (#12)")
+    );
+    assert_eq!(
+        squash_subject_with_spec_ids(
+            "[AI:claude] fix: x (Refs TASK-ZQX9-095)",
+            std::slice::from_ref(&canonical)
+        ),
+        format!("[AI:claude] fix: x (Refs {canonical})")
+    );
 
     assert_eq!(
         extract_trailing_spec_ids_from_subject("[AI:claude] fix: x (task-zqx9-095) (#12)"),

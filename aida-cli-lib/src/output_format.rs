@@ -386,3 +386,8 @@ mod task_2205_list_fields_tests;
 #[cfg(test)]
 #[path = "tests/bug_1813_toon_hint_tests.rs"]
 mod bug_1813_toon_hint_tests;
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[cfg(test)]
+#[path = "tests/node_alias_display_ratchet_tests.rs"]
+mod node_alias_display_ratchet_tests;

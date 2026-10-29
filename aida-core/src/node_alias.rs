@@ -322,8 +322,35 @@ pub fn install_from_store(store_root: &Path) {
     install(NodeAliasMap::load(store_root));
 }
 
-/// This process's installed map (empty until [`install`] runs).
+thread_local! {
+    static THREAD_MAP: std::cell::RefCell<Option<Arc<NodeAliasMap>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Restores the previous thread-scoped map on drop (see [`install_for_thread`]).
+pub struct ThreadMapGuard(Option<Arc<NodeAliasMap>>);
+
+impl Drop for ThreadMapGuard {
+    fn drop(&mut self) {
+        let prev = self.0.take();
+        THREAD_MAP.with(|t| *t.borrow_mut() = prev);
+    }
+}
+
+/// Install `map` for the CURRENT THREAD only, shadowing the process-wide map
+/// until the guard drops. For tests: a long-lived server (MCP) re-installs the
+/// process map on every call, which must not race a test's own map.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+pub fn install_for_thread(map: NodeAliasMap) -> ThreadMapGuard {
+    ThreadMapGuard(THREAD_MAP.with(|t| t.replace(Some(Arc::new(map)))))
+}
+
+/// This process's installed map (empty until [`install`] runs); a
+/// thread-scoped map ([`install_for_thread`]) wins.
 pub fn installed() -> Arc<NodeAliasMap> {
+    if let Some(map) = THREAD_MAP.with(|t| t.borrow().clone()) {
+        return map;
+    }
     slot()
         .read()
         .map(|g| Arc::clone(&g))
@@ -362,6 +389,41 @@ pub fn display_spec_id(id: &str) -> String {
     installed().display(id, canonical_ids())
 }
 
+/// Refuse any label `after` binds that `before` did not when it equals a
+/// node id registered in `registry/nodes.toml`: `TASK-<label>-NNN` would then
+/// name two different requirements. Shared by every write (`set` and
+/// `rename`) because it runs inside [`mutate_cas`].
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[cfg(feature = "native")]
+fn refuse_registered_node_id_labels(
+    store_root: &Path,
+    before: &NodeAliasMap,
+    after: &NodeAliasMap,
+) -> anyhow::Result<()> {
+    let added: Vec<&str> = after
+        .bindings
+        .iter()
+        .filter(|b| before.binding(&b.label).is_none())
+        .map(|b| b.label.as_str())
+        .collect();
+    if added.is_empty() {
+        return Ok(());
+    }
+    let roster = crate::node::NodeRegistry::load(&store_root.join("registry").join("nodes.toml"))
+        .unwrap_or_default();
+    if let Some(label) = added.iter().find(|label| {
+        roster
+            .nodes
+            .iter()
+            .any(|n| n.id.as_str().eq_ignore_ascii_case(label))
+    }) {
+        anyhow::bail!(
+            "label {label} is already a registered node id; spec IDs like TASK-{label}-001 belong to that node"
+        );
+    }
+    Ok(())
+}
+
 /// Commit-and-push a mutation of the node-alias map with the registry CAS
 /// push-wins loop (mirrors [`crate::alias::link_cas`]): pull, strict-load,
 /// mutate, save, commit, push; a rejected push resets and retries. Solo (no
@@ -384,9 +446,11 @@ pub fn mutate_cas(
                 git_ops::pull_rebase(store_root, "origin", &branch)?;
             }
             let mut map = NodeAliasMap::load_strict(store_root)?;
+            let before = map.clone();
             if !mutate(&mut map).map_err(anyhow::Error::msg)? {
                 return Ok(None);
             }
+            refuse_registered_node_id_labels(store_root, &before, &map)?;
             map.save(store_root)?;
             git_ops::add(store_root, &[NODE_ALIASES_TOML_REL])?;
             git_ops::commit(store_root, &format!("chore(registry): {describe}"))?;

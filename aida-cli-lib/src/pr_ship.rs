@@ -550,11 +550,46 @@ pub fn format_dry_run_trailer_provenance(trailer: Result<&SquashTrailer, &str>) 
     }
 }
 
+/// Rewrite every friendly `TYPE-<LABEL>-NNN` inside a parenthesized group of
+/// `subject` (the trailer / `Refs` groups) to its canonical node-local id, so
+/// a squash subject written to main never carries a node label even when the
+/// PR title was typed with one. Text outside parentheses is untouched.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+pub fn canonicalize_node_label_ids(subject: &str) -> String {
+    fn flush(out: &mut String, token: &mut String, in_group: bool) {
+        match aida_core::node_alias::expand_spec_id(token).filter(|_| in_group) {
+            Some(canonical) => out.push_str(&canonical),
+            None => out.push_str(token),
+        }
+        token.clear();
+    }
+    let mut out = String::with_capacity(subject.len());
+    let mut token = String::new();
+    let mut depth = 0usize;
+    for c in subject.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '$' {
+            token.push(c);
+            continue;
+        }
+        flush(&mut out, &mut token, depth > 0);
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        out.push(c);
+    }
+    flush(&mut out, &mut token, depth > 0);
+    out
+}
+
 /// Ensure the squash subject carries every derived spec ID exactly once.
 /// Existing well-formed subjects are left untouched.
 // trace:SPEC-410 BUG-339 | ai:codex
 pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
-    let subject = subject.trim();
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let canonical = canonicalize_node_label_ids(subject.trim());
+    let subject = canonical.as_str();
     if ids.is_empty() || subject.is_empty() {
         return subject.to_string();
     }

@@ -920,6 +920,31 @@ fn spec_id(r: &Requirement) -> &str {
     r.spec_id.as_deref().unwrap_or("?")
 }
 
+/// Install the store's friendly node-label map for this process, so tool
+/// spec-ID arguments accept `TYPE-<LABEL>-NNN` and rows show it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+fn install_node_aliases(storage: &Storage, project_root: &std::path::Path) {
+    let store_root = if storage.path().is_dir() {
+        storage.path().to_path_buf()
+    } else {
+        project_root.join(".aida-store")
+    };
+    aida_core::node_alias::install_from_store(&store_root);
+}
+
+/// A spec id as MCP rows show it: the canonical id stays first (agents act on
+/// it), followed by an additive `display_id` naming the friendly node label
+/// when one applies — `BUG-B6B1…-001 (display_id: BUG-HOME-001)`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+fn mcp_id_cell(canonical: &str) -> String {
+    let display = aida_core::node_alias::display_spec_id(canonical);
+    if display.eq_ignore_ascii_case(canonical) {
+        canonical.to_string()
+    } else {
+        format!("{canonical} (display_id: {display})")
+    }
+}
+
 /// STORY-82: render a `## Git linkage` Markdown section for a spec, reusing
 /// the same collection `aida show` walks (referencing commits, feature
 /// branch / worktree, shipped state, PR). `verbose` expands the per-commit
@@ -1129,6 +1154,10 @@ impl<'a> McpServer<'a> {
         // server must never inherit a previous call's stale observation.
         // trace:TASK-1526 | ai:codex
         let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
+        // A long-lived server sees labels set or renamed since startup: the
+        // map is one small file, re-read per call.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        install_node_aliases(self.storage, &self.project_root);
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
         // The response-scoped ACK plan a `read_inbox` call may prepare.
@@ -1711,7 +1740,7 @@ impl<'a> McpServer<'a> {
         for r in &filtered {
             output.push_str(&format!(
                 "- [{}] {} (Status: {}, Priority: {}, Type: {})\n",
-                spec_id(r),
+                mcp_id_cell(spec_id(r)),
                 r.title,
                 // BUG-626: surface the epic's derived rollup status.
                 mcp_effective_status(&store, r),
@@ -2468,7 +2497,12 @@ impl<'a> McpServer<'a> {
 
         let mut output = format!("Found {} results for '{}':\n\n", matches.len(), query);
         for r in &matches {
-            output.push_str(&format!("- [{}] {} ({})\n", spec_id(r), r.title, r.status));
+            output.push_str(&format!(
+                "- [{}] {} ({})\n",
+                mcp_id_cell(spec_id(r)),
+                r.title,
+                r.status
+            ));
         }
         Ok(output)
     }
@@ -4111,6 +4145,8 @@ impl<'a> McpServer<'a> {
         .ok_or_else(|| format!("Requirement '{}' not found", id))
     }
 
+    /// The id this server acts on (lease gates, events, command hints).
+    /// Prose rows wrap it in [`mcp_id_cell`] for the additive `display_id`.
     fn display_id_of(req: &Requirement) -> String {
         req.agreed_id
             .clone()
@@ -4168,7 +4204,8 @@ impl<'a> McpServer<'a> {
             shown += 1;
             let (disp, title, status) = match req {
                 Some(r) => (
-                    Self::display_id_of(r),
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                    mcp_id_cell(&Self::display_id_of(r)),
                     r.title.clone(),
                     r.status.to_string(),
                 ),
@@ -4294,7 +4331,12 @@ impl<'a> McpServer<'a> {
             .as_deref()
             .map(|r| format!(" [for:{}]", r))
             .unwrap_or_default();
-        Ok(format!("Added {} ({}) to queue{}", display, title, routing))
+        Ok(format!(
+            "Added {} ({}) to queue{}",
+            mcp_id_cell(&display),
+            title,
+            routing
+        ))
     }
 
     // trace:EPIC-27
@@ -4375,7 +4417,7 @@ impl<'a> McpServer<'a> {
                     .find(|r| r.id == entry.requirement_id);
                 let (disp, title, status) = match req {
                     Some(r) => (
-                        Self::display_id_of(r),
+                        mcp_id_cell(&Self::display_id_of(r)),
                         r.title.clone(),
                         r.status.to_string(),
                     ),
@@ -4512,7 +4554,10 @@ impl<'a> McpServer<'a> {
         crate::record_role_activity(&spec_id, "done");
         crate::update_manifest_for_status(&spec_id, "Done");
 
-        Ok(format!("{} marked done and removed from queue.", display))
+        Ok(format!(
+            "{} marked done and removed from queue.",
+            mcp_id_cell(&display)
+        ))
     }
 
     // trace:EPIC-27
@@ -4836,7 +4881,12 @@ impl<'a> McpServer<'a> {
             .as_deref()
             .map(|r| format!(" [for:{}]", r))
             .unwrap_or_default();
-        summary.push_str(&format!("Queued {} ({}){}", display, title, routing));
+        summary.push_str(&format!(
+            "Queued {} ({}){}",
+            mcp_id_cell(&display),
+            title,
+            routing
+        ));
         Ok(summary)
     }
 
@@ -4899,7 +4949,7 @@ impl<'a> McpServer<'a> {
         self.storage
             .queue_reorder(&user_id, &[(req_id, new_position)])
             .map_err(|e| e.to_string())?;
-        Ok(format!("Moved {} in queue.", display))
+        Ok(format!("Moved {} in queue.", mcp_id_cell(&display)))
     }
 
     // trace:EPIC-27
@@ -6044,7 +6094,12 @@ impl<'a> McpServer<'a> {
         for (feature, reqs) in &by_feature {
             output.push_str(&format!("## {}\n\n", feature));
             for r in reqs {
-                output.push_str(&format!("- [{}] {} ({})\n", spec_id(r), r.title, r.status));
+                output.push_str(&format!(
+                    "- [{}] {} ({})\n",
+                    mcp_id_cell(spec_id(r)),
+                    r.title,
+                    r.status
+                ));
             }
             output.push('\n');
         }
@@ -6212,7 +6267,7 @@ impl<'a> McpServer<'a> {
                     .iter()
                     .any(|t| crate::findings::pr_number_from_tag(t) == Some(n as u32))
             })
-            .map(|r| format!("- [{}] {} ({})", spec_id(r), r.title, r.status))
+            .map(|r| format!("- [{}] {} ({})", mcp_id_cell(spec_id(r)), r.title, r.status))
             .collect();
         findings.sort();
 
@@ -8801,13 +8856,10 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
         crate::lane_env::apply_in_process(&project_root, &cwd);
     }
     // Friendly node labels resolve in every tool's spec-ID arguments.
+    // Each tools/call reloads the map too (a label set or renamed after
+    // startup applies without a respawn).
     // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-    let store_root = if storage.path().is_dir() {
-        storage.path().to_path_buf()
-    } else {
-        project_root.join(".aida-store")
-    };
-    aida_core::node_alias::install_from_store(&store_root);
+    install_node_aliases(storage, &project_root);
     let server = McpServer::new(storage, project_root);
     let respawn = McpRespawnState::new();
     let stdin = io::stdin();

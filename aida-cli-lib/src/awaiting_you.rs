@@ -1152,6 +1152,18 @@ pub(crate) fn unowned_failing_pr_toon_rows(items: &[UnownedFailingPrItem]) -> Ve
         .collect()
 }
 
+/// A spec id as the human/TOON awaiting views show it: friendly node label
+/// applied (JSON keeps the canonical id).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+pub(crate) fn shown_spec(id: &str) -> String {
+    aida_core::node_alias::display_spec_id(id)
+}
+
+/// [`shown_spec`] for an optional id, `-` when absent.
+pub(crate) fn shown_opt_spec(id: Option<&str>) -> String {
+    id.map(shown_spec).unwrap_or_else(|| "-".into())
+}
+
 /// BUG-1739: the three-way orphan verdict as one label. The human render and
 /// the agent-mode table read it from here; before this there was exactly one
 /// copy because there was exactly one renderer.
@@ -1182,7 +1194,7 @@ pub(crate) fn orphaned_in_progress_toon_rows(items: &[OrphanedInProgressItem]) -
         .iter()
         .map(|o| {
             vec![
-                o.spec_id.clone(),
+                shown_spec(&o.spec_id),
                 orphaned_state_label(o).to_string(),
                 o.since_label.clone(),
                 "aida ps".to_string(),
@@ -1199,7 +1211,7 @@ pub(crate) fn blocked_seat_toon_rows(items: &[BlockedSeatItem]) -> Vec<Vec<Strin
         .map(|b| {
             vec![
                 b.session_id.clone(),
-                b.spec.clone().unwrap_or_else(|| "-".into()),
+                shown_opt_spec(b.spec.as_deref()),
                 b.tool.clone().unwrap_or_else(|| "-".into()),
                 b.since_label.clone(),
             ]
@@ -1217,8 +1229,8 @@ pub(crate) fn pr_attribution_toon_rows(
         .map(|d| {
             vec![
                 d.pr.to_string(),
-                d.lease_spec.clone(),
-                d.trailer_spec.clone(),
+                shown_spec(&d.lease_spec),
+                shown_spec(&d.trailer_spec),
             ]
         })
         .collect()
@@ -1232,7 +1244,7 @@ pub(crate) fn rework_ready_toon_rows(items: &[ReworkReadyItem]) -> Vec<Vec<Strin
         .map(|r| {
             vec![
                 r.pr.to_string(),
-                r.spec.clone().unwrap_or_else(|| "-".into()),
+                shown_opt_spec(r.spec.as_deref()),
                 r.reviewed_sha.clone(),
                 r.head_sha.clone(),
             ]
@@ -1249,7 +1261,7 @@ pub(crate) fn stale_approval_toon_rows(items: &[StaleApprovalItem]) -> Vec<Vec<S
         .map(|i| {
             vec![
                 i.pr.to_string(),
-                i.spec.clone().unwrap_or_else(|| "-".into()),
+                shown_opt_spec(i.spec.as_deref()),
                 i.reviewed_sha.clone(),
                 i.head_sha.clone(),
                 i.reason.as_wire_str().to_string(),
@@ -1266,7 +1278,7 @@ pub(crate) fn blocked_review_toon_rows(items: &[BlockedReviewItem]) -> Vec<Vec<S
         .map(|i| {
             vec![
                 i.pr.to_string(),
-                i.spec.clone().unwrap_or_else(|| "-".into()),
+                shown_opt_spec(i.spec.as_deref()),
                 i.reviewed_sha.clone(),
                 i.head_sha.clone(),
                 i.reason.as_wire_str().to_string(),
@@ -2052,7 +2064,12 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
-            let scope = item.spec.clone().unwrap_or_else(|| item.session_id.clone());
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            let scope = item
+                .spec
+                .as_deref()
+                .map(shown_spec)
+                .unwrap_or_else(|| item.session_id.clone());
             let tool = item.tool.as_deref().unwrap_or("a tool call");
             writeln!(
                 w,
@@ -2076,7 +2093,7 @@ impl AwaitingReport {
             let spec = item
                 .spec
                 .as_deref()
-                .map(|s| format!(" ({s})"))
+                .map(|s| format!(" ({})", shown_spec(s)))
                 .unwrap_or_default();
             // trace:TASK-1310 | ai:claude — how long the refusal has stood
             // with no subsequent rework, reused from the same verdict data
@@ -2130,7 +2147,7 @@ impl AwaitingReport {
             let spec = item
                 .spec
                 .as_deref()
-                .map(|s| format!(" ({s})"))
+                .map(|s| format!(" ({})", shown_spec(s)))
                 .unwrap_or_default();
             match item.reason {
                 StaleApprovalReason::Stale => writeln!(
@@ -2173,7 +2190,7 @@ impl AwaitingReport {
             let spec = item
                 .spec
                 .as_deref()
-                .map(|s| format!(" ({s})"))
+                .map(|s| format!(" ({})", shown_spec(s)))
                 .unwrap_or_default();
             // trace:STORY-1420 | ai:claude — an inherited row names the
             // exited recorder instead of claiming the refusal was yours.
@@ -2205,8 +2222,8 @@ impl AwaitingReport {
                 "  {} PR-{} attribution split — lease says {}, commit trailers say {}",
                 "⚠️".yellow(),
                 item.pr.to_string().bold(),
-                item.lease_spec.bold(),
-                item.trailer_spec.bold(),
+                shown_spec(&item.lease_spec).bold(),
+                shown_spec(&item.trailer_spec).bold(),
             )?;
             budget -= 1;
         }
@@ -2276,7 +2293,7 @@ impl AwaitingReport {
             }
             // trace:BUG-1514 | ai:claude — name WHY it's stuck (acceptance #5).
             let reason = match &pr.done_spec {
-                Some(spec) => format!("{spec} is marked Done but its CI is failing"),
+                Some(spec) => format!("{} is marked Done but its CI is failing", shown_spec(spec)),
                 None => "CI failing with no owner or route".to_string(),
             };
             writeln!(
@@ -2298,7 +2315,7 @@ impl AwaitingReport {
             let id = if b.spec_id.is_empty() {
                 String::new()
             } else {
-                format!(" {}", b.spec_id.bold())
+                format!(" {}", shown_spec(&b.spec_id).bold())
             };
             writeln!(
                 w,
@@ -2454,7 +2471,7 @@ impl AwaitingReport {
                 w,
                 "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {}{} — `{}`",
                 scope_note,
-                item.spec_id.bold(),
+                shown_spec(&item.spec_id).bold(),
                 item.branch,
                 item.commits_ahead,
                 if item.commits_ahead == 1 { "" } else { "s" },
@@ -2541,7 +2558,7 @@ impl AwaitingReport {
                     "  {} {}: {} — {}",
                     glyph,
                     label,
-                    q.spec_id.bold(),
+                    shown_spec(&q.spec_id).bold(),
                     q.title,
                 )?;
                 budget -= 1;
@@ -2580,7 +2597,7 @@ impl AwaitingReport {
             writeln!(
                 w,
                 "  🗣️ escalation: {} — {} · once decided: `{}` (to Approved)",
-                e.spec_id.bold(),
+                shown_spec(&e.spec_id).bold(),
                 e.title,
                 crate::requeue::requeue_command(&e.spec_id).cyan(),
             )?;
@@ -2598,7 +2615,7 @@ impl AwaitingReport {
                 w,
                 "  {} orphaned In-Progress: {} — {}, {} — `{}`",
                 "⚠️".yellow(),
-                o.spec_id.bold(),
+                shown_spec(&o.spec_id).bold(),
                 state,
                 o.since_label,
                 "aida ps".cyan(),
@@ -2615,7 +2632,7 @@ impl AwaitingReport {
                 w,
                 "  {} in-progress but nothing is working it: {} — {} — `{}`",
                 "⚠️".yellow(),
-                i.spec_id.bold(),
+                shown_spec(&i.spec_id).bold(),
                 i.age_label(),
                 "aida ps".cyan(),
             )?;

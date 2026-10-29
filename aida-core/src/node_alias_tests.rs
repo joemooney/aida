@@ -104,3 +104,30 @@ fn node_alias_malformed_file_reads_empty_and_refuses_write() {
     home().save(dir.path()).unwrap();
     assert_eq!(NodeAliasMap::load(dir.path()), home());
 }
+
+#[test]
+fn node_alias_registered_node_id_guard_covers_set_and_rename() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("registry")).unwrap();
+    std::fs::write(
+        dir.path().join("registry/nodes.toml"),
+        "[[nodes]]\nid = \"w2\"\nuser_id = 1\nhostname = \"h\"\nregistered = \"2026-01-01T00:00:00Z\"\n",
+    )
+    .unwrap();
+    let before = home();
+    // Rename onto a registered node id refuses.
+    let mut renamed = before.clone();
+    renamed.rename("HOME", "W2").unwrap();
+    let err = refuse_registered_node_id_labels(dir.path(), &before, &renamed).unwrap_err();
+    assert!(err.to_string().contains("W2"), "{err}");
+    // Set onto a registered node id refuses.
+    let mut set = NodeAliasMap::default();
+    set.set("W2", NODE_B).unwrap();
+    assert!(refuse_registered_node_id_labels(dir.path(), &NodeAliasMap::default(), &set).is_err());
+    // An unrelated new label passes; bindings that already existed are not re-judged.
+    let mut ok = before.clone();
+    ok.rename("HOME", "DESK").unwrap();
+    refuse_registered_node_id_labels(dir.path(), &before, &ok).unwrap();
+    refuse_registered_node_id_labels(dir.path(), &set, &set).unwrap();
+}

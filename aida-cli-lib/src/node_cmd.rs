@@ -570,21 +570,8 @@ fn handle_node_alias_command(cmd: &NodeAliasCommand, store_path: &std::path::Pat
             };
             let node = node_alias::normalize_node(&node).map_err(anyhow::Error::msg)?;
             let label = node_alias::validate_label(label).map_err(anyhow::Error::msg)?;
-            // A label equal to a registered short node id would make
-            // `TASK-<label>-NNN` name two different requirements.
-            let roster = aida_core::node::NodeRegistry::load(
-                &store_path.join("registry").join("nodes.toml"),
-            )
-            .unwrap_or_default();
-            if roster
-                .nodes
-                .iter()
-                .any(|n| n.id.as_str().eq_ignore_ascii_case(&label))
-            {
-                anyhow::bail!(
-                    "label {label} is already a registered node id; spec IDs like TASK-{label}-001 belong to that node"
-                );
-            }
+            // `mutate_cas` refuses a label equal to a registered node id (for
+            // set and rename alike).
             let changed =
                 node_alias::mutate_cas(store_path, &format!("label node {node} {label}"), |map| {
                     map.set(&label, &node)

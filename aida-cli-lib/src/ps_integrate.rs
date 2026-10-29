@@ -2510,14 +2510,24 @@ pub(crate) struct CollapsedSalvageRow<'a> {
 }
 
 impl<'a> CollapsedSalvageRow<'a> {
+    /// Human/TOON spec cell: friendly node labels apply (JSON keeps
+    /// `spec_ids` canonical).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
     pub(crate) fn display_spec(&self) -> String {
+        use aida_core::node_alias::display_spec_id;
         if !self.spec_ids.is_empty() {
-            self.spec_ids.join(", ")
+            self.spec_ids
+                .iter()
+                .map(|s| display_spec_id(s))
+                .collect::<Vec<_>>()
+                .join(", ")
         } else {
-            self.row
-                .spec
-                .clone()
-                .unwrap_or_else(|| self.row.lease.scope.clone())
+            display_spec_id(
+                self.row
+                    .spec
+                    .as_deref()
+                    .unwrap_or(self.row.lease.scope.as_str()),
+            )
         }
     }
 
@@ -2960,7 +2970,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             .map(|o| {
                 let [driver, driver_kind] = driver_view::toon_cells(o.driver.as_ref());
                 vec![
-                    o.spec.clone(),
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                    aida_core::node_alias::display_spec_id(&o.spec),
                     o.title.clone(),
                     if o.stale_lease {
                         "stale".to_string()
@@ -2993,7 +3004,12 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             .filter(|o| driver_view::orphan_is_driven(o))
             .map(|o| {
                 let [driver, driver_kind] = driver_view::toon_cells(o.driver.as_ref());
-                vec![o.spec.clone(), o.title.clone(), driver, driver_kind]
+                vec![
+                    aida_core::node_alias::display_spec_id(&o.spec),
+                    o.title.clone(),
+                    driver,
+                    driver_kind,
+                ]
             })
             .collect();
         if !driven.is_empty() {
@@ -3445,7 +3461,10 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             println!(
                 "  {} {}  {}",
                 info.cyan(),
-                o.spec.cyan().bold(),
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                aida_core::node_alias::display_spec_id(&o.spec)
+                    .cyan()
+                    .bold(),
                 truncate(&o.title, 48).dimmed(),
             );
         }
@@ -3481,7 +3500,9 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             println!(
                 "  {} {}  {}  {}",
                 warn.yellow(),
-                o.spec.yellow().bold(),
+                aida_core::node_alias::display_spec_id(&o.spec)
+                    .yellow()
+                    .bold(),
                 truncate(&o.title, 48).dimmed(),
                 // trace:STORY-1653 | ai:claude — `· queued (batch:X)` / `· idle 26h`
                 format!("({why}{})", driver_view::orphan_driver_suffix(o)).dimmed(),
