@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-013
 title: Reviewer verdict stores a model-typed head SHA; a typo discards a complete review
 description: |
   A headless reviewer's verdict was rejected at collection because the reviewer typed the head SHA wrong. On aida-relay PR #98 on 2026-10-28, the verdict file recorded reviewed_sha 'cfbd4bd2' while the head was cfbd4bdcbec8…, so 'aida queue work PR-98 --role reviewer' reported "it reviewed cfbd4bd2, but PR-98's head is now cfbd4bdc…" and discarded a complete review. The SHA is copied by the model, not resolved by the tool. Acceptance: `aida review record` (and any verdict-writing path) takes the reviewed SHA from git: default to the checked-out review worktree HEAD; if a SHA or prefix is given, resolve it with rev-parse and refuse unless it equals HEAD; always store the full 40-hex SHA. Collection keeps refusing a genuinely different head. Regression test: a prefix that resolves to HEAD records the full SHA; a mistyped SHA is refused at record time with a clear message, not silently written.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T03:02:24.395927496Z
-modified_at: 2026-10-29T03:46:10.001406600Z
+modified_at: 2026-10-29T03:58:46.094188196Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -38,6 +38,15 @@ history:
   timestamp: 2026-10-29T03:46:11.559992187Z
   session_id: 4539dd78-9e3b-4087-8861-ce3711879f26
   changes: []
+- id: 01a185cf-6d4e-7702-a30d-36fbe76fff49
+  author: aida-orchestrator
+  timestamp: 2026-10-29T03:58:46.094210932Z
+  session_id: 01a185c540b3
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c832ed71e03db1a6c9d1535b2063f6fd36e276a2
   branch: main
@@ -46,3 +55,11 @@ filed_at:
   aida_build_sha: c832ed71e03
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Fix logic meets every BUG-013 acceptance criterion, but PR CI is red (lib-0, cli-0): fixtures still pass unresolvable/stale --sha values that the new refusal now rejects'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-013 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T03:58:46.094188196Z

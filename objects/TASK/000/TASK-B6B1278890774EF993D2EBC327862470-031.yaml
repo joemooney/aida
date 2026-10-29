@@ -13,7 +13,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-28T09:49:20.342181567Z
-modified_at: 2026-10-28T19:57:49.923574453Z
+modified_at: 2026-10-29T03:59:00.558456208Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-008
@@ -38,6 +38,12 @@ comments:
   content: 'ADVISOR 2026-10-28 13:00 MST, second performance-guard trip (show 25/95 over 1000 ms over 24h). Same ruling: no new regression, budget unchanged. Since #3027 (12:16Z), across 7 binaries: 31 calls, 4 over 1000 ms, worst 2606 ms (linkage phase, under concurrent cargo builds), no ceiling breach. The 24h window still holds the pre-fix e33bf32234 samples, which age out by 2026-10-29 07:25Z. If the guard trips after that with the post-fix proportion above 10%, file a bug on the linkage phase.'
   created_at: 2026-10-28T19:57:49.923574453Z
   modified_at: 2026-10-28T19:57:49.923574453Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a185cf-a5ce-7f43-88a2-49d50fc6a182
+  author: joe
+  content: 'ADVISOR 2026-10-28 20:59 MST, third performance-guard trip of the day: same ruling as 07:00 and 13:00 (pre-fix e33bf32234 samples are still inside the 24h window until ~2026-10-29 07:25Z; budget unchanged). Re-check after that time.'
+  created_at: 2026-10-29T03:59:00.558456208Z
+  modified_at: 2026-10-29T03:59:00.558456208Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a18241-bc9f-7c22-9335-865207df9b64
