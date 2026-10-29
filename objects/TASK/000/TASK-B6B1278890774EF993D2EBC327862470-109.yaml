@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:08:59.000484888Z
-modified_at: 2026-10-29T18:44:55.132946260Z
+modified_at: 2026-10-29T18:46:32.129547215Z
 req_type: Task
 tags:
 - advisor-review
@@ -47,6 +47,15 @@ relationships:
   target_id: 01a188db-2c65-74b2-b493-e7a754ce37d3
   created_at: 2026-10-29T18:10:55.904679385Z
   created_by: joe
+comments:
+- id: 01a188fc-33c1-7f12-bcc6-ea0cf6dc4c12
+  author: ai:codex:joe
+  content: |
+    The autonomy/trust slice is implemented as source-derived static pages. It reuses the landing selector and app.js rather than maintaining competing mode definitions. Protected runtime source was read as evidence, never edited.
+
+    PR #3090 remains OPEN at e1bca90b80884a4cc9c25e3ff6a50476fe9b1c52. Claims are intentionally limited to the existing execution modes, exact-head review, grants/mandates, CI/holds and documented identity limits; no new ledger functionality is advertised. The acceptance request to recheck against the base after that lane lands remains an integration/review follow-up, since it has not landed. Please recheck these docs when incorporating that lane. The branch is stacked on PR #3098; no runtime implementation or self-merge is included.
+  created_at: 2026-10-29T18:46:32.129547215Z
+  modified_at: 2026-10-29T18:46:32.129547215Z
 history:
 - id: 01a188d9-e7e3-7b30-acb6-b8ed8552107c
   author: joe
