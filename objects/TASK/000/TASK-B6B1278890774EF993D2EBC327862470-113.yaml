@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:27.557602584Z
-modified_at: 2026-10-29T19:58:45.263271746Z
+modified_at: 2026-10-29T19:58:49.879869682Z
 req_type: Task
 tags:
 - advisor-review
@@ -82,6 +82,24 @@ comments:
     PR #3090 is still OPEN, now at eb306b090cd8b71bf1d9c0c0658c7befa10d7eab. The post-land trust verification from slice 109 remains an integration/reviewer follow-up. Preserve the independently merged #3093 overview changes when retargeting the PR stack. No protected/runtime implementation is edited and no self-merge is performed.
   created_at: 2026-10-29T19:46:42.285391668Z
   modified_at: 2026-10-29T19:46:42.285391668Z
+- id: 01a1893e-6417-7cf3-8e9e-61103a95d7e2
+  author: ai:codex:joe
+  content: |
+    Completes the bounded documentation audit over the approved product-content stack. The recorded snapshot covers 1,016 tracked documentation inputs (plus separately enumerated self-derived outputs), with 2,591 local links scanned and zero candidates in current reader references or static pages. The 223 contextual/template/historical candidates remain explicitly unconfirmed and outside the curated publication set.
+
+    Adds a reproducible inventory/link-report helper and classified/hash/freshness artifacts, plus a concise before/after review report with eleven confirmed issue groups and coverage limits. Repairs current guide paths/anchors, onboarding ID/MCP/role assumptions, cache wording and historical snapshot labels. Two compatibility navigation pages fix generated glossary links without editing generated definitions or template masters. The landing/library now link directly to the complete assessment.
+
+    Carries forward the independently merged PR #3093 overview changes into the stack while preserving newer human-inclusive onboarding and Metrics corrections. No old broad prototype was bulk merged. The publication set remains seven verified guides; no historical evidence rewrite, runtime/gate/ledger change or hosted deployment/access change.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed. Fresh spawned author checker ran its own inventory/hash/report/link/HTML/source/help evidence commands and found no findings. This is author self-checking, not independent review. Source-derived guide/search output and unchanged-input stability were checked. No direct cargo build/test was run.
+
+    Deferred: contextual candidates and uncurated references need their original context; external URLs/vendor installations/browser/assistive technology were not exhaustively re-tested. Broad publication scope remains the advisor question on slice 111. PR #3090 remained open at inspection; post-land trust verification remains an integration follow-up. The report does not declare the epic merged/completed.
+
+    Files: docs/audit-documentation.py; four docs/reports/2026-10-29-documentation-* artifacts; README and administrator/CLI/first-project/lifecycle/overview fixes; two CLI navigation stubs; showcase landing/library master/generated library navigation. Stacked on PR #3102.
+
+    TASK-B6B1278890774EF993D2EBC327862470-113.
+  created_at: 2026-10-29T19:58:49.879869682Z
+  modified_at: 2026-10-29T19:58:49.879869682Z
 history:
 - id: 01a188db-422f-7a63-aa54-4ee293059e7c
   author: joe
