@@ -1,9 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-10-28T17:22:52.208559531Z
+last_run: 2026-10-29T06:09:23.074624738Z
 last_by:
   seat: advisor
   session: 7b875ef6-5970-4f7c-9187-3491563af968
   vendor: claude
 result: done
-due_since: 2026-10-28T18:30:13.540348370Z
-due_reason: every 1h
