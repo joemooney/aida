@@ -30,14 +30,15 @@ description: |
 
   ## Test tier
   LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T06:49:10.610369971Z
+modified_at: 2026-10-29T07:27:38.939022556Z
 req_type: Story
 tags:
+- docs:impacted
 - id-allocation
 - regroup
 - traceability
@@ -56,6 +57,32 @@ comments:
   created_at: 2026-10-29T06:46:19.751550465Z
   modified_at: 2026-10-29T06:46:19.751550465Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a1866f-0b38-7063-b1aa-adb456c8a290
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (aida-core node_alias):** (1) label validation (regex, all-hex refusal, type-prefix refusal, '@'/'.' refusal); set refuses a label bound/retired to another node naming both bindings; one current label per node; rename retires the old label, which keeps resolving and cannot be rebound elsewhere; (7) round-trip display->expand->canonical identity, unaliased node displays canonically; (5) canonical display uppercased; malformed file -> empty map on load, write refuses.
+    - **Unit (aida-core models):** (2) `RequirementsStore` lookup by TYPE-<LABEL>-NNN, any case, resolves to the canonical requirement; unknown label -> None.
+    - **Unit (aida-cli-lib):** (2) commit-trailer group parser and `trace:` token parser expand a hand-written alias to canonical; (4) nothing generated is changed (generators keep using stored spec_id).
+    - **Command-level (aida-cli tests):** (6) `aida node alias set/list/show/rename` against a fixture store, refusal on rebind, no TTY needed; (2) `aida show TASK-<LABEL>-NNN` round-trip; (3) `aida show --format json` keeps `spec_id` canonical and carries `display_id` with the label; `--canonical-ids` / `AIDA_CANONICAL_IDS=1` turn the substitution off.
+    - **No automated test this slice:** full surface coverage (ps, awaiting, ship/merge messages) — show, card, list, queue are migrated; the remaining sites are filed as a follow-up rather than a ratchet in this PR.
+
+    ### Expected files
+    - `aida-core/src/node_alias.rs` (new) + `lib.rs`
+    - `aida-core/src/models.rs`, `aida-core/src/db/{traits,git_backend,cached_git_backend}.rs` (input expansion)
+    - `aida-cli-lib/src/node_cmd{,_args}.rs` (alias subcommands), `cli.rs` + `lib_part1.rs` (`--canonical-ids`), `git_backend_cmd.rs` (install map)
+    - `aida-cli-lib/src/pr_ship.rs`, `trace.rs` (parsers), `requirements_cli.rs` / queue rendering (display)
+    - tests + docs/cli
+
+    ### Ambiguities / conflicts as questions
+    - `aida show --format json` already emits a `display_id` (agreed-or-spec id). Plan: keep the field, make it the aliased form; `spec_id` stays canonical. Additive in shape, value differs only when an alias exists.
+    - Should a label equal to an existing short node id in `registry/nodes.toml` be refused? Plan: yes (TASK-JM-001 would otherwise be ambiguous with a real distributed id).
+  created_at: 2026-10-29T06:53:06.744119347Z
+  modified_at: 2026-10-29T06:53:06.744119347Z
+  session_id: 01a1866b6d56
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
@@ -83,6 +110,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18679-58a8-7101-8473-0c519d850767
+  author: joe
+  timestamp: 2026-10-29T07:04:21.928505097Z
+  session_id: 01a1866b6d56
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
+- id: 01a1868e-aa17-7891-80d6-0de5ca1d5c31
+  author: joe
+  timestamp: 2026-10-29T07:27:39.031157144Z
+  session_id: 01a1866b6d56
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
@@ -91,3 +133,7 @@ filed_at:
   aida_build_sha: a470735bfed
   vendor: claude
   session: 59349e57-271d-4b9e-b662-8585b949736a
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-29T07:27:38.939022556Z
+  implemented_by: joe
