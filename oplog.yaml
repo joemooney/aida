@@ -86110,5 +86110,35 @@ operations:
   timestamp: 2026-10-29T18:04:13.375584174Z
   kind: !SetStatus
     status: Done
-clock: 6729
+- id: 01a188d8-d953-7ab2-b597-929631e2e4c1
+  target_id: 01a188d8-d1c2-77d3-a30b-220a95022694
+  author: aida
+  node_id: '1'
+  lamport: 6730
+  timestamp: 2026-10-29T18:07:55.219592651Z
+  kind: !Create
+    title: Human-first onboarding with one integrated guide
+    description: |
+      Slice 1 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Tracer bullet: a person continues conversational coding with an AIDA-aware agent and can read one updated getting-started guide within the showcase. People remain developers, reviewers and collaborators; the outputs are the system and a durable intent record for maintenance, enhancement and working with others.
+
+      ## Acceptance
+      - [ ] The main newcomer journey describes ordinary conversation and configured background intent capture, with one-time operator setup separately labeled; it does not require people to learn mutation commands or adopt autonomous delivery.
+      - [ ] A current getting-started/first-project guide and a corresponding site entry page agree on that journey. The overview/README route readers to it without rewriting unrelated technical references.
+      - [ ] One source guide renders end-to-end into the site's shared, accessible layout, with working navigation, source provenance and local assets. The implementation remains the thinnest build/templating path needed for that one page, not a bulk handbook build.
+      - [ ] Text does not promise every utterance/unobserved action is recorded automatically. CLI/MCP facts are verified against current source/help.
+
+      ## Layers / boundaries
+      Source guide and overview entry copy -> small shared static layout/build path -> reader-facing guide and site onboarding. No backend, schema, authority or launch behavior changes. Reuse prototypes only after this slice is approved.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6730
 node_id: '1'
