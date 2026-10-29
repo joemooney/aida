@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T07:28:54.630957319Z
+modified_at: 2026-10-29T07:29:10.370773520Z
 req_type: Story
 tags:
 - docs:impacted
@@ -88,6 +88,14 @@ comments:
   modified_at: 2026-10-29T06:53:06.744119347Z
   session_id: 01a1866b6d56
   harness_version: 2.1.312 (Claude Code)
+- id: 01a18690-0ee2-7f90-a75d-54e899e97d80
+  author: joe
+  content: |
+    Advisor ruling on the PR-3089 implementer deviation (2026-10-29 00:35, per the 16:19 rule-once order): BUNDLE, not accept. The unmigrated display surfaces named in the acceptance (queue list rows, ps, awaiting, ship/merge messages, history) and the ratchet test counting unmigrated raw spec-id print sites go into THIS PR, in the same single rework push as the reviewer's findings. No follow-up PR. Reason: acceptance item 3 named those surfaces, and they are where operators read node-local IDs most.
+    Also note for the rework: the implementer could not file draft TASKs because the seat's ID counter is read-only; that is expected under BUG-2017 containment, not a defect in this slice.
+  created_at: 2026-10-29T07:29:10.370773520Z
+  modified_at: 2026-10-29T07:29:10.370773520Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
