@@ -84648,5 +84648,13 @@ operations:
   timestamp: 2026-10-29T06:44:05.408641951Z
   kind: !SetStatus
     status: Superseded
-clock: 6615
+- id: 01a18667-02af-7cb3-8269-9f99302e9921
+  target_id: 019eb57f-42aa-79f2-8d15-a8fa834ead42
+  author: aida
+  node_id: '1'
+  lamport: 6616
+  timestamp: 2026-10-29T06:44:20.271315918Z
+  kind: !RemoveTag
+    tag: deferred:on-demand
+clock: 6616
 node_id: '1'
