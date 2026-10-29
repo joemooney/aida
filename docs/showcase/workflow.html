@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html">✳ AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html" aria-current="page">Workflow</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><figure><img class="guide-graphic" src="assets/workflow.svg" alt="Workflow diagram; details follow in the source guide"></figure><h1 id="from-a-conversation-to-a-maintainable-system">From a conversation to a maintainable system</h1>
+<p>AIDA connects the work people and agents do with the intent behind it. Start with a conversation, develop the system, and keep enough structured context for the next change. You can remain involved throughout or delegate selected stages under the project&#x27;s policy.</p>
+<h2 id="the-collaboration-loop">The collaboration loop</h2>
+<ul>
+<li><strong>Discuss the outcome.</strong> A person and coding agent explore the problem, constraints and alternatives. The person can develop, challenge and review the work throughout.</li>
+<li><strong>Capture agreed intent.</strong> The agent records requirements, acceptance criteria and consequential decisions in the project graph. Ask to inspect the record before implementation.</li>
+<li><strong>Own a bounded change.</strong> The work is assigned to a role and session. Isolated worktrees give separate changes their own checkout; leases and queue state coordinate ownership.</li>
+<li><strong>Implement and validate.</strong> Build the agreed behavior, link it to its specs and run the relevant checks. New discoveries can require revised intent or a separate decision.</li>
+<li><strong>Review independently.</strong> In the governed PR workflow, a separate reviewer evaluates the current change and its evidence. The author&#x27;s self-check is useful preparation and does not constitute independent approval.</li>
+<li><strong>Integrate under policy.</strong> The authorized shipping path checks the applicable evidence and gates. Integration can lead to another conversation; a merged change and a released product are separate milestones.</li>
+</ul>
+<p>These are stages in an operating model, not a promise that every project uses one autonomy mode. The <a href="configuration.html">configuration guide</a> explains how execution mode, guidance and authority remain distinct. The graphic is explanatory, not a live dashboard.</p>
+<h2 id="what-progress-means">What progress means</h2>
+<p>In the standard PR lifecycle, Draft captures an idea, Approved records agreement, In Progress means implementation has started, and Done means work is finished on a branch. Completed follows recognized integration evidence on the default branch. Planned is optional; Needs Attention and terminal dispositions handle work that cannot simply proceed.</p>
+<p>A status is a recorded signal, not proof that deployed behavior is correct. Read the <a href="../lifecycle.md">lifecycle reference</a> for transition rules and exceptions. Deployment and release need their own project workflow.</p>
+<h2 id="four-records-with-different-jobs">Four records with different jobs</h2>
+<ul>
+<li><strong>Code history:</strong> source, tests, trace comments and commits live on the product&#x27;s code branches. Traces connect implementation to structured intent; they do not themselves approve a change.</li>
+<li><strong>Canonical intent:</strong> the default git-canonical store uses the orphan <code>aida-store</code> branch and a live <code>.aida-store/</code> worktree. YAML spec objects contain requirements, relationships, comments and transition history. Store history is separate from code history and must be synchronized deliberately. Sibling-store projects use their configured separate store repository.</li>
+<li><strong>Derived read cache:</strong> <code>.aida/cache.db</code> indexes store data for reads. It is rebuildable from the available canonical store and is not a replacement for that history. Cache reads can report stale, deferred or busy context; inspect freshness rather than assuming every displayed view is current.</li>
+<li><strong>Local operational evidence:</strong> session files, verdict artifacts, holds and handoff notes have local runtime locations under <code>.aida/</code>; machine grants and mandates have their own local authority context. Their scope, validation and retention differ from canonical intent. A store clone or cache rebuild does not recreate all of them or confer authority.</li>
+</ul>
+<p>This is a map of responsibilities, not a backup recipe or complete directory inventory. Some coordination events also live in the store, and the <a href="../cli/10-storage.md">storage reference</a> describes the particular data surfaces. Back up the canonical histories and needed local evidence according to your actual project setup.</p>
+<h2 id="keep-the-intent-useful">Keep the intent useful</h2>
+<p>For maintenance, ask the agent to locate the requirement and decision behind an existing behavior before changing it. <code>aida why</code> can resolve a code location through nearby trace comments. For enhancement, use the current acceptance criteria and relationships to identify what needs revising. For collaboration, hand over the agreed intent, implementation links and unresolved questions so another person or agent can continue.</p>
+<p>The graph is structured project memory, not a transcript archive or complete observation of everything an agent did. Its value depends on what was captured and kept accurate. Ask for a capture sweep at handoff, verify the record and keep consequential corrections explicit.</p>
+<h2 id="read-the-evidence-behind-the-model">Read the evidence behind the model</h2>
+<p>The <a href="getting-started.html">getting-started guide</a> covers everyday conversational use. Operators can inspect <code>aida show</code>, <code>aida history</code>, <code>aida status</code> and <code>aida cache status</code>; exact flags are in command help. Contributors can inspect the <a href="../../aida-core/src/db/cache.rs">cache implementation</a>, <a href="../../aida-core/src/storage.rs">storage abstraction</a>, <a href="../../aida-cli-lib/src/session_end.rs">session lifecycle</a> and <a href="../../OVERVIEW.md#architecture">product architecture</a> for the source behind these distinctions.</p></main>
+<footer class="guide-footer"><p>Generated from <a href="../product-workflow.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>
