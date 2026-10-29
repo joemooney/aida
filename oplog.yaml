@@ -84075,5 +84075,17 @@ operations:
   timestamp: 2026-10-29T04:52:52.774009381Z
   kind: !SetStatus
     status: Rejected
-clock: 6558
+- id: 01a18620-248d-7a90-8d04-9808ef9d14ea
+  target_id: 01a18620-1ddb-7e12-8e5a-7e1969c7e0c7
+  author: aida
+  node_id: '1'
+  lamport: 6559
+  timestamp: 2026-10-29T05:26:55.885377580Z
+  kind: !Create
+    title: Publish the What is AIDA overview under docs/
+    description: Operator-requested overview doc (md + self-contained html), spec IDs anonymized
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6559
 node_id: '1'

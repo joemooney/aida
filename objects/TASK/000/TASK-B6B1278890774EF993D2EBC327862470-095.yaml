@@ -1,0 +1,19 @@
+id: 01a18620-1ddb-7e12-8e5a-7e1969c7e0c7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-095
+title: Publish the What is AIDA overview under docs/
+description: Operator-requested overview doc (md + self-contained html), spec IDs anonymized
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T05:26:54.171557407Z
+modified_at: 2026-10-29T05:26:54.171557407Z
+req_type: Task
+filed_at:
+  code_sha: a470735bfedaf24ba56e7f5b958c171f99d9d829
+  branch: docs/what-is-aida
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a470735bfed
+  vendor: claude
+  session: 950d0de9-9ab4-4d83-b6d0-e9d580715520
