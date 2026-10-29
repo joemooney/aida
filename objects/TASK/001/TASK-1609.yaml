@@ -13,12 +13,12 @@ description: |
   1. The macOS probe returns Alive/Dead/Unknown with the same evidence semantics as the Linux /proc probe.
   2. Orchestrator protected ops no longer refuse on macOS with the "unsupported platform" diagnosis; the refusal text no longer cites this spec.
   3. Unit tests cover alive, exited, zombie, PID reuse and permission-error cases on a macOS CI runner.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:06.737868438Z
-modified_at: 2026-10-29T06:43:35.614648653Z
+modified_at: 2026-10-29T06:43:39.253635554Z
 req_type: Task
 tags:
 - follow-up
@@ -46,6 +46,14 @@ history:
   timestamp: 2026-10-29T06:43:36.417794904Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18666-6275-7f01-b72b-4bf327c03402
+  author: joe
+  timestamp: 2026-10-29T06:43:39.253633432Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
