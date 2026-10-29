@@ -16,9 +16,12 @@ merged, traceable feature graph — six specs filed, two driven all the way to
 
 ## Why this doc exists
 
-[`getting-started.md`](getting-started.md) installs AIDA and files one
-requirement. The README's [5-minute walkthrough](../README.md#getting-started-in-5-minutes)
-carries *one* spec end to end so you can see the lifecycle.
+This command-oriented exercise is for agents and operators. For the usual
+conversational journey, start with the [getting-started guide](getting-started.md).
+
+The [getting-started guide](getting-started.md) introduces the conversational
+journey and separates operator setup. The [README](../README.md#quick-start)
+provides the short entry route.
 
 This doc is the next rung up: a **whole tiny project**. Not one spec — a real
 parent/child graph of six, with two features driven through implement → PR →
@@ -76,7 +79,7 @@ AIDA initialized — distributed git-canonical mode.
 One command set up a git-canonical requirements store (one YAML file per spec
 on the orphan `aida-store` branch), a SQLite read cache, the MCP server config,
 and the Claude Code skills. The full inventory of what `aida init` writes is in
-[`getting-started.md`](getting-started.md#step-2-initialize-your-project).
+[`getting-started.md`](getting-started.md#one-time-operator-setup).
 
 ---
 

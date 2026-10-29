@@ -1,6 +1,8 @@
 # What is AIDA?
 
-AIDA is a coordination and enforcement layer for a software team made of AI agents.
+AIDA is a coordination and enforcement layer for people and coding agents working on software.
+
+Begin with your usual conversational coding agent. AIDA-aware agents can record agreed intent alongside implementation, leaving the system you developed and a durable record for maintenance, enhancement and collaboration. See the [getting-started guide](getting-started.md); autonomous delivery is optional.
 
 AI coding agents can now write real code. On their own, though, several agents on one codebase tend to lose track of what has been decided, collide on the same files, review their own work, and leave no record of why a change was made. AIDA's aim is to give them a shared record, defined roles, independent review, and limits that a human sets, so their combined output can be checked and trusted.
 
