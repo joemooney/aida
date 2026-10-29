@@ -938,8 +938,43 @@ fn surviving_against_previous_round(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    let body = read_verdict_body(verdict_path(project_root, spec)).ok()?;
-    parse_recorded_verdict(&body)
+    let legacy = read_verdict_body(verdict_path(project_root, spec))
+        .ok()
+        .and_then(|body| parse_recorded_verdict(&body));
+    let ledger = crate::gate::ledger::project::newest_verdict(project_root, spec)
+        .and_then(|record| parse_ledger_record(&record));
+    newer_of(legacy, ledger)
+}
+
+/// A verdict record carried on the gate ledger, parsed like a file body.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
+    parse_recorded_verdict(&serde_json::to_string(record).ok()?)
+}
+
+/// Read-through while the legacy files are still written (M1 slice 1): the
+/// ledger answers only where it knows something the file does not — the file
+/// is missing (a contained reviewer's verdict that never reached it) or
+/// strictly older. A tie keeps the file, which may carry a later annotation
+/// (`closed_by_merge`) on the same round.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn newer_of(
+    legacy: Option<RecordedVerdict>,
+    ledger: Option<RecordedVerdict>,
+) -> Option<RecordedVerdict> {
+    let at = |v: &RecordedVerdict| {
+        v.recorded_at
+            .as_deref()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+    };
+    match (legacy, ledger) {
+        (Some(file), Some(led)) => match (at(&file), at(&led)) {
+            (Some(f), Some(l)) if l > f => Some(led),
+            (None, Some(_)) => Some(led),
+            _ => Some(file),
+        },
+        (file, led) => file.or(led),
+    }
 }
 
 /// Read the recorded verdict trying several id forms (agreed id, spec id) —
@@ -1408,6 +1443,28 @@ pub(crate) fn write_verdict_object(
     path: &Path,
     obj: &serde_json::Map<String, serde_json::Value>,
 ) -> std::io::Result<()> {
+    write_verdict_object_for_spec(path, obj, None)
+}
+
+/// [`write_verdict_object`], naming the spec the verdict concerns so the
+/// gate ledger can index a PR-keyed record by it. A PR-keyed write also
+/// lands on the change's gate ledger (directly, or through the mailbox from
+/// a contained seat); the file stays the compatibility record in slice 1.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn write_verdict_object_for_spec(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+    spec: Option<&str>,
+) -> std::io::Result<()> {
+    write_verdict_file(path, obj)?;
+    crate::gate::ledger::mirror_verdict_write(path, obj, spec);
+    Ok(())
+}
+
+fn write_verdict_file(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> std::io::Result<()> {
     // TASK-1460: files recorded before the per-sha archive existed are
     // migrated into it once, lazily, the first time anything records here —
     // BEFORE this write, so the migration sees the pre-existing state.
@@ -1607,10 +1664,14 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
 // trace:BUG-1539 | ai:claude
 // trace:TASK-1460 | ai:claude
 pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<RecordedVerdict> {
-    let path = verdict_file_for_sha(project_root, key, sha)?;
-    read_verdict_body(path)
-        .ok()
-        .and_then(|b| parse_recorded_verdict(&b))
+    let legacy = verdict_file_for_sha(project_root, key, sha)
+        .and_then(|path| read_verdict_body(path).ok())
+        .and_then(|b| parse_recorded_verdict(&b));
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let ledger = crate::gate::ledger::project::verdicts_at(project_root, key, sha)
+        .first()
+        .and_then(parse_ledger_record);
+    newer_of(legacy, ledger)
 }
 
 /// TASK-1460: the FILE holding the verdict recorded under `key` for commit

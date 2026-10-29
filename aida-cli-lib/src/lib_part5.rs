@@ -3471,9 +3471,11 @@ pub(crate) fn handle_review_record_at(
         // launcher's anchor in the primary checkout. Its launcher collects
         // the handshake from the reviewer's worktree (BUG-2149), so land it
         // there instead of failing the record. trace:BUG-2201 | ai:claude
-        let handshake = match crate::gate::review_verdict::write_verdict_object(
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let handshake = match crate::gate::review_verdict::write_verdict_object_for_spec(
             &handshake,
             &handshake_obj,
+            Some(spec),
         ) {
             Ok(()) => handshake,
             Err(err) => {
@@ -3492,7 +3494,7 @@ pub(crate) fn handle_review_record_at(
                         handshake.display()
                     )));
                 };
-                crate::gate::review_verdict::write_verdict_object(&fallback, &handshake_obj).with_context(
+                crate::gate::review_verdict::write_verdict_object_for_spec(&fallback, &handshake_obj, Some(spec)).with_context(
                     || {
                         format!(
                             "the phase-3 handshake was NOT written to {} ({err}) nor to {} — the orchestrator will not see this verdict; re-run `aida review record`",
