@@ -395,7 +395,7 @@ paths; unsupported or incomplete evidence refuses before any push. Private
 profile/policy/receipt IO uses anchored no-follow handles. Exact successful-push
 receipts bind endpoint/ref/tip/root/policy/scanner; every attempt rescans from the
 original root, so receipts neither cache scans nor grant trust to tracking refs.
-Intake enforcement and actual recoverable FF pull remain pending. This bounded
+Prepared sanitized writes and recoverable fast-forward store pull are implemented; unsupported writers and divergence refuse. This bounded
 known-identifier guard requires operator review; raw Git/foreign writers and
 PUBLIC forwarding remain outside enforcement. Fixed store refspecs cannot expand
 through environment defaults, and
