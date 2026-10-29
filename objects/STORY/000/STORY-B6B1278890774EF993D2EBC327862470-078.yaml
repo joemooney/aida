@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T08:34:58.070531740Z
+modified_at: 2026-10-29T08:35:57.880899677Z
 req_type: Story
 tags:
 - docs:impacted
@@ -119,6 +119,20 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Core map, management CLI, input expansion and show/list output are solid and tested, but AC3/AC5 are not met: the design sketch''s required surfaces (queue list, ps, awaiting, ship/merge messages, show relationship rows) are unmigrated and the ratchet test is missing; MCP JSON lacks display_id; alias-vs-literal lookup precedence is inconsistent; rename skips the node-id collision guard.. No triage reason was given.'
   created_at: 2026-10-29T07:33:56.061239720Z
   modified_at: 2026-10-29T07:33:56.061239720Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a186cd-3538-7fc2-88df-35694d390ac5
+  author: joe
+  content: |
+    REWORK BRIEF: PR-3089 round 2 → one final push (advisor, 2026-10-29 01:40). Verdict: .aida/review-verdicts/PR-3089.json at f005464c3d7. Fix exactly these 4, nothing else; no new scope, no follow-up PR.
+
+    1. Collision guard (missing): in aida_core::node_alias, one validator called inside mutate_cas by BOTH set and rename refuses label L when any stored spec_id or agreed_id matches ^[A-Z]+-L-[0-9]+$ (case-insensitive), naming one example ID. Fold the existing refuse_registered_node_id_labels (node_alias.rs:398) into the same validator. The validator needs the store's ID set: pass it in from node_cmd.rs, don't load the store inside aida-core's map code.
+    2. Text parsers literal-first: replace expand_or_keep-style alias-first expansion in trace.rs parse_trace_id_token, commit.rs normalize_spec, pr_ship.rs parse_spec_id_group / refs_group_spec_ids / canonicalize_node_label_ids with the shared resolver from item 4, so a literal id that exists is never rewritten.
+    3. Generated trailer: aida commit's inferred-REQ-ID path (commit.rs:72-79, staged_trace_specs at :267) must install the map and canonicalize, exactly like the --spec path. Test: staged `// trace:TASK-HOME-095 | ai:claude` + `aida commit` produces the canonical trailer.
+    4. ONE resolver: add aida_core::node_alias::resolve_id(id, is_literal: impl Fn(&str)->bool, map) -> canonical-or-input (literal → keep; else alias expansion → canonical; else input unchanged), and make git_backend.rs:2514, cached_git_backend.rs:217, traits.rs:183, models.rs spec_id_index/resolve_unambiguous_index and the item-2 parsers call it. Delete the hand-written orderings. This is the deduplication the slice exists to model; it is in scope.
+
+    Gate (LIGHT): cargo test -p aida-core --lib node_alias; cargo test -p aida-cli --test story_078_node_aliases; make check-ci-fast. Push to the same branch. The next review is scoped to these 4 items only.
+  created_at: 2026-10-29T08:35:57.880899677Z
+  modified_at: 2026-10-29T08:35:57.880899677Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
