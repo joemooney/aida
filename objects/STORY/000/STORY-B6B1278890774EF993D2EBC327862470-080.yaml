@@ -73,12 +73,12 @@ description: |
 
   ## SLICE 2 finish (advisor, 2026-10-29 14:25): third seat, OPEN THE PR THIS SEAT
   Read the newest handoff comment (comment 26). The test retargeting is done. Do only this: (1) compile and fix errors; (2) run `env -u AIDA_CONTAINED cargo test --profile agent -p aida-cli-lib --lib -- gate:: drain_gate pr_merge_gate`; (3) run make check-ci-fast; (4) push and open the PR with `(Refs <this spec>)`. If a test cannot run in this seat because of the sandbox (read-only /tmp test home, or a missing advisor grant such as task_2344_q2), do NOT fight it. List it in the PR body, then push; CI runs it and is the gate. Do not start new refactors. Stop early and push rather than run out of context.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T21:22:24.863174782Z
+modified_at: 2026-10-29T21:23:13.569729306Z
 req_type: Story
 tags:
 - architecture
@@ -937,6 +937,13 @@ history:
   author: joe
   timestamp: 2026-10-29T21:22:25.773079111Z
   changes: []
+- id: 01a1898b-a821-71f3-a1ed-e1642d0a3ce1
+  author: aida-session-start
+  timestamp: 2026-10-29T21:23:13.569725338Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
