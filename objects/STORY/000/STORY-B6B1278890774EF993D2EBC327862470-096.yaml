@@ -1,0 +1,28 @@
+id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-096
+title: aida agent new codex arms mail-wake for the spawned thread, and agent end retires it
+description: |-
+  Operator ask 2026-10-29: every Codex agent started with `aida agent new codex` should watch AIDA mail without a hand install. Today scripts/codex-mail-wake.py (TASK-2347) needs an exact thread UUID and a manual install; agents started without it never see mail (the codex docs stack 3096-3103 stalled on unread rulings for 3h).
+
+  Acceptance:
+  1. `aida agent new codex` installs the mail-wake watcher bound to the new session's exact thread UUID once that thread exists (discover it from the spawned process / Codex session store, never --last or a guess); on failure it warns with the exact manual install command and the agent still starts.
+  2. Ending or reaping the agent (agent end, registry reap of a dead pid) uninstalls that watcher through the adapter's ownership-checked uninstall; ledgers kept.
+  3. Opt-out flag (--no-mail-wake) and a config default; Codex below the native `codex queue` version degrades to a warning.
+  4. `aida agent list` / doctor show per-agent wake state.
+
+  Needs a sketch + advisor signoff (touches agent lifecycle + user systemd units). Open questions for the sketch: thread-UUID discovery race; one unit per thread vs one multiplexed service.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T23:54:52.731570808Z
+modified_at: 2026-10-29T23:54:52.731570808Z
+req_type: Story
+filed_at:
+  code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1db74dba112
+  vendor: claude
+  session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
