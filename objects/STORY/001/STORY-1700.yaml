@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-21T02:47:58.076582736Z
+modified_at: 2026-10-29T06:37:26.878617094Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -28,6 +28,10 @@ relationships:
     custom: implemented-by
   target_id: 01a14e41-abde-72b3-b0e9-5ad4653eb1f9
   created_at: 2026-10-18T09:05:02.972484226Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 019f1047-fcd6-7941-86c1-15bcf616088e
+  created_at: 2026-10-29T06:37:26.878608826Z
   created_by: joe
 comments:
 - id: 01a142e5-a14c-77c2-81c6-d42ba692b76d
@@ -197,6 +201,11 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a18660-ba5d-70f0-8af9-3b918d4e61c9
+  author: joe
+  timestamp: 2026-10-29T06:37:28.541904672Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 processing_record:
 - id: 01a15c23-066e-72f3-9af3-33434097fd6b
   timestamp: 2026-10-21T01:46:01.710565812Z
