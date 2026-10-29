@@ -84280,5 +84280,13 @@ operations:
   timestamp: 2026-10-29T06:35:45.899425861Z
   kind: !RemoveTag
     tag: operator-held
-clock: 6569
+- id: 01a1865f-35da-77e1-a9fe-c8c5bf2e568a
+  target_id: 01a130a7-ad1d-7843-a5fc-6113bb58ecb8
+  author: aida
+  node_id: '1'
+  lamport: 6570
+  timestamp: 2026-10-29T06:35:49.082804871Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6570
 node_id: '1'

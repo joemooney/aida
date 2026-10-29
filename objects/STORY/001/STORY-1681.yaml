@@ -45,12 +45,12 @@ description: |
   BUG-1929 (stopgap, #2541), BUG-1928 (sandbox write-set mechanism), BUG-1918 / STORY-1654 (identity binding for a broker), ADR-73.
 
   Status: DRAFT, sketch only. Do NOT implement until the operator decides and the advisor signs off (architecture rule).
-status: Draft
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:07:37.629452703Z
-modified_at: 2026-10-29T06:35:44.950160077Z
+modified_at: 2026-10-29T06:35:48.134100315Z
 req_type: Story
 tags:
 - architecture
@@ -68,6 +68,14 @@ history:
   timestamp: 2026-10-29T06:35:45.792182851Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1865f-3226-75a3-9118-16aa983880d2
+  author: joe
+  timestamp: 2026-10-29T06:35:48.134098281Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
