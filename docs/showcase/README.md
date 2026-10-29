@@ -22,7 +22,7 @@ The initial version was published as an owner-private preview through Sites. The
 shared `page-template.html` layout. Edit `docs/getting-started.md`, the template
 or `guide.css`, then rebuild; do not hand-edit `getting-started.html`.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
-only the Markdown used by these guides, with explicit page selection in `PAGES`.
+only the Markdown used by these guides, with explicit page selection in `publication.json`.
 Generated files are committed and can be read directly from disk.
 
 ## Curated library and publication scope
@@ -31,8 +31,7 @@ Generated files are committed and can be read directly from disk.
 It currently selects six tracked product guides, classified as human or operator
 reading. Technical references remain links; historical, internal, archived,
 plan/spike/security/agent material and runtime data are not republished or indexed.
-The advisor curation question is recorded on the owning spec; this conservative
-selection proceeds under the human's instruction and awaits PR review.
+The manifest keeps publication scope explicit; adding a source requires checking its audience, currentness and references.
 
 `build.py` derives the selected pages, `library.html` and `search-data.js` from
 those tracked Markdown sources and the shared templates. No timestamps or Git
