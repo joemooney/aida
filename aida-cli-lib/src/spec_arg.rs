@@ -58,6 +58,20 @@ pub(crate) fn canonicalize_csv(slot: &mut String) {
         .join(",");
 }
 
+/// clap `value_parser` for a spec-ID argument: the handler only ever sees the
+/// [`canonical`] id, so keys it writes (verdicts, ledgers, leases) and string
+/// comparisons it makes stay canonical. Never fails.
+pub(crate) fn spec_id(raw: &str) -> Result<String, String> {
+    Ok(canonical(raw))
+}
+
+/// [`spec_id`] for a comma-separated list argument.
+pub(crate) fn spec_id_csv(raw: &str) -> Result<String, String> {
+    let mut list = raw.to_string();
+    canonicalize_csv(&mut list);
+    Ok(list)
+}
+
 /// [`canonicalize_csv`] for an optional argument.
 pub(crate) fn canonicalize_csv_opt(slot: &mut Option<String>) {
     if let Some(list) = slot.as_mut() {

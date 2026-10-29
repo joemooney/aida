@@ -5908,7 +5908,7 @@ pub(crate) struct SessionArgs {
 /// `session end <id>` also takes a session id or branch name; neither is
 /// alias-shaped, so both pass through unchanged.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-fn canonicalize_session_spec_args(cmd: &mut SessionCommand) {
+pub(crate) fn canonicalize_session_spec_args(cmd: &mut SessionCommand) {
     use crate::cli::SessionManifestCommand;
     use crate::spec_arg::{canonicalize, canonicalize_csv, canonicalize_opt};
     match cmd {

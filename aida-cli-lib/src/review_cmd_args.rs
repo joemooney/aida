@@ -34,6 +34,7 @@ pub enum ReviewCommand {
         /// Comma-separated list of spec IDs (e.g. "FR-N,STORY-M"). When
         /// given, --pr is ignored.
         #[clap(long, value_name = "SPEC-IDS")]
+        #[clap(value_parser = crate::spec_arg::spec_id_csv)]
         specs: Option<String>,
 
         /// Pull spec IDs from the PR/MR's commit range. Forge auto-
@@ -77,6 +78,7 @@ pub enum ReviewCommand {
     // trace:BUG-775 | ai:claude
     Record {
         /// Spec the verdict applies to.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// The verdict: approved, request-changes, or rejected.
@@ -147,6 +149,7 @@ pub enum ReviewCommand {
 
         /// Spec the PR implements, shown alongside the claim.
         #[clap(long, value_name = "SPEC")]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Minutes until the claim expires on its own. Capped at 1440 (24h);
@@ -163,6 +166,7 @@ pub enum ReviewCommand {
     // trace:BUG-775 | ai:claude
     Verdict {
         /// Spec to look up.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// Emit the raw record as JSON.

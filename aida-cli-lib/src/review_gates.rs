@@ -971,7 +971,11 @@ pub(crate) struct ReviewCoverage {
 /// reference, and either wins over a body mention.
 // trace:TASK-1955 | ai:claude (BUG-2208)
 pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverage {
+    // A `(TYPE-<LABEL>-NNN)` trailer names the canonical id, so the review
+    // story files against (and dedups on) that id.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
     let push = |v: &mut Vec<String>, id: String| {
+        let id = crate::spec_arg::canonical(&id);
         if !v.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
             v.push(id);
         }

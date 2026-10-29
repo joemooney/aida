@@ -33,6 +33,7 @@ pub enum GateCommand {
         name: String,
 
         /// SPEC-ID to judge.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// Emit the verdict as JSON.

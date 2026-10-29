@@ -887,6 +887,7 @@ pub enum AgentCommand {
 
         /// SPEC-ID currently owned by the agent.
         #[clap(long, value_name = "SPEC-ID")]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Optional human-readable instance name.
@@ -1022,6 +1023,7 @@ pub enum AgentNewCommand {
 
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Override the focus-scope drift guard: launch on a spec
@@ -1179,6 +1181,7 @@ pub enum AgentNewCommand {
 
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Override the focus-scope drift guard: launch on a spec
@@ -1313,6 +1316,7 @@ pub enum AgentNewCommand {
 
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Override the focus-scope drift guard: launch on a spec

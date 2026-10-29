@@ -3,6 +3,8 @@
 //! alias input resolving to the canonical requirement, the JSON `display_id`
 //! contract, `--canonical-ids`, and the stored object never carrying a label.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[allow(dead_code)]
+mod support;
 #[path = "support/test_git.rs"]
 mod test_git;
 use std::{
@@ -109,6 +111,26 @@ impl Fixture {
 
     fn ok(&self, args: &[&str]) -> String {
         let out = self.aida(args);
+        assert!(
+            out.status.success(),
+            "aida {args:?}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    /// [`Self::ok`] under an advisor seat grant, which holds queue dispatch
+    /// authority.
+    fn ok_as_advisor(&self, args: &[&str]) -> String {
+        let grant = support::ensure_seat(&self.home, &self.root, "advisor", &["implementer"])
+            .expect("fixture has .aida/config.toml");
+        let out = self
+            .command(false, args)
+            .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", grant)
+            .output()
+            .unwrap();
         assert!(
             out.status.success(),
             "aida {args:?}\nstdout:\n{}\nstderr:\n{}",
@@ -578,19 +600,45 @@ fn node_alias_spec_scope_commands_act_on_the_canonical_id() {
     assert_eq!(queued(&f), vec![canonical.clone()]);
     f.ok(&["queue", "add", &canonical, "--for", "advisor"]);
     assert_eq!(queued(&f), vec![canonical.clone()]);
-    // The scope matcher resolves the alias (a draft may still be refused as
-    // un-pickable, but never as an unknown id).
-    let plan = f.aida(&[
-        "queue",
-        "work",
-        "STORY-HOME-001",
-        "--role",
-        "implementer",
-        "--dry-run",
-    ]);
-    let plan =
-        String::from_utf8_lossy(&plan.stderr).into_owned() + &String::from_utf8_lossy(&plan.stdout);
-    assert!(!plan.contains("doesn't match any queued entry"), "{plan}");
+    // The scope matcher resolves the alias: the dry-run plan for the alias is
+    // the plan for the canonical id, and names that spec.
+    let plan = |id: &str| {
+        let out = f.aida(&["queue", "work", id, "--role", "implementer", "--dry-run"]);
+        let text = String::from_utf8_lossy(&out.stderr).into_owned()
+            + &String::from_utf8_lossy(&out.stdout);
+        assert!(!text.contains("doesn't match any queued entry"), "{text}");
+        // The lines naming the spec (the session id is fresh per run).
+        text.lines()
+            .map(str::trim)
+            .filter(|l| {
+                [
+                    "anchor:",
+                    "scope:",
+                    "skill:",
+                    "branch:",
+                    "worktree:",
+                    "lease:",
+                ]
+                .iter()
+                .any(|k| l.starts_with(k))
+            })
+            .map(str::to_ascii_uppercase)
+            .collect::<Vec<_>>()
+    };
+    let alias_plan = plan("STORY-HOME-001");
+    assert!(
+        alias_plan.contains(&format!("SCOPE:   {canonical}")),
+        "{alias_plan:?}"
+    );
+    assert_eq!(alias_plan, plan(&canonical));
+
+    // Remove and done by alias act on the canonical entry.
+    f.ok_as_advisor(&["queue", "remove", "story-home-001", "--for", "advisor"]);
+    assert!(queued(&f).is_empty(), "{:?}", queued(&f));
+    f.ok(&["queue", "add", "STORY-HOME-001", "--for", "advisor"]);
+    assert_eq!(queued(&f), vec![canonical.clone()]);
+    f.ok_as_advisor(&["queue", "done", "STORY-HOME-001"]);
+    assert!(queued(&f).is_empty(), "{:?}", queued(&f));
 
     // Claim: the lease scope is the canonical id; unclaim by alias releases it.
     let claimed = f.ok(&["claim", "STORY-HOME-001"]);

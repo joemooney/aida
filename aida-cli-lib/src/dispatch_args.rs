@@ -74,6 +74,7 @@ pub enum DispatchRequestVerb {
         branch: String,
         /// Target spec ID (e.g. `<SPEC-ID>`).
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// Path to the markdown brief file to freeze (`<= 64 KiB`).
         #[clap(long)]
@@ -94,6 +95,7 @@ pub enum DispatchRequestVerb {
         branch: String,
         /// Target spec ID (e.g. `<SPEC-ID>`).
         #[clap(long)]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// Path to the markdown brief file to freeze (`<= 64 KiB`).
         #[clap(long)]

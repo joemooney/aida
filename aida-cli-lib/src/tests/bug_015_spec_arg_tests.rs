@@ -100,3 +100,149 @@ fn queue_verbs_carry_the_canonical_id() {
         other => panic!("{other:?}"),
     }
 }
+
+/// Parse `args` as subcommand `C` (argv[0] is a placeholder).
+fn parse_sub<C: clap::Subcommand + std::fmt::Debug>(args: &[&str]) -> C {
+    use clap::Parser;
+    #[derive(Parser)]
+    struct W<C: clap::Subcommand> {
+        #[clap(subcommand)]
+        cmd: C,
+    }
+    W::<C>::try_parse_from(std::iter::once("aida").chain(args.iter().copied()))
+        .unwrap_or_else(|e| panic!("{args:?}: {e}"))
+        .cmd
+}
+
+#[test]
+fn worktree_add_and_enter_target_the_canonical_id() {
+    use crate::cli::WorktreeCommand;
+    let _map = bind_home();
+    let want = canonical_of("080");
+    match parse_sub(&["add", "STORY-HOME-080"]) {
+        WorktreeCommand::Add { target, .. } => assert_eq!(target, want),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["enter", "story-home-080"]) {
+        WorktreeCommand::Enter { target, .. } => assert_eq!(target, want),
+        other => panic!("{other:?}"),
+    }
+    // Alias and canonical forms parse to the same target, so the same
+    // branch and lease; an unknown label and an epic pass through.
+    match parse_sub(&["add", &want]) {
+        WorktreeCommand::Add { target, .. } => assert_eq!(target, want),
+        other => panic!("{other:?}"),
+    }
+    for kept in ["STORY-NOPE-080", "EPIC-7"] {
+        match parse_sub(&["add", kept]) {
+            WorktreeCommand::Add { target, .. } => assert_eq!(target, kept),
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+#[test]
+fn session_verbs_carry_the_canonical_id() {
+    use crate::cli::{SessionCommand, SessionManifestCommand};
+    let _map = bind_home();
+    let parse = |args: &[&str]| {
+        let mut cmd: SessionCommand = parse_sub(args);
+        crate::agent_launch::canonicalize_session_spec_args(&mut cmd);
+        cmd
+    };
+    let want = canonical_of("080");
+    match parse(&["end", "--spec", "STORY-HOME-080"]) {
+        SessionCommand::End { spec, .. } => assert_eq!(spec.as_deref(), Some(want.as_str())),
+        other => panic!("{other:?}"),
+    }
+    match parse(&["start", "--owns", "story-home-080"]) {
+        SessionCommand::Start { owns, .. } => assert_eq!(owns, want),
+        other => panic!("{other:?}"),
+    }
+    match parse(&["start", "--owns", "src/scaffolding/**"]) {
+        SessionCommand::Start { owns, .. } => assert_eq!(owns, "src/scaffolding/**"),
+        other => panic!("{other:?}"),
+    }
+    match parse(&["manifest", "write", "--items", "STORY-HOME-080,TASK-9"]) {
+        SessionCommand::Manifest {
+            cmd: SessionManifestCommand::Write { items, .. },
+        } => assert_eq!(items, format!("{want},TASK-9")),
+        other => panic!("{other:?}"),
+    }
+    match parse(&["manifest", "mark-started", "STORY-HOME-080"]) {
+        SessionCommand::Manifest {
+            cmd: SessionManifestCommand::MarkStarted { spec_id, .. },
+        } => assert_eq!(spec_id, want),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// `aida review record <SPEC>` keys the verdict under the spec it parses to;
+/// an alias must key it under the canonical id. Same for the other review
+/// spec arguments.
+#[test]
+fn review_spec_arguments_parse_to_the_canonical_id() {
+    use crate::cli::ReviewCommand;
+    let _map = bind_home();
+    let want = canonical_of("080");
+    match parse_sub(&["record", "STORY-HOME-080", "--verdict", "approved"]) {
+        ReviewCommand::Record { spec, .. } => assert_eq!(spec, want),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["verdict", "story-home-080"]) {
+        ReviewCommand::Verdict { spec, .. } => assert_eq!(spec, want),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["claim", "--pr", "3", "--spec", "STORY-HOME-080"]) {
+        ReviewCommand::Claim { spec, .. } => assert_eq!(spec.as_deref(), Some(want.as_str())),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["prompt", "--specs", "STORY-HOME-080,TASK-9"]) {
+        ReviewCommand::Prompt { specs, .. } => {
+            assert_eq!(specs, Some(format!("{want},TASK-9")))
+        }
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["record", "STORY-NOPE-080", "--verdict", "approved"]) {
+        ReviewCommand::Record { spec, .. } => assert_eq!(spec, "STORY-NOPE-080"),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// Spot-check the other audited spec arguments that use the value parser.
+#[test]
+fn audited_spec_arguments_parse_to_the_canonical_id() {
+    use crate::cli::{PuntsCommand, UsageCommand};
+    let _map = bind_home();
+    let want = canonical_of("080");
+    match parse_sub(&["resolve", "STORY-HOME-080", "--answer", "a"]) {
+        PuntsCommand::Resolve { id, .. } => assert_eq!(id, want),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["list", "--spec", "story-home-080"]) {
+        PuntsCommand::List { spec, .. } => assert_eq!(spec.as_deref(), Some(want.as_str())),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["show", "STORY-HOME-080"]) {
+        UsageCommand::Show { spec, .. } => assert_eq!(spec, want),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// `aida pr auto-queue-review` files the review story against the ids its
+/// commit trailers name; a `(TYPE-<LABEL>-NNN)` trailer names the canonical
+/// id, and alias and canonical trailers dedup to one entry.
+#[test]
+fn review_coverage_trailers_resolve_to_the_canonical_id() {
+    let _map = bind_home();
+    let want = canonical_of("080");
+    let messages = vec![
+        "[AI:claude] fix(x): one (STORY-HOME-080)".to_string(),
+        format!("[AI:claude] fix(x): two ({want})"),
+        "[AI:claude] feat(x): slice (Refs STORY-HOME-081)\n\nTouches (STORY-HOME-082)".to_string(),
+    ];
+    let cov = crate::review_gates::review_coverage_from_commits(&messages);
+    assert_eq!(cov.delivered, vec![want]);
+    assert_eq!(cov.slice_refs, vec![canonical_of("081")]);
+    assert_eq!(cov.referenced, vec![canonical_of("082")]);
+}

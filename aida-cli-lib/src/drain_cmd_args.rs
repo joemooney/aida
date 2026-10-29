@@ -61,6 +61,7 @@ pub enum DrainCommand {
     // trace:TASK-1272 | ai:codex
     Resume {
         /// Shelved requirement to resume.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// Emit JSON progress from the underlying drain.
         #[clap(long)]
