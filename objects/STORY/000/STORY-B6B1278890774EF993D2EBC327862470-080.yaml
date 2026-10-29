@@ -50,12 +50,12 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
   BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T14:31:10.666315867Z
+modified_at: 2026-10-29T14:59:18.959489440Z
 req_type: Story
 tags:
 - architecture
@@ -276,6 +276,26 @@ comments:
   created_at: 2026-10-29T14:31:10.666311873Z
   modified_at: 2026-10-29T14:31:10.666311873Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a1882c-122f-74a1-96c5-38871ef1e268
+  author: joe
+  content: |-
+    ## Round-3 rework (17ea28e): all five findings are in this slice
+
+    | # | Finding | Fix | Test |
+    |---|---|---|---|
+    | 1 | A file at the same head hid a newer ledger-only verdict in `merge_gate_verdict_candidates` and `corpus_gate_bodies` | Added `review_verdict::ledger_supersedes`, which uses `newer_of`'s ordering (ledger time = min(ledger `at`, `recorded_at`), and the same round keeps the file). Both gates now weigh the ledger record in place of an older file. Each ledger record counts once across roots. An unparseable file is kept, so the gate still fails closed on it | `a_newer_ledger_verdict_outranks_the_file_at_both_merge_gates` (in both directions), `a_ledger_verdict_counts_once_across_roots` |
+    | 2 | The launcher summary preferred a stale `PR-N.json`; the templates pointed at the file | The summary reads `current_verdict_body` (the newer of file and ledger). The aida-fire, aida-burndown and aida-orchestrate templates (skill, command, portable) now say `aida review verdict PR-<n> --json` and explain that the file can be missing or from an earlier round | `single_key_readers_get_the_newer_of_file_and_ledger` |
+    | 3 | Calibration capture read `verdict_path` only | `capture_review_calibration_for_spec` reads `current_verdict_body_at` | same test |
+    | 4 | File-only readers | **Fixed in this slice, not deferred.** `burndown_run::local_verdict_blocks_merge`, the integrate classification in `queue_cmd`, and `drain_cmd`'s reviewed check all read the merge chokepoint's own `corpus_gate_bodies`, so they share one interpretation and are ledger-aware. `status_awaiting` reads `current_verdict_body_at`. `human::spec_review_approved` adds the ledger record as a timed candidate wherever it is newer than the file. Rework auto-release reads the newer of file and ledger as the latest verdict, and gets the ledger's rounds as retained history through `RetainedHistory::with_ledger`, so a contained RC→approve cycle no longer needs a human clear | `retained_history_includes_the_ledger_rounds` |
+    | 5 | Expired grant at collection was untested | n/a | `an_expired_grant_is_refused_at_collection` |
+
+    Tests: `cargo test --profile agent -p aida-cli-lib --lib gate::ledger` gave 24 passed. A wider run over the touched readers (rework_hold_release, merge_gate, corpus_gate, merge_hold, review_verdict, human, status_awaiting, bug_1581, bug_2149) gave 545 passed. The 16 failures there are all `could not install the hermetic test HOME: Read-only file system`: they are isolated-subprocess tests that cannot run in this sandboxed seat and are left for CI. `make check-ci-fast` passed all 35 gates.
+
+    Known limit, unchanged: `pr_has_approved_verdict` / `pr_has_local_verdict` (orphan sweep) still read the PR file only. They are not on a merge-deciding path, and they move to the ledger projection with the slice-2 reader switch-over.
+  created_at: 2026-10-29T14:59:12.047703084Z
+  modified_at: 2026-10-29T14:59:12.047703084Z
+  session_id: 01a188132464
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -412,6 +432,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a1882c-2d89-7883-a017-71a124b97ef3
+  author: joe
+  timestamp: 2026-10-29T14:59:19.049300814Z
+  session_id: 01a188132464
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
