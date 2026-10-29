@@ -8,12 +8,12 @@ description: |-
 
   PR: #3052
   Reviewed sha: 08c719342aed2fd370e8e1a92e49966b40da638b
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-28T18:34:18.187389051Z
-modified_at: 2026-10-28T23:46:51.757956342Z
+modified_at: 2026-10-29T00:16:56.456771779Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-012
@@ -53,6 +53,21 @@ history:
   timestamp: 2026-10-28T23:46:52.601828729Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a18504-5678-7572-9dd9-e69b75d00d3d
+  author: aida-auto-bump
+  timestamp: 2026-10-29T00:16:56.440227547Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18504-5688-7930-892f-3682357624d4
+  timestamp: 2026-10-29T00:16:56.456742075Z
+  agent: aida
+  commit_sha: 28bbe9d540b26f761d1b796b3f003b65ee9c2a15
+  summary: 'Lock-only entries parsed via typed LockOnlyEntry and occupy only their named worktree (3 tests: other-wt admits, target refuses, corrupt fails closed); is_lease_companion doc corrected; CI green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: aecc4311ee4f4f5b648ef2a0f07b9fdcf3d52004
@@ -62,3 +77,7 @@ filed_at:
   aida_build_sha: f3cda469f7b
   vendor: claude
   session: 7b875ef6-5970-4f7c-9187-3491563af968
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T00:16:56.440214758Z
+  completion_sha: 28bbe9d540b26f761d1b796b3f003b65ee9c2a15
