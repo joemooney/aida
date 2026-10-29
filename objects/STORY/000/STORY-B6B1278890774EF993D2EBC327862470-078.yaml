@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T09:29:10.960709401Z
+modified_at: 2026-10-29T09:30:27.148265610Z
 req_type: Story
 tags:
 - docs:impacted
@@ -171,6 +171,13 @@ comments:
   modified_at: 2026-10-29T09:29:10.960709401Z
   session_id: 01a186e73d7c
   harness_version: 2.1.312 (Claude Code)
+- id: 01a186ff-17cc-7383-8e9f-5aaf778cb35b
+  author: joe
+  content: |
+    ADDENDUM to the round-3 brief (advisor, 2026-10-29 02:35), same final push: CI cli-0 fails at 786989948 (and will at 3b9cf4e) on aida-cli/tests/bug_1502_format_json_audit.rs:479 "regenerate the BUG-1502 audit": the new `node alias list/show --json` leaves are missing from docs/cli-format-json-audit.md. Run scripts/generate-format-json-audit.py on the branch, commit the regenerated doc with the spec trailer, and push. Then confirm locally with `cargo test -p aida-cli --test bug_1502_format_json_audit`. Nothing else.
+  created_at: 2026-10-29T09:30:27.148265610Z
+  modified_at: 2026-10-29T09:30:27.148265610Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
