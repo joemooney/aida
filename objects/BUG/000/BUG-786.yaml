@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:38.590060636Z
-modified_at: 2026-10-29T06:40:42.205879736Z
+modified_at: 2026-10-29T06:40:48.994906630Z
 req_type: Bug
 tags:
 - aida:orchestrator
@@ -37,6 +37,12 @@ comments:
     Close as completed/verified by BUG-777, BUG-906, and BUG-1285.
   created_at: 2026-10-02T06:35:32.777695783Z
   modified_at: 2026-10-02T06:35:32.777695783Z
+- id: 01a18663-c962-75c2-a8d4-6fbcbd72cdad
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as superseded by BUG-777. Reason: Triage verified covered by BUG-777/906/1285.'
+  created_at: 2026-10-29T06:40:48.994906630Z
+  modified_at: 2026-10-29T06:40:48.994906630Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18663-96c8-7313-9977-e44a86cff803
   author: joe
