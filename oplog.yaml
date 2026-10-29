@@ -83801,5 +83801,31 @@ operations:
   timestamp: 2026-10-29T03:36:14.481494285Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6537
+- id: 01a185c3-b8af-74d2-99a4-dc94270850d8
+  target_id: 01a185c3-b1d4-7d82-9768-8f6b812b3566
+  author: aida
+  node_id: '1'
+  lamport: 6538
+  timestamp: 2026-10-29T03:45:58.959759781Z
+  kind: !Create
+    title: 'Review PR-3082: [AI:claude] fix: review record resolves --sha with git and refuses a non-head commit (BUG-b6b1278890774ef993d2ebc327862470-013)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/review-record-resolves-sha`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3082>
+      - Branch: `fix/review-record-resolves-sha` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-013
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3082` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6538
 node_id: '1'
