@@ -84958,5 +84958,21 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6645
+- id: 01a1873c-eb42-7f91-8e63-fc4e90bfea9e
+  target_id: 01a1873c-e422-7ea3-832e-e7307e18d1a6
+  author: aida
+  node_id: '1'
+  lamport: 6646
+  timestamp: 2026-10-29T10:37:58.978476988Z
+  kind: !Create
+    title: 'non-blocking/process: the merge-hold-gate check fails at 5f0c66d (''Require reco…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      non-blocking/process: the merge-hold-gate check fails at 5f0c66d ('Require recorded clearance for every previously held PR'). Merging needs operator/advisor merge-hold clearance; this is not a code defect.
+      Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6646
 node_id: '1'
