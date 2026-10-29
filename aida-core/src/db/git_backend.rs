@@ -521,6 +521,38 @@ impl GitBackend {
     /// [`DatabaseBackend::get_requirement_by_spec_id`] for the id exactly
     /// as given (no node-alias expansion).
     fn get_requirement_by_exact_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
+        if let Some(req) = self.get_requirement_by_object_file(spec_id)? {
+            return Ok(Some(req));
+        }
+        // File doesn't exist by spec_id — try agreed_id scan. A malformed id
+        // was already answered not-found above (BUG-599).
+        let spec_id = object_store::canonical_spec_id(spec_id);
+        if !object_store::valid_spec_id_format(&spec_id) {
+            return Ok(None);
+        }
+        #[cfg(test)]
+        super::cache_refresh::test_count("agreed_id_store_scan");
+        let files = object_store::list_objects(&self.objects_root)?;
+        for (_name, path) in &files {
+            if let Ok(req) = object_store::read_object_from_path(path) {
+                if req.agreed_id.as_deref() == Some(spec_id.as_str()) {
+                    return Ok(Some(req));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// The object file `spec_id` names, read directly: no agreed-id scan of
+    /// the store and no node-alias expansion. A caller whose id index has
+    /// already ruled out every agreed-id match uses this instead of
+    /// [`Self::get_requirement_by_exact_spec_id`], whose scan reads every
+    /// object in the store.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-018 | ai:claude
+    pub(crate) fn get_requirement_by_object_file(
+        &self,
+        spec_id: &str,
+    ) -> Result<Option<Requirement>> {
         let spec_id = object_store::canonical_spec_id(spec_id);
         // BUG-97: distinguish "file doesn't exist" (legitimate not-found,
         // fall through to agreed_id scan and ultimately Ok(None)) from
@@ -549,15 +581,6 @@ impl GitBackend {
             // detail already attached by read_object's `with_context`).
             let req = object_store::read_object(&self.objects_root, &spec_id)?;
             return Ok(Some(req));
-        }
-        // File doesn't exist by spec_id — try agreed_id scan.
-        let files = object_store::list_objects(&self.objects_root)?;
-        for (_name, path) in &files {
-            if let Ok(req) = object_store::read_object_from_path(path) {
-                if req.agreed_id.as_deref() == Some(spec_id.as_str()) {
-                    return Ok(Some(req));
-                }
-            }
         }
         Ok(None)
     }

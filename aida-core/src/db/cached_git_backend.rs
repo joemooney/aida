@@ -259,6 +259,18 @@ impl CachedGitBackend {
                 crate::id_collisions::candidates_for_id(rows.iter(), id)
             }
         };
+        // A READ whose cache index (spec_id OR agreed_id) matched nothing
+        // still reads the object file the id names, so a spec committed since
+        // the snapshot is found, but skips the inner backend's agreed-id scan,
+        // which reads every object in the store (~700 ms on a ~4,400-object
+        // store) and is what every literal miss of a node-alias form such as
+        // `BUG-HOME-018` paid before its expansion was tried. Writes keep the
+        // full fallback: their cache was refreshed first, and they must not
+        // act on a guess.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-018 | ai:claude
+        if candidates.is_empty() && !strict {
+            return self.inner.get_requirement_by_object_file(id);
+        }
         if candidates.len() > 1 {
             // The cache said "ambiguous"; confirm against the canonical
             // objects before refusing, so a stale cache row (an object
@@ -2280,6 +2292,60 @@ mod tests {
                     .unwrap()
             ),
             "Aliased"
+        );
+    }
+
+    /// `aida show BUG-HOME-018` paid ~700 ms in `lookup`: the literal label
+    /// form misses the cache index, and the read fell through to the inner
+    /// backend's agreed-id scan of every object before the alias expansion
+    /// was tried. A read the cache index already answered reads only the
+    /// object file the id names: the label still resolves, a spec committed
+    /// since the snapshot is still found, and no store-wide scan runs.
+    /// Writes keep the full fallback.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-018 | ai:claude
+    #[test]
+    fn read_lookup_of_a_node_label_skips_the_agreed_id_store_scan() {
+        use super::super::cache_refresh::test_counts;
+        const ALIASED: &str = "b6b1278890774ef993d2ebc327862470";
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = home_fixture_cached(&store_root, &dir.path().join("cache.db")).unwrap();
+        let aliased = sample_req(
+            &format!("BUG-{ALIASED}-018").to_ascii_uppercase(),
+            "Aliased",
+        );
+        let uncached = sample_req(
+            &format!("BUG-{ALIASED}-019").to_ascii_uppercase(),
+            "Uncached",
+        );
+        let objects = store_root.join("objects");
+        crate::object_store::write_object(&objects, &aliased).unwrap();
+        backend.cache.upsert_requirement(&aliased).unwrap();
+        // Committed by another writer after the cache snapshot.
+        crate::object_store::write_object(&objects, &uncached).unwrap();
+        let mut map = crate::node_alias::NodeAliasMap::default();
+        map.set("HOME", ALIASED).unwrap();
+        let _guard = crate::node_alias::install_for_thread(map);
+        let title = |r: Option<Requirement>| r.map(|r| r.title).unwrap_or_default();
+
+        test_counts();
+        let label = backend.get_requirement_unambiguous_for_read("BUG-HOME-018");
+        let canonical = backend.get_requirement_unambiguous_for_read(&format!("BUG-{ALIASED}-019"));
+        let missing = backend.get_requirement_unambiguous_for_read("BUG-HOME-404");
+        let counts = test_counts();
+        assert_eq!(title(label.unwrap()), "Aliased");
+        assert_eq!(title(canonical.unwrap()), "Uncached");
+        assert!(missing.unwrap().is_none());
+        assert_eq!(counts.get("agreed_id_store_scan"), None, "{counts:?}");
+
+        assert_eq!(
+            title(backend.get_requirement_unambiguous("BUG-HOME-018").unwrap()),
+            "Aliased"
+        );
+        assert!(
+            test_counts().get("agreed_id_store_scan").is_some(),
+            "a write's lookup keeps the authoritative agreed-id fallback"
         );
     }
 
