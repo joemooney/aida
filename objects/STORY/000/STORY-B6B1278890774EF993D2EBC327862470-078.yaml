@@ -41,6 +41,16 @@ tags:
 - id-allocation
 - regroup
 - traceability
+relationships:
+- rel_type: Child
+  target_id: 01a18655-d0c9-7490-ba48-bfdd8b1a30bc
+  created_at: 2026-10-29T06:33:10.944804318Z
+history:
+- id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
+  author: joe
+  timestamp: 2026-10-29T06:33:12.617175102Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
