@@ -2,12 +2,12 @@ id: 01a18780-4ec9-7220-aafa-92a330d4454d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-100
 title: Explain selectable autonomy in the AIDA overview
 description: 'User-requested documentation update to docs/what-is-aida.md and its HTML companion: expand governed software factory with selectable autonomy; enumerate actual ExecutionMode variants operator, guided, drive, drain and decide, with descriptive management-facing names and a qualified dark-factory comparison. Verify against models.rs and CLI behavior; preserve existing gates and explicitly distinguish decide as a block. No product behavior changes.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T11:51:35.369252268Z
-modified_at: 2026-10-29T18:08:00.387388659Z
+modified_at: 2026-10-29T18:41:35.826877910Z
 req_type: Task
 tags:
 - docs:impacted
@@ -94,6 +94,20 @@ history:
   author: joe
   timestamp: 2026-10-29T18:08:02.018470853Z
   changes: []
+- id: 01a188f7-ae4f-7b33-9367-ce3850fc8979
+  author: aida-auto-bump
+  timestamp: 2026-10-29T18:41:35.823234245Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a188f7-ae52-7612-abed-ba3eb783be0f
+  timestamp: 2026-10-29T18:41:35.826870556Z
+  agent: aida
+  commit_sha: 3a98326513a2740d17d5894b2362f71a99ba078a
+  summary: 'Docs-only: selectable-autonomy section in what-is-aida.md/.html; mode table, decide block, --force override and dark-factory framing match ExecutionMode (models.rs:578-624) and human_contract (do_dispatch.rs:248-272); CI green at head. One cosmetic nit (new HTML h2 lacks the anchor link other h2s carry) is non-blocking.'
+  review_verdict: approved
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -106,6 +120,8 @@ implementation_info:
   test_coverage_notes: 'make check-ci-fast: all 35 fast-tier gates passed'
   implemented_at: 2026-10-29T17:56:47.773649248Z
   implemented_by: joe
+  completed_at: 2026-10-29T18:41:35.823230469Z
+  completion_sha: 3a98326513a2740d17d5894b2362f71a99ba078a
 interface_changes:
   other:
   - Overview explains selectable autonomy and the human/agent handoffs
