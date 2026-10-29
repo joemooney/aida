@@ -83971,5 +83971,23 @@ operations:
   timestamp: 2026-10-29T04:50:59.253921871Z
   kind: !SetStatus
     status: Completed
-clock: 6550
+- id: 01a185ff-56be-78a0-9db6-7147768eb817
+  target_id: 01a185ff-4f62-7f43-a891-91d95831811a
+  author: aida
+  node_id: '1'
+  lamport: 6551
+  timestamp: 2026-10-29T04:51:06.046569121Z
+  kind: !Create
+    title: 'Non-blocking (cosmetic): aida-cli-lib/src/review_cmd_args.rs:86-88 --sha help s…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (cosmetic): aida-cli-lib/src/review_cmd_args.rs:86-88 --sha help still says 'Defaults to the branch tip (current HEAD)' and does not say a non-head sha is refused or that a prefix is expanded to the full sha.
+
+      PR: #3082
+      Reviewed sha: 29f2116cf7224a6109668e206e31e10bef2ca4bf
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6551
 node_id: '1'
