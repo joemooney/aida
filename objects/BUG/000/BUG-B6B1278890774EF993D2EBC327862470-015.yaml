@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T10:58:53.050487034Z
+modified_at: 2026-10-29T11:55:55.960784264Z
 req_type: Bug
 tags:
 - id-allocation
@@ -45,6 +45,21 @@ comments:
     - None blocking. Approach: canonicalize at each command entry via `node_alias::expand_or_keep` (built on `resolve_literal_first`), installing the alias map for early-dispatch commands.
   created_at: 2026-10-29T10:58:53.050487034Z
   modified_at: 2026-10-29T10:58:53.050487034Z
+  session_id: 01a1874d0ae3
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18784-48b8-77a3-a349-ff89124f4f45
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` ID allocation hit a read-only path in this sandbox)
+
+    Branch: bug-b6b1278890774ef993d2ebc327862470-015 · Commit: 422274c3405
+
+    1. **kind:deviation, severity:minor** — Black-box coverage gap. The integration test (`aida-cli/tests/story_078_node_aliases.rs::node_alias_spec_scope_commands_act_on_the_canonical_id`) covers queue add + list, queue work --dry-run, claim/unclaim leases, the `aida add` output and the unknown-label not-found. `queue remove/done` need dispatch authority, which the fixture strips, and `worktree add` / `session end` need a real worktree + lease. Those are covered only by the parse-layer unit test (`aida-cli-lib/src/tests/bug_015_spec_arg_tests.rs`). A fixture that grants an advisor seat would let them run end to end.
+    2. **kind:design-choice, severity:minor** — `command_registry::run_early` now installs the alias map for every early-dispatch command (plan, gate, triage, dispatch, lock, punts, intent, why, ship, worktree, session, claim, pr, …). They ran before the store dispatch installed it, so even their alias-aware store resolvers could not expand labels. statusline/statusbar skip it to stay on their latency budget. `ensure_alias_map` is a no-op under cfg(test).
+    3. **kind:design-choice, severity:cosmetic** — The display ratchet was not extended. It counts `.display_id()` calls only; the `Added:`/`Linked:` lines printed raw `spec_id`. Those sites now use `display_spec_id`, pinned by the integration test. `parse_spec_id_from_add_output` canonicalizes the display form back for in-process callers.
+    4. **kind:followup-suggestion, severity:cosmetic** — The `aida claim`/`unclaim` confirmations print the lowercase canonical scope. They could show `TYPE-<LABEL>-NNN` while the lease keeps the canonical scope.
+  created_at: 2026-10-29T11:55:55.960784264Z
+  modified_at: 2026-10-29T11:55:55.960784264Z
   session_id: 01a1874d0ae3
   harness_version: 2.1.312 (Claude Code)
 history:
