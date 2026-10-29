@@ -8,12 +8,12 @@ description: |-
   DEFERRED on purpose: projects.toml is NOT consumed by aida today (verified: no code computes its path; its own header says EPIC-22 will wire consumption). Auto-registering into a file nothing reads is plumbing-before-consumption. REVISIT TRIGGER: when EPIC-22 (or any feature) starts READING projects.toml — implement the write half in the same change so the registry has data to read. Until then, low priority.
 
   Acceptance: after aida init in a new repo, ~/.aida/projects.toml gains a [[project]] entry for it (idempotent; existing hand-maintained entries + comments preserved); paired with a consumer that reads it.
-status: Approved
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T05:10:20.513393891Z
-modified_at: 2026-10-29T06:45:01.642762729Z
+modified_at: 2026-10-29T06:45:05.559911215Z
 req_type: Task
 tags:
 - aida:init
@@ -27,3 +27,11 @@ history:
   timestamp: 2026-10-29T06:45:02.458430665Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18667-b397-7ce2-87ae-c68398949b77
+  author: joe
+  timestamp: 2026-10-29T06:45:05.559909247Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded

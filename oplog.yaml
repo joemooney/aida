@@ -84696,5 +84696,13 @@ operations:
   timestamp: 2026-10-29T06:45:02.564726204Z
   kind: !RemoveTag
     tag: deferred:until-projects-toml-consumed
-clock: 6621
+- id: 01a18667-b748-7953-928a-5433bdcd360e
+  target_id: 019efd2f-ac61-7b70-ab62-f5d5e8aca31a
+  author: aida
+  node_id: '1'
+  lamport: 6622
+  timestamp: 2026-10-29T06:45:06.504090617Z
+  kind: !SetStatus
+    status: Superseded
+clock: 6622
 node_id: '1'
