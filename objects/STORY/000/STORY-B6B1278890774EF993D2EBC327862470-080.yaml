@@ -54,12 +54,12 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 6 (advisor, 2026-10-29 09:45): make CI green, nothing else
   Two existing fail-closed tests regressed since 7dac907: review_gates::bug_775_commits_ahead_tests::a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites (bug_775_commits_ahead_tests.rs:701) and gate::review_verdict::review_verdict_tests::task1801_ship_and_phase_gates_refuse_linked_verdicts (review_verdict_tests.rs:2118). Restore their fail-closed behavior: a current verdict path that exists but is unreadable or a link must make ship and phase-3 gates REFUSE, even when the ledger has a readable record. Do not edit the tests' expectations. Fix the rustdoc ordering at lib_part5.rs:951-965 (cosmetic, bundled). Run exactly: cargo test -p aida-cli-lib --lib bug_775_commits_ahead task1801 review_verdict, plus make check-ci-fast.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T18:42:49.460761838Z
+modified_at: 2026-10-29T19:19:40.680051790Z
 req_type: Story
 tags:
 - architecture
@@ -427,6 +427,24 @@ comments:
   modified_at: 2026-10-29T18:42:49.460761838Z
   session_id: 01a188f8247b
   harness_version: 2.1.312 (Claude Code)
+- id: 01a1891a-722b-7480-aea9-d7a4436ddd00
+  author: joe
+  content: |-
+    ## Round-9 rework (3165de4 + b8f6862): both round-8 findings fixed
+
+    | # | Finding | Fix | Test |
+    |---|---|---|---|
+    | 1 | A refused verdict file let the ledger answer in `read_recorded_verdict` / `read_verdict_for_sha` | Both readers now go through `newer_of(path, …)`, and that calls `ledger_supersedes(path, file, event)`. A current file that the anchored reader refuses (TASK-1801), or one that does not parse, keeps the ledger out | `a_refused_or_unparseable_file_keeps_the_ledger_out_of_every_reader`: covers both readers, `pr_cmd::ship_refusal_release` and `dispatch_authority::verdict_at_head`, for both a linked file and an unparseable one |
+    | 2 | The undated-file mtime rule lived only in `choose_current` | The rule moved into `ledger_supersedes`, the one predicate that `choose_current`, `newer_of`, `merge_gate_verdict_candidates` and `corpus_gate_bodies` all call. The duplicate filter in `choose_current` is deleted | `an_undated_file_is_dated_by_its_mtime_at_both_merge_gates`: both directions, at both gates and in `newer_of` |
+
+    - b8f6862 fixes the salvaged test fixture: it now creates the verdict directory before linking.
+    - `cargo test --profile agent -p aida-cli-lib --lib -- gate::ledger`: 34 passed, 0 failed. That count includes both ratchets.
+    - The broader run (`review_verdict phase_gates task1801 dispatch_authority ship_refusal`) also passed. Its only failures were the sandbox-only BUG-1642 (hermetic HOME on a read-only FS). CI runs those tests.
+    - `make check-ci-fast`: 35 gates passed.
+  created_at: 2026-10-29T19:19:34.187280026Z
+  modified_at: 2026-10-29T19:19:34.187280026Z
+  session_id: 01a188f8247b
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -698,6 +716,15 @@ history:
   author: joe
   timestamp: 2026-10-29T18:31:15.826729955Z
   changes: []
+- id: 01a1891a-8bf3-7b02-aeff-02982370e05f
+  author: joe
+  timestamp: 2026-10-29T19:19:40.787139068Z
+  session_id: 01a188f8247b
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
