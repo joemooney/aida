@@ -9,8 +9,8 @@ signed sketches and advisor rulings on the spec (comment numbers below are
 `aida show STORY-1843 --comments` indexes). Comment 90 is the inventory this
 matrix completes.
 
-Evidence was checked against `origin/main` at `c832ed71e03` (2026-10-28):
-each SHA is the merge commit on main (`git log origin/main`), and each test was
+Evidence was checked against `origin/main` at `457c8c60cf0` (2026-10-28),
+and against aida-relay `origin/main` at `2db8abb`: each SHA is the merge commit on main (`git log origin/main`), and each test was
 found by name with `rg 'fn <name>'`. Paths are relative to the repository root.
 
 Status values:
@@ -20,9 +20,6 @@ Status values:
   2026-10-23 12:27 (comment 33) puts it outside the code obligations.
 - **KNOWN LIMITATION**: a gap the advisor accepted on the record. It is
   documented, and no follow-up spec is filed.
-- **PENDING-D3**: relay-side (aida-relay STORY-122). The evidence is in
-  joemooney/aida-relay#98, which has not merged yet.
-- **MISSING**: no implementation on main. This blocks completion.
 
 ## Slice commits on main
 
@@ -43,7 +40,8 @@ Status values:
 | D2a relay run lifetime | `27937702c65` | #3040 |
 | D2b relay outbox, label reuse, handover | `b00dbdfa8ba`, `ada00a6def4` | #3049, #3068 |
 | Lifecycle write fallback chain | `872aae84a7a`, `8767e9accd8` | #3069, #3072 |
-| D3 aida-relay STORY-122 | not merged | aida-relay#98 (head `9d614b6`) |
+| W mail watcher reads the logical view | `457c8c60cf0` | #3079 |
+| D3 aida-relay STORY-122 | aida-relay `2db8abb` | aida-relay#98 |
 
 ## A. Description acceptance criteria
 
@@ -99,23 +97,24 @@ permanent Python union logic").
 | Per-turn notice hook (claude, codex, agy) | MET | `ab8c97933da`, `10443faf8fd`. `story1843_adapters_share_one_logical_view_and_one_read_state` (`notice_text`), `story1843_d1_notice_never_waits_on_a_held_lifecycle_lock`; agy: `story_1843_pr3_claude_to_agy_next_turn` | |
 | Status, statusline, awaiting, latency | MET | `ab8c97933da`. `story1843_adapters_share_one_logical_view_and_one_read_state` (`read_urgent_unread_count_for`, `mailbox_latency_warning_for`), `story1843_awaiting_mail_channel_shares_the_view`, `story1843_latency_rows_share_the_view`, `story1843_inbox_read_clears_every_fleet_wide_unread_reader` | |
 | Relay (AIDA side) | MET | `b00dbdfa8ba`. `relay_mail_outbox.rs` and `relay_mail_reuse.rs` read the view; tests are in the relay rows of section B | |
-| Mail watcher (`aida mailbox wake-snapshot` + `scripts/codex-mail-wake.py`, TASK-2347) | **MISSING** | `a01a6989984` (#2915) is the only commit to `aida-cli-lib/src/mailbox_wake.rs`. It predates B2c and D1 and does not use the logical view. | `mailbox_wake::snapshot` reads one root's local `.read`/`.read-receipts` and the canonical store, and the Python script unions the roots. It never reads the B2c ledger (`<git-common-dir>/aida/mail-lifecycle/receipts/`) or D1 `.deliveries/` sidecars. So the watcher can wake for mail the view counts as read: acknowledged in a since-removed worktree, or a cohort message outside this reader's snapshot. It can also miss mail a refused or partial source would flag. The watcher only wakes and never acknowledges or exposes bodies, so it loses no mail, but the obligation is unmet. |
-| Relay (aida-relay side) | PENDING-D3 | aida-relay#98 | See section D. |
+| Mail watcher (`aida mailbox wake-snapshot` + `scripts/codex-mail-wake.py`, TASK-2347) | MET | `457c8c60cf0` (#3079). `aida-cli-lib/src/mailbox_wake.rs`: `story1843_w_no_wake_for_mail_read_in_a_removed_worktree`, `story1843_w_no_wake_for_another_readers_cohort_mail`, `story1843_w_partial_source_is_flagged`, `story1843_w_selector_never_widens_and_envelope_has_no_body`, `story1843_w_wake_snapshot_under_a_non_advisor_session_binds_nothing`; `tests/test_codex_mail_wake.py`: `test_one_logical_snapshot_replaces_the_per_worktree_union`, `test_partial_view_wakes_once_with_partial_flag_and_never_prunes`, `test_snapshot_without_read_evidence_refuses` | `wake-snapshot` builds its envelope from the core logical snapshot with the notice's audience (narrowed by `--recipient`, never widened) and its non-blocking bind pass, so read evidence comes from the common-Git receipt anchor and cohort mail another reader owns is excluded. The script makes one call per scan instead of unioning roots. A partial view sets `partial=true` and never prunes accepted IDs. |
+| Relay (aida-relay side) | MET | aida-relay `2db8abb` (#98) | See section D. |
 
 ## D. Relay side, aida-relay STORY-122 (D3)
 
 Ruling 98 scope. The tests are the cases in `tests/shell/story122_relay_mail.sh`
-on aida-relay#98 (head `9d614b6`, not merged). The aida-relay merge SHA is
-filled in when #98 merges.
+in aida-relay, merged to its `main` as `2db8abb` (#98, approved at `74824a2`;
+its three review nits were accepted in the 2026-10-28 20:50 ruling on
+aida-relay STORY-122). The suite runs against the real `aida relay-mail` CLI.
 
-| Criterion | Status | Evidence (aida-relay#98) | Notes |
+| Criterion | Status | Evidence (aida-relay `2db8abb`) | Notes |
 |---|---|---|---|
-| Probe before reserving; refuse on a protocol mismatch | PENDING-D3 | case 4: a protocol mismatch refuses (exit 9) before the run directory or the label is reserved, and no session starts | |
-| Bind before advertising the label; child-bind on every rotation; one run UUID | PENDING-D3 | case 1: two sessions keep one run UUID (one run record, two child bindings, fresh launch token per session); mid-run mail to the label is accepted | |
-| The capability never goes on argv or into a session's environment | PENDING-D3 | case 1: the capability never appears on any command line or in a session's environment | |
-| End on trap and normal exit, recorded once | PENDING-D3 | case 1 (ends once, reason `exit`); case 2: SIGTERM mid-session, the EXIT trap records the end once (reason `stop`) | |
-| A crash leaves reconciliation to AIDA (`aida agent gc`) | PENDING-D3 | case 3: after `kill -9`, no end is recorded until `aida agent gc` reconciles the run as a crash | |
-| Reuse needs `--leave-with-old` or `--handover`; headless with unread mail exits nonzero | PENDING-D3 | case 5: headless without a choice exits 9 with no session; `--leave-with-old` binds a new run UUID | |
+| Probe before reserving; refuse on a protocol mismatch | MET | case 4: another protocol, a missing operation, no `terminal_reconcile`, and a probe that fails, hangs or answers garbage each refuse (exit 9) with no run directory, no bind and no session | |
+| Bind before advertising the label; child-bind on every rotation; one run UUID | MET | case 1: two sessions keep one run UUID (one run record, two child bindings, fresh launch token per session); mid-session and gap mail to the label is accepted and the second session reads the gap mail; case 8: a controller yielding to the host gate stays bound; case 10: `--detach` reports the launch only once the run is bound | |
+| The capability never goes on argv or into a session's environment | MET | case 1: the capability never appears on any command line or in a session's environment | |
+| End on trap and normal exit, recorded once | MET | case 1 (ends once, reason `exit`); case 2: SIGTERM mid-session, the EXIT trap records the end once (reason `stop`) | |
+| A crash leaves reconciliation to AIDA (`aida agent gc`) | MET | case 3: after `kill -9`, no end is recorded until `aida agent gc` reconciles the run as a crash | |
+| Reuse needs `--leave-with-old` or `--handover`; headless with unread mail exits nonzero | MET | case 5: headless without a choice exits 9 naming the old run and its exact unread count, with no session; `--leave-with-old` binds a new run UUID; case 6: `--handover` binds a new run UUID that reads the old run's unread mail; case 7: an interactive run asks, and aborting exits 9 with no session | |
 
 ## E. Known limitations
 
@@ -126,8 +125,15 @@ filled in when #98 merges.
 
 ## F. Completion
 
-Not complete. One row is MISSING (the mail watcher, section C) and six rows
-are PENDING-D3 (section D). The completing commit carries the bare
-`(STORY-1843)` trailer only when every row is MET, POST-DEPLOYMENT or KNOWN
-LIMITATION. A separate STRICT review of this PR is still required
-(48 #5 / 60 #8).
+Complete. Every row is MET, POST-DEPLOYMENT or KNOWN LIMITATION.
+
+Verification notes. Rows changed since the first draft of this matrix
+(`36531cf3f40`):
+
+- Section C, mail watcher: MISSING to MET, from slice W (`457c8c60cf0`, #3079).
+- Section C, relay (aida-relay side): PENDING-D3 to MET, from aida-relay `2db8abb`.
+- Section D, all six relay criteria: PENDING-D3 to MET, from aida-relay
+  `2db8abb`. Each case was checked by name in the header of
+  `tests/shell/story122_relay_mail.sh` on aida-relay `origin/main`.
+
+A separate STRICT review of this PR is still required (48 #5 / 60 #8).
