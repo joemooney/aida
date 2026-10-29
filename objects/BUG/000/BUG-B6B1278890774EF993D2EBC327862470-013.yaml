@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-013
 title: Reviewer verdict stores a model-typed head SHA; a typo discards a complete review
 description: |
   A headless reviewer's verdict was rejected at collection because the reviewer typed the head SHA wrong. On aida-relay PR #98 on 2026-10-28, the verdict file recorded reviewed_sha 'cfbd4bd2' while the head was cfbd4bdcbec8…, so 'aida queue work PR-98 --role reviewer' reported "it reviewed cfbd4bd2, but PR-98's head is now cfbd4bdc…" and discarded a complete review. The SHA is copied by the model, not resolved by the tool. Acceptance: `aida review record` (and any verdict-writing path) takes the reviewed SHA from git: default to the checked-out review worktree HEAD; if a SHA or prefix is given, resolve it with rev-parse and refuse unless it equals HEAD; always store the full 40-hex SHA. Collection keeps refusing a genuinely different head. Regression test: a prefix that resolves to HEAD records the full SHA; a mistyped SHA is refused at record time with a clear message, not silently written.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T03:02:24.395927496Z
-modified_at: 2026-10-29T03:02:39.366129628Z
+modified_at: 2026-10-29T03:03:21.440483657Z
 req_type: Bug
 history:
 - id: 01a1859c-0e06-7c81-8970-b2b0be7cdeb5
@@ -19,6 +19,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1859c-b260-7263-8642-a3cfb48d5061
+  author: aida-session-start
+  timestamp: 2026-10-29T03:03:21.440482556Z
+  session_id: 4539dd78-9e3b-4087-8861-ce3711879f26
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c832ed71e03db1a6c9d1535b2063f6fd36e276a2
   branch: main
