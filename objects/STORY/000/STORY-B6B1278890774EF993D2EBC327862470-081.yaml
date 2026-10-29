@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:46:50.807919819Z
-modified_at: 2026-10-29T11:47:10.383089831Z
+modified_at: 2026-10-29T13:11:36.066409058Z
 req_type: Story
 relationships:
 - rel_type:
@@ -37,6 +37,12 @@ comments:
   content: 'Review scope (advisor, 2026-10-29 04:50) for PR-3090 = M1 slice 1 of STORY-HOME-080. Judge against the sketch (first comment on STORY-HOME-080) AS AMENDED by the advisor signoff (second comment): slice 1 = gate/ledger module (event types, append+flock, store_root, projection, legacy read-through, ratchet), the MAILBOX gate-event transport with drain-on-read for contained writers (Q1: contained seats must NOT get a write path to <main>/.aida/gate-ledger), verdict writers AND readers switched to the ledger, and the collect step (collect_standalone_verdict / adopt_direct_write) DELETED. The diff is +1440/-10: check specifically whether writers/readers actually switched and collect was deleted, or whether the ledger was only added alongside (that would be a parallel second store, the opposite of the slice''s purpose). Rule-once: name every finding now; non-blocking ones get bundle-or-accept in the verdict. No cargo; judge by CI at head.'
   created_at: 2026-10-29T11:47:10.383089831Z
   modified_at: 2026-10-29T11:47:10.383089831Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a187c9-8f82-72d1-8a31-5215a90885ec
+  author: joe
+  content: 'Round 2 review (advisor, 2026-10-29 06:15) for PR-3090 at 52f127b8e4491a74d434166e5728e9ad4e36b352 (40c22ff rework + merge from main). Verify the 7 round-1 findings against the advisor rulings in STORY-HOME-080''s description (''Slice 1 (PR-3090) round-1 advisor rulings''). Pay special attention to #1 (ingest authority equals the ship gate''s check) and #2 (no submitter-controlled ordering). Dual-write is ACCEPTED for slice 1 (deletion is a slice-2 acceptance item) — do not re-raise it. Rule-once: any new minor finding gets bundle-or-accept in the verdict. No cargo; CI at this head.'
+  created_at: 2026-10-29T13:11:36.066409058Z
+  modified_at: 2026-10-29T13:11:36.066409058Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877c-19b8-7861-83cd-857726302b71
