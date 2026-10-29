@@ -2,12 +2,12 @@ id: 01a18967-cddf-7d20-9641-ff761894270a
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-019
 title: 'aida add in a fresh clone of an AIDA project fails with a bare ''requirement ID allocation failed: No such file or directory'' instead of saying to run aida init'
 description: 'Repro (advisor reviewer, 2026-10-29): aida init a project, push to a bare hub, clone it. In the clone aida list works, but aida add --title X --type bug fails: error: "requirement ID allocation failed: No such file or directory (os error 2); no metadata or object was written". After aida init in the clone, add succeeds. work_binding::bootstrap is only called from init (init_cmd.rs handle_init_post_clone) and legacy node.toml migration. Fix: detect the missing work binding before allocation and say ''this clone has no AIDA node binding yet; run aida init (or aida node acquire)''. Consider bootstrapping automatically.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:03.935600642Z
-modified_at: 2026-10-29T21:33:53.013368106Z
+modified_at: 2026-10-29T21:47:32.527518840Z
 req_type: Bug
 comments:
 - id: 01a18995-69f5-7ad1-b227-09b1e1b4e752
@@ -41,6 +41,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a189a1-eb2a-7c80-b5ea-190154579526
+  author: aida-auto-bump
+  timestamp: 2026-10-29T21:47:32.522375534Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a189a1-eb2f-7e21-ac50-abadb920d022
+  timestamp: 2026-10-29T21:47:32.527517030Z
+  agent: implementer
+  commit_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
+  summary: Completed via merge 24b61036
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main
@@ -53,3 +66,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T21:32:57.723060982Z
   implemented_by: joe
+  completed_at: 2026-10-29T21:47:32.522371436Z
+  completion_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
