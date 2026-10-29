@@ -87259,5 +87259,41 @@ operations:
     req_type: Faq
     status: Completed
     priority: Medium
-clock: 6802
+- id: 01a1895f-f2df-7bf2-b82d-5da836549d25
+  target_id: 01a1895f-ef81-75a1-978f-b7c11c7ef359
+  author: aida
+  node_id: '1'
+  lamport: 6803
+  timestamp: 2026-10-29T20:35:29.119407538Z
+  kind: !Create
+    title: Why does a downstream store still list old requirements after its code is synchronized?
+    description: |
+      **Code synchronization does not imply requirement-store synchronization. A canonical store and a private writable overlay need distinct ownership and mutation rules.**
+
+      ## Why
+
+      Two clones can have identical main branches while their aida-store histories differ. A private fork that never receives canonical changes will keep showing obsolete open requirements even when the code implementing them is current. Matching branch names do not prove matching store commits.
+
+      ## How
+
+      Compare the store tips and inspect cache freshness:
+
+      ```bash
+      git -C .aida-store rev-parse HEAD
+      aida cache status
+      ```
+
+      For a canonical mirror, update only through verified fast-forwards from its authority. Preserve an old private fork under an archive ref before deliberate replacement; never union private history into a public-capable store without boundary review.
+
+      ## Caveat
+
+      A writable private overlay should expose canonical requirements as read-only, permit changes only to overlay-owned objects, and rebase onto canonical updates. Merely switching the worktree to a branch named aida-store-work does not implement those guarantees. Until an enforced overlay profile is available and enabled, keep canonical mirrors read-only by operating policy and use a separate private workflow.
+
+      ## See also
+
+      STORY-1741, STORY-1742, BUG-2017.
+    req_type: Faq
+    status: Completed
+    priority: Medium
+clock: 6803
 node_id: '1'
