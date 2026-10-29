@@ -212,6 +212,10 @@ fn fixture() -> Fixture {
         &fx.repo,
         &["push", "-q", "origin", "main", "HEAD:refs/pull/7/head"],
     );
+    // BUG-b6b1278890774ef993d2ebc327862470-013: `aida init` adds a scaffold
+    // commit, and `review record --sha` now refuses anything but the head
+    // under review — so the reviewer's sha is the HEAD just pushed as PR-7.
+    fx.sha = git(&fx.repo, &["rev-parse", "HEAD"]);
     let review = as_advisor(&fx)
         .args([
             "add",

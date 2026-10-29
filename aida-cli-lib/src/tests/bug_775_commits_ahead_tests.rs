@@ -336,6 +336,9 @@ fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
 #[test]
 fn review_record_pr_handshake_honors_explicit_verdict_file() {
     let drive = tempfile::tempdir().unwrap();
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve
+    // to a real commit in the write root.
+    let head = crate::test_git::commit_fixture(drive.path());
     let parent = tempfile::tempdir().unwrap();
     let verdict_file = parent
         .path()
@@ -367,7 +370,7 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
             crate::handle_review_record(
                 "STORY-993",
                 "approved",
-                Some("abc123"),
+                Some(&head),
                 Some("story-993"),
                 Some("looks good"),
                 &[],

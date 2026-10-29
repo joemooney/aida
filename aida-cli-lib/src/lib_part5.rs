@@ -2908,14 +2908,16 @@ pub(crate) fn handle_review_classes(since: Option<&str>, json: bool) -> Result<(
 
 /// BUG-b6b1278890774ef993d2ebc327862470-013: the full sha a typed `aida review record --sha` names, or a
 /// refusal. `given` (a full sha or a prefix) must resolve with `git
-/// rev-parse` in `project_root` and, when the head under review is known,
-/// equal it. An unknown head (a `--pr` whose forge could not be reached)
-/// leaves the resolved commit unchecked against it, as before.
+/// rev-parse` in `project_root` and equal `head`, the head under review, when
+/// one is known. `remedy` is what the refusal tells the caller to do instead;
+/// it differs when `head` is only the checkout's HEAD standing in for a PR
+/// head the forge could not report, where omitting `--sha` cannot help.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
 pub(crate) fn verified_review_sha(
     project_root: &std::path::Path,
     given: &str,
     head: Option<&str>,
+    remedy: &str,
 ) -> Result<String> {
     let head_hint = head
         .map(|h| format!(" (the head under review is {h})"))
@@ -2923,7 +2925,7 @@ pub(crate) fn verified_review_sha(
     let Some(full) = resolve_commit_sha(project_root, given) else {
         anyhow::bail!(
             "refused: `--sha {given}` does not name a commit in this repository{head_hint} — \
-             omit `--sha` to record the head under review; nothing was recorded"
+             {remedy}; nothing was recorded"
         );
     };
     if let Some(head) = head {
@@ -2931,7 +2933,7 @@ pub(crate) fn verified_review_sha(
         if !crate::gate::review_verdict::same_reviewed_sha(&full, &head_full) {
             anyhow::bail!(
                 "refused: `--sha {given}` resolves to {full}, but the head under review is \
-                 {head_full} — review that head, or omit `--sha` to record it; nothing was recorded"
+                 {head_full} — {remedy}; nothing was recorded"
             );
         }
     }
@@ -3017,8 +3019,11 @@ pub(crate) fn handle_review_record_at(
                 .map_err(|e| anyhow::anyhow!(e));
                 match head {
                     Ok(head) => Some(head),
-                    // With `--sha` the forge head only cross-checks a commit
-                    // git has already resolved; without it, it IS the head.
+                    // With `--sha` an unreachable forge is not fatal: the
+                    // head under review falls back to the checkout's HEAD
+                    // below (advisor ruling on BUG-b6b1278890774ef993d2ebc327862470-013), so the typed sha is
+                    // still checked against a commit git resolved. Without
+                    // `--sha` the forge head IS the head, so it must answer.
                     Err(_) if sha.is_some() => None,
                     Err(e) => {
                         return Err(e).with_context(|| {
@@ -3034,11 +3039,24 @@ pub(crate) fn handle_review_record_at(
     } else {
         None
     };
-    // The head under review, in the same order the default has always used.
+    // The head under review, in the same order the default has always used:
+    // the launch envelope's PR head, the forge's PR head, then the checkout.
+    let checkout_stands_in_for_pr =
+        pr.is_some() && envelope_pr_sha.is_none() && forge_pr_sha.is_none();
     let tool_head = envelope_pr_sha
         .or(forge_pr_sha)
         .or_else(|| resolve_commit_sha(&project_root, branch.as_deref().unwrap_or("HEAD")))
         .or_else(|| resolve_commit_sha(&project_root, "HEAD"));
+    // A `--pr` whose forge could not answer is checked against the checkout,
+    // and omitting `--sha` would then fail on that same forge read — so the
+    // refusal must not send the caller there.
+    let remedy = if checkout_stands_in_for_pr {
+        "the forge did not report the PR's head, so the checkout's HEAD stands in for it: \
+         record from the review worktree checked out at the PR head, or retry once the forge \
+         is reachable"
+    } else {
+        "review that head, or omit `--sha` to record it"
+    };
     // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` is the model's copy of a commit id, and one
     // mistyped character discarded a complete review at collection. Resolve
     // it with git and refuse here — at record time, with a clear message —
@@ -3050,6 +3068,7 @@ pub(crate) fn handle_review_record_at(
             &project_root,
             given,
             tool_head.as_deref(),
+            remedy,
         )?),
         None => tool_head.map(|head| resolve_commit_sha(&project_root, &head).unwrap_or(head)),
     };
