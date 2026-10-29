@@ -61,12 +61,12 @@ description: |-
     inbox so a red nightly cannot sit three days unowned. Whichever is chosen, state it.
   - A green cross-platform nightly on main is observed before this is closed - not merely the
     three tests passing locally.
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:25:25.984047465Z
-modified_at: 2026-10-29T06:40:07.287604227Z
+modified_at: 2026-10-29T06:40:10.030233700Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -288,4 +288,12 @@ history:
   timestamp: 2026-10-29T06:40:08.090975669Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18663-312e-75c0-9774-4910592f9945
+  author: joe
+  timestamp: 2026-10-29T06:40:10.030231643Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 execution_mode: drain
