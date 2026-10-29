@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T10:02:07.550162064Z
+modified_at: 2026-10-29T10:28:03.212592507Z
 req_type: Story
 tags:
 - docs:impacted
@@ -184,6 +184,13 @@ comments:
   created_at: 2026-10-29T10:02:07.550158478Z
   modified_at: 2026-10-29T10:02:07.550158478Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18733-d40c-7123-87cd-2d48df7f7eb4
+  author: joe
+  content: 'Review round 2 addressed at 5f0c66dc076: regenerated docs/cli-format-json-audit.md via scripts/generate-format-json-audit.py (adds aida node alias / set / rename / list / show rows). bug_1502_format_json_audit passes locally (9/9); make check-ci-fast 35/35. CI run 40855752729 at 5f0c66d is green: all 7 lanes incl. cli-0, plus Build.'
+  created_at: 2026-10-29T10:28:03.212592507Z
+  modified_at: 2026-10-29T10:28:03.212592507Z
+  session_id: 01a1871d1d5f
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
