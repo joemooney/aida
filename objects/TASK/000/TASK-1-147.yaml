@@ -3,12 +3,12 @@ spec_id: TASK-1-147
 agreed_id: TASK-171
 title: TASK-1279 needs live cross-seat dogfood waves
 description: The code and audit can be completed headlessly, but TASK-1279 acceptance requires two real product/advisor wave permutations and a merge gated by the Codex advisor. No qualifying event evidence was present in this worktree/session, so queue completion would be false. Run and record both waves on TASK-1279.
-status: Approved
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T00:44:07.607583679Z
-modified_at: 2026-10-29T06:44:01.726505747Z
+modified_at: 2026-10-29T06:44:04.457400133Z
 req_type: Task
 tags:
 - dogfood
@@ -43,4 +43,12 @@ history:
   timestamp: 2026-10-29T06:44:02.523620828Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18666-c4e9-7751-92d9-f4971d43ab48
+  author: joe
+  timestamp: 2026-10-29T06:44:04.457398064Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 execution_mode: operator
