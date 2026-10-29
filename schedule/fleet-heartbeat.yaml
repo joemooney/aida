@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: '1 lane (slice-1 rework, 21 files touched, active 01:05); 1 open PR #3089 changes-requested round 1, rework in flight; relays: 4 stale residue on completed specs; human-waits: none; next: delta re-review + ship'
+due_since: 2026-10-29T09:23:38.236055144Z
+due_reason: every 1h
