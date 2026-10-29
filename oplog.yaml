@@ -86394,5 +86394,31 @@ operations:
   timestamp: 2026-10-29T18:19:36.217890818Z
   kind: !SetStatus
     status: Done
-clock: 6742
+- id: 01a188e4-86fb-7ac2-a4f4-139ed6e6d5ff
+  target_id: 01a188e4-7e4d-7e42-802e-87dfe90dfdb5
+  author: aida
+  node_id: '1'
+  lamport: 6743
+  timestamp: 2026-10-29T18:20:40.571336010Z
+  kind: !Create
+    title: 'Review PR-3095: [AI:claude] fix(ci): builder image installs arm64 libc headers; bump tag to 1.92-2 (BUG-b6b1278890774ef993d2ebc327862470-017)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-017`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3095>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-017` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-017
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3095` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6743
 node_id: '1'
