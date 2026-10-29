@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'Reconciled: pushed 3 unpushed orphan-store commits; aida-store mirrored to gitlab (now equal). main equal on origin and gitlab (8e45449d340); the 2026-10-18 ''mirror fanout rejected (diverged)'' finding is a stale failure record, not current drift. Remaining: GitLab v0.16.0 release missing = operator item (re-run tag pipeline).'
+due_since: 2026-10-29T16:09:18.024029045Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-10-29T16:05:13.532966777Z
+  job: hub-drift-guard
+  error: 'exit 1: '
