@@ -50,12 +50,16 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
   BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
+
+
+  ## Slice 1 (PR-3090) ROUND 6 (advisor, 2026-10-29 09:45): make CI green, nothing else
+  Two existing fail-closed tests regressed since 7dac907: review_gates::bug_775_commits_ahead_tests::a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites (bug_775_commits_ahead_tests.rs:701) and gate::review_verdict::review_verdict_tests::task1801_ship_and_phase_gates_refuse_linked_verdicts (review_verdict_tests.rs:2118). Restore their fail-closed behavior: a current verdict path that exists but is unreadable or a link must make ship and phase-3 gates REFUSE, even when the ledger has a readable record. Do not edit the tests' expectations. Fix the rustdoc ordering at lib_part5.rs:951-965 (cosmetic, bundled). Run exactly: cargo test -p aida-cli-lib --lib bug_775_commits_ahead task1801 review_verdict, plus make check-ci-fast.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T16:42:04.836531291Z
+modified_at: 2026-10-29T16:43:17.024238639Z
 req_type: Story
 tags:
 - architecture
@@ -565,6 +569,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1888b-5fd4-7083-b48f-57bd987259ea
+  author: joe
+  timestamp: 2026-10-29T16:43:17.844401622Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
