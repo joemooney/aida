@@ -356,6 +356,15 @@ impl Invocation {
             globals: Some(globals),
             store: None,
         };
+        // Early handlers resolve spec IDs before the store dispatch installs
+        // the node-alias map, so install it here; the per-prompt status
+        // renderers skip it to stay on their latency budget.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        if matches!(self.reg.run, Handler::Early(_))
+            && !matches!(self.reg.name, "statusline" | "statusbar")
+        {
+            crate::spec_arg::ensure_alias_map();
+        }
         match self.reg.run {
             Handler::Early(run) => run(&self.matches, &ctx).map(|()| Flow::Return),
             Handler::Store(run) => run(&self.matches, &ctx),

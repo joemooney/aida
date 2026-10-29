@@ -10,7 +10,8 @@ pub enum TraceCommand {
     /// Add a trace link from code to a requirement
     Add {
         /// Requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         req: String,
 
         /// Path to the source file
@@ -45,7 +46,7 @@ pub enum TraceCommand {
     /// List trace links for a requirement or file
     List {
         /// Requirement ID (UUID or SPEC-ID) - lists all trace links for this requirement
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         req: Option<String>,
 
         /// File path - lists all trace links for this file
@@ -56,7 +57,7 @@ pub enum TraceCommand {
     /// Remove a trace link
     Remove {
         /// Requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
         req: String,
 
         /// Trace link ID to remove

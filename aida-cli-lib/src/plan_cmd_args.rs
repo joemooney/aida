@@ -40,6 +40,7 @@ pub enum PlanCommand {
     // trace:TASK-94 | ai:claude
     Helpers {
         /// SPEC-ID of the requirement to derive reusable helpers for.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// Append the generated section to this plan file instead of
@@ -58,6 +59,7 @@ pub enum PlanCommand {
     Promote {
         /// SPEC-ID to promote. Omit and pass `--all` to sweep every
         /// Approved spec that has a plan file.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// Promote every Approved spec that has a matching plan file.
@@ -84,6 +86,8 @@ pub enum PlanCommand {
     FanOut {
         /// Explicit SPEC-IDs to fan out over. Mutually exclusive with
         /// --batch / --epic; pick exactly one selection mode.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         specs: Vec<String>,
 
         /// Select every Approved spec tagged `batch:NAME`.
@@ -92,7 +96,7 @@ pub enum PlanCommand {
 
         /// Select every Approved spec tagged `parent:ID` (the epic/story
         /// rollup convention).
-        #[clap(long, conflicts_with_all = ["batch", "specs"])]
+        #[clap(long, conflicts_with_all = ["batch", "specs"], value_parser = crate::spec_arg::spec_id)]
         epic: Option<String>,
 
         /// Include low-priority specs in the fan-out. Off by default so
@@ -150,6 +154,7 @@ pub enum PlanCommand {
     // trace:TASK-0418
     Scan {
         /// SPEC-ID (or agreed id / UUID) of the requirement to scan for.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// Attach the scan summary to the spec as a provenance comment.

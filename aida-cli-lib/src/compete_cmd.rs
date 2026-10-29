@@ -1432,6 +1432,8 @@ mod containment_tests {
 #[clap(name = "compete")]
 pub(crate) struct CompeteArgs {
     /// SPEC-ID (or UUID) to run through the vendors.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     /// Comma-separated vendors to run, e.g. `claude,codex`. Headless

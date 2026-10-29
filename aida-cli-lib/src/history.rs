@@ -4888,7 +4888,8 @@ pub(crate) struct HistoryArgs {
     /// Accepts the same forms as `--id` (SPEC-ID, agreed id, or raw
     /// UUID). Not combinable with `--id` — pass one or the other.
     // trace:TASK-1480 | ai:claude
-    #[clap(value_name = "SPEC_ID", conflicts_with = "id")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_name = "SPEC_ID", conflicts_with = "id", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Human event layout: a name (user > project > builtin), or inline when it
@@ -4981,7 +4982,7 @@ pub(crate) struct HistoryArgs {
     // trace:BUG-1474 | ai:claude — global so it parses after `events`, not
     // just before it, matching the documented invocation.
     // trace:TASK-1480 | ai:claude
-    #[clap(long, global = true)]
+    #[clap(long, global = true, value_parser = crate::spec_arg::spec_id)]
     pub id: Option<String>,
 
     /// Only show entries for requirements of this type (functional,

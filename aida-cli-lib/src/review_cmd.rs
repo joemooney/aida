@@ -26,6 +26,8 @@ pub(crate) struct ReviewArgs {
     /// Spec to review (a story, task, or bug id). Resolves its review surface,
     /// runs a reviewer over the diff, and prompts you to decide. Omit
     /// when using a `prompt` / `assemble` subcommand.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Skip the reviewer-agent analysis: just locate + report the

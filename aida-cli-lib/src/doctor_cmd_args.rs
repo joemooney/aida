@@ -21,7 +21,8 @@ pub enum DoctorCommand {
     // trace:TASK-190 | ai:codex
     ShellSubstitutionHoles {
         /// Omit a spec whose own documentation quotes detector examples.
-        #[clap(long, value_name = "SPEC-ID")]
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
         exclude: Vec<String>,
     },
 

@@ -18,6 +18,9 @@ pub enum DrainCommand {
     // trace:STORY-1130 | ai:codex
     Start {
         /// Optional selector: a SPEC id, `next`, `nextN`, or `batch:NAME`.
+        // `next`/`nextN`/`batch:NAME` are not alias-shaped and pass through.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         selector: Option<String>,
         /// Resolve and run against this project instead of the current cwd.
         #[clap(long, value_name = "PATH")]
@@ -61,6 +64,7 @@ pub enum DrainCommand {
     // trace:TASK-1272 | ai:codex
     Resume {
         /// Shelved requirement to resume.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// Emit JSON progress from the underlying drain.
         #[clap(long)]

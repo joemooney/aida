@@ -3695,6 +3695,7 @@ fn run_worktree(
     matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
+    // `add`/`enter` targets arrive canonical (`spec_arg::spec_id` value parser).
     let args = <WorktreeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let wt_cmd = &args.inner;
     return handle_worktree_command(wt_cmd);

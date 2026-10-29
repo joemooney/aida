@@ -1248,7 +1248,9 @@ pub(crate) fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
             });
         if let Some(c) = candidate {
             if !c.is_empty() {
-                return Some(c);
+                // `Added:` prints the display form; callers act on the
+                // canonical id. trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+                return Some(crate::spec_arg::canonical(&c));
             }
         }
     }

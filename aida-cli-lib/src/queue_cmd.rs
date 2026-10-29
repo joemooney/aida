@@ -10020,11 +10020,13 @@ pub(crate) fn standalone_review_plan(
 
 /// STORY-42: case-insensitive match against a requirement's uuid,
 /// spec_id, or agreed_id. trace:STORY-42 | ai:claude
+/// A friendly node alias (`TYPE-<LABEL>-NNN`) matches its canonical id,
+/// literal id first. trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
 pub(crate) fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
     if let Ok(uuid) = uuid::Uuid::parse_str(query) {
         return req.id == uuid;
     }
-    let q = query.to_ascii_uppercase();
+    let q = aida_core::node_alias::expand_or_keep(query).to_ascii_uppercase();
     if let Some(s) = &req.spec_id {
         if s.to_ascii_uppercase() == q {
             return true;
@@ -16998,6 +17000,8 @@ pub(crate) static QUEUE: crate::command_registry::CommandReg =
 pub(crate) struct ReworkArgs {
     /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
     /// specs one keystroke each.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub id: Option<String>,
     /// Also launch a session for the spec.
     #[clap(long)]

@@ -47,6 +47,7 @@ pub enum QuestionsCommand {
     /// pending request unless --force. Requires at least two choices.
     Ask {
         /// The spec (UUID or SPEC-ID) the question is about.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// The self-contained question (no spec re-read needed to answer).
@@ -88,6 +89,7 @@ pub enum QuestionsCommand {
     /// terms, already-built/held specs, and specs with an active lease.
     Clarify {
         /// The spec(s) to clarify. Omit to clarify the swept set.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         specs: Vec<String>,
 
         /// Show which specs would be clarified + the exact `claude` command,
@@ -106,6 +108,7 @@ pub enum QuestionsCommand {
     // trace:TASK-1075 | ai:codex
     Remedy {
         /// The under-specified spec to remedy.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// Show the resolved headless prompt and log path, then exit without
@@ -133,6 +136,7 @@ pub enum QuestionsCommand {
     // trace:STORY-555 | ai:claude
     Answer {
         /// The spec (UUID or SPEC-ID) to answer. Omit for the interactive loop.
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: Option<String>,
 
         /// The chosen option: a 1-based number, or `default`/`recommended`.

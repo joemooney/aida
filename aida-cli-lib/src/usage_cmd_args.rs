@@ -20,6 +20,7 @@ pub enum UsageCommand {
     // trace:TASK-1427 | ai:codex
     Show {
         #[clap(value_name = "SPEC-ID")]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
         /// Comma-separated dimensions: phase,vendor,model,round.
         #[clap(long, default_value = "phase,vendor,round")]

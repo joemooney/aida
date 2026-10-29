@@ -251,7 +251,8 @@ mod bug_678_focus_rollup_tally_tests {
 pub(crate) struct FocusArgs {
     /// The epic or spec to focus on (SPEC-ID / agreed id). Omit to show
     /// the current focus.
-    #[clap(value_name = "SPEC", conflicts_with = "clear")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_name = "SPEC", conflicts_with = "clear", value_parser = crate::spec_arg::spec_id)]
     pub target: Option<String>,
     /// Clear the current focus (remove `.aida/focus`).
     #[clap(long, hide = true)]

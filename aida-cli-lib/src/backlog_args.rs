@@ -48,6 +48,7 @@ pub enum BacklogCommand {
     Analyze {
         /// Comma-separated list of spec IDs to analyze (≥ 2 required).
         #[clap(long, value_name = "CSV")]
+        #[clap(value_parser = crate::spec_arg::spec_id_csv)]
         specs: Option<String>,
         /// Shorthand for `--specs A,B` — analyzes exactly one pair.
         #[clap(long, value_names = ["A", "B"], num_args = 2)]
@@ -63,6 +64,7 @@ pub enum BacklogCommand {
     Groom {
         /// Comma-separated list of spec IDs to groom into the queue.
         #[clap(long, value_name = "CSV")]
+        #[clap(value_parser = crate::spec_arg::spec_id_csv)]
         specs: Option<String>,
         /// Read newline-separated spec IDs from stdin (mutually exclusive
         /// with --specs).

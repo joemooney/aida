@@ -511,6 +511,8 @@ fn unclaim_status(req: &mut Requirement, pr: &PrLookup) {
 #[clap(name = "claim")]
 pub(crate) struct ClaimArgs {
     /// SPEC-ID, agreed-id, or UUID to claim.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 
     /// Optional worktree path to record on the claim (where the fanned
@@ -556,6 +558,8 @@ pub(crate) static CLAIM: crate::command_registry::CommandReg =
 #[clap(name = "unclaim")]
 pub(crate) struct UnclaimArgs {
     /// SPEC-ID, agreed-id, or UUID to unclaim.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_parser = crate::spec_arg::spec_id)]
     pub spec: String,
 }
 

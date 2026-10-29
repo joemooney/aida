@@ -7806,7 +7806,8 @@ pub(crate) struct ShipArgs {
     /// Spec to finish. When omitted, resolved from the current branch
     /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
     /// lease covering this worktree.
-    #[clap(value_name = "SPEC")]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_name = "SPEC", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
 
     /// Commit subject to use when committing uncommitted work. The

@@ -971,7 +971,11 @@ pub(crate) struct ReviewCoverage {
 /// reference, and either wins over a body mention.
 // trace:TASK-1955 | ai:claude (BUG-2208)
 pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverage {
+    // A `(TYPE-<LABEL>-NNN)` trailer names the canonical id, so the review
+    // story files against (and dedups on) that id.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
     let push = |v: &mut Vec<String>, id: String| {
+        let id = crate::spec_arg::canonical(&id);
         if !v.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
             v.push(id);
         }
@@ -1016,6 +1020,11 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     session_id: &str,
     origin: AutoQueueOrigin,
 ) -> AutoQueueOutcome {
+    // Both callers (`aida pr auto-queue-review`, `aida session end`) dispatch
+    // before the store installs the node-alias map; the trailer parsers need
+    // it to file the review story against the canonical id of a
+    // `(TYPE-<LABEL>-NNN)` trailer. trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    crate::spec_arg::ensure_alias_map();
     // TASK-74: short-circuit when the branch shape says "this session
     // never produces a PR" (reviewer session on `pr-N` / `mr-N` etc.).
     // Catches the case before we even call gh, so a reviewer with `gh`

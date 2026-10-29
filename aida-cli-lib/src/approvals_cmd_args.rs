@@ -17,6 +17,7 @@ pub enum ApprovalCommand {
     /// Write a proxy-approval ledger entry as a marked spec comment.
     Add {
         /// Requirement ID (UUID or SPEC-ID)
+        #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
 
         /// Decision being approved, e.g. merge, clear-merge-hold, fork-choice.

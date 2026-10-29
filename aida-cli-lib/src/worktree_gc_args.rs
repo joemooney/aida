@@ -29,7 +29,7 @@ pub enum WorktreeCommand {
     Add {
         /// The epic or spec to scope the worktree to. Also the basis for
         /// the default path slug and branch.
-        #[clap(value_name = "EPIC_OR_SPEC")]
+        #[clap(value_name = "EPIC_OR_SPEC", value_parser = crate::spec_arg::spec_id)]
         target: String,
         /// Override the worktree path (default `~/ai/aida-<slug>`).
         #[clap(long, value_name = "PATH")]
@@ -57,7 +57,7 @@ pub enum WorktreeCommand {
     /// form through eval yourself: `eval "$(aida worktree enter <id>)"`.
     Enter {
         /// The epic or spec whose worktree to enter (created first if missing).
-        #[clap(value_name = "EPIC_OR_SPEC")]
+        #[clap(value_name = "EPIC_OR_SPEC", value_parser = crate::spec_arg::spec_id)]
         target: String,
         /// Override the worktree path (default `~/ai/aida-<slug>`).
         #[clap(long, value_name = "PATH")]
