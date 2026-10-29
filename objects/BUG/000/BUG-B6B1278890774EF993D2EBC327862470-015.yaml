@@ -13,12 +13,12 @@ description: |
   ## Test tier
   LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
   - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T11:57:37.050149457Z
+modified_at: 2026-10-29T12:12:10.031351363Z
 req_type: Bug
 tags:
 - id-allocation
@@ -108,6 +108,15 @@ history:
   timestamp: 2026-10-29T11:57:38.809288192Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18793-25af-7ec0-806f-d77005d35f23
+  author: aida-orchestrator
+  timestamp: 2026-10-29T12:12:10.031369627Z
+  session_id: 01a187870665
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -120,6 +129,14 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T11:56:47.497371016Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: CI green; AC1 code paths routed, but AC2 lacks per-family tests for worktree add, session end --spec, pr auto-queue-review (queue rm/done parse-only), and AC3 audit missed user spec args such as review record <SPEC>.
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-015 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T12:12:10.031351363Z
 interface_changes:
   cli:
   - Spec-scope commands (queue, rework, claim/unclaim, worktree add/enter, session end/start/manifest, plan fan-out, db reconcile-status) accept a friendly node alias TYPE-<LABEL>-NNN and act on the canonical id
