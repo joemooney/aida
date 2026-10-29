@@ -2,13 +2,46 @@ id: 01a188ef-a78a-74d3-afbc-98b15c8f621a
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-018
 title: 'aida show exceeds its 1000 ms budget again: 18 of 74 calls (24%) over, worst 2.6 s, in the 24h before 2026-10-29 14:03Z'
 description: 'performance-guard tripped at 2026-10-29T14:03:45Z (trip evidence performance-guard@2026-10-29T14:03:45.568595227Z): aida show 24.3% over 1000 ms (18/74, tolerance 10%, worst 2606 ms, ceiling 5000 ms not breached, window 24h, lineage-scoped). Third recurrence after BUG-1480 and BUG-2221; BUG-2221''s AC4 (fresh guard telemetry after promotion) stayed open. First step: split the 18 slow calls by whether a cargo build or headless lane was running at the time (both cargo slots were busy most of the window). If the slow calls track load, rule on the budget explicitly (a load-aware budget, or exclude calls made under build load). Otherwise profile the slow path the same way BUG-2221 did. Advisor ruling 2026-10-29: real breach, not a budget change yet.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:32:49.802440083Z
-modified_at: 2026-10-29T21:54:39.671908777Z
+modified_at: 2026-10-29T22:17:28.617420030Z
 req_type: Bug
+comments:
+- id: 01a189bc-9300-7c81-81ce-82c887cb81c5
+  author: joe
+  content: |-
+    ## Implementer diagnosis and fix (claude, 2026-10-29)
+
+    ### Split of the 18 trip-window slow calls (usage.jsonl, 24h before 14:03:45Z, 74 show calls)
+    Dominant phase per call: **lookup 8**, close 5, linkage 4, open 1.
+    - **lookup (8 calls, all on 8e45449 / b74166a, the two newest builds in the window):** 704-758 ms every time. Deterministic, not load: reproduced at load 2.5-4 on live 5fbe1e3 for every node-label form (`BUG-HOME-018`, `BUG-HOME-016`, `STORY-HOME-080`: lookup 739-767 ms), while the canonical form of the same id costs 23-25 ms.
+      - Root cause: since STORY-078 node labels, `show` resolves literal-first. The literal `BUG-HOME-018` misses the cache's spec_id/agreed_id index, and the read then fell through to `GitBackend::get_requirement_by_exact_spec_id`'s agreed-id scan, which reads every object in the store (~4,400). Only then was the alias expansion tried.
+    - **close (5 calls; also frequent after the window on 8c0adc8 / 5fbe1e3, 400-1750 ms):** the `drop(backend)` phase. `.aida/cache.db-wal` was 45 MB. The likely mechanism is SQLite checkpoint-on-close, so it tracks fleet load and WAL size. **Not fixed here.**
+    - **linkage (4) / open (1):** load-variable. Not fixed here.
+
+    ### Fix (commit 521d961ca2d)
+    A READ whose cache index already answered "no match" now reads only the object file the id names, so a spec committed since the snapshot is still found. It no longer runs the store-wide agreed-id scan. Writes (strict path) keep the full authoritative fallback. The budget, tolerance, ceiling and lineage are unchanged.
+    - Hermetic regression: `aida-core db::cached_git_backend::tests::read_lookup_of_a_node_label_skips_the_agreed_id_store_scan`. It counts store scans (no wall-clock assertion); the label still resolves, an uncached committed spec is still found, a miss stays a miss, and a write still scans. The existing STORY-078 literal-wins and BUG-008 / TASK-029 lookup tests also pass.
+
+    ### Before / after: same live store, same shapes, interleaved, load 4.1-5.7
+    | shape | live 5fbe1e3 | fix build | lookup |
+    |---|---|---|---|
+    | `show BUG-HOME-0xx` (human) | 1098-1135 ms | 401-424 ms | 739-758 → 41-44 ms |
+    | `show BUG-HOME-0xx --format json` | 1846-1939 ms | 1148-1170 ms | 745-761 → 42-44 ms |
+
+    ### Guard status: NOT claimed green
+    Removing only the lookup excess takes the old window from 18/74 to 10/74 (13.5%), still over the 10% tolerance. Fresh lineage telemetry needs this build promoted. Two remaining mechanisms:
+    1. **close-phase WAL checkpoint.** Candidate: SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE on read-only command connections, plus bounded WAL growth. This touches cache concurrency, so it needs a ruling.
+    2. **`--format json` linkage.log at ~1,000 ms on positive-history specs.** linkage is complete:true. The raw `git log --all --grep TASK-2347` alone is 688 ms on 5,724 refs with 84 raw matches. This is the positive path BUG-2221 left alone. JSON show stays ~1.15 s at any load.
+
+    (`aida add` cannot allocate IDs inside this sandboxed seat, so these two are recorded here for the advisor to file rather than as draft TASKs.)
+  created_at: 2026-10-29T22:16:39.424511710Z
+  modified_at: 2026-10-29T22:16:39.424511710Z
+  session_id: 01a189a86be7
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1898a-223d-7a12-aa81-a0c628ae69be
   author: joe
@@ -25,6 +58,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a189bd-538a-7242-9f5a-5876784ab382
+  author: joe
+  timestamp: 2026-10-29T22:17:28.714482215Z
+  session_id: 01a189a86be7
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: main
@@ -33,3 +75,7 @@ filed_at:
   aida_build_sha: b74166aba21
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-29T22:17:28.617420030Z
+  implemented_by: joe
