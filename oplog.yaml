@@ -85544,5 +85544,13 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 6686
+- id: 01a187a8-686f-7b52-9036-cc04ce0bec21
+  target_id: 01a187a2-bc88-77f0-a251-15dd79a0c6eb
+  author: aida
+  node_id: '1'
+  lamport: 6687
+  timestamp: 2026-10-29T12:35:23.375484351Z
+  kind: !SetStatus
+    status: Rejected
+clock: 6687
 node_id: '1'
