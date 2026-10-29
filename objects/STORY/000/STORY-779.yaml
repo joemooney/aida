@@ -3,12 +3,12 @@ spec_id: STORY-779
 agreed_id: STORY-779
 title: Build the subsystem registry + routing (steps 2-7 of the ratified design) — DEFERRED behind the noise trigger
 description: 'The ratified subsystem-advisors design (see the four from-ratification ADRs + docs/plans/2026-07-19-subsystem-advisor-routing.md) green-lights building ONLY when the trigger fires. Steps: registry parsing+validation, fixtures, subsystem list/show/explain read surfaces, context focus wiring, routing dry-run, live scoped queues — sequenced read-only-first, each behind review. Mode when it returns: drive for steps 2-4, guided for 5-7.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T01:42:07.154131649Z
-modified_at: 2026-10-29T06:37:34.410388812Z
+modified_at: 2026-10-29T06:37:37.394927625Z
 req_type: Story
 tags:
 - from-ratification
@@ -24,3 +24,11 @@ history:
   timestamp: 2026-10-29T06:37:35.245042376Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18660-dcf2-7e01-b7fc-e05619bf8ef5
+  author: joe
+  timestamp: 2026-10-29T06:37:37.394925813Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
