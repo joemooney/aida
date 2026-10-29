@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-014
 title: Adopted repos lack the contained egress allowlist and reviewer allow entries; contained reviews fail silently
 description: |
   In a repo adopted with `aida init` other than aida itself (aida-relay), contained headless reviewers could not work. (1) .aida/config.toml had no [contained] allowed_hosts, so GitHub was unreachable and verdicts could not be recorded (fixed by hand in aida-relay #99). (2) .claude/settings.json had zero permissions.allow entries, so `aida show`, `git log` etc. were denied (fixed by hand with operator approval). Each failure made the reviewer exit with no verdict and only a terse "permission layer denied N calls" message; three review attempts were lost. Acceptance: `aida init` (and its template-refresh/upgrade path) scaffolds the same [contained] allowed_hosts and reviewer permissions.allow entries the aida repo uses, from the template master; and `aida queue work --role reviewer` preflights a contained launch: if the repo lacks the egress allowlist or the reviewer allow entries, it refuses BEFORE launching, naming the missing config and the command that fixes it. Tests: init scaffolds both; preflight refuses on a repo missing either. Do not widen permissions beyond what the aida repo has.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T03:02:31.871007283Z
-modified_at: 2026-10-29T03:02:43.078864015Z
+modified_at: 2026-10-29T03:03:24.341017107Z
 req_type: Bug
 history:
 - id: 01a1859c-1c86-7760-a7e4-388dc79eb8f8
@@ -19,6 +19,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1859c-bdb5-76b1-90f7-68919a5449b6
+  author: aida-session-start
+  timestamp: 2026-10-29T03:03:24.341016201Z
+  session_id: 2668ad8a-ede4-4393-a3a3-410d9d89930b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: c832ed71e03db1a6c9d1535b2063f6fd36e276a2
   branch: main
