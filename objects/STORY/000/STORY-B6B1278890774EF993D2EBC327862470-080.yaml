@@ -78,7 +78,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T21:23:13.569729306Z
+modified_at: 2026-10-29T22:18:37.478563853Z
 req_type: Story
 tags:
 - architecture
@@ -595,6 +595,20 @@ comments:
   created_at: 2026-10-29T21:19:52.648134108Z
   modified_at: 2026-10-29T21:19:52.648134108Z
   session_id: 01a189653e4a
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a189be-6026-7fb0-9dc2-2fb1edc3b91b
+  author: joe
+  content: |-
+    ## Slice 2 PR opened: #3106 (head 05a4f4d, Refs trailer)
+
+    This seat compiled the handoff WIP and fixed the 9 real failures it found. It also fixed 4 more from the wider filters (review_verdict_display x2, task_1460, and bug_775 handshake: reads only, expectations unchanged).
+
+    Design change for the reviewer: `ledger::hold::fold` no longer voids a pending `release-authorized` on every `hold` event. Instead, `merge_hold_core::append_hold_record` appends an explicit `release-withdrawn` before a real placement. The blanket void hid a fail-open in the story_1687 hold-field matrix: a raw replacement with a changed `pr` field was appended to another PR's ledger. The fixture now writes it to PR 37's ledger.
+
+    Tests not runnable here are listed in the PR body (BUG-1642 hermetic HOME, the bug_1749 binary, the task_2344_q1 tick lock); CI is the gate for them. make check-ci-fast: 35 gates passed. Slice 3 (carry-over proof events and supersedes) is next.
+  created_at: 2026-10-29T22:18:37.478563853Z
+  modified_at: 2026-10-29T22:18:37.478563853Z
+  session_id: 01a1898ba45a
   harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
