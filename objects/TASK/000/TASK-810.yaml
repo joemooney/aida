@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T15:07:53.430982522Z
-modified_at: 2026-10-29T06:44:47.326896141Z
+modified_at: 2026-10-29T06:44:50.505122818Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,6 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
   created_at: 2026-06-14T15:07:56.598725195Z
+- rel_type: SupersededBy
+  target_id: 019ec4ea-1e5e-7202-9226-f19e95def282
+  created_at: 2026-10-29T06:44:50.505118815Z
+  created_by: joe
 history:
 - id: 01a18667-640a-7491-88cc-218a801d850f
   author: joe
@@ -30,3 +34,8 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Superseded
+- id: 01a18667-7f2b-7403-a45f-8faf4ec6079b
+  author: joe
+  timestamp: 2026-10-29T06:44:52.139297912Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
