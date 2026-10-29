@@ -84772,5 +84772,21 @@ operations:
 
       ## Test tier
       LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
-clock: 6627
+- id: 01a1866b-73fd-7483-ac93-64e5491db41e
+  target_id: 01a1865c-b9ac-7fe3-9246-f5e80986f5dc
+  author: aida
+  node_id: '1'
+  lamport: 6628
+  timestamp: 2026-10-29T06:49:11.421925532Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a1866b-74d8-74d0-a0be-844f76542924
+  target_id: 01a1865c-b9ac-7fe3-9246-f5e80986f5dc
+  author: aida
+  node_id: '1'
+  lamport: 6629
+  timestamp: 2026-10-29T06:49:11.640683320Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 6629
 node_id: '1'
