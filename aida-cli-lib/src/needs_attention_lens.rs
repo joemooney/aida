@@ -133,13 +133,9 @@ pub(crate) fn lens_map(
             .find_map(|id| holds.get(&id.to_ascii_uppercase()));
         let rounds = hold
             .filter(|h| new_heads.contains_key(&h.pr))
-            .and_then(|h| {
-                crate::gate::review_verdict::archived_recordings(
-                    &crate::gate::review_verdict::verdict_path(&root, &h.verdict_key),
-                )
-                .ok()
-            })
-            .map_or(0, |recordings| recordings.len());
+            .map_or(0, |h| {
+                crate::gate::review_verdict::recorded_round_count(&root, &h.verdict_key)
+            });
         let modified = DateTime::parse_from_rfc3339(&r.modified_at)
             .ok()
             .map(|t| t.with_timezone(&Utc));

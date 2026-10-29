@@ -313,19 +313,25 @@ pub(crate) fn spec_verdict_fallback_for_phase3(
     current_head: Option<&str>,
 ) -> Result<Option<auto_complete::ReviewerOutcome>, auto_complete::PhaseFailure> {
     let path = crate::gate::review_verdict::verdict_path(project_root, spec);
+    // M1: the spec record may be on the gate ledger only (a collected
+    // verdict); its freshness is the ledger's order time, a file's its mtime.
     // trace:TASK-1801 | ai:claude
-    let Some(mtime) = crate::gate::review_verdict::verdict_file_modified(&path) else {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let Some(current) = crate::gate::review_verdict::current_verdict_at(&path) else {
         return Ok(None);
     };
-    if mtime < reviewer_started_at {
+    if current
+        .written_at
+        .is_none_or(|written| written < reviewer_started_at)
+    {
         return Ok(None); // stale: recorded by some earlier review, not this one
     }
     // TASK-1460: a later round at another commit may have replaced the spec
     // record; the archived round for THIS head (fresh this session) still
-    // answers. The current file is consulted first and its error stands when
-    // no such archive exists.
+    // answers. The current record is consulted first and its error stands
+    // when no such archive exists.
     // trace:TASK-1460 | ai:claude
-    let outcome = match read_verdict_file_for_head(&path, current_head) {
+    let outcome = match approval_covers_head(&current.body, current_head) {
         Ok(outcome) => outcome,
         Err(e) => {
             phase3_head_archive_fallback(&path, current_head, reviewer_started_at).ok_or(e)?
@@ -581,20 +587,36 @@ pub(crate) fn phase3_head_archive_fallback(
     // current file already at `head` keep their original error (PRIN-5,
     // TASK-1169) — an older archived approval must never paper over them.
     // trace:TASK-1460 | ai:claude
-    read_verdict_file(path).ok()?;
-    let current_sha = crate::gate::review_verdict::read_verdict_body(path)
-        .ok()
-        .and_then(|b| crate::gate::review_verdict::parse_recorded_verdict(&b))
+    let current = crate::gate::review_verdict::current_verdict_at(path)?;
+    outcome_of_verdict_body(&current.body).ok()?;
+    let current_sha = crate::gate::review_verdict::parse_recorded_verdict(&current.body)
         .and_then(|v| v.reviewed_sha)?;
     if crate::gate::review_verdict::same_reviewed_sha(&current_sha, head) {
         return None;
     }
-    let archived = crate::gate::review_verdict::archived_verdict_file_for_sha(path, head)?;
-    let mtime = crate::gate::review_verdict::verdict_file_modified(&archived)?;
-    if mtime < started_at {
+    if let Some(archived) = crate::gate::review_verdict::archived_verdict_file_for_sha(path, head) {
+        let mtime = crate::gate::review_verdict::verdict_file_modified(&archived)?;
+        if mtime < started_at {
+            return None;
+        }
+        return read_verdict_file_for_head(&archived, Some(head)).ok();
+    }
+    // M1: the ledger keeps every round; its newest record at `head`, written
+    // during this session, answers as the archive would.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let (root, key) = crate::gate::review_verdict::canonical_verdict_key(path)?;
+    let event = crate::gate::ledger::project::verdict_events_at(&root, &key, head)
+        .into_iter()
+        .next()?;
+    let written = crate::gate::review_verdict::ledger_order_time(&event)?;
+    if std::time::SystemTime::from(written) < started_at {
         return None;
     }
-    read_verdict_file_for_head(&archived, Some(head)).ok()
+    approval_covers_head(
+        &serde_json::to_string(event.verdict_record()?).ok()?,
+        Some(head),
+    )
+    .ok()
 }
 
 #[cfg(test)]
@@ -697,33 +719,69 @@ mod task_1460_phase3_archive_tests {
 pub(crate) fn read_verdict_file(
     path: &std::path::Path,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
-    // Anchored read: a linked verdict directory or a hard-linked file is no
-    // verdict at all, so phase 4 can never merge on redirected evidence.
-    // trace:TASK-1801 | ai:claude
-    let body = crate::gate::review_verdict::read_verdict_body(path).map_err(|_| {
+    read_verdict_file_since(path, None)
+}
+
+/// The verdict body for `path` as the gates see it: the newer of the file
+/// and the change's gate ledger (M1: a collected verdict is on the ledger
+/// only). A ledger record written before `since` is a previous round, not
+/// this review's answer, and does not count: the handshake clears the file
+/// before the reviewer runs, and the ledger is not cleared.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn handshake_body(
+    path: &std::path::Path,
+    since: Option<std::time::SystemTime>,
+) -> Result<String, auto_complete::PhaseFailure> {
+    let no_verdict = || {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
             "the reviewer session produced no verdict file — the review did not complete",
         )
-    })?;
-    if let Some(current_sha) = crate::gate::review_verdict::parse_recorded_verdict(&body)
+    };
+    // Anchored read: a linked verdict directory or a hard-linked file is no
+    // verdict at all, so phase 4 can never merge on redirected evidence.
+    // trace:TASK-1801 | ai:claude
+    let current = crate::gate::review_verdict::current_verdict_at(path).ok_or_else(no_verdict)?;
+    let stale = since.is_some_and(|since| current.written_at.is_none_or(|at| at < since));
+    if current.source.is_ledger() && stale {
+        return Err(no_verdict());
+    }
+    Ok(current.body)
+}
+
+/// [`read_verdict_file`], counting a gate-ledger record only when it was
+/// written at or after `since` (the reviewer session's start).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn read_verdict_file_since(
+    path: &std::path::Path,
+    since: Option<std::time::SystemTime>,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    outcome_of_verdict_body(&handshake_body(path, since)?)
+}
+
+/// The phase-3 outcome a verdict body carries.
+pub(crate) fn outcome_of_verdict_body(
+    body: &str,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    if let Some(current_sha) = crate::gate::review_verdict::parse_recorded_verdict(body)
         .and_then(|recorded| recorded.reviewed_sha)
     {
-        crate::gate::review_verdict::reconcile_artifacts_for_sha([body.as_str()], &current_sha)
-            .map_err(|reason| {
+        crate::gate::review_verdict::reconcile_artifacts_for_sha([body], &current_sha).map_err(
+            |reason| {
                 auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoVerdict,
                     format!("{reason} — review evidence cannot be proven safe"),
                 )
-            })?;
+            },
+        )?;
     }
-    if let Some(conflict) = crate::gate::review_verdict::verdict_conflict_for_current_sha(&body) {
+    if let Some(conflict) = crate::gate::review_verdict::verdict_conflict_for_current_sha(body) {
         return Err(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
             format!("{conflict} — refusing to select a winner; reconcile the independent reviews"),
         ));
     }
-    let value: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|e| {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
             format!("the verdict file is not valid JSON: {e}"),
@@ -773,20 +831,36 @@ pub(crate) fn read_verdict_file_for_head(
     path: &std::path::Path,
     current_head: Option<&str>,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
-    let outcome = read_verdict_file(path)?;
+    read_verdict_file_for_head_since(path, current_head, None)
+}
+
+/// [`read_verdict_file_for_head`], counting a gate-ledger record only when
+/// it was written at or after `since` (see [`read_verdict_file_since`]).
+/// The outcome and its provenance come from the same body.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn read_verdict_file_for_head_since(
+    path: &std::path::Path,
+    current_head: Option<&str>,
+    since: Option<std::time::SystemTime>,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    let body = handshake_body(path, since)?;
+    approval_covers_head(&body, current_head)
+}
+
+/// The outcome `body` carries, with an approval proven to cover
+/// `current_head`.
+fn approval_covers_head(
+    body: &str,
+    current_head: Option<&str>,
+) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+    let outcome = outcome_of_verdict_body(body)?;
     if !matches!(
         outcome,
         auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved)
     ) {
         return Ok(outcome);
     }
-    let body = crate::gate::review_verdict::read_verdict_body(path).map_err(|e| {
-        auto_complete::PhaseFailure::of(
-            auto_complete::FailureKind::NoVerdict,
-            format!("could not re-read approval provenance: {e}"),
-        )
-    })?;
-    let recorded = serde_json::from_str::<serde_json::Value>(&body)
+    let recorded = serde_json::from_str::<serde_json::Value>(body)
         .ok()
         .and_then(|v| {
             v.get("reviewed_sha")

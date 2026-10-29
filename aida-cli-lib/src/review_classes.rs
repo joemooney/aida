@@ -263,12 +263,36 @@ pub fn collect_class_report(
     let mut seen: HashSet<(String, String, String, String)> = HashSet::new();
     let mut acc: BTreeMap<String, ClassAcc> = BTreeMap::new();
     let mut report = ClassReport::default();
-    for (key, path) in files {
-        // trace:TASK-1801 | ai:claude
-        let Some(round) = crate::gate::review_verdict::read_verdict_body(&path)
-            .ok()
-            .and_then(|b| serde_json::from_str::<RoundView>(&b).ok())
-        else {
+    // trace:TASK-1801 | ai:claude
+    let mut bodies: Vec<(String, String)> = files
+        .into_iter()
+        .filter_map(|(key, path)| {
+            Some((
+                key,
+                crate::gate::review_verdict::read_verdict_body(&path).ok()?,
+            ))
+        })
+        .collect();
+    // M1: every verdict on the gate ledger is a round too (a collected
+    // verdict is there only); the `seen` key counts a round recorded in both
+    // places once. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let root = verdict_dir
+        .parent()
+        .filter(|aida| aida.file_name().is_some_and(|n| n == ".aida"))
+        .and_then(Path::parent);
+    if let Some(root) = root {
+        for event in crate::gate::ledger::project::all_verdict_events(root) {
+            let key = event.spec.clone().unwrap_or_else(|| event.change.clone());
+            if let Some(body) = event
+                .verdict_record()
+                .and_then(|r| serde_json::to_string(r).ok())
+            {
+                bodies.push((key, body));
+            }
+        }
+    }
+    for (key, body) in bodies {
+        let Some(round) = serde_json::from_str::<RoundView>(&body).ok() else {
             continue;
         };
         let mut stack = vec![round];

@@ -33,6 +33,71 @@ struct SpecIndex {
     changes: Vec<String>,
 }
 
+/// Every key the ledger holds verdicts under, read from `start`: each
+/// change with a ledger file (`PR-<N>`) and each indexed spec, sorted. A
+/// reader that enumerates the legacy verdict directory unions these in, so
+/// a ledger-only verdict (a collected review) is not skipped.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn recorded_keys(start: &Path) -> Vec<String> {
+    let Ok(root) = store_root(start) else {
+        return Vec::new();
+    };
+    let dir = ledger_dir(&root);
+    let stems = |dir: PathBuf, ext: &str| -> Vec<String> {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some(ext))
+            .filter_map(|p| Some(p.file_stem()?.to_str()?.to_string()))
+            .collect()
+    };
+    let mut keys: Vec<String> = stems(dir.clone(), "jsonl")
+        .into_iter()
+        .filter_map(|k| ChangeKey::parse(&k).map(|c| c.as_key()))
+        .chain(
+            stems(dir.join("by-spec"), "json")
+                .into_iter()
+                .filter_map(|k| spec_key(&k)),
+        )
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+/// [`recorded_keys`] unioned with the stems of the legacy verdict files
+/// `file_keys` (case-insensitively), sorted: the key set a directory-
+/// scanning reader walks.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn keys_with_ledger(start: &Path, file_keys: Vec<String>) -> Vec<String> {
+    let mut keys = file_keys;
+    for key in recorded_keys(start) {
+        if !keys.iter().any(|k| k.eq_ignore_ascii_case(&key)) {
+            keys.push(key);
+        }
+    }
+    keys.sort();
+    keys
+}
+
+/// Every verdict record on the ledger, with its change and seq, in key
+/// order: what a corpus scan (finding classes, the verdict audit) adds to
+/// the legacy files it walks.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
+    let Ok(root) = store_root(start) else {
+        return Vec::new();
+    };
+    recorded_keys(&root)
+        .into_iter()
+        .filter_map(|k| ChangeKey::parse(&k))
+        .flat_map(|change| events(&root, change))
+        .filter(|e| e.verdict_record().is_some())
+        .collect()
+}
+
 /// The changes the ledger has recorded `spec` against. A derived cache,
 /// rebuilt from events; never the place state lives.
 pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {

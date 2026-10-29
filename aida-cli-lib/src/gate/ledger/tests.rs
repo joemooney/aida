@@ -821,6 +821,296 @@ fn retained_history_includes_the_ledger_rounds() {
     );
 }
 
+/// Round 4, finding 1: `aida review verdict <KEY> --json` prints the record
+/// the gates weigh and names its source: the ledger's record when the key is
+/// ledger-only or the file is a previous round, the file when it is newer.
+#[test]
+fn review_verdict_json_prints_the_selected_record_and_its_source() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let show = |root: &Path| {
+        crate::review_verdict_show_body(root, "PR-44", |_| rv::TipRelation::AtReviewedSha)
+            .map(|(_, value, _)| value)
+    };
+    assert!(show(&root).is_none());
+
+    let mut collected = record("request-changes", &ts(-60), None);
+    collected.insert("summary".into(), "collected round".into());
+    ledger_holds(&root, ChangeKey::pr(44), collected);
+    let only_ledger = show(&root).unwrap();
+    assert_eq!(only_ledger["verdict"], "request-changes", "{only_ledger}");
+    assert_eq!(only_ledger["summary"], "collected round");
+    assert_eq!(only_ledger["record_source"]["kind"], "gate-ledger");
+    assert!(only_ledger["record_source"]["location"]
+        .as_str()
+        .unwrap()
+        .contains("gate-ledger"));
+    assert!(only_ledger["actionability"].is_string());
+
+    file_holds(&root, "PR-44", &record("approved", &ts(-3600), None));
+    let stale_file = show(&root).unwrap();
+    assert_eq!(stale_file["verdict"], "request-changes", "{stale_file}");
+    assert_eq!(stale_file["record_source"]["kind"], "gate-ledger");
+
+    file_holds(&root, "PR-44", &record("approved", &ts(0), None));
+    let newer_file = show(&root).unwrap();
+    assert_eq!(newer_file["verdict"], "approved", "{newer_file}");
+    assert_eq!(newer_file["record_source"]["kind"], "file");
+}
+
+/// Round 4, finding 3 (regression): a contained review's spec record is
+/// collected onto the ledger only; its non-blocking findings are still read
+/// for filing as successors when the spec completes.
+#[test]
+fn a_ledger_only_spec_record_still_files_its_findings_on_completion() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    assert!(crate::findings_gate::completion_verdict(&root, "STORY-45").is_none());
+    let mut rec = record("approved", &ts(-60), None);
+    rec.insert(
+        "findings".into(),
+        serde_json::json!(["[minor] rename the helper"]),
+    );
+    store::append(
+        &root,
+        ChangeKey::pr(45),
+        vec![verdict(ChangeKey::pr(45), Some("STORY-45"), rec)],
+    )
+    .unwrap();
+    assert!(!rv::verdict_path(&root, "STORY-45").exists());
+    let v = crate::findings_gate::completion_verdict(&root, "STORY-45")
+        .expect("the ledger's spec record is read");
+    let todo =
+        crate::findings_gate::findings_needing_a_successor(&v, &std::collections::HashSet::new());
+    assert_eq!(todo.len(), 1, "{todo:?}");
+    assert_eq!(todo[0].0, "[minor] rename the helper");
+}
+
+/// The PR and spec records `aida human` weighs for PR-46 / STORY-46.
+fn human_approved(root: &Path) -> bool {
+    let req = aida_core::Requirement::new("t".into(), "d".into());
+    crate::human::spec_review_approved(root, &req, "STORY-46", 46)
+}
+
+/// Round 4, finding 4: where the ledger's record supersedes the file, the
+/// file is not a candidate at all, so a stale request-changes file with a
+/// later mtime cannot block a newer ledger approval; a newer file still
+/// answers.
+#[test]
+fn awaiting_you_drops_a_file_the_ledger_supersedes() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    ledger_holds(&root, ChangeKey::pr(46), record("approved", &ts(-60), None));
+    // Written after the ledger record (later mtime), but an older round.
+    file_holds(&root, "PR-46", &record("request-changes", &ts(-3600), None));
+    assert!(human_approved(&root));
+
+    file_holds(&root, "PR-46", &record("request-changes", &ts(0), None));
+    assert!(!human_approved(&root));
+}
+
+/// Round 4, finding 2: directory-scanning readers walk the ledger's keys
+/// too, and the phase-3 handshake reads a collected verdict written during
+/// the review but not an earlier round left on the ledger.
+#[test]
+fn scanning_and_handshake_readers_see_ledger_only_verdicts() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    store::append(
+        &root,
+        ChangeKey::pr(47),
+        vec![
+            verdict(
+                ChangeKey::pr(47),
+                None,
+                record("request-changes", &ts(-120), None),
+            ),
+            verdict(
+                ChangeKey::pr(47),
+                Some("STORY-47"),
+                record("request-changes", &ts(-120), None),
+            ),
+        ],
+    )
+    .unwrap();
+    let listed: Vec<_> = rv::list_active_verdicts(&root)
+        .into_iter()
+        .map(|(k, v)| (k, v.kind))
+        .collect();
+    assert_eq!(
+        listed,
+        [
+            ("PR-47".to_string(), rv::VerdictKind::RequestChanges),
+            ("STORY-47".to_string(), rv::VerdictKind::RequestChanges)
+        ]
+    );
+
+    let path = rv::verdict_path(&root, "PR-47");
+    let before = std::time::SystemTime::now() - std::time::Duration::from_secs(600);
+    let after = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
+    assert!(matches!(
+        crate::phase_gates::read_verdict_file_since(&path, Some(before)),
+        Ok(crate::auto_complete::ReviewerOutcome::Verdict(
+            crate::auto_complete::Verdict::RequestChanges
+        ))
+    ));
+    assert!(
+        crate::phase_gates::read_verdict_file_since(&path, Some(after)).is_err(),
+        "a ledger round older than the review session is not its answer"
+    );
+    assert!(crate::human::pr_has_local_verdict(&root, 47));
+    assert!(crate::db_reconcile::read_review_verdict_for_record(&root, "STORY-47").is_some());
+}
+
+/// Round 3 ruling: no reader opens a legacy verdict file directly. Non-test
+/// calls of the file-reading primitives are allowed in the storage owner
+/// (`gate/review_verdict.rs`: the read-through itself, the writers' own
+/// read-modify-write, collection from a seat clone) and the ledger's legacy
+/// importer; anywhere else only as listed, each with its reason. Every other
+/// reader goes through `current_verdict` / `read_recorded_verdict` /
+/// `ledger::project`.
+#[test]
+fn legacy_verdict_files_are_read_only_through_the_ledger_projection() {
+    const PRIMITIVES: &[&str] = &[
+        "read_verdict_body",
+        "archived_recordings",
+        "archived_verdict_file_for_sha",
+        "verdict_file_for_sha",
+        "verdict_file_modified",
+    ];
+    const SANCTIONED: &[&str] = &["gate/review_verdict.rs", "gate/ledger/legacy.rs"];
+    const ALLOWED: &[(&str, &str, usize, &str)] = &[
+        (
+            "gate/ship.rs",
+            "read_verdict_body",
+            1,
+            "merge-gate corpus: weighs each file against the ledger (ledger_supersedes)",
+        ),
+        (
+            "gate/merge_hold_core.rs",
+            "read_verdict_body",
+            1,
+            "merge-chokepoint corpus: weighs each file against the ledger (ledger_supersedes)",
+        ),
+        (
+            "gate/rework_hold_release.rs",
+            "read_verdict_body",
+            1,
+            "an unreadable arming file must fail closed; the body then goes through current_verdict_body",
+        ),
+        (
+            "gate/rework_hold_release.rs",
+            "archived_recordings",
+            1,
+            "retained history: the archive plus the ledger's rounds (RetainedHistory::with_ledger)",
+        ),
+        (
+            "review_classes.rs",
+            "read_verdict_body",
+            1,
+            "finding-class corpus over every legacy round; the ledger's records are added beside them",
+        ),
+        (
+            "phase_gates.rs",
+            "read_verdict_body",
+            2,
+            "BUG-809 sibling sweep: evidence files in other checkouts, reconciled before publishing",
+        ),
+        (
+            "phase_gates.rs",
+            "verdict_file_modified",
+            2,
+            "freshness of a sibling checkout's file and of a per-commit archive",
+        ),
+        (
+            "phase_gates.rs",
+            "archived_verdict_file_for_sha",
+            1,
+            "phase-3 per-commit fallback; the ledger's round at the head answers when there is no archive",
+        ),
+    ];
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut found: Vec<(String, &str, usize)> = Vec::new();
+    for (path, body) in non_test_sources() {
+        let rel = path
+            .strip_prefix(&src)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        if SANCTIONED.contains(&rel.as_str()) {
+            continue;
+        }
+        let body = without_test_modules(body);
+        for primitive in PRIMITIVES {
+            let n = call_sites(&body, primitive);
+            if n > 0 {
+                found.push((rel.clone(), primitive, n));
+            }
+        }
+    }
+    for (file, primitive, n) in &found {
+        let allowed = ALLOWED
+            .iter()
+            .find(|(f, p, _, _)| f == file && p == primitive)
+            .map_or(0, |(_, _, n, _)| *n);
+        assert!(
+            *n <= allowed,
+            "{file} calls {primitive} {n} time(s) (allowed {allowed}): read verdicts through current_verdict / read_recorded_verdict / gate::ledger::project, not the legacy file"
+        );
+    }
+}
+
+/// `src` with every `#[cfg(test)] mod … { … }` block removed (braces
+/// counted naively), so inline test modules do not count as callers.
+fn without_test_modules(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut rest = src;
+    while let Some(at) = rest.find("#[cfg(test)]") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "#[cfg(test)]".len()..];
+        let head = after.trim_start();
+        let is_mod = head.starts_with("mod ")
+            || head.starts_with("pub mod ")
+            || head.starts_with("pub(crate) mod ")
+            || head.starts_with("#[");
+        let open = after.find(['{', ';']);
+        match open {
+            Some(i) if is_mod && after.as_bytes()[i] == b'{' => {
+                let mut depth = 0usize;
+                let mut end = after.len();
+                for (j, b) in after.bytes().enumerate().skip(i) {
+                    match b {
+                        b'{' => depth += 1,
+                        b'}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                end = j + 1;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                rest = &after[end..];
+            }
+            _ => {
+                out.push_str("#[cfg(test)]");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+#[test]
+fn test_modules_are_stripped_but_code_after_them_is_kept() {
+    let src = "fn a() { read_verdict_body(x); }\n#[cfg(test)]\nmod t { fn b() { read_verdict_body(y); } }\nfn c() { read_verdict_body(z); }\n#[cfg(test)]\nuse foo;\n";
+    let kept = without_test_modules(src);
+    assert_eq!(call_sites(&kept, "read_verdict_body"), 2, "{kept}");
+    assert!(kept.contains("use foo;"));
+}
+
 /// Every non-test source file under `src/` with its body, read once per
 /// test process and shared by both ratchets (they scan ~1,000 files).
 fn non_test_sources() -> &'static [(PathBuf, String)] {

@@ -1627,15 +1627,17 @@ impl RealPhaseDriver {
         // it, then let a fresh archived verdict AT the head answer when the
         // current file does not. trace:TASK-1460 | ai:claude
         let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
-        let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref())
-            .or_else(|e| {
-                phase3_head_archive_fallback(
-                    &verdict_path,
-                    gate_head_sha.as_deref(),
-                    gate_started_at,
-                )
+        // M1: a ledger record counts only when written during this gate run.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let outcome = match crate::phase_gates::read_verdict_file_for_head_since(
+            &verdict_path,
+            gate_head_sha.as_deref(),
+            Some(gate_started_at),
+        )
+        .or_else(|e| {
+            phase3_head_archive_fallback(&verdict_path, gate_head_sha.as_deref(), gate_started_at)
                 .ok_or(e)
-            }) {
+        }) {
             Ok(o) => o,
             Err(primary_failure) => {
                 if verdict_path.is_file() {

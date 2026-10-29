@@ -1036,18 +1036,7 @@ pub(crate) fn current_verdict_body(
     key: &str,
     file_body: Option<String>,
 ) -> Option<String> {
-    let parsed = file_body.as_deref().map(parse_recorded_verdict);
-    if matches!(parsed, Some(None)) {
-        return file_body;
-    }
-    let event = crate::gate::ledger::project::newest_verdict_event(start, key);
-    match event {
-        Some(event) if ledger_supersedes(parsed.flatten().as_ref(), &event) => event
-            .verdict_record()
-            .and_then(|r| serde_json::to_string(r).ok())
-            .or(file_body),
-        _ => file_body,
-    }
+    choose_current(start, key, verdict_path(start, key), file_body).map(|c| c.body)
 }
 
 /// [`current_verdict_body`] for the verdict file at `path`
@@ -1055,10 +1044,113 @@ pub(crate) fn current_verdict_body(
 /// nor the ledger holds a record.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn current_verdict_body_at(path: &Path) -> Option<String> {
+    current_verdict_at(path).map(|c| c.body)
+}
+
+/// Where the record a reader weighed came from.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VerdictSource {
+    /// The legacy verdict file at this path.
+    File(PathBuf),
+    /// Event `seq` on the change's gate ledger file.
+    Ledger { file: PathBuf, seq: u64 },
+}
+
+impl VerdictSource {
+    /// `path` for a file, `path#seq` for a ledger event.
+    pub(crate) fn display(&self) -> String {
+        match self {
+            Self::File(path) => path.display().to_string(),
+            Self::Ledger { file, seq } => format!("{}#{seq}", file.display()),
+        }
+    }
+
+    pub(crate) fn is_ledger(&self) -> bool {
+        matches!(self, Self::Ledger { .. })
+    }
+}
+
+/// The record a single-key reader weighs ([`current_verdict_body`]'s
+/// choice), with where it came from and when it counts as written: the
+/// file's mtime, or the ledger event's primary-side order time
+/// ([`ledger_order_time`]).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct CurrentVerdict {
+    pub body: String,
+    pub source: VerdictSource,
+    pub written_at: Option<std::time::SystemTime>,
+}
+
+/// The current verdict for `key`, read from `start` (any checkout sharing
+/// the ledger): the newer of the legacy file and the ledger.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict(start: &Path, key: &str) -> Option<CurrentVerdict> {
+    let path = verdict_path(start, key);
+    let file_body = read_verdict_body(&path).ok();
+    choose_current(start, key, path, file_body)
+}
+
+/// [`current_verdict`] for the verdict file at `path`. Only the canonical
+/// layout `<root>/.aida/review-verdicts/<KEY>.json` has a ledger
+/// counterpart; any other path (a per-commit archive, a sibling checkout's
+/// file) is read as the file alone.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn current_verdict_at(path: &Path) -> Option<CurrentVerdict> {
     let file_body = read_verdict_body(path).ok();
-    let key = path.file_stem()?.to_str()?;
-    let root = path.parent()?.parent()?.parent()?;
-    current_verdict_body(root, key, file_body)
+    match canonical_verdict_key(path) {
+        Some((root, key)) => choose_current(&root, &key, path.to_path_buf(), file_body),
+        None => file_body.map(|body| CurrentVerdict {
+            body,
+            written_at: verdict_file_modified(path),
+            source: VerdictSource::File(path.to_path_buf()),
+        }),
+    }
+}
+
+/// The root and key of a verdict path in the canonical layout.
+pub(crate) fn canonical_verdict_key(path: &Path) -> Option<(PathBuf, String)> {
+    let key = path.file_stem()?.to_str()?.to_string();
+    let dir = path.parent()?;
+    let aida = dir.parent()?;
+    if dir.file_name()? != "review-verdicts" || aida.file_name()? != ".aida" {
+        return None;
+    }
+    Some((aida.parent()?.to_path_buf(), key))
+}
+
+fn choose_current(
+    start: &Path,
+    key: &str,
+    path: PathBuf,
+    file_body: Option<String>,
+) -> Option<CurrentVerdict> {
+    let parsed = file_body.as_deref().map(parse_recorded_verdict);
+    let from_file = |body: String| CurrentVerdict {
+        body,
+        written_at: verdict_file_modified(&path),
+        source: VerdictSource::File(path.clone()),
+    };
+    if matches!(parsed, Some(None)) {
+        return file_body.map(from_file);
+    }
+    let ledger = crate::gate::ledger::project::newest_verdict_event(start, key)
+        .filter(|event| ledger_supersedes(parsed.flatten().as_ref(), event))
+        .and_then(|event| {
+            let body = serde_json::to_string(event.verdict_record()?).ok()?;
+            let change = crate::gate::ledger::ChangeKey::parse(&event.change)?;
+            let store = crate::gate::ledger::store_root(start).ok()?;
+            Some(CurrentVerdict {
+                body,
+                written_at: ledger_order_time(&event).map(std::time::SystemTime::from),
+                source: VerdictSource::Ledger {
+                    file: crate::gate::ledger::store::ledger_file(&store, change),
+                    seq: event.seq,
+                },
+            })
+        });
+    ledger.or_else(|| file_body.map(from_file))
 }
 
 /// Read the recorded verdict trying several id forms (agreed id, spec id) —
@@ -2899,24 +2991,73 @@ pub fn short_sha(sha: &str) -> &str {
     }
 }
 
-pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
+/// How many review rounds `key` has: the per-commit archive's recordings
+/// and the gate ledger's verdict records (M1: a collected round is on the
+/// ledger only), a round recorded in both places counted once.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn recorded_round_count(project_root: &Path, key: &str) -> usize {
+    let identity = |v: &serde_json::Value| {
+        let field = |k: &str| {
+            v.get(k)
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+        (
+            field("reviewed_sha"),
+            field("recorded_at"),
+            field("verdict"),
+        )
     };
-    let mut out: Vec<(String, RecordedVerdict)> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
-        .filter_map(|p| {
-            let spec = p.file_stem()?.to_str()?.to_string();
-            let body = read_verdict_body(&p).unwrap_or_default();
-            let verdict = parse_recorded_verdict(&body)?;
-            Some((spec, verdict))
+    let mut seen = std::collections::HashSet::new();
+    archived_recordings(&verdict_path(project_root, key))
+        .unwrap_or_default()
+        .iter()
+        .map(identity)
+        .chain(
+            crate::gate::ledger::project::verdict_records(project_root, key)
+                .into_iter()
+                .map(|r| identity(&serde_json::Value::Object(r))),
+        )
+        .filter(|id| seen.insert(id.clone()))
+        .count()
+}
+
+/// Every key's current verdict (`aida review list`): each legacy file's key
+/// and each key the gate ledger holds, read through [`current_verdict`] so a
+/// ledger-only verdict is listed and a stale file does not hide a newer one.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
+    let mut out: Vec<(String, RecordedVerdict)> = verdict_keys(project_root)
+        .into_iter()
+        .filter_map(|key| {
+            let verdict = parse_recorded_verdict(&current_verdict(project_root, &key)?.body)?;
+            Some((key, verdict))
         })
         .collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
+}
+
+/// Every key with a verdict: the stems of the top-level legacy files under
+/// `.aida/review-verdicts/` unioned with the keys the gate ledger holds.
+/// Directory-scanning readers walk this instead of the directory.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn verdict_keys(project_root: &Path) -> Vec<String> {
+    let dir = verdict_path(project_root, "x")
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    let file_keys = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|p| Some(p.file_stem()?.to_str()?.to_string()))
+        .collect();
+    crate::gate::ledger::project::keys_with_ledger(project_root, file_keys)
 }
 
 // STORY-1889: moved from `queue_cmd.rs`.

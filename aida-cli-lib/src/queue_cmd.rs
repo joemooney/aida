@@ -10674,16 +10674,16 @@ pub(crate) fn rework_findings_block_for_spec(
         }
     }
 
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let mut blocking = std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
-        .filter_map(|path| {
-            let body = crate::gate::review_verdict::read_verdict_body(&path).ok()?;
-            let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body)?;
-            verdict.kind.blocks_done().then_some((path, verdict))
+    // M1: every key with a verdict, the ledger's included, each read as the
+    // gates weigh it. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut blocking = crate::gate::review_verdict::list_active_verdicts(project_root)
+        .into_iter()
+        .filter(|(_, verdict)| verdict.kind.blocks_done())
+        .map(|(key, verdict)| {
+            (
+                crate::gate::review_verdict::verdict_path(project_root, &key),
+                verdict,
+            )
         })
         .collect::<Vec<_>>();
     blocking.sort_by(|a, b| a.0.cmp(&b.0));
@@ -13887,11 +13887,7 @@ pub(crate) fn run_standalone_reviewer(
         // A collected verdict is on the ledger only: the file may be absent,
         // or a previous round's, so the newer of the two is this review's.
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-        let verdict_json = crate::gate::review_verdict::current_verdict_body(
-            project_root,
-            &format!("PR-{pr}"),
-            crate::gate::review_verdict::read_verdict_body(verdict_path).ok(),
-        );
+        let verdict_json = crate::gate::review_verdict::current_verdict_body_at(verdict_path);
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),

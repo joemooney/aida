@@ -1412,8 +1412,9 @@ pub(crate) fn handle_review_spec(
     // (when it names a commit) before the record below stamps provenance.
     // trace:TASK-1460 | ai:claude
     let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
-    let verdict = crate::gate::review_verdict::read_verdict_body(&verdict_path)
-        .ok()
+    // M1: read through the gate ledger, as every gate does.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let verdict = crate::gate::review_verdict::current_verdict_body_at(&verdict_path)
         .and_then(|body| reviewer_summary::parse_verdict_file(&body));
 
     // BUG-775: stamp WHICH COMMIT this review looked at (and when) onto the
@@ -1617,23 +1618,12 @@ pub(crate) fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
 pub(crate) fn run_stranded_sweep(
     project_root: &std::path::Path,
 ) -> Result<Vec<stranded_sweep::StrandedRow>> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let mut spec_ids: Vec<String> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            if !stranded_sweep::is_spec_keyed_verdict_filename(stem) {
-                continue;
-            }
-            spec_ids.push(stem.to_string());
-        }
-    }
+    // M1: the ledger's spec keys too, so a collected verdict is swept.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut spec_ids: Vec<String> = crate::gate::review_verdict::verdict_keys(project_root)
+        .into_iter()
+        .filter(|key| stranded_sweep::is_spec_keyed_verdict_filename(key))
+        .collect();
     spec_ids.sort();
     spec_ids.dedup();
     if spec_ids.is_empty() {
@@ -1780,23 +1770,12 @@ pub(crate) fn local_branch_tip(project_root: &std::path::Path, branch: &str) -> 
 pub(crate) fn run_stalled_sweep(
     project_root: &std::path::Path,
 ) -> Result<Vec<stranded_sweep::StalledRow>> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let mut spec_ids: Vec<String> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            if !stranded_sweep::is_spec_keyed_verdict_filename(stem) {
-                continue;
-            }
-            spec_ids.push(stem.to_string());
-        }
-    }
+    // M1: the ledger's spec keys too, so a collected verdict is swept.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut spec_ids: Vec<String> = crate::gate::review_verdict::verdict_keys(project_root)
+        .into_iter()
+        .filter(|key| stranded_sweep::is_spec_keyed_verdict_filename(key))
+        .collect();
     spec_ids.sort();
     spec_ids.dedup();
     if spec_ids.is_empty() {
@@ -3277,8 +3256,9 @@ pub(crate) fn handle_review_record_at(
     // BUG-2136: snapshot the record as it stands so the outcome line can say
     // whether this call added a round or re-recorded an identical one.
     // trace:BUG-2136 | ai:claude
-    let record_before = crate::gate::review_verdict::read_verdict_body(&path)
-        .ok()
+    // M1: the record before is the one the gates weighed (file or ledger).
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let record_before = crate::gate::review_verdict::current_verdict_body_at(&path)
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned());
     let mut verdict_obj = crate::gate::review_verdict::build_verdict_object(
@@ -4059,38 +4039,30 @@ mod bug_1452_refusal_aftermath_tests {
 // without the head comparison. trace:BUG-1508 | ai:claude
 pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
-    let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
-    match crate::gate::review_verdict::read_recorded_verdict(&project_root, spec) {
-        Some(v) => {
-            let branch = current_branch_at(&project_root);
-            let relation =
-                verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
-            let actionability =
-                crate::gate::review_verdict::review_actionability(Some(&v), relation);
+    match review_verdict_show_body(&project_root, spec, |sha| {
+        let branch = current_branch_at(&project_root);
+        verdict_tip_relation(&project_root, branch.as_deref(), sha)
+    }) {
+        Some((v, value, source)) => {
             if json {
-                let body = crate::gate::review_verdict::read_verdict_body(&path)
-                    .unwrap_or_else(|_| "{}".to_string());
-                let mut value: serde_json::Value =
-                    serde_json::from_str(body.trim()).unwrap_or(serde_json::Value::Null);
-                if let Some(obj) = value.as_object_mut() {
-                    obj.insert(
-                        "actionability".to_string(),
-                        serde_json::Value::String(actionability.as_str().to_string()),
-                    );
-                }
                 println!("{}", serde_json::to_string_pretty(&value)?);
             } else {
+                let actionability = value
+                    .get("actionability")
+                    .and_then(|a| a.as_str())
+                    .unwrap_or_default();
                 println!(
                     "{} {}",
                     format!("{}:", spec.to_ascii_uppercase()).bold(),
                     crate::review_verdict_display::verdict_notice_line(&v)
                 );
-                println!("  {} {}", "actionability:".dimmed(), actionability.as_str());
-                println!(
-                    "  {} {}",
-                    "record:".dimmed(),
-                    path.display().to_string().dimmed()
-                );
+                println!("  {} {}", "actionability:".dimmed(), actionability);
+                let record = if source.is_ledger() {
+                    format!("{} (gate ledger)", source.display())
+                } else {
+                    source.display()
+                };
+                println!("  {} {}", "record:".dimmed(), record.dimmed());
             }
             Ok(())
         }
@@ -4115,6 +4087,44 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// What `aida review verdict <KEY> --json` prints: the record the gates weigh
+/// (the newer of the legacy file and the gate ledger), never the file just
+/// because it exists, plus `actionability` and the record's source (M1
+/// round 4). `relation` places the reviewed commit against the branch tip.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn review_verdict_show_body(
+    project_root: &std::path::Path,
+    key: &str,
+    relation: impl FnOnce(Option<&str>) -> crate::gate::review_verdict::TipRelation,
+) -> Option<(
+    crate::gate::review_verdict::RecordedVerdict,
+    serde_json::Value,
+    crate::gate::review_verdict::VerdictSource,
+)> {
+    let current = crate::gate::review_verdict::current_verdict(project_root, key)?;
+    let v = crate::gate::review_verdict::parse_recorded_verdict(&current.body)?;
+    let actionability = crate::gate::review_verdict::review_actionability(
+        Some(&v),
+        relation(v.reviewed_sha.as_deref()),
+    );
+    let mut value: serde_json::Value =
+        serde_json::from_str(current.body.trim()).unwrap_or(serde_json::Value::Null);
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "actionability".to_string(),
+            serde_json::Value::String(actionability.as_str().to_string()),
+        );
+        obj.insert(
+            "record_source".to_string(),
+            serde_json::json!({
+                "kind": if current.source.is_ledger() { "gate-ledger" } else { "file" },
+                "location": current.source.display(),
+            }),
+        );
+    }
+    Some((v, value, current.source))
 }
 
 // trace:TASK-1590 | ai:antigravity

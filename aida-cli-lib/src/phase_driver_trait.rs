@@ -2195,9 +2195,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // then fall back to a fresh archived verdict at the reviewed head.
         // trace:TASK-1460 | ai:claude
         let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
-        let outcome = match read_verdict_file_for_head(
+        // M1: a ledger record counts only when written during this review.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let outcome = match crate::phase_gates::read_verdict_file_for_head_since(
             &verdict_path,
             pre_review_head_sha.as_deref(),
+            Some(reviewer_started_at),
         )
         .or_else(|e| {
             phase3_head_archive_fallback(
