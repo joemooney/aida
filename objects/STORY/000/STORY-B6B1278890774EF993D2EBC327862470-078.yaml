@@ -30,12 +30,12 @@ description: |
 
   ## Test tier
   LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T08:48:45.000243441Z
+modified_at: 2026-10-29T09:02:35.024464417Z
 req_type: Story
 tags:
 - docs:impacted
@@ -234,6 +234,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a186e5-9410-7552-91e5-d7c8dd328e56
+  author: aida-orchestrator
+  timestamp: 2026-10-29T09:02:35.024483469Z
+  session_id: 01a186e3721f
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
@@ -246,3 +255,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T07:27:38.939022556Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 3 closes items 1, 3 and 4: one resolver (resolve_literal_first) behind every store lookup, inferred commit trailers canonical, set/rename refuse a label already used as a stored spec_id/agreed_id middle segment, all tested. Item 2 was not done as ruled: hand-written-text parsers stay alias-first and depend on a guard that only runs at bind time, so a node registered later with id == a bound label makes TYPE-<LABEL>-NNN name two specs (AC2/AC7). PR CI was still queued at review time (not started), so no green run is cited. AC status: AC1 verified by node_alias_tests + story_078 set/rename refusal tests, except the reverse-registration gap; AC2 verified for flags/rel targets/MCP/trailers by story_078, but parsers are not literal-first; AC3 verified by node_alias_display_ratchet_tests + display_id JSON tests; AC4 verified by the inferred-trailer and pr-ship squash tests; AC5 verified by the core uppercase display test; AC6 verified by story_078 set/list/show/rename without a TTY; AC7 partial, see finding 2.'
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-078 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T09:02:35.024464417Z
