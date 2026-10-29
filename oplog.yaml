@@ -85251,5 +85251,17 @@ operations:
   timestamp: 2026-10-29T11:49:10.629168735Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6667
+- id: 01a18780-573d-7802-ac3d-3cb427a6b277
+  target_id: 01a18780-4ec9-7220-aafa-92a330d4454d
+  author: aida
+  node_id: '1'
+  lamport: 6668
+  timestamp: 2026-10-29T11:51:37.533051464Z
+  kind: !Create
+    title: Explain selectable autonomy in the AIDA overview
+    description: 'User-requested documentation update to docs/what-is-aida.md and its HTML companion: expand governed software factory with selectable autonomy; enumerate actual ExecutionMode variants operator, guided, drive, drain and decide, with descriptive management-facing names and a qualified dark-factory comparison. Verify against models.rs and CLI behavior; preserve existing gates and explicitly distinguish decide as a block. No product behavior changes.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6668
 node_id: '1'

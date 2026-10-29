@@ -1,0 +1,20 @@
+id: 01a18780-4ec9-7220-aafa-92a330d4454d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-100
+title: Explain selectable autonomy in the AIDA overview
+description: 'User-requested documentation update to docs/what-is-aida.md and its HTML companion: expand governed software factory with selectable autonomy; enumerate actual ExecutionMode variants operator, guided, drive, drain and decide, with descriptive management-facing names and a qualified dark-factory comparison. Verify against models.rs and CLI behavior; preserve existing gates and explicitly distinguish decide as a block. No product behavior changes.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T11:51:35.369252268Z
+modified_at: 2026-10-29T11:51:35.369252268Z
+req_type: Task
+tags:
+- docs:impacted
+filed_at:
+  code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a470735bfed
+  vendor: codex
