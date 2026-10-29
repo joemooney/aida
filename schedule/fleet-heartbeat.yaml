@@ -1,10 +1,8 @@
 job: fleet-heartbeat
-last_run: 2026-10-29T10:18:09.823650939Z
+last_run: 2026-10-29T11:47:51.937836067Z
 last_by:
   seat: advisor
   session: 59349e57-271d-4b9e-b662-8585b949736a
   vendor: claude
 result: done
-note: 'PR #3089 (slice 1) at 5f0c66d: audit regenerated (doc-only +5), closing review + CI running; implementer lane finishing; 0 other PRs; human-waits: none; next: ship on approved+green'
-due_since: 2026-10-29T11:25:50.382777915Z
-due_reason: every 1h
+note: '2 lanes: BUG-HOME-015 testing; M1 slice 1 PR #3090 (+1440/-10) in review, scoped to check writers actually switched + collect deleted. Store drift fixed. Human-waits: GitLab v0.16.0 release; mandate expires ~07:43.'
