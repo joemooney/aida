@@ -84025,5 +84025,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6553
+- id: 01a185ff-8ae4-7011-9677-87eb2ee0c973
+  target_id: 01a185ff-836a-7e81-a511-3b35af2480bf
+  author: aida
+  node_id: '1'
+  lamport: 6554
+  timestamp: 2026-10-29T04:51:19.396348126Z
+  kind: !Create
+    title: 'Non-blocking (minor): --sha '''' (empty/whitespace) is filtered to None and silen…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (minor): --sha '' (empty/whitespace) is filtered to None and silently takes the default path instead of being refused (lib_part5.rs resolved_sha match).
+
+      PR: #3082
+      Reviewed sha: 29f2116cf7224a6109668e206e31e10bef2ca4bf
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6554
 node_id: '1'
