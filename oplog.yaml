@@ -84320,5 +84320,13 @@ operations:
   timestamp: 2026-10-29T06:36:24.390809514Z
   kind: !SetStatus
     status: Rejected
-clock: 6574
+- id: 01a1865f-d88c-74d0-8af3-e350301924cd
+  target_id: 019ebf8d-2ea3-7803-b157-3ba618843a2b
+  author: aida
+  node_id: '1'
+  lamport: 6575
+  timestamp: 2026-10-29T06:36:30.732131214Z
+  kind: !RemoveTag
+    tag: deferred:design
+clock: 6575
 node_id: '1'
