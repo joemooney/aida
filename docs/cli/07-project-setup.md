@@ -252,6 +252,7 @@ ID counters and other remotes are untouched by the transport.
 **Key options (rationale only).**
 - `acquire` — the CAS-loop claim of the next sequential node id; defaults pull `git config user.email` and the hostname for the registry stamp. The one you need on a fresh clone that will *write*.
 - `release` — removes the registry entry but is deliberately *non-destructive to issued ids*. Reach for it only when retiring a clone for good.
+- `alias set <LABEL> [--node <uuid>]` / `alias rename <OLD> <NEW>` / `alias list` / `alias show <LABEL|uuid>` — give a node a short label so its node-local ids read as `TASK-HOME-095` instead of `TASK-<32-hex-node>-095`. Any command that takes a spec id accepts the label form in any case, and human and agent output shows it; `--format json` keeps `spec_id` canonical and adds `display_id`. Pass `--canonical-ids` (or set `AIDA_CANONICAL_IDS=1`) to show canonical ids instead. Labels are for display and input only: AIDA always stores and writes the canonical id. A label is never moved to another node. `rename` retires the old label, which keeps resolving to the same node, and there is no delete. Labels are 2–8 letters or digits starting with a letter; labels made only of hex digits and labels equal to a type prefix are refused.
 
 **Gotchas.** "Read works but I can't add a spec" on a fresh clone is the classic node-missing symptom — the store auto-attaches for reads, but writes need `aida node acquire` (or a full `init`).
 

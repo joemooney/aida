@@ -4909,9 +4909,14 @@ pub(crate) fn handle_queue_command(
                     let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                     // TASK-91: PR-N (STORY-NNN) for auto-queued review
                     // stories. trace:TASK-91 | ai:claude
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                     let (display_id_owned, title_owned) =
-                        format_review_story_display(spec_id, title)
-                            .unwrap_or_else(|| (spec_id.to_string(), title.to_string()));
+                        format_review_story_display(spec_id, title).unwrap_or_else(|| {
+                            (
+                                aida_core::node_alias::display_spec_id(spec_id),
+                                title.to_string(),
+                            )
+                        });
                     let status = req
                         .map(|r| format!("{}", r.status))
                         .unwrap_or_else(|| "Unknown".to_string());

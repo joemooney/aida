@@ -5291,6 +5291,8 @@ fn run_list(
                         #[derive(serde::Serialize)]
                         struct ListJsonRow<'a> {
                             spec_id: &'a str,
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                            display_id: String,
                             title: &'a str,
                             req_type: &'a str,
                             // BUG-1520: `type` is what `--fields`, the human header and
@@ -5365,12 +5367,14 @@ fn run_list(
                                 let rework = rework_ids.contains(&r.id);
                                 let (status_label, status_lens) =
                                     list_json_status_label_lens(rework, parked_lens.as_ref());
+                                let spec_id = r
+                                    .agreed_id
+                                    .as_deref()
+                                    .or(r.spec_id.as_deref())
+                                    .unwrap_or("");
                                 ListJsonRow {
-                                    spec_id: r
-                                        .agreed_id
-                                        .as_deref()
-                                        .or(r.spec_id.as_deref())
-                                        .unwrap_or(""),
+                                    spec_id,
+                                    display_id: aida_core::node_alias::display_spec_id(spec_id),
                                     title: r.title.as_str(),
                                     req_type: r.req_type.as_str(),
                                     r#type: r.req_type.as_str(),
@@ -6431,9 +6435,12 @@ fn run_show(
                                 let object = out.as_object_mut().ok_or_else(|| {
                                     anyhow::anyhow!("serialized requirement was not a JSON object")
                                 })?;
+                                // `spec_id` stays canonical; `display_id` carries
+                                // the friendly node label when one applies.
+                                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                                 object.insert(
                                     "display_id".to_string(),
-                                    serde_json::Value::String(req.display_id()),
+                                    serde_json::Value::String(req.friendly_id()),
                                 );
                                 object.insert(
                                     "uuid".to_string(),
@@ -6580,7 +6587,15 @@ fn run_show(
                             // mirroring `--card` density. trace:TASK-964
                             if agent_output_mode() && !*card {
                                 let mut lines: Vec<String> = Vec::new();
-                                lines.push(crate::toon::scalar("id", &req.display_id()));
+                                // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                                let friendly = req.friendly_id();
+                                lines.push(crate::toon::scalar("id", &friendly));
+                                if !friendly.eq_ignore_ascii_case(&req.display_id()) {
+                                    lines.push(crate::toon::scalar(
+                                        "canonical_id",
+                                        &req.display_id().to_ascii_uppercase(),
+                                    ));
+                                }
                                 if let Some(origin) = req.spec_id.as_deref() {
                                     if origin != req.display_id() {
                                         lines.push(crate::toon::scalar("origin_id", origin));
@@ -6870,7 +6885,16 @@ fn run_show(
                                 }
                                 return crate::command_registry::returned(Ok(()));
                             }
-                            println!("{}: {}", "ID".bold(), req.display_id());
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                            let friendly = req.friendly_id();
+                            println!("{}: {}", "ID".bold(), friendly);
+                            if !friendly.eq_ignore_ascii_case(&req.display_id()) {
+                                println!(
+                                    "{}: {}",
+                                    "Canonical ID".bold(),
+                                    req.display_id().to_ascii_uppercase()
+                                );
+                            }
                             // Only show Agreed ID / Origin ID when they actually
                             // differ from the canonical display id — otherwise it's
                             // three lines of the same string. trace:BUG-29

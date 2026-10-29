@@ -4779,6 +4779,15 @@ impl Requirement {
             .to_string()
     }
 
+    /// [`Self::display_id`] as human and TOON surfaces show it: a node-local
+    /// ID takes its node's friendly label (`TASK-HOME-095`) and is otherwise
+    /// upper-cased. Display only — never persist this value; stored data and
+    /// generated traces/trailers use [`Self::display_id`].
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    pub fn friendly_id(&self) -> String {
+        crate::node_alias::display_spec_id(&self.display_id())
+    }
+
     /// Check if this requirement matches a given ID string.
     /// Matches against spec_id, agreed_id, or UUID.
     pub fn matches_id(&self, id: &str) -> bool {
@@ -6189,6 +6198,13 @@ impl RequirementsStore {
     /// first, then `agreed_id`.
     // trace:BUG-1535 | ai:claude
     fn spec_id_index(&self, id: &str) -> Option<usize> {
+        self.spec_id_index_exact(id).or_else(|| {
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            crate::node_alias::expand_spec_id(id).and_then(|c| self.spec_id_index_exact(&c))
+        })
+    }
+
+    fn spec_id_index_exact(&self, id: &str) -> Option<usize> {
         let native = self.requirements.iter().position(|r| {
             r.spec_id
                 .as_deref()
@@ -6217,6 +6233,22 @@ impl RequirementsStore {
         if let Ok(uuid) = uuid::Uuid::parse_str(id.trim()) {
             return Ok(self.requirements.iter().position(|r| r.id == uuid));
         }
+        // A friendly `TYPE-<LABEL>-NNN` resolves as its canonical form when
+        // nothing answers to it literally.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let expanded;
+        let id = match crate::node_alias::expand_spec_id(id) {
+            Some(c)
+                if !self
+                    .requirements
+                    .iter()
+                    .any(|r| r.matches_id_ignore_case(id.trim())) =>
+            {
+                expanded = c;
+                expanded.as_str()
+            }
+            _ => id,
+        };
         let rows: Vec<crate::id_collisions::IdRow> = self
             .requirements
             .iter()

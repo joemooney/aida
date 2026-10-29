@@ -218,6 +218,14 @@ impl CachedGitBackend {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
+        // A friendly `TYPE-<LABEL>-NNN` resolves as the canonical id it
+        // expands to (whose node segment is never itself a label).
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        if let Some(canonical) = crate::node_alias::expand_spec_id(id) {
+            if let Some(req) = self.resolve_unambiguous(&canonical, strict)? {
+                return Ok(Some(req));
+            }
+        }
         let scanned = if strict {
             self.id_candidates_strict(id)
         } else {

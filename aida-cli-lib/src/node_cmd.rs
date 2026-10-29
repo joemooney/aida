@@ -551,8 +551,101 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
 
         // trace:TASK-851 | ai:claude
         NodeCommand::Whoami => return session_misc_cmd::handle_whoami_command(),
+        NodeCommand::Alias { cmd } => return handle_node_alias_command(cmd, store_path),
     }
 
+    Ok(())
+}
+
+/// `aida node alias …`: manage friendly node labels in
+/// `registry/node_aliases.toml` (CAS push). Works without a TTY.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+fn handle_node_alias_command(cmd: &NodeAliasCommand, store_path: &std::path::Path) -> Result<()> {
+    use aida_core::node_alias::{self, NodeAliasMap};
+    match cmd {
+        NodeAliasCommand::Set { label, node } => {
+            let node = match node {
+                Some(n) => n.clone(),
+                None => aida_core::allocation_authority::node(store_path)?,
+            };
+            let node = node_alias::normalize_node(&node).map_err(anyhow::Error::msg)?;
+            let label = node_alias::validate_label(label).map_err(anyhow::Error::msg)?;
+            // A label equal to a registered short node id would make
+            // `TASK-<label>-NNN` name two different requirements.
+            let roster = aida_core::node::NodeRegistry::load(
+                &store_path.join("registry").join("nodes.toml"),
+            )
+            .unwrap_or_default();
+            if roster
+                .nodes
+                .iter()
+                .any(|n| n.id.as_str().eq_ignore_ascii_case(&label))
+            {
+                anyhow::bail!(
+                    "label {label} is already a registered node id; spec IDs like TASK-{label}-001 belong to that node"
+                );
+            }
+            let changed =
+                node_alias::mutate_cas(store_path, &format!("label node {node} {label}"), |map| {
+                    map.set(&label, &node)
+                })?;
+            if changed {
+                println!("Labelled node {node} {label}. TASK-{label}-NNN now names its specs.");
+            } else {
+                println!("Node {node} is already labelled {label}.");
+            }
+        }
+        NodeAliasCommand::Rename { old, new } => {
+            let old = node_alias::validate_label(old).map_err(anyhow::Error::msg)?;
+            let new = node_alias::validate_label(new).map_err(anyhow::Error::msg)?;
+            let changed = node_alias::mutate_cas(
+                store_path,
+                &format!("relabel node {old} -> {new}"),
+                |map| map.rename(&old, &new),
+            )?;
+            if changed {
+                println!("Relabelled {old} to {new}. {old} is retired and still resolves to the same node.");
+            } else {
+                println!("{old} is already the current label.");
+            }
+        }
+        NodeAliasCommand::List { json } => {
+            let map = NodeAliasMap::load(store_path);
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&map.bindings)?);
+            } else if map.bindings.is_empty() {
+                println!("No node labels. Add one with `aida node alias set <LABEL>`.");
+            } else {
+                for b in &map.bindings {
+                    let state = if b.retired { "retired" } else { "current" };
+                    println!("{:<8}  {}  {state}", b.label, b.node);
+                }
+            }
+        }
+        NodeAliasCommand::Show { target, json } => {
+            let map = NodeAliasMap::load(store_path);
+            let rows: Vec<&node_alias::NodeAliasBinding> = match node_alias::normalize_node(target)
+            {
+                Ok(node) => map.bindings.iter().filter(|b| b.node == node).collect(),
+                Err(_) => map
+                    .bindings
+                    .iter()
+                    .filter(|b| b.label.eq_ignore_ascii_case(target.trim()))
+                    .collect(),
+            };
+            if rows.is_empty() {
+                anyhow::bail!("no node label matches '{target}'");
+            }
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                for b in rows {
+                    let state = if b.retired { "retired" } else { "current" };
+                    println!("{:<8}  {}  {state}", b.label, b.node);
+                }
+            }
+        }
+    }
     Ok(())
 }
 

@@ -518,6 +518,50 @@ fn queue_relative_path_for_file(store_root: &Path, path: &Path, user_id: &str) -
 }
 
 impl GitBackend {
+    /// [`DatabaseBackend::get_requirement_by_spec_id`] for the id exactly
+    /// as given (no node-alias expansion).
+    fn get_requirement_by_exact_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
+        let spec_id = object_store::canonical_spec_id(spec_id);
+        // BUG-97: distinguish "file doesn't exist" (legitimate not-found,
+        // fall through to agreed_id scan and ultimately Ok(None)) from
+        // "file exists but failed to parse" (propagate the parse error so
+        // the caller surfaces the real cause instead of a misleading
+        // "Requirement not found"). Without this split, both cases ended
+        // up at the agreed_id scan, then Ok(None), then the caller's
+        // "Requirement not found" hint — sending the user down a
+        // wrong-spec-id investigation when the YAML was actually fine,
+        // just incompatible with the binary's enums.
+        // trace:BUG-97 | ai:claude
+        //
+        // BUG-599: a malformed id (e.g. `not-a-real-id`, a UUID-shaped string)
+        // makes `object_path`/`object_exists` return Err("Invalid spec_id
+        // format ..."), which a caller would then dress up with the
+        // version-mismatch `parse_failure_hint` — alarming, wrong guidance for
+        // a simple typo. A malformed id can never name a stored object, so
+        // treat it as a plain not-found (Ok(None)); the CLI surfaces a friendly
+        // format hint before this point. trace:BUG-599 | ai:claude
+        if !object_store::valid_spec_id_format(&spec_id) {
+            return Ok(None);
+        }
+        if object_store::object_exists(&self.objects_root, &spec_id)? {
+            // File exists; any error from read_object now is a parse
+            // failure worth propagating (with the file path + serde
+            // detail already attached by read_object's `with_context`).
+            let req = object_store::read_object(&self.objects_root, &spec_id)?;
+            return Ok(Some(req));
+        }
+        // File doesn't exist by spec_id — try agreed_id scan.
+        let files = object_store::list_objects(&self.objects_root)?;
+        for (_name, path) in &files {
+            if let Ok(req) = object_store::read_object_from_path(path) {
+                if req.agreed_id.as_deref() == Some(spec_id.as_str()) {
+                    return Ok(Some(req));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     /// Create a new git backend rooted at the given directory.
     /// Creates the directory structure if it doesn't exist.
     pub fn new(root: &Path) -> Result<Self> {
@@ -2468,45 +2512,16 @@ impl DatabaseBackend for GitBackend {
     // Override individual CRUD for efficiency — don't reload everything each time
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
-        let spec_id = object_store::canonical_spec_id(spec_id);
-        // BUG-97: distinguish "file doesn't exist" (legitimate not-found,
-        // fall through to agreed_id scan and ultimately Ok(None)) from
-        // "file exists but failed to parse" (propagate the parse error so
-        // the caller surfaces the real cause instead of a misleading
-        // "Requirement not found"). Without this split, both cases ended
-        // up at the agreed_id scan, then Ok(None), then the caller's
-        // "Requirement not found" hint — sending the user down a
-        // wrong-spec-id investigation when the YAML was actually fine,
-        // just incompatible with the binary's enums.
-        // trace:BUG-97 | ai:claude
-        //
-        // BUG-599: a malformed id (e.g. `not-a-real-id`, a UUID-shaped string)
-        // makes `object_path`/`object_exists` return Err("Invalid spec_id
-        // format ..."), which a caller would then dress up with the
-        // version-mismatch `parse_failure_hint` — alarming, wrong guidance for
-        // a simple typo. A malformed id can never name a stored object, so
-        // treat it as a plain not-found (Ok(None)); the CLI surfaces a friendly
-        // format hint before this point. trace:BUG-599 | ai:claude
-        if !object_store::valid_spec_id_format(&spec_id) {
-            return Ok(None);
-        }
-        if object_store::object_exists(&self.objects_root, &spec_id)? {
-            // File exists; any error from read_object now is a parse
-            // failure worth propagating (with the file path + serde
-            // detail already attached by read_object's `with_context`).
-            let req = object_store::read_object(&self.objects_root, &spec_id)?;
-            return Ok(Some(req));
-        }
-        // File doesn't exist by spec_id — try agreed_id scan.
-        let files = object_store::list_objects(&self.objects_root)?;
-        for (_name, path) in &files {
-            if let Ok(req) = object_store::read_object_from_path(path) {
-                if req.agreed_id.as_deref() == Some(spec_id.as_str()) {
-                    return Ok(Some(req));
-                }
+        // A friendly `TYPE-<LABEL>-NNN` reads the canonical object it names;
+        // the literal id is the fallback, so neither form costs a second
+        // agreed-id scan in the common case.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        if let Some(canonical) = crate::node_alias::expand_spec_id(spec_id) {
+            if let Some(req) = self.get_requirement_by_exact_spec_id(&canonical)? {
+                return Ok(Some(req));
             }
         }
-        Ok(None)
+        self.get_requirement_by_exact_spec_id(spec_id)
     }
 
     fn get_requirement(&self, id: &uuid::Uuid) -> Result<Option<Requirement>> {

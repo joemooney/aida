@@ -1765,6 +1765,8 @@ pub(crate) fn run() -> Result<()> {
     // renders. `--format` wins; else `AIDA_OUTPUT_FORMAT`; else the TTY-based
     // default stands. trace:STORY-764 | ai:claude
     set_output_format_override(cli.globals.format);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    aida_core::node_alias::set_canonical_ids(cli.globals.canonical_ids);
     // trace:TASK-1526 | ai:codex
     cache_output::set_toon_cache_output(matches!(cli.command.name(), "history" | "graph"));
     // Only human output at a real terminal may perform the pre-C inline full

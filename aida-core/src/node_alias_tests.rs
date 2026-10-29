@@ -1,0 +1,106 @@
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+use super::*;
+
+const NODE_A: &str = "b6b1278890774ef993d2ebc327862470";
+const NODE_B: &str = "0123456789abcdef0123456789abcdef";
+
+fn home() -> NodeAliasMap {
+    let mut map = NodeAliasMap::default();
+    assert!(map.set("HOME", NODE_A).unwrap());
+    map
+}
+
+#[test]
+fn node_alias_label_validation() {
+    assert_eq!(validate_label("home").unwrap(), "HOME");
+    assert_eq!(validate_label("W2").unwrap(), "W2");
+    for bad in [
+        "H",
+        "TOOLONGLABEL",
+        "2HOME",
+        "HO-ME",
+        "a@b",
+        "a.b",
+        "",
+        "CAFE",
+        "BEEF12",
+    ] {
+        assert!(validate_label(bad).is_err(), "{bad} should be refused");
+    }
+    for prefix in ["TASK", "BUG", "STORY", "EPIC", "FR", "ADR", "SPEC", "PR"] {
+        assert!(validate_label(prefix).is_err(), "{prefix} is a type prefix");
+    }
+}
+
+#[test]
+fn node_alias_rebind_to_another_node_refuses_naming_both() {
+    let mut map = home();
+    assert!(!map.set("home", NODE_A).unwrap(), "re-set is a no-op");
+    let err = map.set("HOME", NODE_B).unwrap_err();
+    assert!(err.contains(NODE_A) && err.contains(NODE_B), "{err}");
+    // One current label per node: a second set is a rename, not a set.
+    let err = map.set("LAPTOP", NODE_A).unwrap_err();
+    assert!(err.contains("rename"), "{err}");
+}
+
+#[test]
+fn node_alias_rename_retires_old_label_forever() {
+    let mut map = home();
+    assert!(map.rename("HOME", "DESK").unwrap());
+    assert_eq!(map.current_label(NODE_A), Some("DESK"));
+    // The retired label still resolves for input...
+    assert_eq!(map.node_for_label("HOME"), Some(NODE_A));
+    assert_eq!(
+        map.expand("task-home-095").as_deref(),
+        Some("TASK-B6B1278890774EF993D2EBC327862470-095")
+    );
+    // ...is never displayed...
+    assert_eq!(
+        map.display("TASK-B6B1278890774EF993D2EBC327862470-095", false),
+        "TASK-DESK-095"
+    );
+    // ...and can never be bound to another node.
+    let err = map.set("HOME", NODE_B).unwrap_err();
+    assert!(err.contains("retired") && err.contains(NODE_A), "{err}");
+    let mut other = map.clone();
+    other.set("WORKBOX", NODE_B).unwrap();
+    assert!(other.rename("WORKBOX", "HOME").is_err());
+    // The same node may take its retired label back.
+    assert!(map.rename("DESK", "HOME").unwrap());
+    assert_eq!(map.current_label(NODE_A), Some("HOME"));
+    assert_eq!(map.node_for_label("DESK"), Some(NODE_A));
+}
+
+#[test]
+fn node_alias_round_trip_and_case() {
+    let map = home();
+    let canonical = "TASK-B6B1278890774EF993D2EBC327862470-095";
+    let lower = "task-b6b1278890774ef993d2ebc327862470-095";
+    let shown = map.display(lower, false);
+    assert_eq!(shown, "TASK-HOME-095");
+    assert_eq!(map.expand(&shown).as_deref(), Some(canonical));
+    // Canonical display is upper-case on every surface.
+    assert_eq!(map.display(lower, true), canonical);
+    // A node with no alias displays canonically (upper-cased).
+    let other = format!("BUG-{NODE_B}-001");
+    assert_eq!(map.display(&other, false), other.to_ascii_uppercase());
+    // Short / agreed / feature IDs pass through untouched.
+    for id in ["TASK-095", "FR-1-042", "BUG-JM-001", "PR-12"] {
+        assert_eq!(map.display(id, false), id);
+        assert_eq!(map.expand(id), None);
+    }
+    // Unknown label never guesses.
+    assert_eq!(map.expand("TASK-NOPE-001"), None);
+}
+
+#[test]
+fn node_alias_malformed_file_reads_empty_and_refuses_write() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("registry")).unwrap();
+    std::fs::write(dir.path().join(NODE_ALIASES_TOML_REL), "not = [valid").unwrap();
+    assert_eq!(NodeAliasMap::load(dir.path()), NodeAliasMap::default());
+    assert!(NodeAliasMap::load_strict(dir.path()).is_err());
+
+    home().save(dir.path()).unwrap();
+    assert_eq!(NodeAliasMap::load(dir.path()), home());
+}

@@ -1759,6 +1759,12 @@ impl<'a> McpServer<'a> {
             req.req_type
         );
 
+        // The heading keeps the canonical id; the friendly label is additive.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let display_id = req.friendly_id();
+        if !display_id.eq_ignore_ascii_case(&canonical_id) {
+            output.push_str(&format!("**Display ID:** {}\n", display_id));
+        }
         if !req.feature.is_empty() {
             output.push_str(&format!("**Feature:** {}\n", req.feature));
         }
@@ -8794,6 +8800,14 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     if let Ok(cwd) = std::env::current_dir() {
         crate::lane_env::apply_in_process(&project_root, &cwd);
     }
+    // Friendly node labels resolve in every tool's spec-ID arguments.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let store_root = if storage.path().is_dir() {
+        storage.path().to_path_buf()
+    } else {
+        project_root.join(".aida-store")
+    };
+    aida_core::node_alias::install_from_store(&store_root);
     let server = McpServer::new(storage, project_root);
     let respawn = McpRespawnState::new();
     let stdin = io::stdin();

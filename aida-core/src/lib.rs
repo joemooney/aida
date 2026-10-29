@@ -160,6 +160,7 @@ pub mod mailbox_delivery;
 pub mod meta;
 pub mod models;
 pub mod node;
+pub mod node_alias;
 pub mod object_store;
 pub mod oplog;
 /// trace:STORY-333 | ai:claude

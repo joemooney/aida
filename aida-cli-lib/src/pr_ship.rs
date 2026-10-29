@@ -771,7 +771,11 @@ fn refs_group_spec_ids(inner: &str) -> Vec<String> {
     }
     let rest = inner[word_len..].trim_start();
     let rest = rest.strip_prefix(':').unwrap_or(rest);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
     extract_spec_ids_from_text(rest)
+        .iter()
+        .map(|id| aida_core::node_alias::expand_or_keep(id))
+        .collect()
 }
 
 fn append_spec_ids_before_pr_suffix(subject: &str, joined_ids: &str) -> String {
@@ -809,7 +813,9 @@ fn parse_spec_id_group(inner: &str) -> Vec<String> {
         tok_count += 1;
         let ids = extract_spec_ids_from_text(tok);
         if ids.len() == 1 && ids[0].eq_ignore_ascii_case(tok) {
-            out.push(ids[0].clone());
+            // A hand-written `TASK-<LABEL>-NNN` counts as the canonical id.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            out.push(aida_core::node_alias::expand_or_keep(&ids[0]));
         } else {
             return Vec::new();
         }

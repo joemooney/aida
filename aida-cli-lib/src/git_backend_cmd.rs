@@ -500,11 +500,14 @@ where
     lines.push("─".repeat(table_width));
 
     for req in reqs {
-        let display_id = req
-            .agreed_id
-            .as_deref()
-            .or(req.spec_id.as_deref())
-            .unwrap_or("?");
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let display_id = aida_core::node_alias::display_spec_id(
+            req.agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or("?"),
+        );
+        let display_id = display_id.as_str();
         let status = render_status(req);
         let prefix = if options.show_origin {
             let origin = req.spec_id.as_deref().unwrap_or("-");
@@ -1486,6 +1489,9 @@ pub(crate) fn handle_git_backend_command(
     maybe_team_identity_guard(store_path, command)?;
     drop(guard_phase);
 
+    // Friendly node labels for spec-ID input and display, read once per
+    // process. trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    aida_core::node_alias::install_from_store(store_path);
     let flow = match command {
         // trace:STORY-1728 | ai:claude
         Command::Registered(invocation) => {

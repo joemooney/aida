@@ -72,7 +72,12 @@ SURFACE_DIRS = (
     "aida-core/templates/commands/",
 )
 
-SPEC_RE = re.compile(r"\b((?:STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|SR|UR|CR|CON|VIS|PRIN|TERM|SPEC)-[0-9]+)\b")
+# A node-local id carries the 32-hex node between the prefix and the number
+# (`STORY-<node>-078`); its hex node may be either case and is upper-cased to the
+# stored filename form. trace:STORY-B6B1278890774EF993D2EBC327862470-078
+SPEC_RE = re.compile(
+    r"\b((?:STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|SR|UR|CR|CON|VIS|PRIN|TERM|SPEC)(?:-[0-9A-Fa-f]{32})?-[0-9]+)\b"
+)
 STORE_BRANCH = "aida-store"
 
 
@@ -111,12 +116,12 @@ def referenced_specs(base, head):
     """SPEC-IDs from commit messages + added trace comments in the range."""
     specs = set()
     msgs = sh(["git", "log", "--format=%B", f"{base}..{head}"]).stdout
-    specs.update(SPEC_RE.findall(msgs))
+    specs.update(sid.upper() for sid in SPEC_RE.findall(msgs))
     # added lines only (the '+' side of the diff)
     diff = sh(["git", "diff", f"{base}...{head}"]).stdout
     for line in diff.splitlines():
         if line.startswith("+") and "trace:" in line:
-            specs.update(SPEC_RE.findall(line))
+            specs.update(sid.upper() for sid in SPEC_RE.findall(line))
     return specs
 
 
