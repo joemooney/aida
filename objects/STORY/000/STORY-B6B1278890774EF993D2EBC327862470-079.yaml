@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T07:28:43.445144261Z
-modified_at: 2026-10-29T08:58:06.195465079Z
+modified_at: 2026-10-29T09:57:24.571648943Z
 req_type: Story
 relationships:
 - rel_type:
@@ -41,6 +41,12 @@ comments:
   content: 'Round 3 review requested by advisor (2026-10-29 02:00): scope is ONLY f005464c3d7..786989948aa against the 4 items in the advisor''s round-2 brief on STORY-…-078 (collision guard in mutate_cas for set+rename; literal-first text parsers; inferred commit trailer canonical; ONE shared resolve_id with per-backend orderings deleted). Do not reopen round-1/2 items that were closed. Any new non-blocking finding: state bundle-or-accept in the verdict. Judge tests by CI at 7869899; no cargo.'
   created_at: 2026-10-29T08:58:06.195465079Z
   modified_at: 2026-10-29T08:58:06.195465079Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18717-c5db-7873-b356-babef85bd98b
+  author: joe
+  content: 'Final review (advisor, 2026-10-29 03:05) at 3b9cf4e0ed1: verify ONLY round-3 items (1) literal-first text parsers via resolve_literal_first and (2) node registration refuses current/retired labels; plus CI at this exact head. CI cli-0 is red here and at 786989948 on aida-cli/tests/bug_1502_format_json_audit.rs:479 ''regenerate the BUG-1502 audit'' (new node alias list/show --json leaves missing from docs/cli-format-json-audit.md; fix = run scripts/generate-format-json-audit.py and commit). If (1) and (2) hold, the verdict must name that audit regeneration as the ONLY required change. Advisor cap: any other finding is accepted with a reason, not reworked.'
+  created_at: 2026-10-29T09:57:24.571648943Z
+  modified_at: 2026-10-29T09:57:24.571648943Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1868f-c9a0-73c2-9cbc-cc5b250bc2e3
