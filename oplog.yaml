@@ -86261,5 +86261,36 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6734
+- id: 01a188da-a2dc-7600-b530-b69bd5db9909
+  target_id: 01a188da-9c2a-7a00-9510-acb3541266e8
+  author: aida
+  node_id: '1'
+  lamport: 6735
+  timestamp: 2026-10-29T18:09:52.348533762Z
+  kind: !Create
+    title: Build a curated searchable documentation library
+    description: |
+      Slice 6 of 8 for the product documentation/showcase epic.
+
+      [HITL: advisor must approve publication/curation scope before implementation] Turn the agreed current documentation set into an integrated, searchable site library with traceable sources, using the one-guide rendering path from the tracer slice.
+
+      ## Acceptance
+      - [ ] Record the approved allowlist/classification: human guides, agent/operator references and historical/evidence material must be distinguishable. Do not silently republish every internal or stale document as current product guidance.
+      - [ ] Generate static readable pages and a content-search index from the approved Markdown sources; source docs remain authoritative. Exclude untracked/runtime data, credentials and unsupported archival content from publication.
+      - [ ] Relative links, section anchors, assets and source provenance resolve after rendering. Long code blocks/headings and reference tables fit mobile layouts; navigation and search/filter/empty states are keyboard accessible.
+      - [ ] Rebuilding unchanged sources produces stable output. Derived handbook/search output is not maintained as a second hand-edited copy; document the build dependency and output ownership.
+      - [ ] Keep hosting owner-private unless separately authorized. Do not introduce a new product CLI/API or deploy a public audience as part of this slice.
+
+      ## Layers / boundaries
+      Advisor-approved documentation policy -> source selection/static rendering/search index -> searchable reader library. This includes only the bounded docs/site build path, not backend or authority architecture.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6735
 node_id: '1'
