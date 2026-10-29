@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T05:32:40.112577157Z
-modified_at: 2026-10-29T05:32:40.112577157Z
+modified_at: 2026-10-29T05:32:48.261144139Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a18620-1ddb-7e12-8e5a-7e1969c7e0c7
+  created_at: 2026-10-29T05:32:48.261141041Z
+  created_by: joe
+history:
+- id: 01a18625-8b18-70d3-8486-df38ef14f160
+  author: joe
+  timestamp: 2026-10-29T05:32:49.816947115Z
+  session_id: 950d0de9-9ab4-4d83-b6d0-e9d580715520
+  changes: []
 filed_at:
   code_sha: 339f20c84f8ebd87f28e447682b287601293ed7e
   branch: docs/what-is-aida
