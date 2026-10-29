@@ -69,7 +69,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T20:01:52.986387991Z
+modified_at: 2026-10-29T20:35:05.818778036Z
 req_type: Story
 tags:
 - architecture
@@ -454,6 +454,96 @@ comments:
   created_at: 2026-10-29T19:19:34.187280026Z
   modified_at: 2026-10-29T19:19:34.187280026Z
   session_id: 01a188f8247b
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18943-8624-79d1-bfe4-066df98889b8
+  author: joe
+  content: |-
+    ## Implementer approach — slice 2 (holds on the ledger, single writer)
+
+    ### Acceptance criteria as tests
+    - **AC3, unit (`gate::ledger::tests`):** placing a hold appends a `hold` event carrying the full composed `MergeHoldRecord`, and releasing it appends a `hold-release` event carrying the `HoldClearance`. After a release the ledger still holds the `hold` line, and `read_hold_record` answers `None`. The test name will be `a_release_appends_and_keeps_the_hold_as_evidence`.
+    - **AC3, unit:** `human_recorded_clearance` and `held_then_cleared` (the input to the mandate and to `aida awaiting`) read "a hold existed and was cleared" from the ledger with no marker file present. Test: `a_cleared_hold_is_read_from_the_ledger_without_a_marker`.
+    - **AC3, legacy read-through (unit):** a hand-written marker in `.aida/merge-holds/PR-N` with no ledger hold events still holds, and an unreadable one still fails closed (TASK-1238). A marker older than the newest ledger hold event does not reopen a released hold. Test: `legacy_markers_are_read_through_until_the_ledger_answers`.
+    - **AC5 (unit):** no hold, clearance or lock file is written under a worktree or seat clone. `local_hold_path` and `local_clearance_path` are deleted. A contained hold writer is refused and does not fall back to a local marker.
+    - **Single writer, verdicts (unit):** `record_verdict` / `write_verdict_object_for_spec` / `close_verdict_on_merge` / `stamp_pr_review_verdict` append ledger events and write no `.aida/review-verdicts/*` file, including the per-commit archive. A spec-only record resolves its change through the spec index, and with no indexed change it goes onto the spec's change-less index entry (question below).
+    - **Ratchet:** in `legacy_gate_writers_do_not_gain_call_sites`, the verdict and hold writer baselines drop to 0. The existing fail-closed tests (TASK-1801, bug_775 phase-3) stay green with their expectations unchanged.
+
+    ### Expected files
+    - `gate/ledger/{event,store,project,legacy,mod,tests}.rs`
+    - `gate/merge_hold_core.rs`
+    - `gate/review_verdict.rs`
+    - `gate/rework_hold_release.rs`
+    - hold writer and release call sites (`merge_hold_cmd`, `pr_cmd`, `pr_ship_batch`, `mandate_ship`, `burndown_run`, `needs_attention_lens`, `phase_driver*`, `lib_part5`, etc.)
+    - verdict writer call sites (`pr_merge_gate`, `phase_gates`, `db_reconcile`, `needs_attention_lens`, `phase_driver_trait`)
+    - the tests that asserted on legacy files
+
+    ### Ambiguities / conflicts as questions
+    - A spec-only verdict for a spec with no PR yet has no change to key on. I will resolve it through the spec index, then through the spec's open PR if the forge lookup already used by `review record` finds one. If neither finds a change, I will record the verdict on the ledger against the spec's index entry as an unbound event, so the gate state still lands on the ledger rather than a legacy file. The question is whether this unbound event is acceptable as the orphan case under the Q5 ruling.
+  created_at: 2026-10-29T20:04:26.276014055Z
+  modified_at: 2026-10-29T20:04:26.276014055Z
+  session_id: 01a189412b5b
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a1895f-97da-76c1-bb55-13d2c70be562
+  author: joe
+  content: |-
+    ## Slice 2 handoff (implementer seat rotation, 2026-10-29 13:35). This is work in progress; no PR is open yet.
+
+    The branch `story-b6b1278890774ef993d2ebc327862470-080` is pushed at **e87ae08**. That commit is a WIP: the lib compiles and the tests compile. The approach comment above stays valid, so do not post a new one.
+
+    `aida session handoff --write` was refused by the sandbox, so this comment is the handoff.
+
+    **Local test runs must unset `AIDA_CONTAINED`.** This seat exports `AIDA_CONTAINED=1`, so every ledger writer refuses. Use `env -u AIDA_CONTAINED cargo test --profile agent -p aida-cli-lib --lib -- gate:: merge_hold`.
+
+    ### What e87ae08 does
+    **Holds**
+    - New `gate/ledger/hold.rs` adds hold-family events: hold, hold-release, release-authorized, release-withdrawn and label-sync.
+    - `state()` is a fold over those events, with legacy marker read-through. A marker counts when the ledger has no hold or release for the PR, or when the marker is newer than the last one. A marker-held hold is imported before any write that is not a placement.
+
+    **`merge_hold_core`**
+    - Renamed: `place_hold`, `rearm_hold`, `place_hold_by_hand`, `release_hold`, `release_hold_by`, `release_hold_under_mandate`.
+    - Added: `clearance_for`, `recorded_clearance`, `hold_is_open`, `hold_placed_at`, `hold_written_at`, `hold_ledger_file`, `refusal_hold`, `collect_legacy_hold`.
+    - The hold lock moved to `gate-ledger/PR-N.hold.lock`, with no local fallback.
+    - `local_hold_path`, `local_clearance_path`, `clear_hold`, `superseded_clearance_path` and the marker writers are deleted.
+
+    **Rework release and contained reviewers**
+    - `rework_hold_release::release_with` now runs on ledger events: authorize, then recheck, then release, or withdraw.
+    - It reads verdicts through `current_verdict` and `RetainedHistory::projected`.
+    - A contained `aida review record` skips arming the hold. The launcher arms it after collect through `merge_hold::arm_collected_refusal`.
+    - `adopt_worktree_hold` and `dispatch_reviewer_hold` now only collect legacy worktree markers onto the ledger.
+
+    **Verdicts**
+    - `write_verdict_object_for_spec` goes through `ledger::record_verdict_at` and is ledger-only.
+    - A contained or non-canonical path gets a seat hand-off file instead.
+    - A spec with no indexed change is written to `by-spec/<SPEC>.jsonl`.
+    - `close_verdict_on_merge` appends an annotated record.
+    - The archive writer and the sidecar migration are deleted.
+
+    **Ratchet**
+    - Writer baselines are 0 via the GONE list.
+    - The `write_verdict_atomic` allowlist covers the contained hand-off, `backfill-shas` and `review_carryover` (slice 3).
+    - The `merge-holds` and `merge-hold-clearances` literal baselines are 0.
+    - New tests: `verdict_and_hold_writers_write_no_legacy_file`, plus 4 AC3 tests at the end of `gate/ledger/tests.rs`. These have not been run yet.
+
+    ### Remaining work
+    1. Fix about 119 tests that still assert legacy files. The failing list is committed at `.slice2-failing.txt`; delete it before the PR. Biggest groups:
+       - `rework_hold_release`: ~72
+       - `review_verdict_tests`: 31
+       - `merge_hold_core`: 5
+       - `story_1917`: 5
+       - `solo_review`: 5
+       - mandate: 4
+
+       Fail-closed test expectations (TASK-1801, bug_775) must stay unchanged.
+    2. Run wider filters: `review_verdict`, `phase_gates`, `bug_775`, `task1801`, `human::`, `status_awaiting`, `pr_claim`, `lane_liveness`, `doctor`.
+    3. Run `make check-ci-fast`, push, then open the PR with `/aida-pr`.
+    4. Findings to file:
+       - The unbound spec ledger bends AC2.
+       - `backfill-shas` still rewrites legacy files.
+       - The `list_holds` scan reads every ledger file.
+       - Collected untyped legacy markers keep `legacy=true`.
+  created_at: 2026-10-29T20:35:05.818778036Z
+  modified_at: 2026-10-29T20:35:05.818778036Z
+  session_id: 01a189412b5b
   harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
