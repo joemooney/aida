@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:43.585217658Z
-modified_at: 2026-10-29T06:39:59.549859260Z
+modified_at: 2026-10-29T06:40:03.255945418Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,6 +22,12 @@ comments:
   content: 'Advisor note (overnight groom): NOT headless-implementable — promoting a recurring rule to a gate is an advisor/operator judgment triggered by threshold data, not a standalone code task. Leave parked until the violations log crosses the threshold.'
   created_at: 2026-07-01T06:45:14.673440507Z
   modified_at: 2026-07-01T06:45:14.673440507Z
+- id: 01a18663-16b7-7f12-8433-cb503192be74
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject with TASK-916.'
+  created_at: 2026-10-29T06:40:03.255945418Z
+  modified_at: 2026-10-29T06:40:03.255945418Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18662-ffe4-7163-bbe0-38b95d577c77
   author: joe
