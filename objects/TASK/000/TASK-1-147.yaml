@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-20T00:44:07.607583679Z
-modified_at: 2026-10-29T06:44:07.564157389Z
+modified_at: 2026-10-29T06:44:15.377912740Z
 req_type: Task
 tags:
 - dogfood
@@ -42,6 +42,12 @@ comments:
   created_at: 2026-09-20T00:51:14.141047618Z
   modified_at: 2026-09-20T00:51:14.141047618Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a18666-ef91-7df3-946e-f405b781b8c0
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as superseded by TASK-1279. Reason: Obsolete: TASK-1279 completed.'
+  created_at: 2026-10-29T06:44:15.377912740Z
+  modified_at: 2026-10-29T06:44:15.377912740Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18666-bd5b-7d70-bdb9-677b354e26ce
   author: joe
