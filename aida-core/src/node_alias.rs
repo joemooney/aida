@@ -316,33 +316,100 @@ pub fn install(map: NodeAliasMap) {
     }
 }
 
-/// Load the store's map (best-effort) and install it.
+/// Whether a spec ID exists literally in the store (`spec_id` or
+/// `agreed_id`). Text parsers with no store handle of their own use it to keep
+/// a literal id that happens to be label-shaped (see [`expand_or_keep`]).
+pub type LiteralCheck = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
+fn literal_slot() -> &'static RwLock<Option<LiteralCheck>> {
+    static SLOT: OnceLock<RwLock<Option<LiteralCheck>>> = OnceLock::new();
+    SLOT.get_or_init(|| RwLock::new(None))
+}
+
+/// Load the store's map (best-effort) and install it, together with a
+/// literal-id check over the store's objects. The check scans `objects/`
+/// lazily, on the first label-shaped token a text parser meets, so commands
+/// that never see one pay nothing.
 #[cfg(feature = "native")]
 pub fn install_from_store(store_root: &Path) {
     install(NodeAliasMap::load(store_root));
+    let objects = store_root.join("objects");
+    let ids: Arc<OnceLock<std::collections::HashSet<String>>> = Arc::new(OnceLock::new());
+    let check: LiteralCheck = Arc::new(move |id: &str| {
+        ids.get_or_init(|| stored_spec_ids(&objects))
+            .contains(&id.trim().to_ascii_uppercase())
+    });
+    if let Ok(mut guard) = literal_slot().write() {
+        *guard = Some(check);
+    }
+}
+
+/// Every stored object's filename stem, `spec_id` and `agreed_id`,
+/// upper-cased. An unreadable object contributes only its stem.
+#[cfg(feature = "native")]
+fn stored_spec_ids(objects: &Path) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for (stem, path) in crate::object_store::list_objects(objects).unwrap_or_default() {
+        out.insert(stem.to_ascii_uppercase());
+        if let Ok(req) = crate::object_store::read_object_from_path(&path) {
+            out.extend(req.spec_id.map(|s| s.to_ascii_uppercase()));
+            out.extend(req.agreed_id.map(|s| s.to_ascii_uppercase()));
+        }
+    }
+    out
+}
+
+/// The installed literal-id check; a thread-scoped one ([`install_for_thread`])
+/// wins. `None` (nothing installed) treats no id as literal.
+fn installed_literal_check() -> Option<LiteralCheck> {
+    if let Some(check) = THREAD_LITERAL.with(|t| t.borrow().clone()) {
+        return check;
+    }
+    literal_slot().read().ok().and_then(|g| g.clone())
 }
 
 thread_local! {
     static THREAD_MAP: std::cell::RefCell<Option<Arc<NodeAliasMap>>> =
         const { std::cell::RefCell::new(None) };
+    static THREAD_LITERAL: std::cell::RefCell<Option<Option<LiteralCheck>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
-/// Restores the previous thread-scoped map on drop (see [`install_for_thread`]).
-pub struct ThreadMapGuard(Option<Arc<NodeAliasMap>>);
+/// Restores the previous thread-scoped map and literal check on drop (see
+/// [`install_for_thread`]).
+pub struct ThreadMapGuard(Option<Arc<NodeAliasMap>>, Option<Option<LiteralCheck>>);
 
 impl Drop for ThreadMapGuard {
     fn drop(&mut self) {
         let prev = self.0.take();
         THREAD_MAP.with(|t| *t.borrow_mut() = prev);
+        let prev_literal = self.1.take();
+        THREAD_LITERAL.with(|t| *t.borrow_mut() = prev_literal);
     }
 }
 
 /// Install `map` for the CURRENT THREAD only, shadowing the process-wide map
 /// until the guard drops. For tests: a long-lived server (MCP) re-installs the
-/// process map on every call, which must not race a test's own map.
+/// process map on every call, which must not race a test's own map. No id
+/// counts as literal on this thread (see [`install_for_thread_with_literals`]).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
 pub fn install_for_thread(map: NodeAliasMap) -> ThreadMapGuard {
-    ThreadMapGuard(THREAD_MAP.with(|t| t.replace(Some(Arc::new(map)))))
+    install_for_thread_with(map, None)
+}
+
+/// [`install_for_thread`] plus a thread-scoped literal-id check.
+pub fn install_for_thread_with_literals(
+    map: NodeAliasMap,
+    is_literal: impl Fn(&str) -> bool + Send + Sync + 'static,
+) -> ThreadMapGuard {
+    install_for_thread_with(map, Some(Arc::new(is_literal)))
+}
+
+fn install_for_thread_with(map: NodeAliasMap, check: Option<LiteralCheck>) -> ThreadMapGuard {
+    ThreadMapGuard(
+        THREAD_MAP.with(|t| t.replace(Some(Arc::new(map)))),
+        THREAD_LITERAL.with(|t| t.replace(Some(check))),
+    )
 }
 
 /// This process's installed map (empty until [`install`] runs); a
@@ -408,13 +475,24 @@ pub fn resolve_literal_first_opt<T>(
     }
 }
 
-/// [`expand_spec_id`], or `id` unchanged when it is not a known alias form.
-/// For parsers of hand-written text (commit trailers, `trace:` comments),
-/// which have no store to try the literal id first: they rely on
-/// `mutate_cas` refusing any label that is already the middle segment of
-/// a stored `spec_id`/`agreed_id`, so an expanded id never shadows a literal.
+/// The canonical id a hand-written spec-ID token (commit trailer, `Refs`
+/// group, `trace:` comment) names, by [`resolve_literal_first`]: `id` itself
+/// when it exists literally in the store (the installed literal check) or is
+/// not a known alias form, else its expanded canonical id. The literal check
+/// runs only for label-shaped tokens, so plain ids never trigger a store scan.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
 pub fn expand_or_keep(id: &str) -> String {
-    expand_spec_id(id).unwrap_or_else(|| id.to_string())
+    if expand_spec_id(id).is_none() {
+        return id.to_string();
+    }
+    let is_literal = installed_literal_check();
+    // The literal id "resolves" only when stored; the expanded id is the
+    // canonical one by construction.
+    resolve_literal_first_opt(id, |candidate| {
+        let stored = candidate != id || is_literal.as_ref().is_some_and(|check| check(candidate));
+        stored.then(|| candidate.to_string())
+    })
+    .unwrap_or_else(|| id.to_string())
 }
 
 /// Display form of a spec ID with the installed map (see
@@ -479,6 +557,27 @@ fn refuse_colliding_labels(
                 );
             }
         }
+    }
+    Ok(())
+}
+
+/// The reverse of [`refuse_colliding_labels`]: refuse registering node id
+/// `node_id` when it equals a current or retired label in
+/// `registry/node_aliases.toml`, since `TYPE-<node_id>-NNN` would then also be
+/// the labelled node's display form. Called by every node-registration path
+/// inside its store write lock, so a label bound concurrently is seen.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[cfg(feature = "native")]
+pub fn refuse_node_id_colliding_with_label(store_root: &Path, node_id: &str) -> anyhow::Result<()> {
+    let map = NodeAliasMap::load_strict(store_root)?;
+    if let Some(b) = map.binding(node_id.trim()) {
+        anyhow::bail!(
+            "node id {node_id} is already {} node label {} for node {}; spec IDs like TASK-{}-001 belong to that node — pick a different node id",
+            if b.retired { "a retired" } else { "the" },
+            b.label,
+            b.node,
+            b.label
+        );
     }
     Ok(())
 }

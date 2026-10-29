@@ -5181,7 +5181,15 @@ pub fn suggest_free_node_id(aida_repo: &Path, requested: &str) -> Result<NodeIdP
             std::collections::HashSet::new()
         };
 
-        let in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
+        // A node label (current or retired) also occupies the id, so the
+        // auto-suffix never suggests one registration would then refuse.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let labels = crate::node_alias::NodeAliasMap::load(aida_repo);
+        let in_use = |id: &str| {
+            registry.is_registered(id)
+                || blocks_in_use.contains(id)
+                || labels.node_for_label(id).is_some()
+        };
 
         if !in_use(requested) {
             return Ok(NodeIdProbe::Free);
@@ -5324,6 +5332,9 @@ pub fn register_node_full_identity(
                         next
                     }
                 };
+                // A node id equal to a node label would make TYPE-<id>-NNN name
+                // two nodes. trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+                crate::node_alias::refuse_node_id_colliding_with_label(aida_repo, &node_id)?;
 
                 // Step 3: Register the node, capturing clone_path for hijack-mark-
                 // in-place support (STORY-43). The clone path is the parent of the
@@ -5492,6 +5503,8 @@ pub fn register_node_remote_only(
                     id
                 );
             }
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            crate::node_alias::refuse_node_id_colliding_with_label(aida_repo, &id)?;
 
             // Step 3: Register the entry. clone_path is None: we don't know the
             // legacy clone's path from here, and recording the local clone's path
@@ -8034,6 +8047,31 @@ mod tests {
             suggest_free_node_id(&aida, "AL").unwrap(),
             NodeIdProbe::Free
         );
+    }
+
+    #[test]
+    fn test_node_registration_refuses_a_node_label() {
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, aida, _branch) = setup_remote_and_clone(dir.path(), "aida");
+        let mut map = crate::node_alias::NodeAliasMap::default();
+        map.set("HOME", "b6b1278890774ef993d2ebc327862470").unwrap();
+        map.save(&aida).unwrap();
+
+        // The auto-suffix probe treats a label as taken...
+        match suggest_free_node_id(&aida, "HOME").unwrap() {
+            NodeIdProbe::Taken { suggested } => assert_eq!(suggested, "HOME2"),
+            other => panic!("expected Taken, got {:?}", other),
+        }
+        // ...and every registration path refuses it, naming the binding.
+        let err = register_node_remote_only(&aida, "HOME".into(), 2, "spock", "s@x.com".into())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("node label HOME"), "{err}");
+        let err = register_node_full(&aida, Some("home".into()), 1, "imac", None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("b6b1278890774ef993d2ebc327862470"), "{err}");
     }
 
     /// BUG-82: merge_gate must skip agreed-id candidates that already

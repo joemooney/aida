@@ -553,13 +553,16 @@ pub fn format_dry_run_trailer_provenance(trailer: Result<&SquashTrailer, &str>) 
 /// Rewrite every friendly `TYPE-<LABEL>-NNN` inside a parenthesized group of
 /// `subject` (the trailer / `Refs` groups) to its canonical node-local id, so
 /// a squash subject written to main never carries a node label even when the
-/// PR title was typed with one. Text outside parentheses is untouched.
+/// PR title was typed with one. A label-shaped id that exists literally in the
+/// store is kept. Text outside parentheses is untouched.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
 pub fn canonicalize_node_label_ids(subject: &str) -> String {
     fn flush(out: &mut String, token: &mut String, in_group: bool) {
-        match aida_core::node_alias::expand_spec_id(token).filter(|_| in_group) {
-            Some(canonical) => out.push_str(&canonical),
-            None => out.push_str(token),
+        // Literal-first: a stored id that is label-shaped stays as written.
+        if in_group {
+            out.push_str(&aida_core::node_alias::expand_or_keep(token));
+        } else {
+            out.push_str(token);
         }
         token.clear();
     }

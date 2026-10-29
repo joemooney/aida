@@ -165,3 +165,57 @@ fn node_alias_stored_id_guard_covers_spec_id_and_agreed_id() {
     ok.rename("HOME", "DESK").unwrap();
     refuse_colliding_labels(dir.path(), &before, &ok).unwrap();
 }
+
+#[test]
+fn node_alias_node_id_registration_refuses_current_and_retired_labels() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let dir = tempfile::tempdir().unwrap();
+    let mut map = home();
+    map.rename("HOME", "DESK").unwrap();
+    map.save(dir.path()).unwrap();
+    for (id, kind) in [("DESK", "the node label"), ("home", "a retired node label")] {
+        let err = refuse_node_id_colliding_with_label(dir.path(), id)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(kind) && err.contains(NODE_A), "{err}");
+    }
+    refuse_node_id_colliding_with_label(dir.path(), "JM2").unwrap();
+    // No map file at all: nothing to collide with.
+    let empty = tempfile::tempdir().unwrap();
+    refuse_node_id_colliding_with_label(empty.path(), "HOME").unwrap();
+}
+
+#[test]
+fn node_alias_text_parsers_keep_a_stored_literal_id() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let canonical = format!("TASK-{NODE_A}-001").to_ascii_uppercase();
+    {
+        let _guard = install_for_thread(home());
+        assert_eq!(expand_or_keep("TASK-HOME-001"), canonical);
+    }
+    // A stored `TASK-HOME-001` (e.g. from a node registered as HOME) wins.
+    let _guard =
+        install_for_thread_with_literals(home(), |id| id.eq_ignore_ascii_case("TASK-HOME-001"));
+    assert_eq!(expand_or_keep("TASK-HOME-001"), "TASK-HOME-001");
+    assert_eq!(
+        expand_or_keep("TASK-HOME-002"),
+        canonical.replace("-001", "-002")
+    );
+    assert_eq!(expand_or_keep("TASK-095"), "TASK-095");
+}
+
+#[test]
+fn node_alias_stored_spec_ids_cover_spec_id_and_agreed_id() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let dir = tempfile::tempdir().unwrap();
+    let objects = dir.path().join("objects");
+    let mut req = crate::Requirement::new("t".into(), "b".into());
+    req.spec_id = Some("TASK-HOME-001".into());
+    req.agreed_id = Some("task-ak-007".into());
+    crate::object_store::write_object(&objects, &req).unwrap();
+    let ids = stored_spec_ids(&objects);
+    assert!(
+        ids.contains("TASK-HOME-001") && ids.contains("TASK-AK-007"),
+        "{ids:?}"
+    );
+}
