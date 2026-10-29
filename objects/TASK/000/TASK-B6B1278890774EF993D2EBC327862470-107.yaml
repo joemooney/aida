@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:08:19.489745209Z
-modified_at: 2026-10-29T18:38:47.251062473Z
+modified_at: 2026-10-29T18:38:50.907097372Z
 req_type: Task
 tags:
 - advisor-review
@@ -48,6 +48,19 @@ relationships:
   target_id: 01a188f4-b4fb-70c2-8b12-aafe1bea9209
   created_at: 2026-10-29T18:38:32.802401398Z
   created_by: ai:codex:joe
+comments:
+- id: 01a188f5-2a1b-7412-8266-694a89af4ddf
+  author: ai:codex:joe
+  content: |
+    A team lead can follow six configuration surfaces from the product site into a maintained guide: execution modes, agents, protocols, workflow policy, footprints and reporting. An original SVG shows the surfaces without implying a universal precedence chain or authority grant.
+
+    Adds docs/configuration-guide.md and its generated configuration.html page/graphic; extends the small renderer/shared layout and product navigation. The policy requests are illustrative, not live configuration writes. Source inspection covers ExecutionMode, agent_config readers, meta protocol rendering and current init/config/agent/history help.
+
+    Validation: make check-ci-fast: 35 fast-tier gates passed. Required fresh author self-check ran its own evidence commands and found no findings. No runtime, gate, template or hosting changes.
+
+    Stacked on PR #3096 to keep each approved slice independently reviewable. TASK-B6B1278890774EF993D2EBC327862470-107.
+  created_at: 2026-10-29T18:38:50.907097372Z
+  modified_at: 2026-10-29T18:38:50.907097372Z
 history:
 - id: 01a188d9-4dfd-77e3-82ab-8a4936e580da
   author: joe
