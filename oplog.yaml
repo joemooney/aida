@@ -85584,5 +85584,41 @@ operations:
   timestamp: 2026-10-29T13:06:17.912881840Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6691
+- id: 01a187c5-f67c-7482-bcb5-0c1134d0689f
+  target_id: 01a1874c-239a-7f73-afc0-c9a87b8256d8
+  author: aida
+  node_id: '1'
+  lamport: 6692
+  timestamp: 2026-10-29T13:07:40.284012003Z
+  kind: !SetDescription
+    description: |
+      ## Problem
+      STORY-B6B1278890774EF993D2EBC327862470-078 (friendly node aliases, PR-3089) promised that every surface taking a spec ID accepts TYPE-<LABEL>-NNN. `aida queue work STORY-HOME-080 --role implementer --no-human --dry-run` refuses with "`STORY-HOME-080` doesn't match any queued entry or known requirement", while `aida show STORY-HOME-080` and `aida edit STORY-HOME-080` resolve it (HOME bound 2026-10-29). The queue scope matcher compares raw strings instead of going through the shared literal-first resolver.
+
+      ## Acceptance
+      - `aida queue work`, `aida queue add/rm/done`, `aida claim`, `aida worktree add`, `aida session end --spec` and `aida pr auto-queue-review` resolve TYPE-<LABEL>-NNN through `aida_core::node_alias::resolve_literal_first`, and act on the canonical ID (leases, branch names and queue entries stay canonical).
+      - A test per command family: with a label bound, the alias form and the canonical form produce the same lease/queue entry; unknown label stays a not-found that names it.
+      - Audit the remaining spec-ID argument parsers in aida-cli-lib (grep clap args named spec/id/scope) and route any others found through the resolver in the same PR; list them in the PR body.
+
+      ## Test tier
+      LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
+      - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
+
+
+      ## PR-3091 round-1 advisor ruling (2026-10-29 05:15) — ONE rework push, no follow-up PR
+      BUNDLE all findings in .aida/review-verdicts/PR-3091.json, but fix them with ONE mechanism instead of per-command patches:
+      1. A single clap value parser (e.g. `spec_arg::SpecIdParser`, wrapping `spec_arg::canonical` / resolve_literal_first) is attached to EVERY user-facing spec-ID argument: review record/claim/prompt, gate run, dispatch review/impl, drain, approvals, human, plan, questions, worktree add/enter, session end --spec / start --owns / manifest, queue add/rm/done/work, claim, pr auto-queue-review, and any other found. Remove the ad-hoc canonicalize_* helpers this PR added where the parser replaces them (net fewer resolution sites).
+      2. ONE structural test walks the full clap command tree (`Cli::command()`), finds every argument whose id or value_name denotes a spec ID (spec, specs, owns, id/ID on spec commands, SPEC, SPEC-ID), and fails if it lacks the parser. That test is the ratchet; it replaces the per-command parse tests the reviewer asked for.
+      3. Keep end-to-end checks only where behavior goes beyond parsing: `review record STORY-HOME-NNN` keys the verdict under the canonical ID; `queue work` dry-run plan names the canonical ID (assert it, not the absence of an error); queue rm/done by alias acts on the entry `queue add` created; a (TYPE-<LABEL>-NNN) trailer in auto-queue-review files against the canonical ID.
+      Gate (LIGHT): targeted cargo test filters for spec_arg + bug_015 + story_078, plus make check-ci-fast. >10 files: also make test-touched once.
+
+
+      ## PR-3091 ROUND 2 ruling (advisor, 2026-10-29 06:10) — FINAL push; do these steps IN THIS ORDER
+      Round 2 did not implement the round-1 ruling's mechanism, so the audit missed commands again. Do not patch commands one by one.
+      STEP 1 — write the ratchet test FIRST: walk `Cli::command()` recursively; for every argument whose id or value_name is one of spec, specs, spec_id, owns, req, epic, SPEC, SPEC-ID, SPEC_ID, EPIC_OR_SPEC (case-insensitive), assert it uses `spec_arg::spec_id` as its value parser. Keep an explicit, commented ALLOWLIST only for non-ID keyword args (e.g. questions sweep --scope, triage --scope). Run it: its failure list IS the work list.
+      STEP 2 — attach `spec_arg::spec_id` to every arg the test flags (this covers ship [SPEC], commit --spec, zen, goal --spec/--epic, import-plan --spec, orchestrator state-snapshot --spec, history, trace --req, comment --re…, and anything else), until the test passes.
+      STEP 3 — DELETE the post-parse helpers: canonicalize_queue_spec_args (queue_cmd.rs), canonicalize_session_spec_args (agent_launch.rs), the run_claim/run_unclaim canonicalization (claim.rs), and handler-side canonical() calls at db_reconcile.rs:3120, plan_cmd.rs:763 and queue rework. ship::resolve_spec and commit normalize_spec must receive already-canonical IDs.
+      STEP 4 — end-to-end, exactly two tests: `review record STORY-<LABEL>-NNN` writes its verdict under the canonical ID; `aida commit --spec STORY-<LABEL>-NNN` produces the canonical (SPEC-ID) trailer. worktree add / session end staying parse-level is ACCEPTED (reason: the parser is the only resolution point once Step 3 lands, and the tree test proves it is attached).
+      Advisor cap: this is the last round; the next review checks Steps 1-4 and green CI only.
+clock: 6692
 node_id: '1'

@@ -21,12 +21,21 @@ description: |
   2. ONE structural test walks the full clap command tree (`Cli::command()`), finds every argument whose id or value_name denotes a spec ID (spec, specs, owns, id/ID on spec commands, SPEC, SPEC-ID), and fails if it lacks the parser. That test is the ratchet; it replaces the per-command parse tests the reviewer asked for.
   3. Keep end-to-end checks only where behavior goes beyond parsing: `review record STORY-HOME-NNN` keys the verdict under the canonical ID; `queue work` dry-run plan names the canonical ID (assert it, not the absence of an error); queue rm/done by alias acts on the entry `queue add` created; a (TYPE-<LABEL>-NNN) trailer in auto-queue-review files against the canonical ID.
   Gate (LIGHT): targeted cargo test filters for spec_arg + bug_015 + story_078, plus make check-ci-fast. >10 files: also make test-touched once.
+
+
+  ## PR-3091 ROUND 2 ruling (advisor, 2026-10-29 06:10) — FINAL push; do these steps IN THIS ORDER
+  Round 2 did not implement the round-1 ruling's mechanism, so the audit missed commands again. Do not patch commands one by one.
+  STEP 1 — write the ratchet test FIRST: walk `Cli::command()` recursively; for every argument whose id or value_name is one of spec, specs, spec_id, owns, req, epic, SPEC, SPEC-ID, SPEC_ID, EPIC_OR_SPEC (case-insensitive), assert it uses `spec_arg::spec_id` as its value parser. Keep an explicit, commented ALLOWLIST only for non-ID keyword args (e.g. questions sweep --scope, triage --scope). Run it: its failure list IS the work list.
+  STEP 2 — attach `spec_arg::spec_id` to every arg the test flags (this covers ship [SPEC], commit --spec, zen, goal --spec/--epic, import-plan --spec, orchestrator state-snapshot --spec, history, trace --req, comment --re…, and anything else), until the test passes.
+  STEP 3 — DELETE the post-parse helpers: canonicalize_queue_spec_args (queue_cmd.rs), canonicalize_session_spec_args (agent_launch.rs), the run_claim/run_unclaim canonicalization (claim.rs), and handler-side canonical() calls at db_reconcile.rs:3120, plan_cmd.rs:763 and queue rework. ship::resolve_spec and commit normalize_spec must receive already-canonical IDs.
+  STEP 4 — end-to-end, exactly two tests: `review record STORY-<LABEL>-NNN` writes its verdict under the canonical ID; `aida commit --spec STORY-<LABEL>-NNN` produces the canonical (SPEC-ID) trailer. worktree add / session end staying parse-level is ACCEPTED (reason: the parser is the only resolution point once Step 3 lands, and the tree test proves it is attached).
+  Advisor cap: this is the last round; the next review checks Steps 1-4 and green CI only.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T13:06:16.982334648Z
+modified_at: 2026-10-29T13:07:39.373495094Z
 req_type: Bug
 tags:
 - id-allocation
@@ -160,6 +169,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a187c5-f610-7fd2-891e-3acb8c4b164b
+  author: joe
+  timestamp: 2026-10-29T13:07:40.176815423Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
