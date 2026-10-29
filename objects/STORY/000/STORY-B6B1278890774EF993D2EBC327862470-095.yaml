@@ -26,13 +26,64 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T22:47:20.232117001Z
-modified_at: 2026-10-29T22:47:20.232117001Z
+modified_at: 2026-10-29T22:48:07.316961621Z
 req_type: Story
 tags:
 - architecture
 - from-operator
 - id-allocation
 - partitioned-store
+comments:
+- id: 01a189d9-6194-7773-908c-0a3b8d535eee
+  author: joe
+  content: |
+    SKETCH v1 (STORY-HOME-095): hierarchical block delegation
+
+    Status: proposal for advisor signoff. No code changed. Supersedes BUG-2017 acceptance item 4 and its single-HOME model; keeps its items 1-3 and 5.
+
+    ## Topology this must serve
+    HOME (primary clone, origin=GitHub, mirror=GitLab) is root. WORK reaches HOME only through the GitLab hub, which is a bare repo, not a running AIDA node. A laptop clone may hang off HOME. So an "upstream" is a git remote ref that holds a pool, not necessarily a live AIDA process: the CAS on that ref is what serializes claims, and whoever last wrote the pool there (HOME) is its authority.
+
+    ## Data model (store, `registry/`)
+    - `pools.yaml`: one pool per holder, `{pool_id, holder_node, type_prefix|*, ranges[], parent_pool_id|null}`. The root pool has `parent_pool_id: null` and is the only place new ranges are created.
+    - `blocks.yaml` (existing `AgreedIdBlock`): add `pool_id` (lineage) and keep `next`. A block is spendable on node N only if `block.node_id == N.binding` and its pool chain reaches the root through N's declared upstream chain.
+    - A pool held for a bare hub is written by its parent (HOME pre-delegates "hub pool" to the GitLab hub ref); downstream nodes of that hub claim from it.
+    - Root marker: `root.yaml {root_pool_id, holder_node, epoch}`; `epoch` bumps on transfer.
+    - Clone-local (common git dir, not store): `aida-allocation.toml` evolves from `{authoritative}` to `{version=2, role = root|node, upstream = "<remote>"}`. Version 1 `authoritative=true` reads as `role=root`. Missing means node with no upstream, i.e. node-local only (BUG-2017 default unchanged).
+
+    ## Flows
+    1. Claim (`aida push`/`aida pull` sync step, or explicit `aida node claim`): fetch upstream store ref; carve the lowest free sub-range of the requested size from the upstream pool (or the hub pool) into a new block for this node; one commit "claim BUG 2400-2499 for node <opaque>"; push with lease to the upstream ref. Non-fast-forward: refetch, recarve, retry (bounded). Commit lands locally only after the push succeeds.
+    2. Replenish: trigger only when remaining < LOW_THRESHOLD for a type used in the last N days; pull never claims otherwise. Intermediate pools (incl. HOME's pre-delegated hub pool) top up from their parent with the same flow and a larger size.
+    3. Dispense (`aida add`): unchanged hot path (local block, local counter, dispense lock). No network.
+    4. Offline/exhausted: node-local ID as today. Promotion: a node that holds a block may promote ITS OWN node-local IDs into that block (UUID preserved, old ID kept as alias). HOME's existing merge-gate renumbering of other nodes' IDs keeps working for nodes that never get a block.
+    5. Transfer root (`aida node transfer-root <node>`, run on current root): commit moves `root.yaml` holder, reparents old root pool under the new root, bumps epoch, CAS-pushed. Existing lineage stays valid via the old root. Downstream `upstream` settings unchanged.
+    6. Migration (`aida node migrate-blocks --dry-run` then apply, operator on HOME): enroll root; create root pool covering all ranges not held by open blocks; attach every open block to the root pool; rebind legacy node "1" blocks to HOME's current binding; run BUG-2017 preflight and refuse on any overlap, listing all conflicts. Work-owned nodes 3-8 blocks: attach to a "work" pool delegated to the GitLab hub if non-overlapping, else report.
+
+    ## Enforcement seams
+    Reuse BUG-2017's allocator inventory. `effective_policy()` changes from "authoritative flag or node-aware-only" to "has a spendable block by lineage, else node-aware-only". `require_global` becomes `require_spendable_block(type)`. Root-only operations (create range, transfer-root, migrate) gate on `role=root` plus matching `root.yaml` holder. Remote is never trusted by URL; only the declared `upstream` remote name. Mirror remotes (`store.sync.mirror_remotes`) are rejected as upstream.
+
+    ## Failure modes and tests
+    - Two siblings race a claim on one upstream ref: exactly one wins; loser retries and gets a disjoint range.
+    - Claim pushed to a mirror or a non-upstream remote: refused; block not spendable.
+    - Imported block with no lineage to this node: never spendable (regression for BUG-2017's threat).
+    - Two roots (store merged from two lineages with distinct root.yaml): preflight refuses, lists both.
+    - Offline add, later claim, then self-promotion: UUID, comments, traces, old-ID lookups survive; second promotion is a no-op.
+    - Transfer root then a claim against the old root: still valid; claim against stale epoch after transfer: refetch and succeed or refuse clearly.
+    - Silent-downgrade notice fires once per session with the specific reason.
+    - Pseudonymous: claim commits and pool records carry only opaque node ids (STORY-1742 scanner runs on them).
+
+    ## Slices
+    1. Model + local role/upstream setting (v1 compat), lineage check in `effective_policy`, `aida node show` reporting, downgrade notice. Root-only enroll command. (Refs)
+    2. Claim/replenish over CAS to declared upstream, wired into push/pull; hub pre-delegated pools. (Refs)
+    3. Self-promotion of node-local IDs; migrate-blocks; transfer-root; docs (docs/cli/10-storage.md). Final (STORY-HOME-095).
+
+    ## Open questions for advisor
+    - Default block sizes per level (leaf 100, hub pool 1000?) and the LOW_THRESHOLD trigger.
+    - Should `aida pull` claim at all, or only `aida push`? (Proposed: both, threshold-gated, with a notice.)
+    - Self-promotion vs HOME-only renumbering: is it acceptable for a leaf to renumber its own node-local IDs once it holds a block?
+  created_at: 2026-10-29T22:48:07.316961621Z
+  modified_at: 2026-10-29T22:48:07.316961621Z
+  session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
