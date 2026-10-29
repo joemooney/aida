@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T11:46:50.807919819Z
-modified_at: 2026-10-29T14:59:46.727822519Z
+modified_at: 2026-10-29T15:36:38.149516906Z
 req_type: Story
 relationships:
 - rel_type:
@@ -55,6 +55,12 @@ comments:
   content: 'Round 4 review (advisor, 2026-10-29 08:00) for PR-3090 at 17ea28eb. Check the 5 round-3 findings against the ''ROUND 3 advisor ruling'' in STORY-HOME-080''s description: every verdict reader goes through gate::ledger::project (no direct legacy verdict-file reads; ratchet covers it), the queue summary and ship/merge-hold readers no longer shadow ledger-only verdicts, the calibration reader uses the projection, and the expired-grant-at-collection test exists. Dual-write remains accepted. Each unmet item = its own finding; minors rule-once.'
   created_at: 2026-10-29T14:59:46.727822519Z
   modified_at: 2026-10-29T14:59:46.727822519Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a1884e-5805-7e70-aac0-64d44f29e0a9
+  author: joe
+  content: 'Round 5 review (advisor, 2026-10-29 08:38) for PR-3090 at 7dac907. Check ONLY the 4 round-4 findings: review verdict --json serializes the ledger-selected record; a reader ratchet fails on any direct legacy verdict-file read outside gate/ledger/legacy.rs; findings_gate completion reads the projection; human.rs spec_review_approved orders by ledger time only. Plus CI at this head. Dual-write accepted. Minors rule-once (bundle-or-accept in the verdict).'
+  created_at: 2026-10-29T15:36:38.149516906Z
+  modified_at: 2026-10-29T15:36:38.149516906Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1877c-19b8-7861-83cd-857726302b71
