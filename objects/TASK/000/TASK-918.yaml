@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:34.192837945Z
-modified_at: 2026-10-29T06:39:49.308727743Z
+modified_at: 2026-10-29T06:39:52.868267477Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,6 +22,12 @@ comments:
   content: 'Advisor note (overnight groom): NOT headless-implementable — this is a data/analysis task (join field-study violations against run windows over collected data), not a code deliverable. Needs the harvest data to exist first. Leave parked, do not queue for a headless implementer.'
   created_at: 2026-07-01T06:45:08.861486171Z
   modified_at: 2026-07-01T06:45:08.861486171Z
+- id: 01a18662-ee24-7370-99f1-1d72be5b5406
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject with TASK-916.'
+  created_at: 2026-10-29T06:39:52.868267477Z
+  modified_at: 2026-10-29T06:39:52.868267477Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18662-d4b8-7510-903c-6463fd4129ef
   author: joe
