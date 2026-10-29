@@ -222,8 +222,10 @@ You've seen the floor the whole system stands on — the git-canonical store and
 <!-- trace:BUG-2017 | ai:codex -->
 
 Global allocation requires an explicit local setting in the clone's common Git
-directory, shared by its linked worktrees. `aida-allocation.toml` uses version 1
-and an `authoritative` boolean. Missing means non-authoritative; malformed or
+directory, shared by its linked worktrees. `aida-allocation.toml` version 1 holds
+an `authoritative` boolean. Version 2 holds a role and an upstream (see
+[Block delegation](#block-delegation-root-upstream-and-lineage)), and only the
+root is authoritative. Missing means non-authoritative; malformed or
 unsafe files refuse allocation. A normal Git clone does not inherit this file.
 Store contents, cached blocks, transport enrollment, forge URLs, user preferences
 and environment variables do not grant authority.
@@ -247,6 +249,49 @@ ID as an alias. The operator enrolls HOME explicitly; nothing enrolls a clone
 automatically. Do not create an authority setting merely to make an unproven
 global allocation succeed. The writer checklist is in the
 [allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
+
+#### Block delegation: root, upstream and lineage
+
+<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude -->
+
+ID blocks are handed down a tree. Exactly one node per store is the **root**: it
+owns the unallocated ID space. Every other clone declares one **upstream**, a
+git remote it takes blocks from. The clone-local setting is now version 2:
+`version = 2`, `role = "root"` or `"node"`, and for a node an optional
+`upstream = "<remote>"`. A version 1 file with `authoritative = true` still
+reads as the root.
+
+- `aida node enroll-root [--dry-run]` makes this clone the root. Run it once, on
+  the primary clone. It records the root in the store's `registry/root.yaml`
+  (with an epoch that changes when the role is handed over) and marks the clone.
+  It refuses when another node already holds the role. Re-running it on the root
+  changes nothing.
+- `aida node upstream [<remote>] [--clear]` shows, sets or clears the upstream.
+  The root has none. A remote listed in `[store.sync] mirror_remotes` is
+  refused, because a mirror copies records and never grants blocks.
+- `aida node show` reports the clone's role, upstream and the store's root. It
+  lists every pool with its free space, this node's blocks with whether each one
+  is spendable (and if not, why), and any lineage conflict.
+
+Lineage lives in `registry/pools.yaml`. Each pool is an append-only grant of one
+type's range to a holder: `pool_id`, `type_prefix`, range, `parent_pool_id`
+(empty only for a root pool), `holder_node`, and `home_ref`, the one remote ref
+where claims against that pool are pushed. A block records the `pool_id` it was
+carved from. Free space is derived (the parent's range minus its children) and
+never stored, so stores merged from two hubs union cleanly. Overlapping
+children, a child outside its parent, a type mismatch, an unknown parent, a
+cycle, or a root pool not held by the root are listed as conflicts and never
+resolved automatically. A clone may spend a block only when the block is bound
+to its node and the block's pool chain reaches a root pool held by the root.
+Off the root, the block's pool must also be homed on the declared upstream. A
+block that merely appears in an imported store is never spendable.
+
+When blocks are configured but this clone cannot use one, `aida add` issues a
+node-local ID and prints the reason once per session: no upstream, no block
+from the upstream yet, no lineage, or an exhausted block. Claiming blocks from
+the upstream during `aida push` and `aida node claim`, promoting a node's own
+node-local IDs into a block, migrating existing blocks, and handing the root
+role over are not available yet.
 
 #### Allocation claims at every store sync
 

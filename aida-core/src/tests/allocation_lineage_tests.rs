@@ -1,0 +1,434 @@
+//! Lineage records: derived free space, the disjointness invariant, and
+//! which blocks a clone may spend.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+use super::*;
+
+const ROOT: &str = "aaaa";
+const HUB: &str = "bbbb";
+const LEAF: &str = "cccc";
+
+fn pool(
+    id: &str,
+    typ: &str,
+    start: u32,
+    end: u32,
+    parent: Option<&str>,
+    holder: &str,
+    home: &str,
+) -> PoolRecord {
+    PoolRecord {
+        pool_id: id.into(),
+        type_prefix: typ.into(),
+        range_start: start,
+        range_end: end,
+        parent_pool_id: parent.map(Into::into),
+        holder_node: holder.into(),
+        home_ref: home.into(),
+    }
+}
+
+fn block(node: &str, typ: &str, start: u32, end: u32, pool: Option<&str>) -> AgreedIdBlock {
+    AgreedIdBlock {
+        node_id: node.into(),
+        owner: String::new(),
+        hostname: String::new(),
+        type_prefix: typ.into(),
+        range_start: start,
+        range_end: end,
+        next: start,
+        allocated_at: "2026-10-29T00:00:00Z".parse().unwrap(),
+        pool_id: pool.map(Into::into),
+    }
+}
+
+fn root() -> RootRecord {
+    RootRecord {
+        holder_node: ROOT.into(),
+        epoch: 1,
+    }
+}
+
+/// HOME root pool BUG 1-10000, a hub pool 2001-3000 homed on gitlab.
+fn tree() -> Vec<PoolRecord> {
+    vec![
+        pool(
+            "p-root-bug",
+            "BUG",
+            1,
+            10_000,
+            None,
+            ROOT,
+            "origin/aida-store",
+        ),
+        pool(
+            "p-hub-bug",
+            "BUG",
+            2001,
+            3000,
+            Some("p-root-bug"),
+            HUB,
+            "gitlab/aida-store",
+        ),
+    ]
+}
+
+#[test]
+fn free_space_is_parent_range_minus_children() {
+    let pools = tree();
+    let blocks = vec![
+        block(ROOT, "BUG", 1, 100, Some("p-root-bug")),
+        block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug")),
+        // A legacy block with no lineage takes nothing from any pool.
+        block(LEAF, "BUG", 5000, 5100, None),
+    ];
+    assert_eq!(
+        free_ranges(&pools[0], &pools, &blocks),
+        vec![(101, 2000), (3001, 10_000)]
+    );
+    assert_eq!(free_ranges(&pools[1], &pools, &blocks), vec![(2101, 3000)]);
+    let full = pool("p", "BUG", 1, 10, None, ROOT, "origin/aida-store");
+    let children = vec![full.clone(), pool("c", "BUG", 1, 10, Some("p"), HUB, "x/y")];
+    assert!(free_ranges(&full, &children, &[]).is_empty());
+}
+
+#[test]
+fn a_consistent_tree_has_no_conflicts() {
+    let blocks = vec![block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug"))];
+    assert_eq!(check_invariants(&tree(), &blocks, Some(&root())), vec![]);
+}
+
+#[test]
+fn two_claims_union_merged_from_two_hubs_are_listed_not_resolved() {
+    // Each hub's store took a claim from the same free range of one pool.
+    let via_github = PoolRegistry { pools: tree() };
+    let mut via_gitlab = via_github.clone();
+    via_gitlab.pools.push(pool(
+        "p-hub2-bug",
+        "BUG",
+        2500,
+        3500,
+        Some("p-root-bug"),
+        LEAF,
+        "gitlab/aida-store",
+    ));
+    let merged = via_github.union(&via_gitlab);
+    // Identical records collapse; the new claim is kept for the check.
+    assert_eq!(merged.pools.len(), 3);
+    let blocks = vec![
+        block(LEAF, "BUG", 2050, 2149, Some("p-hub-bug")),
+        block(HUB, "BUG", 2100, 2199, Some("p-hub-bug")),
+    ];
+    let conflicts = check_invariants(&merged.pools, &blocks, Some(&root()));
+    let overlaps: Vec<_> = conflicts
+        .iter()
+        .filter(|c| matches!(c, LineageConflict::Overlap { .. }))
+        .collect();
+    // hub vs hub2 under the root pool, and the two blocks under the hub.
+    assert_eq!(overlaps.len(), 2, "{conflicts:?}");
+}
+
+#[test]
+fn every_structural_violation_is_listed() {
+    let pools = vec![
+        pool(
+            "p-root-bug",
+            "BUG",
+            1,
+            1000,
+            None,
+            ROOT,
+            "origin/aida-store",
+        ),
+        pool(
+            "p-out",
+            "BUG",
+            900,
+            1100,
+            Some("p-root-bug"),
+            HUB,
+            "gitlab/aida-store",
+        ),
+        pool(
+            "p-type",
+            "FR",
+            1,
+            10,
+            Some("p-root-bug"),
+            HUB,
+            "gitlab/aida-store",
+        ),
+        pool(
+            "p-orphan",
+            "BUG",
+            1,
+            10,
+            Some("p-missing"),
+            HUB,
+            "gitlab/aida-store",
+        ),
+        pool("p-a", "BUG", 1, 10, Some("p-b"), HUB, "gitlab/aida-store"),
+        pool("p-b", "BUG", 1, 10, Some("p-a"), HUB, "gitlab/aida-store"),
+        pool(
+            "p-rogue-root",
+            "TASK",
+            1,
+            10,
+            None,
+            HUB,
+            "gitlab/aida-store",
+        ),
+        pool("p-root-bug", "BUG", 1, 1000, None, ROOT, "other/aida-store"),
+    ];
+    let blocks = vec![
+        block(LEAF, "*", 1, 10, Some("p-root-bug")),
+        block(LEAF, "BUG", 10, 5, Some("p-root-bug")),
+    ];
+    let conflicts = check_invariants(&pools, &blocks, Some(&root()));
+    let has = |pred: fn(&LineageConflict) -> bool| conflicts.iter().any(pred);
+    assert!(has(|c| matches!(c, LineageConflict::DuplicatePoolId(_))));
+    assert!(has(|c| matches!(c, LineageConflict::OutsideParent { .. })));
+    assert!(has(|c| matches!(c, LineageConflict::TypeMismatch { .. })));
+    assert!(has(|c| matches!(c, LineageConflict::UnknownParent { .. })));
+    assert!(has(|c| matches!(c, LineageConflict::Cycle(_))));
+    assert!(has(|c| matches!(
+        c,
+        LineageConflict::RootPoolNotHeldByRoot { .. }
+    )));
+    assert!(has(|c| matches!(c, LineageConflict::WildcardType(_))));
+    assert!(has(|c| matches!(c, LineageConflict::InvalidRange(_))));
+    // A root pool with no enrolled root is never legitimate.
+    assert!(check_invariants(&tree()[..1], &[], None)
+        .iter()
+        .any(|c| matches!(c, LineageConflict::RootPoolNotHeldByRoot { .. })));
+}
+
+#[test]
+fn lineage_walks_to_the_root_and_refuses_cycles() {
+    let pools = tree();
+    let chain = lineage(&pools, "p-hub-bug").unwrap();
+    assert_eq!(
+        chain.iter().map(|p| p.pool_id.as_str()).collect::<Vec<_>>(),
+        ["p-hub-bug", "p-root-bug"]
+    );
+    let cyclic = vec![
+        pool("a", "BUG", 1, 2, Some("b"), HUB, "x/y"),
+        pool("b", "BUG", 1, 2, Some("a"), HUB, "x/y"),
+    ];
+    assert!(lineage(&cyclic, "a").is_err());
+    assert!(lineage(&pools, "missing").is_err());
+}
+
+fn view<'a>(
+    pools: &'a [PoolRecord],
+    blocks: &'a [AgreedIdBlock],
+    root: Option<&'a RootRecord>,
+    node: &'a str,
+    role: AllocationRole,
+    upstream: Option<&'a str>,
+) -> LineageView<'a> {
+    LineageView {
+        pools,
+        blocks,
+        root,
+        node,
+        role,
+        upstream,
+    }
+}
+
+#[test]
+fn a_block_granted_through_the_declared_upstream_is_spendable() {
+    let pools = tree();
+    let blocks = vec![block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug"))];
+    let r = root();
+    let v = view(
+        &pools,
+        &blocks,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(v.spendable_block("bug"), Ok(0));
+    // The root spends blocks carved from its own pool without an upstream.
+    let home = vec![block(ROOT, "BUG", 1, 100, Some("p-root-bug"))];
+    let v = view(&pools, &home, Some(&r), ROOT, AllocationRole::Root, None);
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+}
+
+#[test]
+fn an_imported_block_without_lineage_is_never_spendable() {
+    let pools = tree();
+    let r = root();
+    // No pool_id at all (a legacy or imported block).
+    let legacy = vec![block(LEAF, "BUG", 2001, 2100, None)];
+    let v = view(
+        &pools,
+        &legacy,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NoLineage("BUG".into()))
+    );
+    // A pool_id naming a pool this store does not record.
+    let dangling = vec![block(LEAF, "BUG", 2001, 2100, Some("p-elsewhere"))];
+    let v = view(
+        &pools,
+        &dangling,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NoLineage(_)) | Err(Unusable::Conflict(_))
+    ));
+    // A chain that reaches a root pool held by a node that is not the root.
+    let foreign = vec![pool(
+        "p-other-root",
+        "BUG",
+        1,
+        100,
+        None,
+        HUB,
+        "elsewhere/aida-store",
+    )];
+    let blocks = vec![block(LEAF, "BUG", 1, 10, Some("p-other-root"))];
+    let v = view(
+        &foreign,
+        &blocks,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("elsewhere"),
+    );
+    assert!(v.spendable_block("BUG").is_err());
+    // Another node's block is never this node's.
+    let theirs = vec![block(HUB, "BUG", 2001, 2100, Some("p-hub-bug"))];
+    let v = view(
+        &pools,
+        &theirs,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NoBlock("BUG".into()))
+    );
+}
+
+#[test]
+fn a_mirror_or_other_remote_confers_nothing() {
+    let pools = tree();
+    let blocks = vec![block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug"))];
+    let r = root();
+    let v = view(
+        &pools,
+        &blocks,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("origin"),
+    );
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::WrongUpstream { .. })
+    ));
+    let v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    assert_eq!(v.spendable_block("BUG"), Err(Unusable::NoUpstream));
+}
+
+#[test]
+fn exhausted_and_conflicting_blocks_say_why() {
+    let pools = tree();
+    let r = root();
+    let mut spent = block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug"));
+    spent.next = 2101;
+    let blocks = vec![spent];
+    let v = view(
+        &pools,
+        &blocks,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::Exhausted("BUG".into()))
+    );
+    let overlapping = vec![
+        block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug")),
+        block(HUB, "BUG", 2050, 2150, Some("p-hub-bug")),
+    ];
+    let v = view(
+        &pools,
+        &overlapping,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::Conflict(_))
+    ));
+}
+
+#[test]
+fn records_round_trip_and_refuse_unknown_fields() {
+    let reg = PoolRegistry { pools: tree() };
+    let text = serde_yaml::to_string(&reg).unwrap();
+    assert_eq!(serde_yaml::from_str::<PoolRegistry>(&text).unwrap(), reg);
+    assert!(serde_yaml::from_str::<PoolRecord>(
+        "pool_id: p\ntype_prefix: BUG\nrange_start: 1\nrange_end: 2\nholder_node: a\nhome_ref: o/s\nranges: []\n"
+    )
+    .is_err());
+    // A legacy block without pool_id still loads; an absent pool_id is not written.
+    let legacy = block(LEAF, "BUG", 1, 2, None);
+    assert!(!serde_yaml::to_string(&legacy).unwrap().contains("pool_id"));
+}
+
+#[test]
+fn enrollment_refuses_a_second_root_and_is_idempotent_for_the_holder() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        enroll_preflight(dir.path(), ROOT).unwrap(),
+        EnrollOutcome::Enrolled
+    );
+    std::fs::create_dir_all(dir.path().join("registry")).unwrap();
+    std::fs::write(
+        dir.path().join(ROOT_YAML_REL),
+        serde_yaml::to_string(&root()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        enroll_preflight(dir.path(), ROOT).unwrap(),
+        EnrollOutcome::AlreadyRoot
+    );
+    let err = enroll_preflight(dir.path(), LEAF).unwrap_err().to_string();
+    assert!(err.contains("already the allocation root"), "{err}");
+}
+
+#[test]
+fn enroll_root_commits_the_root_record_once() {
+    let dir = tempfile::tempdir().unwrap();
+    crate::git_ops::init(dir.path()).unwrap();
+    assert_eq!(
+        enroll_root(dir.path(), ROOT).unwrap(),
+        EnrollOutcome::Enrolled
+    );
+    assert_eq!(RootRecord::load(dir.path()).unwrap(), Some(root()));
+    assert_eq!(
+        enroll_root(dir.path(), ROOT).unwrap(),
+        EnrollOutcome::AlreadyRoot
+    );
+    assert!(enroll_root(dir.path(), LEAF).is_err());
+}

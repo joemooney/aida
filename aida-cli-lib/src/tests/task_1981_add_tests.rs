@@ -45,6 +45,7 @@ fn task_1981_run_add_waits_for_sync_before_taking_blocks_lock_and_reloads_pointe
         range_end: 199,
         next: 100,
         allocated_at: chrono::Utc::now(),
+        pool_id: None,
     });
     registry.save(&blocks_path).unwrap();
     aida_core::git_ops::add(&store, &["registry/blocks.yaml"]).unwrap();

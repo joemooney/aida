@@ -6,11 +6,137 @@ use std::path::{Path, PathBuf};
 
 pub const CONFIG_FILE: &str = "aida-allocation.toml";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+pub use crate::allocation_lineage::AllocationRole;
+
+/// The clone-local allocation setting. Version 1 holds `authoritative`;
+/// version 2 holds `role` and, off the root, the declared `upstream` remote.
+/// `authoritative` stays the derived "this clone is the root" answer every
+/// BUG-2017 gate keys on.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+#[derive(Clone, Debug, Serialize)]
 pub struct AllocationMode {
     pub version: u32,
     pub authoritative: bool,
+    pub role: AllocationRole,
+    pub upstream: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ModeV1 {
+    #[allow(dead_code)]
+    version: u32,
+    authoritative: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ModeV2 {
+    #[allow(dead_code)]
+    version: u32,
+    role: AllocationRole,
+    #[serde(default)]
+    upstream: Option<String>,
+}
+
+impl AllocationMode {
+    fn node_local() -> Self {
+        Self {
+            version: 1,
+            authoritative: false,
+            role: AllocationRole::Node,
+            upstream: None,
+        }
+    }
+}
+
+/// A git remote name usable as an upstream: plain, bounded, no path parts.
+pub fn valid_remote_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && !name.starts_with(['.', '-'])
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
+
+fn parse_mode(text: &str) -> Result<AllocationMode> {
+    let invalid = || anyhow::anyhow!("invalid allocation setting");
+    let table: toml::Table = toml::from_str(text).map_err(|_| invalid())?;
+    match table.get("version").and_then(toml::Value::as_integer) {
+        Some(1) => {
+            let v1: ModeV1 = toml::from_str(text).map_err(|_| invalid())?;
+            Ok(AllocationMode {
+                version: 1,
+                authoritative: v1.authoritative,
+                role: if v1.authoritative {
+                    AllocationRole::Root
+                } else {
+                    AllocationRole::Node
+                },
+                upstream: None,
+            })
+        }
+        Some(2) => {
+            let v2: ModeV2 = toml::from_str(text).map_err(|_| invalid())?;
+            if let Some(upstream) = &v2.upstream {
+                if v2.role == AllocationRole::Root {
+                    bail!("invalid allocation setting: the root has no upstream")
+                }
+                if !valid_remote_name(upstream) {
+                    bail!("invalid allocation setting: upstream is not a plain git remote name")
+                }
+            }
+            Ok(AllocationMode {
+                version: 2,
+                authoritative: v2.role == AllocationRole::Root,
+                role: v2.role,
+                upstream: v2.upstream,
+            })
+        }
+        Some(_) => bail!("unsupported allocation setting version"),
+        None => Err(invalid()),
+    }
+}
+
+/// Write the version-2 setting into the clone's common Git directory. Only
+/// explicit operator commands call this (`aida node enroll-root`,
+/// `aida node upstream`); shared store content never does.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+pub fn write_mode(root: &Path, role: AllocationRole, upstream: Option<&str>) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    if let Some(upstream) = upstream {
+        anyhow::ensure!(role == AllocationRole::Node, "the root has no upstream");
+        anyhow::ensure!(
+            valid_remote_name(upstream),
+            "upstream must be a plain git remote name"
+        );
+    }
+    use crate::toml_quote::toml_string;
+    let mut text = format!(
+        "version = 2\nrole = {}\n",
+        toml_string(match role {
+            AllocationRole::Root => "root",
+            AllocationRole::Node => "node",
+        })
+    );
+    if let Some(upstream) = upstream {
+        text.push_str(&format!("upstream = {}\n", toml_string(upstream)));
+    }
+    let common = common_dir(root)?;
+    let tmp = common.join(format!("{CONFIG_FILE}.tmp"));
+    let _ = std::fs::remove_file(&tmp);
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&tmp)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()?;
+    std::fs::rename(&tmp, common.join(CONFIG_FILE))?;
+    Ok(())
 }
 
 // The legacy model API is infallible and signals a refused allocation with
@@ -113,10 +239,7 @@ pub fn resolve(root: &Path) -> Result<AllocationMode> {
     {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(AllocationMode {
-                version: 1,
-                authoritative: false,
-            })
+            return Ok(AllocationMode::node_local())
         }
         Err(_) => bail!("allocation setting could not be safely read"),
     };
@@ -134,12 +257,7 @@ pub fn resolve(root: &Path) -> Result<AllocationMode> {
     if text.len() > 4096 {
         bail!("allocation setting exceeds its bound")
     }
-    let mode: AllocationMode =
-        toml::from_str(&text).map_err(|_| anyhow::anyhow!("invalid allocation setting"))?;
-    if mode.version != 1 {
-        bail!("unsupported allocation setting version")
-    }
-    Ok(mode)
+    parse_mode(&text)
 }
 
 /// A file-only serializer outside any Git clone is not an allocation writer.
@@ -171,9 +289,75 @@ pub fn effective_policy(
         return Ok(configured);
     }
     if configured == crate::IdFormatPolicy::BlocksOnly {
-        require_global(root)?;
+        // Name the missing piece rather than only "not authoritative".
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+        match resolve(root)?.upstream {
+            None => bail!(
+                "id_format policy is `blocks-only` but this clone cannot use blocks: {}",
+                crate::allocation_lineage::Unusable::NoUpstream
+            ),
+            Some(upstream) => bail!(
+                "id_format policy is `blocks-only` but this clone cannot dispense from a block granted by its upstream `{upstream}` yet; it may allocate only node-local IDs"
+            ),
+        }
     }
     Ok(crate::IdFormatPolicy::NodeAwareOnly)
+}
+
+/// Why a non-root clone issues node-local `type_prefix` IDs although
+/// blocks are configured, read from its upstream setting and the store's
+/// lineage records. `None` on the root, which dispenses as before.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+pub fn downgrade_reason(root: &Path, type_prefix: &str) -> Result<Option<String>> {
+    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
+    let mode = resolve(root)?;
+    if mode.authoritative {
+        return Ok(None);
+    }
+    let node = match node(root) {
+        Ok(node) => node,
+        Err(e) => return Ok(Some(format!("{e:#}"))),
+    };
+    let pools = PoolRegistry::load(root)?;
+    let blocks = crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))?;
+    let root_record = RootRecord::load(root)?;
+    let view = LineageView {
+        pools: &pools.pools,
+        blocks: &blocks.blocks,
+        root: root_record.as_ref(),
+        node: &node,
+        role: mode.role,
+        upstream: mode.upstream.as_deref(),
+    };
+    Ok(Some(match view.spendable_block(type_prefix) {
+        // Claims, the only way a node gains such a block, wire dispensing.
+        Ok(_) => format!(
+            "this clone holds a delegated {} block, but dispensing from delegated blocks is not enabled yet",
+            type_prefix.to_ascii_uppercase()
+        ),
+        Err(reason) => reason.to_string(),
+    }))
+}
+
+/// True the first time `reason` is seen in this session (the AIDA session,
+/// else the invoking shell), so the downgrade notice prints once, not on
+/// every `aida add`. The marker lives beside the clone-local setting.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+pub fn first_notice_this_session(root: &Path, reason: &str) -> bool {
+    let session = std::env::var("AIDA_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("ppid-{}", std::os::unix::process::parent_id()));
+    let Ok(common) = common_dir(root) else {
+        return true;
+    };
+    let marker = common.join("aida-allocation-notice");
+    let line = format!("{session}\t{reason}");
+    if std::fs::read_to_string(&marker).is_ok_and(|seen| seen == line) {
+        return false;
+    }
+    let _ = crate::write_atomic(&marker, &line);
+    true
 }
 
 /// Refusal for a clone that has never claimed a node (no work binding and no
@@ -653,6 +837,56 @@ mod tests {
             assert!(resolve(dir.path()).is_err());
         }
     }
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    #[test]
+    fn v2_setting_carries_role_and_upstream_and_v1_reads_as_root() {
+        let (dir, _) = fixture(true);
+        let mode = resolve(dir.path()).unwrap();
+        assert_eq!(
+            (mode.role, mode.authoritative),
+            (AllocationRole::Root, true)
+        );
+        write_mode(dir.path(), AllocationRole::Node, Some("gitlab")).unwrap();
+        let mode = resolve(dir.path()).unwrap();
+        assert_eq!(mode.version, 2);
+        assert_eq!(mode.role, AllocationRole::Node);
+        assert!(!mode.authoritative);
+        assert_eq!(mode.upstream.as_deref(), Some("gitlab"));
+        write_mode(dir.path(), AllocationRole::Root, None).unwrap();
+        assert!(resolve(dir.path()).unwrap().authoritative);
+        assert!(write_mode(dir.path(), AllocationRole::Root, Some("origin")).is_err());
+        assert!(write_mode(dir.path(), AllocationRole::Node, Some("../x")).is_err());
+        for text in [
+            "version=2\nrole=\"root\"\nupstream=\"origin\"",
+            "version=2\nrole=\"node\"\nupstream=\"a/b\"",
+            "version=2\nrole=\"leaf\"",
+            "version=2\nrole=\"node\"\nauthoritative=true",
+        ] {
+            std::fs::write(dir.path().join(".git").join(CONFIG_FILE), text).unwrap();
+            assert!(resolve(dir.path()).is_err(), "{text}");
+        }
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    #[test]
+    fn downgrade_reason_names_the_missing_piece_once_per_session() {
+        let (dir, _) = fixture(false);
+        let reason = downgrade_reason(dir.path(), "BUG").unwrap().unwrap();
+        assert!(reason.contains("no upstream"), "{reason}");
+        write_mode(dir.path(), AllocationRole::Node, Some("gitlab")).unwrap();
+        let reason = downgrade_reason(dir.path(), "BUG").unwrap().unwrap();
+        assert!(reason.contains("holds no BUG block"), "{reason}");
+        let err = effective_policy(dir.path(), crate::IdFormatPolicy::BlocksOnly)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("upstream `gitlab`"), "{err}");
+        assert!(first_notice_this_session(dir.path(), &reason));
+        assert!(!first_notice_this_session(dir.path(), &reason));
+        assert!(first_notice_this_session(dir.path(), "a different reason"));
+        let (home, _) = fixture(true);
+        assert_eq!(downgrade_reason(home.path(), "BUG").unwrap(), None);
+    }
+
     // trace:BUG-b6b1278890774ef993d2ebc327862470-019 | ai:claude
     #[test]
     fn unbound_clone_add_names_the_node_repair() {
