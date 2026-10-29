@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:43.585217658Z
-modified_at: 2026-07-20T04:46:33.488324925Z
+modified_at: 2026-10-29T06:39:56.584542183Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,6 +22,9 @@ comments:
   content: 'Advisor note (overnight groom): NOT headless-implementable — promoting a recurring rule to a gate is an advisor/operator judgment triggered by threshold data, not a standalone code task. Leave parked until the violations log crosses the threshold.'
   created_at: 2026-07-01T06:45:14.673440507Z
   modified_at: 2026-07-01T06:45:14.673440507Z
-deferred: true
-deferred_at: 2026-07-20T04:46:33.488324925Z
-deferred_until: TASK-916 harvest surfaces a rule recurring past threshold
+history:
+- id: 01a18662-ffe4-7163-bbe0-38b95d577c77
+  author: joe
+  timestamp: 2026-10-29T06:39:57.412456026Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
