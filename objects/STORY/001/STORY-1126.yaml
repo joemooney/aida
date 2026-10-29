@@ -21,13 +21,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:38:13.525680488Z
-modified_at: 2026-10-29T06:35:38.878525197Z
+modified_at: 2026-10-29T06:35:42.025390667Z
 req_type: Story
 tags:
 - attachments
 - images
 - req-authoring
 - substrate-tax
+comments:
+- id: 01a1865f-1a49-71b0-8239-a9312c6b3bc3
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject: demand-pulled, no demand in 39 days.'
+  created_at: 2026-10-29T06:35:42.025390667Z
+  modified_at: 2026-10-29T06:35:42.025390667Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865f-0756-7ea1-90fe-c0cf209397f6
   author: joe
