@@ -8,14 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:48:30.918246081Z
-modified_at: 2026-06-26T04:48:41.368787515Z
+modified_at: 2026-10-29T06:36:54.683693297Z
 req_type: Story
 tags:
 - advisor
 - cockpit
-- deferred:cockpit-phase2
 - roles
 relationships:
 - rel_type: Child
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
   created_at: 2026-06-26T04:48:35.410641586Z
+history:
+- id: 01a18660-395a-7f10-9bcc-90af8824fbbb
+  author: joe
+  timestamp: 2026-10-29T06:36:55.514634872Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
