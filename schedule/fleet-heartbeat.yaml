@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: '2 lanes: BUG-HOME-015 testing; M1 slice 1 PR #3090 (+1440/-10) in review, scoped to check writers actually switched + collect deleted. Store drift fixed. Human-waits: GitLab v0.16.0 release; mandate expires ~07:43.'
+due_since: 2026-10-29T12:51:11.009845559Z
+due_reason: every 1h
