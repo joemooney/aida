@@ -667,9 +667,19 @@ fn auto_release_fixture(change: ReleaseChange) {
                         || change.hold_field.is_some())
                 {
                     if change.absorbed_kind.is_some() || change.hold_field.is_some() {
-                        // Model a raw hold replacement on the ledger, without promoting
-                        // the primary kind: the entire absorbed record must be compared.
-                        crate::gate::ledger::hold::place(root.path(), &expected_hold, false)?;
+                        // Model a raw hold replacement on PR 37's ledger (as the legacy
+                        // fixture rewrote PR 37's marker), without promoting the primary
+                        // kind: the entire record, `pr` included, must be compared.
+                        crate::gate::ledger::hold::append(
+                            root.path(),
+                            37,
+                            crate::gate::ledger::EventBody::Hold {
+                                hold: expected_hold.clone(),
+                                rearmed: false,
+                            },
+                            expected_hold.target_head_sha.as_deref(),
+                            expected_hold.spec.as_deref(),
+                        )?;
                     } else {
                         mh::place_hold(root.path(), &expected_hold)?;
                     }

@@ -1358,7 +1358,10 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
     })
     .unwrap_err();
     assert!(label_tried);
-    assert!(err.contains("marker could not be rewritten") && err.contains("label unavailable"));
+    assert!(
+        err.contains("could not be re-armed on the gate ledger")
+            && err.contains("label unavailable")
+    );
     assert_eq!(crate::events::read_all(tmp.path()).len(), before);
 }
 

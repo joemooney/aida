@@ -1657,6 +1657,23 @@ fn append_hold_record(
     record: &MergeHoldRecord,
     rearmed: bool,
 ) -> std::io::Result<()> {
+    // A real placement supersedes a pending auto-release authorization
+    // before the new hold lands, so no release can act on it (TASK-1757).
+    // trace:TASK-1757 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if crate::gate::ledger::hold::state(project_root, record.pr)
+        .authorized
+        .is_some()
+    {
+        crate::gate::ledger::hold::append(
+            project_root,
+            record.pr,
+            crate::gate::ledger::EventBody::ReleaseWithdrawn {
+                reason: "superseded by a new hold placement".to_string(),
+            },
+            None,
+            None,
+        )?;
+    }
     crate::gate::ledger::hold::place(project_root, record, rearmed)?;
     // TASK-1406: the placement event goes to the events log of the store
     // root, so the primary's tampering check sees holds placed from a

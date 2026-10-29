@@ -436,14 +436,27 @@ fn the_ledger_answers_a_read_only_where_the_file_knows_less() {
         rv::VerdictKind::Approved
     );
 
+    // Slice 2: the merge-close annotation is a ledger event of the same
+    // round, and the same round on both sides is the ledger's.
     let mut closed = record("approved", &first, Some(&a));
     closed.insert("closed_by_merge".into(), "cccccccc".into());
-    let file = rv::verdict_path(&root, "PR-14");
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(&file, serde_json::to_string(&closed).unwrap()).unwrap();
+    record_event(&root, verdict(change, None, closed)).unwrap();
     assert!(rv::read_recorded_verdict(&root, "PR-14")
         .unwrap()
         .is_closed());
+    let file = rv::verdict_path(&root, "PR-14");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &file,
+        serde_json::to_string(&record("approved", &first, Some(&a))).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        rv::read_recorded_verdict(&root, "PR-14")
+            .unwrap()
+            .is_closed(),
+        "a same-round legacy file does not outrank the ledger's annotation"
+    );
 
     let older = record("approved", &ts(-60), Some(&a));
     std::fs::write(&file, serde_json::to_string(&older).unwrap()).unwrap();

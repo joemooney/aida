@@ -493,6 +493,7 @@ fn re_recording_the_same_round_does_not_manufacture_a_survivor() {
     let mut obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&first).unwrap();
     obj.insert("summary".into(), "reworded".into());
     obj.insert("recorded_at".into(), recorded_at.clone().into());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, serde_json::to_string_pretty(&obj).unwrap()).unwrap();
 
     record_verdict(
@@ -1407,12 +1408,11 @@ fn same_sha_recorded_twice_is_idempotent() {
     record_pr(root, "PR-7", "request-changes", SHA_R1, "reviewer-a", &f);
 
     assert_eq!(rounds_by_sha(root, "PR-7"), vec![SHA_R1.to_string()]);
+    // Newest first. A re-record stays its own ledger event (the phase-3
+    // handshake counts only records written during the review session); the
+    // per-sha view is still one commit, and the newest round there carries no
+    // manufactured `rounds`.
     let at_sha = || crate::gate::ledger::project::verdict_events_at(root, "PR-7", SHA_R1);
-    assert_eq!(
-        at_sha().len(),
-        1,
-        "an identical re-record is not a second event"
-    );
     let v = serde_json::Value::Object(at_sha()[0].verdict_record().unwrap().clone());
     assert!(
         v.get("rounds").is_none(),
@@ -1423,7 +1423,7 @@ fn same_sha_recorded_twice_is_idempotent() {
     // two recordings, the first kept in the archive's own rounds.
     record_pr(root, "PR-7", "approved", SHA_R1, "reviewer-b", &[]);
     assert_eq!(rounds_by_sha(root, "PR-7"), vec![SHA_R1.to_string()]);
-    let v = serde_json::Value::Object(at_sha().last().unwrap().verdict_record().unwrap().clone());
+    let v = serde_json::Value::Object(at_sha()[0].verdict_record().unwrap().clone());
     assert_eq!(v["recorded_by"], "reviewer-b");
     assert_eq!(v["rounds"].as_array().unwrap().len(), 1);
     assert_eq!(v["rounds"][0]["recorded_by"], "reviewer-a");
@@ -2318,6 +2318,7 @@ fn per_sha_archive_carries_unarchived_rounds() {
     // (rewritten by a writer that predates it) does not erase it from the archive.
     let mut current: serde_json::Value = serde_json::from_str(&current_at(&path)).unwrap();
     current.as_object_mut().unwrap().remove("unarchived_rounds");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, current.to_string()).unwrap();
     record_verdict_at_path(
         root,

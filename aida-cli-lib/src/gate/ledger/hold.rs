@@ -69,9 +69,12 @@ pub(crate) fn fold(events: &[GateEvent]) -> HoldState {
                 st.open = Some(hold.clone());
                 st.open_source = Some(OpenSource::Ledger);
                 st.release = None;
-                // A (re-)placement changes the hold an authorization was
-                // recorded for, so it voids that authorization.
-                st.authorized = None;
+                // A pending authorization survives a bare `hold` event: the
+                // release path's second pass refuses a changed hold and
+                // withdraws it on the PR (TASK-1757). A placement through
+                // `merge_hold_core` supersedes it with an explicit
+                // `release-withdrawn` first, as the legacy placement removed
+                // the clearance file.
                 st.on_ledger = true;
             }
             EventBody::HoldRelease { clearance } => {
