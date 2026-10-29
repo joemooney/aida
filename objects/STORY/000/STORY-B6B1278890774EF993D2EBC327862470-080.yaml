@@ -46,12 +46,12 @@ description: |
   2. Point collect/adopt at ledger append, keeping StandaloneVerdictChecks::check_record (PR binding, child-grant check at collection time). Tests: a verdict naming PR-B collected from PR-A's reviewer seat is refused; an expired/revoked grant at collection is refused.
   3. Make legacy_gate_writers_do_not_gain_call_sites fast (<10s; scan once, cached file list) or add a justified entry to scripts/test-time-budget.toml — CI lib-1 currently fails on this budget.
   Findings 3 (backdating) and 4 (rejected-event size) disappear with the spool; no further action. Slice 2's acceptance items stand (legacy writers to 0, readers on the ledger).
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T14:13:13.894815015Z
+modified_at: 2026-10-29T14:18:56.650638286Z
 req_type: Story
 tags:
 - architecture
@@ -380,6 +380,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18807-370a-76f1-96f5-f9d40b85c688
+  author: aida-orchestrator
+  timestamp: 2026-10-29T14:18:56.650665012Z
+  session_id: 01a18803c334
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -392,3 +401,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 3: round-2 ruling items 1-3 done with tests (spool/mailbox deleted, collect appends ledger-only with PR binding and child-grant checks, fast ratchet). Blocking: a legacy file still shadows newer ledger-only verdicts in the merge gate and in the launcher summary, so a contained reviewer''s re-review is misreported or not weighed. AC1 partial (verdict + legacy-imported events, seq/flock tested; other kinds slices 2-3); AC2 verified (a_verdict_for_the_spec_of_a_pr_and_one_for_the_pr_are_the_same_record); AC3 n/a (slice 2); AC4 n/a (slice 3); AC5 partial (amended AC5 met by a_contained_writer_cannot_write_the_ledger, a_verdict_for_another_pr_is_refused_at_collection, a_revoked_or_foreign_grant_is_refused_at_collection, a_collected_verdict_goes_on_the_ledger_and_no_legacy_file_is_written; readers inconsistent, see findings); AC6 partial (read-through verified by legacy_files_are_read_through_and_imported_verbatim_on_the_first_write, the_first_verdict_write_is_recorded_once; writer ratchet baselines equal current counts; dual write accepted for slice 1); AC7 partial (code in gate/ledger; reduction due at final slice). CI at review: lib/cli/gates/contracts/rest pending, merge-hold-gate fail (hold label).'
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-080 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T14:18:56.650638286Z
