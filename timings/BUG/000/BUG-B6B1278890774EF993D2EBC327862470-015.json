@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-015",
+  "publishes": [
+    {
+      "at": "2026-10-29T11:56:49.441897430Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-29T10:55:50.521750233Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-015",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}

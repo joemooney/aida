@@ -13,12 +13,12 @@ description: |
   ## Test tier
   LIGHT: one targeted cargo test filter plus `make check-ci-fast`.
   - Output: the `aida add` confirmation ('Added: BUG-b6b1278890774ef993d2ebc327862470-015 - …') and its Linked: line print the canonical ID in lowercase; show TYPE-<LABEL>-NNN there (canonical uppercase under --canonical-ids), and extend the slice-078 ratchet if it missed this site.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T11:55:55.960784264Z
+modified_at: 2026-10-29T11:56:50.351934491Z
 req_type: Bug
 tags:
 - id-allocation
@@ -82,6 +82,21 @@ history:
   session_id: 01a1874d0ae3
   harness_version: 2.1.312 (Claude Code)
   changes: []
+- id: 01a18785-1262-7c33-8ace-51ef0827de73
+  author: joe
+  timestamp: 2026-10-29T11:56:47.586271774Z
+  session_id: 01a1874d0ae3
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a18785-2073-7763-a1a7-0097774d6519
+  author: joe
+  timestamp: 2026-10-29T11:56:51.187388555Z
+  session_id: 01a1874d0ae3
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -90,3 +105,11 @@ filed_at:
   aida_build_sha: 8e45449d340
   vendor: claude
   session: 59349e57-271d-4b9e-b662-8585b949736a
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-29T11:56:47.497371016Z
+  implemented_by: joe
+interface_changes:
+  cli:
+  - Spec-scope commands (queue, rework, claim/unclaim, worktree add/enter, session end/start/manifest, plan fan-out, db reconcile-status) accept a friendly node alias TYPE-<LABEL>-NNN and act on the canonical id
+  - 'aida add / aida doc add print the Added: and Linked: lines with the friendly display id (canonical under --canonical-ids)'
