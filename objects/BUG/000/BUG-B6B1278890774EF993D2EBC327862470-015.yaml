@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T13:38:43.720042143Z
+modified_at: 2026-10-29T13:40:39.861886359Z
 req_type: Bug
 tags:
 - id-allocation
@@ -191,6 +191,11 @@ history:
 - id: 01a187e2-68c0-7a33-8a69-4e7d4d2bb5fd
   author: joe
   timestamp: 2026-10-29T13:38:44.544414439Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
+- id: 01a187e4-2f52-7cb1-836d-e358b5c2a4a6
+  author: joe
+  timestamp: 2026-10-29T13:40:40.914739061Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
 filed_at:
