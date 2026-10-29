@@ -85532,5 +85532,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6685
+- id: 01a187a4-0e9f-73b3-abd0-0c60b23c68df
+  target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
+  author: aida
+  node_id: '1'
+  lamport: 6686
+  timestamp: 2026-10-29T12:30:38.239919647Z
+  kind: !Create
+    title: Refresh product documentation and expand the AIDA showcase
+    description: Operator requests an exhaustive documentation review and update, followed by a professional multi-page product site with informative graphics for newcomers and engineering management. Inventory all docs; distinguish current guidance from historical plans/evidence; check current claims against source/help; correct verified drift and broken navigation; preserve a review report with scope, evidence, before/after changes and unresolved findings. Expand the existing static showcase into a coherent product site covering lifecycle, selectable autonomy, capabilities, trust boundaries, integrations and getting started, grounded in reviewed docs. Include accessible responsive original SVG diagrams and an executive brief. Validate navigation, controls, layouts and consistency; preserve owner-private hosted audience and portable repo source. No invented ROI/customer claims or production/security promises.
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 6686
 node_id: '1'
