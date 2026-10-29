@@ -86830,5 +86830,31 @@ operations:
   timestamp: 2026-10-29T19:05:59.832216439Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6780
+- id: 01a18917-58e2-74c0-8660-dcefd3a0acc1
+  target_id: 01a18917-50f5-7963-9e16-f0f1e7b56bd7
+  author: aida
+  node_id: '1'
+  lamport: 6781
+  timestamp: 2026-10-29T19:16:11.106669338Z
+  kind: !Create
+    title: 'Review PR-3101: [AI:codex] docs(library): add a curated searchable product guide library (TASK-B6B1278890774EF993D2EBC327862470-111)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1890d`) for branch `task-b6b1278890774ef993d2ebc327862470-111-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3101>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-111-work` → `task-b6b1278890774ef993d2ebc327862470-110-work`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-111
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3101` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6781
 node_id: '1'
