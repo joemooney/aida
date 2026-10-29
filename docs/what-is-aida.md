@@ -1,6 +1,6 @@
 # What is AIDA?
 
-AIDA is a coordination and enforcement layer for a software team made of AI agents.
+AIDA is a governed software factory with selectable autonomy: a coordination and enforcement layer for a software team made of AI agents, with explicit choices about where people stay involved.
 
 AI coding agents can now write real code. On their own, though, several agents on one codebase tend to lose track of what has been decided, collide on the same files, review their own work, and leave no record of why a change was made. AIDA's aim is to give them a shared record, defined roles, independent review, and limits that a human sets, so their combined output can be checked and trusted.
 
@@ -26,13 +26,46 @@ AI coding agents can now write real code. On their own, though, several agents o
 
 ### In one sentence
 
-**AIDA is an operating system for AI engineering teams: it decides what agents may do, remembers what they did, and proves what they shipped.**
+**AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.**
 
-("Operating system" is the direction, not a claim of completeness: like an OS, AIDA doesn't write the code itself. It grants authority, keeps the shared state, and stops parallel workers from trampling each other.)
+AIDA also acts as an operating system for AI engineering teams: it grants authority, keeps shared state, and stops parallel workers from trampling each other. The coding agents write the code; AIDA coordinates and checks their work.
 
 In plain terms: AIDA gives a team of AI coding agents shared memory, defined roles, independent review and human-set limits, so that what they ship can be checked the way you would check a well-run engineering team's work.
 
 AIDA is alpha software and supports Linux only (README; internal spec).
+
+---
+
+## A governed software factory with selectable autonomy
+
+**Software factory** describes the repeatable path from a specification to an implemented, tested, reviewed and merged change. **Governed** means that path has assigned responsibilities, recorded decisions, acceptance criteria and enforced authority limits. **Selectable autonomy** means the team chooses where human participation is required for each spec, rather than choosing one automation level for an entire project.
+
+### Four execution modes, plus a decision stop
+
+These descriptive names explain the existing modes to a management audience; the CLI values in the second column remain the actual mode names. They are operating choices, not industry certification levels.
+
+| Descriptive name | AIDA mode | What the agents do | Where people participate | Example |
+|---|---|---|---|---|
+| **Human-led delivery** | `operator` | No implementation agent is launched; AIDA presents the checklist and stops. | A person carries out the work. | An action requiring human credentials or judgment. |
+| **Collaborative delivery** | `guided` | Work through an interactive design session and prepare a change; no automatic merge. | A person answers recorded design forks and reviews the resulting PR. | An architectural change with unresolved trade-offs. |
+| **Supervised delivery** | `drive` | Implement, open a PR and run through CI, then stop. | A person reviews and merges the change. | A feature whose implementation can be delegated but whose release into the main branch needs human approval. |
+| **Autonomous delivery** | `drain` | Run the lifecycle through implementation, CI, independent review, merge and pull, subject to the applicable gates. | People define and authorize the work beforehand and handle escalations or work outside the delegated scope. | A bounded fix with clear acceptance criteria and no unresolved design decision. |
+
+**Decision pending** (`decide`) sits outside this ladder. It blocks execution until the pending decision is resolved; no implementation harness runs. It is how AIDA represents work that is not ready to delegate, rather than asking an agent to invent an answer.
+
+The execution mode is recorded on the spec. The advisor classifies the work, and `aida do <SPEC>` uses that classification to select the execution path. Moving toward more human involvement is permitted; reducing involvement requires an explicit `--force` override or a durable reclassification. A `decide` block cannot be bypassed with a mode override. See [Work & autonomy](cli/03-work-autonomy.md) for operational commands.
+
+### Where a dark factory fits
+
+In the software use of **dark factory**, people define intent and validation while agents implement and validate changes without routine human coding or code review. [StrongDM's software factory](https://factory.strongdm.ai/) is one explicit example of that approach.
+
+**`drain` is AIDA's dark factory mode.** For approved, authorized specs, agents implement, test, independently review and merge changes without routine human coding or code review. People define the intent, acceptance criteria and authority limits; the factory executes within them and escalates exceptions. AIDA lets a team run this mode alongside supervised, collaborative and human-led delivery, choosing the level of human involvement for each spec.
+
+Selecting autonomy does not grant authority to bypass reviews, CI, merge holds or protected operations. Mandates and seat grants determine which actions are authorized and for how long; the execution mode determines how the work is carried out. A stopped gate or unresolved decision can still require a person. Here, delivery means reaching the merged code state; production deployment requires its own policy and automation.
+
+For management, this supports a practical adoption path: start with supervised delivery, retain collaborative delivery for design-heavy work, and delegate well-specified work to autonomous delivery as its validation and operating evidence justify it. The goal is to choose the human attention each change needs and retain a record of what happened.
+
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-100 | ai:codex -->
 
 ---
 

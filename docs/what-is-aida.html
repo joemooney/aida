@@ -385,18 +385,18 @@ td code { font-size: 0.84em; }
 <header class="masthead">
   <div class="masthead-inner">
     <h1>What is AIDA?</h1>
-    <p class="lead-callout">AIDA is an operating system for AI engineering teams: it decides what agents may do, remembers what they did, and proves what they shipped.</p>
+    <p class="lead-callout">AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.</p>
     <p class="dateline"><time datetime="2026-10">October 2026</time></p>
   </div>
 </header>
 <div class="layout">
 <nav class="toc" aria-label="Table of contents">
   <h2 class="toc-title">Contents</h2>
-  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
+  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</a><ol><li><a href="#four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</a></li><li><a href="#where-a-dark-factory-fits">Where a dark factory fits</a></li></ol></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
 </nav>
 <main id="content">
 <section class="intro" aria-label="Introduction">
-<p>AIDA is a coordination and enforcement layer for a software team made of AI agents.</p>
+<p>AIDA is a governed software factory with selectable autonomy: a coordination and enforcement layer for a software team made of AI agents, with explicit choices about where people stay involved.</p>
 <p>AI coding agents can now write real code. On their own, though, several agents on one codebase tend to lose track of what has been decided, collide on the same files, review their own work, and leave no record of why a change was made. AIDA's aim is to give them a shared record, defined roles, independent review, and limits that a human sets, so their combined output can be checked and trusted.</p>
 
 </section>
@@ -421,13 +421,68 @@ td code { font-size: 0.84em; }
 
 <section class="sub callout callout-sentence" aria-labelledby="in-one-sentence">
 <h3 id="in-one-sentence">In one sentence</h3>
-<p><strong>AIDA is an operating system for AI engineering teams: it decides what agents may do, remembers what they did, and proves what they shipped.</strong></p>
-<p>(&quot;Operating system&quot; is the direction, not a claim of completeness: like an OS, AIDA doesn't write the code itself. It grants authority, keeps the shared state, and stops parallel workers from trampling each other.)</p>
+<p><strong>AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.</strong></p>
+<p>AIDA also acts as an operating system for AI engineering teams: it grants authority, keeps shared state, and stops parallel workers from trampling each other. The coding agents write the code; AIDA coordinates and checks their work.</p>
 <p>In plain terms: AIDA gives a team of AI coding agents shared memory, defined roles, independent review and human-set limits, so that what they ship can be checked the way you would check a well-run engineering team's work.</p>
 <p>AIDA is alpha software and supports Linux only (README; internal spec).</p>
 
 
 </section>
+</section>
+<section class="major" id="sec-a-governed-software-factory-with-selectable-autonomy" aria-labelledby="a-governed-software-factory-with-selectable-autonomy">
+<h2 id="a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</h2>
+<p><strong>Software factory</strong> describes the repeatable path from a specification to an implemented, tested, reviewed and merged change. <strong>Governed</strong> means that path has assigned responsibilities, recorded decisions, acceptance criteria and enforced authority limits. <strong>Selectable autonomy</strong> means the team chooses where human participation is required for each spec, rather than choosing one automation level for an entire project.</p>
+<h3 id="four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</h3>
+<p>These descriptive names explain the existing modes to a management audience; the CLI values in the second column remain the actual mode names. They are operating choices, not industry certification levels.</p>
+<div class="table-wrap" role="region" tabindex="0" aria-label="Selectable autonomy modes (scrollable table)"><table>
+<thead>
+<tr class="header">
+<th scope="col">Descriptive name</th>
+<th scope="col">AIDA mode</th>
+<th scope="col">What the agents do</th>
+<th scope="col">Where people participate</th>
+<th scope="col">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Human-led delivery</strong></td>
+<td><code>operator</code></td>
+<td>No implementation agent is launched; AIDA presents the checklist and stops.</td>
+<td>A person carries out the work.</td>
+<td>An action requiring human credentials or judgment.</td>
+</tr>
+<tr class="even">
+<td><strong>Collaborative delivery</strong></td>
+<td><code>guided</code></td>
+<td>Work through an interactive design session and prepare a change; no automatic merge.</td>
+<td>A person answers recorded design forks and reviews the resulting PR.</td>
+<td>An architectural change with unresolved trade-offs.</td>
+</tr>
+<tr class="odd">
+<td><strong>Supervised delivery</strong></td>
+<td><code>drive</code></td>
+<td>Implement, open a PR and run through CI, then stop.</td>
+<td>A person reviews and merges the change.</td>
+<td>A feature whose implementation can be delegated but whose release into the main branch needs human approval.</td>
+</tr>
+<tr class="even">
+<td><strong>Autonomous delivery</strong></td>
+<td><code>drain</code></td>
+<td>Run the lifecycle through implementation, CI, independent review, merge and pull, subject to the applicable gates.</td>
+<td>People define and authorize the work beforehand and handle escalations or work outside the delegated scope.</td>
+<td>A bounded fix with clear acceptance criteria and no unresolved design decision.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Decision pending</strong> (<code>decide</code>) sits outside this ladder. It blocks execution until the pending decision is resolved; no implementation harness runs. It is how AIDA represents work that is not ready to delegate, rather than asking an agent to invent an answer.</p>
+<p>The execution mode is recorded on the spec. The advisor classifies the work, and <code>aida do &lt;SPEC&gt;</code> uses that classification to select the execution path. Moving toward more human involvement is permitted; reducing involvement requires an explicit <code>--force</code> override or a durable reclassification. A <code>decide</code> block cannot be bypassed with a mode override. See <a href="cli/03-work-autonomy.md">Work &amp; autonomy</a> for operational commands.</p>
+<h3 id="where-a-dark-factory-fits">Where a dark factory fits</h3>
+<p>In the software use of <strong>dark factory</strong>, people define intent and validation while agents implement and validate changes without routine human coding or code review. <a href="https://factory.strongdm.ai/">StrongDM's software factory</a> is one explicit example of that approach.</p>
+<p><strong><code>drain</code> is AIDA's dark factory mode.</strong> For approved, authorized specs, agents implement, test, independently review and merge changes without routine human coding or code review. People define the intent, acceptance criteria and authority limits; the factory executes within them and escalates exceptions. AIDA lets a team run this mode alongside supervised, collaborative and human-led delivery, choosing the level of human involvement for each spec.</p>
+<p>Selecting autonomy does not grant authority to bypass reviews, CI, merge holds or protected operations. Mandates and seat grants determine which actions are authorized and for how long; the execution mode determines how the work is carried out. A stopped gate or unresolved decision can still require a person. Here, delivery means reaching the merged code state; production deployment requires its own policy and automation.</p>
+<p>For management, this supports a practical adoption path: start with supervised delivery, retain collaborative delivery for design-heavy work, and delegate well-specified work to autonomous delivery as its validation and operating evidence justify it. The goal is to choose the human attention each change needs and retain a record of what happened.</p>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-100 | ai:codex -->
 </section>
 <section class="major" id="sec-how-big-is-it-and-why" aria-labelledby="how-big-is-it-and-why">
 <h2 id="how-big-is-it-and-why"><a class="anchor" href="#how-big-is-it-and-why" aria-label="Link to this section">#</a>How big is it, and why</h2>

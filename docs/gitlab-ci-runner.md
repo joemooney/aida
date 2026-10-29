@@ -12,10 +12,10 @@ Toolchain, `clippy` + `rustfmt`, `cargo-nextest`, the cross targets and the apt 
 workspace needs are baked into one image. Build it on the runner host:
 
 ```bash
-sudo podman build -t localhost/aida-ci:1.92 -f ci/Dockerfile ci/
+sudo podman build -t localhost/aida-ci:1.92-2 -f ci/Dockerfile ci/
 ```
 
-`.gitlab-ci.yml` references `localhost/aida-ci:1.92` and the runner is
+`.gitlab-ci.yml` references `localhost/aida-ci:1.92-2` and the runner is
 configured with `pull_policy = ["if-not-present"]`, so the image is used from
 the host's podman store — no registry, no per-run pull. When you change the
 Dockerfile (new Rust pin, new apt package) **bump the tag** in both places so
@@ -47,7 +47,7 @@ concurrent = 2
 [[runners]]
   executor = "docker"
   [runners.docker]
-    image = "localhost/aida-ci:1.92"
+    image = "localhost/aida-ci:1.92-2"
     pull_policy = ["if-not-present"]
     volumes = ["/cache",
                "/var/cache/aida-ci/builds:/builds",
