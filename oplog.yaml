@@ -86762,5 +86762,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6775
+- id: 01a18903-4c1b-7010-8c73-e52eb8c4b77e
+  target_id: 01a18903-42b8-77d2-bb1a-ecb608b45347
+  author: aida
+  node_id: '1'
+  lamport: 6776
+  timestamp: 2026-10-29T18:54:17.115220165Z
+  kind: !Create
+    title: 'cosmetic: docs/showcase/styles.css uses 8px mono text (.brand-caption, .art-lab…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-101, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      cosmetic: docs/showcase/styles.css uses 8px mono text (.brand-caption, .art-label/.art-footer, .mode-example .mono, footer .mono) — below common legibility guidance; consider >=10px.
+
+      PR: #3094
+      Reviewed sha: 32bebfab93f9df469f443fdfb019a12f9d7053bc
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6776
 node_id: '1'

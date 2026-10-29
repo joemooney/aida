@@ -1,0 +1,29 @@
+id: 01a18903-42b8-77d2-bb1a-ecb608b45347
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-115
+title: 'cosmetic: docs/showcase/styles.css uses 8px mono text (.brand-caption, .art-lab…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-101, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: docs/showcase/styles.css uses 8px mono text (.brand-caption, .art-label/.art-footer, .mode-example .mono, footer .mono) — below common legibility guidance; consider >=10px.
+
+  PR: #3094
+  Reviewed sha: 32bebfab93f9df469f443fdfb019a12f9d7053bc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T18:54:14.712280670Z
+modified_at: 2026-10-29T18:54:14.712280670Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-101
+- finding-hash:8cc7dc74
+- from-review:PR-3094
+- kind:carried-forward
+filed_at:
+  code_sha: 8c0adc8fe0776cdc8eb53eb7061cbc65c5302682
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00500cf82ce
+  vendor: claude
