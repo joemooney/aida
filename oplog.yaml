@@ -84926,5 +84926,21 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6643
+- id: 01a1873c-cba8-7d01-8e24-caf91291cc1e
+  target_id: 01a1873c-c473-7b22-88e3-6a224fb51025
+  author: aida
+  node_id: '1'
+  lamport: 6644
+  timestamp: 2026-10-29T10:37:50.888199194Z
+  kind: !Create
+    title: 'non-blocking/minor: NodeAliasMap::rename (aida-core/src/node_alias.rs:253-259) …'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      non-blocking/minor: NodeAliasMap::rename (aida-core/src/node_alias.rs:253-259) retires bindings with exact-case b.label == old, while binding() matches case-insensitively. A hand-edited lowercase label in registry/node_aliases.toml would be found but not retired, which leaves the node with two current labels. set() (:195) also compares existing.node != node exactly, so a hand-edited uppercase node UUID would refuse as 'another node'. This only happens after a hand edit.
+      Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6644
 node_id: '1'
