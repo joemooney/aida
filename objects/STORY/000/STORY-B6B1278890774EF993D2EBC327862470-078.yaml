@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T09:03:41.343292648Z
+modified_at: 2026-10-29T09:29:10.960709401Z
 req_type: Story
 tags:
 - docs:impacted
@@ -164,6 +164,13 @@ comments:
   created_at: 2026-10-29T09:03:41.343288413Z
   modified_at: 2026-10-29T09:03:41.343288413Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a186fd-ee30-7dd2-9f39-b3d3296569e9
+  author: joe
+  content: 'Review round 4 (commit 3b9cf4e, PR #3089). F1: expand_or_keep is now literal-first via resolve_literal_first; install_from_store installs a lazy store-backed literal-id check (stems + spec_id + agreed_id), so trace check, aida commit normalize_spec, pr ship canonicalize_node_label_ids and the Refs/trailer parsers keep a stored label-shaped id. F2: register_node_full_identity and register_node_remote_only refuse a node id equal to any current or retired label (refuse_node_id_colliding_with_label, inside the store write lock), and suggest_free_node_id treats labels as taken. Tests: node_alias_tests (3 new) + git_ops test_node_registration_refuses_a_node_label; make check-ci-fast green (35 gates). F3: CI run 40849959615 at 3b9cf4e was in progress when the session ended; a green run at that head still needs citing.'
+  created_at: 2026-10-29T09:29:10.960709401Z
+  modified_at: 2026-10-29T09:29:10.960709401Z
+  session_id: 01a186e73d7c
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
@@ -268,6 +275,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a186e7-767e-7841-b6be-408a2c8ed699
+  author: joe
+  timestamp: 2026-10-29T09:04:38.526609780Z
+  session_id: 01a186e73d7c
+  harness_version: 2.1.312 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
