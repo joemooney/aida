@@ -132,7 +132,7 @@ Useful starting points:
 ## Documentation
 
 - [OVERVIEW.md](OVERVIEW.md): vision, architecture, and feature surface in depth
-- [docs/what-is-aida.md](docs/what-is-aida.md): What is AIDA? (overview for managers and newcomers; [HTML](docs/what-is-aida.html))
+- [docs/what-is-aida.md](docs/what-is-aida.md): What is AIDA? (overview for managers and newcomers; a self-contained `what-is-aida.html` beside it is for offline reading)
 - [docs/getting-started.md](docs/getting-started.md): setup and first steps
 - [docs/cli/](docs/cli/README.md): CLI reference
 - [docs/lifecycle.md](docs/lifecycle.md): the spec lifecycle
