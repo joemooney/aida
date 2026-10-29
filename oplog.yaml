@@ -87066,5 +87066,13 @@ operations:
       5. Keep every existing fail-closed test green without editing its expectations (TASK-1801 refused/linked files, bug_775 phase-3).
       NOT in slice 2: carry-over proof events (AC4) and superseding TASK-1992/TASK-1316/STORY-1375/TASK-2008/STORY-1683; that is slice 3, the final slice with the plain trailer.
       Test tier LIGHT: ONE targeted run `cargo test -p aida-cli-lib --lib gate::` (+ the specific merge_hold / review_verdict filters you touch) plus `make check-ci-fast`; `make test-touched` only if you touch shared test infra or >10 files. Never the workspace suite or make check-ci.
-clock: 6795
+- id: 01a1893f-61bb-7ae1-bc87-46729d64a7ff
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6796
+  timestamp: 2026-10-29T19:59:54.811449469Z
+  kind: !SetStatus
+    status: Approved
+clock: 6796
 node_id: '1'
