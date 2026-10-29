@@ -1,0 +1,51 @@
+id: 01a1865c-b9ac-7fe3-9246-f5e80986f5dc
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-078
+title: Friendly node aliases for node-local spec IDs (display and input only)
+description: |
+  ## Problem
+  This clone is not an allocation authority (BUG-2017), so every spec it files gets an opaque node-local ID such as TASK-B6B1278890774EF993D2EBC327862470-095. Today alone produced dozens of these. They are hard to read, type, say aloud or compare, and their case varies between surfaces (store objects and commit trailers are uppercase; `aida show` and the epic are lowercase). Slice 1 of EPIC-b6b1278890774ef993d2ebc327862470-001: presentation and input only. It changes no identity, allocation or sharing rule.
+
+  ## Acceptance
+  1. A shared, append-only node-alias map binds a short label to one node UUID, e.g. HOME -> b6b1278890774ef993d2ebc327862470. A label must match ^[A-Z][A-Z0-9]{1,7}$, must not be all hex digits, and must not equal a requirement type prefix. Once bound, a label is never silently rebound or reused: rebinding a label, or giving one UUID a second label, refuses with both bindings named.
+  2. Input: every surface that takes a spec ID (CLI positional/flags, MCP tools, commit-trailer and `trace:` parsers, relationship targets) accepts TYPE-<LABEL>-NNN case-insensitively and resolves it to the same requirement as the canonical TYPE-<UUID>-NNN. Canonical and agreed short IDs keep working unchanged. Resolution is fallible: an unknown label is a not-found error that names the label, never a guess.
+  3. Output: human and TOON surfaces show TYPE-<LABEL>-NNN wherever a canonical node-local ID would otherwise appear. JSON and MCP keep `spec_id` canonical and add a separate `display_id` field (additive, not a rename). `--canonical-ids` (or AIDA_CANONICAL_IDS=1) turns the substitution off for scripts.
+  4. Persistence: AIDA never writes an alias into store objects, relationships, trace annotations it generates, or commit trailers it generates. It writes the canonical form there, so changing or losing the alias map cannot corrupt anything stored. Hand-written alias forms in commits and traces are accepted (item 2) but are not rewritten.
+  5. Case: canonical display of node-local IDs is normalized to one case on every surface (uppercase, matching the stored filenames).
+  6. Management: `aida node alias set <LABEL> [--node <uuid>]` (defaults to this clone's node), `aida node alias list`, and `aida node alias show <LABEL|uuid>`. Writes use the existing registry CAS push-wins loop. Setting or listing works without a TTY, so headless lanes and MCP can read it. There is no remove command in this slice; retiring a label is deferred to the domain-model slice.
+  7. Round-trip: for every requirement, display -> parse yields the same UUID; canonical -> display -> canonical is the identity; an ID with no alias for its node displays canonically.
+
+  ## Design sketch (for advisor/operator signoff)
+  - Storage: new `registry/node_aliases.toml` on aida-store, next to the person-alias map (`registry/aliases.toml`, TASK-845) but separate from it: people and nodes are different namespaces. Reads are best-effort (missing or malformed -> no aliases; display falls back to canonical; alias input then fails as not-found). Writes refuse on a malformed file rather than overwriting it.
+  - Chokepoint: input expansion happens once, in a fallible `expand_node_alias(&str, &NodeAliasMap) -> Result<Cow<str>>` called at the top of `RequirementsStore::spec_id_index` and `resolve_unambiguous_index` (aida-core/src/models.rs ~6177-6215). All 372 `get_requirement_by_spec_id` callers go through these, plus the git_backend file-by-id read and the linkage/trace trailer parsers, which get the same call. No repository-wide SpecId type in this slice (the epic lists that as an option, not a mandate).
+  - Display: one `display_spec_id(&str, &NodeAliasMap) -> Cow<str>` used by the human/TOON formatters. Sites that print a raw spec_id are migrated incrementally behind a ratchet test that counts unmigrated print sites; the slice ships when the main surfaces are covered (show, list, queue, ps, awaiting, ship/merge messages).
+  - Domain qualification (the same short ID BUG-999 existing in two domains) is OUT of scope here and belongs to slice 2. Aliases only qualify node-local IDs, which are already globally unique by UUID.
+  - Privacy: an alias reveals nothing that the UUID does not already reveal, so it stays a pseudonym (BUG-2017 item 3). The label is operator-chosen and must not be a hostname or email; the validator rejects '@' and '.' by construction.
+
+  ## Constraints
+  - No change to allocation, promotion, transport profiles (STORY-1742) or the BUG-2017 authority gates.
+  - Existing node and person-alias schemas are untouched; this adds a file and does not repurpose `nodes.toml` `node_name`.
+
+  ## Non-goals
+  Short-ID allocation, reserved blocks, domain/sharing policy, uid: trace annotations, UUID v7, rewriting existing traces or history.
+
+  ## Test tier
+  LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T06:33:06.220012840Z
+modified_at: 2026-10-29T06:33:06.220012840Z
+req_type: Story
+tags:
+- id-allocation
+- regroup
+- traceability
+filed_at:
+  code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a470735bfed
+  vendor: claude
+  session: 59349e57-271d-4b9e-b662-8585b949736a
