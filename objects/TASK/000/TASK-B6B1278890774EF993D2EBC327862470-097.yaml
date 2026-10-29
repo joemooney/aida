@@ -11,13 +11,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T10:37:49.043433778Z
-modified_at: 2026-10-29T10:37:49.043433778Z
+modified_at: 2026-10-29T10:46:42.604447096Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
 - finding-hash:56733950
 - from-review:STORY-B6B1278890774EF993D2EBC327862470-078
 - kind:carried-forward
+comments:
+- id: 01a18744-e8ac-7c02-99b8-a329e8184a0b
+  author: joe
+  content: 'Advisor ruling (2026-10-29 03:50, 16:19 rule-once order): ACCEPTED, not reworked. Only reachable after a hand edit of registry/node_aliases.toml; every write path goes through the CLI, which stores labels uppercase and UUIDs in canonical form.'
+  created_at: 2026-10-29T10:46:42.604447096Z
+  modified_at: 2026-10-29T10:46:42.604447096Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
