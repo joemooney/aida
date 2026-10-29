@@ -16,12 +16,12 @@ description: |-
   - `aida add`/`edit` (and MCP add/update) can attach an image with a required caption; the blob is stored by reference outside the spec YAML; the YAML diff stays text-only.
   - `aida show` surfaces the attachment (path + caption); the text surfaces remain fully usable without the blob.
   - A public-store scrub confirm gates the commit of any attachment.
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:38:13.525680488Z
-modified_at: 2026-10-29T06:35:36.367705782Z
+modified_at: 2026-10-29T06:35:38.878525197Z
 req_type: Story
 tags:
 - attachments
@@ -34,3 +34,11 @@ history:
   timestamp: 2026-10-29T06:35:37.174691222Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1865f-0dfe-73f1-9dbd-98cfd4fe1aa0
+  author: joe
+  timestamp: 2026-10-29T06:35:38.878523225Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
