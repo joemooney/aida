@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T07:28:43.445144261Z
-modified_at: 2026-10-29T08:31:20.379756637Z
+modified_at: 2026-10-29T08:58:06.195465079Z
 req_type: Story
 relationships:
 - rel_type:
@@ -35,6 +35,12 @@ comments:
   content: 'Round 2 delta review requested by advisor (2026-10-29 01:33): review c398bf506a2..f005464c3d7 against the 7 round-1 findings in .aida/review-verdicts/PR-3089.json and the advisor rework brief on STORY-…-078 (literal-first precedence via one shared resolver; set/rename collision guard). Per the 16:19 rule-once order, any NEW non-blocking finding must be bundled-or-accepted now, not deferred to a follow-up. Implementer notes 5 local test failures (gate::dispatch_auth x3, pr_cmd x2) from sandbox read-only HOME; judge by CI at f005464, do not re-run cargo.'
   created_at: 2026-10-29T08:31:20.379756637Z
   modified_at: 2026-10-29T08:31:20.379756637Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a186e1-79f3-7f13-b876-380510654ca4
+  author: joe
+  content: 'Round 3 review requested by advisor (2026-10-29 02:00): scope is ONLY f005464c3d7..786989948aa against the 4 items in the advisor''s round-2 brief on STORY-…-078 (collision guard in mutate_cas for set+rename; literal-first text parsers; inferred commit trailer canonical; ONE shared resolve_id with per-backend orderings deleted). Do not reopen round-1/2 items that were closed. Any new non-blocking finding: state bundle-or-accept in the verdict. Judge tests by CI at 7869899; no cargo.'
+  created_at: 2026-10-29T08:58:06.195465079Z
+  modified_at: 2026-10-29T08:58:06.195465079Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1868f-c9a0-73c2-9cbc-cc5b250bc2e3
