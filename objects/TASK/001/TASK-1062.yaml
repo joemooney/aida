@@ -3,12 +3,12 @@ spec_id: TASK-1062
 agreed_id: TASK-1062
 title: (Possible) extend the guardrail toward a stronger structural/AST check if re-forks recur
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T18:06:36.871040383Z
-modified_at: 2026-10-29T06:42:41.056738649Z
+modified_at: 2026-10-29T06:42:43.890740591Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,11 @@ history:
   timestamp: 2026-10-29T06:42:41.858138638Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18665-8a32-70c2-80e3-da1eb3407356
+  author: joe
+  timestamp: 2026-10-29T06:42:43.890738696Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
