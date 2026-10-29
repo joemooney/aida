@@ -30,12 +30,12 @@ description: |
 
   ## Test tier
   LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T06:46:19.751550465Z
+modified_at: 2026-10-29T06:46:22.657737173Z
 req_type: Story
 tags:
 - id-allocation
@@ -62,6 +62,14 @@ history:
   timestamp: 2026-10-29T06:33:12.617175102Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18668-e0c1-7322-b97f-72b98759ec2d
+  author: joe
+  timestamp: 2026-10-29T06:46:22.657734414Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
