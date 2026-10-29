@@ -32,6 +32,15 @@ tags:
 - advisor-review
 - docs:impacted
 - vertical-slice
+relationships:
+- rel_type: Child
+  target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
+  created_at: 2026-10-29T18:10:15.805138326Z
+history:
+- id: 01a188db-04e1-7113-a4de-4d5e2010ac1b
+  author: joe
+  timestamp: 2026-10-29T18:10:17.441520321Z
+  changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
