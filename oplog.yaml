@@ -85375,5 +85375,31 @@ operations:
   timestamp: 2026-10-29T12:10:05.702022373Z
   kind: !SetStatus
     status: Done
-clock: 6675
+- id: 01a18792-1c88-7dc2-9b1b-f30c00a5359c
+  target_id: 01a18792-1569-7962-bfc1-a8abc8c0e5ae
+  author: aida
+  node_id: '1'
+  lamport: 6676
+  timestamp: 2026-10-29T12:11:02.152607321Z
+  kind: !Create
+    title: 'Review PR-3092: [AI:claude] fix(review): reviewer preflight follows committed symlinks for settings and config (BUG-B6B1278890774EF993D2EBC327862470-016)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-016`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3092>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-016` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-016
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3092` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6676
 node_id: '1'
