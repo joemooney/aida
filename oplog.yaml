@@ -85792,5 +85792,13 @@ operations:
 
       ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
       BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
-clock: 6702
+- id: 01a18812-6df3-78b2-aa21-e1cf500a3cef
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 6703
+  timestamp: 2026-10-29T14:31:11.603799053Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6703
 node_id: '1'
