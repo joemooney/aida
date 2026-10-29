@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-29T02:31:37.687994344Z
+modified_at: 2026-10-29T02:55:26.022636127Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1407,6 +1407,12 @@ comments:
   content: 'ADVISOR RULING 2026-10-28 18:49 MST (recorded here 19:32; it was first sent to the W lane directly), amending the slice-W ruling (18:16) after the #3079 round-1 review: wake-snapshot NEVER binds queued deliveries. It is a pure read of the logical view, so it cannot attach role mail to whatever session runs it. Queued deliveries are reported as an envelope ''pending'' count; binding stays with explicit reads and the per-turn notice. The adapter clears all inherited session-identity variables. The lane''s addition (one ID-less notice per episode when pending > 0 and nothing new is listed) is ACCEPTED, so queued advisor mail does not sit unseen.'
   created_at: 2026-10-29T02:31:37.687994344Z
   modified_at: 2026-10-29T02:31:37.687994344Z
+  session_id: 7b875ef6-5970-4f7c-9187-3491563af968
+- id: 01a18595-7146-7640-8e2e-229f9ddc7f7e
+  author: joe
+  content: 'ADVISOR RULING 2026-10-28 19:56 MST on the #3079 (slice W) round-3 non-blocking findings, per the 16:19 standing order: both ACCEPTED, no follow-up. (1) A take-one-add-one between two watcher scans leaves the role_pending count unchanged and fires no new notice. Accepted: the watcher is a wake hint only, and the new delivery still surfaces on the next explicit read and the per-turn notice, so no mail is lost or acknowledged. (2) One docs line in codex-mail-wake.md is past the wrap width; cosmetic, accepted.'
+  created_at: 2026-10-29T02:55:26.022636127Z
+  modified_at: 2026-10-29T02:55:26.022636127Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
