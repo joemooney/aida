@@ -1,26 +1,7 @@
 job: performance-guard-route
-last_run: 2026-10-28T19:57:53.529414003Z
+last_run: 2026-10-29T03:59:04.756447967Z
 last_by:
   seat: advisor
   session: 7b875ef6-5970-4f7c-9187-3491563af968
   vendor: claude
 result: done
-due_since: 2026-10-29T02:00:27.168523334Z
-due_reason: on CronJobFailed:performance-guard
-due_failure:
-  trip_id: performance-guard@2026-10-29T01:51:23.533616145Z
-  performance:
-  - command: show
-    budget_ms: 1000
-    over_budget: 28
-    denominator: 113
-    proportion_millipercent: 24779
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 34821
-    excluded_samples: 0
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: true
-  job: performance-guard
-  error: 'exit 1: '
