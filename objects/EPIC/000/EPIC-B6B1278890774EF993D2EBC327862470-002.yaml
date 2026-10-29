@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T12:30:36.494411466Z
-modified_at: 2026-10-29T17:38:11.664286944Z
+modified_at: 2026-10-29T18:12:13.270207529Z
 req_type: Epic
 tags:
 - docs:impacted
@@ -45,6 +45,27 @@ comments:
     Operator clarification, 2026-10-29: add a top-level Metrics tab and cover the full What is AIDA overview. The product includes people as developers, reviewers and collaborators. Its entry path is continuing normal conversational work with an agent while AIDA preserves requirements, decisions and implementation intent in the background. The lasting outputs are the working system and a durable intent record for maintenance, enhancement and collaboration. Full factory/autonomous delivery is optional, not a prerequisite for adoption. Implementing this clarification in docs/what-is-aida.md, its standalone HTML, the homepage/onboarding/workflow/brief and a new Metrics page. Reporting capabilities and coverage gaps stay explicit; historical numbers are dated, not displayed as live metrics.
   created_at: 2026-10-29T17:38:11.664286944Z
   modified_at: 2026-10-29T17:38:11.664286944Z
+- id: 01a188dc-c956-7b11-ab6e-6f530fc9792a
+  author: joe
+  content: |
+    Decomposed for advisor approval only; all eight child tasks are Draft. No epic implementation or PR was created.
+
+    TASK-B6B1278890774EF993D2EBC327862470-106: Human-first onboarding with one integrated guide. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-100, TASK-B6B1278890774EF993D2EBC327862470-101.
+    TASK-B6B1278890774EF993D2EBC327862470-107: Explain configurable agents protocols and delivery policy. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-106.
+    TASK-B6B1278890774EF993D2EBC327862470-108: Explain the human agent lifecycle and durable data layers. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-106.
+    TASK-B6B1278890774EF993D2EBC327862470-109: Publish autonomy and trust pages with explicit boundaries. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-106, TASK-B6B1278890774EF993D2EBC327862470-108.
+    TASK-B6B1278890774EF993D2EBC327862470-110: Add Metrics navigation and evidence based reporting page. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-106.
+    TASK-B6B1278890774EF993D2EBC327862470-111: Build a curated searchable documentation library. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-106.
+    TASK-B6B1278890774EF993D2EBC327862470-112: Refresh supported installation and operator storage guidance. Dependencies: none.
+    TASK-B6B1278890774EF993D2EBC327862470-113: Complete documentation freshness and navigation audit. Dependencies: TASK-B6B1278890774EF993D2EBC327862470-106, TASK-B6B1278890774EF993D2EBC327862470-107, TASK-B6B1278890774EF993D2EBC327862470-108, TASK-B6B1278890774EF993D2EBC327862470-109, TASK-B6B1278890774EF993D2EBC327862470-110, TASK-B6B1278890774EF993D2EBC327862470-111, TASK-B6B1278890774EF993D2EBC327862470-112.
+
+    Slice 106 is the first integrated onboarding/guide tracer. Slice 111 requires advisor approval of the publication scope and allowlist before implementation; remaining slices are bounded documentation work after approval. The final freshness audit follows the other slices. Layers covered are source documentation, static presentation/generation, navigation and operator guidance; no runtime/backend changes are authorized here.
+
+    The installed CLI has no decompose subcommand, so children were created with aida add --parent. The requested role-bearing worktree command refused this scoping-only epic; a clean sibling planning worktree was created without a role or implementation lease. No source files were edited there.
+
+    TASK-100 and TASK-101 are delivered separately in open PRs #3093 and #3094, with author leases released and reviewer handoffs queued. Both passed make check-ci-fast (35 gates). Existing broader product-site and hosted artifacts remain unmerged prototypes, not approved implementation to bulk merge. Advisor next action: review/ship the two PRs and assess these draft slices. No children have been approved, queued or implemented by this session.
+  created_at: 2026-10-29T18:12:13.270207529Z
+  modified_at: 2026-10-29T18:12:13.270207529Z
 history:
 - id: 01a188d9-2570-7371-9263-443539ea244d
   author: joe
