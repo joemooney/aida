@@ -419,7 +419,18 @@ fn review_record_refuses_a_rejected_grant() {
 use crate::test_env::{AmbientGuard, HERMETIC_TEST_USER};
 
 const SPEC: &str = "TASK-1";
-const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// The project root's HEAD — `review record --sha` must name a commit git
+/// resolves there. trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+fn root_head(root: &Path) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("rev-parse");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
 
 /// A throwaway project: the seat-grant scaffolding (`.aida/config.toml`,
 /// `.aida-store/registry`), a git-initialised store, and one Draft spec.
@@ -443,6 +454,7 @@ fn draft_project() -> (tempfile::TempDir, std::path::PathBuf) {
     req.spec_id = Some(SPEC.into());
     req.status = aida_core::models::RequirementStatus::Draft;
     backend.add_requirement(req).unwrap();
+    crate::test_git::commit_fixture(root);
     (tmp, store)
 }
 
@@ -516,7 +528,7 @@ fn review_record(root: &Path) -> anyhow::Result<()> {
             root.to_path_buf(),
             SPEC,
             "approved",
-            Some(SHA),
+            Some(&root_head(root)),
             Some("some-branch"),
             None,
             &[],
@@ -700,7 +712,7 @@ fn one_rejection_table_drives_the_edit_gate_and_review_record() {
                 recorded.kind,
                 crate::gate::review_verdict::VerdictKind::Approved
             );
-            assert_eq!(recorded.reviewed_sha.as_deref(), Some(SHA));
+            assert_eq!(recorded.reviewed_sha, Some(root_head(root)));
             assert_eq!(
                 recorded.recorded_by.as_deref(),
                 Some("valid-advisor-fixture (codex advisor seat)"),

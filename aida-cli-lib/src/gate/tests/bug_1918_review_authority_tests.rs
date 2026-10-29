@@ -247,6 +247,8 @@ fn recorder_inside_the_authoring_worktree_is_the_author() {
 #[test]
 fn review_record_refuses_the_author_session_even_with_a_reviewer_seat() {
     let root = tempfile::tempdir().unwrap();
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+    let head = crate::test_git::commit_fixture(root.path());
     let l = lease("aaaabbbbeeee", SPEC, root.path().join("elsewhere"));
     {
         let _env =
@@ -263,7 +265,7 @@ fn review_record_refuses_the_author_session_even_with_a_reviewer_seat() {
         root.path().to_path_buf(),
         SPEC,
         "approved",
-        Some(HEAD),
+        Some(&head),
         Some("main"),
         Some("lgtm"),
         &[],
@@ -634,6 +636,8 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
         proc(50, "claude", &["claude"], "h0"),
     ] {
         let root = tempfile::tempdir().unwrap();
+        // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+        let head = crate::test_git::commit_fixture(root.path());
         let l = lease("aaaabbbb1111", SPEC, root.path().join("wt"));
         with_identity_source(source_under(100, 200, harness.clone(), None), || {
             record_authoring_lease(root.path(), &l)
@@ -656,7 +660,7 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
                 root.path().to_path_buf(),
                 SPEC,
                 "approved",
-                Some(HEAD),
+                Some(&head),
                 Some("main"),
                 Some("lgtm"),
                 &[],
@@ -879,6 +883,8 @@ fn pr_keyed_review_resolves_head_branch_and_trailer_specs() {
 #[test]
 fn pr_keyed_approval_from_main_is_refused_for_the_author() {
     let root = tempfile::tempdir().unwrap();
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+    let head = crate::test_git::commit_fixture(root.path());
     let l = lease("aaaabbbb5555", SPEC, root.path().join("wt"));
     let harness = proc(90, "codex", &["codex"], "h");
     with_identity_source(source_under(100, 200, harness.clone(), None), || {
@@ -895,7 +901,7 @@ fn pr_keyed_approval_from_main_is_refused_for_the_author() {
             root.path().to_path_buf(),
             "PR-2485",
             "approved",
-            Some(HEAD),
+            Some(&head),
             None,
             Some("lgtm"),
             &[],
@@ -1351,6 +1357,8 @@ fn an_unanchored_identity_cannot_record_an_approval() {
     assert!(has_identity_anchor(&["sid:60@t0".into()]));
 
     let root = tempfile::tempdir().unwrap();
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+    let head = crate::test_git::commit_fixture(root.path());
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         root.path(),
         "reviewer",
@@ -1362,7 +1370,7 @@ fn an_unanchored_identity_cannot_record_an_approval() {
             root.path().to_path_buf(),
             SPEC,
             "approved",
-            Some(HEAD),
+            Some(&head),
             Some("main"),
             Some("lgtm"),
             &[],

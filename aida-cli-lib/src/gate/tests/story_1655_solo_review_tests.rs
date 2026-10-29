@@ -161,6 +161,8 @@ fn solo_human_mode_on_still_refuses_the_author_agent_end_to_end() {
         return;
     };
     let root = tempfile::tempdir().unwrap();
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+    let head = crate::test_git::commit_fixture(root.path());
     global_config(&home, SOLO_ON);
     let session = AUTHOR_SESSION;
     record_author_lease(root.path());
@@ -175,7 +177,7 @@ fn solo_human_mode_on_still_refuses_the_author_agent_end_to_end() {
         root.path().to_path_buf(),
         SPEC,
         "approved",
-        Some(HEAD),
+        Some(&head),
         Some("main"),
         Some("lgtm"),
         &[],
@@ -245,6 +247,8 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
         return;
     };
     let root = tempfile::tempdir().unwrap();
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+    let head = crate::test_git::commit_fixture(root.path());
     global_config(&home, SOLO_ON);
     record_author_lease(root.path());
     let _ambient = crate::test_env::AmbientGuard::hermetic_and(
@@ -267,7 +271,7 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
                     root.path().to_path_buf(),
                     SPEC,
                     "approved",
-                    Some(HEAD),
+                    Some(&head),
                     Some("story-91655-work"),
                     Some("lgtm"),
                     &[],
@@ -293,7 +297,7 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
     assert!(att.solo_human && att.human_at_tty, "{att:?}");
     let receipt_id = att.receipt_id.clone().expect("a receipt");
     let receipt =
-        crate::gate::review_authority::human_receipt_for(&receipt_id, HEAD).expect("receipt");
+        crate::gate::review_authority::human_receipt_for(&receipt_id, &head).expect("receipt");
     assert!(receipt.solo_human, "{receipt:?}");
     assert!(
         std::fs::read_to_string(

@@ -12,6 +12,11 @@ mod bug_2130_liveness_identity_tests;
 #[path = "tests/bug_012_dispatch_lease_scan_tests.rs"]
 mod bug_012_dispatch_lease_scan_tests;
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_013_review_record_sha_tests.rs"]
+mod bug_013_review_record_sha_tests;
+
 #[cfg(test)]
 #[path = "tests/drain_reliability_wiring_tests.rs"]
 mod drain_reliability_wiring_tests;

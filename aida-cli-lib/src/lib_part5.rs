@@ -2906,6 +2906,40 @@ pub(crate) fn handle_review_classes(since: Option<&str>, json: bool) -> Result<(
     Ok(())
 }
 
+/// BUG-b6b1278890774ef993d2ebc327862470-013: the full sha a typed `aida review record --sha` names, or a
+/// refusal. `given` (a full sha or a prefix) must resolve with `git
+/// rev-parse` in `project_root` and equal `head`, the head under review, when
+/// one is known. `remedy` is what the refusal tells the caller to do instead;
+/// it differs when `head` is only the checkout's HEAD standing in for a PR
+/// head the forge could not report, where omitting `--sha` cannot help.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+pub(crate) fn verified_review_sha(
+    project_root: &std::path::Path,
+    given: &str,
+    head: Option<&str>,
+    remedy: &str,
+) -> Result<String> {
+    let head_hint = head
+        .map(|h| format!(" (the head under review is {h})"))
+        .unwrap_or_default();
+    let Some(full) = resolve_commit_sha(project_root, given) else {
+        anyhow::bail!(
+            "refused: `--sha {given}` does not name a commit in this repository{head_hint} — \
+             {remedy}; nothing was recorded"
+        );
+    };
+    if let Some(head) = head {
+        let head_full = resolve_commit_sha(project_root, head).unwrap_or_else(|| head.to_string());
+        if !crate::gate::review_verdict::same_reviewed_sha(&full, &head_full) {
+            anyhow::bail!(
+                "refused: `--sha {given}` resolves to {full}, but the head under review is \
+                 {head_full} — {remedy}; nothing was recorded"
+            );
+        }
+    }
+    Ok(full)
+}
+
 /// The core of `aida review record`, taking its write root as an explicit
 /// parameter rather than resolving it ambiently. Used directly by tests so a
 /// test can pin the root to a tempdir and know — by construction, not by
@@ -2946,6 +2980,17 @@ pub(crate) fn handle_review_record_at(
     let branch = branch
         .map(str::to_string)
         .or_else(|| current_branch_at(&project_root));
+    // BUG-1983: a session that exports a grant which fails validation claims
+    // a seat it does not hold; refuse rather than attribute the verdict to
+    // it, with the same sentence the advisor-gated edit gives. No exported
+    // grant stays permissive (agent identity, or the operator fallback below).
+    // trace:BUG-1983 | ai:claude
+    if let Some(rejection) =
+        crate::gate::seat_authority::grant_check(&project_root).rejection_sentence()
+    {
+        anyhow::bail!("refused: review record. {rejection}.");
+    }
+
     // A from-PR reviewer receives the forge-resolved head in its launch
     // envelope. Prefer it to a checkout's HEAD, which may be stale or may be
     // the drive root rather than the review worktree.
@@ -2953,14 +2998,14 @@ pub(crate) fn handle_review_record_at(
     let envelope_pr_sha = pr
         .and_then(|_| std::env::var("AIDA_FROM_PR_HEAD_SHA").ok())
         .filter(|s| !s.trim().is_empty());
-    let forge_pr_sha = if sha.is_none() && envelope_pr_sha.is_none() {
+    let forge_pr_sha = if envelope_pr_sha.is_none() {
         match pr {
             // TASK-1455: the verdict's head is read from the PINNED repo and
             // refused if the forge answers for any other repo, so a PR number
             // can never stamp this verdict with another repo's head.
             // trace:TASK-1455 | ai:claude
-            Some(n) => Some(
-                merge_hold::fetch_pinned_change(
+            Some(n) => {
+                let head = merge_hold::fetch_pinned_change(
                     &project_root,
                     crate::forge::resolve_open_change_forge_kind(&project_root),
                     n,
@@ -2971,39 +3016,66 @@ pub(crate) fn handle_review_record_at(
                         .head_sha
                         .ok_or_else(|| format!("the forge did not return a head SHA for #{n}"))
                 })
-                .map_err(|e| anyhow::anyhow!(e))
-                .with_context(|| {
-                    format!(
-                        "could not resolve PR {n}'s current head for the verdict; pass `--sha <commit>` explicitly"
-                    )
-                })?,
-            ),
+                .map_err(|e| anyhow::anyhow!(e));
+                match head {
+                    Ok(head) => Some(head),
+                    // With `--sha` an unreachable forge is not fatal: the
+                    // head under review falls back to the checkout's HEAD
+                    // below (advisor ruling on BUG-b6b1278890774ef993d2ebc327862470-013), so the typed sha is
+                    // still checked against a commit git resolved. Without
+                    // `--sha` the forge head IS the head, so it must answer.
+                    Err(_) if sha.is_some() => None,
+                    Err(e) => {
+                        return Err(e).with_context(|| {
+                            format!(
+                                "could not resolve PR {n}'s current head for the verdict; pass `--sha <commit>` explicitly"
+                            )
+                        });
+                    }
+                }
+            }
             None => None,
         }
     } else {
         None
     };
-    let resolved_sha = sha
-        .map(str::to_string)
-        .or(envelope_pr_sha)
+    // The head under review, in the same order the default has always used:
+    // the launch envelope's PR head, the forge's PR head, then the checkout.
+    let checkout_stands_in_for_pr =
+        pr.is_some() && envelope_pr_sha.is_none() && forge_pr_sha.is_none();
+    let tool_head = envelope_pr_sha
         .or(forge_pr_sha)
         .or_else(|| resolve_commit_sha(&project_root, branch.as_deref().unwrap_or("HEAD")))
         .or_else(|| resolve_commit_sha(&project_root, "HEAD"));
+    // A `--pr` whose forge could not answer is checked against the checkout,
+    // and omitting `--sha` would then fail on that same forge read — so the
+    // refusal must not send the caller there.
+    let remedy = if checkout_stands_in_for_pr {
+        "the forge did not report the PR's head, so the checkout's HEAD stands in for it: \
+         record from the review worktree checked out at the PR head, or retry once the forge \
+         is reachable"
+    } else {
+        "review that head, or omit `--sha` to record it"
+    };
+    // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` is the model's copy of a commit id, and one
+    // mistyped character discarded a complete review at collection. Resolve
+    // it with git and refuse here — at record time, with a clear message —
+    // unless it is the head under review; the stored value is always git's
+    // full 40-hex answer, never the typed string.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-013 | ai:claude
+    let resolved_sha = match sha.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(given) => Some(verified_review_sha(
+            &project_root,
+            given,
+            tool_head.as_deref(),
+            remedy,
+        )?),
+        None => tool_head.map(|head| resolve_commit_sha(&project_root, &head).unwrap_or(head)),
+    };
     if resolved_sha.is_none() {
         anyhow::bail!(
             "no commit could be resolved for this review — pass `--sha <commit>`; an unstamped verdict is unverifiable and will not be recorded"
         );
-    }
-
-    // BUG-1983: a session that exports a grant which fails validation claims
-    // a seat it does not hold; refuse rather than attribute the verdict to
-    // it, with the same sentence the advisor-gated edit gives. No exported
-    // grant stays permissive (agent identity, or the operator fallback below).
-    // trace:BUG-1983 | ai:claude
-    if let Some(rejection) =
-        crate::gate::seat_authority::grant_check(&project_root).rejection_sentence()
-    {
-        anyhow::bail!("refused: review record. {rejection}.");
     }
 
     // BUG-1802: bind recording identity and enforce policy.
@@ -3785,11 +3857,13 @@ mod bug_1452_refusal_aftermath_tests {
         // handshake escaping and to hold `ENV_LOCK` against sibling setters,
         // not to steer the hold. See BUG-1743 and the doc comment above.
         // trace:BUG-1743 | ai:claude
+        // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+        let head = crate::test_git::commit_fixture(root.path());
         handle_review_record_at(
             root.path().to_path_buf(),
             "BUG-14520",
             "request-changes",
-            Some("abc123"),
+            Some(&head[..7]),
             Some("bug-14520-work"),
             Some("the regression is still open"),
             &["fix the regression".to_string()],
@@ -3817,7 +3891,7 @@ mod bug_1452_refusal_aftermath_tests {
             .expect("marker references the verdict");
         assert_eq!(vref.key, "BUG-14520");
         assert_eq!(vref.pr, Some(1452));
-        assert_eq!(vref.reviewed_sha.as_deref(), Some("abc123"));
+        assert_eq!(vref.reviewed_sha.as_deref(), Some(head.as_str()));
         assert!(vref.recorded_by.is_some());
         assert_eq!(hold.spec.as_deref(), Some("BUG-14520"));
         assert!(hold
@@ -3934,11 +4008,13 @@ mod bug_1452_refusal_aftermath_tests {
         // A bogus, unlikely-to-collide-with-anything-real PR number — the
         // exact shape of the incident, where the number happened to match a
         // real merged PR purely by chance.
+        // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve to a real commit.
+        let head = crate::test_git::commit_fixture(explicit_root.path());
         handle_review_record_at(
             explicit_root.path().to_path_buf(),
             "BUG-99999",
             "request-changes",
-            Some("deadbeef"),
+            Some(&head),
             Some("bug-99999-work"),
             Some("isolation check"),
             &["nothing real".to_string()],
