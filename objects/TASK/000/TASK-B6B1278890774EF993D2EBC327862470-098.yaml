@@ -6,12 +6,12 @@ description: |-
 
   non-blocking/minor: refuse_node_id_colliding_with_label (node_alias.rs:571) uses load_strict, so a malformed node_aliases.toml blocks every node registration (aida node acquire/init) until the alias file is fixed. This fails closed and the error is explicit, but it couples node acquisition to the health of the alias file.
   Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T10:37:53.155796727Z
-modified_at: 2026-10-29T10:46:49.745901330Z
+modified_at: 2026-10-29T10:46:53.202520039Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-29T10:46:49.745901330Z
   modified_at: 2026-10-29T10:46:49.745901330Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+history:
+- id: 01a18745-1212-75d3-a584-139bb979d8e1
+  author: joe
+  timestamp: 2026-10-29T10:46:53.202517480Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
