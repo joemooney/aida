@@ -46,12 +46,12 @@ description: |
   2. Point collect/adopt at ledger append, keeping StandaloneVerdictChecks::check_record (PR binding, child-grant check at collection time). Tests: a verdict naming PR-B collected from PR-A's reviewer seat is refused; an expired/revoked grant at collection is refused.
   3. Make legacy_gate_writers_do_not_gain_call_sites fast (<10s; scan once, cached file list) or add a justified entry to scripts/test-time-budget.toml — CI lib-1 currently fails on this budget.
   Findings 3 (backdating) and 4 (rejected-event size) disappear with the spool; no further action. Slice 2's acceptance items stand (legacy writers to 0, readers on the ledger).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T13:23:22.800630751Z
+modified_at: 2026-10-29T14:13:13.894815015Z
 req_type: Story
 tags:
 - architecture
@@ -243,6 +243,29 @@ comments:
   created_at: 2026-10-29T13:23:22.800626364Z
   modified_at: 2026-10-29T13:23:22.800626364Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18801-ddd0-7952-95b7-2b750c89e6fc
+  author: joe
+  content: |-
+    ## Round-2 rework (79a9b06): the mailbox transport is withdrawn and launcher collect is the only contained route
+
+    | Ruling item | Done | Test |
+    |---|---|---|
+    | 1. Delete spool.rs, the mailbox gate-event kind, drain-on-read | `gate/ledger/spool.rs`, `rejected-event`, the `submission` field and `store::ingest` are deleted. The projection reads only the ledger plus legacy read-through. `record_event` refuses a contained caller, and a contained verdict write leaves the ledger untouched | `a_contained_writer_cannot_write_the_ledger` |
+    | 2. collect/adopt append to the ledger, check_record kept | `collect_standalone_verdict` keeps `StandaloneVerdictChecks` (PR binding, current head, this launch's child grant checked by `grant_check_for` at collection time). It appends the verdict plus one record per credited spec through `ledger::record_collected_verdict` and writes **no legacy file**. `adopt_direct_write` appends PR-keyed heredoc writes to the ledger | `a_verdict_for_another_pr_is_refused_at_collection` (a record naming PR-31, one reviewed at another head, and a `PR-31.json` in the seat are all refused), `a_revoked_or_foreign_grant_is_refused_at_collection`, `a_collected_verdict_goes_on_the_ledger_and_no_legacy_file_is_written`, plus the BUG-2149 launcher test now asserts the ledger |
+    | 3. Fast ratchet | Sources are read once (OnceLock) and call sites counted by substring search instead of 20 regex passes: 0.22s locally, so no budget entry is needed | `call_sites_skip_definitions_and_longer_names` |
+
+    **Needed so main does not regress:** collected verdicts are now on the ledger only, so `ship::merge_gate_verdict_candidates` and `merge_hold_core::corpus_gate_bodies` fall back to the ledger's newest record for a key with no file. A collected approval counts at ship, and a collected request-changes still blocks at the merge chokepoint.
+
+    ### Implementer findings (filed as a comment: this seat cannot `aida add`)
+    1. **kind:deviation · minor: `adopt_direct_write` still writes the per-commit archive** beside the PR-keyed file, as well as the ledger event. The ruling says no legacy write on that path. I kept the archive because BUG-2186 `RetainedHistory::beside` (rework auto-release) and `phase_gates::phase3_head_archive_fallback` read it directly, and two TASK-1801 tests rely on it. adopt runs only primary-side, on a file already in the primary checkout, and never on the contained route (collect no longer calls it), so AC5 as amended holds. Slice 2 removes the archive write together with those readers. The ratchet counts it as `archive_round_by_sha` = 2.
+    2. **kind:design-choice · major: rework-hold auto-release reads verdict files only** (`rework_hold_release` `verdict_file` / `read_history`). After this push a contained reviewer's approval is on the ledger only, so auto-release reports "arming verdict missing" and the hold needs `aida merge-hold clear`. This fails closed, not open. It belongs to slice 2 (holds plus readers on the ledger) and should be the first reader slice 2 moves.
+    3. **kind:design-choice · minor:** ledger dedupe is now by (record, spec), so the per-spec records from one collection are kept side by side. A repeated collection appends nothing.
+
+    Tests: `cargo test --profile agent -p aida-cli-lib --lib -- gate::ledger review_verdict_tests story_1687 bug_2123 bug_2186 task_1960 bug_1774 story_1697 gate::ship merge_hold_core bug_2176 phase_gates` → 343 passed, 6 failed. All 6 failures are sandbox-isolated tests that cannot install a hermetic HOME in this seat (`BUG-1642: Read-only file system`), as are the 14 BUG-2149/2187 launcher tests; CI runs them. `make check-ci-fast` → 35 gates passed.
+  created_at: 2026-10-29T14:13:06.128422291Z
+  modified_at: 2026-10-29T14:13:06.128422291Z
+  session_id: 01a187d513e6
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -348,6 +371,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a18801-fc8d-7210-8a82-a374d6c56fd1
+  author: joe
+  timestamp: 2026-10-29T14:13:13.997477179Z
+  session_id: 01a187d513e6
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
