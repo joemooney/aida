@@ -50,12 +50,12 @@ description: |
 
   ## Slice 1 (PR-3090) ROUND 3 advisor ruling, 2026-10-29 07:35
   BUNDLE all 5 findings in .aida/review-verdicts/PR-3090.json. Ruling on the needs-ruling item: pull slice 2's READER switch forward. Every verdict reader (ship.rs merge_gate_verdict_candidates, merge_hold_core corpus_gate_bodies, queue_cmd end-of-command summary, capture_review_calibration_for_spec, burndown_run local_verdict_blocks_merge, queue_cmd probe_pr_integration_state, and any other reader of verdict_path / PR-N.json) reads through gate::ledger::project, which already does legacy read-through. No reader opens a legacy verdict file directly; add that to the ratchet. Legacy WRITERS (dual write) stay accepted until slice 2. Add the expired-grant-at-collection test.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T15:41:01.303449236Z
+modified_at: 2026-10-29T16:12:49.277326525Z
 req_type: Story
 tags:
 - architecture
@@ -327,6 +327,33 @@ comments:
   created_at: 2026-10-29T15:40:22.047282383Z
   modified_at: 2026-10-29T15:40:22.047282383Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18859-e2e0-7d21-b037-b4bd046dd1b7
+  author: joe
+  content: |-
+    ## Round-5 rework: both findings fixed in this slice
+
+    | # | Finding | Fix | Test |
+    |---|---|---|---|
+    | 1 | `aida review <SPEC>` read a pre-launch ledger record as the new review's verdict and re-recorded it at the current head | New `review_verdict::current_verdict_since(path, since)`: a ledger-sourced record written before `since` yields `None` (the file is cleared before launch, the ledger is not). `handle_review_spec` stamps `launched_at` before the reviewer launch and reads through `review_spec_verdict(path, launched_at)`, so with no new verdict nothing is presented or re-recorded. The phase-3 `handshake_body` now uses the same helper (one rule, one place) | `review_spec_ignores_a_ledger_verdict_from_before_the_launch` |
+    | 2 | `phase3_head_archive_fallback` let the archive answer when the anchored reader refused the current file and the ledger held a record | New `review_verdict::verdict_file_refused(path)` (exists but anchored read refused, TASK-1801), checked first in the fallback; `verdict_file_for_sha` uses the same helper | `a_refused_current_file_keeps_the_phase3_archive_fallback_closed` |
+  created_at: 2026-10-29T15:49:14.592531383Z
+  modified_at: 2026-10-29T15:49:14.592531383Z
+  session_id: 01a188530d6c
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a1886f-6ac7-7ed0-a82a-c56ecc02ff38
+  author: joe
+  content: |-
+    ## Round-5 addendum (308b231)
+
+    Two more fixes in the same commit, both for round-4 regressions found by the targeted run (likely the red `CI (lib-1)` at 7dac907):
+    - `choose_current`: a current file with no `recorded_at` is dated by its mtime, so a malformed or hand-written file newer than the ledger round fails closed instead of being outranked. Fixes `a_malformed_current_file_never_falls_back_to_an_archived_approval`.
+    - `audit_verdict_dir` read `verdict_path(key)`, which uppercases the key and missed mixed-case stems (`PR-1979-advisor.json`). It now reads the file the stem names. Fixes `unknown_verdicts_get_their_own_finding_and_drift_is_aggregated`.
+
+    Tests: `cargo test --profile agent -p aida-cli-lib --lib -- gate::ledger task_1460 bug_2201 review_verdict human:: doctor_cmd::bug_1505` gave 141 passed, 1 failed. The failure is `task1801_replacing_validated_verdict_with_fifo_reads_open_inode`, an isolated test that cannot install its hermetic HOME on this seat's read-only filesystem (BUG-1642); CI runs it. `make check-ci-fast` passed.
+  created_at: 2026-10-29T16:12:45.639057294Z
+  modified_at: 2026-10-29T16:12:45.639057294Z
+  session_id: 01a188530d6c
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -520,6 +547,15 @@ history:
   timestamp: 2026-10-29T15:41:02.123113293Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1886f-795a-7ac1-b653-e2139c1eef58
+  author: joe
+  timestamp: 2026-10-29T16:12:49.370536163Z
+  session_id: 01a188530d6c
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
