@@ -87151,5 +87151,41 @@ operations:
     req_type: Faq
     status: Completed
     priority: Medium
-clock: 6799
+- id: 01a1895f-c63a-7ca0-83a0-00e0bab1f9ec
+  target_id: 01a1895f-c2df-7f71-bf8b-923b9468ac78
+  author: aida
+  node_id: '1'
+  lamport: 6800
+  timestamp: 2026-10-29T20:35:17.690871826Z
+  kind: !Create
+    title: Why does changing directories or opening another terminal select a different AIDA binary?
+    description: |
+      **Development activation belongs to the shell, not to its current directory. Changing directories does not change the executable already selected on PATH.**
+
+      ## Why
+
+      Two terminals can run different AIDA builds against the same project. A dev-activated shell can keep selecting an old release binary even after a newer agent build has been compiled elsewhere. Shell functions, PATH ordering, and Bash's command hash can all affect command resolution.
+
+      ## How
+
+      ```bash
+      type -a aida
+      aida --version
+      aida dev status
+      hash -r
+      ```
+
+      On builds that support it, `aida --path` reports the actual executable. Use `aida dev activate auto` to select the freshest available target build in the configured development checkout. A stable live installation is preferable for ordinary project use.
+
+      ## Caveat
+
+      Bare `aida dev activate` can default to the release profile; `make build-fast` produces the agent profile. `exec bash` reloads startup configuration but can inherit activation environment variables unless startup code clears them. Inspect resolution after restarting.
+
+      ## See also
+
+      FAQ-25 and FAQ-27.
+    req_type: Faq
+    status: Completed
+    priority: Medium
+clock: 6800
 node_id: '1'
