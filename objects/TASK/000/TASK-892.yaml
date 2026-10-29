@@ -13,12 +13,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T05:10:20.513393891Z
-modified_at: 2026-06-25T05:10:20.513393891Z
+modified_at: 2026-10-29T06:45:01.642762729Z
 req_type: Task
 tags:
 - aida:init
-- deferred:until-projects-toml-consumed
 - distributed
 - from-operator
 - parent:EPIC-22
 - registry
+history:
+- id: 01a18667-a77a-7fd0-b954-a4ff63321ca3
+  author: joe
+  timestamp: 2026-10-29T06:45:02.458430665Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes: []
