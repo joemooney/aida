@@ -20,7 +20,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T03:16:37.130372260Z
-modified_at: 2026-10-29T06:38:17.194832974Z
+modified_at: 2026-10-29T06:38:20.740387976Z
 req_type: Spike
 tags:
 - batch:groom-2026-09-25
@@ -78,6 +78,12 @@ comments:
   created_at: 2026-10-01T03:52:49.653551964Z
   modified_at: 2026-10-01T03:52:49.653551964Z
   session_id: f00803e7-046a-4f7e-8540-549f9adf7c10
+- id: 01a18661-8644-7503-9556-b67b3f55b5e1
+  author: joe
+  content: 'Regroup decision 1 (operator-approved 2026-10-28 23:34): closed as rejected. Reason: Reject: cosmetic, operator-deferred.'
+  created_at: 2026-10-29T06:38:20.740387976Z
+  modified_at: 2026-10-29T06:38:20.740387976Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a18661-5c5f-7351-9806-a17b7b39fca0
   author: joe
