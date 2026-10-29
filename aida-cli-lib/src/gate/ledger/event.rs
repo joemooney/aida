@@ -10,7 +10,7 @@ use std::path::Path;
 pub(crate) const EVENT_VERSION: u32 = 1;
 
 /// One ledger line. `seq` and `at` are assigned by the appender under the
-/// change's lock; a submitter's values are overwritten.
+/// change's lock; a caller's values are overwritten.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct GateEvent {
@@ -35,13 +35,9 @@ pub(crate) struct GateEvent {
     /// Index only: the spec the event concerns.
     #[serde(default)]
     pub spec: Option<String>,
-    /// The recorder's attestation, validated on ingest of a submission.
+    /// The recorder's attestation, as the verdict record carries it.
     #[serde(default)]
     pub actor: Option<RecorderAttestation>,
-    /// The mailbox submission this event was ingested from, so a submission
-    /// whose spool file survived its ingest is never appended twice.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub submission: Option<String>,
     #[serde(flatten)]
     pub body: EventBody,
 }
@@ -58,11 +54,6 @@ pub(crate) enum EventBody {
     /// The change's legacy files, verbatim, captured on its first ledger
     /// write so the ledger alone carries the history.
     LegacyImported { legacy: Vec<LegacyFile> },
-    /// A mailbox submission the primary side refused, kept as evidence.
-    RejectedEvent {
-        reason: String,
-        submitted: serde_json::Value,
-    },
 }
 
 /// One legacy file preserved in a `legacy-imported` event.
@@ -88,7 +79,6 @@ impl GateEvent {
             base_tip: None,
             spec: None,
             actor: None,
-            submission: None,
             body,
         }
     }

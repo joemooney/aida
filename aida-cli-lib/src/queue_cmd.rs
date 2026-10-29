@@ -13793,10 +13793,11 @@ pub(crate) fn run_standalone_reviewer(
         .unwrap_or_default();
 
     // BUG-2149: a contained reviewer can only write inside its review
-    // worktree, so its `aida review record` lands there and the launcher's
-    // canonical PR-N.json never appears. Collect it (and mirror the
-    // spec-keyed records) into the launcher project, where `aida review
-    // verdict` and `aida pr ship` read. trace:BUG-2149 | ai:claude
+    // worktree, so its `aida review record` lands there and never reaches
+    // the primary side. Collect it onto the PR's gate ledger, where `aida
+    // review verdict` and `aida pr ship` read: the launcher is the ledger's
+    // only writer for a contained seat. trace:BUG-2149 | ai:claude
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let head_sha = standalone_review_pr_head(project_root, pr);
     // trace:BUG-2187 | ai:claude
     let record_template =
@@ -13818,10 +13819,9 @@ pub(crate) fn run_standalone_reviewer(
     );
     match &collected {
         Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
-            "  {} collected the reviewer's verdict from {} into {}",
+            "  {} collected the reviewer's verdict from {} onto the PR-{pr} gate ledger",
             crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
             worktree.display(),
-            verdict_path.display()
         ),
         Ok(_) => {}
         Err(why) => eprintln!(
@@ -13884,7 +13884,14 @@ pub(crate) fn run_standalone_reviewer(
         )
     });
     if !quiet {
-        let verdict_json = crate::gate::review_verdict::read_verdict_body(verdict_path).ok();
+        // A collected verdict is on the ledger only; the file may be absent.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let verdict_json = crate::gate::review_verdict::read_verdict_body(verdict_path)
+            .ok()
+            .or_else(|| {
+                crate::gate::ledger::project::newest_verdict(project_root, &format!("PR-{pr}"))
+                    .and_then(|record| serde_json::to_string(&record).ok())
+            });
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),

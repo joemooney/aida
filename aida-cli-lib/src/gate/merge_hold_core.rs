@@ -1328,6 +1328,29 @@ pub(crate) fn corpus_gate_bodies(
             }
         }
     }
+    // M1: a verdict collected from a contained reviewer is on the change's
+    // gate ledger only. A key with no file under any root is weighed by the
+    // ledger's newest record, so a ledger-only refusal still blocks.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut stores: Vec<PathBuf> = Vec::new();
+    for root in roots {
+        if let Ok(store) = crate::gate::ledger::store_root(root) {
+            if !stores.contains(&store) {
+                stores.push(store);
+            }
+        }
+    }
+    for key in &keys {
+        if out.iter().any(|(k, _)| k == key) {
+            continue;
+        }
+        for store in &stores {
+            if let Some(record) = crate::gate::ledger::project::newest_verdict(store, key) {
+                let body = serde_json::to_string(&record).map_err(|e| e.to_string())?;
+                out.push((key.clone(), body));
+            }
+        }
+    }
     Ok(out)
 }
 

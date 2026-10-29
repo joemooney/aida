@@ -958,10 +958,9 @@ pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
 ///
 /// Order uses primary-side time only. A ledger verdict counts as of the
 /// earlier of the ledger's own `at` (stamped on append) and the record's
-/// `recorded_at`: the `at` bound stops a submitter's future-dated record
-/// from shadowing later verdicts, the `recorded_at` bound stops a late
-/// ingest from passing off an old round as new. The file's `recorded_at` was
-/// written by an uncontained writer. The same round on both sides (equal
+/// `recorded_at`: the `at` bound stops a reviewer's future-dated record from
+/// shadowing later verdicts, the `recorded_at` bound stops a late collection
+/// from passing off an old round as new. The same round on both sides (equal
 /// `recorded_at`) keeps the file, which may carry a later annotation
 /// (`closed_by_merge`).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
@@ -1464,9 +1463,10 @@ pub(crate) fn write_verdict_object(
 }
 
 /// [`write_verdict_object`], naming the spec the verdict concerns so the
-/// gate ledger can index a PR-keyed record by it. A PR-keyed write also
-/// lands on the change's gate ledger (directly, or through the mailbox from
-/// a contained seat); the file stays the compatibility record in slice 1.
+/// gate ledger can index a PR-keyed record by it. An uncontained PR-keyed
+/// write also lands on the change's gate ledger; a contained one stays in
+/// its seat clone for the launcher to collect. The file stays the
+/// compatibility record in slice 1.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn write_verdict_object_for_spec(
     path: &Path,
@@ -1781,10 +1781,18 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
 /// TASK-1460: archive a verdict file that was written OUTSIDE the record
 /// path — the `/aida-review` skill writes `AIDA_REVIEW_VERDICT_FILE` with a
 /// shell heredoc — so its round lands in the per-sha archive exactly as a
-/// recorded one would. The current file is left byte-for-byte as written.
-/// A file with no verdict or no reviewed commit is unidentifiable and is not
-/// archived (the same refusal the record path makes). Idempotent.
+/// recorded one would, and (a PR-keyed path) on the change's gate ledger.
+/// The current file is left byte-for-byte as written. A file with no verdict
+/// or no reviewed commit is unidentifiable and is not archived (the same
+/// refusal the record path makes). Idempotent.
+///
+/// M1 slice 1: the archive write is the same primary-side dual write the
+/// record path keeps until slice 2 moves its readers (retained history,
+/// BUG-2186; the phase-3 archive fallback) onto the ledger. A contained
+/// reviewer never reaches this: its verdict arrives by collection, which
+/// writes the ledger only.
 // trace:TASK-1460 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
     let Some(obj) = read_verdict_body(path)
         .ok()
@@ -1793,18 +1801,27 @@ pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
     else {
         return Ok(());
     };
-    archive_round_by_sha(path, &obj)
+    archive_round_by_sha(path, &obj)?;
+    let identified = round_sha(&obj).is_some()
+        && obj
+            .get("verdict")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| !v.trim().is_empty());
+    if identified {
+        crate::gate::ledger::adopt_verdict_file(path, &obj)?;
+    }
+    Ok(())
 }
 
 /// BUG-2149: what [`collect_standalone_verdict`] found and where it put it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CollectedVerdict {
-    /// The verdict now present at the launcher's canonical PR-keyed path.
+    /// The verdict now on the change's gate ledger.
     pub verdict: RecordedVerdict,
-    /// Spec-keyed records (upper-case ids) written into the launcher project.
+    /// Spec ids (upper-case) the collected verdict was recorded for.
     pub spec_records: Vec<String>,
-    /// True when the canonical PR-keyed file was written by the collector
-    /// rather than in place by the reviewer.
+    /// True when the verdict came from the reviewer's worktree rather than
+    /// a file it wrote in place in the launcher checkout.
     pub collected_from_worktree: bool,
 }
 
@@ -2092,11 +2109,18 @@ pub trait VerdictCollectionChecks {
 ///   identity-checked source on verdict and reviewed commit.
 ///
 /// Any mismatch collects nothing and returns `Err(reason)`. On success the
-/// newest identity-checked record is written to `canonical` unless the
-/// reviewer already wrote it in place, and the spec-keyed records for
-/// `spec_ids` (the specs the PR credits) — and no others — are mirrored into
-/// the launcher project unless it already holds one written during this run.
+/// newest identity-checked record, and one record for each of `spec_ids`
+/// (the specs the PR credits, and no others), are appended to the change's
+/// gate ledger from this — the uncontained launcher's — side (M1). Nothing
+/// is written to the legacy verdict files, and the ledger already holding a
+/// record (the reviewer wrote it in place) appends nothing new.
+///
+/// This is the only route from a contained seat to the ledger, and it is
+/// origin-authenticated: the launcher reads the exact worktree it launched,
+/// the record must be for the launched PR at its current head, and its
+/// recording grant must be that launch's own child grant, valid now.
 // trace:BUG-2149 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn collect_standalone_verdict(
     launcher_root: &Path,
     worktree: &Path,
@@ -2195,36 +2219,32 @@ pub fn collect_standalone_verdict(
         }
     }
 
-    // Mirror. Never overwrite a file written during this run.
-    let mut collected_from_worktree = false;
-    if canonical_in_place.is_none() {
-        write_verdict_atomic(canonical, &source.body)
-            .map_err(|e| format!("could not write {}: {e}", canonical.display()))?;
-        let _ = adopt_direct_write(canonical);
-        collected_from_worktree = true;
-    }
-    let mut spec_records = Vec::new();
-    for id in spec_ids {
-        let target = verdict_path(launcher_root, &id);
-        if fresh_candidate(&target, since).is_some() {
-            continue;
-        }
-        let body = worktree_specs
-            .iter()
-            .find(|c| {
-                c.path
-                    .file_stem()
-                    .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(&id))
-            })
-            .map(|c| c.body.clone())
-            .unwrap_or_else(|| source.body.clone());
-        // Archive the round being replaced before overwriting it.
-        let _ = adopt_direct_write(&target);
-        write_verdict_atomic(&target, &body)
-            .map_err(|e| format!("could not write {}: {e}", target.display()))?;
-        let _ = adopt_direct_write(&target);
-        spec_records.push(id);
-    }
+    let change = crate::gate::ledger::legacy::change_of_verdict_path(canonical)
+        .map(|(_, change)| change)
+        .ok_or_else(|| format!("{} does not name a change", canonical.display()))?;
+    let spec_bodies: Vec<(String, JsonObj)> = spec_ids
+        .iter()
+        .map(|id| {
+            let body = worktree_specs
+                .iter()
+                .find(|c| {
+                    c.path
+                        .file_stem()
+                        .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(id))
+                })
+                .map_or_else(|| source.obj.clone(), |c| c.obj.clone());
+            (id.clone(), body)
+        })
+        .collect();
+    crate::gate::ledger::record_collected_verdict(launcher_root, change, &source.obj, &spec_bodies)
+        .map_err(|e| {
+            format!(
+                "could not record the verdict on the {} gate ledger: {e}",
+                change.as_key()
+            )
+        })?;
+    let collected_from_worktree = canonical_in_place.is_none();
+    let spec_records = spec_ids;
 
     Ok(CollectedVerdict {
         verdict: source.verdict,

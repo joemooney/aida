@@ -1,6 +1,5 @@
 //! Read side: the state a gate needs, folded from a change's events, and the
-//! spec → change index. Every read first ingests the change's pending
-//! mailbox submissions (when this caller can write the ledger).
+//! spec → change index.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
 
@@ -73,9 +72,8 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
     })
 }
 
-/// The change's events after ingesting its pending submissions.
+/// The change's events, in ledger order.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    store::ingest(root, change);
     store::read_file(root, change)
 }
 

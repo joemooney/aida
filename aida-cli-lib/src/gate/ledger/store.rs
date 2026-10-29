@@ -5,7 +5,7 @@
 // mandate-gate
 
 use super::event::{EventBody, GateEvent};
-use super::{ledger_dir, legacy, spool, ChangeKey, Delivered};
+use super::{ledger_dir, legacy, ChangeKey, Delivered};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -50,11 +50,11 @@ pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
 }
 
 /// Append `events` to the change's ledger, after the change's legacy import
-/// (first write only) and any pending mailbox submissions. A direct verdict
-/// whose record the ledger already holds — written through two paths, or the
-/// collected copy of an ingested submission — is not appended again. Returns
-/// the events as appended, with `seq` and `at` assigned. Writes nothing when
-/// there is nothing to append; consumed spool files are removed either way.
+/// (first write only). A verdict whose record the ledger already holds for
+/// the same spec — written through two paths, or collected after the
+/// reviewer wrote it in place — is not appended again. Returns the events as
+/// appended, with `seq` and `at` assigned; writes nothing when there is
+/// nothing to append.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn append(
     root: &Path,
@@ -66,9 +66,8 @@ pub(crate) fn append(
     })
 }
 
-/// Append the change's `legacy-imported` event now if it has none (plus any
-/// pending submissions), so the import reads the legacy files before a
-/// writer changes them.
+/// Append the change's `legacy-imported` event now if it has none, so the
+/// import reads the legacy files before a writer changes them.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn import_legacy(root: &Path, change: ChangeKey) -> std::io::Result<()> {
     with_lock(&lock_file(root, change), || {
@@ -83,14 +82,13 @@ fn append_locked(
     import: bool,
 ) -> std::io::Result<Vec<GateEvent>> {
     let existing = read_file(root, change);
-    let (submitted, consumed) = spool::drain(root, change, &existing);
-    let mut pending: Vec<GateEvent> = submitted;
+    let mut pending: Vec<GateEvent> = Vec::new();
     for event in events {
         let known = event.verdict_record().is_some_and(|record| {
             existing
                 .iter()
                 .chain(pending.iter())
-                .any(|e| e.verdict_record() == Some(record))
+                .any(|e| e.verdict_record() == Some(record) && e.spec == event.spec)
         });
         if !known {
             pending.push(event);
@@ -104,12 +102,6 @@ fn append_locked(
     }
     if !pending.is_empty() {
         write_events(root, change, &existing, &mut pending)?;
-    }
-    // The submissions are on the ledger now (or were already, when an
-    // earlier removal failed: the drain skips a submission whose id the
-    // ledger holds), so their spool files are consumed.
-    for path in consumed {
-        let _ = std::fs::remove_file(path);
     }
     Ok(pending)
 }
@@ -164,22 +156,9 @@ pub(crate) fn append_one(root: &Path, event: GateEvent) -> std::io::Result<Deliv
     })?;
     let body = event.body.clone();
     let appended = append(root, change, vec![event])?;
-    Ok(
-        if appended
-            .iter()
-            .any(|e| e.submission.is_none() && e.body == body)
-        {
-            Delivered::Appended
-        } else {
-            Delivered::Unchanged
-        },
-    )
-}
-
-/// Drain the change's pending mailbox submissions onto its ledger. A caller
-/// that cannot write the ledger (a contained reader) reads it as it stands.
-pub(crate) fn ingest(root: &Path, change: ChangeKey) {
-    if spool::has_pending(root, change) {
-        let _ = append(root, change, Vec::new());
-    }
+    Ok(if appended.iter().any(|e| e.body == body) {
+        Delivered::Appended
+    } else {
+        Delivered::Unchanged
+    })
 }

@@ -110,6 +110,8 @@ fn run_mock_reviewer_mode(
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
         ("AIDA_TEST_PR_HEAD_SHA", Some(HEAD)),
         (crate::gate::seat_authority::GRANT_ENV, None),
+        // The launcher is uncontained: it is the gate ledger's writer.
+        ("AIDA_CONTAINED", None),
     ]);
     // Headless launch resolves its grant root independently of the arguments
     // passed to the standalone collector; pin that root to this fixture too.
@@ -200,11 +202,12 @@ fn assert_refused(result: Result<()>, project: &std::path::Path, reason: &str) {
 
 /// BUG-2149: the reviewer recorded its approval inside the review worktree
 /// (all a contained reviewer can write), under this launch's reviewer grant,
-/// at the PR's current head. The launcher collects it into its own
-/// `.aida/review-verdicts/PR-59.json` and mirrors the record for the spec the
-/// PR credits, so `aida review verdict` / `aida pr ship` see it from the
-/// primary checkout.
+/// at the PR's current head. The launcher collects it onto PR-59's gate
+/// ledger, with the record for the spec the PR credits, so `aida review
+/// verdict` / `aida pr ship` see it from the primary checkout. No legacy
+/// verdict file is written (M1).
 // trace:BUG-2149 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[cfg(unix)]
 #[test]
 fn standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout() {
@@ -217,9 +220,9 @@ fn standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout() {
     });
     result.expect("a verified review verdict must succeed");
 
-    let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json"))
-        .expect("the launcher checkout must hold the canonical PR-59.json verdict");
-    let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+    let verdict = crate::gate::review_verdict::read_recorded_verdict(&project, "PR-59")
+        .expect("the PR-59 gate ledger must hold the collected verdict");
     assert_eq!(
         verdict.kind,
         crate::gate::review_verdict::VerdictKind::Approved
@@ -759,8 +762,8 @@ fn bug2187_scrubbed_parent_supplies_headless_reviewer_attribution() {
             .replacen("#!/bin/sh\n", "#!/bin/sh\n[ \"$AIDA_AGENT_TYPE\" = claude ] || exit 73\n[ \"$AIDA_AGENT_NAME\" = claude-reviewer ] || exit 73\n", 1)
     });
     result.expect("a scrubbed launcher must still identify its actual child vendor");
-    let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json")).unwrap();
-    let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let verdict = crate::gate::review_verdict::read_recorded_verdict(&project, "PR-59").unwrap();
     assert!(verdict.attestation.is_some());
     assert_eq!(
         verdict.kind,

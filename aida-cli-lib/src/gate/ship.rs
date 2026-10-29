@@ -1048,12 +1048,29 @@ pub(crate) fn merge_gate_verdict_candidates(
             // it must not let an archived round answer for the key either.
             // trace:TASK-1801 | ai:claude
             let body = crate::gate::review_verdict::read_verdict_body(&path);
-            if body.is_err() && std::fs::symlink_metadata(&path).is_ok() {
+            let file_exists = std::fs::symlink_metadata(&path).is_ok();
+            if body.is_err() && file_exists {
                 continue;
             }
-            let current = body
-                .ok()
-                .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body));
+            // M1: a verdict collected from a contained reviewer is on the
+            // change's gate ledger only; with no file, the ledger's newest
+            // record for the key is the current one (once per ledger).
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let mut ledger_current = || {
+                let store = crate::gate::ledger::store_root(root).ok()?;
+                let seen_key = store.join(".aida").join("gate-ledger").join(key);
+                if seen.contains(&seen_key) {
+                    return None;
+                }
+                seen.push(seen_key);
+                crate::gate::ledger::project::newest_verdict(&store, key)
+                    .and_then(|record| crate::gate::review_verdict::parse_ledger_record(&record))
+            };
+            let current = match body {
+                Ok(body) => crate::gate::review_verdict::parse_recorded_verdict(&body),
+                Err(_) if !file_exists => ledger_current(),
+                Err(_) => None,
+            };
             let current_at_head = match (&current, head) {
                 (Some(v), Some(h)) => v
                     .reviewed_sha
