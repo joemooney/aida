@@ -6,3 +6,5 @@ last_by:
   vendor: claude
 result: done
 note: 'PR #3089 (slice 1) at 5f0c66d: audit regenerated (doc-only +5), closing review + CI running; implementer lane finishing; 0 other PRs; human-waits: none; next: ship on approved+green'
+due_since: 2026-10-29T11:25:50.382777915Z
+due_reason: every 1h
