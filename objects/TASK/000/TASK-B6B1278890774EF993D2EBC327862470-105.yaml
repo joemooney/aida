@@ -1,0 +1,30 @@
+id: 01a187a2-ee38-7422-a5e5-1aed5e7073d8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-105
+title: 'cosmetic: escape error interpolates raw link text without trimming a trailing n…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: escape error interpolates raw link text without trimming a trailing newline
+
+  PR: #3092
+  Reviewed sha: 7eb3e940b01ab9130ddbafa26791956868f6d0ab
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-29T12:29:24.408964880Z
+modified_at: 2026-10-29T12:29:24.408964880Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-016
+- finding-hash:76261e9e
+- from-review:PR-3092
+- kind:carried-forward
+filed_at:
+  code_sha: b74166aba21293380f163f21e5df6137a79dbcce
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 8e45449d340
+  vendor: claude
+  session: 59349e57-271d-4b9e-b662-8585b949736a
