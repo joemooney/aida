@@ -861,7 +861,7 @@ fn story1843_d1_queued_role_mail_is_taken_only_by_its_live_owner() {
     assert_eq!(taken.unwrap().1.pending_deliveries.len(), 1, "still queued");
 }
 
-const D1_SESSION: &str = "d1-test-thread-0001";
+pub(crate) const D1_SESSION: &str = "d1-test-thread-0001";
 
 /// Register this test process's own session as a `reviewer` reader in
 /// `root`'s registry so its live identity owns a recipient UUID, and return
@@ -873,7 +873,7 @@ const D1_SESSION: &str = "d1-test-thread-0001";
 /// names that row's id and handle exactly as `SessionBindingFacts::verify`
 /// sees them.
 // trace:STORY-1843 | ai:claude
-fn register_self_as_reviewer(root: &Path) -> ResolvedAudience {
+pub(crate) fn register_self_as_reviewer(root: &Path) -> ResolvedAudience {
     let me = std::process::id();
     let nearest = ["claude", "codex", "antigravity"]
         .into_iter()
@@ -929,6 +929,10 @@ fn d1_env() -> crate::test_env::EnvVarsGuard {
         ("AIDA_AGENT_NAME", None),
         ("AIDA_HOOK_PAYLOAD", None),
         ("CODEX_THREAD_ID", Some(D1_SESSION)),
+        // The caller's own Claude session must not win the native-session
+        // fallback where vendor ancestors are hidden.
+        ("CLAUDE_CODE_SESSION_ID", None),
+        ("CLAUDE_PID", None),
     ])
 }
 

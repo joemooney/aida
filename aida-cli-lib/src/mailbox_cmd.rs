@@ -213,8 +213,19 @@ pub(crate) fn handle_mailbox_command(
             recipient,
             json: _,
         } => {
+            // STORY-1843 W: the notice's audience over the logical view, as a
+            // pure read (never binds queued role mail); the watcher's own
+            // caller budget is the explicit read profile.
+            // trace:STORY-1843 | ai:claude
             let root = local_root.as_deref().unwrap_or(project_root);
-            let snapshot = crate::mailbox_wake::snapshot(root, store_root, recipient)?;
+            let audience =
+                crate::mailbox_wake::audience_for(&crate::mailbox_view::own_audience(), recipient)?;
+            let snapshot = crate::mailbox_wake::snapshot(
+                root,
+                store_root,
+                &audience,
+                &crate::mailbox_view::explicit_limits(),
+            )?;
             println!("{}", serde_json::to_string(&snapshot)?);
             Ok(())
         }
