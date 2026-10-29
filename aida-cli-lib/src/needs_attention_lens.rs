@@ -214,7 +214,7 @@ mod tests {
             Some("85c6036d67aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()),
         );
         record.spec = Some("TASK-77".into());
-        crate::gate::merge_hold_core::write_typed_hold(root, &record).unwrap();
+        crate::gate::merge_hold_core::place_hold(root, &record).unwrap();
         let routed = root.join(".aida/lane-liveness/routed.json");
         std::fs::create_dir_all(routed.parent().unwrap()).unwrap();
         std::fs::write(

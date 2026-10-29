@@ -143,7 +143,7 @@ impl Case {
     /// outcome, the audit comments posted, and whether the hold survived.
     fn run(&self) -> (Result<Outcome>, Vec<String>, bool) {
         let root = tempfile::tempdir().unwrap();
-        mh::write_typed_hold(root.path(), &self.hold).unwrap();
+        mh::place_hold(root.path(), &self.hold).unwrap();
         let verdict_path = rv::verdict_path(root.path(), "TASK-37");
         std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
         std::fs::write(&verdict_path, serde_json::to_vec(&self.body).unwrap()).unwrap();

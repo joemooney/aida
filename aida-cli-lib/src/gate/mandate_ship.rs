@@ -539,8 +539,8 @@ pub(crate) fn release_hold_under_mandate(
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         crate::gate::mandate::release_note(&cover.id)
     );
-    let _ = crate::gate::merge_hold_core::clear_hold(hold_root, pr);
-    if let Err(err) = crate::gate::merge_hold_core::record_mandate_clearance(
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if let Err(err) = crate::gate::merge_hold_core::release_hold_under_mandate(
         hold_root,
         hold_record,
         &cover.principal,
@@ -619,8 +619,10 @@ pub(crate) fn rearm_mandate_hold_with(
     sync_label: impl FnOnce() -> std::result::Result<(), String>,
 ) -> std::result::Result<(), String> {
     let mut failed = Vec::new();
-    if let Err(e) = crate::gate::merge_hold_core::rearm_typed_hold(hold_root, record) {
-        failed.push(format!("the hold marker could not be rewritten ({e})"));
+    if let Err(e) = crate::gate::merge_hold_core::rearm_hold(hold_root, record) {
+        failed.push(format!(
+            "the hold could not be re-armed on the gate ledger ({e})"
+        ));
     }
     if let Err(e) = sync_label() {
         failed.push(format!("the merge-hold label could not be restored ({e})"));

@@ -111,7 +111,7 @@ pub(crate) trait BatchPorts {
     /// One line typed by the operator; `None` at end of input.
     fn ask(&mut self, prompt: &str) -> Option<String>;
     /// Clear `pr`'s merge-hold through `aida merge-hold clear`.
-    fn clear_hold(&mut self, pr: u64) -> Result<()>;
+    fn release_merge_hold(&mut self, pr: u64) -> Result<()>;
     fn ship(&mut self, pr: u64, overrides: ShipOverrides) -> Result<()>;
     fn sleep(&mut self, secs: u64);
     fn elapsed_secs(&self) -> u64;
@@ -243,7 +243,7 @@ pub(crate) fn confirm_and_ship(
                 "PR #{pr}'s merge-hold was not cleared; nothing shipped"
             ));
         }
-        if let Err(e) = ports.clear_hold(pr) {
+        if let Err(e) = ports.release_merge_hold(pr) {
             return PrOutcome::Stopped(format!("could not clear PR #{pr}'s merge-hold: {e:#}"));
         }
         cleared = true;

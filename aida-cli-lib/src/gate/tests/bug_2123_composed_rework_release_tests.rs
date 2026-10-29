@@ -64,7 +64,7 @@ fn rework(key: &str) -> mh::MergeHoldRecord {
 fn refuse_both(root: &Path) {
     for key in [A, B] {
         record(root, key, "request-changes", OLD);
-        mh::write_typed_hold(root, &rework(key)).unwrap();
+        mh::place_hold(root, &rework(key)).unwrap();
         std::fs::remove_file(rv::verdict_path(root, key)).unwrap();
     }
 }
@@ -165,8 +165,8 @@ fn release_hooks(
 fn composing_rework_holds_keeps_every_refusal() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    mh::write_typed_hold(root, &rework(A)).unwrap();
-    mh::write_typed_hold(root, &rework(B)).unwrap();
+    mh::place_hold(root, &rework(A)).unwrap();
+    mh::place_hold(root, &rework(B)).unwrap();
     let hold = mh::read_hold_record(root, PR).unwrap();
     assert_eq!(hold.verdict_ref.as_ref().unwrap().key, B);
     let shadows: Vec<_> = hold
@@ -181,7 +181,7 @@ fn composing_rework_holds_keeps_every_refusal() {
         .collect();
     assert_eq!(shadows, vec![(mh::HoldReasonKind::Rework, Some(A))]);
     // Re-arming on the same verdict replaces it rather than stacking.
-    mh::write_typed_hold(root, &rework(B)).unwrap();
+    mh::place_hold(root, &rework(B)).unwrap();
     assert_eq!(mh::read_hold_record(root, PR).unwrap().absorbed.len(), 1);
     assert_eq!(
         arming_refs(&mh::read_hold_record(root, PR).unwrap())
@@ -310,7 +310,7 @@ fn a_contended_hold_lock_refuses_placement_and_release() {
         .unwrap();
     holder.lock_exclusive().unwrap();
 
-    let placed = mh::write_typed_hold(root, &rework("TASK-53")).unwrap_err();
+    let placed = mh::place_hold(root, &rework("TASK-53")).unwrap_err();
     assert!(
         placed.to_string().contains("merge-hold PR-51 is busy"),
         "{placed}"
@@ -461,7 +461,7 @@ esac
         Some(REVIEWER.into()),
     ));
     hold.spec = Some("TASK-61".into());
-    mh::write_typed_hold(&root, &hold).unwrap();
+    mh::place_hold(&root, &hold).unwrap();
 
     // Verdict read: the arming verdict is looked up on disk.
     let missing = format!("{:#}", auto_release(&root, 61).unwrap_err());
@@ -498,7 +498,7 @@ fn an_approval_under_another_key_names_the_key_the_release_reads() {
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
     record(root, A, "request-changes", OLD);
-    mh::write_typed_hold(root, &rework(A)).unwrap();
+    mh::place_hold(root, &rework(A)).unwrap();
     std::fs::remove_file(rv::verdict_path(root, A)).unwrap();
     record(root, A, "request-changes", OLD);
     record(root, B, "approved", HEAD);

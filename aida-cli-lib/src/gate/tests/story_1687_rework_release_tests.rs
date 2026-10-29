@@ -75,7 +75,7 @@ fn current_independent_newer_approval_releases_with_audit() {
     let f = Fixture::new();
     let verdict = f.check().unwrap();
     let root = tempfile::tempdir().unwrap();
-    mh::write_typed_hold(root.path(), &f.hold).unwrap();
+    mh::place_hold(root.path(), &f.hold).unwrap();
     let comments = Cell::new(0);
     let labels = Cell::new(0);
     release_with(
@@ -303,7 +303,7 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
 fn moved_head_before_release_preserves_marker_and_labels() {
     let f = Fixture::new();
     let root = tempfile::tempdir().unwrap();
-    mh::write_typed_hold(root.path(), &f.hold).unwrap();
+    mh::place_hold(root.path(), &f.hold).unwrap();
     let count = Cell::new(0);
     let error = release_with(
         root.path(),
@@ -329,7 +329,7 @@ fn moved_head_before_release_preserves_marker_and_labels() {
 fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() {
     let f = Fixture::new();
     let root = tempfile::tempdir().unwrap();
-    mh::write_typed_hold(root.path(), &f.hold).unwrap();
+    mh::place_hold(root.path(), &f.hold).unwrap();
     let verdict = f.check().unwrap();
     assert!(release_with(
         root.path(),
@@ -369,7 +369,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
 fn failed_clearance_write_keeps_hold() {
     let f = Fixture::new();
     let root = tempfile::tempdir().unwrap();
-    mh::write_typed_hold(root.path(), &f.hold).unwrap();
+    mh::place_hold(root.path(), &f.hold).unwrap();
     std::fs::create_dir_all(mh::clearance_path(root.path(), 37)).unwrap();
     assert!(release_with(
         root.path(),
@@ -535,7 +535,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             f.hold.absorbed.push(absorbed(kind));
         }
     }
-    mh::write_typed_hold(root.path(), &f.hold).unwrap();
+    mh::place_hold(root.path(), &f.hold).unwrap();
     let verdict_path = rv::verdict_path(root.path(), "TASK-37");
     std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
     std::fs::write(&verdict_path, serde_json::to_vec(&f.body).unwrap()).unwrap();
@@ -649,7 +649,7 @@ fn auto_release_fixture(change: ReleaseChange) {
                             &serde_json::to_vec_pretty(&expected_hold)?,
                         )?;
                     } else {
-                        mh::write_typed_hold(root.path(), &expected_hold)?;
+                        mh::place_hold(root.path(), &expected_hold)?;
                     }
                     *expected_marker.borrow_mut() = std::fs::read(mh::hold_path(root.path(), 37))?;
                 }

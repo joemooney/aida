@@ -162,3 +162,67 @@ pub(crate) fn append_one(root: &Path, event: GateEvent) -> std::io::Result<Deliv
         Delivered::Unchanged
     })
 }
+
+/// The unbound ledger of a spec no change has been recorded against yet:
+/// `by-spec/<SPEC>.jsonl` beside the spec's index entry. It carries only
+/// verdict events whose `change` is the spec key, and is read together with
+/// the spec's change-bound records ([`super::project`]); once a change is
+/// indexed for the spec, new records land on that change.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn unbound_file(root: &Path, spec: &str) -> PathBuf {
+    ledger_dir(root)
+        .join("by-spec")
+        .join(format!("{}.jsonl", spec.trim().to_ascii_uppercase()))
+}
+
+/// Every parseable event on `spec`'s unbound ledger, in file order.
+pub(crate) fn read_unbound(root: &Path, spec: &str) -> Vec<GateEvent> {
+    let Ok(body) = std::fs::read_to_string(unbound_file(root, spec)) else {
+        return Vec::new();
+    };
+    body.lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect()
+}
+
+/// Append `record` as a verdict event on `spec`'s unbound ledger, unless
+/// that ledger already holds it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn append_unbound(
+    root: &Path,
+    spec: &str,
+    record: &crate::gate::review_verdict::JsonObj,
+) -> std::io::Result<Delivered> {
+    let spec = spec.trim().to_ascii_uppercase();
+    let safe = !spec.is_empty()
+        && !spec.starts_with('.')
+        && spec
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+    if !safe || ChangeKey::parse(&spec).is_some() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("`{spec}` is not a spec id"),
+        ));
+    }
+    let file = unbound_file(root, &spec);
+    with_lock(&file.with_extension("lock"), || {
+        let existing = read_unbound(root, &spec);
+        if existing.iter().any(|e| e.verdict_record() == Some(record)) {
+            return Ok(Delivered::Unchanged);
+        }
+        let mut event = super::event::verdict_event_unbound(root, &spec, record);
+        event.seq = existing.last().map(|e| e.seq).unwrap_or(0) + 1;
+        event.at = chrono::Utc::now().to_rfc3339();
+        let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
+        line.push('\n');
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file)?;
+        out.write_all(line.as_bytes())?;
+        out.sync_data()?;
+        Ok(Delivered::Appended)
+    })
+}

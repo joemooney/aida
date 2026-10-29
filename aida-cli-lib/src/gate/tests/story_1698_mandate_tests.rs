@@ -457,12 +457,11 @@ fn a_mandate_release_is_recorded_in_the_hold_ledger_and_events() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None)
+    crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
         .unwrap();
-    let clearance: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(crate::gate::merge_hold_core::clearance_path(tmp.path(), 42)).unwrap(),
-    )
-    .unwrap();
+    let clearance = serde_json::Value::Object(
+        crate::gate::merge_hold_core::recorded_clearance(tmp.path(), 42).unwrap(),
+    );
     assert_eq!(clearance["cleared_by"], "advisor:joe");
     assert_eq!(clearance["released_under_mandate"], "M-1");
     assert_eq!(release_note("M-1"), "released under mandate M-1 by advisor");
@@ -579,7 +578,7 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
         .split("pub(crate) fn release_hold_under_mandate(")
         .nth(1)
         .expect("release_hold_under_mandate");
-    assert!(shared.contains("record_mandate_clearance("));
+    assert!(shared.contains("merge_hold_core::release_hold_under_mandate("));
     let train = include_str!("../../pr_train.rs");
     assert!(
         train.contains("release_hold_under_mandate("),
@@ -1033,8 +1032,9 @@ fn a_mandate_released_hold_is_re_armed_after_a_merge_failure() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(tmp.path(), &hold).unwrap();
-    crate::gate::merge_hold_core::clear_hold(tmp.path(), 44).unwrap();
+    crate::gate::merge_hold_core::place_hold(tmp.path(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
+        .unwrap();
     assert!(crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).is_none());
     crate::gate::mandate_ship::rearm_mandate_hold_with(tmp.path(), &hold, || Ok(())).unwrap();
     let back = crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).expect("re-armed");
@@ -1055,7 +1055,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let src = include_str!("../../pr_cmd.rs");
     let handler = src.split("pub(crate) fn pr_ship_handler(").nth(1).unwrap();
     let release = handler
-        .find("crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number)")
+        .find("crate::gate::merge_hold_core::release_hold(")
         .unwrap();
     let after = &handler[release..];
     let merged = after.find("merged_this_run = true;").unwrap();
@@ -1297,9 +1297,8 @@ fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(tmp.path(), &hold).unwrap();
-    crate::gate::merge_hold_core::clear_hold(tmp.path(), 44).unwrap();
-    crate::gate::merge_hold_core::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None)
+    crate::gate::merge_hold_core::place_hold(tmp.path(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
         .unwrap();
     // Same release event emitted by pr_ship_handler after clearance.
     crate::events::emit(
@@ -1862,7 +1861,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
 
     // Run mandate_ship_cover and verify that:
     // 1. Dangling FR-0042 does not cause HistoryUnreadable or SpecsUnresolved.
@@ -2048,7 +2047,7 @@ fn ship_tracing_deleted_agreed_id_spec(
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
 
     let result = crate::with_review_pr_subject(
         crate::ReviewPrSubject {

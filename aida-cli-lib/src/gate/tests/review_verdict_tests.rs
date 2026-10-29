@@ -1534,64 +1534,6 @@ fn a_direct_skill_write_is_adopted_into_the_archive_and_the_gate_ledger() {
 
 // trace:TASK-1460 | ai:claude
 #[test]
-fn migration_archives_existing_sidecars_once_and_idempotently() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    let dir = root.join(".aida/review-verdicts");
-    std::fs::create_dir_all(&dir).unwrap();
-    let legacy = format!(
-        r#"{{"verdict":"approved","reviewed_sha":"{SHA_R2}","recorded_by":"b","recorded_at":"2026-09-02T00:00:00Z",
-            "rounds":[{{"verdict":"request-changes","head":"{SHA_R1}","recorded_by":"a","recorded_at":"2026-09-01T00:00:00Z","findings":["x"]}}]}}"#
-    );
-    std::fs::write(dir.join("PR-3.json"), &legacy).unwrap();
-    std::fs::write(dir.join("PR-4.json"), r#"{"verdict":"approved"}"#).unwrap();
-    std::fs::write(dir.join("PR-5.json"), "not json").unwrap();
-
-    assert_eq!(migrate_sidecars_to_archive(&dir).unwrap(), 2);
-    assert_eq!(
-        archive_files(root, "PR-3"),
-        vec![format!("{SHA_R1}.json"), format!("{SHA_R2}.json")]
-    );
-    let r1 = read_verdict_for_sha(root, "PR-3", SHA_R1).unwrap();
-    assert_eq!(r1.kind, VerdictKind::RequestChanges);
-    assert_eq!(r1.findings, vec!["x".to_string()]);
-    assert!(!verdict_archive_dir(&dir.join("PR-4.json"))
-        .unwrap()
-        .exists());
-    // Top-level files are untouched; a re-run adds nothing.
-    assert_eq!(
-        std::fs::read_to_string(dir.join("PR-3.json")).unwrap(),
-        legacy
-    );
-    assert_eq!(migrate_sidecars_to_archive(&dir).unwrap(), 0);
-
-    // The lazy one-shot runs once, then the marker short-circuits it.
-    assert_eq!(ensure_sidecars_archived(&dir).unwrap(), 0);
-    assert!(dir.join(".archive-migrated").is_file());
-    std::fs::remove_dir_all(dir.join("PR-3")).unwrap();
-    assert_eq!(ensure_sidecars_archived(&dir).unwrap(), 0);
-    assert!(!dir.join("PR-3").exists(), "marker makes it one-shot");
-}
-
-// trace:TASK-1460 | ai:claude
-#[test]
-fn the_record_path_migrates_existing_sidecars_lazily() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    let dir = root.join(".aida/review-verdicts");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("PR-8.json"),
-        format!(r#"{{"verdict":"approved","reviewed_sha":"{SHA_R1}"}}"#),
-    )
-    .unwrap();
-    record_pr(root, "PR-9", "approved", SHA_R2, "r", &[]);
-    assert_eq!(archive_files(root, "PR-8"), vec![format!("{SHA_R1}.json")]);
-    assert!(dir.join(".archive-migrated").is_file());
-}
-
-// trace:TASK-1460 | ai:claude
-#[test]
 fn merge_gate_candidates_include_the_archived_verdict_at_head() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();

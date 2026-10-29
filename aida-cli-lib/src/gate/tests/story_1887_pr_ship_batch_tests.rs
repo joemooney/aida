@@ -147,7 +147,7 @@ impl BatchPorts for Fake {
     fn ask(&mut self, _prompt: &str) -> Option<String> {
         self.answers.pop_front()
     }
-    fn clear_hold(&mut self, pr: u64) -> Result<()> {
+    fn release_merge_hold(&mut self, pr: u64) -> Result<()> {
         self.cleared.push(pr);
         Ok(())
     }

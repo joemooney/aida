@@ -592,7 +592,7 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
         "findings",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(&f.root, &hold_403).unwrap();
+    crate::gate::merge_hold_core::place_hold(&f.root, &hold_403).unwrap();
     let fake_aida_403 = f.write_executable_script(
         "fake-aida-flow-403.sh",
         &format!(
@@ -1809,7 +1809,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
     let mandate_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9701]);
     let hold_root = crate::pr_cmd::pr_ship_hold_root(&f.root);
-    crate::gate::merge_hold_core::rearm_typed_hold(&hold_root, &hold_record(9701)).unwrap();
+    crate::gate::merge_hold_core::rearm_hold(&hold_root, &hold_record(9701)).unwrap();
 
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
@@ -2567,7 +2567,7 @@ fn native_ship(pr: u64, held: bool) -> NativeShip {
     if held {
         let mut record = hold_record(pr);
         record.target_head_sha = Some(head.clone());
-        crate::gate::merge_hold_core::write_typed_hold(&f.root, &record).unwrap();
+        crate::gate::merge_hold_core::place_hold(&f.root, &record).unwrap();
     }
     let mandate = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let sub = submit_request(

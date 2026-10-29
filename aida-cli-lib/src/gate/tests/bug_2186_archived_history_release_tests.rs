@@ -53,7 +53,7 @@ fn arm(root: &Path) {
         Some(REVIEWER.into()),
     ));
     hold.spec = Some(KEY.into());
-    mh::write_typed_hold(root, &hold).unwrap();
+    mh::place_hold(root, &hold).unwrap();
 }
 
 /// What the reviewer launchers do before each review run: clear the
@@ -297,7 +297,7 @@ fn only_rework_holds_release_on_the_markers_evidence() {
         if kind == mh::HoldReasonKind::Recusal {
             hold.recused_principals = vec!["advisor:recused".into()];
         }
-        mh::write_typed_hold(root, &hold).unwrap();
+        mh::place_hold(root, &hold).unwrap();
         launch_reviewer(root);
         // One recording leaves no per-commit archive yet.
         let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
