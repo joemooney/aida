@@ -86230,5 +86230,36 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6733
+- id: 01a188da-427d-7f71-a84a-d3d27bb800b5
+  target_id: 01a188da-3bc1-7f82-83a2-5d70d3cfe0f5
+  author: aida
+  node_id: '1'
+  lamport: 6734
+  timestamp: 2026-10-29T18:09:27.677709132Z
+  kind: !Create
+    title: Add Metrics navigation and evidence based reporting page
+    description: |
+      Slice 5 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Add the requested top-level Metrics entry and a management-facing explanation of reporting capabilities grounded in the full What is AIDA assessment.
+
+      ## Acceptance
+      - [ ] Shared desktop/mobile navigation reaches Metrics; the page and overview agree on cycle time/work-wait-unknown, traceability, supported token/cost attribution, drain outcomes, spec/review evidence, effort touchpoints and tool reliability.
+      - [ ] Distinguish reported today, recorded-but-incomplete, derivable-without-a-finished-report and not-supported/proposed measures. Do not invent ROI, forecasts, complete coverage or live dashboard values.
+      - [ ] Numerical examples are either freshly measured with reproducible scope/date or explicitly dated historical snapshots. Unknown/unpriced values are not zero, invocation counts are not human productivity, and estimates are not measured equivalent human work.
+      - [ ] Verify command/flag and effort-touchpoint claims against current source/help; update the Markdown and HTML overview together for corrected claims. Preserve human-inclusive background-capture framing.
+      - [ ] Accessible original graphics and source links connect the reports to their evidence and limitations.
+
+      ## Layers / boundaries
+      Existing report source/help and overview -> corrected narrative/status map -> navigable Metrics page and graphic. No telemetry collection, pricing logic, ledger/report implementation or protected runtime changes.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6734
 node_id: '1'
