@@ -3,12 +3,12 @@ spec_id: TASK-735
 agreed_id: TASK-735
 title: (operator-gated) Decide digest/insights launcher (bucket C) on real demand
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:04:36.778816303Z
-modified_at: 2026-10-29T06:44:19.364568124Z
+modified_at: 2026-10-29T06:44:23.333543069Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,11 @@ history:
   timestamp: 2026-10-29T06:44:20.165397855Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a18667-0ea5-7201-ab95-d1a0fc4c2688
+  author: joe
+  timestamp: 2026-10-29T06:44:23.333541164Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
