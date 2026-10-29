@@ -83649,5 +83649,33 @@ operations:
   timestamp: 2026-10-29T01:02:24.800097701Z
   kind: !SetStatus
     status: Completed
-clock: 6524
+- id: 01a18552-3164-7061-b10d-bbde55e2ce6c
+  target_id: 01a18552-2ade-7962-a467-419ac6b629c8
+  author: aida
+  node_id: '1'
+  lamport: 6525
+  timestamp: 2026-10-29T01:41:58.756129473Z
+  kind: !Create
+    title: 'Review PR-3079: [AI:claude] fix(mailbox): wake-snapshot reads the logical view (Refs STORY-1843)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-w-watcher`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3079>
+      - Branch: `story-1843-w-watcher` → `main`
+
+      ## Slice of (Refs only — not completed by this PR)
+
+      Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+      - STORY-1843
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3079` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6525
 node_id: '1'
