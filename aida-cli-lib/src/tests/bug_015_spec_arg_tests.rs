@@ -229,6 +229,165 @@ fn audited_spec_arguments_parse_to_the_canonical_id() {
     }
 }
 
+/// Every remaining audited spec argument routed through the value parser —
+/// one case per argument, so a dropped `value_parser` fails here.
+#[test]
+fn every_routed_spec_argument_parses_to_the_canonical_id() {
+    use crate::cli::*;
+    let _map = bind_home();
+    let want = canonical_of("080");
+    let want_opt = Some(want.as_str());
+    let a = "STORY-HOME-080";
+
+    // `aida review <SPEC>` (top-level) through the real registry.
+    let review = crate::command_registry::try_parse_from(["aida", "review", a])
+        .unwrap()
+        .command
+        .registered::<crate::review_cmd::ReviewArgs>();
+    assert_eq!(review.spec.as_deref(), want_opt);
+
+    match parse_sub(&["run", "well-formed", a]) {
+        GateCommand::Run { spec, .. } => assert_eq!(spec, want),
+        other => panic!("{other:?}"),
+    }
+    for args in [
+        &[
+            "request", "take", "7", "--branch", "b", "--spec", a, "--brief", "x.md",
+        ][..],
+        &[
+            "request", "impl", "--name", "n", "--branch", "b", "--spec", a, "--brief", "x.md",
+        ][..],
+    ] {
+        match parse_sub(args) {
+            DispatchAction::Request {
+                verb:
+                    DispatchRequestVerb::Take { spec, .. } | DispatchRequestVerb::Impl { spec, .. },
+                ..
+            } => assert_eq!(spec, want, "{args:?}"),
+            other => panic!("{other:?}"),
+        }
+    }
+    match parse_sub(&["start", a]) {
+        DrainCommand::Start { selector, .. } => assert_eq!(selector.as_deref(), want_opt),
+        other => panic!("{other:?}"),
+    }
+    for kept in ["next", "next3", "batch:alias-fix"] {
+        match parse_sub(&["start", kept]) {
+            DrainCommand::Start { selector, .. } => assert_eq!(selector.as_deref(), Some(kept)),
+            other => panic!("{other:?}"),
+        }
+    }
+    match parse_sub(&["resume", a]) {
+        DrainCommand::Resume { spec, .. } => assert_eq!(spec, want),
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&[
+        "add",
+        a,
+        "--decision",
+        "merge",
+        "--verdict",
+        "ok",
+        "--authorized-by",
+        "joe",
+        "--independent",
+        "yes",
+    ]) {
+        ApprovalCommand::Add { spec, .. } => assert_eq!(spec, want),
+    }
+    for args in [
+        &["answer", a, "1"][..],
+        &["decide", a, "1"][..],
+        &["review", a][..],
+    ] {
+        match parse_sub(args) {
+            HumanCommand::Answer { spec, .. }
+            | HumanCommand::Decide { spec, .. }
+            | HumanCommand::Review { spec, .. } => assert_eq!(spec, want, "{args:?}"),
+            other => panic!("{other:?}"),
+        }
+    }
+    for args in [&["helpers", a][..], &["scan", a][..]] {
+        match parse_sub(args) {
+            PlanCommand::Helpers { spec, .. } | PlanCommand::Scan { spec, .. } => {
+                assert_eq!(spec, want, "{args:?}")
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    match parse_sub(&["promote", a]) {
+        PlanCommand::Promote { spec, .. } => assert_eq!(spec.as_deref(), want_opt),
+        other => panic!("{other:?}"),
+    }
+    for args in [
+        &["ask", a, "-q", "which?", "-c", "x|y|noop"][..],
+        &["remedy", a][..],
+    ] {
+        match parse_sub(args) {
+            QuestionsCommand::Ask { spec, .. } | QuestionsCommand::Remedy { spec, .. } => {
+                assert_eq!(spec, want, "{args:?}")
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    match parse_sub(&["clarify", a, "TASK-9"]) {
+        QuestionsCommand::Clarify { specs, .. } => {
+            assert_eq!(specs, vec![want.clone(), "TASK-9".to_string()])
+        }
+        other => panic!("{other:?}"),
+    }
+    match parse_sub(&["answer", a]) {
+        QuestionsCommand::Answer { spec, .. } => assert_eq!(spec.as_deref(), want_opt),
+        other => panic!("{other:?}"),
+    }
+    for args in [
+        &["analyze", "--specs", "STORY-HOME-080,TASK-9"][..],
+        &["groom", "--specs", "STORY-HOME-080,TASK-9"][..],
+    ] {
+        match parse_sub(args) {
+            BacklogCommand::Analyze { specs, .. } | BacklogCommand::Groom { specs, .. } => {
+                assert_eq!(specs, Some(format!("{want},TASK-9")), "{args:?}")
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    for args in [&["list", a][..], &["prune", "--spec", a][..]] {
+        match parse_sub(args) {
+            RecordCommand::List { spec, .. } | RecordCommand::Prune { spec, .. } => {
+                assert_eq!(spec.as_deref(), want_opt, "{args:?}")
+            }
+        }
+    }
+    for args in [
+        &[
+            "register",
+            "42",
+            "--type",
+            "claude",
+            "--role",
+            "implementer",
+            "--spec",
+            a,
+        ][..],
+        &["new", "claude", "--spec", a][..],
+        &["new", "codex", "--spec", a][..],
+        &["new", "antigravity", "--spec", a][..],
+    ] {
+        match parse_sub(args) {
+            AgentCommand::Register { spec, .. }
+            | AgentCommand::New {
+                command:
+                    Some(
+                        AgentNewCommand::Claude { spec, .. }
+                        | AgentNewCommand::Codex { spec, .. }
+                        | AgentNewCommand::Antigravity { spec, .. },
+                    ),
+            } => assert_eq!(spec.as_deref(), want_opt, "{args:?}"),
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
 /// `aida pr auto-queue-review` files the review story against the ids its
 /// commit trailers name; a `(TYPE-<LABEL>-NNN)` trailer names the canonical
 /// id, and alias and canonical trailers dedup to one entry.
