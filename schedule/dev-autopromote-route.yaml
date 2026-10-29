@@ -1,13 +1,7 @@
 job: dev-autopromote-route
-last_run: 2026-10-28T12:33:32.651723297Z
+last_run: 2026-10-29T06:10:11.530146384Z
 last_by:
   seat: advisor
-  session: 24a9a7ec-0307-41c2-97da-15e4e955b18d
+  session: 7b875ef6-5970-4f7c-9187-3491563af968
   vendor: claude
 result: done
-due_since: 2026-10-28T22:15:38.915919875Z
-due_reason: on CronJobFailed:dev-autopromote
-due_failure:
-  trip_id: dev-autopromote@2026-10-28T23:24:03.538809282Z
-  job: dev-autopromote
-  error: 'exit 1: build of 872aae84a7a43a33fc3e4f22175a472ac8952d73 failed; log /home/joe/.aida/dev-autopromote/20261028T230129Z-872aae84a7a4.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 3m 01s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
