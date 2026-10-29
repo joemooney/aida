@@ -1,13 +1,10 @@
 job: night-shift
-last_run: 2026-10-29T08:47:53.533800567Z
+last_run: 2026-10-29T09:00:03.738275919Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:124
 failure_trips:
-- trip_id: night-shift@2026-10-29T04:42:49.830949446Z
-  at: 2026-10-29T04:42:49.830949446Z
-  status: 124
 - trip_id: night-shift@2026-10-29T04:55:13.531967475Z
   at: 2026-10-29T04:55:13.531967475Z
   status: 124
@@ -64,4 +61,7 @@ failure_trips:
   status: 124
 - trip_id: night-shift@2026-10-29T08:47:53.533800567Z
   at: 2026-10-29T08:47:53.533800567Z
+  status: 124
+- trip_id: night-shift@2026-10-29T09:00:03.738275919Z
+  at: 2026-10-29T09:00:03.738275919Z
   status: 124
