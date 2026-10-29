@@ -6,12 +6,12 @@ description: |-
 
   non-blocking/minor: NodeAliasMap::rename (aida-core/src/node_alias.rs:253-259) retires bindings with exact-case b.label == old, while binding() matches case-insensitively. A hand-edited lowercase label in registry/node_aliases.toml would be found but not retired, which leaves the node with two current labels. set() (:195) also compares existing.node != node exactly, so a hand-edited uppercase node UUID would refuse as 'another node'. This only happens after a hand edit.
   Reviewed sha: 5f0c66dc07620a14b6327b7e1791ffd9db32bf01
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-29T10:37:49.043433778Z
-modified_at: 2026-10-29T10:46:42.604447096Z
+modified_at: 2026-10-29T10:46:45.686853437Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-078
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-29T10:46:42.604447096Z
   modified_at: 2026-10-29T10:46:42.604447096Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+history:
+- id: 01a18744-f4b6-7dc2-9818-57436d0db377
+  author: joe
+  timestamp: 2026-10-29T10:46:45.686851340Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
