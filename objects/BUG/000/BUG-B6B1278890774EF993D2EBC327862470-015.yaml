@@ -18,11 +18,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:36.442782932Z
-modified_at: 2026-10-29T10:55:48.763408530Z
+modified_at: 2026-10-29T10:58:53.050487034Z
 req_type: Bug
 tags:
 - id-allocation
 - regroup
+comments:
+- id: 01a18750-0dfa-70d3-afb8-0706bb47a594
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Command-level (aida-cli/tests/story_078_node_aliases.rs):** with a label bound, `queue add/rm/done` and `queue work --dry-run` with the alias give the same queue entry as the canonical form; `claim`/`unclaim` alias writes the canonical-scope lease; `worktree add` alias makes the canonical branch + lease; `session end --spec` alias finds the canonical lease; an unknown label stays a not-found that names it.
+    - **Unit (spec_arg tests):** canonical/csv helpers keep non-alias input unchanged and expand bound labels literal-first.
+    - **pr auto-queue-review:** it is branch-keyed; trailers already canonicalize via expand_or_keep, but `pr` is early-dispatch so the map was never installed. Covered by installing the map in the shared helper; no live-forge test (needs gh).
+    - **Audit:** grep clap spec/id/scope args; list routed ones in the PR body.
+
+    ### Expected files
+    - new `aida-cli-lib/src/spec_arg.rs` (+ test file)
+    - `queue_cmd.rs` (run_queue normalization), `claim.rs`, `worktree_gc.rs`, `agent_launch.rs`, `pr_cmd.rs`, other audited dispatchers
+    - `aida-cli/tests/story_078_node_aliases.rs`
+    - `aida add` confirmation output site (description tail)
+
+    ### Ambiguities / conflicts as questions
+    - None blocking. Approach: canonicalize at each command entry via `node_alias::expand_or_keep` (built on `resolve_literal_first`), installing the alias map for early-dispatch commands.
+  created_at: 2026-10-29T10:58:53.050487034Z
+  modified_at: 2026-10-29T10:58:53.050487034Z
+  session_id: 01a1874d0ae3
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1874c-5b8f-74b0-876c-68ad6612be70
   author: joe
