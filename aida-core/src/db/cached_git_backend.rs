@@ -215,17 +215,10 @@ impl CachedGitBackend {
 
     // trace:BUG-1535 trace:BUG-1670 | ai:claude
     fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
-        // A friendly `TYPE-<LABEL>-NNN` resolves as the canonical id it
-        // expands to only when nothing answers to it literally: an existing
-        // agreed/initials id such as `BUG-JM-001` always wins over label JM.
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        if let Some(req) = self.resolve_unambiguous_exact(id, strict)? {
-            return Ok(Some(req));
-        }
-        match crate::node_alias::expand_spec_id(id) {
-            Some(canonical) => self.resolve_unambiguous_exact(&canonical, strict),
-            None => Ok(None),
-        }
+        crate::node_alias::resolve_literal_first(id, |id| {
+            self.resolve_unambiguous_exact(id, strict)
+        })
     }
 
     /// [`Self::resolve_unambiguous`] for `id` exactly as given (no node-alias

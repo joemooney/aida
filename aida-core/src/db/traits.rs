@@ -198,8 +198,9 @@ pub trait DatabaseBackend: Send + Sync {
                 .cloned()
         };
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        Ok(matches(spec_id)
-            .or_else(|| crate::node_alias::expand_spec_id(spec_id).and_then(|c| matches(&c))))
+        Ok(crate::node_alias::resolve_literal_first_opt(
+            spec_id, matches,
+        ))
     }
 
     /// Resolve `id` for a WRITE (or any caller that must not act on a

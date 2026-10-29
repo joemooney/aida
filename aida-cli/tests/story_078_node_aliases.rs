@@ -389,6 +389,26 @@ fn node_alias_input_through_flags_relationships_and_mcp_writes_canonical() {
     ]);
     assert!(message.trim().ends_with(&format!("({task})")), "{message}");
 
+    // Inferred from staged traces (no --spec): the label form expands too, and
+    // the label and canonical forms of one spec count as ONE spec (not an
+    // ambiguous pair that silently drops the trailer).
+    fs::write(
+        f.root.join("lib.rs"),
+        format!("// trace:TASK-HOME-001 | ai:claude\n// trace:{task} | ai:claude\n"),
+    )
+    .unwrap();
+    f.git(&["add", "lib.rs"]);
+    let message = f.ok(&[
+        "commit",
+        "--dry-run",
+        "--type",
+        "fix",
+        "--message",
+        "inferred spec",
+    ]);
+    assert!(message.trim().ends_with(&format!("({task})")), "{message}");
+    assert!(!message.contains("HOME"), "{message}");
+
     // A label equal to a registered node id is refused on rename as on set.
     let nodes = f.store.join("registry/nodes.toml");
     let mut roster = fs::read_to_string(&nodes).unwrap_or_default();
@@ -414,4 +434,100 @@ fn node_alias_input_through_flags_relationships_and_mcp_writes_canonical() {
             + &String::from_utf8_lossy(&refused.stdout);
         assert!(err.contains("registered node id"), "{err}");
     }
+}
+
+/// A label is refused (on set and rename alike) when a stored spec_id or
+/// agreed_id already has it as its middle segment, naming one example: the
+/// labelled node's `BUG-<LABEL>-001` would otherwise display as an id that
+/// parses back to the literal spec. Hand-written text that names the literal
+/// id (a `--spec` trailer) therefore keeps naming the literal spec.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+#[test]
+fn node_alias_label_refused_when_a_stored_id_uses_it() {
+    let f = Fixture::new();
+    f.ok(&["add", "--title", "aliased defect", "--type", "bug"]);
+    // Stored objects that arrived from elsewhere (an import, another clone):
+    // written as files, since this clone may not mint global ids itself.
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .unwrap()
+        .node_id
+        .to_ascii_uppercase();
+    let canonical = format!("BUG-{node}-001");
+    let uuid = f.show_json(&[&canonical])["uuid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let template = fs::read_to_string(
+        aida_core::object_store::object_path(&f.store.join("objects"), &canonical).unwrap(),
+    )
+    .unwrap();
+    for (spec_id, other_uuid, extra) in [
+        ("BUG-JM-001", "00000000-0000-4000-8000-0000000000a1", ""),
+        (
+            "BUG-777",
+            "00000000-0000-4000-8000-0000000000a2",
+            "agreed_id: TASK-AK-007\n",
+        ),
+    ] {
+        let path = aida_core::object_store::object_path(&f.store.join("objects"), spec_id).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let text = template
+            .replace(&canonical, spec_id)
+            .replace(&uuid, other_uuid)
+            + extra;
+        fs::write(&path, text).unwrap();
+    }
+
+    f.ok(&["node", "alias", "set", "HOME"]);
+    for (args, example) in [
+        (
+            &[
+                "node",
+                "alias",
+                "set",
+                "jm",
+                "--node",
+                "0123456789abcdef0123456789abcdef",
+            ][..],
+            "BUG-JM-001",
+        ),
+        (&["node", "alias", "rename", "HOME", "JM"][..], "BUG-JM-001"),
+        (
+            &[
+                "node",
+                "alias",
+                "set",
+                "AK",
+                "--node",
+                "0123456789abcdef0123456789abcdef",
+            ][..],
+            "TASK-AK-007",
+        ),
+        (
+            &["node", "alias", "rename", "HOME", "ak"][..],
+            "TASK-AK-007",
+        ),
+    ] {
+        let refused = f.aida(args);
+        assert!(!refused.status.success(), "{args:?} must refuse");
+        let err = String::from_utf8_lossy(&refused.stderr).into_owned()
+            + &String::from_utf8_lossy(&refused.stdout);
+        assert!(err.contains(example), "{args:?}: {err}");
+    }
+    let list = f.ok(&["node", "alias", "list"]);
+    assert!(!list.contains("JM") && !list.contains("AK"), "{list}");
+
+    // The literal id keeps naming the literal spec in hand-written text.
+    let message = f.ok(&[
+        "commit",
+        "--dry-run",
+        "--type",
+        "fix",
+        "--message",
+        "literal spec",
+        "--spec",
+        "BUG-JM-001",
+    ]);
+    assert!(message.trim().ends_with("(BUG-JM-001)"), "{message}");
 }

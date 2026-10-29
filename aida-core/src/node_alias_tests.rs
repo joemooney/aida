@@ -119,15 +119,49 @@ fn node_alias_registered_node_id_guard_covers_set_and_rename() {
     // Rename onto a registered node id refuses.
     let mut renamed = before.clone();
     renamed.rename("HOME", "W2").unwrap();
-    let err = refuse_registered_node_id_labels(dir.path(), &before, &renamed).unwrap_err();
+    let err = refuse_colliding_labels(dir.path(), &before, &renamed).unwrap_err();
     assert!(err.to_string().contains("W2"), "{err}");
     // Set onto a registered node id refuses.
     let mut set = NodeAliasMap::default();
     set.set("W2", NODE_B).unwrap();
-    assert!(refuse_registered_node_id_labels(dir.path(), &NodeAliasMap::default(), &set).is_err());
+    assert!(refuse_colliding_labels(dir.path(), &NodeAliasMap::default(), &set).is_err());
     // An unrelated new label passes; bindings that already existed are not re-judged.
     let mut ok = before.clone();
     ok.rename("HOME", "DESK").unwrap();
-    refuse_registered_node_id_labels(dir.path(), &before, &ok).unwrap();
-    refuse_registered_node_id_labels(dir.path(), &set, &set).unwrap();
+    refuse_colliding_labels(dir.path(), &before, &ok).unwrap();
+    refuse_colliding_labels(dir.path(), &set, &set).unwrap();
+}
+
+#[test]
+fn node_alias_stored_id_guard_covers_spec_id_and_agreed_id() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    let dir = tempfile::tempdir().unwrap();
+    let objects = dir.path().join("objects");
+    let mut literal = crate::Requirement::new("t".into(), "b".into());
+    literal.spec_id = Some("BUG-JM-001".into());
+    crate::object_store::write_object(&objects, &literal).unwrap();
+    let mut agreed = crate::Requirement::new("t".into(), "b".into());
+    agreed.spec_id = Some(format!("TASK-{NODE_B}-001").to_ascii_uppercase());
+    agreed.agreed_id = Some("task-ak-007".into());
+    crate::object_store::write_object(&objects, &agreed).unwrap();
+
+    let before = home();
+    for (label, example) in [("JM", "BUG-JM-001"), ("ak", "TASK-AK-007")] {
+        let mut set = NodeAliasMap::default();
+        set.set(label, NODE_B).unwrap();
+        let err = refuse_colliding_labels(dir.path(), &NodeAliasMap::default(), &set)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(example), "{err}");
+        let mut renamed = before.clone();
+        renamed.rename("HOME", label).unwrap();
+        let err = refuse_colliding_labels(dir.path(), &before, &renamed)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(example), "{err}");
+    }
+    // A label that is no stored id's middle segment passes.
+    let mut ok = before.clone();
+    ok.rename("HOME", "DESK").unwrap();
+    refuse_colliding_labels(dir.path(), &before, &ok).unwrap();
 }

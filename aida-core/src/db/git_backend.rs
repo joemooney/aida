@@ -2512,19 +2512,10 @@ impl DatabaseBackend for GitBackend {
     // Override individual CRUD for efficiency — don't reload everything each time
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
-        // The literal id wins: a friendly `TYPE-<LABEL>-NNN` reads the
-        // canonical object it names only when nothing answers to it as given,
-        // so an existing agreed/initials id such as `BUG-JM-001` is never
-        // shadowed by label JM (same precedence as the cached and in-memory
-        // resolvers).
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        if let Some(req) = self.get_requirement_by_exact_spec_id(spec_id)? {
-            return Ok(Some(req));
-        }
-        match crate::node_alias::expand_spec_id(spec_id) {
-            Some(canonical) => self.get_requirement_by_exact_spec_id(&canonical),
-            None => Ok(None),
-        }
+        crate::node_alias::resolve_literal_first(spec_id, |id| {
+            self.get_requirement_by_exact_spec_id(id)
+        })
     }
 
     fn get_requirement(&self, id: &uuid::Uuid) -> Result<Option<Requirement>> {

@@ -377,8 +377,42 @@ pub fn expand_spec_id(id: &str) -> Option<String> {
     installed().expand(id)
 }
 
+/// THE resolution order for a spec ID, shared by every store resolver: run
+/// `lookup` on `id` exactly as given (native `spec_id`, then `agreed_id`, is
+/// the lookup's own rule); only when that finds nothing, expand a node-label
+/// form and look the canonical id up. A literal id such as `BUG-JM-001` is
+/// therefore never shadowed by label JM. A lookup error on the literal id
+/// (e.g. an ambiguous id) is returned as-is, never retried as an alias.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+pub fn resolve_literal_first<T, E>(
+    id: &str,
+    mut lookup: impl FnMut(&str) -> Result<Option<T>, E>,
+) -> Result<Option<T>, E> {
+    if let Some(hit) = lookup(id)? {
+        return Ok(Some(hit));
+    }
+    match expand_spec_id(id) {
+        Some(canonical) => lookup(&canonical),
+        None => Ok(None),
+    }
+}
+
+/// [`resolve_literal_first`] for an infallible lookup.
+pub fn resolve_literal_first_opt<T>(
+    id: &str,
+    mut lookup: impl FnMut(&str) -> Option<T>,
+) -> Option<T> {
+    match resolve_literal_first(id, |i| Ok::<_, std::convert::Infallible>(lookup(i))) {
+        Ok(hit) => hit,
+        Err(never) => match never {},
+    }
+}
+
 /// [`expand_spec_id`], or `id` unchanged when it is not a known alias form.
-/// For parsers of hand-written text (commit trailers, `trace:` comments).
+/// For parsers of hand-written text (commit trailers, `trace:` comments),
+/// which have no store to try the literal id first: they rely on
+/// `mutate_cas` refusing any label that is already the middle segment of
+/// a stored `spec_id`/`agreed_id`, so an expanded id never shadows a literal.
 pub fn expand_or_keep(id: &str) -> String {
     expand_spec_id(id).unwrap_or_else(|| id.to_string())
 }
@@ -389,13 +423,20 @@ pub fn display_spec_id(id: &str) -> String {
     installed().display(id, canonical_ids())
 }
 
-/// Refuse any label `after` binds that `before` did not when it equals a
-/// node id registered in `registry/nodes.toml`: `TASK-<label>-NNN` would then
-/// name two different requirements. Shared by every write (`set` and
-/// `rename`) because it runs inside [`mutate_cas`].
+/// Whether `id` is `TYPE-<label>-NNN` (any case) for `label`.
+fn id_uses_label(id: &str, label: &str) -> bool {
+    split_three(id).is_some_and(|(_, middle, _)| middle.eq_ignore_ascii_case(label))
+}
+
+/// Refuse any label `after` binds that `before` did not when
+/// `TYPE-<label>-NNN` would name two different requirements: the label equals
+/// a node id registered in `registry/nodes.toml`, or a stored `spec_id` or
+/// `agreed_id` already has the label as its middle segment (display of the
+/// labelled node's ids would then parse back to that literal spec). Shared by
+/// every write (`set` and `rename`) because it runs inside [`mutate_cas`].
 // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
 #[cfg(feature = "native")]
-fn refuse_registered_node_id_labels(
+fn refuse_colliding_labels(
     store_root: &Path,
     before: &NodeAliasMap,
     after: &NodeAliasMap,
@@ -420,6 +461,24 @@ fn refuse_registered_node_id_labels(
         anyhow::bail!(
             "label {label} is already a registered node id; spec IDs like TASK-{label}-001 belong to that node"
         );
+    }
+    let objects = store_root.join("objects");
+    for (stem, path) in crate::object_store::list_objects(&objects)? {
+        let mut ids = vec![stem];
+        // An unreadable object cannot hold an agreed_id we could resolve to
+        // either, so skipping it keeps the label usable.
+        if let Ok(req) = crate::object_store::read_object_from_path(&path) {
+            ids.extend(req.spec_id);
+            ids.extend(req.agreed_id);
+        }
+        for id in ids {
+            if let Some(label) = added.iter().find(|label| id_uses_label(&id, label)) {
+                anyhow::bail!(
+                    "label {label} is already the middle of stored spec ID {}; choose another label",
+                    id.to_ascii_uppercase()
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -450,7 +509,7 @@ pub fn mutate_cas(
             if !mutate(&mut map).map_err(anyhow::Error::msg)? {
                 return Ok(None);
             }
-            refuse_registered_node_id_labels(store_root, &before, &map)?;
+            refuse_colliding_labels(store_root, &before, &map)?;
             map.save(store_root)?;
             git_ops::add(store_root, &[NODE_ALIASES_TOML_REL])?;
             git_ops::commit(store_root, &format!("chore(registry): {describe}"))?;
