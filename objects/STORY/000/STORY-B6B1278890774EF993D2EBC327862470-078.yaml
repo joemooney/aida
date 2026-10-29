@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T08:36:06.572675735Z
+modified_at: 2026-10-29T08:48:45.000243441Z
 req_type: Story
 tags:
 - docs:impacted
@@ -140,6 +140,13 @@ comments:
   created_at: 2026-10-29T08:36:06.572671096Z
   modified_at: 2026-10-29T08:36:06.572671096Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a186d8-e9c8-71b2-9abe-7dd609ca988f
+  author: joe
+  content: 'Round 2 rework (f005464 review): (1) mutate_cas validator refuse_colliding_labels now also refuses a label that is the middle segment of any stored spec_id/agreed_id, naming one example; core + CLI tests for set and rename. (2) Text parsers stay alias-first; they rely on that guard (documented on expand_or_keep); CLI test shows a literal BUG-JM-001 trailer stays literal once JM is refused. (3) aida commit installs the label map unconditionally and canonicalizes inferred staged trace ids (label+canonical forms count as one spec); dry-run test covers the inferred path. (4) Consolidated: every store resolver (git, cached-git, trait default, RequirementsStore spec_id_index / resolve_unambiguous_index) now calls one node_alias::resolve_literal_first.'
+  created_at: 2026-10-29T08:48:45.000243441Z
+  modified_at: 2026-10-29T08:48:45.000243441Z
+  session_id: 01a186ce1722
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
