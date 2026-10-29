@@ -86904,5 +86904,31 @@ operations:
   timestamp: 2026-10-29T19:19:41.691401272Z
   kind: !SetStatus
     status: Done
-clock: 6787
+- id: 01a1892a-306c-7731-a094-bc9fece887bf
+  target_id: 01a1892a-28b7-7363-9885-8c5492980130
+  author: aida
+  node_id: '1'
+  lamport: 6788
+  timestamp: 2026-10-29T19:36:45.932472992Z
+  kind: !Create
+    title: 'Review PR-3102: [AI:codex] docs(setup): refresh supported operator and storage guidance (TASK-B6B1278890774EF993D2EBC327862470-112)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a18918`) for branch `task-b6b1278890774ef993d2ebc327862470-112-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3102>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-112-work` → `task-b6b1278890774ef993d2ebc327862470-111-work`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-112
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3102` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6788
 node_id: '1'
