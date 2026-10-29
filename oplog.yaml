@@ -86292,5 +86292,36 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6735
+- id: 01a188da-f686-7b11-b8db-b637b33ff867
+  target_id: 01a188da-efd0-7c12-91f9-ae2f6592676f
+  author: aida
+  node_id: '1'
+  lamport: 6736
+  timestamp: 2026-10-29T18:10:13.766781157Z
+  kind: !Create
+    title: Refresh supported installation and operator storage guidance
+    description: |
+      Slice 7 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Give operators a coherent supported setup/maintenance route without conflating it with the normal conversational user experience.
+
+      ## Acceptance
+      - [ ] Verify and correct current Linux installation/release, init/MCP opt-in, adopted/sibling-store, clone identity/allocation and data-layer guidance against source/help.
+      - [ ] Update the applicable administrator, storage, multi-node/multi-hub and setup-reference sections together so a reader follows one consistent route. Preserve still-valid detail rather than replacing it with unsupported generalizations.
+      - [ ] Separate canonical store history, derived cache and local/machine operational state; do not imply a cache rebuild restores unpublished history or grants. Legacy alternatives and migration constraints remain explicitly scoped.
+      - [ ] HOME/WORK and transport behavior reflect shipped code. Future hierarchical allocation/per-remote sharing proposals are not documented as shipped functionality.
+      - [ ] Broken source/template links are fixed at their authoritative source. If a touched doc is a template-generated mirror, edit the master and run the documented synchronization.
+
+      ## Layers / boundaries
+      Verified setup/storage references -> consistent operator guides and reader navigation -> supported installation/maintenance journey. No allocator, transport, grant, store or gate behavior changes.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6736
 node_id: '1'
