@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-29T18:33:07.669321409Z
+modified_at: 2026-10-29T18:33:17.654427386Z
 req_type: Task
 tags:
 - advisor-review
@@ -76,6 +76,20 @@ comments:
     Dependencies TASK-B6B1278890774EF993D2EBC327862470-100 and -101 are Done/in independent review. The explicitly requested worktree add --role implementer succeeded. To keep implementation separate without merging those PRs, this branch is stacked on task-b6b1278890774ef993d2ebc327862470-101-work (PR #3094); the PR base will be that branch. Overview intro edits are limited to human-inclusive onboarding and should be preserved when #3093 is integrated. No gate/authority runtime changes. Broader operator-reference correctness belongs to slice 112; publication scope belongs to slice 111.
   created_at: 2026-10-29T18:29:16.130137871Z
   modified_at: 2026-10-29T18:29:16.130137871Z
+- id: 01a188f0-1456-7210-a257-d4f2bb54831f
+  author: ai:codex:joe
+  content: |
+    People can start AIDA through the conversational coding workflow they already use. The newcomer guide separates operator setup, explains durable intent and capture limits, and renders from one Markdown source into an accessible static showcase page.
+
+    Changes: newcomer guide; README and overview entry copy (Markdown and HTML); first-project introduction; small stdlib renderer/shared layout/styles; generated guide; showcase navigation and build/deployment instructions.
+
+    Validation: make check-ci-fast; source/help verification of init profile selection, MCP opt-in and capture guidance. Author self-check: two rounds; fixed mobile CTA, deployment-layout instructions and outdated walkthrough introduction; fresh checker found no further findings. This is author checking, not independent review.
+
+    Stacked on PR #3094 so its existing showcase remains a separate change. PR #3093 remains in independent review; this PR's overview edit only changes the human-inclusive introduction. No runtime/gate changes or hosted publication. Broader configuration, metrics, library and reference refresh remain in their separate approved slices.
+
+    TASK-B6B1278890774EF993D2EBC327862470-106
+  created_at: 2026-10-29T18:33:17.654427386Z
+  modified_at: 2026-10-29T18:33:17.654427386Z
 history:
 - id: 01a188d8-e7f2-7920-ae16-f28e478dd331
   author: joe
