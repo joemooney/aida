@@ -46,12 +46,10 @@ We file all six up front, then drive **STORY-1** and **STORY-2** through the
 full lifecycle. STORY-3, STORY-4, and BUG-1 stay queued — that's your project
 to finish after the walkthrough ends.
 
-> **A note on the ids you'll see.** AIDA numbers specs from a single shared
-> sequence, not per-type — so when you file the epic first and four stories next,
-> your real ids come out `EPIC-1, STORY-2, STORY-3, STORY-4, STORY-5`, and the bug
-> is `BUG-6`. The diagram above uses the tidy `STORY-1..4 / BUG-1` names for
-> readability; substitute your own ids as you follow along (the *shape* of the
-> graph is identical either way).
+> **A note on the IDs you'll see.** The diagram uses illustrative short IDs to
+> show the graph. Use the actual IDs printed by your CLI. Default WORK allocation
+> uses a clone UUID and per-type counters; global allocation requires explicit
+> HOME enrollment. The example numbers are not a promise of allocation order.
 
 ---
 
@@ -64,7 +62,7 @@ $ mkdir todo-cli && cd todo-cli
 $ git init
 Initialized empty Git repository in ~/todo-cli/.git/
 
-$ aida init
+$ aida init --with-mcp
 ✓ orphan branch aida-store + worktree .aida-store/
 ✓ .aida/config.toml · .aida/cache.db
 ✓ seeded META requirements
@@ -72,19 +70,18 @@ $ aida init
 AIDA initialized — distributed git-canonical mode.
 ```
 
-One command set up a git-canonical requirements store (one YAML file per spec
+This illustrative setup explicitly opts into MCP registration. It sets up a git-canonical requirements store (one YAML file per spec
 on the orphan `aida-store` branch), a SQLite read cache, the MCP server config,
 and the Claude Code skills. The full inventory of what `aida init` writes is in
-[`getting-started.md`](getting-started.md#one-time-operator-setup).
+[CLI initialization reference](cli/01-getting-started.md#aida-init).
 
 ---
 
 <!-- trace:BUG-597 -->
 
-> **A note on roles before you start.** A fresh `aida init` seats you as the
-> **implementer** role — the seat that files and *implements* work. This
-> walkthrough also promotes specs and routes work, which require advisor
-> authority. Since you're driving this project solo, enter that seat at your
+> **A note on roles before you start.** Initialization does not substitute for
+> a validated role grant. This walkthrough promotes specs and routes work,
+> which require the appropriate advisor authority. Since you're driving this project solo, enter that seat at your
 > terminal before those steps: `eval "$(aida role enter advisor)"`. The grant
 > stays in this shell session; a new terminal must enter its own seat.
 > `AIDA_SESSION_ROLE` by itself is only a display/routing hint.
@@ -519,9 +516,9 @@ message format** section of [`CLAUDE.md`](../CLAUDE.md).
 
 - **[Spec lifecycle](lifecycle.md)** — the full Draft → Released state machine,
   the verb vocabulary, and the edge cases (cluster PRs, parallel pipelining).
-- **[Getting started](getting-started.md)** — install options and the command
-  quick-reference.
-- **[How AIDA compares](../README.md#how-aida-compares)** — the
+- **[Getting started](getting-started.md)** — the conversational journey and
+  separately labeled operator setup.
+- **[How AIDA compares](positioning/README.md)** — the
   *"why AIDA instead of X?"* question, one neighbor tool at a time.
 - **[Why AIDA?](WHY-AIDA.md)** — the problem statement behind all of it.
 

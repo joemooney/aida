@@ -13,7 +13,7 @@ It is alpha software, Linux-only, and released under the MIT licence.
 - **A git-canonical requirements graph.** Specs (stories, tasks, bugs, spikes,
   epics, decisions) are YAML objects on an orphan `aida-store` branch with
   stable IDs and typed relationships. A local SQLite cache makes reads fast and
-  can always be rebuilt from git. Cloning the repository brings the graph with it.
+  is rebuildable from available canonical store history. Cloning the repository brings the graph with it.
 - **Code-to-intent links.** A `// trace:<SPEC-ID>` comment ties code to the spec
   it implements, and commits carry the spec ID in a trailer. `aida why
   <file>:<line>` reads that link back and shows the intent behind a line.

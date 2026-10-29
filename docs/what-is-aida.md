@@ -73,7 +73,7 @@ For management, this supports a practical adoption path: start with supervised d
 
 ## How big is it, and why
 
-Counts are for files tracked in git at `origin/main` `28bbe9d540b`.
+Historical snapshot: counts are for tracked files at commit `28bbe9d540b`, dated 28 October 2026 (then `origin/main`). These are not live product metrics.
 
 | What | Lines |
 |---|---|

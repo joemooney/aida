@@ -49,3 +49,7 @@ link remains listed. This work neither deploys the site nor changes the existing
 owner-private hosted preview's audience. Plain Markdown references require the
 repository layout described above; they are source references, not generated
 handbook pages.
+
+## Standalone overview
+
+`python3 docs/showcase/build.py --overview` also regenerates `docs/what-is-aida.html` from `docs/what-is-aida.md` and `overview-template.html`. This optional step requires Pandoc (the Markdown tables and nested lists use its GFM reader); the guide/library build without this flag still needs only Python 3 and Git. Edit the Markdown or the overview shell, then regenerate instead of hand-editing the standalone HTML. Local links to manifest guides are mapped into the showcase; other links keep their source-document paths.
