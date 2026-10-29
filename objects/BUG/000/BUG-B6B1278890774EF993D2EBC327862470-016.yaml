@@ -17,11 +17,31 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T11:48:32.376104043Z
-modified_at: 2026-10-29T11:49:24.761275659Z
+modified_at: 2026-10-29T11:49:42.634461113Z
 req_type: Bug
 tags:
 - regroup
 - review
+comments:
+- id: 01a1877e-966a-7032-bdf0-fa4e2d56470f
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit/fixture (git repo):** `bug_016_preflight_follows_a_symlinked_settings_file` — a committed `.claude/settings.json -> ../templates/settings.json` (mode 120000) whose target has the entries passes; same link to a target without them refuses with "lacks the reviewer allow entries". Same resolution applies to `.aida/config.toml`.
+    - **Unit/fixture:** `bug_016_preflight_names_a_dangling_or_escaping_link` — a dangling link and a `../../outside` link each refuse with an error naming the link path and its target, and not "lacks the allow entries".
+    - **Unit:** pure path resolution (`resolve_link_target`) — relative join, `..` normalisation, escape refusal, absolute refusal; hop bound (link cycle) refuses.
+
+    ### Expected files
+    - `aida-cli-lib/src/reviewer_preflight.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None. Intermediate directory symlinks are out of scope (only the blob at the path and each hop target are resolved).
+  created_at: 2026-10-29T11:49:42.634461113Z
+  modified_at: 2026-10-29T11:49:42.634461113Z
+  session_id: 01a1877e1198
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a1877e-154b-77b2-8d83-87ce645863f9
   author: aida-session-start
