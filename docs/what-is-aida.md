@@ -59,7 +59,7 @@ The execution mode is recorded on the spec. The advisor classifies the work, and
 
 In the software use of **dark factory**, people define intent and validation while agents implement and validate changes without routine human coding or code review. [StrongDM's software factory](https://factory.strongdm.ai/) is one explicit example of that approach.
 
-AIDA's `drain` mode can support that pattern for eligible, authorized work. A project can use autonomous delivery for routine fixes, supervised delivery for features, and collaborative or human-led delivery for sensitive changes at the same time. Whether the overall operation qualifies as a dark factory depends on the actual human interventions and authority available, not simply on selecting `drain`.
+**`drain` is AIDA's dark factory mode.** For approved, authorized specs, agents implement, test, independently review and merge changes without routine human coding or code review. People define the intent, acceptance criteria and authority limits; the factory executes within them and escalates exceptions. AIDA lets a team run this mode alongside supervised, collaborative and human-led delivery, choosing the level of human involvement for each spec.
 
 Selecting autonomy does not grant authority to bypass reviews, CI, merge holds or protected operations. Mandates and seat grants determine which actions are authorized and for how long; the execution mode determines how the work is carried out. A stopped gate or unresolved decision can still require a person. Here, delivery means reaching the merged code state; production deployment requires its own policy and automation.
 
