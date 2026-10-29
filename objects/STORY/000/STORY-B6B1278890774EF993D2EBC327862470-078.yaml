@@ -35,7 +35,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T09:02:35.024464417Z
+modified_at: 2026-10-29T09:03:38.055828473Z
 req_type: Story
 tags:
 - docs:impacted
@@ -147,6 +147,17 @@ comments:
   modified_at: 2026-10-29T08:48:45.000243441Z
   session_id: 01a186ce1722
   harness_version: 2.1.312 (Claude Code)
+- id: 01a186e6-8a47-73a1-a8d5-ee9f3c13ee1e
+  author: joe
+  content: |
+    REWORK BRIEF: PR-3089 round 3 → FINAL push (advisor, 2026-10-29 02:08). Verdict at 786989948aa. Exactly 2 items:
+    1. Text parsers literal-first (round-2 item 2, not done): trace.rs:28 parse_trace_id_token, commit.rs:261 normalize_spec, pr_ship.rs:560 canonicalize_node_label_ids and pr_ship.rs:812/853 call resolve_literal_first with an is_literal closure over the store's ID set (pr ship, trace check and aida commit all load the store). Delete expand_or_keep/expand_spec_id once no caller remains, and drop the doc comment claiming the set-time guard makes alias-first safe. Test: label JM bound, a literal BUG-JM-001 exists (inject it after binding, bypassing the guard), and a trailer (BUG-JM-001) stays BUG-JM-001.
+    2. Reverse collision: NodeRegistry registration (node.rs register_specific*/next_free_with_prefix, and `aida node acquire --id/--yes` suffix fallback) refuses, or skips in the suffix fallback, any node id equal to a current or retired label in registry/node_aliases.toml. Test: bind HOME, then `aida node acquire --id HOME` refuses naming the label.
+    Gate (LIGHT): cargo test -p aida-core --lib node_alias; cargo test -p aida-cli --test story_078_node_aliases; make check-ci-fast. Same branch.
+    ADVISOR CAP: this is the last rework round. The next review verifies only these 2 items plus green CI at the exact head. Any other finding is accepted with a recorded reason, not reworked.
+  created_at: 2026-10-29T09:03:38.055828473Z
+  modified_at: 2026-10-29T09:03:38.055828473Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
