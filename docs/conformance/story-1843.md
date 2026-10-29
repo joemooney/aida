@@ -10,8 +10,9 @@ signed sketches and advisor rulings on the spec (comment numbers below are
 matrix completes.
 
 Evidence was checked against `origin/main` at `457c8c60cf0` (2026-10-28),
-and against aida-relay `origin/main` at `2db8abb`: each SHA is the merge commit on main (`git log origin/main`), and each test was
-found by name with `rg 'fn <name>'`. Paths are relative to the repository root.
+and against aida-relay `origin/main` at `2db8abb`: each SHA is the merge
+commit on main (`git log origin/main`), and each test was found by name with
+`rg 'fn <name>'`. Paths are relative to the repository root.
 
 Status values:
 
@@ -25,12 +26,12 @@ Status values:
 
 | Slice | Merge commit | PR |
 |---|---|---|
-| PR1 shared resolver, unroutable recipients refused | `597ea98e771` | #2808 line |
-| PR2 migration dry-run, layout manifest refusal | `b6aa5e87013` | |
+| PR1 shared resolver, unroutable recipients refused | `597ea98e771` | #2808 |
+| PR2 migration dry-run, layout manifest refusal | `b6aa5e87013` | #2848 |
 | PR2b handles, statusline, `agent ls` | `f19b73debfc` | #2864 |
 | PR3 child handles, agy next-turn mail | `94124569c9b`, `84f0642f339` | #2909 |
 | B1 logical inbox snapshot | `06fa4fb01ee` | #2944 |
-| B2a monotone retraction | `f34fd143233` | |
+| B2a monotone retraction | `f34fd143233` | #2948 |
 | B2b identity policy, own-audience readers | `ab8c97933da` | #2952 |
 | B2c post-flush ACK, common-Git receipt anchor | `b010bc35f63` | #3015 |
 | C1 lifecycle anchor, retention barrier | `8ae30fc1685` | #2949 |
@@ -97,7 +98,7 @@ permanent Python union logic").
 | Per-turn notice hook (claude, codex, agy) | MET | `ab8c97933da`, `10443faf8fd`. `story1843_adapters_share_one_logical_view_and_one_read_state` (`notice_text`), `story1843_d1_notice_never_waits_on_a_held_lifecycle_lock`; agy: `story_1843_pr3_claude_to_agy_next_turn` | |
 | Status, statusline, awaiting, latency | MET | `ab8c97933da`. `story1843_adapters_share_one_logical_view_and_one_read_state` (`read_urgent_unread_count_for`, `mailbox_latency_warning_for`), `story1843_awaiting_mail_channel_shares_the_view`, `story1843_latency_rows_share_the_view`, `story1843_inbox_read_clears_every_fleet_wide_unread_reader` | |
 | Relay (AIDA side) | MET | `b00dbdfa8ba`. `relay_mail_outbox.rs` and `relay_mail_reuse.rs` read the view; tests are in the relay rows of section B | |
-| Mail watcher (`aida mailbox wake-snapshot` + `scripts/codex-mail-wake.py`, TASK-2347) | MET | `457c8c60cf0` (#3079). `aida-cli-lib/src/mailbox_wake.rs`: `story1843_w_no_wake_for_mail_read_in_a_removed_worktree`, `story1843_w_no_wake_for_another_readers_cohort_mail`, `story1843_w_partial_source_is_flagged`, `story1843_w_selector_never_widens_and_envelope_has_no_body`, `story1843_w_wake_snapshot_under_a_non_advisor_session_binds_nothing`; `tests/test_codex_mail_wake.py`: `test_one_logical_snapshot_replaces_the_per_worktree_union`, `test_partial_view_wakes_once_with_partial_flag_and_never_prunes`, `test_snapshot_without_read_evidence_refuses` | `wake-snapshot` builds its envelope from the core logical snapshot with the notice's audience (narrowed by `--recipient`, never widened) and its non-blocking bind pass, so read evidence comes from the common-Git receipt anchor and cohort mail another reader owns is excluded. The script makes one call per scan instead of unioning roots. A partial view sets `partial=true` and never prunes accepted IDs. |
+| Mail watcher (`aida mailbox wake-snapshot` + `scripts/codex-mail-wake.py`, TASK-2347) | MET | `457c8c60cf0` (#3079). `aida-cli-lib/src/mailbox_wake.rs`: `story1843_w_no_wake_for_mail_read_in_a_removed_worktree`, `story1843_w_no_wake_for_another_readers_cohort_mail`, `story1843_w_partial_source_is_flagged`, `story1843_w_selector_never_widens_and_envelope_has_no_body`, `story1843_w_wake_snapshot_under_a_non_advisor_session_binds_nothing`; `tests/test_codex_mail_wake.py`: `test_one_logical_snapshot_replaces_the_per_worktree_union`, `test_partial_view_wakes_once_with_partial_flag_and_never_prunes`, `test_snapshot_without_read_evidence_refuses`, `test_queued_role_mail_wakes_once_without_ids` | `wake-snapshot` builds its envelope from the core logical snapshot with the notice's audience (narrowed by `--recipient`, never widened), so read evidence comes from the common-Git receipt anchor and cohort mail another reader owns is excluded. It is a pure read and never binds (ruling 102, 18:49, amending ruling 101): queued deliveries appear as the envelope's `pending` count, and binding stays with explicit reads and the per-turn notice. The adapter clears inherited session-identity variables and sends one ID-less notice per episode when `pending` is above zero and nothing new is listed. The script makes one call per scan instead of unioning roots. A partial view sets `partial=true` and never prunes accepted IDs. |
 | Relay (aida-relay side) | MET | aida-relay `2db8abb` (#98) | See section D. |
 
 ## D. Relay side, aida-relay STORY-122 (D3)
@@ -131,7 +132,11 @@ Verification notes. Rows changed since the first draft of this matrix
 (`36531cf3f40`):
 
 - Section C, mail watcher: MISSING to MET, from slice W (`457c8c60cf0`, #3079).
-- Section C, relay (aida-relay side): PENDING-D3 to MET, from aida-relay `2db8abb`.
+  Review round 1 corrected its notes: wake-snapshot never binds (ruling 102).
+- Slice table: PR numbers filled in for PR1 (#2808), PR2 (#2848) and B2a
+  (#2948), from the GitHub commit-to-PR lookup.
+- Section C, relay (aida-relay side): PENDING-D3 to MET, from aida-relay
+  `2db8abb`.
 - Section D, all six relay criteria: PENDING-D3 to MET, from aida-relay
   `2db8abb`. Each case was checked by name in the header of
   `tests/shell/story122_relay_mail.sh` on aida-relay `origin/main`.
