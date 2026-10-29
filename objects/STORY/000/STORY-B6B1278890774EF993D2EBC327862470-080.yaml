@@ -73,12 +73,12 @@ description: |
 
   ## SLICE 2 finish (advisor, 2026-10-29 14:25): third seat, OPEN THE PR THIS SEAT
   Read the newest handoff comment (comment 26). The test retargeting is done. Do only this: (1) compile and fix errors; (2) run `env -u AIDA_CONTAINED cargo test --profile agent -p aida-cli-lib --lib -- gate:: drain_gate pr_merge_gate`; (3) run make check-ci-fast; (4) push and open the PR with `(Refs <this spec>)`. If a test cannot run in this seat because of the sandbox (read-only /tmp test home, or a missing advisor grant such as task_2344_q2), do NOT fight it. List it in the PR body, then push; CI runs it and is the gate. Do not start new refactors. Stop early and push rather than run out of context.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T22:18:37.478563853Z
+modified_at: 2026-10-29T22:27:51.729612397Z
 req_type: Story
 tags:
 - architecture
@@ -958,6 +958,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a189c6-d531-79b1-810c-fd431e7e8843
+  author: aida-orchestrator
+  timestamp: 2026-10-29T22:27:51.729630098Z
+  session_id: 01a189c112bf
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -971,3 +980,11 @@ implementation_info:
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
   reopened_at_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Slice 2 moves holds and verdicts onto the ledger as briefed, but CI is red (cli-0, lib-0, lib-1 fail at 05a4f4d; green on main), an uncontained standalone reviewer's ledger-only verdict is no longer collected by the launcher, and the launcher-armed refusal hold that replaced the contained fallback is untested.
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-080 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-29T22:27:51.729612397Z
