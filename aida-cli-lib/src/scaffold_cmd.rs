@@ -605,6 +605,8 @@ pub(crate) fn handle_scaffold_command(
             if seeded > 0 {
                 println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
             }
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+            crate::ensure_contained_reviewer_config(&root)?;
             // TASK-1233: refresh is an existing-project setup pass too. Keep
             // it read-only unless an interactive operator accepts the same
             // contained-posture repair offered by `aida init`.
@@ -639,6 +641,15 @@ pub(crate) fn handle_scaffold_command(
             // trace:STORY-1741 | ai:claude
             let preview = scaffolder.preview_for_write(&store)?;
             run_scaffold_upgrade(&root, &preview, *dry_run, *force, *prune)?;
+            // BUG-014: an older config gets the contained egress allowlist.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+            if crate::ensure_contained_allowed_hosts(&root, *dry_run)? {
+                println!(
+                    "  {} {} [contained] allowed_hosts to the project config",
+                    "+".green(),
+                    if *dry_run { "would add" } else { "added" }
+                );
+            }
         }
         ScaffoldCommand::Diff {
             path,
@@ -831,7 +842,9 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
             if slots.is_empty() {
                 aida_core::scaffolding::generated_text_matches(actual, expected)
             } else {
-                slots.iter().all(|s| av.pointer(s) == ev.pointer(s))
+                slots.iter().all(|s| {
+                    aida_core::scaffolding::slot_value_matches(s, av.pointer(s), ev.pointer(s))
+                })
             }
         }
     }

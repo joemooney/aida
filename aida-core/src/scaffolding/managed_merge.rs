@@ -58,6 +58,10 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
             // issue: MCP". The gitignored settings.local.json (BUG-484) doesn't
             // propagate into worktrees; the committed slot does. trace:BUG-501
             "/enabledMcpjsonServers",
+            // BUG-014: the reviewer allow entries. Additive (see
+            // `ADDITIVE_SLOTS`): AIDA adds its entries, the user's stay.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+            "/permissions/allow",
         ],
         "mcp.json" | ".mcp.json" => &["/mcpServers/aida"],
         // settings.local.json — per-user, gitignored Claude Code overrides.
@@ -67,6 +71,26 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
         "settings.local.json" => &["/enabledMcpjsonServers"],
         _ => &[],
     }
+}
+
+/// Slots whose value is a string array AIDA shares with the user: AIDA owns
+/// its entries, not the whole array. A slot matches when every AIDA entry is
+/// present, and a merge appends the missing ones, keeping the user's extra
+/// entries (a `permissions.allow` list is the user's to widen).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+const ADDITIVE_SLOTS: &[&str] = &["/permissions/allow"];
+
+/// Whether the user's value at `slot` satisfies AIDA's. Exact equality,
+/// except for an [`ADDITIVE_SLOTS`] array, where every AIDA entry must be
+/// present. Every slot-equality check (drift, diff, status, merge) uses this.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+pub fn slot_value_matches(slot: &str, user: Option<&Value>, aida: Option<&Value>) -> bool {
+    if ADDITIVE_SLOTS.contains(&slot) {
+        if let (Some(Value::Array(u)), Some(Value::Array(a))) = (user, aida) {
+            return a.iter().all(|entry| u.contains(entry));
+        }
+    }
+    user == aida
 }
 
 /// Compute what would change if we slot-merged `user_doc` against
@@ -84,12 +108,22 @@ pub fn slot_merge(user_doc: &Value, aida_doc: &Value, slots: &[&str]) -> (Value,
         let user_val = result.pointer(slot);
 
         match (user_val, aida_val) {
-            (None, None) => continue,                 // neither has it
-            (Some(u), Some(a)) if u == a => continue, // matching
+            (None, None) => continue, // neither has it
+            (Some(u), Some(a)) if slot_value_matches(slot, Some(u), Some(a)) => continue,
             (Some(_), Some(a)) => {
-                // Drift — replace.
+                // Drift — replace, or for an additive array append AIDA's
+                // missing entries. trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
                 if let Some(target) = result.pointer_mut(slot) {
-                    *target = a.clone();
+                    match (ADDITIVE_SLOTS.contains(slot), target, a) {
+                        (true, Value::Array(user_entries), Value::Array(aida_entries)) => {
+                            for entry in aida_entries {
+                                if !user_entries.contains(entry) {
+                                    user_entries.push(entry.clone());
+                                }
+                            }
+                        }
+                        (_, target, a) => *target = a.clone(),
+                    }
                 }
                 changes.push(SlotChange {
                     slot: (*slot).to_string(),
@@ -177,6 +211,28 @@ mod tests {
         // trace:BUG-501 — committed MCP pre-approval slot so every worktree
         // (a fresh project path) trusts the scaffolded aida server.
         assert!(slots.contains(&"/enabledMcpjsonServers"));
+    }
+
+    /// BUG-014: AIDA's allow entries are added to a user's list, never
+    /// replace it, and a list holding them all is not drift.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+    #[test]
+    fn bug_014_permissions_allow_merges_additively() {
+        let slots = slots_for_file(Path::new(".claude/settings.json"));
+        let aida = json!({"permissions": {"allow": ["Bash(aida)", "Bash(aida *)"]}});
+        let user = json!({"permissions": {"allow": ["Bash(make *)", "Bash(aida)"]}});
+        let (merged, changes) = slot_merge(&user, &aida, slots);
+        assert_eq!(
+            merged["permissions"]["allow"],
+            json!(["Bash(make *)", "Bash(aida)", "Bash(aida *)"])
+        );
+        assert_eq!(changes.len(), 1);
+        let (_, again) = slot_merge(&merged, &aida, slots);
+        assert!(again.is_empty(), "a superset is not drift: {again:?}");
+
+        let bare = json!({"hooks": {}});
+        let (merged, _) = slot_merge(&bare, &aida, slots);
+        assert_eq!(merged["permissions"]["allow"], aida["permissions"]["allow"]);
     }
 
     #[test]

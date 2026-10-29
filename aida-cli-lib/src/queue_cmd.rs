@@ -12701,6 +12701,17 @@ pub(crate) fn handle_queue_work(
     // trace:BUG-1607 | ai:claude
     if !no_launch {
         session::preflight_launch_vendor(launch_vendor, !no_human)?;
+        // BUG-014: a contained Claude reviewer needs the egress allowlist and
+        // the reviewer allow entries on the PR branch it checks out; refuse
+        // before any lease or worktree.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+        if let Some((forge, pr)) = plan.review_target.filter(|_| {
+            contained
+                && launch_vendor == session::HeadlessVendor::Claude
+                && role.eq_ignore_ascii_case("reviewer")
+        }) {
+            crate::reviewer_preflight::preflight_contained_reviewer(&project_root, forge, pr)?;
+        }
     }
 
     // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
