@@ -30,12 +30,12 @@ description: |
 
   ## Test tier
   LIGHT: one targeted `cargo test -p aida-core node_alias` plus `make check-ci-fast`. Add CLI fixtures for set/list/show, refusal on rebind, input round-trip through `aida show` and a trailer, and the JSON `display_id` contract.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T06:33:06.220012840Z
-modified_at: 2026-10-29T07:33:45.616351345Z
+modified_at: 2026-10-29T07:33:56.061244028Z
 req_type: Story
 tags:
 - docs:impacted
@@ -114,6 +114,12 @@ comments:
   created_at: 2026-10-29T07:33:45.616351345Z
   modified_at: 2026-10-29T07:33:45.616351345Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
+- id: 01a18694-6add-75e1-94be-e1f55dedeeec
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Core map, management CLI, input expansion and show/list output are solid and tested, but AC3/AC5 are not met: the design sketch''s required surfaces (queue list, ps, awaiting, ship/merge messages, show relationship rows) are unmigrated and the ratchet test is missing; MCP JSON lacks display_id; alias-vs-literal lookup precedence is inconsistent; rename skips the node-id collision guard.. No triage reason was given.'
+  created_at: 2026-10-29T07:33:56.061239720Z
+  modified_at: 2026-10-29T07:33:56.061239720Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
 history:
 - id: 01a1865c-d2a9-7a22-ae0d-4f16fc5bd0f4
   author: joe
@@ -170,6 +176,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18694-6add-75e1-94be-e1e842b4000d
+  author: joe
+  timestamp: 2026-10-29T07:33:56.061231304Z
+  session_id: 59349e57-271d-4b9e-b662-8585b949736a
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main
@@ -182,11 +196,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T07:27:38.939022556Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Core map, management CLI, input expansion and show/list output are solid and tested, but AC3/AC5 are not met: the design sketch''s required surfaces (queue list, ps, awaiting, ship/merge messages, show relationship rows) are unmigrated and the ratchet test is missing; MCP JSON lacks display_id; alias-vs-literal lookup precedence is inconsistent; rename skips the node-id collision guard.'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-078 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T07:32:19.049000556Z
