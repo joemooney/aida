@@ -11622,10 +11622,10 @@ Commands:
   rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
-  ambiguous-ids             Find bare spec ids (STORY-100) in descriptions and comments that also
-                            name this node's local spec with the same number (STORY-HOME-100). A
-                            bare id resolves to the agreed spec, so prose meaning the local one
-                            should use the alias form. Reports only
+  bare-id-twins             Find bare spec ids (TYPE-100) in descriptions and comments that also
+                            name this node's local spec with the same number (TYPE-HOME-100). A bare
+                            id resolves to the agreed spec, so prose meaning the local one should
+                            use the alias form. Reports only
   check                     Focused multi-agent drift diagnostic for one category
   heal                      Focused multi-agent drift heal for one category
   migrate-counter-scope     Migrate this project from per-type counters (each type counts
@@ -11773,12 +11773,12 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida doctor ambiguous-ids
-Find bare spec ids (STORY-100) in descriptions and comments that also name this node's local spec
-with the same number (STORY-HOME-100). A bare id resolves to the agreed spec, so prose meaning the
+===== aida doctor bare-id-twins
+Find bare spec ids (TYPE-100) in descriptions and comments that also name this node's local spec
+with the same number (TYPE-HOME-100). A bare id resolves to the agreed spec, so prose meaning the
 local one should use the alias form. Reports only
 
-Usage: aida doctor ambiguous-ids [OPTIONS]
+Usage: aida doctor bare-id-twins [OPTIONS]
 
 Options:
       --format <FORMAT>
@@ -40267,9 +40267,9 @@ Working on aida itself
     "path": [
       "aida",
       "doctor",
-      "ambiguous-ids"
+      "bare-id-twins"
     ],
-    "about": "Find bare spec ids (STORY-100) in descriptions and comments that also name this node's local spec with the same number (STORY-HOME-100). A bare id resolves to the agreed spec, so prose meaning the local one should use the alias form. Reports only",
+    "about": "Find bare spec ids (TYPE-100) in descriptions and comments that also name this node's local spec with the same number (TYPE-HOME-100). A bare id resolves to the agreed spec, so prose meaning the local one should use the alias form. Reports only",
     "flags": [
       {
         "name": "canonical-ids",

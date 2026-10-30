@@ -283,6 +283,23 @@ fn bare_id_local_twin_candidates_use_the_allocator_padding() {
     assert_eq!(local_twin_label(&twin, Some("story-4120")), "STORY-4120");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+#[test]
+fn alias_expansion_pads_the_sequence_like_the_allocator() {
+    let map = home();
+    for alias in ["BUG-HOME-36", "bug-home-036", "BUG-HOME-0036"] {
+        assert_eq!(
+            map.expand(alias).as_deref(),
+            Some("BUG-B6B1278890774EF993D2EBC327862470-036"),
+            "{alias}"
+        );
+    }
+    assert_eq!(
+        map.expand("TASK-HOME-1234").as_deref(),
+        Some("TASK-B6B1278890774EF993D2EBC327862470-1234")
+    );
+}
+
 #[test]
 fn bare_id_tokens_skip_local_alias_and_legacy_node_forms() {
     let text = "See STORY-100, BUG-030.\nnot TASK-1-096 or BUG-HOME-030 or \

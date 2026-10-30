@@ -95,3 +95,22 @@ fn doctor_lint_flags_bare_ids_that_also_name_a_local_spec() {
     reqs[4].agreed_id = Some("BUG-030".into());
     assert_eq!(ambiguous_bare_id_lines(&reqs).len(), 2);
 }
+
+/// Ids compare by (TYPE, number), so zero padding never changes the verdict.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac12b260 | ai:claude
+#[test]
+fn doctor_lint_ignores_zero_padding_on_agreed_ids() {
+    let _guard = home();
+    let mut reqs = store();
+    reqs.push(spec("TASK-900", "ruling", "See BUG-030."));
+    // A stored agreed BUG-30 is what bare BUG-030 opens.
+    reqs.push(spec("BUG-30", "agreed bug", ""));
+    assert_eq!(
+        ambiguous_bare_id_lines(&reqs),
+        vec!["TASK-900:description:1: BUG-030 also names local BUG-HOME-030 (bare BUG-030 opens the agreed spec)"],
+    );
+    // The twin's own agreed id, written with other padding, is not ambiguous.
+    reqs.pop();
+    reqs[4].agreed_id = Some("BUG-30".into());
+    assert!(ambiguous_bare_id_lines(&reqs).is_empty());
+}

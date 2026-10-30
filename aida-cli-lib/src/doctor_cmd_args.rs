@@ -26,12 +26,12 @@ pub enum DoctorCommand {
         exclude: Vec<String>,
     },
 
-    /// Find bare spec ids (STORY-100) in descriptions and comments that also
-    /// name this node's local spec with the same number (STORY-HOME-100).
+    /// Find bare spec ids (TYPE-100) in descriptions and comments that also
+    /// name this node's local spec with the same number (TYPE-HOME-100).
     /// A bare id resolves to the agreed spec, so prose meaning the local one
     /// should use the alias form. Reports only.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
-    AmbiguousIds,
+    BareIdTwins,
 
     /// Focused multi-agent drift diagnostic for one category.
     // trace:STORY-462 | ai:codex

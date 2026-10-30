@@ -241,7 +241,7 @@ pub(crate) fn handle_doctor_command(
             doctor_shell_substitution_holes(exclude)
         }
         // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
-        cli::DoctorCommand::AmbiguousIds => doctor_ambiguous_ids(),
+        cli::DoctorCommand::BareIdTwins => doctor_bare_id_twins(),
     }
 }
 
@@ -301,7 +301,7 @@ fn doctor_shell_substitution_holes(exclude: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn doctor_ambiguous_ids() -> Result<()> {
+fn doctor_bare_id_twins() -> Result<()> {
     let project_root = find_project_root()?;
     let objects_root = shell_substitution_objects_root(&project_root);
     if !objects_root.exists() {
@@ -324,29 +324,26 @@ fn doctor_ambiguous_ids() -> Result<()> {
 /// node-local twin: `SPEC:field:line: BARE also names local ALIAS (...)`. The
 /// local ids are indexed once by `(TYPE, number)`, so the scan is linear in
 /// the prose. A twin is named by its agreed id when it has one, and a bare id
-/// that IS that twin's agreed id is not ambiguous. Pure over `reqs` so a
-/// fixture can drive it.
+/// that IS that twin's agreed id is not ambiguous. Ids are compared by their
+/// `(TYPE, number)` key, so `BUG-030` and a stored `BUG-30` are the same id.
+/// Pure over `reqs` so a fixture can drive it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
 pub(crate) fn ambiguous_bare_id_lines(reqs: &[aida_core::Requirement]) -> Vec<String> {
     use aida_core::node_alias::{
         bare_id_tokens, display_spec_id, local_id_key, local_twin_label, split_bare_id,
     };
-    // (TYPE, number) -> (label, upper-cased agreed id) per local spec.
-    let mut locals: std::collections::HashMap<(String, u32), Vec<(String, Option<String>)>> =
-        Default::default();
-    let mut agreed = std::collections::HashSet::new();
+    // (TYPE, number) -> (label, agreed-id key) per local spec.
+    type Key = (String, u32);
+    let mut locals: std::collections::HashMap<Key, Vec<(String, Option<Key>)>> = Default::default();
+    let mut agreed: std::collections::HashSet<Key> = Default::default();
     for req in reqs {
         for id in req.spec_id.iter().chain(req.agreed_id.iter()) {
             match local_id_key(id) {
                 Some(key) => locals.entry(key).or_default().push((
                     local_twin_label(id, req.agreed_id.as_deref()),
-                    req.agreed_id
-                        .as_deref()
-                        .map(|a| a.trim().to_ascii_uppercase()),
+                    req.agreed_id.as_deref().and_then(split_bare_id),
                 )),
-                None => {
-                    agreed.insert(id.trim().to_ascii_uppercase());
-                }
+                None => agreed.extend(split_bare_id(id)),
             }
         }
     }
@@ -360,18 +357,21 @@ pub(crate) fn ambiguous_bare_id_lines(reqs: &[aida_core::Requirement]) -> Vec<St
         );
         for (field, body) in fields {
             for (line, token) in bare_id_tokens(body) {
-                let Some(twins) = split_bare_id(&token).and_then(|key| locals.get(&key)) else {
+                let Some(key) = split_bare_id(&token) else {
+                    continue;
+                };
+                let Some(twins) = locals.get(&key) else {
                     continue;
                 };
                 let twins: Vec<&str> = twins
                     .iter()
-                    .filter(|(_, twin_agreed)| twin_agreed.as_deref() != Some(token.as_str()))
+                    .filter(|(_, twin_agreed)| twin_agreed.as_ref() != Some(&key))
                     .map(|(label, _)| label.as_str())
                     .collect();
                 if twins.is_empty() {
                     continue;
                 }
-                let resolves = if agreed.contains(&token) {
+                let resolves = if agreed.contains(&key) {
                     format!("bare {token} opens the agreed spec")
                 } else {
                     format!("bare {token} is not found")

@@ -270,11 +270,17 @@ impl NodeAliasMap {
     /// Expand `TYPE-<LABEL>-NNN` (any case) to the canonical
     /// `TYPE-<NODE>-NNN` (upper-case, matching stored filenames). `None` when
     /// `id` is not alias-shaped or names an unknown label — the caller then
-    /// looks up `id` as given, so an unknown label stays a not-found.
+    /// looks up `id` as given, so an unknown label stays a not-found. The
+    /// sequence is re-padded the way the node-local allocator writes it
+    /// (`{seq:03}`), so `BUG-HOME-36` finds `BUG-<node>-036`.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
     pub fn expand(&self, id: &str) -> Option<String> {
         let (prefix, middle, seq) = split_three(id)?;
         let node = self.node_for_label(middle)?;
+        let seq = seq
+            .parse::<u64>()
+            .map_or_else(|_| seq.to_string(), |n| format!("{n:03}"));
         Some(format!("{prefix}-{node}-{seq}").to_ascii_uppercase())
     }
 
