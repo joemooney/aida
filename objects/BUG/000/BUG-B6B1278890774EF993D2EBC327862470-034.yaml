@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T03:45:48.780708400Z
-modified_at: 2026-10-30T06:40:23.068702233Z
+modified_at: 2026-10-30T07:03:48.602810104Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -27,6 +27,13 @@ comments:
     2026-10-29 23:40: third hit tonight. `aida session end` failed with 'git add -A . failed: fatal: Unable to create .git/worktrees/-aida-store/index.lock: File exists' while about 8 reviewers and lanes ran. All store writers (session end, reviewer launch, review record) need one serialized writer or a bounded lock retry. Priority raised to high.
   created_at: 2026-10-30T06:40:23.068702233Z
   modified_at: 2026-10-30T06:40:23.068702233Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18b9f-327a-7832-b97a-116d7244695e
+  author: joe
+  content: |
+    2026-10-29 23:47: ROOT CAUSE found. index.lock in .git/worktrees/-aida-store was STALE from 23:38:28 to 23:47 (7+ min): no git process held it and lsof showed nothing, so a killed writer left it behind. Every store write failed until the advisor removed it by hand. Writers must detect a stale lock (no live holder, older than N seconds) and recover, or run under the store flock so a killed writer cannot leave index.lock behind.
+  created_at: 2026-10-30T07:03:48.602810104Z
+  modified_at: 2026-10-30T07:03:48.602810104Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18aea-4634-7890-b81b-b37aba622a8e
