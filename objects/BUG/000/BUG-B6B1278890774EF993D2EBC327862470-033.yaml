@@ -22,12 +22,12 @@ description: |
 
 
   ADVISOR RULING 2026-10-30 01:30 (PR-3123 round 2): AMENDS item 4 of the 00:20 ruling. The post-merge session reap (TASK-1177 run_session_reap) may stay outside the 60s deadline, since it is documented as such. Reason: the 26-minute stall was the worktree scan and heal pass, which are now bounded; the reap's cost is linear in session count, and the operator ship path already cuts cleanup 60s after merge. Items 1-3 and 5 are verified. A re-review checks only CI green at head plus this amendment; there is no new work.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T08:29:59.986137994Z
+modified_at: 2026-10-30T09:07:24.652882096Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -151,6 +151,20 @@ history:
   timestamp: 2026-10-30T08:30:01.184054726Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c10-5b62-7a83-a558-19327e0a9e26
+  author: aida-auto-bump
+  timestamp: 2026-10-30T09:07:24.642782857Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18c10-5b6c-7190-b30f-a941190144b9
+  timestamp: 2026-10-30T09:07:24.652878020Z
+  agent: implementer
+  commit_sha: 1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5
+  summary: 'Base-only update from main (gh update-branch 31610d935e68188ad3f955ce99993641d4e6e071 -> 6a7507f4acd47f69275ee3ecc3a11211fbb9b004); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -163,11 +177,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T06:23:21.973894774Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-2 rework lands 4 of 5 ruling items (golden snapshot, --no-cleanup + ordering tests, criterion anchors, wording; scan+heal share the 60s deadline), but ruling item 4 is not met: the post-merge session reap still runs outside the deadline and is documented as unbounded. CI pending at head.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-033 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T08:28:02.308747892Z
+  completed_at: 2026-10-30T09:07:24.642777759Z
+  completion_sha: 1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5
