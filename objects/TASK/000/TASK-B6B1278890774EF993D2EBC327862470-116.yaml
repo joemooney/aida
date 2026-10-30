@@ -9,12 +9,12 @@ description: |-
   2. aida-cli-lib/src/doctor_cmd.rs, test this_repo_configures_a_ceiling_for_the_show_budget (~line 4261): assert budget_ms == 2000 and reword its message/doc-comment to cite this operator host decision (TASK-HOME-116); keep the ceiling_ms.is_some() limb unchanged. Without this, CI lib-1 is red (advisor ruling 16:53, reviewer round 1 on PR-3107).
   Leave init_cmd.rs scaffold defaults unchanged (host decision).
   Validate: cargo test --profile agent -p aida-cli-lib --lib this_repo_configures_a_ceiling_for_the_show_budget, then make check-ci-fast. Commit with the plain trailer for this task and push to the PR-3109 branch.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:37:09.111996566Z
-modified_at: 2026-10-30T00:23:27.900407603Z
+modified_at: 2026-10-30T00:30:40.427446351Z
 req_type: Task
 comments:
 - id: 01a18a14-846c-7710-b8c9-963d086cdf35
@@ -76,6 +76,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18a37-452b-74c3-828a-96e45f633336
+  author: aida-session-start
+  timestamp: 2026-10-30T00:30:40.427445149Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
