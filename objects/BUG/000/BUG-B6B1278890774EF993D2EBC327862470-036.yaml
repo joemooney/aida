@@ -51,7 +51,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T11:15:10.504605279Z
+modified_at: 2026-10-30T11:50:23.202533311Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -142,6 +142,13 @@ comments:
   created_at: 2026-10-30T11:12:08.679002031Z
   modified_at: 2026-10-30T11:12:08.679002031Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18ca5-90e2-7950-8434-c286f95421c1
+  author: joe
+  content: 'Round 3 (review of 6b1fbb6), commit 42ca189 on PR-3131, following the 04:14 ruling. F1+F2: both CI failures (lib-0 source_doc_comments and catalog_descriptions; contracts verify-manual) were the STORY-100 example in the doctor help and docs. Replaced with TYPE-100 / TYPE-HOME-100, no allowlist entries. F3: added resolver test bare_id_resolves_to_the_agreed_spec_never_a_local_number (aida-core cached_git_backend), anchored to .ac6dd87b. F4: renamed the subcommand to bare-id-twins and regenerated the goldens and audit. F5: the lint compares by split_bare_id keys, with a zero-padding test. F6: expand pads to {seq:03}, with a test. Local runs: make check-ci-fast is green (35 gates); the targeted bug_home_036, task_1082, story_1728, source_doc_comments, catalog_descriptions, node_alias and resolver tests pass. 3 doctor_cmd isolated tests fail only in this sandbox (read-only hermetic HOME) and are unrelated.'
+  created_at: 2026-10-30T11:50:23.202533311Z
+  modified_at: 2026-10-30T11:50:23.202533311Z
+  session_id: 01a18c85503d
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18b1f-e560-7f93-9902-8b36e5583aef
   author: joe
