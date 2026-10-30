@@ -8,12 +8,12 @@ description: |
   - Deviation RATIFIED: acceptance 2 is met by the explicit `aida mailbox retention prune` verb instead of relaxing the view rule. No change needed there.
   - REQUIRED FIX (bundle into PR-3112, then push for a delta re-review): mailbox_cli_policy (aida-cli-lib/src/mailbox_cmd.rs ~3105) classifies every MailboxCommand::Retention as StakeholderAction::Read, so read-only guest/requester seats can run the mutating prune (removes .git/worktrees/<admin>, including locked ones). Classify Retention::Prune without --dry-run as a write-class action; keep --dry-run and the other retention reads as Read. Add a test: a guest seat is refused for prune while the dry run is allowed.
   - Gate: LIGHT. One targeted `cargo test -p aida-cli-lib mailbox` run plus `make check-ci-fast`, then push. Do not run the full suite.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:33.145162743Z
-modified_at: 2026-10-30T03:24:30.142564115Z
+modified_at: 2026-10-30T03:27:48.910042820Z
 req_type: Task
 tags:
 - docs:impacted
@@ -112,6 +112,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18ad9-72ae-7181-8c0c-1eb6afb71c52
+  author: aida-session-start
+  timestamp: 2026-10-30T03:27:48.910038964Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
