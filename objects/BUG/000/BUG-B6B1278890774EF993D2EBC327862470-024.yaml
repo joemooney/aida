@@ -1,13 +1,20 @@
 id: 01a18a3e-f42a-7a10-8ec0-e11746b63e44
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-024
 title: Finished reviewer sessions linger and block the next review of the same PR
-description: '2026-10-29: reviewer lease 01a189c1 (worktree GONE) blocked aida queue work PR-3106 --role reviewer; dormant reviewer sessions for merged PR-3105 and ruled PR-3107 stayed in aida ps. Acceptance: a reviewer session ends its lease when its verdict is written or the reviewer process exits; a lease whose worktree is gone is reaped automatically.'
+description: |
+  2026-10-29: reviewer lease 01a189c1 (worktree GONE) blocked aida queue work PR-3106 --role reviewer; dormant reviewer sessions for merged PR-3105 and ruled PR-3107 stayed in aida ps. Acceptance: a reviewer session ends its lease when its verdict is written or the reviewer process exits; a lease whose worktree is gone is reaped automatically.
+
+  ADVISOR RULING 2026-10-30 03:28 (PR-3132 round 1). ONE rework push on PR-3132; BUNDLE:
+  1. (major) When release_exited_reviewer_lease (queue_cmd.rs ~14038) ends the reviewer lease at exit, ALSO tear down the aida-pr-N review worktree in the same step, after the verdict has been collected onto the ledger. Nothing in a finished review worktree is needed. If collection failed, keep both the lease and the worktree, and say so. Test: after a reviewer exits, both the lease and the aida-pr-N worktree are gone, and the TASK-1955 reap has nothing left to do.
+  2. (minor) Wiring tests: handle_queue_work releases a dead gone-worktree conflict without --force-claim; session_start (~2447) filters it before AutoEnd; run_standalone_reviewer calls the release.
+  3. (cosmetic) Pass the existing recovery verdict into release_gone_worktree_lease instead of rescanning the process table.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_024 session_reap` plus make check-ci-fast.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T10:26:17.171676175Z
+modified_at: 2026-10-30T10:27:00.030802621Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -71,6 +78,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18c59-4cdf-7a52-99f2-ed3cf1cde86c
+  author: joe
+  timestamp: 2026-10-30T10:27:05.055644115Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
