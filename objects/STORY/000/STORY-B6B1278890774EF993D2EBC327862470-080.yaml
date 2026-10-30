@@ -90,7 +90,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-29T23:55:17.081381717Z
+modified_at: 2026-10-30T00:06:20.777825567Z
 req_type: Story
 tags:
 - architecture
@@ -680,6 +680,16 @@ comments:
   modified_at: 2026-10-29T23:55:03.231469005Z
   session_id: 01a189cf0e41
   harness_version: 2.1.312 (Claude Code)
+- id: 01a18a20-ff69-7463-9c81-eba93d3882bb
+  author: joe
+  content: |-
+    Advisor ruling 2026-10-29 17:07, slice-2 round-2 (PR-3106 @ ec65dd90): CI red on two tests main passes (main 1db74dba green), so this PR regressed them. Fix both, nothing else:
+    1. aida-cli/tests/story_078_node_aliases.rs:748 node_alias_review_record_keys_the_verdict_under_the_canonical_id (CI cli-0). The verdict for a node-alias id must still be keyed under the canonical id after the ledger move; find where review record/collect now keys by the alias (or by PR only) and restore canonical keying. Do not edit the test's expectation.
+    2. aida-cli-lib/src/tests/queue_work_tests.rs:3684 status_sections::queue_work_tests::closed_refusal_does_not_count_as_outstanding (CI lib-1). The test panics at :3684:47 (an unwrap/expect); the hold/refusal projection now reads from the ledger, so a closed refusal is either missing or counted as outstanding. Fix the projection, not the test.
+    Validate with exactly those two targeted runs (cargo test --profile agent -p aida-cli --test story_078_node_aliases node_alias_review_record; cargo test --profile agent -p aida-cli-lib --lib closed_refusal_does_not_count_as_outstanding), then make check-ci-fast, push to the PR-3106 branch. LIGHT tier.
+  created_at: 2026-10-30T00:06:20.777825567Z
+  modified_at: 2026-10-30T00:06:20.777825567Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
