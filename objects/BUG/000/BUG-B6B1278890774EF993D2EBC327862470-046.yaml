@@ -17,12 +17,27 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-30T23:17:06.038259824Z
+modified_at: 2026-10-30T23:18:53.489218752Z
 req_type: Bug
 tags:
 - ids
 - sketch-required
 - store
+comments:
+- id: 01a18f1b-e931-7cb1-8306-cb73accc80d0
+  author: joe
+  content: |
+    AC5 AMENDED (operator 2026-10-30 16:18: a project may want IDs padded from the start). Replaces the original AC5:
+
+    5. One project setting, `[ids] seq_width` in .aida/config.toml (0 = no padding), governs BOTH minting and rendering:
+       a. New IDs are minted at that width (TASK-0001 when seq_width = 4). `aida init --id-width N` sets it at project creation.
+       b. Every rendered ID (list/show/JSON, the ID printed by `aida add`, suggested trace comments and commit trailers) is shown at that width, whatever padding the stored ID has.
+       c. Because identity is numeric (AC1), changing seq_width later renames nothing and collides with nothing: existing IDs still resolve under any padding and simply render at the new width. A test flips the width on a store with mixed-padding IDs and asserts lookups and rendering.
+       d. Defaults preserve today's look: legacy IDs 0, node-local IDs 3 (node-local keeps its own width key if one setting cannot express both; the sketch decides).
+       e. `aida list` aligns its ID column to the widest rendered ID.
+  created_at: 2026-10-30T23:18:53.489218752Z
+  modified_at: 2026-10-30T23:18:53.489218752Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
