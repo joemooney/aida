@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T01:51:11.755688668Z
+modified_at: 2026-10-30T05:02:46.370855766Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -30,6 +30,18 @@ comments:
     Operator priority changed to docs round2 before TASK117 completion. Work-in-progress committed locally as5292f3f222c; not pushed, no PR. Source implements canonical List + visible ls alias, existing status behavior, argv pre-parser routing, focused parse/alias test, docs/template text. Template sync completed. Initial make check-ci-fast completed35 gates. Targeted Rust test process was still compiling and was deliberately terminated (exit143) for operator priority; do not claim those tests passed. It can be resumed from cached artifacts after docs106/111/112/113 are handed back. Help snapshot still needs regeneration from actual definitions, and the fresh author self-check/PR workflow remain unfinished.
   created_at: 2026-10-30T01:51:11.755688668Z
   modified_at: 2026-10-30T01:51:11.755688668Z
+- id: 01a18b30-6262-7792-8cd2-46bcaea330f9
+  author: ai:codex:joe
+  content: |
+    Continuation progress after the docs round-2 priority work: all eight docs PR heads were plain-pushed, each passed 35 fast gates, and verified against origin/GitHub. Advisor handoff sent as a2fb5f67-1565-4706-ba6f-50c817d1e768 to the live advisor. See /tmp/aida-docs-round2-heads.json and the per-doc spec comments. No self-merge or author verdict.
+
+    TASK-117 worktree/lease were re-entered through aida worktree enter; original lease 01a18a5e6541 remains. WIP 5292f3f222c is intact. Added MCP negative-hint test coverage for both canonical list and legacy ls (07d8eb64787), then cleanly merged current main f0dfbd03d09 as cab0b71b520. The merge imports upstream changes only; the feature diff against main stays scoped to agent naming, tests, docs and the template master. Historical story_1728_main_policy.tsv retains ls invocations intentionally; do not regenerate that historical fixture.
+
+    VALIDATION IS STILL IN PROGRESS. An old-baseline snapshot-test compile was intentionally stopped with exit 143 when main's new node commands were noticed; no passing-test claim. The current required make check-ci-compile is live against the merged source, log /tmp/task117-compile.log (unified exec session 30829 in this conversation). Rust compiler CPU counters are advancing; do not launch a duplicate compile merely because the log is quiet. Snapshot regeneration from the actual clap definitions still remains, followed by make test-touched, targeted command-registry/policy/alias checks, a fresh author checker, final fast gate and /aida-pr. No TASK-117 push or PR yet.
+
+    An isolated runtime alias smoke probe is prepared at /tmp/task117-cli-smoke.py; run it only against the completed candidate binary under target/worktrees/aida-taskb6b1278890774ef993d2ebc327862470117/agent/aida. It creates only a temporary project/HOME. Every new push/new PR still requires a real inbox check, and new PR number/full SHA must be mailed to the advisor. After TASK-117, follow advisor queue mail 5647920e in order; re-read actual spec/current mail before each pickup. No user confirmation is pending.
+  created_at: 2026-10-30T05:02:46.370855766Z
+  modified_at: 2026-10-30T05:02:46.370855766Z
 history:
 - id: 01a18a38-865a-73b1-baec-dc0e2fc248fb
   author: joe
