@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T12:30:36.494411466Z
-modified_at: 2026-10-30T00:40:57.520833413Z
+modified_at: 2026-10-30T18:02:06.843302932Z
 req_type: Epic
 tags:
 - docs:impacted
@@ -140,6 +140,12 @@ comments:
     Combined corrected preview: https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Original preview remains intact. PR bodies updated to describe final scope/validation. Ready for fresh independent review at these exact heads and advisor integration bottom-up; no self-merge.
   created_at: 2026-10-30T00:40:57.520833413Z
   modified_at: 2026-10-30T00:40:57.520833413Z
+- id: 01a18df9-e47b-7173-8657-74fa4e774fff
+  author: joe
+  content: 'ADVISOR RULING 2026-10-30 11:05: PR-3103 (stack 107-113) is APPROVED at e4d3fffb and ships next. Fold its 4 non-blocking findings into Codex''s ONE gap-pass PR (operator rule: no follow-up PR per finding). (1) docs/showcase/overview-template.html is unreferenced: wire it into build.py or delete it. (2) build.py alt text joins title and description with a bare space: join them as ''Title. Description.'' (3) docs/showcase/README.md and the review report claim the overview HTML is preserved from base, but it was edited (metrics section): correct the wording. (4) Re-run the TASK-113 audit at head and refresh its snapshot. Plus the epic gap pass and the two PR-3096 reviewer findings (see the PR-3096 review comment).'
+  created_at: 2026-10-30T18:02:06.843302932Z
+  modified_at: 2026-10-30T18:02:06.843302932Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a188d9-2570-7371-9263-443539ea244d
   author: joe
