@@ -2159,7 +2159,9 @@ mod forge_seam_tests {
             "[forge]\nprovider = \"github\"\n",
         )
         .unwrap();
-        std::fs::write(tmp.path().join(".aida/merge-holds"), "occupied").unwrap();
+        // M1 slice 2: holds live on the gate ledger; occupy its directory.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        std::fs::write(tmp.path().join(".aida/gate-ledger"), "occupied").unwrap();
         let detail = "guard `Run clippy` could not complete: timed out";
         driver.hold_inconclusive_publication("claude/bug-1714", detail);
 
@@ -2213,7 +2215,9 @@ mod forge_seam_tests {
             "[forge]\nprovider = \"github\"\n",
         )
         .unwrap();
-        std::fs::write(tmp.path().join(".aida/merge-holds"), "occupied").unwrap();
+        // M1 slice 2: holds live on the gate ledger; occupy its directory.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        std::fs::write(tmp.path().join(".aida/gate-ledger"), "occupied").unwrap();
         let detail = "guard `Run clippy` could not complete: timed out";
         driver.hold_inconclusive_publication("claude/bug-1714", detail);
 

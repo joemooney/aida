@@ -64,9 +64,17 @@ fn rework(key: &str) -> mh::MergeHoldRecord {
 fn refuse_both(root: &Path) {
     for key in [A, B] {
         record(root, key, "request-changes", OLD);
-        mh::write_typed_hold(root, &rework(key)).unwrap();
-        std::fs::remove_file(rv::verdict_path(root, key)).unwrap();
+        mh::place_hold(root, &rework(key)).unwrap();
+        // M1 slice 2: no current file is written, so the launcher's clear
+        // has nothing to remove; the round stays on the gate ledger.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        assert!(!rv::verdict_path(root, key).exists());
     }
+}
+
+/// A recorded release on PR's gate ledger.
+fn has_release(root: &Path) -> bool {
+    mh::recorded_clearance(root, PR).is_some()
 }
 
 fn store() -> aida_core::RequirementsStore {
@@ -138,11 +146,13 @@ fn release_hooks(
             },
             covered_specs: &|| Ok((vec![A.into(), B.into()], store.clone())),
             read_body: &|key| {
-                Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
-                    root, key,
-                ))?)?)
+                Ok(serde_json::from_str(
+                    &rv::current_verdict(root, key)
+                        .with_context(|| format!("arming verdict {key} is missing"))?
+                        .body,
+                )?)
             },
-            read_history: &|key| RetainedHistory::beside(&rv::verdict_path(root, key)),
+            read_history: &|key| RetainedHistory::projected(root, key),
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[root], PR, ids).map_err(anyhow::Error::msg)
             },
@@ -165,8 +175,8 @@ fn release_hooks(
 fn composing_rework_holds_keeps_every_refusal() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    mh::write_typed_hold(root, &rework(A)).unwrap();
-    mh::write_typed_hold(root, &rework(B)).unwrap();
+    mh::place_hold(root, &rework(A)).unwrap();
+    mh::place_hold(root, &rework(B)).unwrap();
     let hold = mh::read_hold_record(root, PR).unwrap();
     assert_eq!(hold.verdict_ref.as_ref().unwrap().key, B);
     let shadows: Vec<_> = hold
@@ -181,7 +191,7 @@ fn composing_rework_holds_keeps_every_refusal() {
         .collect();
     assert_eq!(shadows, vec![(mh::HoldReasonKind::Rework, Some(A))]);
     // Re-arming on the same verdict replaces it rather than stacking.
-    mh::write_typed_hold(root, &rework(B)).unwrap();
+    mh::place_hold(root, &rework(B)).unwrap();
     assert_eq!(mh::read_hold_record(root, PR).unwrap().absorbed.len(), 1);
     assert_eq!(
         arming_refs(&mh::read_hold_record(root, PR).unwrap())
@@ -206,8 +216,8 @@ fn an_approval_of_one_spec_does_not_release_an_unanswered_refusal_on_another() {
     let (result, comments) = release(root, &[HEAD]);
     let error = format!("{:#}", result.unwrap_err());
     assert!(error.contains("the refusal on TASK-51"), "{error}");
-    assert!(mh::hold_path(root, PR).exists(), "the hold stays armed");
-    assert!(!mh::clearance_path(root, PR).exists());
+    assert!(mh::hold_is_open(root, PR), "the hold stays armed");
+    assert!(!has_release(root));
     assert!(comments.is_empty());
 }
 
@@ -222,9 +232,8 @@ fn approvals_answering_every_refusal_release_and_record_each() {
 
     let (result, comments) = release(root, &[HEAD]);
     assert_eq!(result.unwrap(), Outcome::Released { mandate: None });
-    assert!(!mh::hold_path(root, PR).exists());
-    let audit: Value =
-        serde_json::from_slice(&std::fs::read(mh::clearance_path(root, PR)).unwrap()).unwrap();
+    assert!(!mh::hold_is_open(root, PR));
+    let audit = Value::Object(mh::recorded_clearance(root, PR).unwrap());
     assert_eq!(audit["released_by_verdict"]["key"], B);
     assert_eq!(audit["also_released_by"][0]["key"], A);
     assert!(comments[0].contains("TASK-51"), "{comments:?}");
@@ -266,27 +275,31 @@ fn a_refused_second_pass_supersedes_its_clearance() {
     let (result, comments) = release(root, &[HEAD, HEAD, MOVED]);
     let error = format!("{:#}", result.unwrap_err());
     assert!(error.contains("PR head moved before release"), "{error}");
-    assert!(mh::hold_path(root, PR).exists(), "the hold stays armed");
+    assert!(mh::hold_is_open(root, PR), "the hold stays armed");
     assert!(
-        !mh::clearance_path(root, PR).exists(),
+        !has_release(root)
+            && crate::gate::ledger::hold::state(root, PR)
+                .authorized
+                .is_none(),
         "the withdrawn clearance must not stay where readers find a release"
     );
-    let dir = mh::clearance_path(root, PR).parent().unwrap().to_path_buf();
-    let kept: Vec<_> = std::fs::read_dir(&dir)
-        .unwrap()
-        .flatten()
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
+    let kept: Vec<_> =
+        crate::gate::ledger::store::read_file(root, crate::gate::ledger::ChangeKey::pr(PR))
+            .into_iter()
+            .map(|e| e.body)
+            .collect();
     assert!(
-        kept.iter().any(|n| n.starts_with("PR-51.superseded-")),
-        "{kept:?}"
+        kept.iter()
+            .any(|b| matches!(b, crate::gate::ledger::EventBody::ReleaseWithdrawn { .. })),
+        "the withdrawn authorization stays on the ledger: {kept:?}"
     );
     assert!(
         comments.last().unwrap().contains("authorization withdrawn"),
         "{comments:?}"
     );
 
-    std::fs::remove_file(mh::hold_path(root, PR)).unwrap();
+    // A hand-removal of the hold's evidence is still reported as tampering.
+    std::fs::remove_file(mh::hold_ledger_file(root, PR)).unwrap();
     assert_eq!(mh::unrecorded_marker_removals(root), vec![PR]);
 }
 
@@ -310,7 +323,7 @@ fn a_contended_hold_lock_refuses_placement_and_release() {
         .unwrap();
     holder.lock_exclusive().unwrap();
 
-    let placed = mh::write_typed_hold(root, &rework("TASK-53")).unwrap_err();
+    let placed = mh::place_hold(root, &rework("TASK-53")).unwrap_err();
     assert!(
         placed.to_string().contains("merge-hold PR-51 is busy"),
         "{placed}"
@@ -318,11 +331,8 @@ fn a_contended_hold_lock_refuses_placement_and_release() {
     let (released, _) = release(root, &[HEAD]);
     let released = format!("{:#}", released.unwrap_err());
     assert!(released.contains("merge-hold PR-51 is busy"), "{released}");
-    assert!(mh::hold_path(root, PR).exists());
-    assert!(
-        !mh::clearance_path(root, PR).exists(),
-        "a busy release leaves no clearance"
-    );
+    assert!(mh::hold_is_open(root, PR));
+    assert!(!has_release(root), "a busy release leaves no clearance");
     assert_eq!(mh::read_hold_record(root, PR).unwrap().absorbed.len(), 1);
 
     FileExt::unlock(&holder).unwrap();
@@ -461,7 +471,7 @@ esac
         Some(REVIEWER.into()),
     ));
     hold.spec = Some("TASK-61".into());
-    mh::write_typed_hold(&root, &hold).unwrap();
+    mh::place_hold(&root, &hold).unwrap();
 
     // Verdict read: the arming verdict is looked up on disk.
     let missing = format!("{:#}", auto_release(&root, 61).unwrap_err());
@@ -478,14 +488,13 @@ esac
 
     // Requirement lookup: the store holds TASK-62, not TASK-61.
     record(&root, "TASK-61", "request-changes", OLD);
-    std::fs::remove_file(rv::verdict_path(&root, "TASK-61")).unwrap();
     record(&root, "TASK-61", "approved", HEAD);
     let unresolved = format!("{:#}", auto_release(&root, 61).unwrap_err());
     assert!(
         unresolved.contains("covered spec is missing or ambiguous: TASK-61 resolves to 0"),
         "{unresolved}"
     );
-    assert!(mh::hold_path(&root, 61).exists());
+    assert!(mh::hold_is_open(&root, 61));
 }
 
 /// TASK-1757 (5), observed on #2638: the approval was recorded under the
@@ -498,8 +507,7 @@ fn an_approval_under_another_key_names_the_key_the_release_reads() {
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
     record(root, A, "request-changes", OLD);
-    mh::write_typed_hold(root, &rework(A)).unwrap();
-    std::fs::remove_file(rv::verdict_path(root, A)).unwrap();
+    mh::place_hold(root, &rework(A)).unwrap();
     record(root, A, "request-changes", OLD);
     record(root, B, "approved", HEAD);
     let hold = mh::read_hold_record(root, PR).unwrap();
@@ -541,11 +549,8 @@ fn an_overlapping_release_keeps_the_winners_clearance() {
     );
     let error = format!("{:#}", loser.unwrap_err());
     assert!(error.contains("already removed the hold"), "{error}");
-    assert!(!mh::hold_path(root, PR).exists());
-    assert!(
-        mh::clearance_path(root, PR).exists(),
-        "the winner's clearance stands"
-    );
+    assert!(!mh::hold_is_open(root, PR));
+    assert!(has_release(root), "the winner's clearance stands");
     assert!(
         !comments
             .iter()
@@ -570,7 +575,17 @@ fn a_withdrawn_clearance_keeps_the_hold_armed() {
 
     let (result, _) = release_hooked(root, &[HEAD], &|i| {
         if i == 2 {
-            std::fs::remove_file(mh::clearance_path(root, PR)).unwrap();
+            // A concurrent release withdrew this authorization.
+            crate::gate::ledger::hold::append(
+                root,
+                PR,
+                crate::gate::ledger::EventBody::ReleaseWithdrawn {
+                    reason: "a concurrent release".into(),
+                },
+                None,
+                None,
+            )
+            .unwrap();
         }
     });
     let error = format!("{:#}", result.unwrap_err());
@@ -578,7 +593,7 @@ fn a_withdrawn_clearance_keeps_the_hold_armed() {
         error.contains("withdrawn by a concurrent release"),
         "{error}"
     );
-    assert!(mh::hold_path(root, PR).exists(), "the hold stays armed");
+    assert!(mh::hold_is_open(root, PR), "the hold stays armed");
     assert!(mh::unrecorded_marker_removals(root).is_empty());
 }
 
@@ -632,13 +647,10 @@ fn a_busy_overlapping_release_keeps_the_winners_clearance() {
     assert!(error.contains("merge-hold PR-51 is busy"), "{error}");
     if winner.borrow().is_none() {
         assert!(
-            mh::hold_path(root, PR).exists(),
+            mh::hold_is_open(root, PR),
             "the busy loser left the hold armed"
         );
-        assert!(
-            !mh::clearance_path(root, PR).exists(),
-            "the busy loser recorded nothing"
-        );
+        assert!(!has_release(root), "the busy loser recorded nothing");
     }
 
     FileExt::unlock(&holder).unwrap();
@@ -647,11 +659,8 @@ fn a_busy_overlapping_release_keeps_the_winners_clearance() {
         .into_inner()
         .unwrap_or_else(|| release(root, &[HEAD]).0);
     assert_eq!(winner.unwrap(), Outcome::Released { mandate: None });
-    assert!(!mh::hold_path(root, PR).exists());
-    assert!(
-        mh::clearance_path(root, PR).exists(),
-        "the winner's clearance stands"
-    );
+    assert!(!mh::hold_is_open(root, PR));
+    assert!(has_release(root), "the winner's clearance stands");
     assert!(
         !comments
             .iter()

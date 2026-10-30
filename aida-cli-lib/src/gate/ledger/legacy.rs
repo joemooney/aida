@@ -1,6 +1,8 @@
-//! Read-only access to the legacy verdict files a change's ledger replaces:
+//! Read-only access to the legacy files a change's ledger replaces:
 //! `.aida/review-verdicts/<CHANGE>.json` and its per-commit archive
-//! `.aida/review-verdicts/<CHANGE>/<sha>.json`. Code here never writes or
+//! `.aida/review-verdicts/<CHANGE>/<sha>.json`, the merge-hold marker
+//! `.aida/merge-holds/PR-<N>` and its clearance
+//! `.aida/merge-hold-clearances/PR-<N>.json`. Code here never writes or
 //! deletes them (signoff Q4: read-through, no bulk rewrite).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
@@ -50,15 +52,77 @@ pub(crate) fn verdict_files(root: &Path, change: ChangeKey) -> Vec<LegacyFile> {
     out
 }
 
+/// The legacy merge-hold marker directory under `root`.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn marker_dir(root: &Path) -> PathBuf {
+    root.join(".aida").join("merge-holds")
+}
+
+/// The legacy merge-hold marker for PR `pr` under the store root `root`.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn hold_marker_path(root: &Path, pr: u64) -> PathBuf {
+    marker_dir(root).join(format!("PR-{pr}"))
+}
+
+/// The legacy clearance record for PR `pr` under the store root `root`.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn clearance_file_path(root: &Path, pr: u64) -> PathBuf {
+    root.join(".aida")
+        .join("merge-hold-clearances")
+        .join(format!("PR-{pr}.json"))
+}
+
+/// The PRs with a legacy marker file under `root`, ascending.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn marker_prs(root: &Path) -> Vec<u64> {
+    let dir = marker_dir(root);
+    let mut prs: Vec<u64> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            e.file_name()
+                .to_str()?
+                .strip_prefix("PR-")?
+                .parse::<u64>()
+                .ok()
+        })
+        .collect();
+    prs.sort_unstable();
+    prs.dedup();
+    prs
+}
+
+/// The legacy hold files of a PR change, verbatim, for its import event.
+fn hold_files(root: &Path, change: ChangeKey) -> Vec<LegacyFile> {
+    if change.forge != super::ChangeForge::Pr {
+        return Vec::new();
+    }
+    [
+        hold_marker_path(root, change.number),
+        clearance_file_path(root, change.number),
+    ]
+    .into_iter()
+    .filter_map(|path| {
+        let body = std::fs::read_to_string(&path).ok()?;
+        Some(LegacyFile {
+            path: path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .into_owned(),
+            body,
+        })
+    })
+    .collect()
+}
+
 /// The `legacy-imported` event for a change's first ledger write. Always
 /// returned, even with no files, so the import happens exactly once.
 pub(crate) fn import_event(root: &Path, change: ChangeKey) -> GateEvent {
-    GateEvent::new(
-        change,
-        EventBody::LegacyImported {
-            legacy: verdict_files(root, change),
-        },
-    )
+    let mut legacy = verdict_files(root, change);
+    legacy.extend(hold_files(root, change));
+    GateEvent::new(change, EventBody::LegacyImported { legacy })
 }
 
 /// The root and change of a PR-keyed legacy verdict path laid out as

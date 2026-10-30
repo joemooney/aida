@@ -82,8 +82,11 @@ fn classes_are_stored_alongside_findings_and_old_files_parse() {
         serde_json::json!(["incomplete-fix", "untested-path"])
     );
     // The existing reader is unaffected by the new field.
-    let body =
-        std::fs::read_to_string(dir.path().join(".aida/review-verdicts/TASK-1.json")).unwrap();
+    // M1 slice 2: the record is on the gate ledger, not a verdict file.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let body = crate::gate::review_verdict::current_verdict(dir.path(), "TASK-1")
+        .expect("the recorded verdict")
+        .body;
     let v = crate::gate::review_verdict::parse_recorded_verdict(&body).unwrap();
     assert_eq!(v.findings.len(), 2);
 

@@ -98,6 +98,11 @@ fn kinds(events: &[GateEvent]) -> Vec<&'static str> {
         .map(|e| match e.body {
             EventBody::Verdict { .. } => "verdict",
             EventBody::LegacyImported { .. } => "legacy-imported",
+            EventBody::Hold { .. } => "hold",
+            EventBody::HoldRelease { .. } => "hold-release",
+            EventBody::ReleaseAuthorized { .. } => "release-authorized",
+            EventBody::ReleaseWithdrawn { .. } => "release-withdrawn",
+            EventBody::LabelSync { .. } => "label-sync",
         })
         .collect()
 }
@@ -299,8 +304,12 @@ fn the_first_verdict_write_is_recorded_once() {
     assert_eq!(events[1].verdict_record(), Some(&rec));
 }
 
+/// M1 slice 2 (brief item 3): a spec-only verdict goes onto the ledger too,
+/// on the spec's unbound entry while no change is indexed for it; slice 1
+/// left it in the legacy file only.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
-fn a_pr_keyed_verdict_write_lands_on_the_ledger_and_a_spec_keyed_one_does_not() {
+fn a_pr_keyed_verdict_write_lands_on_the_change_and_a_spec_keyed_one_on_the_spec() {
     // An uncontained writer, as the primary side runs it.
     let _env = uncontained();
     let (_tmp, root) = root();
@@ -310,8 +319,13 @@ fn a_pr_keyed_verdict_write_lands_on_the_ledger_and_a_spec_keyed_one_does_not() 
         .unwrap();
     rv::write_verdict_object(&rv::verdict_path(&root, "STORY-8"), &rec).unwrap();
     assert_eq!(project::newest_verdict(&root, "PR-15"), Some(rec.clone()));
-    assert_eq!(project::newest_verdict(&root, "STORY-7"), Some(rec));
-    assert_eq!(project::newest_verdict(&root, "STORY-8"), None);
+    assert_eq!(project::newest_verdict(&root, "STORY-7"), Some(rec.clone()));
+    assert_eq!(project::newest_verdict(&root, "STORY-8"), Some(rec));
+    assert!(
+        !rv::verdict_path(&root, "STORY-8").exists(),
+        "no legacy file is written for a spec-only verdict"
+    );
+    assert!(store::unbound_file(&root, "STORY-8").is_file());
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -422,14 +436,27 @@ fn the_ledger_answers_a_read_only_where_the_file_knows_less() {
         rv::VerdictKind::Approved
     );
 
+    // Slice 2: the merge-close annotation is a ledger event of the same
+    // round, and the same round on both sides is the ledger's.
     let mut closed = record("approved", &first, Some(&a));
     closed.insert("closed_by_merge".into(), "cccccccc".into());
-    let file = rv::verdict_path(&root, "PR-14");
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(&file, serde_json::to_string(&closed).unwrap()).unwrap();
+    record_event(&root, verdict(change, None, closed)).unwrap();
     assert!(rv::read_recorded_verdict(&root, "PR-14")
         .unwrap()
         .is_closed());
+    let file = rv::verdict_path(&root, "PR-14");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &file,
+        serde_json::to_string(&record("approved", &first, Some(&a))).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        rv::read_recorded_verdict(&root, "PR-14")
+            .unwrap()
+            .is_closed(),
+        "a same-round legacy file does not outrank the ledger's annotation"
+    );
 
     let older = record("approved", &ts(-60), Some(&a));
     std::fs::write(&file, serde_json::to_string(&older).unwrap()).unwrap();
@@ -810,8 +837,7 @@ fn retained_history_includes_the_ledger_rounds() {
     );
     ledger_holds(&root, ChangeKey::pr(43), record("approved", &ts(-60), None));
     let history =
-        crate::gate::rework_hold_release::RetainedHistory::with_ledger(None, &root, "PR-43")
-            .unwrap();
+        crate::gate::rework_hold_release::RetainedHistory::projected(&root, "PR-43").unwrap();
     let verdicts: Vec<_> = history
         .archived
         .iter()
@@ -1021,18 +1047,18 @@ fn a_refused_current_file_keeps_the_phase3_archive_fallback_closed() {
     let (_tmp, root) = root();
     let path = rv::verdict_path(&root, "PR-49");
     let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    // Two rounds as an older binary left them: the current file at
+    // OTHER_HEAD and a per-commit archive entry for each head (M1 slice 2
+    // writes neither; the phase-3 fallback reads them through).
+    let archive = rv::verdict_archive_dir(&path).unwrap();
+    std::fs::create_dir_all(&archive).unwrap();
     for sha in [HEAD, OTHER_HEAD] {
-        rv::record_verdict_at_path(
-            &root,
-            &path,
-            Some("approved"),
-            Some(sha),
-            None,
-            None,
-            &[],
-            "reviewer",
-        )
-        .unwrap();
+        let body = format!(
+            r#"{{"verdict":"approved","reviewed_sha":"{sha}","recorded_by":"reviewer","recorded_at":"{}"}}"#,
+            chrono::Utc::now().to_rfc3339()
+        );
+        std::fs::write(archive.join(format!("{sha}.json")), &body).unwrap();
+        std::fs::write(&path, &body).unwrap();
     }
     // The ledger's current round is at OTHER_HEAD, like the file's.
     let mut rec = record("approved", &ts(0), None);
@@ -1360,46 +1386,150 @@ fn call_sites(src: &str, name: &str) -> usize {
         .count()
 }
 
-/// AC6 ratchet (finding 5): non-test code may not add calls to the legacy
-/// gate-state writers, which build their paths through helpers and so add
-/// no directory literal. Counted per writer, definitions excluded. Slice 2
-/// takes the verdict writers to 0 (advisor ruling); slice 3 the rest.
-/// `collect_standalone_verdict` writes the ledger only and is not listed;
-/// `adopt_direct_write`'s archive is counted as `archive_round_by_sha`.
+/// AC6 ratchet (finding 5), M1 slice 2: every legacy verdict and hold file
+/// writer is gone, so each baseline is 0 (advisor ruling: the story cannot
+/// complete with dual writes). The record funnels — `record_verdict`,
+/// `record_verdict_at_path`, `write_verdict_object(_for_spec)`,
+/// `close_verdict_on_merge`, `stamp_pr_review_verdict`, `place_hold`,
+/// `release_hold*` — now append the gate ledger only and are not legacy
+/// writers ([`verdict_and_hold_writers_write_no_legacy_file`] proves it).
+/// Inline `#[cfg(test)]` modules are stripped before counting.
+///
+/// `write_verdict_atomic` is the one atomic file publisher left, and only at
+/// the sites below, each with its reason. `record_carry_over` is slice 3.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
 fn legacy_gate_writers_do_not_gain_call_sites() {
-    const BASELINE: &[(&str, usize)] = &[
-        // Verdict files.
-        ("write_verdict_atomic", 8),
-        ("write_verdict_object", 3),
-        ("write_verdict_object_for_spec", 3),
-        ("record_verdict", 2),
-        ("record_verdict_at_path", 2),
-        ("close_verdict_on_merge", 3),
-        ("stamp_pr_review_verdict", 3),
-        ("archive_round_by_sha", 2),
-        // Merge holds and their clearances.
-        ("write_hold", 4),
-        ("write_typed_hold", 15),
-        ("write_typed_hold_context", 3),
-        ("write_marker", 9),
-        ("write_marker_with_route", 1),
-        ("place_hand_hold", 1),
-        ("record_clearance", 2),
-        ("record_clearance_with_verdict", 3),
-        ("record_clearance_by", 2),
-        ("clear_hold", 6),
-        // Carry-over proofs.
-        ("record_carry_over", 1),
+    const GONE: &[&str] = &[
+        // Verdict files and their per-commit archive.
+        "write_verdict_file",
+        "archive_round_by_sha",
+        "prepare_archive_round",
+        "migrate_sidecars_to_archive",
+        "ensure_sidecars_archived",
+        // Merge-hold markers and their clearances.
+        "write_typed_hold",
+        "write_typed_hold_context",
+        "write_typed_hold_replacing",
+        "write_marker_with_route",
+        "write_marker_files",
+        "place_hand_hold",
+        "record_clearance",
+        "record_clearance_with_verdict",
+        "record_clearance_by",
+        "record_clearance_full",
+        "record_mandate_clearance",
+        "clear_hold",
+        "supersede_clearance",
+        "local_hold_path",
+        "local_clearance_path",
+        "superseded_clearance_path",
     ];
-    let sources = non_test_sources();
-    for (writer, baseline) in BASELINE {
-        let found: usize = sources.iter().map(|(_, src)| call_sites(src, writer)).sum();
+    const ATOMIC_ALLOWED: &[(&str, usize, &str)] = &[
+        (
+            "gate/review_verdict.rs",
+            2,
+            "a contained seat's hand-off file in its own seat clone (the launcher collects it), \
+             and the operator's one-shot `aida review backfill-shas` over legacy files",
+        ),
+        (
+            "review_carryover.rs",
+            1,
+            "carry-over proof records: slice 3 moves them onto the ledger",
+        ),
+    ];
+    const SLICE_3: &[(&str, usize)] = &[("record_carry_over", 1)];
+    let src_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let stripped: Vec<(String, String)> = non_test_sources()
+        .iter()
+        .map(|(p, body)| {
+            let rel = p
+                .strip_prefix(&src_root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .replace('\\', "/");
+            (rel, without_test_modules(body))
+        })
+        .collect();
+    for writer in GONE {
+        let found: Vec<&str> = stripped
+            .iter()
+            .filter(|(_, src)| call_sites(src, writer) > 0)
+            .map(|(p, _)| p.as_str())
+            .collect();
         assert!(
-            found <= *baseline,
-            "{found} non-test call sites of {writer} (baseline {baseline}): new gate state goes on the gate ledger (gate::ledger), not a legacy file writer"
+            found.is_empty(),
+            "non-test calls of the legacy writer {writer} in {found:?}: gate state goes on the gate ledger (gate::ledger)"
         );
     }
+    for (file, src) in &stripped {
+        let n = call_sites(src, "write_verdict_atomic");
+        let allowed = ATOMIC_ALLOWED
+            .iter()
+            .find(|(f, _, _)| f == file)
+            .map_or(0, |(_, n, _)| *n);
+        assert!(
+            n <= allowed,
+            "{n} non-test calls of write_verdict_atomic in {file} (allowed {allowed}): verdicts go on the gate ledger"
+        );
+    }
+    for (writer, baseline) in SLICE_3 {
+        let found: usize = stripped
+            .iter()
+            .map(|(_, src)| call_sites(src, writer))
+            .sum();
+        assert!(
+            found <= *baseline,
+            "{found} non-test calls of {writer} (baseline {baseline})"
+        );
+    }
+}
+
+/// The record funnels and every hold writer leave no legacy file behind:
+/// recording, closing, placing, label-syncing and releasing all land on the
+/// ledger, and `.aida/review-verdicts/` and `.aida/merge-holds/` stay absent.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn verdict_and_hold_writers_write_no_legacy_file() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    rv::record_verdict(
+        &root,
+        "PR-61",
+        Some("request-changes"),
+        Some("a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0"),
+        None,
+        Some("fix it"),
+        &["one".to_string()],
+        "reviewer-x",
+    )
+    .unwrap();
+    rv::record_verdict(
+        &root,
+        "STORY-61",
+        Some("approved"),
+        None,
+        None,
+        None,
+        &[],
+        "r",
+    )
+    .unwrap();
+    assert!(rv::close_verdict_on_merge(&root, "PR-61", "deadbeef").unwrap());
+    let hold = mh::typed_hold(61, mh::HoldReasonKind::Supervision, "held", None);
+    mh::place_hold(&root, &hold).unwrap();
+    mh::record_label_state(&root, 61, &mh::LabelState::Synced).unwrap();
+    mh::release_hold(&root, &hold, &mh::PrincipalIdentity::human("joe"), None).unwrap();
+    for legacy in ["review-verdicts", "merge-holds", "merge-hold-clearances"] {
+        assert!(
+            !root.join(".aida").join(legacy).exists(),
+            "{legacy} must not be written"
+        );
+    }
+    let closed = rv::read_recorded_verdict(&root, "PR-61").unwrap();
+    assert_eq!(closed.closed_by_merge.as_deref(), Some("deadbeef"));
+    assert!(rv::read_recorded_verdict(&root, "STORY-61").is_some());
 }
 
 #[test]
@@ -1415,8 +1545,8 @@ fn call_sites_skip_definitions_and_longer_names() {
 fn legacy_gate_paths_do_not_gain_new_references() {
     const BASELINE: &[(&str, usize)] = &[
         ("review-verdicts", 32),
-        ("merge-holds", 3),
-        ("merge-hold-clearances", 2),
+        ("merge-holds", 0),
+        ("merge-hold-clearances", 0),
         ("review-carryover", 1),
         ("review-in-progress", 6),
     ];
@@ -1437,4 +1567,398 @@ fn legacy_gate_paths_do_not_gain_new_references() {
             "{found} references to {needle} in non-test code (baseline {baseline}): new gate state goes on the gate ledger (gate::ledger), not the legacy directory"
         );
     }
+}
+
+// ---- M1 slice 2: holds on the ledger (AC3) ----
+
+/// AC3: a release appends a `hold-release` event; the `hold` it answers
+/// stays on the ledger, so "a hold existed and was cleared" is evidence,
+/// not an absence.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_release_appends_and_keeps_the_hold_as_evidence() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let hold = mh::typed_hold(71, mh::HoldReasonKind::Supervision, "supervised", None);
+    mh::place_hold(&root, &hold).unwrap();
+    assert!(mh::hold_is_open(&root, 71));
+    mh::release_hold(&root, &hold, &mh::PrincipalIdentity::human("joe"), None).unwrap();
+    assert!(mh::read_hold_record(&root, 71).is_none());
+    let events = store::read_file(&root, ChangeKey::pr(71));
+    assert_eq!(
+        kinds(&events),
+        ["legacy-imported", "hold", "hold-release"],
+        "the release is appended after the hold it answers"
+    );
+    let cleared = mh::human_recorded_clearance(&root, 71).expect("a human release");
+    assert_eq!(cleared.cleared_by, "human:joe");
+    // A new placement closes the release: it no longer answers.
+    mh::place_hold(&root, &hold).unwrap();
+    assert!(mh::recorded_clearance(&root, 71).is_none());
+    assert!(mh::human_recorded_clearance(&root, 71).is_none());
+}
+
+/// AC3: the ship-held mandate's "a hold existed and was cleared" and the
+/// awaiting surface read the ledger alone; no marker or clearance file is
+/// involved at any point.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_cleared_hold_is_read_from_the_ledger_without_a_marker() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let hold = mh::typed_hold(72, mh::HoldReasonKind::Supervision, "supervised", None);
+    mh::place_hold(&root, &hold).unwrap();
+    assert_eq!(mh::list_holds(&root), vec![(72, "supervised".to_string())]);
+    mh::release_hold(&root, &hold, &mh::PrincipalIdentity::human("joe"), None).unwrap();
+    assert!(mh::list_holds(&root).is_empty());
+    assert!(mh::human_recorded_clearance(&root, 72).is_some());
+    assert!(mh::unrecorded_marker_removals(&root).is_empty());
+    assert!(!root.join(".aida/merge-holds").exists());
+    assert!(!root.join(".aida/merge-hold-clearances").exists());
+}
+
+/// AC6 for holds: a legacy marker is read through while the ledger has no
+/// placement or release for the PR; an unreadable one still holds
+/// (TASK-1238); a marker older than the ledger's last release does not
+/// reopen it, and a newer one (an older binary placed it) does.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn legacy_markers_are_read_through_until_the_ledger_answers() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let marker = legacy::hold_marker_path(&root, 73);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "legacy supervised hold\n").unwrap();
+    let legacy_hold = mh::read_hold_record(&root, 73).expect("read through");
+    assert!(legacy_hold.legacy);
+
+    // Releasing imports the marker-held hold first, then releases it.
+    mh::release_hold(
+        &root,
+        &legacy_hold,
+        &mh::PrincipalIdentity::human("joe"),
+        None,
+    )
+    .unwrap();
+    assert!(
+        mh::read_hold_record(&root, 73).is_none(),
+        "the old marker no longer holds"
+    );
+    let events = store::read_file(&root, ChangeKey::pr(73));
+    assert_eq!(kinds(&events), ["legacy-imported", "hold", "hold-release"]);
+    let EventBody::LegacyImported { legacy } = &events[0].body else {
+        panic!("first event is the import");
+    };
+    assert!(
+        legacy.iter().any(|f| f.body == "legacy supervised hold\n"),
+        "the marker body is preserved verbatim"
+    );
+
+    // An older binary writes a marker after the release: it holds again.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&marker, "re-placed by an older binary\n").unwrap();
+    assert_eq!(
+        mh::read_hold(&root, 73).as_deref(),
+        Some("re-placed by an older binary")
+    );
+
+    // An unreadable marker on a PR with no ledger events holds (fail closed).
+    #[cfg(unix)]
+    {
+        let dir_marker = legacy::hold_marker_path(&root, 74);
+        std::fs::create_dir_all(&dir_marker).unwrap();
+        let held = mh::read_hold_record(&root, 74).expect("unreadable marker holds");
+        assert_eq!(held.reason_kind, mh::HoldReasonKind::Unknown);
+    }
+}
+
+/// A label sync and an auto-release authorization are recorded as events
+/// on the open hold; a withdrawn authorization no longer counts.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn label_sync_and_release_authorization_are_ledger_events() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let hold = mh::typed_hold(75, mh::HoldReasonKind::Rework, "changes requested", None);
+    mh::place_hold(&root, &hold).unwrap();
+    mh::record_label_state(&root, 75, &mh::LabelState::Synced).unwrap();
+    assert_eq!(mh::read_label_state(&root, 75), mh::LabelState::Synced);
+    let clearance = mh::clearance_for(&hold, "auto-release", None, None).unwrap();
+    hold::append(
+        &root,
+        75,
+        EventBody::ReleaseAuthorized { clearance },
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(hold::state(&root, 75).authorized.is_some());
+    hold::append(
+        &root,
+        75,
+        EventBody::ReleaseWithdrawn {
+            reason: "head moved".into(),
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let st = hold::state(&root, 75);
+    assert!(st.authorized.is_none());
+    assert!(
+        st.open.is_some(),
+        "a withdrawn authorization leaves the hold armed"
+    );
+}
+
+/// A worktree marker collected onto the ledger is no longer a legacy marker:
+/// an untyped one is recorded as the typed Rework hold it stood for, so the
+/// ship gate and rework auto-release treat it like any reviewer refusal. A
+/// typed marker is collected as written.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_collected_untyped_marker_becomes_a_typed_rework_hold() {
+    use crate::gate::merge_hold_core as mh;
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let untyped = mh::parse_hold_marker(Ok("changes requested by the reviewer\n".into()), 76)
+        .expect("an untyped marker parses");
+    assert!(untyped.legacy);
+    mh::collect_legacy_hold(&root, &untyped).unwrap();
+    let held = mh::read_hold_record(&root, 76).expect("the collected hold is open");
+    assert!(
+        !held.legacy,
+        "a collected hold is a ledger hold, not a legacy one"
+    );
+    assert_eq!(held.schema_version, 2);
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Rework);
+    assert!(held.is_refusal(), "it is still read as a reviewer refusal");
+    assert_eq!(held.detail, "changes requested by the reviewer");
+    assert!(held.release_condition.is_some());
+
+    let typed = mh::typed_hold(77, mh::HoldReasonKind::Supervision, "supervised", None);
+    mh::collect_legacy_hold(&root, &typed).unwrap();
+    let held = mh::read_hold_record(&root, 77).expect("open");
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Supervision);
+    assert!(!held.legacy);
+}
+
+/// PR-3106 round 1, item 2: an uncontained reviewer's `aida review record`
+/// writes the ledger and no file, so the launcher collects that ledger record
+/// (under the same PR, head and grant checks) and arms the refusal's hold
+/// from it. A ledger round from before the launch is not this run's verdict.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn an_uncontained_reviewers_ledger_only_refusal_is_collected_and_holds_the_pr() {
+    use crate::gate::merge_hold_core as mh;
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    std::fs::create_dir_all(&worktree).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let canonical = rv::verdict_path(&launcher, "PR-40");
+    let child = a.grant_id.clone().unwrap();
+
+    // Before the reviewer writes anything there is nothing to collect.
+    let err = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 40, &child),
+    )
+    .unwrap_err();
+    assert!(err.contains("no verdict"), "{err}");
+
+    let rec = record("request-changes", &ts(1), Some(&a));
+    record_verdict_at(&canonical, &rec, None).unwrap();
+    assert!(!canonical.exists(), "the reviewer wrote the ledger only");
+
+    // A launch that started after that record does not collect it.
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    assert!(rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        later,
+        &checks(&launcher, 40, &child),
+    )
+    .is_err());
+
+    let before = store::read_file(&launcher, ChangeKey::pr(40)).len();
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 40, &child),
+    )
+    .expect("the ledger-only verdict is collected");
+    assert_eq!(got.verdict.kind, rv::VerdictKind::RequestChanges);
+    assert!(!got.collected_from_worktree);
+    assert_eq!(
+        store::read_file(&launcher, ChangeKey::pr(40)).len(),
+        before,
+        "the record is already on the ledger: nothing is appended twice"
+    );
+
+    // The same grant check applies: another launch's grant is refused.
+    assert!(rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 40, "some-other-grant"),
+    )
+    .is_err());
+
+    assert!(crate::merge_hold::place_collected_refusal(&launcher, 40, &got).unwrap());
+    let held = mh::read_hold_record(&launcher, 40).expect("the refusal holds the PR");
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Rework);
+    assert!(held.is_refusal());
+}
+
+/// PR-3106 round 1, items 3 and 9: a contained reviewer cannot write hold
+/// state, so the launcher arms the refusal's Rework hold from the verdict it
+/// collected; the seat's hand-off file does not outlive the collection. An
+/// approval arms nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_contained_reviewers_refusal_is_armed_by_the_launcher_and_its_hand_off_removed() {
+    use crate::gate::merge_hold_core as mh;
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let child = a.grant_id.clone().unwrap();
+    let canonical = rv::verdict_path(&launcher, "PR-41");
+    let rec = record("request-changes", &ts(1), Some(&a));
+    reviewer_wrote(&worktree, "PR-41", &rec);
+    let hand_off = worktree.join(".aida/review-verdicts/PR-41.json");
+
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 41, &child),
+    )
+    .unwrap();
+    assert!(got.collected_from_worktree);
+    assert!(
+        !hand_off.exists(),
+        "no verdict state persists in the seat after collection"
+    );
+    assert!(mh::read_hold_record(&launcher, 41).is_none());
+    assert!(crate::merge_hold::place_collected_refusal(&launcher, 41, &got).unwrap());
+    let held = mh::read_hold_record(&launcher, 41).expect("armed by the launcher");
+    assert_eq!(held.reason_kind, mh::HoldReasonKind::Rework);
+    assert!(kinds(&store::read_file(&launcher, ChangeKey::pr(41))).contains(&"hold"));
+
+    let approved = rv::CollectedVerdict {
+        verdict: rv::parse_recorded_verdict(
+            &serde_json::to_string(&record("approved", &ts(1), Some(&a))).unwrap(),
+        )
+        .unwrap(),
+        spec_records: Vec::new(),
+        collected_from_worktree: true,
+    };
+    assert!(!crate::merge_hold::place_collected_refusal(&launcher, 42, &approved).unwrap());
+    assert!(mh::read_hold_record(&launcher, 42).is_none());
+}
+
+/// PR-3106 round 1, item 6: `aida queue work --role reviewer` resolves
+/// containment from the `[agents] contained` knob and exports
+/// `AIDA_CONTAINED=1` for the reviewer it launches. That export must not
+/// contain the launcher itself: run from a shell with no `AIDA_CONTAINED`,
+/// its collection still writes the ledger. A contained parent stays
+/// contained, and a malformed value reads as contained (BUG-2146).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn the_launchers_export_for_its_reviewer_does_not_contain_its_own_collection() {
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let (_guard, a) = granted_reviewer(&launcher);
+    let child = a.grant_id.clone().unwrap();
+    let canonical = rv::verdict_path(&launcher, "PR-43");
+    reviewer_wrote(&worktree, "PR-43", &record("approved", &ts(1), Some(&a)));
+
+    crate::queue_cmd::apply_queue_work_contained_env(true);
+    assert!(
+        crate::session::aida_contained_env().unwrap(),
+        "the reviewer the launcher spawns inherits AIDA_CONTAINED=1"
+    );
+    assert!(!crate::session::process_contained());
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &[],
+        since(),
+        &checks(&launcher, 43, &child),
+    );
+    crate::queue_cmd::apply_queue_work_contained_env(false);
+    assert!(got.is_ok(), "{got:?}");
+    assert_eq!(
+        project::newest_verdict(&launcher, "PR-43")
+            .and_then(|r| r.get("verdict").cloned())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .as_deref(),
+        Some("approved")
+    );
+
+    // The guard above holds the env lock and restores AIDA_CONTAINED.
+    std::env::set_var("AIDA_CONTAINED", "1");
+    crate::queue_cmd::apply_queue_work_contained_env(true);
+    assert!(crate::session::process_contained(), "a contained parent");
+    std::env::set_var("AIDA_CONTAINED", "ture");
+    assert!(crate::session::process_contained(), "fail closed");
+    let err = record_verdict_at(&canonical, &record("approved", &ts(1), None), None).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+    std::env::remove_var("AIDA_CONTAINED");
+    crate::queue_cmd::apply_queue_work_contained_env(false);
+}
+
+/// PR-3106 round 1, item 5: one spec's records on two changes' ledgers are
+/// weighed in the ledger's own order, not the order the files are walked in.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn verdicts_at_a_commit_keep_the_newest_record_per_key_in_ledger_order() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    store::append_one(
+        &root,
+        verdict(
+            ChangeKey::pr(51),
+            Some("STORY-9"),
+            record("approved", &ts(0), None),
+        ),
+    )
+    .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    store::append_one(
+        &root,
+        verdict(
+            ChangeKey::pr(50),
+            Some("STORY-9"),
+            record("request-changes", &ts(0), None),
+        ),
+    )
+    .unwrap();
+    let got = rv::verdicts_for_sha(&root, HEAD);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].kind, rv::VerdictKind::RequestChanges);
 }

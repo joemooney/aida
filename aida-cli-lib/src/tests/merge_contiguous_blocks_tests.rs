@@ -17,6 +17,7 @@ fn block(
         range_end: end,
         next,
         allocated_at: chrono::Utc::now(),
+        pool_id: None,
     }
 }
 

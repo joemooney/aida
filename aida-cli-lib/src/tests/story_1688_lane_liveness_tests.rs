@@ -479,7 +479,7 @@ fn stale_human_merge_hold_routes_to_the_operator_only() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let now = Utc::now();
-    crate::gate::merge_hold_core::write_typed_hold(
+    crate::gate::merge_hold_core::place_hold(
         root,
         &crate::gate::merge_hold_core::typed_hold(
             2710,
@@ -489,7 +489,7 @@ fn stale_human_merge_hold_routes_to_the_operator_only() {
         ),
     )
     .unwrap();
-    crate::gate::merge_hold_core::write_typed_hold(
+    crate::gate::merge_hold_core::place_hold(
         root,
         &crate::gate::merge_hold_core::typed_hold(
             2711,
@@ -783,7 +783,7 @@ fn routing_is_one_wake_per_finding_on_registered_seats() {
         root,
         &lease("or2", "TASK-80", &dead_pid(), now - Duration::hours(1)),
     );
-    crate::gate::merge_hold_core::write_typed_hold(
+    crate::gate::merge_hold_core::place_hold(
         root,
         &crate::gate::merge_hold_core::typed_hold(
             2731,
@@ -828,7 +828,7 @@ fn rework_push_past_a_refusal_is_ready_for_re_review() {
     let now = Utc::now();
     let head_c = "c3d4e5f60718293a4b5c6d7e8f901234567890ab";
     for (pr, refused_at) in [(2740, HEAD_A), (2741, head_c)] {
-        crate::gate::merge_hold_core::write_typed_hold(
+        crate::gate::merge_hold_core::place_hold(
             root,
             &crate::gate::merge_hold_core::typed_hold(
                 pr,
@@ -1117,7 +1117,7 @@ fn reviewer_session_lease_counts_as_review_started() {
 #[test]
 fn operator_gate_is_routed_only_when_a_notice_is_sent() {
     let hold = |root: &Path| {
-        crate::gate::merge_hold_core::write_typed_hold(
+        crate::gate::merge_hold_core::place_hold(
             root,
             &crate::gate::merge_hold_core::typed_hold(
                 2780,
@@ -1573,7 +1573,7 @@ fn linked_worktree_hold_waits_from_the_primary_placement_event() {
     );
     early.ts = placed_at;
     crate::events::emit(&primary, &early);
-    crate::gate::merge_hold_core::write_typed_hold(
+    crate::gate::merge_hold_core::place_hold(
         &linked,
         &crate::gate::merge_hold_core::typed_hold(
             2712,

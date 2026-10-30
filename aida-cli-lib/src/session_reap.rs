@@ -1179,9 +1179,10 @@ fn reap_one_with_clear_hooks(
                     .unwrap_or_default()
             );
         }
-        // BUG-2176: a reviewer's merge-hold marker lives in its review
-        // worktree; move it to the primary before the tree goes, or keep the
-        // tree. trace:TASK-1955 | ai:claude (BUG-2206)
+        // BUG-2176: a legacy marker a pre-ledger reviewer left in its review
+        // worktree is collected onto the gate ledger before the tree goes, or
+        // the tree is kept. trace:TASK-1955 | ai:claude (BUG-2206)
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
         if let Some(pr) = crate::gate::review_authority::review_lease_pr(lease) {
             if let Err(e) = crate::merge_hold::adopt_worktree_hold(
                 project_root,

@@ -18,6 +18,7 @@ pub(crate) mod dispatch_lock;
 pub(crate) mod dispatch_reviewer_hold;
 pub(crate) mod dispatch_types;
 pub(crate) mod fleet_lanes;
+pub(crate) mod hold_collect;
 pub(crate) mod kernel_deps;
 pub(crate) mod ledger;
 pub(crate) mod mandate;

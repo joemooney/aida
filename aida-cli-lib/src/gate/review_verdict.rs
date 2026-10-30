@@ -952,18 +952,16 @@ pub(crate) fn parse_ledger_record(record: &JsonObj) -> Option<RecordedVerdict> {
     parse_recorded_verdict(&serde_json::to_string(record).ok()?)
 }
 
-/// Read-through while the legacy files are still written (M1 slice 1): the
-/// ledger answers only where it knows something the file does not — the file
-/// is missing (a contained reviewer's verdict that never reached it) or
-/// strictly older.
+/// Read-through of the legacy files (M1): the ledger answers where the file
+/// is missing, older, or the same round (slice 2: the ledger is the only
+/// writer, so its copy is the one later events annotate).
 ///
 /// Order uses primary-side time only. A ledger verdict counts as of the
 /// earlier of the ledger's own `at` (stamped on append) and the record's
 /// `recorded_at`: the `at` bound stops a reviewer's future-dated record from
 /// shadowing later verdicts, the `recorded_at` bound stops a late collection
 /// from passing off an old round as new. The same round on both sides (equal
-/// `recorded_at`) keeps the file, which may carry a later annotation
-/// (`closed_by_merge`). `path` is the file `legacy` was read from, or the
+/// `recorded_at`) is the ledger's. `path` is the file `legacy` was read from, or the
 /// key's current file when there is no legacy record ([`ledger_supersedes`]).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn newer_of(
@@ -990,7 +988,10 @@ pub(crate) fn newer_of(
 ///   closed on, and the ledger never answers in its place;
 /// - a file with no `recorded_at` is dated by its mtime, so a hand-written
 ///   file newer than the ledger's round is not outranked by it; with no
-///   readable mtime either, the file is kept.
+///   readable mtime either, the file is kept;
+/// - the same round on both sides is the ledger's (M1 slice 2): the ledger
+///   is the only writer, so its copy is the one later events annotate (a
+///   merge close), and the legacy file is the round's import.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 trace:TASK-1801 | ai:claude
 pub(crate) fn ledger_supersedes(
     path: &Path,
@@ -1010,7 +1011,7 @@ pub(crate) fn ledger_supersedes(
         return !unparseable;
     };
     if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
-        return false;
+        return true;
     }
     let file_time = rfc3339(file.recorded_at.as_deref()).or_else(|| {
         verdict_file_modified(path)
@@ -1184,13 +1185,12 @@ fn choose_current(
         .filter(|event| ledger_supersedes(&path, parsed.as_ref(), event))
         .and_then(|event| {
             let body = serde_json::to_string(event.verdict_record()?).ok()?;
-            let change = crate::gate::ledger::ChangeKey::parse(&event.change)?;
             let store = crate::gate::ledger::store_root(start).ok()?;
             Some(CurrentVerdict {
                 body,
                 written_at: ledger_order_time(&event).map(std::time::SystemTime::from),
                 source: VerdictSource::Ledger {
-                    file: crate::gate::ledger::store::ledger_file(&store, change),
+                    file: crate::gate::ledger::project::event_file(&store, &event),
                     seq: event.seq,
                 },
             })
@@ -1501,7 +1501,10 @@ pub(crate) fn build_verdict_object(
             "review recording requires non-empty recorded_by provenance",
         ));
     }
-    let mut obj = read_existing_verdict_object(path)?;
+    // M1 slice 2: the record this one builds on is the current one the
+    // gates weigh (ledger, legacy file read through), not a file alone.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut obj = read_current_verdict_object(path)?;
     // BUG-1516 criterion 2: normalize AT THE WRITE BOUNDARY rather than
     // teaching every comparison site to tolerate an abbreviated sha. One
     // writer (the drain's forge-resolved head) already always writes full;
@@ -1668,62 +1671,106 @@ pub(crate) fn write_verdict_object(
 }
 
 /// [`write_verdict_object`], naming the spec the verdict concerns so the
-/// gate ledger can index a PR-keyed record by it. An uncontained PR-keyed
-/// write also lands on the change's gate ledger; a contained one stays in
-/// its seat clone for the launcher to collect. The file stays the
-/// compatibility record in slice 1.
+/// gate ledger can index a PR-keyed record by it.
+///
+/// M1 slice 2: the gate ledger is the only store. An uncontained write at a
+/// canonical verdict path appends a `verdict` event
+/// ([`crate::gate::ledger::record_verdict_at`]) and writes no
+/// `.aida/review-verdicts/` file or per-commit archive: the ledger keeps every
+/// round. A contained seat cannot write the ledger, so its record is handed
+/// off as a file inside its own seat clone, where only the launcher that
+/// started it collects it ([`collect_standalone_verdict`]). A path outside
+/// the canonical layout is a hand-off file too.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn write_verdict_object_for_spec(
     path: &Path,
     obj: &serde_json::Map<String, serde_json::Value>,
     spec: Option<&str>,
 ) -> std::io::Result<()> {
-    crate::gate::ledger::before_verdict_write(path);
-    write_verdict_file(path, obj)?;
-    crate::gate::ledger::mirror_verdict_write(path, obj, spec);
+    let contained = crate::gate::ledger::contained();
+    if contained || canonical_verdict_key(path).is_none() {
+        return hand_off_verdict_file(path, obj);
+    }
+    refuse_unsafe_legacy_history(path, round_sha(obj).as_deref())?;
+    let mut obj = obj.clone();
+    carry_unarchived_rounds(path, &mut obj);
+    crate::gate::ledger::record_verdict_at(path, &obj, spec).map(|_| ())
+}
+
+/// TASK-1766: a later recording at the same commit keeps the displaced
+/// shaless-round count the ledger's earlier round there carried, even when
+/// the record it was built on (a legacy file rewritten by an older writer)
+/// lost it. Never lowers a count.
+// trace:TASK-1766 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn carry_unarchived_rounds(path: &Path, obj: &mut JsonObj) {
+    let (Some((root, key)), Some(sha)) = (canonical_verdict_key(path), round_sha(obj)) else {
+        return;
+    };
+    let count = |o: &JsonObj| o.get("unarchived_rounds").and_then(|v| v.as_u64());
+    let prior = crate::gate::ledger::project::verdict_events_at(&root, &key, &sha)
+        .iter()
+        .filter_map(|e| e.verdict_record().and_then(count))
+        .max();
+    if let Some(n) = prior.max(count(obj)) {
+        obj.insert("unarchived_rounds".to_string(), n.into());
+    }
+}
+
+/// TASK-1801, kept on the gate ledger: a record at `path` fails closed when
+/// the legacy history it would sit beside cannot be read safely. A linked
+/// verdict directory, or a per-commit archive entry for `sha` that the
+/// anchored reader refuses, is history the projection cannot read, so a new
+/// round recorded over it is refused rather than accepted as the whole story.
+// trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn refuse_unsafe_legacy_history(path: &Path, sha: Option<&str>) -> std::io::Result<()> {
+    let refused = |e: std::io::Error| {
+        std::io::Error::new(
+            e.kind(),
+            format!(
+                "refusing to overwrite {}: the existing verdict could not be read safely: {e}",
+                path.display()
+            ),
+        )
+    };
+    let linked = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink());
+    if let Some(dir) = path.parent() {
+        if linked(dir) || dir.parent().is_some_and(linked) {
+            return Err(refused(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("{} is reached through a symlink", dir.display()),
+            )));
+        }
+    }
+    let (Some(sha), Some(archive)) = (sha, verdict_archive_dir(path)) else {
+        return Ok(());
+    };
+    if linked(&archive) {
+        return Err(refused(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("{} is a symlink", archive.display()),
+        )));
+    }
+    let entry = archive.join(format!("{}.json", sha.trim().to_ascii_lowercase()));
+    if std::fs::symlink_metadata(&entry).is_ok() {
+        read_verdict_body(&entry).map_err(refused)?;
+    }
     Ok(())
 }
 
-fn write_verdict_file(
+/// A contained seat's verdict, written (atomically, read back, BUG-1571) as a
+/// file in its own seat clone for the launcher to collect. Never the shared
+/// store: the launcher appends what it collects to the gate ledger.
+// trace:BUG-2149 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn hand_off_verdict_file(
     path: &Path,
     obj: &serde_json::Map<String, serde_json::Value>,
 ) -> std::io::Result<()> {
-    // TASK-1460: files recorded before the per-sha archive existed are
-    // migrated into it once, lazily, the first time anything records here —
-    // BEFORE this write, so the migration sees the pre-existing state.
-    // Best-effort: a failed migration never costs the record being written.
-    // trace:TASK-1460 | ai:claude
     if let Some(dir) = path.parent() {
-        if let Err(e) = ensure_sidecars_archived(dir) {
-            eprintln!(
-                "warning: could not migrate existing verdicts in {} into the per-commit archive: {e}",
-                dir.display()
-            );
-        }
+        std::fs::create_dir_all(dir)?;
     }
-    // TASK-1801: read the archive entry before writing anything, so a refused
-    // entry fails the whole record instead of being rewritten without the
-    // rounds it held. trace:TASK-1801 | ai:claude
-    let archive = prepare_archive_round(path, obj)?;
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
-    write_verdict_atomic(path, &format!("{body}\n"))?;
-    // BUG-1539: the current file above is the compatibility contract every
-    // existing reader depends on; the per-sha archive is the history. It is
-    // written second so a failure here can never cost the current record,
-    // and it is best-effort for the same reason — but loudly, because a
-    // silently missing archive is exactly the invisible loss this fixes.
-    // trace:BUG-1539 | ai:claude
-    if let Err(e) = archive
-        .map(|(file, body)| write_verdict_atomic(&file, &body))
-        .unwrap_or(Ok(()))
-    {
-        eprintln!(
-            "warning: recorded {} but could not archive the round by reviewed commit: {e}",
-            path.display()
-        );
-    }
-    Ok(())
+    write_verdict_atomic(path, &format!("{body}\n"))
 }
 
 /// BUG-1539: the directory holding every archived round of the verdict file
@@ -1740,95 +1787,36 @@ pub fn verdict_archive_dir(path: &Path) -> Option<PathBuf> {
     Some(path.parent()?.join(stem))
 }
 
-/// A reviewed sha usable as a file name: hex only, long enough to be a
-/// commit. Anything else is unidentifiable and is not archived (the same
-/// refusal [`archive_current_round`] makes for a round with no commit).
-fn archivable_sha(sha: &str) -> Option<&str> {
-    let sha = sha.trim();
-    (sha.len() >= 7 && sha.len() <= 64 && sha.bytes().all(|b| b.is_ascii_hexdigit())).then_some(sha)
-}
-
-/// BUG-1539: a verdict is about a COMMIT, but the current file is keyed by
-/// PR number or spec, so a later round replaces it. Archive this round at
-/// `<stem>/<reviewed_sha>.json` so a round never destroys the one before it
-/// and a reader can ask "is there a verdict for THIS commit".
-///
-/// Idempotent per commit: re-recording the same review at the same sha
-/// rewrites one file and adds nothing. A DIFFERENT recording at the same sha
-/// (a second reviewer) is kept in that file's own `rounds`, through the same
-/// [`archive_current_round`] rule the current file uses, so two reviewers at
-/// one commit read as one commit with two recordings, never as a silent
-/// overwrite.
-// trace:BUG-1539 | ai:claude
-fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
-    match prepare_archive_round(path, obj)? {
-        Some((archive, body)) => write_verdict_atomic(&archive, &body),
-        None => Ok(()),
-    }
-}
-
-/// The archive file and body [`archive_round_by_sha`] would write for `obj`,
-/// computed without writing. `None` when the round is not archivable. An
-/// existing archive entry the anchored reader refuses is an error: rewriting
-/// it from an empty object would drop the rounds it retained.
-// trace:TASK-1801 | ai:claude
-fn prepare_archive_round(path: &Path, obj: &JsonObj) -> std::io::Result<Option<(PathBuf, String)>> {
-    let Some(sha) = round_sha(obj) else {
-        return Ok(None);
-    };
-    let Some(sha) = archivable_sha(&sha) else {
-        return Ok(None);
-    };
-    if obj
-        .get("verdict")
-        .and_then(|v| v.as_str())
-        .is_none_or(|v| v.trim().is_empty())
-    {
-        return Ok(None);
-    }
-    let Some(dir) = verdict_archive_dir(path) else {
-        return Ok(None);
-    };
-    let archive = dir.join(format!("{}.json", sha.to_ascii_lowercase()));
-    let mut snapshot = obj.clone();
-    snapshot.remove("rounds");
-    let mut existing = read_existing_verdict_object(&archive)?;
-    archive_current_round(&mut existing, &recording_key(&snapshot));
-    if let Some(rounds) = existing.remove("rounds") {
-        snapshot.insert("rounds".to_string(), rounds);
-    }
-    // TASK-1766: carry the displaced shaless-round count the same way, never
-    // lowering one this archive already holds. trace:TASK-1766 | ai:claude
-    let unarchived = |o: &JsonObj| o.get("unarchived_rounds").and_then(|v| v.as_u64());
-    if let Some(n) = unarchived(&existing).max(unarchived(&snapshot)) {
-        snapshot.insert("unarchived_rounds".to_string(), n.into());
-    }
-    let body = serde_json::to_string_pretty(&serde_json::Value::Object(snapshot))
-        .unwrap_or_else(|_| "{}".to_string());
-    Ok(Some((archive, format!("{body}\n"))))
-}
-
-/// The verdict object already at `path`, for a read-modify-write. A missing
-/// file is empty. A present file the anchored reader refuses (linked, too
-/// large, or reached through a linked directory) is an error, so a writer
-/// fails closed instead of replacing the history it could not read.
-/// Unparseable content is still treated as empty, as before.
-// trace:TASK-1801 | ai:claude
-fn read_existing_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
-    match read_verdict_body(path) {
-        Ok(body) => Ok(serde_json::from_str::<serde_json::Value>(&body)
-            .ok()
-            .and_then(|v| v.as_object().cloned())
-            .unwrap_or_default()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(JsonObj::new()),
-        Err(e) => Err(std::io::Error::new(
+/// The record a new recording at `path` builds on: the current verdict for
+/// its key (ledger, or the legacy file read through). A missing record is
+/// empty. A present file the anchored reader refuses (linked, too large, or
+/// reached through a linked directory) is an error, so a writer fails closed
+/// instead of replacing history it could not read. Unparseable content is
+/// treated as empty, as before.
+// trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn read_current_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
+    if verdict_file_refused(path) {
+        let e = read_verdict_body(path)
+            .err()
+            .unwrap_or_else(|| std::io::Error::other("refused"));
+        return Err(std::io::Error::new(
             e.kind(),
             format!(
                 "refusing to overwrite {}: the existing verdict could not be read safely: {e}",
                 path.display()
             ),
-        )),
+        ));
     }
+    let contained = crate::gate::ledger::contained();
+    let body = if contained {
+        read_verdict_body(path).ok()
+    } else {
+        current_verdict_at(path).map(|c| c.body)
+    };
+    Ok(body
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default())
 }
 
 /// BUG-2186: every recording [`archive_round_by_sha`] kept for the verdict
@@ -1962,18 +1950,65 @@ pub fn archived_verdict_file_for_sha(path: &Path, sha: &str) -> Option<PathBuf> 
 /// file of its own. One entry per archive file (per key), so one review
 /// seen through two PR numbers reads as that review under each reference,
 /// newest recording first.
+///
+/// M1 slice 2: the gate ledger's rounds at `sha` count first, one per key
+/// (the change, or the spec a record credits), newest recording. A legacy
+/// archive answers for a key the ledger has no round at `sha` for. A key
+/// whose current verdict file the anchored reader refuses keeps the ledger
+/// out, as at every other reader (TASK-1801).
 // trace:BUG-1539 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn verdicts_for_sha(project_root: &Path, sha: &str) -> Vec<RecordedVerdict> {
+    let mut ledger: std::collections::BTreeMap<String, RecordedVerdict> = Default::default();
+    // A key keeps its newest event in the ledger's own order (append time,
+    // then seq), not the order the ledger files are walked in: one spec's
+    // records can sit on several changes' files.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut events = crate::gate::ledger::project::all_verdict_events(project_root);
+    events.sort_by(|a, b| {
+        rfc3339(Some(&a.at))
+            .cmp(&rfc3339(Some(&b.at)))
+            .then(a.seq.cmp(&b.seq))
+    });
+    for event in events {
+        if !event
+            .head
+            .as_deref()
+            .is_some_and(|head| same_reviewed_sha(head, sha))
+        {
+            continue;
+        }
+        let key = event
+            .spec
+            .clone()
+            .unwrap_or_else(|| event.change.clone())
+            .to_ascii_uppercase();
+        if verdict_file_refused(&verdict_path(project_root, &key)) {
+            continue;
+        }
+        let parsed = event
+            .verdict_record()
+            .and_then(|r| serde_json::to_string(r).ok())
+            .and_then(|b| parse_recorded_verdict(&b));
+        if let Some(v) = parsed {
+            ledger.insert(key, v);
+        }
+    }
     let dir = project_root.join(".aida").join("review-verdicts");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-    let mut out: Vec<RecordedVerdict> = entries
+    let legacy = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.is_dir())
+        .filter(|d| {
+            d.file_name()
+                .and_then(|n| n.to_str())
+                .is_none_or(|n| !ledger.contains_key(&n.to_ascii_uppercase()))
+        })
         .flat_map(|d| archived_in_dir(&d, sha))
-        .collect();
+        .collect::<Vec<_>>();
+    let mut out: Vec<RecordedVerdict> = ledger.into_values().chain(legacy).collect();
     out.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
     out
 }
@@ -2009,17 +2044,12 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
 
 /// TASK-1460: archive a verdict file that was written OUTSIDE the record
 /// path — the `/aida-review` skill writes `AIDA_REVIEW_VERDICT_FILE` with a
-/// shell heredoc — so its round lands in the per-sha archive exactly as a
-/// recorded one would, and (a PR-keyed path) on the change's gate ledger.
-/// The current file is left byte-for-byte as written. A file with no verdict
-/// or no reviewed commit is unidentifiable and is not archived (the same
-/// refusal the record path makes). Idempotent.
-///
-/// M1 slice 1: the archive write is the same primary-side dual write the
-/// record path keeps until slice 2 moves its readers (retained history,
-/// BUG-2186; the phase-3 archive fallback) onto the ledger. A contained
-/// reviewer never reaches this: its verdict arrives by collection, which
-/// writes the ledger only.
+/// shell heredoc — so its round lands on the gate ledger exactly as a
+/// recorded one would. The file is the skill's hand-off and is left
+/// byte-for-byte as written. A file with no verdict or no reviewed commit is
+/// unidentifiable and is not adopted (the same refusal the record path
+/// makes). Idempotent. A contained reviewer never reaches this: its verdict
+/// arrives by collection, which writes the ledger only.
 // trace:TASK-1460 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
@@ -2030,7 +2060,6 @@ pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
     else {
         return Ok(());
     };
-    archive_round_by_sha(path, &obj)?;
     let identified = round_sha(&obj).is_some()
         && obj
             .get("verdict")
@@ -2311,6 +2340,37 @@ fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictC
     })
 }
 
+/// The newest ledger verdict for `canonical`'s change, read from
+/// `launcher_root`, when the ledger recorded it at or after `since` (primary-
+/// side time, [`ledger_order_time`]): an uncontained reviewer's record of
+/// this run. An older ledger round is never a candidate.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn fresh_ledger_candidate(
+    launcher_root: &Path,
+    canonical: &Path,
+    since: std::time::SystemTime,
+) -> Option<VerdictCandidate> {
+    let (_, key) = canonical_verdict_key(canonical)?;
+    let event = crate::gate::ledger::project::newest_verdict_event(launcher_root, &key)?;
+    let modified: std::time::SystemTime = ledger_order_time(&event)?.into();
+    if modified < since {
+        return None;
+    }
+    let obj = event.verdict_record()?.clone();
+    let body = serde_json::to_string_pretty(&obj).ok()?;
+    let verdict = parse_recorded_verdict(&body).unwrap_or_default();
+    let file = crate::gate::ledger::store_root(launcher_root)
+        .map(|root| crate::gate::ledger::project::event_file(&root, &event))
+        .unwrap_or_else(|_| canonical.to_path_buf());
+    Some(VerdictCandidate {
+        path: PathBuf::from(format!("{}#{}", file.display(), event.seq)),
+        body,
+        obj,
+        verdict,
+        modified,
+    })
+}
+
 /// BUG-2149: the checks a collected verdict must pass, supplied by the caller
 /// (they need the forge and the seat-grant store, which this filesystem-only
 /// module does not touch).
@@ -2410,8 +2470,21 @@ pub fn collect_standalone_verdict(
     for id in &spec_ids {
         candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
     }
+    // An uncontained reviewer's `aida review record` writes the ledger, not a
+    // file: its record for this change, appended after the reviewer started,
+    // is a candidate under the same checks.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let from_ledger = if canonical_in_place.is_none() {
+        fresh_ledger_candidate(launcher_root, canonical, since)
+    } else {
+        None
+    };
+    candidates.extend(from_ledger.clone());
     if candidates.is_empty() {
-        return Err("the reviewer wrote no verdict file after it started".to_string());
+        return Err(
+            "the reviewer wrote no verdict file after it started, and recorded none on the ledger"
+                .to_string(),
+        );
     }
 
     for c in &candidates {
@@ -2472,7 +2545,24 @@ pub fn collect_standalone_verdict(
                 change.as_key()
             )
         })?;
-    let collected_from_worktree = canonical_in_place.is_none();
+    // The seat's hand-off files are collected: none stays in the worktree.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let worktree_files: Vec<&PathBuf> = candidates
+        .iter()
+        .map(|c| &c.path)
+        .filter(|p| separate && p.parent() == Some(worktree_dir.as_path()))
+        .collect();
+    for path in &worktree_files {
+        if let Err(err) = std::fs::remove_file(path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "  warning: collected {} but could not remove it from the review worktree: {err}",
+                    path.display()
+                );
+            }
+        }
+    }
+    let collected_from_worktree = canonical_in_place.is_none() && from_ledger.is_none();
     let spec_records = spec_ids;
 
     Ok(CollectedVerdict {
@@ -2480,98 +2570,6 @@ pub fn collect_standalone_verdict(
         spec_records,
         collected_from_worktree,
     })
-}
-
-/// TASK-1460: the marker that says the one-shot sidecar migration has run in
-/// a verdict directory. A dotfile with no `.json` extension, so every `*.json`
-/// walker of the directory is untouched by it.
-const MIGRATION_MARKER: &str = ".archive-migrated";
-
-/// TASK-1460: run [`migrate_sidecars_to_archive`] once per verdict directory.
-/// Called lazily from the record path; the marker makes every later call a
-/// single `stat`.
-// trace:TASK-1460 | ai:claude
-pub fn ensure_sidecars_archived(dir: &Path) -> std::io::Result<usize> {
-    let marker = dir.join(MIGRATION_MARKER);
-    if marker.exists() || !dir.is_dir() {
-        return Ok(0);
-    }
-    let migrated = migrate_sidecars_to_archive(dir)?;
-    std::fs::write(&marker, format!("{migrated}\n"))?;
-    Ok(migrated)
-}
-
-/// TASK-1460: move every verdict recorded before BUG-1539's per-sha archive
-/// into it — each top-level `<KEY>.json` in `dir`, its archived `rounds`
-/// oldest first and then its current round, lands at `<KEY>/<sha>.json`
-/// through the same [`archive_round_by_sha`] the record path uses.
-///
-/// Idempotent: a commit that already has an archive file is skipped whole,
-/// so a re-run (or a round the record path already archived) adds nothing
-/// and can never reorder a newer recording under an older one. Rounds with
-/// no reviewed commit are unidentifiable and stay where they are. The
-/// top-level files are never modified. Returns the archive files created.
-// trace:TASK-1460 | ai:claude
-pub fn migrate_sidecars_to_archive(dir: &Path) -> std::io::Result<usize> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Ok(0);
-    };
-    let mut files: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_file())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-        .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| !n.starts_with('.'))
-        })
-        .collect();
-    files.sort();
-    let mut created = 0;
-    for path in files {
-        let Some(obj) = read_verdict_body(&path)
-            .ok()
-            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-            .and_then(|v| v.as_object().cloned())
-        else {
-            continue;
-        };
-        let Some(archive_dir) = verdict_archive_dir(&path) else {
-            continue;
-        };
-        let mut recordings: Vec<JsonObj> = obj
-            .get("rounds")
-            .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|r| r.as_object().cloned()).collect())
-            .unwrap_or_default();
-        let mut current = obj.clone();
-        current.remove("rounds");
-        recordings.push(current);
-        // Decide per commit up front, so a commit is either migrated whole or
-        // (already archived) not touched at all.
-        let mut fresh: Vec<String> = Vec::new();
-        for rec in &recordings {
-            let Some(sha) = round_sha(rec) else { continue };
-            let Some(sha) = archivable_sha(&sha).map(str::to_ascii_lowercase) else {
-                continue;
-            };
-            if !fresh.contains(&sha) && !archive_dir.join(format!("{sha}.json")).exists() {
-                fresh.push(sha);
-            }
-        }
-        for rec in &recordings {
-            let in_fresh = round_sha(rec)
-                .as_deref()
-                .and_then(archivable_sha)
-                .is_some_and(|s| fresh.contains(&s.to_ascii_lowercase()));
-            if in_fresh {
-                archive_round_by_sha(&path, rec)?;
-            }
-        }
-        created += fresh.len();
-    }
-    Ok(created)
 }
 
 /// BUG-1529 criterion 1: close a spec's outstanding refusal out when its
@@ -2608,11 +2606,15 @@ pub fn close_verdict_on_merge(
     if merge_ref.is_empty() {
         return Ok(false);
     }
+    // M1 slice 2: the close is an annotated copy of the current record,
+    // appended to the gate ledger; the ledger keeps the open round before it,
+    // and no legacy file or archive entry is rewritten.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let path = verdict_path(project_root, spec);
-    let Ok(body) = read_verdict_body(&path) else {
+    let Some(current) = current_verdict_at(&path) else {
         return Ok(false);
     };
-    let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
+    let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&current.body) else {
         return Ok(false);
     };
     let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
@@ -2627,23 +2629,7 @@ pub fn close_verdict_on_merge(
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
     if already_closed {
-        // TASK-2135: an earlier close wrote the current file and then failed
-        // writing the archive entry at the same commit. The current file
-        // already says closed, so close the archive entry too if it is still
-        // open; otherwise `verdicts_for_sha` keeps reporting the refusal.
-        // trace:TASK-1951 trace:TASK-2135 | ai:claude
-        let Some((archive, body)) = prepare_archive_round(&path, &obj)? else {
-            return Ok(false);
-        };
-        let archive_open = read_existing_verdict_object(&archive)?
-            .get("closed_by_merge")
-            .and_then(|v| v.as_str())
-            .is_none_or(|s| s.trim().is_empty());
-        if !archive_open {
-            return Ok(false);
-        }
-        write_verdict_atomic(&archive, &body)?;
-        return Ok(true);
+        return close_legacy_archive_left_open(project_root, spec, &path, &obj);
     }
     obj.insert(
         "closed_by_merge".to_string(),
@@ -2653,24 +2639,56 @@ pub fn close_verdict_on_merge(
         "closed_at".to_string(),
         serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
     );
-    let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
-        .unwrap_or_else(|_| "{}".to_string());
-    // TASK-1460: the current round is also archived at its reviewed commit;
-    // close it there too, or `verdicts_for_sha` / `read_verdict_for_sha`
-    // would still report this refusal as open. The archive's top level is
-    // this same recording, so re-archiving replaces it with the closed copy
-    // and keeps that commit's earlier recordings in its `rounds`.
-    // trace:TASK-1460 | ai:claude
-    // TASK-1671: prepare the archive entry BEFORE writing the current file,
-    // as write_verdict_object does, so a refused archive entry fails the
-    // close before anything is written. Writing current first left it closed
-    // and the archive open, and a re-run then saw `already_closed`.
-    // trace:TASK-1951 trace:TASK-1671 | ai:claude
-    let archive = prepare_archive_round(&path, &obj)?;
-    write_verdict_atomic(&path, &format!("{pretty}\n"))?;
-    if let Some((archive, body)) = archive {
-        write_verdict_atomic(&archive, &body)?;
+    refuse_unsafe_legacy_history(&path, round_sha(&obj).as_deref())?;
+    crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    Ok(true)
+}
+
+/// TASK-2135 on the gate ledger: an older binary closed the current file and
+/// then failed to close the per-commit archive entry at the same commit, so
+/// the commit's view still reports the refusal open. The re-run records the
+/// closed round at that commit on the ledger (which supersedes the legacy
+/// entry for the key), with the merge the current record already names. A
+/// commit the ledger has already closed is left alone.
+// trace:TASK-1951 trace:TASK-2135 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn close_legacy_archive_left_open(
+    project_root: &Path,
+    spec: &str,
+    path: &Path,
+    current: &JsonObj,
+) -> std::io::Result<bool> {
+    let Some(sha) = round_sha(current) else {
+        return Ok(false);
+    };
+    let is_closed = |o: &JsonObj| {
+        o.get("closed_by_merge")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty())
+    };
+    let ledger_closed = crate::gate::ledger::project::verdict_events_at(project_root, spec, &sha)
+        .iter()
+        .any(|e| e.verdict_record().is_some_and(is_closed));
+    if ledger_closed {
+        return Ok(false);
     }
+    refuse_unsafe_legacy_history(path, Some(&sha))?;
+    let Some(archived) = archived_verdict_file_for_sha(path, &sha)
+        .and_then(|p| read_verdict_body(&p).ok())
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned())
+    else {
+        return Ok(false);
+    };
+    if is_closed(&archived) {
+        return Ok(false);
+    }
+    let mut closed = archived;
+    for key in ["closed_by_merge", "closed_at"] {
+        if let Some(v) = current.get(key) {
+            closed.insert(key.to_string(), v.clone());
+        }
+    }
+    crate::gate::ledger::record_verdict_at(path, &closed, None)?;
     Ok(true)
 }
 

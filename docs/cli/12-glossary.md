@@ -291,8 +291,8 @@ is never an approval criterion and never blocks a pickup or a merge.
 
 Set at pickup with `aida queue work <SPEC> --complexity {low|med|high}`;
 at ship time with `aida pr ship --complexity {low|med|high}`; at
-review time via `implementation_complexity` in the
-`.aida/review-verdicts/PR-N.json` file the `/aida-review` skill writes.
+review time via `implementation_complexity` in the PR's verdict record the
+`/aida-review` skill records (read it with `aida review verdict PR-N --json`).
 Each capture point also writes a per-spec record to
 `.aida/complexity-calibration/<SPEC>.yaml`.
 
@@ -325,7 +325,8 @@ backlog load.
 Set at open time with `aida add --effort <bucket>`, at pickup/plan time
 with `aida queue work <SPEC> --effort <bucket>`, at ship time with
 `aida pr ship --effort <bucket>`, and at review time via
-`implementation_effort` in `.aida/review-verdicts/PR-N.json`.
+`implementation_effort` in the PR's verdict record
+(`aida review verdict PR-N --json`).
 Each capture point also writes a per-spec record to
 `.aida/effort-calibration/<SPEC>.yaml`.
 

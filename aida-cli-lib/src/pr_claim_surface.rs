@@ -64,9 +64,8 @@ pub(crate) struct IncomingVerdict<'a> {
 /// Filesystem-only and cheap; no forge or store access.
 pub(crate) fn read_pr_record(root: &Path, pr: u64, extra_keys: &[&str]) -> PrRecord {
     let marker = crate::gate::merge_hold_core::read_hold_record(root, pr);
-    let marker_at = std::fs::metadata(crate::gate::merge_hold_core::hold_path(root, pr))
-        .and_then(|m| m.modified())
-        .ok()
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let marker_at = crate::gate::merge_hold_core::hold_written_at(root, pr)
         .map(chrono::DateTime::<chrono::Utc>::from);
     let mut keys: Vec<String> = vec![format!("PR-{pr}")];
     if let Some(m) = &marker {
@@ -411,7 +410,7 @@ mod tests {
     fn marker_write_surfaces_existing_marker_and_verdict() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        crate::gate::merge_hold_core::write_typed_hold(
+        crate::gate::merge_hold_core::place_hold(
             root,
             &rework_marker(
                 2034,
@@ -457,7 +456,7 @@ mod tests {
             None,
         );
         m.placed_by = Some("driver-advisor".into());
-        crate::gate::merge_hold_core::write_typed_hold(root, &m).unwrap();
+        crate::gate::merge_hold_core::place_hold(root, &m).unwrap();
         let rec = read_pr_record(root, 1972, &["STORY-9"]);
         let inc = IncomingVerdict {
             key: "STORY-9",
@@ -486,7 +485,7 @@ mod tests {
             "waiting on claude-reviewer-1's verdict before merge",
             None,
         );
-        crate::gate::merge_hold_core::write_typed_hold(root, &m).unwrap();
+        crate::gate::merge_hold_core::place_hold(root, &m).unwrap();
         write_verdict(
             root,
             "PR-1989",
@@ -516,7 +515,7 @@ mod tests {
     fn verdict_write_flags_a_marker_quoting_a_different_verdict() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        crate::gate::merge_hold_core::write_typed_hold(
+        crate::gate::merge_hold_core::place_hold(
             root,
             &rework_marker(
                 2034,
@@ -548,7 +547,7 @@ mod tests {
     fn older_verdict_does_not_contradict_a_newer_marker() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        crate::gate::merge_hold_core::write_typed_hold(
+        crate::gate::merge_hold_core::place_hold(
             root,
             &rework_marker(
                 7,
