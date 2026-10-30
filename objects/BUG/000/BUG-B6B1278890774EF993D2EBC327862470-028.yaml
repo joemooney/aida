@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:12:03.755273489Z
-modified_at: 2026-10-30T05:50:36.326280925Z
+modified_at: 2026-10-30T05:52:08.912434337Z
 req_type: Bug
 tags:
 - codex
@@ -36,6 +36,28 @@ tags:
 - permissions
 - sandbox
 - security
+comments:
+- id: 01a18b5d-96d0-7ad1-be3a-c247457ac645
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (config_cmd tests):** table test over both flag forms (`--sandbox X` / `--sandbox=X`) × {danger-full-access, workspace-write, read-only}: danger-full-access → tier `bypass`, sandboxed `no`; workspace-write/read-only → tier `contained`, sandboxed `yes`. Codex flag values are extracted from the tokens `split_posture_flags("codex", …)` drops, so the launch path and the view share one parser. `--ask-for-approval[=]never` drives the prompts column ahead of `approval_policy`.
+    - **Unit:** row carries a new `sandbox_source` naming the winner (`default_flags (<agents.toml scope>)` vs `~/.codex/config.toml`); flag beats config.
+    - **Unit:** `codex-sandbox-overridden-by-default-flags` (high) fires when the flag sandbox ranks wider than the configured `sandbox_mode` (read-only < workspace-write < danger-full-access) or the nuclear bypass flag is set, in either form; `scan_permission_posture_findings` (doctor permission-posture category) is asserted to carry it.
+    - **Unit:** under `[agents] contained` / `[contained] enable`, codex/antigravity rows get `refused_under_containment: true`, sandboxed `refused`, net effect `refused under containment …` (flags kept in JSON, labelled as applying only when containment is off); a high `default-headless-vendor-refused-under-containment` finding fires when the configured default headless vendor (`[orchestrator] headless_vendor`, then `[agents] vendor`) is one of them.
+    - **Unit:** user `~/.aida/agents.toml` workspace-write overridden by project `.aida/agents.toml` `--sandbox=danger-full-access` → bypass / sandboxed no / source `.aida/agents.toml` + finding.
+
+    ### Expected files
+    - `aida-cli-lib/src/config_cmd.rs` (classifier, row, render, tests)
+
+    ### Ambiguities / conflicts as questions
+    - Should refused rows still compute flag-derived findings? Decision: yes — the bug notes the flags reach a launch as soon as containment is off, so the widening finding stays visible on refused rows.
+  created_at: 2026-10-30T05:52:08.912434337Z
+  modified_at: 2026-10-30T05:52:08.912434337Z
+  session_id: 01a18b5c2030
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18aee-1a09-7243-91b8-78e1a5359e1f
   author: joe

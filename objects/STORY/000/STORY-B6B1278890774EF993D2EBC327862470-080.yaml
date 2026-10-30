@@ -102,12 +102,12 @@ description: |
   4. On completion, supersede TASK-1992, TASK-1316, STORY-1375, TASK-2008 (carry-over part) and STORY-1683 with `aida edit <ID> --status superseded --superseded-by <this spec>`.
   Tests: base-only update keeps approval; a content change drops it; the CI gate and ship agree on the same event; the proof is computed once (counted).
   Test tier STRICT: targeted `cargo test -p aida-cli-lib --lib gate::` plus the ship/mandate integration binaries you touch, plus make check-ci-fast. Never the workspace suite. Run with env -u AIDA_CONTAINED.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T05:43:25.627781245Z
+modified_at: 2026-10-30T05:51:47.253539896Z
 req_type: Story
 tags:
 - architecture
@@ -1247,6 +1247,15 @@ history:
   timestamp: 2026-10-30T05:43:27.285297279Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18b5d-4235-7a11-91f1-6f00615058ba
+  author: aida-orchestrator
+  timestamp: 2026-10-30T05:51:47.253559619Z
+  session_id: 01a18b59b110
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -1260,3 +1269,11 @@ implementation_info:
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
   reopened_at_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC4 carry-over-on-ledger and AC2 binding are implemented and tested, and CI is green at c1aef1b. But this final slice uses the plain trailer and AC7 is unmet with no evidence, and AC2 binding duplicates across changes and only runs on one PR-open path.
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-080 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T05:51:47.253539896Z
