@@ -45,7 +45,7 @@ The full footprint scaffolds project guidance and agent skills for selected prof
 
 Operators can follow the [supported setup and storage guide](operator-setup.md).
 
-Before creating specs in a fresh clone of an existing AIDA project, run `aida init` (or `aida node acquire`) in the clone to establish its local identity. Follow the project's onboarding guidance and preserve existing adoption/configuration choices. Operators can consult the [setup reference](cli/07-project-setup.md) and [storage reference](cli/10-storage.md). The [first-project walkthrough](first-project.md) is a detailed command-oriented exercise for operators and agents; ordinary users can start with the conversational journey above.
+Before creating specs in a fresh clone of an [existing AIDA project](../README.md#cloning-an-existing-aida-project), run `aida init` (or `aida node acquire`) in the clone to establish its local identity. Follow the project's onboarding guidance and preserve existing adoption/configuration choices. Operators can consult the [setup reference](cli/07-project-setup.md) and [storage reference](cli/10-storage.md). The [first-project walkthrough](first-project.md) is a detailed command-oriented exercise for operators and agents; ordinary users can start with the conversational journey above.
 
 ## Uninstall
 
