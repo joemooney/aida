@@ -9,6 +9,16 @@ feature: Uncategorized
 created_at: 2026-10-30T03:45:48.780708400Z
 modified_at: 2026-10-30T03:45:48.780708400Z
 req_type: Bug
+relationships:
+- rel_type: Child
+  target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
+  created_at: 2026-10-30T03:46:07.802304254Z
+history:
+- id: 01a18aea-4634-7890-b81b-b37aba622a8e
+  author: joe
+  timestamp: 2026-10-30T03:46:11.636479270Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
