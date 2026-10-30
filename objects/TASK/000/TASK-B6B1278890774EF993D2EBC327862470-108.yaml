@@ -20,12 +20,12 @@ description: |
 
   ## Approval boundary
   Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:08:39.022770176Z
-modified_at: 2026-10-30T01:58:16.843229678Z
+modified_at: 2026-10-30T18:34:29.307377761Z
 req_type: Task
 tags:
 - advisor-review
@@ -173,6 +173,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18e17-8836-7542-8d99-2719bf7b3133
+  author: aida-auto-bump
+  timestamp: 2026-10-30T18:34:29.302184334Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18e17-883b-7d42-8c83-77a5b533d09b
+  timestamp: 2026-10-30T18:34:29.307370623Z
+  agent: aida
+  commit_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
+  summary: 'Base-only update from main (gh update-branch e4d3fffbd32dcf242ee53fc665f742b1c1b7fd6c -> 62d6078c93b8bd42de3a0a240a6b3886a90813a9); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  punted:
+  - 'punted: session end observed 4 commits ahead on branch `codex/docs-restack-108` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
@@ -185,6 +201,8 @@ implementation_info:
   test_coverage_notes: 'make check-ci-fast: 35 fast-tier gates passed; source/help inspection and spawned author self-check'
   implemented_at: 2026-10-29T18:43:42.008730093Z
   implemented_by: ai:codex:joe
+  completed_at: 2026-10-30T18:34:29.302177992Z
+  completion_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   reopened_at_sha: 5e4ec0c39e38f1b62108e4ede81c9abd24dfe7fe
 interface_changes:
   other:
