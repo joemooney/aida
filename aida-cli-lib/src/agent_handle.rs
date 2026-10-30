@@ -1358,6 +1358,7 @@ mod tests {
             claude_session_id: sid.map(str::to_string),
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         }
     }

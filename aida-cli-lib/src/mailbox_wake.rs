@@ -67,6 +67,41 @@ pub(crate) fn audience_for(own: &ResolvedAudience, recipient: &str) -> Result<Re
     }
 }
 
+/// The audience a wake snapshot for `recipient` reads. A recipient that a
+/// registry row of the project at `project_root` names as its handle reads
+/// that row's own inbox (its handle plus its recorded role), verified from
+/// the row: it must be armed for mail wake and its process still live.
+/// Anything else is this process's own audience narrowed to `recipient`
+/// (the advisor-thread adapter's path, unchanged).
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn audience_for_recipient(
+    project_root: &Path,
+    recipient: &str,
+) -> Result<ResolvedAudience> {
+    let main = crate::main_worktree_root_from(project_root);
+    let rows: Vec<_> = crate::agent_registry::load_active_entries(&main)
+        .into_iter()
+        .filter(|(_, e)| {
+            e.name
+                .as_deref()
+                .is_some_and(|n| n.eq_ignore_ascii_case(recipient.trim()))
+        })
+        .collect();
+    if rows.is_empty() {
+        return audience_for(&crate::mailbox_view::own_audience(), recipient);
+    }
+    match rows
+        .iter()
+        .find_map(|(path, _)| crate::mailbox_wake_run::armed_audience(path).ok())
+    {
+        Some(audience) => Ok(audience),
+        None => bail!(
+            "`{recipient}` has no live session armed for mail wake; arm it with `aida agent wake \
+             arm {recipient}`"
+        ),
+    }
+}
+
 /// Read `audience`'s logical view from `root` and project it to IDs.
 /// Never binds: see the module docs.
 pub(crate) fn snapshot(
@@ -77,6 +112,19 @@ pub(crate) fn snapshot(
 ) -> Result<Snapshot> {
     let view = read_own_mail(root, store, audience, limits);
     envelope(&view)
+}
+
+impl Snapshot {
+    /// The watcher's view of this envelope.
+    // trace:STORY-HOME-096 | ai:claude
+    pub(crate) fn scan(self) -> crate::mailbox_wake_run::Scan {
+        crate::mailbox_wake_run::Scan {
+            unread: self.messages.into_iter().map(|m| m.id).collect(),
+            acknowledged: self.acknowledged_ids.into_iter().collect(),
+            partial: self.partial,
+            role_pending: self.pending,
+        }
+    }
 }
 
 fn envelope(view: &OwnMail) -> Result<Snapshot> {

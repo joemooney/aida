@@ -1427,6 +1427,7 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         },
     )
