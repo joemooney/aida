@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-30T04:20:24.385603237Z
+modified_at: 2026-10-30T06:48:12.296180805Z
 req_type: Task
 tags:
 - advisor-review
@@ -173,6 +173,12 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18b90-ecb1-7302-a33f-9ff40555703c
+  author: joe
+  timestamp: 2026-10-30T06:48:13.233642197Z
+  session_id: 01a18b8d6bb9
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
@@ -190,10 +196,10 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Operator guide, init/MCP, release, allocation and transport claims match source/help; three residual route/data-layer inconsistencies in touched docs block AC2/AC3.
+  detail: Operator guide, transport, install, init/MCP, allocation and queue claims verify against source/help and the showcase build check passes, but touched docs still contradict the HOME/WORK and bounded-cache corrections, and two broken links remain in touched docs (AC2/AC3/AC4/AC5 partial).
   recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-112 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-30T00:51:35.913719368Z
+  shelved_at: 2026-10-30T06:48:12.296180805Z
 interface_changes:
   other:
   - refresh supported operator and storage guidance
