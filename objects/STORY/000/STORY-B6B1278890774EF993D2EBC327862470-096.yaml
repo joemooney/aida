@@ -60,7 +60,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T08:23:11.594685791Z
+modified_at: 2026-10-30T09:02:57.738518428Z
 req_type: Story
 relationships:
 - rel_type:
@@ -213,6 +213,19 @@ comments:
     - `agent resume` of a codex session is not armed in this slice (it uses run_tracked_agent without a decision).
   created_at: 2026-10-30T08:23:11.594685791Z
   modified_at: 2026-10-30T08:23:11.594685791Z
+  session_id: 01a18be4bff1
+  harness_version: 2.1.314 (Claude Code)
+- id: 01a18c0c-48ca-7251-a2cf-3cbb40f08665
+  author: joe
+  content: |-
+    ## Implementer findings — slice 2, commit 6860304d08a (could not file as draft TASKs: `aida add` refused, "requirement ID allocation failed: Read-only file system")
+
+    1. **kind:design-choice, minor.** The health job is printed, not registered. `doctor check codex-mail-wake` now iterates armed rows' health.json, but no `[[schedule.jobs]]` is written to tracked `.aida/config.toml`. `wake-service install` prints the block instead. Automatic registration needs the Python adapter's ownership/adoption checks, or a built-in job gated on armed rows existing.
+    2. **kind:followup-suggestion, minor.** `aida agent resume` of a Codex session does not arm its mail wake. The resume path (`run_tracked_agent`) carries no decision, even though the resumed thread id is already known.
+    3. **kind:bug-spotted, minor.** `make check-ci-fast` failed the git-maintenance ratchet from a different seat's worktree. The traceback path was `aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-035/tests/test_git_maintenance_ratchet.py`, flagging that worktree's `bug_035_seat_clone_log_range_tests.rs`. One seat's gate can therefore fail on another's in-flight files.
+    4. **kind:design-choice, minor.** Slice 1's `row_thread` read only `native_session_id`. A launched Codex reports its thread through the SessionStart hook's `claude_session_id`, so it could never arm. Slice 2 adds that fallback, and `register_spawned_agent` now keeps a same-process hook session id that it previously overwrote.
+  created_at: 2026-10-30T09:02:57.738518428Z
+  modified_at: 2026-10-30T09:02:57.738518428Z
   session_id: 01a18be4bff1
   harness_version: 2.1.314 (Claude Code)
 history:
