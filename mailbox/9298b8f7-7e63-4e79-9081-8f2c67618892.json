@@ -1,0 +1,18 @@
+{
+  "id": "9298b8f7-7e63-4e79-9081-8f2c67618892",
+  "thread_id": "9298b8f7-7e63-4e79-9081-8f2c67618892",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793369854762,
+  "body": "Additional retention evidence: incompatible PID1092707 is `aida queue work TASK-b6b1278890774ef993d2ebc327862470-120 --user role:implementer --role implementer --no-human --force-claim --fresh`, cwd /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-120. It is owned by the active TASK-HOME-120 lane, so I did not terminate or restart it. Latest activation dry-run still refuses (recorded=no), plus a transient unreadable writer. Once that lane can safely restart under the current binary, the operator can run interactive retention activation and retry the four normal session ends. The four code PR branches remain freed by clean detached worktrees, without mail or lease deletion.\n",
+  "subject": "Retention blocker belongs to active TASK-HOME-120 launcher",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}

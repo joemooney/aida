@@ -1,0 +1,18 @@
+{
+  "id": "f12f8cce-5daf-4733-abc2-2e5f2a71f6cd",
+  "thread_id": "f12f8cce-5daf-4733-abc2-2e5f2a71f6cd",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793369552027,
+  "body": "The four session ends still refuse mail-retention activation, so leases are NOT released. To remove the Git checkout obstruction safely, detached each clean author worktree at its exact existing HEAD; all mail/data/leases remain intact. PR branches for3122,3125,3126,3130 are now free of the old worktree checkout. Evidence /tmp/code-pr-branches-detached.json. Reviewers can check out those branches if their ordinary lease/authority preflight allows; lease cleanup itself still needs operator retention activation after incompatible writer restart. Do not bypass any independent lease guard. Docs final corrections are merged upward locally, now validating before one final push per head.\n",
+  "subject": "Four code PR branches freed; retention-blocked leases remain intact",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
