@@ -7,8 +7,14 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T12:37:36.892991811Z
-modified_at: 2026-10-30T17:50:17.686743517Z
+modified_at: 2026-10-30T18:41:19.877134143Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a18e1d-775a-7200-89f4-8447943cfd9a
+  created_at: 2026-10-30T18:41:19.877130779Z
+  created_by: joe
 history:
 - id: 01a18dee-60b7-7083-a715-8ecff048b8fc
   author: aida-session-start
@@ -23,6 +29,10 @@ history:
   timestamp: 2026-10-30T17:50:32.953803640Z
   session_id: 01a18dee5ce8
   harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18e1d-d3f2-7530-af93-9571288dc22a
+  author: joe
+  timestamp: 2026-10-30T18:41:21.906015448Z
   changes: []
 filed_at:
   code_sha: 94551ac3d29e492e7785e5966b3b69f70c86e879
