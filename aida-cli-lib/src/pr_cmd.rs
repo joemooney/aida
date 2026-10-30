@@ -1980,7 +1980,7 @@ fn ship_preflight_gates(
         // TASK-1960: prove only. The gate that pins the merge records,
         // prints and logs the carry-over, once per ship.
         // trace:TASK-1960 | ai:claude
-        Some(&crate::review_carryover::CarryOverSite::quiet(
+        Some(&crate::gate::review_carryover::CarryOverSite::quiet(
             main_worktree,
             Some(change.base.as_str()),
         )),
@@ -3053,7 +3053,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // TASK-1960: the site remembers an applied carry-over, so the PR's
         // base is re-checked against the proven base right before the merge.
         // trace:TASK-1960 | ai:claude
-        let carry_site = crate::review_carryover::CarryOverSite::new(
+        let carry_site = crate::gate::review_carryover::CarryOverSite::new(
             &main_worktree,
             Some(retarget_base.as_str()),
         );
@@ -3553,7 +3553,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 .change_metadata(pr_number, &mut crate::network_retry::NoopSink)
                 .ok()
                 .map(|m| m.base_ref);
-            if let Some(refusal) = crate::review_carryover::proven_base_refusal(
+            if let Some(refusal) = crate::gate::review_carryover::proven_base_refusal(
                 pr_number,
                 &proven_base,
                 base_now.as_deref(),
@@ -4354,9 +4354,16 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         body,
         draft: false,
     };
-    let change = crate::forge::forge_for_open_change(project_root)
-        .open_change(req)
-        .context("could not open a forge change request")?;
+    // STORY-080 AC2: verdicts recorded for the credited specs before this
+    // PR existed bind to it, so the change answers for them.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let change = crate::gate::ledger::open_change_bound(
+        &*crate::forge::forge_for_open_change(project_root),
+        project_root,
+        req,
+        &extract_spec_ids_from_commit(&commit_msg),
+    )
+    .context("could not open a forge change request")?;
     if change.id == 0 {
         anyhow::bail!(
             "`gh pr create` succeeded but no PR number found in its output: {}",
@@ -4537,7 +4544,13 @@ pub(crate) fn recover_open_change(probe_repo: &std::path::Path, branch: &str) ->
         body: derive_pr_body_from_commit(&commit_msg),
         draft: false,
     };
-    match crate::forge::forge_for_open_change(probe_repo).open_change(req) {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    match crate::gate::ledger::open_change_bound(
+        &*crate::forge::forge_for_open_change(probe_repo),
+        probe_repo,
+        req,
+        &extract_spec_ids_from_commit(&commit_msg),
+    ) {
         Ok(change) => {
             // STORY-1480: adopting unshipped work IS the integrate-side
             // implementer hand-off — before this, such a spec's history

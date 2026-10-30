@@ -2108,7 +2108,8 @@ fn task_1800_deleted_agreed_id_spec_at_a_non_canonical_path_refuses() {
 // trace:TASK-1960 | ai:claude
 #[test]
 fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
-    use crate::review_carryover::tests as fx;
+    use crate::gate::review_carryover::tests as fx;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
     let (tmp, approved) = fx::fixture();
     let repo = tmp.path();
@@ -2159,8 +2160,10 @@ fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
         }
         other => panic!("an evil merge must stay a stale approval: {other:?}"),
     }
-    // The mandate path only proves; the pinning gate records.
-    assert!(crate::review_carryover::read_record(repo, 42, clean).is_none());
+    // The mandate path's proof is on the gate ledger for the pinning gate
+    // to read (STORY-080 AC4); the evil head has only its refusal.
+    assert!(crate::gate::review_carryover::tests::proof_event(repo, clean).is_some());
+    assert!(crate::gate::review_carryover::tests::proof_event(repo, evil).is_none());
 }
 
 // ── BUG-2179: one bounded store-history read for every traced spec ─────────
