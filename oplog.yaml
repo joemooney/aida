@@ -93377,5 +93377,13 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 7228
+- id: 01a18d41-a560-74c3-9aae-c622001ebd3e
+  target_id: 01a159bf-9294-7303-8baf-af447935c9ce
+  author: aida
+  node_id: '1'
+  lamport: 7229
+  timestamp: 2026-10-30T14:40:52.064688883Z
+  kind: !SetStatus
+    status: Superseded
+clock: 7229
 node_id: '1'
