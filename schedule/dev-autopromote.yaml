@@ -1,9 +1,9 @@
 job: dev-autopromote
-last_run: 2026-10-30T18:57:13.579046946Z
+last_run: 2026-10-30T19:23:14.404474584Z
 last_by:
   seat: substrate
   vendor: tick
-result: ok
+result: failed:1
 failure_trips:
 - trip_id: dev-autopromote@2026-10-24T03:05:06.760243893Z
   at: 2026-10-24T03:05:06.760243893Z
@@ -49,4 +49,7 @@ failure_trips:
   status: 1
 - trip_id: dev-autopromote@2026-10-30T17:24:09.540429421Z
   at: 2026-10-30T17:24:09.540429421Z
+  status: 1
+- trip_id: dev-autopromote@2026-10-30T19:23:14.404474584Z
+  at: 2026-10-30T19:23:14.404474584Z
   status: 1
