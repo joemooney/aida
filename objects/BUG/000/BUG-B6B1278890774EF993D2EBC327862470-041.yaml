@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T16:24:25.164645338Z
+modified_at: 2026-10-30T16:24:30.063090656Z
 req_type: Bug
 tags:
 - area:cache
@@ -126,6 +126,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Ruling items 1-4 mostly landed with core unit tests, but CI is red at head (lib-1 Test time budget), acceptance criteria ac0b5d93 (30s bound for rel add / auto-queue-review) and ac6fb004 (auto-queue-review re-run repair) are not implemented, advisor addendum item 5 is missing, and the D-state no-steal guard only fires on the pid-reuse case.. No triage reason was given.'
   created_at: 2026-10-30T16:24:25.164643864Z
   modified_at: 2026-10-30T16:24:25.164643864Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18da0-8602-7361-8796-0c15113ca1e1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-041):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 87315add9e8e
+    Recorded: 2026-10-30T16:22:11.581262274+00:00
+    Findings:
+    1. CI red at reviewed head 87315add: job 'CI (lib-1)' failed its 'Test time budget' step (run 41086315822), so 'Build (ubuntu-latest) / Require every CI lane' is red; main is green. Find the test that blew the budget (scripts/test-time-budget.toml) and fix it or its budget.
+    2. AC ac0b5d93 unmet: 'aida rel add' and 'aida pr auto-queue-review' are not bounded to 30s against a foreign-pid_ns + stale-heartbeat lock-info. store_lock::acquire still waits its 120s default and the cache retry ladder adds ~25s; only 'doctor stale-locks' got a deadline (20s). No test exercises any of the three commands against that fixture.
+    3. AC ac6fb004 unmet: 'aida pr auto-queue-review' interrupted after the add step is still not repaired by a re-run: the 'story already exists' idempotency guard (aida-cli-lib/src/pr_cmd.rs) still skips the link and queue steps. Nothing in the diff touches it; needs the fix plus a test that seeds an existing unlinked/unqueued review story.
+    4. Advisor addendum item 5 (bundled TASK-HOME-126) missing: ensure_index_lock_clear_for_write (aida-core/src/git_ops.rs) does not print 'removed stale store index.lock from <mtime>' when it removes a stale index.lock, and bug034_commit_recovers_a_stale_index_lock does not assert it. git_ops.rs is not in the diff.
+    5. D-state no-steal guard misfires: reclaim_dead_lock_info_probed (aida-core/src/db/cache_lock.rs) checks the D state only after the classifier says Dead. Dead{pid_reused:false} means the pid is gone (no /proc stat), so the guard can only fire on Dead{pid_reused:true}, where the D-state process is an UNRELATED process reusing the pid. That keeps a stale record for no reason. stale_lock_findings has the same flaw: its 'Dead if on_disk => {}' arm drops the finding silently. The test bug_home_041_healer_never_steals_from_a_d_state_holder asserts exactly that pid-reuse case. A live visible D-state holder already classifies Alive and is never removed. Fix: drop the guard, or apply it only to the non-reused visible holder, and test the Alive+D path.
+    6. doctor_stale_locks_bounded (aida-cli-lib/src/doctor_cmd.rs) is untested: no test covers the recv_timeout path, AIDA_STALE_LOCKS_DEADLINE_SECS, or an end-to-end 'aida doctor heal stale-locks' run against a foreign-pid_ns stale-heartbeat fixture, which is what AC ac9b2995 requires at CLI level. Only the scan is bounded: heal_doctor_findings runs on the calling thread after the scan, so a reclaim read parked on disk is not bounded by the deadline.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T16:24:29.954194599Z
+  modified_at: 2026-10-30T16:24:29.954194599Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d4b-c6ce-72a0-a586-c58512a5c7e1
