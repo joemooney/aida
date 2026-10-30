@@ -89778,5 +89778,17 @@ operations:
   timestamp: 2026-10-30T04:05:09.537982733Z
   kind: !SetStatus
     status: Completed
-clock: 6989
+- id: 01a18afe-b8b6-7253-bf13-a44062181e29
+  target_id: 01a18afe-5265-7ca3-872d-c0c6563ac05c
+  author: aida
+  node_id: '1'
+  lamport: 6990
+  timestamp: 2026-10-30T04:08:31.670454752Z
+  kind: !Create
+    title: Refresh Devin/Cognition entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research (Devin Desktop/ACP, Managed Devins, single-writer stance, Security Profiles/Outposts, memory
+    description: ''
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6990
 node_id: '1'
