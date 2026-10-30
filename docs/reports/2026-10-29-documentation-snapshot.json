@@ -14,7 +14,7 @@
     "site-source-or-asset": 15,
     "template-master": 213
   },
-  "local_links_scanned": 2591,
+  "local_links_scanned": 2600,
   "link_candidates": 220,
   "self_derived_outputs_excluded_from_hash_cycle": [
     "docs/reports/2026-10-29-documentation-inventory.csv",
