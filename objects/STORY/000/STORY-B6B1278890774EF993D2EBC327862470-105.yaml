@@ -19,12 +19,19 @@ description: |
   - Census of .aida-store/objects: 5746 flat agreed specs; 412 node-1 local ids (BUG-1-nnn), of which 411 already have an agreed_id; 269 node-b6b local ids, of which 0 have an agreed_id. The backfill target is the 269 b6b specs (plus the single node-1 spec with no agreed id).
   - Operator offered to migrate the node-1 local ids into the b6b namespace. RULED: do not renumber. b6b local numbers 001-2xx are already taken, so a move would need an offset and would rewrite 412 ids for no lookup gain (they already resolve bare through their agreed ids). Instead, record node 1 as a retired identity of this node, so BUG-1-nnn keeps resolving and the old node never allocates again.
   - Agreed ids for the backfill continue each type's existing global sequence (next after the highest flat agreed id per type).
+
+
+  ADVISOR RULING 2026-10-29 22:00: REVISES the node-1 bullet above, per the operator's clarified proposal.
+  - MIGRATE every node-1 spec (412) to a NEW b6b local id, numbered after this node's current per-type maximum (so no collision). The old BUG-1-mmm stays as a permanent alias that points to the new local id. agreed_id is unchanged (BUG-ggg), so bare use is unaffected.
+  - Resolution chain: BUG-ggg (agreed) and BUG-1-mmm (alias) both resolve to the spec whose local id is BUG-B6B...-nnn. trace: comments, commit trailers and blocked-by edges that name BUG-1-mmm keep working through the alias. Rewrite edges in the store to the new id; do not rewrite git history.
+  - Node 1 is retired after the migration and never allocates again.
+  - SKETCH QUESTION for the lane (advisor rules on the sketch): do the 5746 flat pre-node specs (agreed id only, no local id) also get b6b local ids under the "every spec has a local id" rule? Lay out the cost and benefit; the advisor's default is yes, done in the same one-time pass if the alias mechanism is identical.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-30T04:50:45.742890971Z
+modified_at: 2026-10-30T05:00:08.892690545Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -39,6 +46,11 @@ history:
 - id: 01a18b25-6eec-7b11-9357-2bd3a760cc07
   author: joe
   timestamp: 2026-10-30T04:50:48.684898861Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
+- id: 01a18b2e-9acf-72a0-bab1-31516052e9aa
+  author: joe
+  timestamp: 2026-10-30T05:00:49.743040769Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:

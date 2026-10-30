@@ -90147,5 +90147,37 @@ operations:
       - Census of .aida-store/objects: 5746 flat agreed specs; 412 node-1 local ids (BUG-1-nnn), of which 411 already have an agreed_id; 269 node-b6b local ids, of which 0 have an agreed_id. The backfill target is the 269 b6b specs (plus the single node-1 spec with no agreed id).
       - Operator offered to migrate the node-1 local ids into the b6b namespace. RULED: do not renumber. b6b local numbers 001-2xx are already taken, so a move would need an offset and would rewrite 412 ids for no lookup gain (they already resolve bare through their agreed ids). Instead, record node 1 as a retired identity of this node, so BUG-1-nnn keeps resolving and the old node never allocates again.
       - Agreed ids for the backfill continue each type's existing global sequence (next after the highest flat agreed id per type).
-clock: 7010
+- id: 01a18b2e-9c9b-7230-ac17-6d9c5aad2981
+  target_id: 01a18b22-974c-7f91-b2c0-2293b1395170
+  author: aida
+  node_id: '1'
+  lamport: 7011
+  timestamp: 2026-10-30T05:00:50.203878459Z
+  kind: !SetDescription
+    description: |
+      Follow-up to STORY-HOME-095 (block delegation slice 1, Done at 9a86ae5), whose slice-2 work (root enrollment checks, dispensing from blocks) has no owner. Operator model 2026-10-29: everyday use is the bare, globally agreed ID based on reservations; every spec also keeps a local ID.
+
+      Today: `aida node show` on the home primary says 'node-local allocation; no global blocks', Root: not enrolled, Pools: none. So every spec filed since the node change (BUG-HOME-0xx, STORY-HOME-0xx, TASK-HOME-1xx) has only a local ID.
+
+      Acceptance:
+      1. The home primary is root (`aida node enroll-root`, or a documented equivalent) and holds or grants agreed-ID blocks per type. `aida add` assigns the next agreed ID from this node's block AND a local ID in one write.
+      2. A clone without a usable block assigns a local ID only and marks the spec 'agreed id pending'. The next sync that reaches a block-holder assigns the agreed ID (the existing merge-gate promotion path; see TASK-446).
+      3. Backfill (one-time surgery, allowed): assign agreed IDs to every local-only spec, recorded as an alias, so existing local IDs, trailers and trace comments still resolve.
+      4. `aida show` and `aida list` display the agreed ID first and the local ID beside it.
+      5. Finish STORY-HOME-095 slice 2: effective_policy refuses when the local role says root but registry/root.yaml names another holder, plus dispensing from delegated blocks.
+      Process: architecture-adjacent. A short sketch comment (allocation flow, backfill plan, interaction with BUG-HOME-036's resolver) and advisor signoff come before code.
+
+      ADVISOR NOTES 2026-10-29 21:55 (operator input plus store census):
+      - Operator: "this clone really is the root" and "this is where 99.9% of the work happens". Enroll the home primary (/home/joe/ai/aida) as root. No election or remote handshake is needed.
+      - Census of .aida-store/objects: 5746 flat agreed specs; 412 node-1 local ids (BUG-1-nnn), of which 411 already have an agreed_id; 269 node-b6b local ids, of which 0 have an agreed_id. The backfill target is the 269 b6b specs (plus the single node-1 spec with no agreed id).
+      - Operator offered to migrate the node-1 local ids into the b6b namespace. RULED: do not renumber. b6b local numbers 001-2xx are already taken, so a move would need an offset and would rewrite 412 ids for no lookup gain (they already resolve bare through their agreed ids). Instead, record node 1 as a retired identity of this node, so BUG-1-nnn keeps resolving and the old node never allocates again.
+      - Agreed ids for the backfill continue each type's existing global sequence (next after the highest flat agreed id per type).
+
+
+      ADVISOR RULING 2026-10-29 22:00: REVISES the node-1 bullet above, per the operator's clarified proposal.
+      - MIGRATE every node-1 spec (412) to a NEW b6b local id, numbered after this node's current per-type maximum (so no collision). The old BUG-1-mmm stays as a permanent alias that points to the new local id. agreed_id is unchanged (BUG-ggg), so bare use is unaffected.
+      - Resolution chain: BUG-ggg (agreed) and BUG-1-mmm (alias) both resolve to the spec whose local id is BUG-B6B...-nnn. trace: comments, commit trailers and blocked-by edges that name BUG-1-mmm keep working through the alias. Rewrite edges in the store to the new id; do not rewrite git history.
+      - Node 1 is retired after the migration and never allocates again.
+      - SKETCH QUESTION for the lane (advisor rules on the sketch): do the 5746 flat pre-node specs (agreed id only, no local id) also get b6b local ids under the "every spec has a local id" rule? Lay out the cost and benefit; the advisor's default is yes, done in the same one-time pass if the alias mechanism is identical.
+clock: 7011
 node_id: '1'
