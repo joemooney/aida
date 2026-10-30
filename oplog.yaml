@@ -92159,5 +92159,13 @@ operations:
       4. Ruling C: not_found_suggestion and ambiguous_bare_id_lines show the twin's agreed_id when it has one, else the alias-local form.
       ACCEPTED, no action: the local-twin signpost stays on `aida show` only (bare = agreed under ruling A).
       Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 story_1728` plus make check-ci-fast.
-clock: 7138
+- id: 01a18c52-e48b-79a2-8ce0-ce8edec1216b
+  target_id: 01a18b1f-af35-7061-859d-b99015bea8ed
+  author: aida
+  node_id: '1'
+  lamport: 7139
+  timestamp: 2026-10-30T10:20:05.131301547Z
+  kind: !SetStatus
+    status: Approved
+clock: 7139
 node_id: '1'
