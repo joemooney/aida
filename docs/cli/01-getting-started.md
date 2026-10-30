@@ -26,7 +26,7 @@ A command reference for agents and operators: initialize the project, then captu
 - `--with-memories` — opt into the starter memory pack.
 - `--no-skills` / `--no-hooks` / `--no-roles` / `--no-agent-config` — skip the documented setup categories. Inspect help for the exact footprint interaction.
 
-**Gotchas.** Non-interactive init does not prompt for first-machine permission posture. Inspect `aida config permissions show` afterward rather than assuming a prompt was answered. A workspace of nested repositories needs deliberate store attachment, not an accidental parent-project initialization.
+**Gotchas.** Non-interactive init does not prompt for first-machine permission posture. Inspect `aida config permissions show` afterward rather than assuming a prompt was answered. Initialization refuses a parent directory containing unmanaged nested repositories unless `--force` is explicit. Re-initializing an existing project also refuses without `--force`; overwriting a populated store has an additional confirmation guard. Use deliberate store attachment when joining existing history.
 
 **Outside a project.** Run from a directory that isn't inside an AIDA project, `add`, `list`, `edit` and the other store commands refuse with setup guidance instead of guessing a store. A legacy `default_project` entry in the old project registry (`~/.aida.config` / `~/.requirements.config`) is no longer used implicitly, because it could point at an unrelated project. To target a store on purpose, pass `--file <path>` or `-p <project>`, or set `AIDA_STORE` or `REQ_DB_NAME`.
 

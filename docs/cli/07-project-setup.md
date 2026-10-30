@@ -182,7 +182,7 @@ remote-tracking ref. Local hook-profile installation/verification is the existin
 policy; it does not change the canonical store.
 
 **Sanitization is refusal-only.** A reviewed policy (below) gates every push
-and every store write; see [sanitized intake](#sanitized-intake-aida-add---sanitized).
+and every store write; see [sanitized intake](#aida-add---sanitized-sanitized-intake).
 It can only refuse known shapes and listed tokens, so keep work-filed defects
 generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
