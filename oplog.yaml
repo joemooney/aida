@@ -90958,5 +90958,31 @@ operations:
   timestamp: 2026-10-30T06:59:50.156207396Z
   kind: !SetStatus
     status: Done
-clock: 7057
+- id: 01a18b9d-a156-7f03-aba3-7c0b97622583
+  target_id: 01a18b9d-8ef1-7cb0-9e30-815bf535370a
+  author: aida
+  node_id: '1'
+  lamport: 7058
+  timestamp: 2026-10-30T07:02:05.910089302Z
+  kind: !Create
+    title: 'Review PR-3125: fix(alias): describe personal and project aliases (BUG-B6B1278890774EF993D2EBC327862470-020)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a18b68`) for branch `bug-b6b1278890774ef993d2ebc327862470-020-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3125>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-020-work` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-020
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3125` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 7058
 node_id: '1'
