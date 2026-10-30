@@ -2,12 +2,12 @@ id: 01a18c84-6948-7090-a032-b6fd22c81261
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-038
 title: Some contained seat clones are flagged 'writable git config/hooks', so the lane can never publish (BUG-HOME-037 seats, twice)
 description: '2026-10-30: two consecutive --fresh implementer seats for BUG-HOME-037 committed a fix, but `aida ship` refused to run git in the seat (''the seat can write to its git config and hooks''), and the host''s `aida ship` from the primary refused the same way. Other --fresh seats launched the same night (BUG-HOME-024, 034, 035, 036) published fine. The advisor inspected the clone''s .git/config (stock: core plus origin) and hooks (none), then published by fetching from the clone (PR-3133). Acceptance: (1) find why these seats were created with seat-writable git metadata (likely the clone''s .git is not made read-only for the seat, or a sandbox profile difference) and fix it at creation; (2) when the guard refuses, offer a host-side verified publish path: `aida ship --from-seat <clone>` inspects config and hooks and fetches the commit, and never runs the seat''s hooks; (3) test both.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T21:59:21.661737818Z
+modified_at: 2026-10-30T21:59:28.836589002Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -89,6 +89,12 @@ comments:
   content: 'ADVISOR RULING 2026-10-30 15:02 (PR-3143 round 3, FINAL). The code passes review on substance (every round 0-2 item is met); the only blocker is three deterministic CI ratchets on run 41124379639: (1) gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor: register the new seat_clone_detect / ship_from_seat gate-authority paths in the gate floor registry (do NOT exempt them); (2) command_registry help_surface_matches_golden_snapshot: regenerate the help golden for the new --from-seat flag (AIDA_UPDATE_SNAPSHOTS=1; all 3 golden locations); (3) gitlab_project_create::bug_2181_host_remote_credentials_tests::task_2001_every_host_remote_call_routes_its_credentials: route the new host push/PR calls in ship_from_seat through the credential-routing helper that the ratchet requires. Merge origin/main first. Run those 3 tests by filter plus make check-ci-fast. A delta-only re-review follows.'
   created_at: 2026-10-30T21:59:21.661737818Z
   modified_at: 2026-10-30T21:59:21.661737818Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18ed3-3544-7c52-b711-695b039f1c7f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All spec acceptance criteria and round 0-2 ruling items are met in code and covered by tests (14/14 bug_home_038 pass locally), but required PR CI is red at this head: CI (lib-0) and CI (lib-1) fail in ''Run tests'' (run 41124379639), as they did at the previous head 190d51a; main and sibling PRs on the same base are green.. No triage reason was given.'
+  created_at: 2026-10-30T21:59:28.836586651Z
+  modified_at: 2026-10-30T21:59:28.836586651Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
@@ -181,6 +187,14 @@ history:
   session_id: 01a18e93346a
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a18ed3-3544-7c52-b711-6942159a00ae
+  author: joe
+  timestamp: 2026-10-30T21:59:28.836577772Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 3bd7aa16acf3a54b66bc3527d40d93494092a7f0
   branch: main
@@ -189,11 +203,3 @@ filed_at:
   aida_build_sha: d3d60856bea
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All spec acceptance criteria and round 0-2 ruling items are met in code and covered by tests (14/14 bug_home_038 pass locally), but required PR CI is red at this head: CI (lib-0) and CI (lib-1) fail in ''Run tests'' (run 41124379639), as they did at the previous head 190d51a; main and sibling PRs on the same base are green.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-038 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T21:13:53.883126442Z
