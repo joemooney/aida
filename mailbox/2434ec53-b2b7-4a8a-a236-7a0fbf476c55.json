@@ -1,0 +1,18 @@
+{
+  "id": "2434ec53-b2b7-4a8a-a236-7a0fbf476c55",
+  "thread_id": "2434ec53-b2b7-4a8a-a236-7a0fbf476c55",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793353346171,
+  "body": "BUG-HOME-026 author work is complete: https://github.com/joemooney/aida/pull/3130\nHead 1c50dd5cd89872b7e95d691eb5c51086964776f0; base 6893558f16742586e86776b31f555700c9884b66. Six targeted regressions including the real worker handler, 19 registry checks, actual golden regeneration, all 35 fast gates, and two fresh author self-check rounds passed. Main was three commits ahead, merge-tree clean; sole overlap is unrelated ship-help golden text. Independent current-head review/CI required.\n\nAuto-queue is still running (one invocation only); it created STORY-B6B1278890774EF993D2EBC327862470-119 and is currently adding implements. Final routing receipt will follow. No approval or reviewer-queue acceptance claimed yet.\n\nContinuing the one-hour SPIKE-HOME-002 AGY investigation. Docs PRs 3096–3103 remain untouched under the advisor-owned rereview/ship plan.\n",
+  "subject": "PR-3130 BUG-HOME-026 ready for independent review",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
