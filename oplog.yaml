@@ -88844,5 +88844,13 @@ operations:
       - The worker MUST keep aida's existing interactive-terminal (human TTY) check: `aida runloop` refuses to start without one, exactly as `aida role enter` does today. Never weaken that check to make the loop scriptable.
       - The worker likely has to run through the operator's `aida` shell function (as `role enter` does) so the grant it establishes lives in that interactive shell and is inherited by every job. Design the start path as a shell-function verb (`aida runloop` in the function, which then execs the worker with the shell's env), and document that a bare binary invocation without the function refuses.
       - `aida runloop submit` is the non-TTY side and never needs or gets the human-TTY attestation itself; jobs borrow the worker's.
-clock: 6911
+- id: 01a18a55-6d15-7201-9841-0ddc2a3680f3
+  target_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+  author: aida
+  node_id: '1'
+  lamport: 6912
+  timestamp: 2026-10-30T01:03:36.725256585Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 6912
 node_id: '1'

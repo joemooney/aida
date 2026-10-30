@@ -11,12 +11,12 @@ description: |-
   4. `aida agent list` / doctor show per-agent wake state.
 
   Needs a sketch + advisor signoff (touches agent lifecycle + user systemd units). Open questions for the sketch: thread-UUID discovery race; one unit per thread vs one multiplexed service.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T01:02:05.052057798Z
+modified_at: 2026-10-30T01:03:35.633015171Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -36,6 +36,34 @@ comments:
   created_at: 2026-10-30T00:04:06.159623685Z
   modified_at: 2026-10-30T00:04:06.159623685Z
   session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+- id: 01a18a55-4aa5-7c62-bf8b-70b9bdfa5f85
+  author: joe
+  content: |-
+    ## Implementer sketch (needs advisor signoff before code) — ai:claude
+
+    ### Ground truth from the code (2026-10-29, main 1db74db)
+    1. `aida agent new codex` **exec()s** codex (agent_launch.rs `agent_new_with_config`); the launcher process is gone once codex runs, so it cannot "install once the thread exists" itself. Unlike Claude (`agent_seed_session_args` seeds `--session-id`), Codex gets **no pre-seeded thread id**.
+    2. The thread id *does* reach AIDA without guessing: Codex's SessionStart hook → `agent_registry::touch_session_start_agent` stamps the row's session id from the hook payload `session_id` / `CODEX_THREAD_ID`. The registry row (keyed by pid + start identity, carrying the handle/name from `agent new`) is the exact, race-free source.
+    3. `scripts/codex-mail-wake.py` is **advisor-only**: it runs `mailbox wake-snapshot --recipient advisor` with `AIDA_SESSION_ROLE=advisor` and all identity env cleared. A per-agent watcher on an implementer/reviewer codex would wake it for *advisor* mail, not its own. `mailbox_wake::audience_for` only narrows the calling process's verified audience, so watching another handle's inbox needs a new verified selector.
+    4. The script's `install` appends a per-thread health job block to **tracked** `.aida/config.toml` and refuses in linked checkouts. Per-agent auto-install would churn tracked config once per agent and fail when launched from a worktree.
+
+    ### Proposed shape
+    - **Adapter (per operator ruling):** Rust `WakeAdapter { install(handle, session_id) / uninstall(handle) / status(handle) }` picked by vendor. `codex` → real impl; `antigravity` → `Unsupported` + one launch warning ("mail arrives on the next turn"); never an error.
+    - **Discovery trigger (open Q1), lean A1:** `agent new codex` stamps `mail_wake = pending` on the launch row (honouring `--no-mail-wake` and an `agents.toml` `[codex] mail_wake = true|false` default; a `codex --version` < 0.164.0 check downgrades this to a warning). The Codex **SessionStart hook**, on first binding of a thread id to a `pending` row, calls `adapter.install(handle, thread)` with a bounded timeout and flips the row to `armed`/`failed`. If it fails, the hook prints the exact manual `codex-mail-wake.py install …` line and never blocks the session. No race (the thread exists by definition) and no `--last`. Alternative A2: the launcher forks a detached poller that waits up to N s for the row's thread id. That adds a process and a timeout-race, so it's rejected.
+    - **Unit topology (open Q2), lean B2 (one multiplexed service):** one user unit `aida-mail-wake@<project-hash>.service` that, each tick, reads registry rows with `mail_wake=armed` and runs the existing per-thread tick (ledger per thread, same dedupe/recovery semantics) against that row's own inbox. Install = flip the row and ensure the single unit and health job exist (once per project, at the main checkout). Uninstall = flip the row to `retired`; the ledger is kept. No per-agent systemd churn, no per-agent tracked-config edits, and the worktree refusal goes away. Cost: the script gains a multi-target mode (or a Rust port). B1 (reuse the script as-is, one unit plus one config.toml health block per thread) is quick, but it hits findings 3 and 4 head-on.
+    - **Recipient (new Q3):** the watcher should wake each agent for **its own** inbox (handle + routed role), which needs `mailbox wake-snapshot --recipient <handle>` verified against the registry row instead of the env-asserted advisor role. Should the advisor-thread install keep today's advisor-only path unchanged? Lean: yes. The advisor install is an explicit operator act, and per-agent is the new mode.
+    - **Retire:** `agent end` and `gc_dead_agents` (a dead pid that gets stamped ended) call `adapter.uninstall(handle)` through the ownership check, and ledgers are retained.
+    - **Visibility:** `aida agent list` gets a `wake` column (`armed` / `pending-thread` / `failed` / `off` / `unsupported`), and `doctor check codex-mail-wake` iterates the armed rows.
+
+    ### Questions for the advisor
+    1. Q1: A1 (hook-triggered install) vs A2 (detached poller)?
+    2. Q2: B2 (one multiplexed service) vs B1 (unit per thread, today's script)?
+    3. Q3: does a per-agent watcher wake the agent's own inbox (needs a verified `--recipient <handle>`), or is advisor mail the intended scope?
+    4. Is extending the Python script acceptable, or should the multiplexed watcher be a Rust `aida mailbox wake-run` subcommand?
+  created_at: 2026-10-30T01:03:27.909513035Z
+  modified_at: 2026-10-30T01:03:27.909513035Z
+  session_id: 01a18a5402f7
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
   author: joe
@@ -52,6 +80,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18a55-68d1-7520-b327-00f5c0314e85
+  author: joe
+  timestamp: 2026-10-30T01:03:35.633030735Z
+  session_id: 01a18a5402f7
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -60,3 +97,9 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+attention_reason:
+  category: design-fork
+  detail: 'The spec requires a sketch plus advisor signoff before implementation (agent lifecycle + user systemd units). Sketch posted as a spec comment. Open forks: (Q1) where the thread-id-triggered install happens, since agent new exec()s codex and Codex gets no seeded thread id; (Q2) one unit per thread vs one multiplexed service, because today''s script edits tracked .aida/config.toml per thread and refuses in worktrees; (Q3) the script only wakes the advisor inbox, so a per-agent watcher needs a verified --recipient <handle>; (Q4) Python extension vs Rust subcommand.'
+  lean: 'A1: Codex SessionStart hook installs on first thread-id binding of a mail_wake=pending registry row. B2: one multiplexed per-project service reading armed registry rows, per-thread ledgers. Q3: wake the agent''s own inbox via a registry-verified recipient, and leave the advisor install path unchanged. Q4: Rust ''aida mailbox wake-run'' long-term; extending the script is acceptable for slice 1.'
+  raised_by: implementer
+  raised_at: 2026-10-30T01:03:35.633015171Z
