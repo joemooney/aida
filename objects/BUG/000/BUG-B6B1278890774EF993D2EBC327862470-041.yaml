@@ -25,12 +25,12 @@ description: |
 
   ## See also
   BUG-1644 (lock-info resolved per worktree), BUG-HOME-028 (noted the doctor hang)
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T16:23:39.299765883Z
+modified_at: 2026-10-30T16:24:25.164645338Z
 req_type: Bug
 tags:
 - area:cache
@@ -121,6 +121,12 @@ comments:
   created_at: 2026-10-30T16:23:39.299765883Z
   modified_at: 2026-10-30T16:23:39.299765883Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18da0-734c-7610-9fc4-f5dafaf038e3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Ruling items 1-4 mostly landed with core unit tests, but CI is red at head (lib-1 Test time budget), acceptance criteria ac0b5d93 (30s bound for rel add / auto-queue-review) and ac6fb004 (auto-queue-review re-run repair) are not implemented, advisor addendum item 5 is missing, and the D-state no-steal guard only fires on the pid-reuse case.. No triage reason was given.'
+  created_at: 2026-10-30T16:24:25.164643864Z
+  modified_at: 2026-10-30T16:24:25.164643864Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d4b-c6ce-72a0-a586-c58512a5c7e1
   author: joe
@@ -163,6 +169,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18da0-734c-7610-9fc4-f5cc2dcbb3a9
+  author: joe
+  timestamp: 2026-10-30T16:24:25.164630773Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: bd35c50292a984ef4f0c29737f46c97b4305a030
   branch: main
@@ -171,11 +185,3 @@ filed_at:
   aida_build_sha: 7ee1fa1789a
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Ruling items 1-4 mostly landed with core unit tests, but CI is red at head (lib-1 Test time budget), acceptance criteria ac0b5d93 (30s bound for rel add / auto-queue-review) and ac6fb004 (auto-queue-review re-run repair) are not implemented, advisor addendum item 5 is missing, and the D-state no-steal guard only fires on the pid-reuse case.
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-041 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T16:22:11.646732978Z
