@@ -31,7 +31,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:27.557602584Z
-modified_at: 2026-10-30T07:10:20.081839077Z
+modified_at: 2026-10-30T15:06:50.179324121Z
 req_type: Task
 tags:
 - advisor-review
@@ -137,6 +137,18 @@ comments:
     Validation: all 35 make check-ci-fast gates passed at this head (completed exit 0, /tmp/docs-round2-113-fast.log), including nine behavioral fixtures and the generated-output drift check. Both ordinary and --overview --check modes passed locally; Pandoc remains optional for ordinary CI. Fresh spawned author checker independently ran all nine fixtures, both modes, hash/count/link/navigation/help checks and every bundle requirement; no findings. This is author self-check, not independent approval. Plain push and required post-push inbox check completed. Advisor owns fresh independent review and bottom-up integration. No author verdict, self-merge, protected runtime edit or hosting change.
   created_at: 2026-10-30T04:35:44.462069842Z
   modified_at: 2026-10-30T04:35:44.462069842Z
+- id: 01a18d59-6bc3-7282-82a6-c1c885073973
+  author: ai:codex:joe
+  content: |
+    Final-round author update at `3e373bd032bdae9eefb7c082e93f3bd4ac1de1c7`.
+
+    Restored standalone overview HTML exactly from the final base (SHA256 f300086b3268b4d4d5a42d498ed574389fc94ea5de698b8edd2d0cb6853520af); removed the Pandoc --overview path and its documentation/test; corrected report citations and claims; hid all 11 decorative arrows; regenerated final inventory/candidates/snapshot.
+
+    All lower-stack fixes are included by ordinary merges; no rebases or force pushes. One fresh author self-check ran builder --check, eight behavioral fixtures, HTML arrow parsing, overview/base equality and all 1,017 inventory hashes; no scoped findings. These are author checks, with no independent-review or hold-clearance authority.
+
+    Validation: `make check-ci-fast` completed all 35 gates successfully at this exact head
+  created_at: 2026-10-30T15:06:50.179324121Z
+  modified_at: 2026-10-30T15:06:50.179324121Z
 history:
 - id: 01a188db-422f-7a63-aa54-4ee293059e7c
   author: joe
