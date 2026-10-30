@@ -92498,5 +92498,31 @@ operations:
   timestamp: 2026-10-30T11:12:06.222307096Z
   kind: !SetStatus
     status: Approved
-clock: 7164
+- id: 01a18c84-2c68-78f1-9e15-12d4ce2f431d
+  target_id: 01a18c84-24f1-77f3-b209-50efe4a436c2
+  author: aida
+  node_id: '1'
+  lamport: 7165
+  timestamp: 2026-10-30T11:13:54.792910511Z
+  kind: !Create
+    title: 'Review PR-3133: [AI:claude] fix(regen): group-timeout descendant check trusts the pidfd alone; missing PID file retries (BUG-B6B1278890774EF993D2EBC327862470-037)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-037`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3133>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-037` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-037
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3133` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7165
 node_id: '1'
