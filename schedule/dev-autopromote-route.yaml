@@ -5,3 +5,9 @@ last_by:
   session: 7b875ef6-5970-4f7c-9187-3491563af968
   vendor: claude
 result: done
+due_since: 2026-10-30T03:10:32.536816504Z
+due_reason: on CronJobFailed:dev-autopromote
+due_failure:
+  trip_id: dev-autopromote@2026-10-30T02:57:15.912596325Z
+  job: dev-autopromote
+  error: 'exit 1: build of 52e235e32f5a0f6b31bc77a086f324713f4f5fd7 failed; log /home/joe/.aida/dev-autopromote/20261030T023331Z-52e235e32f5a.log; tail: cargo: queued for a build slot (2 in use; priority normal; set AIDA_CARGO_NO_SLOT=1 to bypass; run cargo ps to see who holds them) |     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 2m 28s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
