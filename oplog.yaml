@@ -91167,5 +91167,17 @@ operations:
   timestamp: 2026-10-30T07:18:06.223626907Z
   kind: !SetStatus
     status: Approved
-clock: 7070
+- id: 01a18bae-86fd-70f3-92e4-336a8455bd4c
+  target_id: 01a18bae-7968-7a40-bd0e-601b06709a42
+  author: aida
+  node_id: '1'
+  lamport: 7071
+  timestamp: 2026-10-30T07:20:33.277160237Z
+  kind: !Create
+    title: Lanes that add a CLI flag keep shipping a stale help golden snapshot; catch it before push
+    description: '2026-10-29/30: help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/story_1728_command_registry_tests.rs) failed CI on several lane PRs in one night (3110, 3113, 3123, the 096 rework), each costing a CI cycle plus a rework round. The LIGHT gate (one targeted test plus make check-ci-fast) does not cover the help surface. Acceptance: (1) the implementer pickup prompt and LIGHT-gate text say: when you add or change a CLI command or flag, regenerate the help golden (story_1728 with AIDA_UPDATE_SNAPSHOTS=1) and commit it; (2) a cheap pre-push check in make check-ci-fast fails when *_args.rs or command_registry changed but the golden snapshot did not; (3) the test''s failure message names the exact update command.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 7071
 node_id: '1'
