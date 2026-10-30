@@ -2349,6 +2349,59 @@ mod tests {
         );
     }
 
+    /// Ruling A: a bare id resolves to the agreed spec only. When this node
+    /// also has a local spec with the same type and number, the bare id still
+    /// opens the agreed one, and a bare id whose number exists only locally is
+    /// not found; the local spec answers to its alias form.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac6dd87b | ai:claude
+    #[test]
+    fn bare_id_resolves_to_the_agreed_spec_never_a_local_number() {
+        const NODE: &str = "b6b1278890774ef993d2ebc327862470";
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = home_fixture_cached(&store_root, &dir.path().join("cache.db")).unwrap();
+        let local = |ty: &str, seq: &str, title: &str| {
+            sample_req(&format!("{ty}-{NODE}-{seq}").to_ascii_uppercase(), title)
+        };
+        let objects = store_root.join("objects");
+        for req in [
+            sample_req("STORY-100", "Agreed"),
+            local("STORY", "100", "Local twin"),
+            local("BUG", "030", "Local only"),
+        ] {
+            crate::object_store::write_object(&objects, &req).unwrap();
+            backend.cache.upsert_requirement(&req).unwrap();
+        }
+        let mut map = crate::node_alias::NodeAliasMap::default();
+        map.set("HOME", NODE).unwrap();
+        let _guard = crate::node_alias::install_for_thread(map);
+        let title = |r: Option<Requirement>| r.map(|r| r.title);
+
+        for id in ["STORY-100", "story-100"] {
+            let read = backend.get_requirement_unambiguous_for_read(id).unwrap();
+            assert_eq!(title(read).as_deref(), Some("Agreed"), "{id}");
+            let write = backend.get_requirement_unambiguous(id).unwrap();
+            assert_eq!(title(write).as_deref(), Some("Agreed"), "{id}");
+        }
+        for id in ["BUG-030", "BUG-30"] {
+            let read = backend.get_requirement_unambiguous_for_read(id).unwrap();
+            assert_eq!(title(read), None, "{id} never matches the local number");
+        }
+        let alias = backend
+            .get_requirement_unambiguous_for_read("STORY-HOME-100")
+            .unwrap();
+        assert_eq!(title(alias).as_deref(), Some("Local twin"));
+        let alias = backend
+            .get_requirement_unambiguous_for_read("BUG-HOME-30")
+            .unwrap();
+        assert_eq!(
+            title(alias).as_deref(),
+            Some("Local only"),
+            "padded on expand"
+        );
+    }
+
     // write event's session context. trace:STORY-1674 | ai:claude
     #[test]
     fn story1674_update_atomically_returns_and_caches_stamped_rows() {
