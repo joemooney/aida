@@ -21,12 +21,17 @@ description: |
 
   ## Approval boundary
   Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+
+
+  ADVISOR RULING 2026-10-30 00:15 (PR-3103 round 2, FINAL round: one push, then a scoped check of these items only)
+  (1)+(2) Do NOT regenerate docs/what-is-aida.html through the Pandoc --overview path in this PR. Restore the file's content from the base branch and remove the --overview regeneration step (or leave it unused and undocumented). That removes the accessibility and heading regressions. A Pandoc template that preserves th scope, aria-labelledby, anchors and the nested TOC can be a later task only if someone wants it; nothing is filed now.
+  FIX (3): correct the report's first-project.md line citations (49-52, 65, ~80-86) and drop any accessibility claim about the regenerated overview. FIX (4): docs/showcase/index.html: aria-hide every "↗" arrow, not just the first.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:27.557602584Z
-modified_at: 2026-10-30T06:50:04.640627128Z
+modified_at: 2026-10-30T07:10:20.081839077Z
 req_type: Task
 tags:
 - advisor-review
@@ -243,6 +248,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18ba5-2f55-7f90-b29b-f9c977aff63f
+  author: joe
+  timestamp: 2026-10-30T07:10:21.013241873Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work

@@ -91094,5 +91094,37 @@ operations:
   timestamp: 2026-10-30T07:09:50.808623354Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 7066
+- id: 01a18ba5-2fcf-7451-8248-0d91858edfc8
+  target_id: 01a188db-2c65-74b2-b493-e7a754ce37d3
+  author: aida
+  node_id: '1'
+  lamport: 7067
+  timestamp: 2026-10-30T07:10:21.135552257Z
+  kind: !SetDescription
+    description: |
+      Slice 8 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approves scope] Close the epic with an auditable reader-facing reference set after the approved content/page slices land.
+
+      ## Acceptance
+      - [ ] Inventory all tracked documentation, classify current/derived versus historical/decision/evidence/assets, and record the reviewed snapshot. Preserve historical records as dated evidence rather than rewriting their claims to current time.
+      - [ ] Sweep the final current set for file links, section anchors, moved source paths, CLI examples, freshness/terminology conflicts, unsupported claims and accessibility/navigation issues. Verify substantive corrections against source/help.
+      - [ ] Apply bounded verified fixes in the affected reader journeys; report unresolved/external-verification gaps without claiming every historical statement or vendor client was re-tested.
+      - [ ] Record file/line evidence, before/after fixes, severity, coverage and remaining gaps in a concise review report. Reference the Git diff instead of duplicating entire obsolete documents unless the advisor requests a separate artifact.
+      - [ ] Validate the final static site against its current source set and check that primary overview topics are reachable. No new runtime CI/gate policy is introduced; keep owner-private hosting unchanged unless separately authorized.
+
+      ## Layers / boundaries
+      Final source-document inventory and verification -> bounded source fixes + derived site rebuild -> usable navigation and durable audit evidence. Does not implement the epic as an unreviewed bulk task.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+
+
+      ADVISOR RULING 2026-10-30 00:15 (PR-3103 round 2, FINAL round: one push, then a scoped check of these items only)
+      (1)+(2) Do NOT regenerate docs/what-is-aida.html through the Pandoc --overview path in this PR. Restore the file's content from the base branch and remove the --overview regeneration step (or leave it unused and undocumented). That removes the accessibility and heading regressions. A Pandoc template that preserves th scope, aria-labelledby, anchors and the nested TOC can be a later task only if someone wants it; nothing is filed now.
+      FIX (3): correct the report's first-project.md line citations (49-52, 65, ~80-86) and drop any accessibility claim about the regenerated overview. FIX (4): docs/showcase/index.html: aria-hide every "↗" arrow, not just the first.
+clock: 7067
 node_id: '1'
