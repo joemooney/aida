@@ -1,5 +1,6 @@
 //! Small self-contained session/identity command handlers lifted out of
-//! `main.rs` (SPIKE-78): `aida whoami` (caller-identity read) and the internal
+//! `main.rs` (SPIKE-78): `aida whoami` (the session view; its rendering lives
+//! in `whoami_view`) and the internal
 //! `_bg-fetch` background/two-leg refresh worker. Pure movement — behavior
 //! unchanged. Shared helpers (`current_user_id`, `canonical_role_name`,
 //! `bg_fetch_lock_path`, `write_last_fetch_entry`, `handle_fetch_command`)
@@ -31,18 +32,22 @@ pub(crate) fn whoami_user_source(
     }
 }
 
-/// `aida whoami` — print the caller identity AIDA resolved, each line
-/// annotated with where the value came from. This is a PURE READ of the same
-/// resolvers the gating / queue / provenance code already uses
-/// (`current_user_id`, `agent_registry::detect_agent_type`, and the
-/// `AIDA_SESSION_*` / `AIDA_AGENT_*` / `AIDA_HEADLESS` / `AIDA_AI_TOOL` env
-/// reads) — no project store is loaded and no state is written. It exists to
-/// answer the recurring "why did this refuse?" (role resolved to a default,
-/// not advisor, so the advisor-gate fired) and "why is my queue empty?" (the
-/// shell's user/role identity differs from whatever queued the items — see the
-/// BUG-89 queue-identity note in CLAUDE.md).
+/// `aida whoami --verbose`'s caller-identity block: the identity AIDA
+/// resolved, each line annotated with where the value came from. This is a
+/// PURE READ of the same resolvers the gating / queue / provenance code
+/// already uses (`current_user_id`, `agent_registry::detect_agent_type`, and
+/// the `AIDA_SESSION_*` / `AIDA_AGENT_*` / `AIDA_HEADLESS` / `AIDA_AI_TOOL`
+/// env reads) — no project store is loaded and no state is written. It exists
+/// to answer the recurring "why did this refuse?" (role resolved to a
+/// default, not advisor, so the advisor-gate fired) and "why is my queue
+/// empty?" (the shell's user/role identity differs from whatever queued the
+/// items — see the BUG-89 queue-identity note in CLAUDE.md).
+///
+/// Rows are `(field, value, source)`; the field names are the ones the
+/// pre-STORY-098 `aida whoami` printed, kept stable for scripts.
 // trace:TASK-784
-pub(crate) fn handle_whoami_command() -> Result<()> {
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+pub(crate) fn caller_identity_rows() -> Vec<(&'static str, String, String)> {
     // Helper: read an env var, returning the value + a source label that names
     // the env var when set (non-empty) and the fallback otherwise.
     fn env_with_source(key: &str, fallback: &str) -> (String, String) {
@@ -51,74 +56,124 @@ pub(crate) fn handle_whoami_command() -> Result<()> {
             _ => (fallback.to_string(), "default".to_string()),
         }
     }
-
-    println!("{}", "AIDA caller identity".bold());
+    let mut rows = Vec::new();
 
     // Role — read of $AIDA_SESSION_ROLE, canonicalized exactly the way the
     // gating/queue/routing code reads it (dialog → advisor, human casing).
     // Unset means no role is seated; the gating code treats that as the
     // implementer default, so name that explicitly — it's the value that
     // surprises people at the advisor-gate.
-    match std::env::var("AIDA_SESSION_ROLE") {
+    rows.push(match std::env::var("AIDA_SESSION_ROLE") {
         Ok(raw) if !raw.trim().is_empty() => {
             let canonical = canonical_role_name(&raw);
-            if canonical != raw {
-                println!(
-                    "  role:       {} (from AIDA_SESSION_ROLE={}, canonicalized)",
-                    canonical, raw
-                );
+            let source = if canonical != raw {
+                format!("from AIDA_SESSION_ROLE={raw}, canonicalized")
             } else {
-                println!("  role:       {} (from AIDA_SESSION_ROLE)", canonical);
-            }
+                "from AIDA_SESSION_ROLE".to_string()
+            };
+            ("role", canonical, source)
         }
-        _ => println!("  role:       implementer (default — no AIDA_SESSION_ROLE seated)"),
-    }
+        _ => (
+            "role",
+            "implementer".to_string(),
+            "default — no AIDA_SESSION_ROLE seated".to_string(),
+        ),
+    });
 
     // Agent type — detect_agent_type prefers $AIDA_AGENT_TYPE, then sniffs the
     // env (CODEX_* / ANTIGRAVITY_* / GEMINI_* / CLAUDE*), else "other".
-    let agent_type = agent_registry::detect_agent_type();
     let agent_type_source = match std::env::var("AIDA_AGENT_TYPE") {
-        Ok(v) if !v.trim().is_empty() => "from AIDA_AGENT_TYPE".to_string(),
-        _ => "env-sniff fallback".to_string(),
+        Ok(v) if !v.trim().is_empty() => "from AIDA_AGENT_TYPE",
+        _ => "env-sniff fallback",
     };
-    println!("  agent-type: {} ({})", agent_type, agent_type_source);
+    rows.push((
+        "agent-type",
+        agent_registry::detect_agent_type(),
+        agent_type_source.to_string(),
+    ));
 
-    // Agent name.
-    let (agent_name, agent_name_src) = env_with_source("AIDA_AGENT_NAME", "(none)");
-    println!("  agent-name: {} ({})", agent_name, agent_name_src);
+    let (agent_name, src) = env_with_source("AIDA_AGENT_NAME", "(none)");
+    rows.push(("agent-name", agent_name, src));
 
     // User id — the queue/provenance identity (BUG-89). Mirror current_user_id's
     // resolution order so the source label is precise.
-    let user_id = current_user_id(None);
     let user_source = whoami_user_source(
         std::env::var("AIDA_USER").ok().as_deref(),
         std::env::var("USER").ok().as_deref(),
         std::env::var("USERNAME").ok().as_deref(),
     );
-    println!("  user-id:    {} ({})", user_id, user_source);
+    rows.push(("user-id", current_user_id(None), user_source.to_string()));
 
     // Headless flag — set to "1" by the headless launchers.
-    match std::env::var("AIDA_HEADLESS") {
-        Ok(v) if !v.trim().is_empty() => {
-            println!("  headless:   {} (from AIDA_HEADLESS)", v)
-        }
-        _ => println!("  headless:   no (default — AIDA_HEADLESS unset)"),
+    rows.push(match std::env::var("AIDA_HEADLESS") {
+        Ok(v) if !v.trim().is_empty() => ("headless", v, "from AIDA_HEADLESS".to_string()),
+        _ => (
+            "headless",
+            "no".to_string(),
+            "default — AIDA_HEADLESS unset".to_string(),
+        ),
+    });
+
+    // AI tool — provenance stamp source; then the AIDA_SESSION_* family.
+    for (field, key) in [
+        ("ai-tool", "AIDA_AI_TOOL"),
+        ("scope", "AIDA_SESSION_SCOPE"),
+        ("project", "AIDA_SESSION_PROJECT"),
+        ("purpose", "AIDA_SESSION_PURPOSE"),
+        ("session-id", "AIDA_SESSION_ID"),
+    ] {
+        let (value, src) = env_with_source(key, "(none)");
+        rows.push((field, value, src));
     }
+    rows
+}
 
-    // AI tool — provenance stamp source.
-    let (ai_tool, ai_tool_src) = env_with_source("AIDA_AI_TOOL", "(none)");
-    println!("  ai-tool:    {} ({})", ai_tool, ai_tool_src);
+/// `aida whoami` / `aida node whoami`: the compact session view (handle,
+/// node, mail, working, goal, worktree), plus the caller-identity block under
+/// `--verbose`. Human at a TTY, flat lines when piped, `--json` on request.
+// trace:TASK-784
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+pub(crate) fn handle_whoami_command(flags: &WhoamiFlags) -> Result<()> {
+    let cwd = std::env::current_dir()?;
+    let worktree = find_aida_project_root_from(&cwd).unwrap_or(cwd);
+    let main_root = main_worktree_root_from(&worktree);
+    let facts = collect_mail_identity_facts_in(Some(&worktree));
+    let view = whoami_view::collect(&main_root, &worktree, &facts, chrono::Utc::now());
+    let identity = flags.verbose.then(caller_identity_rows);
 
-    // Active session / scope — the AIDA_SESSION_* family.
-    let (scope, scope_src) = env_with_source("AIDA_SESSION_SCOPE", "(none)");
-    println!("  scope:      {} ({})", scope, scope_src);
-    let (project, project_src) = env_with_source("AIDA_SESSION_PROJECT", "(none)");
-    println!("  project:    {} ({})", project, project_src);
-    let (purpose, purpose_src) = env_with_source("AIDA_SESSION_PURPOSE", "(none)");
-    println!("  purpose:    {} ({})", purpose, purpose_src);
-    let (session_id, session_id_src) = env_with_source("AIDA_SESSION_ID", "(none)");
-    println!("  session-id: {} ({})", session_id, session_id_src);
-
+    if flags.json {
+        let mut value = serde_json::to_value(&view)?;
+        if let Some(rows) = &identity {
+            let map: serde_json::Map<String, serde_json::Value> = rows
+                .iter()
+                .map(|(field, value, source)| {
+                    (
+                        field.to_string(),
+                        serde_json::json!({ "value": value, "source": source }),
+                    )
+                })
+                .collect();
+            value["identity"] = serde_json::Value::Object(map);
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
+        return Ok(());
+    }
+    let agent = agent_output_mode();
+    if agent {
+        print!("{}", view.render_toon());
+    } else {
+        print!("{}", view.render_human());
+    }
+    if let Some(rows) = identity {
+        println!();
+        if !agent {
+            println!("{}", "AIDA caller identity".bold());
+        }
+        for (field, value, source) in rows {
+            let label = format!("{field}:");
+            println!("  {label:<11} {value} ({source})");
+        }
+    }
     Ok(())
 }
 
@@ -192,32 +247,46 @@ pub(crate) fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()
     Ok(())
 }
 
-/// Print the caller identity AIDA resolved — role, agent-type, agent-name,
-/// user-id, headless flag, ai-tool, and active session/scope — each line
-/// annotated with where the value came from (env var vs fallback vs
-/// default). Read-only: it runs the SAME resolvers the gating/queue/
-/// provenance code uses, so it answers "why did this refuse?" (role
-/// resolved to a default, not advisor, tripping the advisor-gate) and
-/// "why is my queue empty?" (your user/role identity differs from what
-/// queued the items). No project store is loaded; no state is written.
+/// Who this session is: mail handle, node, unread mail, current spec, goal
+/// and worktree.
 ///
-/// Hidden alias for `aida node whoami` (identity introspection lives under
-/// the `node` namespace; kept top-level for muscle memory).
+/// One compact block from local state only; never marks mail seen.
+/// `--verbose` adds the caller-identity details (role,
+/// agent-type, agent-name, user-id, headless, ai-tool, scope, project,
+/// purpose, session-id), each annotated with where it came from.
+///
+/// Also available as `aida node whoami`.
 // trace:TASK-784
 // trace:TASK-851 | ai:claude
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
 #[derive(clap::Parser, Debug)]
 #[clap(name = "whoami")]
-#[clap(hide = true)]
-pub(crate) struct WhoamiArgs {}
+pub(crate) struct WhoamiArgs {
+    #[clap(flatten)]
+    pub flags: WhoamiFlags,
+}
 
-// TASK-784: pure read of the caller-identity resolvers (env vars +
-// current_user_id + detect_agent_type). No project store needed.
+/// Flags shared by `aida whoami` and `aida node whoami`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+#[derive(clap::Args, Debug, Clone, Default)]
+pub(crate) struct WhoamiFlags {
+    /// Machine-readable JSON output.
+    #[clap(long)]
+    pub json: bool,
+    /// Also print the caller-identity details and where each came from.
+    #[clap(long, short = 'v')]
+    pub verbose: bool,
+}
+
+// TASK-784: a read of local state only (env, registry, leases, mailbox
+// files, queue YAML, read-only cache). No store load, no network.
 // trace:TASK-784
 fn run_whoami(
-    _matches: &clap::ArgMatches,
+    matches: &clap::ArgMatches,
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
-    handle_whoami_command()
+    let args = <WhoamiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    handle_whoami_command(&args.flags)
 }
 
 // trace:STORY-1728 | ai:claude

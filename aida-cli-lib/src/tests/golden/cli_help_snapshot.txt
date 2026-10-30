@@ -309,6 +309,7 @@ Commands:
                 parking keystone/architecture for you. A timestamped flag (~/.aida/solo.toml, 24h
                 safety TTL) the statusline surfaces. `--off` exits; `--status` prints current state;
                 `--ttl <DURATION>` overrides the 24h cap (e.g. 8h, 2h30m)
+  whoami        Who this session is: mail handle, node, unread mail, current spec, goal and worktree
   upgrade       Upgrade aida to the latest release (or a specified version). Detects how aida was
                 installed (cargo / pre-built binary) and uses the matching upgrade strategy. From a
                 developer build with no --target, scans common install locations and offers to
@@ -5712,9 +5713,9 @@ Commands:
                role. Identity introspection under the `node` namespace. Equivalent to the top-level
                `aida team` (kept visible because the multi-clone harness invokes it); with a
                subcommand, manage per-user roles (`set-role`, `my-role`)
-  whoami       Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id,
-               headless flag, ai-tool, and active session/scope. Read-only. Identity introspection
-               under the `node` namespace; equivalent to the hidden top-level `aida whoami`
+  whoami       Who this session is: mail handle, node, unread mail, current spec, goal and worktree.
+               Read-only. Equivalent to the top-level `aida whoami`; `--verbose` adds the
+               caller-identity details
   alias        Friendly labels for node-local spec IDs: bind `HOME` to a node so `TASK-<node>-095`
                can be typed and shown as `TASK-HOME-095`. Labels are display and input only; stored
                data keeps the canonical ID
@@ -6136,13 +6137,18 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida node whoami
-Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id, headless flag,
-ai-tool, and active session/scope. Read-only. Identity introspection under the `node` namespace;
-equivalent to the hidden top-level `aida whoami`
+Who this session is: mail handle, node, unread mail, current spec, goal and worktree. Read-only.
+Equivalent to the top-level `aida whoami`; `--verbose` adds the caller-identity details
 
 Usage: aida node whoami [OPTIONS]
 
 Options:
+      --json
+          Machine-readable JSON output
+
+  -v, --verbose
+          Also print the caller-identity details and where each came from
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -17590,19 +17596,23 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida whoami
-Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id, headless flag,
-ai-tool, and active session/scope — each line annotated with where the value came from (env var vs
-fallback vs default). Read-only: it runs the SAME resolvers the gating/queue/ provenance code uses,
-so it answers "why did this refuse?" (role resolved to a default, not advisor, tripping the
-advisor-gate) and "why is my queue empty?" (your user/role identity differs from what queued the
-items). No project store is loaded; no state is written.
+Who this session is: mail handle, node, unread mail, current spec, goal and worktree.
 
-Hidden alias for `aida node whoami` (identity introspection lives under the `node` namespace; kept
-top-level for muscle memory).
+One compact block from local state only; never marks mail seen. `--verbose` adds the caller-identity
+details (role, agent-type, agent-name, user-id, headless, ai-tool, scope, project, purpose,
+session-id), each annotated with where it came from.
+
+Also available as `aida node whoami`.
 
 Usage: aida whoami [OPTIONS]
 
 Options:
+      --json
+          Machine-readable JSON output
+
+  -v, --verbose
+          Also print the caller-identity details and where each came from
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -34664,7 +34674,7 @@ Working on aida itself
       "node",
       "whoami"
     ],
-    "about": "Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id, headless flag, ai-tool, and active session/scope. Read-only. Identity introspection under the `node` namespace; equivalent to the hidden top-level `aida whoami`",
+    "about": "Who this session is: mail handle, node, unread mail, current spec, goal and worktree. Read-only. Equivalent to the top-level `aida whoami`; `--verbose` adds the caller-identity details",
     "flags": [
       {
         "name": "canonical-ids",
@@ -34680,6 +34690,16 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Machine-readable JSON output"
+      },
+      {
+        "name": "verbose",
+        "takes_value": false,
+        "help": "Also print the caller-identity details and where each came from"
       }
     ],
     "hidden": false
@@ -46133,7 +46153,7 @@ Working on aida itself
       "aida",
       "whoami"
     ],
-    "about": "Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id, headless flag, ai-tool, and active session/scope — each line annotated with where the value came from (env var vs fallback vs default). Read-only: it runs the SAME resolvers the gating/queue/ provenance code uses, so it answers \"why did this refuse?\" (role resolved to a default, not advisor, tripping the advisor-gate) and \"why is my queue empty?\" (your user/role identity differs from what queued the items). No project store is loaded; no state is written",
+    "about": "Who this session is: mail handle, node, unread mail, current spec, goal and worktree",
     "flags": [
       {
         "name": "canonical-ids",
@@ -46149,9 +46169,19 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Machine-readable JSON output"
+      },
+      {
+        "name": "verbose",
+        "takes_value": false,
+        "help": "Also print the caller-identity details and where each came from"
       }
     ],
-    "hidden": true
+    "hidden": false
   },
   {
     "path": [
