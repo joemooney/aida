@@ -90918,5 +90918,13 @@ operations:
 
 
       ADVISOR NOTE 2026-10-29 23:33: SUPERSEDES the 23:26 note. The advisor pushed the lane's commit 6bdf89bc8a7 to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096), so all seven fixes are on the PR now. REMAINING WORK ONLY: check out the PR-3110 branch, regenerate the help golden snapshot (command_registry::story_1728 help_surface_matches_golden_snapshot), run `cargo test -p aida-cli-lib --lib story_1728` plus make check-ci-fast, and push to that same branch. Do NOT open a new PR and do NOT redo the fixes.
-clock: 7052
+- id: 01a18b81-b7f3-7c03-a821-d2c549ae3961
+  target_id: 01a18b59-712f-7623-a9c5-ef9c13f8166f
+  author: aida
+  node_id: '1'
+  lamport: 7053
+  timestamp: 2026-10-30T06:31:36.691523118Z
+  kind: !SetStatus
+    status: Completed
+clock: 7053
 node_id: '1'
