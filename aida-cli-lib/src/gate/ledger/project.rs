@@ -167,12 +167,22 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     let Some(spec) = spec_key(key) else {
         return Vec::new();
     };
-    let mut out: Vec<GateEvent> = changes_for_spec(root, &spec)
+    let bound: Vec<GateEvent> = changes_for_spec(root, &spec)
         .into_iter()
         .flat_map(|change| events(root, change))
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
-        .chain(store::read_unbound(root, &spec))
         .collect();
+    // An unbound record already bound to a change (AC2) is read once, from
+    // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)
+        .into_iter()
+        .filter(|u| {
+            !bound
+                .iter()
+                .any(|b| b.verdict_record() == u.verdict_record())
+        })
+        .collect();
+    let mut out: Vec<GateEvent> = bound.into_iter().chain(unbound).collect();
     out.sort_by(|a, b| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)));
     out
 }
@@ -218,4 +228,31 @@ pub(crate) fn verdict_events_at(start: &Path, key: &str, sha: &str) -> Vec<GateE
                 .is_some_and(|head| same_reviewed_sha(head, sha))
         })
         .collect()
+}
+
+/// The newest carry-over answer on `change`'s ledger for the approval at
+/// `approved` and the head `head` (a `carry-over-proof` or
+/// `carry-over-refused` event), read from `start`. Which base tip and proof
+/// version it may stand for is the reader's check (`review_carryover`).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn carry_over_at(
+    start: &Path,
+    change: ChangeKey,
+    approved: &str,
+    head: &str,
+) -> Option<GateEvent> {
+    use super::EventBody;
+    let root = store_root(start).ok()?;
+    events(&root, change).into_iter().rev().find(|e| {
+        let (a, h) = match &e.body {
+            EventBody::CarryOverProof { proof, .. } => (&proof.approved_sha, &proof.new_head),
+            EventBody::CarryOverRefused {
+                approved_sha,
+                new_head,
+                ..
+            } => (approved_sha, new_head),
+            _ => return false,
+        };
+        same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
+    })
 }
