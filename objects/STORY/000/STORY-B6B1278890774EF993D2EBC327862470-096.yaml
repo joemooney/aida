@@ -67,12 +67,12 @@ description: |
   4. Run `codex --version` with a short timeout (for example 5s); a timeout degrades to the "old Codex" warning.
   5. An invalid `[agents.codex] mail_wake` value warns and falls back to the default instead of aborting the launch.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast. Regenerate the help golden if help changes.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T10:34:10.184827887Z
+modified_at: 2026-10-30T10:59:06.056054317Z
 req_type: Story
 relationships:
 - rel_type:
@@ -521,6 +521,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18c76-9cc8-7931-b4ab-55af68a197b7
+  author: aida-session-start
+  timestamp: 2026-10-30T10:59:06.056049936Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
