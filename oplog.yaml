@@ -87082,6 +87082,41 @@ operations:
   timestamp: 2026-10-29T20:01:53.996145282Z
   kind: !SetStatus
     status: In Progress
+- id: 01a1895d-ce27-78a1-a860-2fb226c3bccd
+  target_id: 01a1895d-c9f1-7500-8e2f-86db48466256
+  author: aida
+  node_id: '1'
+  lamport: 6798
+  timestamp: 2026-10-29T20:33:08.647164019Z
+  kind: !Create
+    title: How do I upgrade an existing project to the latest AIDA scaffolding?
+    description: |
+      **Use `aida scaffold upgrade` for category-aware project upgrades, or `aida scaffold refresh` for a gentler refresh of installed agent packs.**
+
+      ## How
+
+      Run from the consuming project with the intended installed binary:
+
+      ```bash
+      aida --version
+      aida scaffold status
+      aida scaffold upgrade --dry-run
+      aida scaffold upgrade
+      git diff
+      ```
+
+      Upgrade replaces drifted AIDA-owned templates, creates missing seed files, and updates the delimited AIDA-AUTOGEN block in AGENTS.md. Existing user-owned seed content outside that block is left alone; existing managed-merge files are left alone in the current implementation.
+
+      ## Caveat
+
+      Customized AIDA-owned skills and hooks may be overwritten by upgrade. `aida scaffold refresh` preserves edited installed pack files and does not install packs that were never installed. Avoid `--force` unless deliberately replacing user guidance. Review any tracked changes before committing; scaffolding refresh is not requirement-store synchronization.
+
+      ## See also
+
+      FAQ-25: building and promoting the live binary.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a18960-c41f-7310-af26-37fefa921a75
   target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
   author: aida
@@ -87157,6 +87192,40 @@ operations:
       ## SLICE 2 continuation (advisor, 2026-10-29 13:40)
       Continue from branch head e87ae08 and the "Slice 2 handoff" comment (the newest comment). Do not restart or re-sketch. Retarget each of the ~119 failing tests in `.slice2-failing.txt` to assert the equivalent LEDGER state (event appended, projection value, hold open or released). Never delete a test to make it pass, and never weaken an assertion. Fail-closed expectations (TASK-1801, bug_775) stay byte-identical. Run tests with `env -u AIDA_CONTAINED`. Delete `.slice2-failing.txt`, run make check-ci-fast, then open the PR with `(Refs <this spec>)`. The handoff's 4 "findings to file" are RULED here, so do not file them: (a) by-spec ledger for unindexed specs is accepted for slice 2; slice 3 binds it to the change. (b) backfill-shas legacy rewrite is accepted; it is the operator's exemption. (c) list_holds full scan is accepted (perf, revisit if measured). (d) collected untyped legacy markers keeping legacy=true is a defect: fix it in this slice.
       If context runs low again, push the WIP and update the handoff comment before stopping.
+- id: 01a1895f-b878-78b1-a073-6f6219a9e649
+  target_id: 01a1895f-b4b5-7893-8ed2-d6bdf609c9a3
+  author: aida
+  node_id: '1'
+  lamport: 6799
+  timestamp: 2026-10-29T20:35:14.168471165Z
+  kind: !Create
+    title: Where does scaffold status get the templates it compares against?
+    description: |
+      **Scaffolding compares against the templates shipped in the running AIDA binary; it does not automatically download the latest templates from a forge.**
+
+      ## Why
+
+      Pulling the AIDA source checkout and upgrading a consuming project's scaffolding are separate operations. Templates in `aida-core/templates/` are compiled into AIDA. An older executable can therefore report scaffolding as current relative to its own older templates.
+
+      ## How
+
+      ```bash
+      aida --path
+      aida --version
+      ```
+
+      After updating the primary AIDA source checkout, run `aida dev build` there to build, smoke-test, and promote the updated binary. Then run `aida scaffold status` and `aida scaffold upgrade --dry-run` in the consuming project.
+
+      ## Caveat
+
+      Check for deliberately configured template customizations when the generated output differs from stock templates. "Current" describes the selected binary/template source, not the latest remote commit.
+
+      ## See also
+
+      FAQ-25 and FAQ-27.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a18960-d3e6-7013-af72-06f548685f6e
   target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
   author: aida
@@ -87165,6 +87234,42 @@ operations:
   timestamp: 2026-10-29T20:36:26.726793030Z
   kind: !SetStatus
     status: Approved
+- id: 01a1895f-c63a-7ca0-83a0-00e0bab1f9ec
+  target_id: 01a1895f-c2df-7f71-bf8b-923b9468ac78
+  author: aida
+  node_id: '1'
+  lamport: 6800
+  timestamp: 2026-10-29T20:35:17.690871826Z
+  kind: !Create
+    title: Why does changing directories or opening another terminal select a different AIDA binary?
+    description: |
+      **Development activation belongs to the shell, not to its current directory. Changing directories does not change the executable already selected on PATH.**
+
+      ## Why
+
+      Two terminals can run different AIDA builds against the same project. A dev-activated shell can keep selecting an old release binary even after a newer agent build has been compiled elsewhere. Shell functions, PATH ordering, and Bash's command hash can all affect command resolution.
+
+      ## How
+
+      ```bash
+      type -a aida
+      aida --version
+      aida dev status
+      hash -r
+      ```
+
+      On builds that support it, `aida --path` reports the actual executable. Use `aida dev activate auto` to select the freshest available target build in the configured development checkout. A stable live installation is preferable for ordinary project use.
+
+      ## Caveat
+
+      Bare `aida dev activate` can default to the release profile; `make build-fast` produces the agent profile. `exec bash` reloads startup configuration but can inherit activation environment variables unless startup code clears them. Inspect resolution after restarting.
+
+      ## See also
+
+      FAQ-25 and FAQ-27.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a18965-457f-71f2-af99-5f67681928e3
   target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
   author: aida
@@ -87173,6 +87278,39 @@ operations:
   timestamp: 2026-10-29T20:41:17.951423669Z
   kind: !SetStatus
     status: In Progress
+- id: 01a1895f-d746-72f1-b6f3-bdf9c68ce217
+  target_id: 01a1895f-d3f5-7a90-a016-5e50d912da74
+  author: aida
+  node_id: '1'
+  lamport: 6801
+  timestamp: 2026-10-29T20:35:22.054298429Z
+  kind: !Create
+    title: Which project store and remote receive a requirement or FAQ that I add?
+    description: |
+      **The working project's resolved store determines where a requirement or FAQ is written; the directory containing the AIDA executable does not.**
+
+      ## How
+
+      Before filing reference material, check the intended project:
+
+      ```bash
+      pwd
+      git remote -v
+      aida cache status
+      ```
+
+      Run AIDA in that project's directory. Explicit store overrides and sibling-store configuration can change the resolved destination, so verify those before writing. A binary built in one AIDA checkout can be used in another project without redirecting that project's requirements back to the binary's source checkout.
+
+      ## Publication
+
+      An add may publish immediately if auto-push is enabled. Otherwise publication waits for an explicit push. Ordinary synchronization uses origin and may fan out to configured mirrors; an enabled transport profile changes that behavior. A blocked push URL does not prevent local commits.
+
+      ## See also
+
+      FAQ-11: FAQ filing conventions. STORY-1742: clone-local transport profiles.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a18967-d52f-7dd0-bf96-92d7a9cffc75
   target_id: 01a18967-cddf-7d20-9641-ff761894270a
   author: aida
@@ -87185,6 +87323,45 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
+- id: 01a1895f-e50d-7dc2-b792-a0fc900ae0f2
+  target_id: 01a1895f-e1ae-7111-bda7-40de0c530068
+  author: aida
+  node_id: '1'
+  lamport: 6802
+  timestamp: 2026-10-29T20:35:25.581919845Z
+  kind: !Create
+    title: Is aida push --store-only equivalent to a raw Git store-branch push?
+    description: |
+      **An ordinary `aida push --store-only` is not equivalent to a raw Git ref push. An enabled transport profile deliberately narrows AIDA's behavior.**
+
+      ## Difference
+
+      ```bash
+      git -C .aida-store push origin aida-store:aida-store
+      ```
+
+      This pushes existing commits using the explicit refspec. It does not itself stage or commit pending store files, publish mailbox data, or run AIDA lifecycle reconciliation. Git hooks still run and can have side effects.
+
+      Ordinary AIDA push orchestration may commit pending state, publish collaboration metadata, run lifecycle follow-ups, and fan out to configured mirrors. `--store-only` disables the code leg, not all those other behaviors.
+
+      ## How
+
+      Inspect the effective profile before assuming push is ref-only:
+
+      ```bash
+      aida config transport show
+      ```
+
+      ## Caveat
+
+      Raw Git bypasses AIDA's transport content scanner. An explicit refspec limits the destination branch but does not certify the history as safe. Neither a blocked code push nor a store-only flag is a complete information-boundary control.
+
+      ## See also
+
+      STORY-1742, FAQ-33, FAQ-34.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a1898a-2604-71a1-9127-d37eb943e6de
   target_id: 01a188ef-a78a-74d3-afbc-98b15c8f621a
   author: aida
@@ -87193,6 +87370,42 @@ operations:
   timestamp: 2026-10-29T21:21:34.724762440Z
   kind: !SetStatus
     status: Approved
+- id: 01a1895f-f2df-7bf2-b82d-5da836549d25
+  target_id: 01a1895f-ef81-75a1-978f-b7c11c7ef359
+  author: aida
+  node_id: '1'
+  lamport: 6803
+  timestamp: 2026-10-29T20:35:29.119407538Z
+  kind: !Create
+    title: Why does a downstream store still list old requirements after its code is synchronized?
+    description: |
+      **Code synchronization does not imply requirement-store synchronization. A canonical store and a private writable overlay need distinct ownership and mutation rules.**
+
+      ## Why
+
+      Two clones can have identical main branches while their aida-store histories differ. A private fork that never receives canonical changes will keep showing obsolete open requirements even when the code implementing them is current. Matching branch names do not prove matching store commits.
+
+      ## How
+
+      Compare the store tips and inspect cache freshness:
+
+      ```bash
+      git -C .aida-store rev-parse HEAD
+      aida cache status
+      ```
+
+      For a canonical mirror, update only through verified fast-forwards from its authority. Preserve an old private fork under an archive ref before deliberate replacement; never union private history into a public-capable store without boundary review.
+
+      ## Caveat
+
+      A writable private overlay should expose canonical requirements as read-only, permit changes only to overlay-owned objects, and rebase onto canonical updates. Merely switching the worktree to a branch named aida-store-work does not implement those guarantees. Until an enforced overlay profile is available and enabled, keep canonical mirrors read-only by operating policy and use a separate private workflow.
+
+      ## See also
+
+      STORY-1741, STORY-1742, BUG-2017.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a1898a-349d-7d22-a547-3883fca6b875
   target_id: 01a18967-cddf-7d20-9641-ff761894270a
   author: aida
@@ -87201,6 +87414,33 @@ operations:
   timestamp: 2026-10-29T21:21:38.461707029Z
   kind: !SetStatus
     status: Approved
+- id: 01a18960-00e4-7af1-8232-04b59ee1e751
+  target_id: 01a1895f-fd76-7111-84c3-55964f578d82
+  author: aida
+  node_id: '1'
+  lamport: 6804
+  timestamp: 2026-10-29T20:35:32.708548192Z
+  kind: !Create
+    title: How should I identify portable intent promoted between independent requirement stores?
+    description: |
+      **Promoting sanitized intent between separate stores creates independent requirement records; their local display IDs are not a shared global identity.**
+
+      ## Why
+
+      A source store and a receiving store allocate independently. Preserving the same bare STORY number can collide with an unrelated allocation. Keep source and target handles qualified by store namespace, and record the mapping explicitly.
+
+      For the checksum-envelope workflow, the full envelope digest identifies the exact transferred artifact. A short INTENT label is convenient for display, but use the full digest for verification. The receiving requirement becomes the implementation handle; the source remains provenance.
+
+      ## Caveat
+
+      An envelope checksum proves integrity, not sanitization or approval. Re-exporting with a new timestamp or edited content produces a new artifact digest; it is not inherently a permanent identity for the evolving idea. Keep a promotion receipt and reviewed mapping. Independent stores must not claim globally reserved node/block IDs without a common allocation authority.
+
+      ## See also
+
+      BUG-2017 and FAQ-10.
+    req_type: Faq
+    status: Completed
+    priority: Medium
 - id: 01a1898a-47f3-7733-813f-f53af2a6c467
   target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
   author: aida
@@ -87280,6 +87520,47 @@ operations:
 
       ## SLICE 2 finish (advisor, 2026-10-29 14:25): third seat, OPEN THE PR THIS SEAT
       Read the newest handoff comment (comment 26). The test retargeting is done. Do only this: (1) compile and fix errors; (2) run `env -u AIDA_CONTAINED cargo test --profile agent -p aida-cli-lib --lib -- gate:: drain_gate pr_merge_gate`; (3) run make check-ci-fast; (4) push and open the PR with `(Refs <this spec>)`. If a test cannot run in this seat because of the sandbox (read-only /tmp test home, or a missing advisor grant such as task_2344_q2), do NOT fight it. List it in the PR body, then push; CI runs it and is the gate. Do not start new refactors. Stop early and push rather than run out of context.
+- id: 01a18968-691e-7012-a8c5-0e6b65cde334
+  target_id: 01a18968-65ca-7971-a97a-fbfccf17648d
+  author: aida
+  node_id: '1'
+  lamport: 6805
+  timestamp: 2026-10-29T20:44:43.678682593Z
+  kind: !Create
+    title: Scaffold status and diff misreport user-owned README changes as AIDA drift
+    description: |
+      ## Problem
+
+      `aida scaffold diff` emits a full diff between a consuming project's authored README.md and the generic starter README template. `aida scaffold status` consequently reports the project README as modified scaffold drift. This is misleading: README.md is already classified as FileCategory::Seed and is expected to become user-owned after initialization. A project can have all maintained AIDA artifacts up to date and still appear stale solely because its README describes the actual product.
+
+      Reproduced with a current installed AIDA binary in an existing consuming project: scaffold status reported 306 matching, 1 modified, 0 missing; scaffold diff identified README.md alone, comparing a short generic starter README with the full project documentation. No source or project-private README content is needed to reproduce.
+
+      ## Cause
+
+      FileCategory::from_path classifies README.md as Seed. However, file_matches_artifact only special-cases CLAUDE.md and AGENTS.md and falls through to whole-content equality for README.md. The managed-diff slice/report paths also surface the full README comparison. Upgrade ownership and drift-reporting semantics are inconsistent.
+
+      ## Acceptance
+
+      - An existing user-owned README.md that differs from the starter template does not count as stale AIDA scaffolding in status or the default diff/list output.
+      - Existing README.md content remains untouched by ordinary upgrade and refresh commands.
+      - Status, diff selection, diff exit code, and upgrade reporting share consistent seed-ownership semantics.
+      - CLAUDE.md import checks and AGENTS.md managed-block checks remain intact; genuine drift in AIDA-owned templates still reports normally.
+      - Explicit single-path README comparison, if retained, is clearly labeled as an optional seed comparison, not an upgrade requirement. Document and test its exit-code semantics.
+      - Missing README behavior is explicit and consistent with seed creation policy; it must not imply a private authored README should be replaced.
+      - Add focused regressions for a richly customized README, a seed-only difference, a genuinely stale managed artifact, and missing seed files.
+
+      ## Constraints
+
+      - Do not solve this by overwriting or shortening consuming-project README files, suppressing all scaffold drift, or disabling managed-block comparisons.
+      - No project-specific paths or source content are required in fixtures.
+
+      ## Non-goals
+
+      - Redesigning scaffold template storage or the adoption plane.
+      - Changing consuming-project documentation.
+    req_type: Bug
+    status: Draft
+    priority: Medium
 - id: 01a1898a-56b9-7410-9a61-9c000663092c
   target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
   author: aida
@@ -87807,5 +88088,5 @@ operations:
   timestamp: 2026-10-29T23:59:45.571028888Z
   kind: !SetStatus
     status: In Progress
-clock: 6851
+clock: 6859
 node_id: '1'

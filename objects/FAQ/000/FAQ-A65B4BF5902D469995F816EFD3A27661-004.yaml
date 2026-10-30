@@ -1,0 +1,46 @@
+id: 01a1895f-d3f5-7a90-a016-5e50d912da74
+spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-004
+title: Which project store and remote receive a requirement or FAQ that I add?
+description: |
+  **The working project's resolved store determines where a requirement or FAQ is written; the directory containing the AIDA executable does not.**
+
+  ## How
+
+  Before filing reference material, check the intended project:
+
+  ```bash
+  pwd
+  git remote -v
+  aida cache status
+  ```
+
+  Run AIDA in that project's directory. Explicit store overrides and sibling-store configuration can change the resolved destination, so verify those before writing. A binary built in one AIDA checkout can be used in another project without redirecting that project's requirements back to the binary's source checkout.
+
+  ## Publication
+
+  An add may publish immediately if auto-push is enabled. Otherwise publication waits for an explicit push. Ordinary synchronization uses origin and may fan out to configured mirrors; an enabled transport profile changes that behavior. A blocked push URL does not prevent local commits.
+
+  ## See also
+
+  FAQ-11: FAQ filing conventions. STORY-1742: clone-local transport profiles.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T20:35:21.205345600Z
+modified_at: 2026-10-29T20:35:21.205345600Z
+req_type: Faq
+tags:
+- audience:user
+- topic:faq
+- topic:storage
+filed_at:
+  code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5fbe1e39c0
+  vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T20:35:21.205355216Z

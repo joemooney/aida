@@ -1,0 +1,49 @@
+id: 01a1895f-ef81-75a1-978f-b7c11c7ef359
+spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-006
+title: Why does a downstream store still list old requirements after its code is synchronized?
+description: |
+  **Code synchronization does not imply requirement-store synchronization. A canonical store and a private writable overlay need distinct ownership and mutation rules.**
+
+  ## Why
+
+  Two clones can have identical main branches while their aida-store histories differ. A private fork that never receives canonical changes will keep showing obsolete open requirements even when the code implementing them is current. Matching branch names do not prove matching store commits.
+
+  ## How
+
+  Compare the store tips and inspect cache freshness:
+
+  ```bash
+  git -C .aida-store rev-parse HEAD
+  aida cache status
+  ```
+
+  For a canonical mirror, update only through verified fast-forwards from its authority. Preserve an old private fork under an archive ref before deliberate replacement; never union private history into a public-capable store without boundary review.
+
+  ## Caveat
+
+  A writable private overlay should expose canonical requirements as read-only, permit changes only to overlay-owned objects, and rebase onto canonical updates. Merely switching the worktree to a branch named aida-store-work does not implement those guarantees. Until an enforced overlay profile is available and enabled, keep canonical mirrors read-only by operating policy and use a separate private workflow.
+
+  ## See also
+
+  STORY-1741, STORY-1742, BUG-2017.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-29T20:35:28.257087843Z
+modified_at: 2026-10-29T20:35:28.257087843Z
+req_type: Faq
+tags:
+- audience:user
+- topic:storage
+- topic:transport
+filed_at:
+  code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5fbe1e39c0
+  vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-29T20:35:28.257097540Z
