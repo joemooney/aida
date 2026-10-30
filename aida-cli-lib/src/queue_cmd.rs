@@ -11268,7 +11268,10 @@ pub(crate) fn scope_conflict_resume_hint(
     adopting: Option<&str>,
     clone: bool,
 ) -> String {
-    let id = &conflict_id[..conflict_id.len().min(8)];
+    // The FULL lease id: an 8-hex prefix is a timestamp and is routinely
+    // shared by two sessions, so `aida session end <prefix>` was ambiguous.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+    let id = conflict_id;
     match (refusal, adopting) {
         (Some(why), _) => format!(
             " `--resume` cannot re-enter it in place: {why} (`aida session show {id}` shows \
@@ -11276,7 +11279,6 @@ pub(crate) fn scope_conflict_resume_hint(
              {id} --force` discards it."
         ),
         (None, Some(adopted)) => {
-            let adopted = &adopted[..adopted.len().min(8)];
             format!(
                 " `--resume` re-enters only the newest orphaned lease ({adopted}), not this \
                  one: commit or stash its work there, or `aida session end {id} --force` \
@@ -12478,10 +12480,11 @@ pub(crate) fn handle_queue_work(
                         adopting,
                         conflict.tree_kind == crate::seat_clone::TreeKind::Clone,
                     );
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
                     anyhow::bail!(
                         "lease {} for scope `{}` looks orphaned (dormant process, \
                          worktree has {} uncommitted change(s) at {}).{}",
-                        &conflict.id[..conflict.id.len().min(8)],
+                        conflict.id,
                         plan.scope,
                         dirty_entries,
                         conflict.worktree_path.display(),
@@ -12511,13 +12514,16 @@ pub(crate) fn handle_queue_work(
             // "work there is lost unless committed" is evaluable in place.
             // trace:BUG-777 | ai:claude
             let recovery = stale_lease_recovery_for_lease(&conflict);
-            let short_conflict_id = conflict.id[..conflict.id.len().min(8)].to_string();
+            // Refusals name the FULL lease id so the `aida session end <id>`
+            // they suggest is unambiguous.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+            let conflict_id = conflict.id.as_str();
             match &recovery.verdict {
                 StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
                     eprintln!(
                         "  {} released orphaned lease {} ({})",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        short_conflict_id.yellow(),
+                        conflict_id.yellow(),
                         if *worktree_missing {
                             "owning session gone, worktree already removed".dimmed()
                         } else {
@@ -12544,7 +12550,7 @@ pub(crate) fn handle_queue_work(
                          refusing so that work is not discarded (--force-claim does NOT \
                          override this). Uncommitted: {}.{}",
                         plan.scope,
-                        short_conflict_id,
+                        conflict_id,
                         conflict.role.as_deref().unwrap_or("(unset)"),
                         conflict.worktree_path.display(),
                         dirty_entries,
@@ -12566,7 +12572,7 @@ pub(crate) fn handle_queue_work(
                          Recovery: `aida queue work {} --force-claim` releases the dead lease \
                          and takes the scope.{}",
                         plan.scope,
-                        short_conflict_id,
+                        conflict_id,
                         conflict.role.as_deref().unwrap_or("(unset)"),
                         conflict.worktree_path.display(),
                         recovery.worktree_state_phrase(),
@@ -12617,11 +12623,11 @@ pub(crate) fn handle_queue_work(
                      worktree (work there is lost unless committed), \
                      or `aida session end {}` manually.{}",
                     plan.scope,
-                    short_conflict_id,
+                    conflict_id,
                     conflict.role.as_deref().unwrap_or("(unset)"),
                     conflict.worktree_path.display(),
                     recovery.worktree_state_phrase(),
-                    short_conflict_id,
+                    conflict_id,
                     force_claim_note
                 );
             }
@@ -12652,7 +12658,6 @@ pub(crate) fn handle_queue_work(
                 )
                 .cyan()
             );
-            let short_id = &conflict.id[..conflict.id.len().min(8)];
             session_end(
                 Some(&conflict.id),
                 /* spec */ None,
@@ -12690,9 +12695,9 @@ pub(crate) fn handle_queue_work(
                      (resolve manually: `aida session end {} --force` discards uncommitted \
                      changes and `--include-in-use` overrides a live process in the worktree; \
                      or commit/stash the changes or stop the process first, then re-run)",
-                    short_id,
+                    conflict_id,
                     e,
-                    short_id,
+                    conflict_id,
                 ) // trace:BUG-1986 | ai:claude
             })?;
             remaining -= 1;
