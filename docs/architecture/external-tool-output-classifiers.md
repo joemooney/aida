@@ -26,6 +26,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `gh_stderr_is_network_error` |
 | `git_ops::classify_push_failure` |
 | `git_ops::commit` |
+| `git_ops::commit_failure::is_lock_contention` |
 | `git_ops::looks_like_index_lock_failure` |
 | `git_ops::push` |
 | `git_ops::push_exact` |
