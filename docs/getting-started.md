@@ -43,7 +43,7 @@ aida init --help
 
 The full footprint scaffolds project guidance and agent skills for selected profiles; `--agent` chooses profiles explicitly. The CLI is the default tool surface for agents with shell access. MCP registration is opt-in with `--with-mcp`; `aida mcp-serve` provides the stdio server for MCP clients. Check the [client setup matrix](agents/aida-mcp-install-matrix.md) for your harness. Agent permissions, project policy and review authority still need deliberate configuration.
 
-For an existing AIDA project, follow its own onboarding guidance before reinitializing or changing configuration. Operators can consult the [setup reference](cli/07-project-setup.md) and [storage reference](cli/10-storage.md). The [first-project walkthrough](first-project.md) is a detailed command-oriented exercise for operators and agents; ordinary users can start with the conversational journey above.
+For an [existing AIDA project](../README.md#cloning-an-existing-aida-project), follow its own onboarding guidance before reinitializing or changing configuration. Operators can consult the [setup reference](cli/07-project-setup.md) and [storage reference](cli/10-storage.md). The [first-project walkthrough](first-project.md) is a detailed command-oriented exercise for operators and agents; ordinary users can start with the conversational journey above.
 
 ## Uninstall
 
