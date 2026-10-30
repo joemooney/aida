@@ -197,12 +197,6 @@
   added_at: 2026-10-30T07:43:44.986321721Z
   for_role: advisor
 - user_id: role:implementer
-  requirement_id: 01a18ae9-ecec-7812-9050-cb1e8c9dc56b
-  position: 511000
-  added_by: role:implementer
-  added_at: 2026-10-30T07:46:25.344568876Z
-  for_role: advisor
-- user_id: role:implementer
   requirement_id: 01a18b07-a7e4-7fd1-afab-65e787b05fcd
   position: 513000
   added_by: role:implementer
