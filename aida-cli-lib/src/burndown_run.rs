@@ -1194,7 +1194,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         // merger (an integrate sweep, another agent session, a stale-binary
         // drain) also refuses at the merge_change chokepoint — not just this
         // in-process guard, which was the BUG-1167 gap. trace:BUG-1167 | ai:claude
-        let _ = crate::gate::merge_hold_core::write_typed_hold(
+        let _ = crate::gate::merge_hold_core::place_hold(
             project_root,
             &crate::gate::merge_hold_core::typed_hold(
                 pr.number,

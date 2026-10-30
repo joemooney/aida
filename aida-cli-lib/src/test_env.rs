@@ -277,10 +277,22 @@ impl EnvVarsGuard {
                 }
             }
         }
+        forget_contained_export(&prev);
         Self {
             prev,
             _guard: guard,
         }
+    }
+}
+
+/// A guard that sets or clears `AIDA_CONTAINED` starts and ends with no
+/// remembered launcher export, so a test that exported it for its children
+/// ([`crate::session::set_contained_env_for_children`]) cannot change how a
+/// later test's process posture reads.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn forget_contained_export(keys: &[(&'static str, Option<OsString>)]) {
+    if keys.iter().any(|(key, _)| *key == "AIDA_CONTAINED") {
+        crate::session::forget_contained_env_for_children();
     }
 }
 
@@ -341,6 +353,7 @@ impl Drop for EnvVarsGuard {
                 }
             }
         }
+        forget_contained_export(&self.prev);
     }
 }
 

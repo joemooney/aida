@@ -1,6 +1,6 @@
 You are already in your worktree {{WORKTREE}} (branch {{BRANCH}}, the PR #{{PR}} head branch). NEVER call the EnterWorktree tool.
 Takeover fixer brief (advisor {{TIMESTAMP}}): PR #{{PR}} ({{SPEC}}). The original author is idle; you continue its branch.
-1. Claim {{SPEC}} from this worktree. Read `aida show {{SPEC}} --full --comments`, any review verdicts `{{MAIN_WORKTREE}}/.aida/review-verdicts/PR-{{PR}}*`, and `gh pr view {{PR}} --comments`.
+1. Claim {{SPEC}} from this worktree. Read `aida show {{SPEC}} --full --comments`, the current review verdict `aida review verdict PR-{{PR}} --json` (it reads the PR's gate ledger), and `gh pr view {{PR}} --comments`.
 2. `git merge origin/main` (resolve conflicts preserving both sides' intent; no force-push ever).
 3. {{BRIEF}}
 4. Main's git auto-maintenance ratchet (`tests/test_git_maintenance_ratchet.py`) flags bare git spawns in tests: use `crate::test_git::git_command()` in any test you add or touch; never raise `scripts/git-maintenance-baseline.txt`.

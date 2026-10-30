@@ -134,18 +134,15 @@ impl RetainedHistory {
         Ok(Self { archived, location })
     }
 
-    /// The archive beside the verdict file at `file` (when there is one) plus
-    /// every round the gate ledger holds for `key` (M1: a collected verdict
-    /// is ledger-only). Neither source alone is required.
+    /// Every round the gate-ledger projection holds for `key`: the legacy
+    /// per-commit archive, read through, then the ledger's own rounds (M1
+    /// slice 2: the writer keeps history on the ledger only). Neither source
+    /// alone is required.
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    pub(crate) fn with_ledger(file: Option<&Path>, root: &Path, key: &str) -> Result<Self> {
-        let mut history = match file {
-            Some(path) => Self::beside(path)?,
-            None => Self {
-                archived: Vec::new(),
-                location: format!("no verdict file for {key}"),
-            },
-        };
+    pub(crate) fn projected(root: &Path, key: &str) -> Result<Self> {
+        let store = crate::gate::ledger::hold::read_root(root);
+        let file = rv::verdict_path(&store, key);
+        let mut history = Self::beside(&file)?;
         let ledger = crate::gate::ledger::project::verdict_records(root, key);
         if !ledger.is_empty() {
             history.location = format!("{} and the {key} gate ledger", history.location);
@@ -407,15 +404,20 @@ fn release_with(
     // release either finished first (its clearance stands, the marker is
     // gone) or waits, and a busy refusal has written nothing (TASK-2285).
     // trace:TASK-1951 trace:TASK-2285 | ai:claude
+    // M1 slice 2: every step is an event on the PR's gate ledger, appended
+    // under the per-PR hold lock. The authorization (with its audit comment)
+    // is recorded before the second validation; a refusing second pass
+    // appends `release-withdrawn`; the release itself is one `hold-release`
+    // event, appended last, so there is no window in which the hold is gone
+    // without its clearance (TASK-2285).
+    // trace:TASK-1951 trace:TASK-2285 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let locked = mh::with_hold_lock(root, hold.pr, || -> Result<()> {
-        if !mh::hold_path(root, hold.pr).exists() {
+        let state = crate::gate::ledger::hold::state(root, hold.pr);
+        if state.open.is_none() {
             bail!("a concurrent release already removed the hold; its clearance stands");
         }
-        let path = mh::clearance_path(root, hold.pr);
-        let existing = std::fs::read(&path)
-            .ok()
-            .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
         let also_json = serde_json::to_value(also)?;
+        let existing = state.authorized.clone().map(Value::Object);
         let same = existing.as_ref().is_some_and(|v| {
             v.get("cleared_by").and_then(Value::as_str) == Some(PRINCIPAL)
                 && v.get("released_by_verdict") == serde_json::to_value(verdict).ok().as_ref()
@@ -423,27 +425,41 @@ fn release_with(
                     .unwrap_or(&Value::Array(Vec::new()))
                     == &also_json
         });
-        if !same {
-            let mut approved_hold = hold.clone();
-            approved_hold.target_head_sha = verdict.reviewed_sha.clone();
-            mh::record_clearance_by(root, &approved_hold, PRINCIPAL, Some(verdict.clone()))?;
-            // trace:STORY-1697 trace:BUG-2123 | ai:claude
-            if release.mandate.is_some() || !also.is_empty() {
-                let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
-                if let Some(id) = &release.mandate {
-                    audit["released_under_mandate"] = Value::String(id.clone());
-                }
-                if !also.is_empty() {
-                    audit["also_released_by"] = also_json.clone();
-                }
-                aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
-            }
-        }
-        if !same
-            || !existing
+        let posted = same
+            && existing
                 .as_ref()
-                .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)))
-        {
+                .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)));
+        let mut approved_hold = hold.clone();
+        approved_hold.target_head_sha = verdict.reviewed_sha.clone();
+        // trace:STORY-1697 trace:BUG-2123 | ai:claude
+        let mut clearance = mh::clearance_for(
+            &approved_hold,
+            PRINCIPAL,
+            Some(verdict.clone()),
+            release.mandate.clone(),
+        )?;
+        if !also.is_empty() {
+            clearance.insert("also_released_by".into(), also_json.clone());
+        }
+        let authorize = |posted: bool| -> Result<()> {
+            let mut clearance = clearance.clone();
+            clearance.insert("audit_comment_posted".into(), Value::Bool(posted));
+            crate::gate::ledger::hold::append(
+                root,
+                hold.pr,
+                crate::gate::ledger::EventBody::ReleaseAuthorized { clearance },
+                verdict.reviewed_sha.as_deref(),
+                None,
+            )?;
+            Ok(())
+        };
+        // The authorization is recorded before its audit comment is posted,
+        // and marked posted after, so a failed comment is retried and a
+        // failed record never leaves a comment claiming one.
+        if !same {
+            authorize(false)?;
+        }
+        if !posted {
             let specs = match &release.mandate {
                 None => "covered specs require no human signoff".to_string(),
                 Some(id) => format!(
@@ -464,10 +480,9 @@ fn release_with(
             };
             comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}",
                 verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
-            let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
-            audit["audit_comment_posted"] = Value::Bool(true);
-            aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
+            authorize(true)?;
         }
+        clearance.insert("audit_comment_posted".into(), Value::Bool(true));
         let second = validate().and_then(|head| {
             ensure!(
                 Some(head.as_str()) == verdict.reviewed_sha.as_deref(),
@@ -475,26 +490,32 @@ fn release_with(
             );
             Ok(())
         });
-        if let Err(why) = second {
+        let now = crate::gate::ledger::hold::state(root, hold.pr);
+        if now.open.is_none() {
             // trace:TASK-1951 trace:TASK-2285 | ai:claude
-            if !mh::hold_path(root, hold.pr).exists() {
-                return Err(why.context(
-                    "a concurrent release already removed the hold; its clearance stands",
-                ));
-            }
-            supersede_clearance(root, hold.pr, &why, &comment);
+            let why = anyhow::anyhow!(
+                "a concurrent release already removed the hold; its clearance stands"
+            );
+            return Err(match second {
+                Err(second) => second.context(why),
+                Ok(()) => why,
+            });
+        }
+        if let Err(why) = second {
+            // trace:TASK-1951 trace:TASK-1757 | ai:claude
+            withdraw_authorization(root, hold.pr, &why, &comment);
             return Err(why);
         }
         ensure!(
-            path.exists(),
+            now.authorized.is_some(),
             "the auto-release clearance was withdrawn by a concurrent release; the hold \
              stays armed (re-run `aida merge-hold auto-release`)"
         );
         labels()?;
-        mh::clear_hold(root, hold.pr)?;
+        crate::gate::ledger::hold::release(root, hold.pr, clearance)?;
         // BUG-2216: the release path's event, as ship's release emits it —
         // who released, and that no human attested. Inside the lock, on the
-        // one successful clear, so it is emitted exactly once.
+        // one successful release, so it is emitted exactly once.
         // trace:BUG-2216 | ai:claude
         let mut hold_event = crate::events::Event::new(
             None,
@@ -515,7 +536,7 @@ fn release_with(
             },
         );
         hold_event.seat = crate::events::active_seat();
-        crate::events::emit(root, &hold_event);
+        crate::events::emit(&mh::hold_store_root(root), &hold_event);
         Ok(())
     });
     match locked {
@@ -525,32 +546,38 @@ fn release_with(
     }
 }
 
-/// TASK-1757: the second validation pass refused after the clearance was
-/// recorded. Move the clearance aside (kept for audit, never read as a
-/// clearance: a stale one beside a live marker would mask a later
-/// hand-deletion from the tamper check) and say so on the PR, best-effort.
-// trace:TASK-1951 trace:TASK-1757 | ai:claude
-fn supersede_clearance(
+/// TASK-1757: the second validation pass refused after the authorization
+/// was recorded. Append `release-withdrawn` (the authorization stays on the
+/// ledger for audit and no longer counts) and say so on the PR, best-effort.
+// trace:TASK-1951 trace:TASK-1757 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn withdraw_authorization(
     root: &Path,
     pr: u64,
     why: &anyhow::Error,
     comment: &dyn Fn(&str) -> Result<()>,
 ) {
-    let path = mh::clearance_path(root, pr);
-    if !path.exists() {
+    if crate::gate::ledger::hold::state(root, pr)
+        .authorized
+        .is_none()
+    {
         return;
     }
-    let aside = mh::superseded_clearance_path(root, pr, chrono::Utc::now());
-    if let Err(e) = std::fs::rename(&path, &aside) {
+    if let Err(e) = crate::gate::ledger::hold::append(
+        root,
+        pr,
+        crate::gate::ledger::EventBody::ReleaseWithdrawn {
+            reason: format!("{why:#}"),
+        },
+        None,
+        None,
+    ) {
         eprintln!(
-            "  warning: could not supersede PR #{pr}'s auto-release clearance {} ({e}); remove it by hand",
-            path.display()
+            "  warning: could not withdraw PR #{pr}'s auto-release authorization on its gate ledger ({e})"
         );
         return;
     }
     let _ = comment(&format!(
-        "Auto-release authorization withdrawn: {why:#}. The hold stays armed; the withdrawn clearance is kept at {}.",
-        aside.display()
+        "Auto-release authorization withdrawn: {why:#}. The hold stays armed; the withdrawn authorization stays on the gate ledger."
     ));
 }
 
@@ -597,24 +624,6 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
         .filter(|spec| !spec.starts_with("PR-"))
         .cloned()
         .collect();
-    // Each arming verdict is read from the root it was first found under, so
-    // both validation passes read the same file (BUG-2123: one per key).
-    let verdict_roots = std::cell::RefCell::new(std::collections::HashMap::<String, &Path>::new());
-    let verdict_file = |key: &str| -> Result<std::path::PathBuf> {
-        let known = verdict_roots.borrow().get(key).copied();
-        let verdict_root = match known {
-            Some(path) => path,
-            None => {
-                let path = [project, root.as_path()]
-                    .into_iter()
-                    .find(|r| rv::verdict_path(r, key).is_file())
-                    .with_context(|| format!("arming verdict {key} is missing"))?;
-                verdict_roots.borrow_mut().insert(key.to_string(), path);
-                path
-            }
-        };
-        Ok(rv::verdict_path(verdict_root, key))
-    };
     auto_release_with(
         &root,
         &hold,
@@ -631,24 +640,18 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     .context("covered spec store is unreadable; human clear required")?;
                 Ok((ids, store))
             },
-            // M1: a contained reviewer's collected approval is on the gate
-            // ledger only, so the newer of file and ledger is the latest
-            // verdict, and the ledger's rounds join the retained history.
-            // trace:TASK-1801 | ai:claude
+            // M1 slice 2: the arming verdict and its round history are read
+            // through the gate-ledger projection (legacy files read through
+            // it), from the shared store root, never from a verdict file.
+            // trace:TASK-1801 trace:BUG-2186 | ai:claude
             // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
             read_body: &|key| {
-                let file = match verdict_file(key) {
-                    Ok(path) => Some(rv::read_verdict_body(path)?),
-                    Err(_) => None,
-                };
-                let body = rv::current_verdict_body(&root, key, file)
+                let current = rv::current_verdict(&root, key)
+                    .or_else(|| rv::current_verdict(project, key))
                     .with_context(|| format!("arming verdict {key} is missing"))?;
-                Ok(serde_json::from_str(&body)?)
+                Ok(serde_json::from_str(&current.body)?)
             },
-            // trace:BUG-2186 | ai:claude
-            read_history: &|key| {
-                RetainedHistory::with_ledger(verdict_file(key).ok().as_deref(), &root, key)
-            },
+            read_history: &|key| RetainedHistory::projected(&root, key),
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
             },

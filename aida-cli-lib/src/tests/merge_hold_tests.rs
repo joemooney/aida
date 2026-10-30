@@ -888,7 +888,7 @@ fn live_head_projection_marks_stale_without_writing() {
     let mut record = recused_record();
     record.routing_state = HoldRoutingState::Routed;
     record.routed_to = vec![PrincipalIdentity::parse("agent:reader")];
-    std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+    std::fs::create_dir_all(hold_path(dir.path(), 42).parent().unwrap()).unwrap();
     let body = serde_json::to_vec_pretty(&record).unwrap();
     std::fs::write(hold_path(dir.path(), 42), &body).unwrap();
 
@@ -912,8 +912,8 @@ fn recusal_routing_is_idempotent_and_excludes_recused_agent() {
     }
     let mut record = typed_hold(43, HoldReasonKind::Recusal, "recused", Some("abc".into()));
     record.recused_principals = vec![PrincipalIdentity::parse("agent:author")];
-    write_typed_hold(dir.path(), &record).unwrap();
-    write_typed_hold(dir.path(), &record).unwrap();
+    place_hold(dir.path(), &record).unwrap();
+    place_hold(dir.path(), &record).unwrap();
     let reread = read_hold_record(dir.path(), 43).unwrap();
     assert_eq!(
         reread.routed_to,
@@ -925,7 +925,7 @@ fn recusal_routing_is_idempotent_and_excludes_recused_agent() {
     assert_eq!(briefs, 1);
 
     std::fs::remove_file(dir.path().join(".aida/agents/reader.toml")).unwrap();
-    write_typed_hold(dir.path(), &reread).unwrap();
+    place_hold(dir.path(), &reread).unwrap();
     let unrouted = read_hold_record(dir.path(), 43).unwrap();
     assert_eq!(
         unrouted.routing_state,
@@ -940,7 +940,7 @@ fn recusal_routing_is_idempotent_and_excludes_recused_agent() {
     let mut moved = unrouted;
     moved.target_head_sha = Some("def".into());
     moved.routing_state = HoldRoutingState::StaleHead;
-    write_typed_hold(dir.path(), &moved).unwrap();
+    place_hold(dir.path(), &moved).unwrap();
     let rerouted = read_hold_record(dir.path(), 43).unwrap();
     assert_eq!(
         rerouted.routed_to,

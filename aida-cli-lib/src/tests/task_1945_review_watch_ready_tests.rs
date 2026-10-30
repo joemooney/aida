@@ -998,7 +998,7 @@ fn live_hold_reads_the_marker_then_the_label() {
         "findings outstanding",
         Some(c.head.clone()),
     );
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
     let held = ready::live_hold(root, &c).unwrap().expect("marker hold");
     assert!(held.contains("rework hold"), "{held}");
 }
