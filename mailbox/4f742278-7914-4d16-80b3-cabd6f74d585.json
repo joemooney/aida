@@ -1,0 +1,19 @@
+{
+  "id": "4f742278-7914-4d16-80b3-cabd6f74d585",
+  "thread_id": "4f742278-7914-4d16-80b3-cabd6f74d585",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-01"
+  },
+  "timestamp": 1793373088631,
+  "body": "ADVISOR RULING 2026-10-30 08:16 (PR-3130 round 1, BUG-HOME-026). The code review is otherwise clean. The ONE blocker is red CI: lib-1 ratchet no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup flags aida-cli-lib/src/tests/bug026_node_inventory_tests.rs. In node_inventory_worker_dispatch_lists_other_nodes_without_allocating, replace std::env::current_exe().unwrap() with crate::resolve_aida_exe() (precedent: bug_1749_doctor_toon_tests.rs:59 and bug_1745_error_channel_tests.rs:26). Do not add an allowlist entry. Merge origin/main (no rebase, no force), run cargo test -p aida-cli-lib --lib bug026 plus make check-ci-fast, push, and mail the advisor the new head. A delta-scoped re-review follows.",
+  "subject": "PR-3130 one-line fix (CI ratchet)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
