@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T05:02:46.370855766Z
+modified_at: 2026-10-30T05:40:44.237620599Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -42,6 +42,18 @@ comments:
     An isolated runtime alias smoke probe is prepared at /tmp/task117-cli-smoke.py; run it only against the completed candidate binary under target/worktrees/aida-taskb6b1278890774ef993d2ebc327862470117/agent/aida. It creates only a temporary project/HOME. Every new push/new PR still requires a real inbox check, and new PR number/full SHA must be mailed to the advisor. After TASK-117, follow advisor queue mail 5647920e in order; re-read actual spec/current mail before each pickup. No user confirmation is pending.
   created_at: 2026-10-30T05:02:46.370855766Z
   modified_at: 2026-10-30T05:02:46.370855766Z
+- id: 01a18b53-244d-7670-bc59-b55da0719b82
+  author: ai:codex:joe
+  content: |
+    TASK-117 final source head is now 31a9af98f696f28c8dad6a66763944252ed2c7a8. The actual help snapshot was regenerated and compared successfully; only the intended agent-name/alias guidance changed. Historical policy fixture remains unchanged. Registry/policy suite: 19 passed. Isolated built-CLI probe passed canonical help, visible ls alias, list-roles separation and equal list/ls/status output for all three listing flags.
+
+    Author self-check loop: first pass found one manual bullet still showing ls as canonical; fixed it. Second fresh pass found no findings after independently checking actual spec/source/diff and parsing/help evidence. Author checks only, no independent approval or self-verdict.
+
+    make check-ci-fast at final head completed all 35 gates, exit 0 (/tmp/task117-final-fast.log). Required compile-only check after main merge passed every test target (/tmp/task117-compile.log). make test-touched has passed all 1,062 selected CLI-library tests and is still building/running the core-package tests selected by the template change; do not claim that command fully passed yet (/tmp/task117-touched-tests.log, exec session 2185 in this conversation). No TASK-117 push or PR yet. PR draft is /tmp/task117-pr.md, with the affected-test checkbox deliberately pending.
+
+    Avoid Git HEAD/index changes while builds run: committing the final snapshot during the first affected-test build triggered an avoidable extra CLI-library rebuild via build_git_stamp.rs. Branch and index are now frozen through remaining checks; use GIT_OPTIONAL_LOCKS=0 for incidental read-only Git operations. No source or gate-policy change is needed for this workflow lesson.
+  created_at: 2026-10-30T05:40:44.237620599Z
+  modified_at: 2026-10-30T05:40:44.237620599Z
 history:
 - id: 01a18a38-865a-73b1-baec-dc0e2fc248fb
   author: joe

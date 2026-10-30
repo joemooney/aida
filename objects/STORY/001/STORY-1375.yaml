@@ -34,12 +34,12 @@ description: |
   6. The 2026-09-20 case is the fixture: a hold on #1983 must surface that the drive-ownership check is inert until it lands.
 
   Filed by the product seat at the advisor's explicit request — they asked that someone without their bias shape it, having just been on the wrong side of the trade. Disposition remains theirs.
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T08:24:01.804311106Z
-modified_at: 2026-10-30T05:29:57.632413561Z
+modified_at: 2026-10-30T05:40:43.608363266Z
 req_type: Story
 tags:
 - from:session-0919
@@ -65,3 +65,12 @@ history:
   session_id: 01a18b09181f
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a18b53-21d8-7633-b632-612686014535
+  author: joe
+  timestamp: 2026-10-30T05:40:43.608359757Z
+  session_id: 01a18b09181f
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
