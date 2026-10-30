@@ -89859,5 +89859,31 @@ operations:
   timestamp: 2026-10-30T04:20:27.064102142Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6995
+- id: 01a18b13-00f9-7272-bd90-2218569442a8
+  target_id: 01a18b12-f5c2-7100-988f-4b5670162e1c
+  author: aida
+  node_id: '1'
+  lamport: 6996
+  timestamp: 2026-10-30T04:30:40.889272885Z
+  kind: !Create
+    title: 'Review PR-3117: [AI:claude] fix(agent): launcher keeps waiting on a spawned agent when registry lock is busy (BUG-b6b1278890774ef993d2ebc327862470-030)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-030`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3117>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-030` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-030
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3117` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6996
 node_id: '1'
