@@ -1,0 +1,27 @@
+id: 01a18e67-6728-7af1-b44c-3cf46b898bc4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-132
+title: 'cosmetic (non-blocking): docs/showcase/index.html start section: the new ''Explo…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-128, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): docs/showcase/index.html start section: the new 'Explore capabilities' / 'Connect project tools' text-links omit the aria-hidden arrow glyph that the sibling internal text-links carry; style is inconsistent
+  Reviewed sha: 8de7ba2fb5df1e3e085f5d988c33aef041fd8351
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-30T20:01:43.720743680Z
+modified_at: 2026-10-30T20:01:43.720743680Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-128
+- finding-hash:12d9801c
+- from-review:TASK-B6B1278890774EF993D2EBC327862470-128
+- kind:carried-forward
+filed_at:
+  code_sha: d7ff223575290d0a2d3d749400efa29f7ed24605
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 79ed6f56bf8
+  vendor: claude
