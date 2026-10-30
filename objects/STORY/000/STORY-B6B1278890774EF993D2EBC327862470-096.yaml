@@ -1,7 +1,7 @@
 id: 01a18a16-7fbb-7290-839f-6513351a7d4d
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-096
 title: aida agent new codex arms mail-wake for the spawned thread, and agent end retires it
-description: |-
+description: |
   Operator ask 2026-10-29: every Codex agent started with `aida agent new codex` should watch AIDA mail without a hand install. Today scripts/codex-mail-wake.py (TASK-2347) needs an exact thread UUID and a manual install; agents started without it never see mail (the codex docs stack 3096-3103 stalled on unread rulings for 3h).
 
   Acceptance:
@@ -25,12 +25,19 @@ description: |-
   - Slice 1 (this lane): verified `wake-snapshot --recipient <handle>` + `mailbox wake-run` over armed rows (rows armed manually via a hidden `aida agent wake arm <handle>` for now) + the unit/health-job install + tests. Closes TASK-HOME-119's acceptance.
   - Slice 2: the `agent new` pending stamp, SessionStart hook arming, retire on end/GC, the `agent list` wake column and the doctor iteration.
   LIGHT tier: targeted tests + make check-ci-fast. trace:STORY-HOME-096.
+
+  ADVISOR REWORK BRIEF 2026-10-29 20:30 (PR-3110, slice 1, same PR, no new PR):
+  1. Merge origin/main into branch story-b6b1278890774ef993d2ebc327862470-096 (merge, no rebase).
+  2. CI lib-0/lib-1 fail command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot: regenerate the golden help snapshot after the merge (the test's failure message names the update command).
+  3. CI gates fail: "docs/architecture/external-tool-output-classifiers.md does not match the markers in the tree". Regenerate or update that doc to match.
+  4. Every new commit message must end with "(Refs STORY-B6B1278890774EF993D2EBC327862470-096)". The PR's commit range has no REQ-ID trailer, so no review story could be filed.
+  5. Gate: LIGHT. Run `cargo test -p aida-cli-lib story_1728` plus `make check-ci-fast`, then push. Do not run the full suite.
 status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T02:07:29.315511399Z
+modified_at: 2026-10-30T03:23:41.961104503Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -182,6 +189,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18ad5-b15e-7192-8875-7fa46b55e435
+  author: joe
+  timestamp: 2026-10-30T03:23:42.814515466Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
