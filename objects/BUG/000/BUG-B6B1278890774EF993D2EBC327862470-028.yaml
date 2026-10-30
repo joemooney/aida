@@ -23,12 +23,12 @@ description: |
   5. Regression tests: both flag forms × {danger-full-access, workspace-write, read-only}, and the user-vs-project override case above.
 
   Note: `aida doctor --category permission-posture` did not finish within 60 s in this session; not investigated here.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T01:12:03.755273489Z
-modified_at: 2026-10-30T01:12:03.755273489Z
+modified_at: 2026-10-30T03:50:22.473290154Z
 req_type: Bug
 tags:
 - codex
@@ -36,6 +36,15 @@ tags:
 - permissions
 - sandbox
 - security
+history:
+- id: 01a18aee-1a09-7243-91b8-78e1a5359e1f
+  author: joe
+  timestamp: 2026-10-30T03:50:22.473286759Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
