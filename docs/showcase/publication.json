@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "scope": "Curated product guides; expansion pending advisor curation review. Historical/internal material is excluded. No hosting access change.",
+  "pages": [
+    {
+      "source": "getting-started.md",
+      "output": "getting-started.html",
+      "label": "Get started",
+      "category": "human"
+    },
+    {
+      "source": "configuration-guide.md",
+      "output": "configuration.html",
+      "label": "Configuration",
+      "category": "operator"
+    },
+    {
+      "source": "product-workflow.md",
+      "output": "workflow.html",
+      "label": "Workflow",
+      "category": "human"
+    },
+    {
+      "source": "selectable-autonomy.md",
+      "output": "autonomy.html",
+      "label": "Autonomy",
+      "category": "human"
+    },
+    {
+      "source": "trust-and-evidence.md",
+      "output": "trust.html",
+      "label": "Trust",
+      "category": "human"
+    },
+    {
+      "source": "metrics-guide.md",
+      "output": "metrics.html",
+      "label": "Metrics",
+      "category": "operator"
+    },
+    {
+      "source": "operator-setup.md",
+      "output": "setup.html",
+      "label": "Setup",
+      "category": "operator"
+    }
+  ]
+}

@@ -13,7 +13,7 @@ It is alpha software, Linux-only, and released under the MIT licence.
 - **A git-canonical requirements graph.** Specs (stories, tasks, bugs, spikes,
   epics, decisions) are YAML objects on an orphan `aida-store` branch with
   stable IDs and typed relationships. A local SQLite cache makes reads fast and
-  can always be rebuilt from git. Cloning the repository brings the graph with it.
+  is rebuildable from available canonical store history. Cloning the repository brings the graph with it.
 - **Code-to-intent links.** A `// trace:<SPEC-ID>` comment ties code to the spec
   it implements, and commits carry the spec ID in a trailer. `aida why
   <file>:<line>` reads that link back and shows the intent behind a line.
@@ -29,8 +29,8 @@ It is alpha software, Linux-only, and released under the MIT licence.
   on its execution mode (drain, drive, guided, operator, or decide) and tells
   you what will be asked of you before anything starts. Queues, leases, briefs,
   and an inter-agent mailbox coordinate the rest.
-- **CLI and MCP surfaces.** The `aida` CLI is the primary surface for people and
-  CLI-capable agents. `aida mcp-serve` exposes the same requirements as MCP tools
+- **CLI and MCP surfaces.** The `aida` CLI is the primary tool surface for
+  CLI-capable agents and operators. `aida mcp-serve` exposes the same requirements as MCP tools
   over stdio for MCP-native clients.
 
 ## Who it is for
@@ -71,42 +71,20 @@ pure-Rust `protox` crate.
 
 ## Quick start
 
-```bash
-cd my-project
-git init                      # if it is not already a git repository
-aida init                     # orphan-branch store, cache, agent skills, commit hooks
+Start with your usual conversational coding agent. Discuss a change, agree on
+acceptance criteria, and ask the agent to keep the intent and implementation
+linked in AIDA. You develop and review the system; the agent handles the tracking
+commands as part of the work.
 
-aida add --type story --title "Rate-limit the login endpoint"
-aida list
-aida show <SPEC-ID>
-```
-
-`aida init` sets up the store and cache and generates Claude Code skills,
-commands, and commit-validation hooks. Add `--with-mcp` to also scaffold MCP
-registrations for Claude Code and Codex. See `aida init --help` for the other
-options.
-
-Link code to the spec with a trace comment, then ask why the code exists:
-
-```rust
-// trace:<SPEC-ID> | ai:claude
-fn throttle_login(ip: IpAddr) -> Result<()> { /* ... */ }
-```
-
-```bash
-aida why src/auth.rs:42
-```
-
-From there, a spec moves through its lifecycle: approve it
-(`aida edit <SPEC-ID> --status approved`), queue it (`aida queue add <SPEC-ID>`),
-and pick it up in an isolated worktree (`aida queue work`). The
-[getting-started guide](docs/getting-started.md) and
-[first project walkthrough](docs/first-project.md) run one spec end to end.
+The [getting-started guide](docs/getting-started.md) explains this journey and
+labels the one-time operator setup separately. The product showcase renders [that same guide source](docs/getting-started.md)
+in a reader-friendly layout. Autonomous delivery is optional.
 
 ### Cloning an existing AIDA project
 
 The store travels on the `aida-store` branch, so a normal clone is enough to
-read it. The first read attaches the store and rebuilds the local cache:
+read it. Reads can attach the store and report stale or deferred cache context;
+use `aida cache status` or `aida cache rebuild` when cache maintenance is needed:
 
 ```bash
 git clone <repo-url> && cd <repo>
@@ -114,7 +92,10 @@ aida list
 ```
 
 Before creating specs in a new clone, run `aida init` (or `aida node acquire`)
-to claim a node ID so your spec IDs do not collide with other clones.
+in that clone. Follow the [operator setup guide](docs/operator-setup.md) for
+the project's attachment and clone-local identity. Allocation defaults to
+UUID-bound WORK IDs; global allocation requires explicit HOME enrollment. These
+policy names do not describe a person's physical workplace or sharing policy.
 
 ## Finding your way around
 
