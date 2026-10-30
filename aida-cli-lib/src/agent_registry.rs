@@ -140,6 +140,55 @@ pub(crate) struct AgentRegistryEntry {
     // trace:STORY-790 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) spec_status_at_end: Option<String>,
+    /// Whether the project's mail-wake watcher wakes this session's native
+    /// thread for its own mail. `None` on rows nothing has armed.
+    // trace:STORY-HOME-096 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mail_wake: Option<MailWake>,
+}
+
+/// A registry row's mail-wake state. Only `armed` rows are watched; a
+/// retired row keeps its ledger on disk.
+// trace:STORY-HOME-096 | ai:claude
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum MailWake {
+    /// Requested at launch; the session has no thread to bind yet.
+    Pending,
+    /// The watcher wakes this session's thread for its own mail.
+    Armed,
+    /// Arming was attempted and failed.
+    Failed,
+    /// The operator opted out.
+    Off,
+    /// The session ended; the watcher stopped waking it.
+    Retired,
+}
+
+impl MailWake {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Armed => "armed",
+            Self::Failed => "failed",
+            Self::Off => "off",
+            Self::Retired => "retired",
+        }
+    }
+}
+
+/// Set the mail-wake state of the live session `target` (name or
+/// `<type>#<pid>`). Returns the updated row.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn set_mail_wake(
+    project_root: &Path,
+    target: &str,
+    state: MailWake,
+) -> Result<AgentRegistryEntry> {
+    let (_, mut entry) = resolve_target_entry(project_root, target)?;
+    entry.mail_wake = Some(state);
+    write_entry(project_root, &entry)?;
+    Ok(entry)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -582,6 +631,7 @@ pub(crate) fn touch_mcp_agent(
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         });
 
@@ -727,6 +777,7 @@ pub(crate) fn touch_session_start_agent(
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         });
 
@@ -886,6 +937,7 @@ pub(crate) fn register_spawned_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from,
     };
     write_entry(project_root, &entry)?;
@@ -933,6 +985,7 @@ pub(crate) fn register_role_enter_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1101,6 +1154,7 @@ pub(crate) fn register_existing_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1597,6 +1651,12 @@ fn resolve_target_entry(
             )
         }
     }
+}
+
+/// The single live registry entry `target` names.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn resolve_live_target(project_root: &Path, target: &str) -> Result<AgentRegistryEntry> {
+    resolve_target_entry(project_root, target).map(|(_, entry)| entry)
 }
 
 /// Mark a live agent `Paused`. Returns the updated entry so the caller can
@@ -2953,6 +3013,7 @@ mod tests {
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         }
     }

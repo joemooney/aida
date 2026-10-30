@@ -358,7 +358,78 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Describe { agent, description } => agent_describe(agent, description),
         AgentCommand::Stop { name } => agent_stop(name),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
+        AgentCommand::Wake { command } => agent_wake(command),
     }
+}
+
+/// `aida agent wake arm|retire <agent>`.
+// trace:STORY-HOME-096 | ai:claude
+fn agent_wake(cmd: &AgentWakeCommand) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    agent_wake_in(&project_root, cmd)
+}
+
+pub(crate) fn agent_wake_in(project_root: &std::path::Path, cmd: &AgentWakeCommand) -> Result<()> {
+    use agent_registry::MailWake;
+    let (agent, state) = match cmd {
+        AgentWakeCommand::Arm { agent } => (agent, MailWake::Armed),
+        AgentWakeCommand::Retire { agent } => (agent, MailWake::Retired),
+    };
+    let entry = agent_registry::resolve_live_target(project_root, agent)?;
+    require_wake_authority(
+        &entry,
+        crate::collect_mail_identity_facts().own_handle(),
+        crate::gate::seat_authority::require_direct_human,
+    )?;
+    if state == MailWake::Armed {
+        if aida_core::mailbox_identity::normalize_agent_type(&entry.agent_type) != "codex" {
+            anyhow::bail!(
+                "{agent} is a {} session; only Codex sessions can be woken for mail (mail \
+                 arrives on its next turn)",
+                entry.agent_type
+            );
+        }
+        if entry.name.is_none() {
+            anyhow::bail!("{agent} has no handle to read mail as");
+        }
+        if crate::mailbox_wake_run::row_thread(&entry).is_none() {
+            anyhow::bail!(
+                "{agent} has not reported its Codex thread yet; retry once it has started"
+            );
+        }
+    }
+    let entry = agent_registry::set_mail_wake(project_root, agent, state)?;
+    let identity = entry
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+    println!("{identity}: mail wake {}", state.as_str());
+    Ok(())
+}
+
+/// Who may arm or retire a session's mail wake: the session itself (its
+/// verified own handle names the row) or the human operator at a direct
+/// terminal, as `agent stop` is the operator's or the owner's act. Another
+/// agent is refused.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn require_wake_authority(
+    target: &agent_registry::AgentRegistryEntry,
+    own_handle: Option<&str>,
+    direct_human: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let is_owner = match (own_handle, target.name.as_deref()) {
+        (Some(own), Some(name)) => own.eq_ignore_ascii_case(name),
+        _ => false,
+    };
+    if is_owner {
+        return Ok(());
+    }
+    direct_human().map_err(|why| {
+        why.context(
+            "only the session itself or the operator at a terminal may arm or retire its mail wake",
+        )
+    })
 }
 
 // trace:STORY-759 | ai:codex
@@ -6316,6 +6387,7 @@ mod task_1806_launch_mandate_tests {
             claude_session_id: Some("abcd1234-0000-4000-8000-000000000000".into()),
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         };
         agent_registry::write_entry(&project, &stale).unwrap();

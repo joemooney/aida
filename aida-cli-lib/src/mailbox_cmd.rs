@@ -14,7 +14,7 @@
 //! `digest_mailbox_to_canonical`) stay in `main.rs`; this dispatcher reaches
 //! them via `crate::`.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use colored::Colorize;
 use std::io::Read;
 
@@ -224,8 +224,13 @@ pub(crate) fn handle_mailbox_command(
             // caller budget is the explicit read profile.
             // trace:STORY-1843 | ai:claude
             let root = local_root.as_deref().unwrap_or(project_root);
-            let audience =
-                crate::mailbox_wake::audience_for(&crate::mailbox_view::own_audience(), recipient)?;
+            // trace:STORY-HOME-096 | ai:claude — narrows only: this CLI never
+            // holds the watcher's lock, so it reads only the caller's own mail.
+            let audience = crate::mailbox_wake::audience_for_recipient(
+                &crate::mailbox_view::own_audience(),
+                recipient,
+                None,
+            )?;
             let snapshot = crate::mailbox_wake::snapshot(
                 root,
                 store_root,
@@ -234,6 +239,58 @@ pub(crate) fn handle_mailbox_command(
             )?;
             println!("{}", serde_json::to_string(&snapshot)?);
             Ok(())
+        }
+        // trace:STORY-HOME-096 | ai:claude
+        MailboxCommand::WakeRun {
+            project,
+            codex,
+            interval,
+            batch_seconds,
+            once,
+            recover,
+            accepted,
+            retry: _,
+        } => {
+            let project = project
+                .as_deref()
+                .unwrap_or(project_root)
+                .canonicalize()
+                .context("resolving --project")?;
+            let state_root = crate::mailbox_wake_run::state_root(&project);
+            if let Some(thread) = recover {
+                let recovered =
+                    crate::mailbox_wake_run::recover_thread(&state_root, thread, *accepted)?;
+                println!("{}", serde_json::json!({ "recovered": recovered }));
+                return Ok(());
+            }
+            if !(1..=3600).contains(interval) || !(0.0..=300.0).contains(batch_seconds) {
+                anyhow::bail!("--interval must be 1..3600 seconds and --batch-seconds 0..300");
+            }
+            let codex = match codex {
+                Some(c) => c.clone(),
+                None => crate::mailbox_wake_run::which("codex")
+                    .ok_or_else(|| anyhow::anyhow!("codex is not on PATH; pass --codex <path>"))?,
+            };
+            crate::mailbox_wake_run::run(&crate::mailbox_wake_run::RunOptions {
+                store: project.join(".aida-store"),
+                state_root,
+                project,
+                codex,
+                interval: std::time::Duration::from_secs(*interval),
+                batch_seconds: *batch_seconds,
+                once: *once,
+            })
+        }
+        // trace:STORY-HOME-096 | ai:claude
+        MailboxCommand::WakeService {
+            action,
+            codex,
+            dry_run,
+        } => {
+            let project = crate::main_worktree_root_from(project_root)
+                .canonicalize()
+                .context("resolving the project root")?;
+            crate::mailbox_wake_run::service(&project, *action, codex.as_deref(), *dry_run)
         }
         MailboxCommand::Migrate { dry_run, json } => {
             // trace:STORY-1843 | ai:codex
@@ -3114,6 +3171,8 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
             Some(
                 MailboxCommand::Inbox { .. }
                     | MailboxCommand::WakeSnapshot { .. }
+                    | MailboxCommand::WakeRun { .. }
+                    | MailboxCommand::WakeService { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
                     | MailboxCommand::Retention {

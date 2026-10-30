@@ -1006,6 +1006,14 @@ pub enum AgentCommand {
         name: String,
     },
 
+    /// Arm or retire a session's mail wake (internal; `agent new` arms it).
+    // trace:STORY-HOME-096 | ai:claude
+    #[clap(hide = true)]
+    Wake {
+        #[clap(subcommand)]
+        command: AgentWakeCommand,
+    },
+
     /// List the supported agent roles in the taxonomy.
     // trace:TASK-587 | ai:antigravity
     #[clap(name = "list-roles")]
@@ -1013,6 +1021,22 @@ pub enum AgentCommand {
         /// Format output as JSON.
         #[clap(long)]
         json: bool,
+    },
+}
+
+/// `aida agent wake` verbs.
+// trace:STORY-HOME-096 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum AgentWakeCommand {
+    /// Wake this live Codex session's thread when its own inbox has mail.
+    Arm {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
+    },
+    /// Stop waking this session; its ledger is kept.
+    Retire {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
     },
 }
 

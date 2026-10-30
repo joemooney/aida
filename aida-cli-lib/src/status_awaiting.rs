@@ -3870,6 +3870,7 @@ mod task_2253_agy_session_start_gc_tests {
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         }
     }

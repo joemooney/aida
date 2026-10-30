@@ -242,6 +242,10 @@ struct RegistryRow {
     claude_session_id: Option<String>,
     #[serde(default)]
     ended_at: Option<toml::Value>,
+    #[serde(default)]
+    role: Option<String>,
+    #[serde(default)]
+    mail_wake: Option<String>,
 }
 
 /// Why a registry row was not accepted as this process's session binding.
@@ -257,6 +261,10 @@ pub enum BindingRefusal {
     NoHandle,
     /// Nothing in this process's own evidence binds it to the row.
     NotThisProcess,
+    /// The row is not armed for a mail-wake watcher.
+    NotArmed,
+    /// The row's process is not provably the live process it recorded.
+    NotLive,
 }
 
 /// The persisted session binding of this process: its handle and vendor,
@@ -593,6 +601,67 @@ impl MailIdentityFacts {
             env_vendor: env.vendor,
             unverified,
         }
+    }
+
+    /// The facts a mail-wake watcher reads for the session the registry row
+    /// at `row` records: that row's own handle (and reservation UUID) plus
+    /// its recorded role, never this process's environment, user or vendor
+    /// group. Accepted only when the row is armed (`mail_wake = "armed"`),
+    /// has not ended, carries a valid handle, and its process is still the
+    /// one it recorded (start identity strictly matching), so arming a row
+    /// is the only authority and a dead or recycled pid never reads.
+    // trace:STORY-HOME-096 | ai:claude
+    pub fn watched(row: &Path) -> Result<Self, BindingRefusal> {
+        Self::watched_with(row, crate::liveness::process_identity_matches_strict)
+    }
+
+    /// [`Self::watched`] with an explicit live-identity matcher.
+    pub(crate) fn watched_with(
+        row: &Path,
+        live: impl Fn(u32, &str) -> bool,
+    ) -> Result<Self, BindingRefusal> {
+        let body = read_bounded_regular(row).ok_or(BindingRefusal::Unreadable)?;
+        let parsed: RegistryRow = toml::from_str(&body).map_err(|_| BindingRefusal::Corrupt)?;
+        if row.file_stem().and_then(|s| s.to_str()) != Some(parsed.id.as_str()) {
+            return Err(BindingRefusal::Corrupt);
+        }
+        if parsed.ended_at.is_some() {
+            return Err(BindingRefusal::Ended);
+        }
+        let handle = parsed
+            .name
+            .clone()
+            .filter(|n| valid_handle(n))
+            .ok_or(BindingRefusal::NoHandle)?;
+        if parsed.mail_wake.as_deref() != Some("armed") {
+            return Err(BindingRefusal::NotArmed);
+        }
+        if !parsed
+            .pid_start
+            .as_deref()
+            .is_some_and(|start| live(parsed.pid, start))
+        {
+            return Err(BindingRefusal::NotLive);
+        }
+        let sessions: Vec<&str> = [&parsed.claude_session_id, &parsed.native_session_id]
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        let own_recipient = row
+            .parent()
+            .and_then(|agents| reservation_recipient(agents, &handle, &parsed.id, &sessions));
+        Ok(Self {
+            own_handle: Some(handle.clone()),
+            own_recipient,
+            own_vendor: None,
+            user: handle,
+            user_is_known_person: false,
+            aliases: Vec::new(),
+            role: parsed.role.filter(|r| !r.trim().is_empty()),
+            env_vendor: None,
+            unverified: false,
+        })
     }
 
     /// Whether a session row was found that could not be verified.

@@ -363,6 +363,13 @@ resolves); it narrows and never widens. `partial: true` (with safe
 it. It never acknowledges mail. `--local-root` selects the checkout the view is
 read from. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
 for opt-in setup, deduplication, and uncertain-delivery recovery.
+
+`--recipient <handle>` naming a registered agent reads that agent's own inbox
+(its handle plus its recorded role) when the agent is armed for mail wake and
+still live. `aida mailbox wake-run` watches every armed Codex agent of the
+project and wakes its thread; `aida mailbox wake-service install|uninstall|status`
+manages the one user service that runs it. Both are described in the
+[Codex mail wake adapter](../agents/codex-mail-wake.md).
 <!-- trace:STORY-1843 | ai:claude -->
 <!-- trace:TASK-2347 | ai:codex -->
 
