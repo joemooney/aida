@@ -132,8 +132,8 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
 }
 
 // BUG-767: the awaiting mail count is scoped to the OPERATOR's own inbox.
-// Mail addressed to the SHARED session-role inbox (agent-to-agent traffic) is
-// reported on its own labelled channel — so an operator whose personal inbox is
+// Mail addressed to the session-role inbox is reported on its own role-named
+// channel (BUG-HOME-040) — so an operator whose personal inbox is
 // empty reads 0, not the role backlog's size.
 #[test]
 fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
@@ -170,11 +170,14 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
         report.mail.unread, 0,
         "the operator's own inbox is empty — role mail must not be counted as theirs"
     );
+    // BUG-HOME-040: the seat's role mail is its direct mail, named for the
+    // role — never folded into the operator's number nor labelled shared.
     assert_eq!(
-        report.mail.shared_unread, 3,
-        "role mail is kept, on its own labelled channel"
+        report.mail.role_unread, 3,
+        "role mail is kept, on its own role-named channel"
     );
-    assert_eq!(report.mail.shared_scope.as_deref(), Some("advisor"));
+    assert_eq!(report.mail.role.as_deref(), Some("advisor"));
+    assert_eq!(report.mail.shared_unread, 0, "role mail is not shared mail");
 }
 
 // TASK-1245: the event-driven advisor heartbeat constructs an advisor status
@@ -215,15 +218,15 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
         "advisor shared inbox mail must stay out of the operator's own count"
     );
     assert_eq!(
-        report.mail.shared_unread, 1,
+        report.mail.role_unread, 1,
         "ctx.role=advisor must include advisor-addressed mail even with no env role"
     );
     let line = report
         .compact_line()
-        .expect("advisor shared mail must wake the compact awaiting line");
+        .expect("advisor role mail must wake the compact awaiting line");
     assert!(
-        line.contains("shared mail"),
-        "compact line should name the shared mail channel: {line}"
+        line.contains("1 mail to advisor") && !line.contains("shared mail"),
+        "compact line should name the advisor's direct mail: {line}"
     );
 }
 
@@ -284,12 +287,15 @@ fn bound_session_headline_is_its_handle_and_vendor_is_shared() {
         report.mail.unread, 1,
         "only the handle's own mail headlines"
     );
-    assert_eq!(report.mail.shared_unread, 2, "vendor + role mail is shared");
+    assert_eq!(report.mail.shared_unread, 1, "vendor mail is shared");
     assert_eq!(
         report.mail.shared_scope.as_deref(),
-        Some("claude + advisor"),
-        "shared scopes hold the vendor and role, never the handle or user"
+        Some("claude"),
+        "shared scopes hold the vendor, never the handle, user or role"
     );
+    // BUG-HOME-040: the role inbox is the seat's direct mail.
+    assert_eq!(report.mail.role_unread, 1, "role mail is the seat's own");
+    assert_eq!(report.mail.role.as_deref(), Some("advisor"));
 }
 
 // A binding whose registry name fails the handle spelling rules is not a
@@ -309,11 +315,10 @@ fn misspelled_bound_handle_falls_back_to_the_user_headline() {
     let report = awaiting_report_bound(dir.path(), &backend, &ctx, "Claude_Reviewer");
 
     assert_eq!(report.mail.unread, 1, "the user's own mail headlines");
-    assert_eq!(
-        report.mail.shared_unread, 1,
-        "only the role inbox is shared"
-    );
-    assert_eq!(report.mail.shared_scope.as_deref(), Some("advisor"));
+    // BUG-HOME-040: the role inbox counts as the seat's direct mail.
+    assert_eq!(report.mail.shared_unread, 0, "nothing else is shared");
+    assert_eq!(report.mail.role_unread, 1, "the role inbox is direct mail");
+    assert_eq!(report.mail.role.as_deref(), Some("advisor"));
 }
 
 // A spec parked in NeedsAttention surfaces as an escalation line —
@@ -513,4 +518,128 @@ fn notice_time_line_is_always_emitted_and_well_formed() {
     let now = chrono::Utc::now();
     assert!(!presence::stamp_turn_clock(None, true, now).is_empty());
     assert!(!presence::stamp_turn_clock(None, false, now).is_empty());
+}
+
+/// One unread message with full control over sender, intent, subject and age.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+fn write_mail_full(
+    project_root: &std::path::Path,
+    id: &str,
+    from: &str,
+    to: &str,
+    intent: aida_core::mailbox::Intent,
+    subject: &str,
+    timestamp: i64,
+) {
+    let msg = aida_core::mailbox::Message {
+        subject: Some(subject.to_string()),
+        id: id.to_string(),
+        thread_id: format!("t-{id}"),
+        from: from.to_string(),
+        to: aida_core::mailbox::Recipient::Agent(to.to_string()),
+        timestamp,
+        in_reply_to: None,
+        body: "body".to_string(),
+        urgent: false,
+        intent,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    };
+    crate::mailbox_store::write_message(project_root, &msg).unwrap();
+}
+
+// BUG-HOME-040 AC5: a role-addressed handoff from another vendor shows by
+// sender and subject in the next per-turn notice — not as "N shared mail" —
+// while weeks-old automated notices collapse to one line and an unanswered
+// request escalates as an awaiting item.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+#[test]
+fn role_addressed_cross_vendor_handoff_shows_by_sender_and_subject_in_the_notice() {
+    use aida_core::mailbox::Intent;
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+    let now = chrono::Utc::now().timestamp();
+    write_mail_full(
+        dir.path(),
+        "m-handoff",
+        "codex-implementer-01",
+        "advisor",
+        Intent::Handoff,
+        "PR-3122 needs review routing",
+        now - 600,
+    );
+    write_mail_full(
+        dir.path(),
+        "m-request",
+        "codex-implementer-01",
+        "advisor",
+        Intent::Request,
+        "lease refusal: please re-route",
+        now - 2 * 3600,
+    );
+    for i in 0..5 {
+        write_mail_full(
+            dir.path(),
+            &format!("m-watch-{i}"),
+            "review-watch",
+            "advisor",
+            Intent::Fyi,
+            "review-watch: PR ready",
+            1_000 + i,
+        );
+    }
+
+    // A seat that ran `aida role enter advisor`: the role is in its audience.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_USER", Some("operator-under-test")),
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_SESSION_ID", None),
+    ]);
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = awaiting_report_bound(dir.path(), &backend, &ctx, "seat-handle");
+
+    assert_eq!(
+        report.mail.role_unread, 2,
+        "old automated mail is not new mail"
+    );
+    assert_eq!(report.mail.stale_automated, 5);
+    let line = report.compact_line().expect("role mail wakes the notice");
+    assert!(line.contains("2 mail to advisor"), "{line}");
+    assert!(!line.contains("shared mail"), "{line}");
+    assert!(line.contains("1 overdue request"), "{line}");
+
+    let previews = report.mail_preview_lines();
+    assert_eq!(
+        previews.len(),
+        3,
+        "two previews + one stale summary: {previews:?}"
+    );
+    assert!(
+        previews[0].contains("[request] from codex-implementer-01")
+            && previews[0].contains("lease refusal: please re-route"),
+        "requests lead: {previews:?}"
+    );
+    assert!(
+        previews[1].contains("[handoff] from codex-implementer-01")
+            && previews[1].contains("PR-3122 needs review routing")
+            && previews[1].contains("m ago ·"),
+        "handoff named by sender, age and subject: {previews:?}"
+    );
+    assert!(
+        previews[2].contains("5 unread notices older than 7d from automated senders"),
+        "stale automated mail is one line: {previews:?}"
+    );
+
+    let mut out = Vec::new();
+    report.render(false, &mut out).unwrap();
+    let rendered = String::from_utf8(out).unwrap();
+    assert!(
+        rendered.contains("unanswered [request] from codex-implementer-01"),
+        "an overdue request is an awaiting item: {rendered}"
+    );
 }

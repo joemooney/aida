@@ -519,15 +519,15 @@ pub(crate) fn collect_awaiting_report_inner(
 }
 
 /// Unread mail addressed to `role` that the reader's audience does not
-/// cover, counted (never shown) over this checkout and the canonical store
-/// with the role's read watermark and its receipts in any worktree, skipping
-/// IDs already counted.
+/// cover, read (to be counted, never shown) over this checkout and the
+/// canonical store with the role's read watermark and its receipts in any
+/// worktree, skipping IDs already counted.
 // trace:TASK-1245 trace:STORY-1843 | ai:claude
 fn inspected_role_unread(
     project_root: &std::path::Path,
     role: &str,
     counted: &std::collections::HashSet<&str>,
-) -> usize {
+) -> Vec<aida_core::mailbox::Message> {
     let store_root = project_root.join(".aida-store");
     let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
     let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
@@ -537,7 +537,8 @@ fn inspected_role_unread(
     aida_core::mailbox::unread_for_identities([role], &merged, &evidence.watermarks)
         .into_iter()
         .filter(|m| !counted.contains(m.id.as_str()) && !evidence.receipted(role, m))
-        .count()
+        .cloned()
+        .collect()
 }
 
 /// [`collect_awaiting_report_inner`] with the mail channel's identity facts
@@ -891,11 +892,16 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
             Vec::new()
         };
         // The status context's role (TASK-1245: the advisor heartbeat sets
-        // it from a plain env) joins the shared scope. When it is not one of
-        // the verified audience's keys it is not recipient authority, so its
+        // it from a plain env) is the seat's role channel. When it is not one
+        // of the verified audience's keys it is not recipient authority, so its
         // unread mail is only COUNTED, by the source-local operator
         // inspection (this checkout plus the store), never projected.
         // trace:TASK-1245 trace:STORY-1843 | ai:claude
+        // BUG-HOME-040: the role's mail is the seat's DIRECT mail, so the
+        // resolved role key is passed apart from the shared scope.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+        let now = chrono::Utc::now().timestamp();
+        let mut role_key = None;
         let mut inspected_role = None;
         if let Some(raw) = ctx
             .role
@@ -909,30 +915,38 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
                 .and_then(|a| a.keys().next().map(str::to_string))
             {
                 Some(key) => {
-                    if key != operator && !shared.contains(&key) {
-                        shared.push(key);
+                    shared.retain(|s| *s != key);
+                    if key != operator {
+                        role_key = Some(key);
                     }
                 }
                 None if role != operator => inspected_role = Some(role),
                 None => {}
             }
         }
-        let mut channel = awaiting_you::split_mail_scopes(
+        let mut channel = awaiting_you::split_mail_scopes_for_role(
             &operator,
+            role_key.as_deref(),
             &shared,
             &unread,
             &std::collections::HashMap::new(),
+            now,
         );
         if let Some(role) = inspected_role {
             let counted: std::collections::HashSet<&str> =
                 unread.iter().map(|m| m.id.as_str()).collect();
             let inspected = inspected_role_unread(project_root, &role, &counted);
-            if inspected > 0 {
-                channel.shared_unread += inspected;
-                channel.shared_scope = Some(match channel.shared_scope.take() {
-                    Some(scope) => format!("{scope} + {role}"),
-                    None => role,
-                });
+            channel.stale_automated += inspected
+                .iter()
+                .filter(|m| awaiting_you::is_stale_automated(m, now))
+                .count();
+            let fresh = inspected
+                .iter()
+                .filter(|m| !awaiting_you::is_stale_automated(m, now))
+                .count();
+            if fresh > 0 {
+                channel.role_unread += fresh;
+                channel.role = Some(role);
             }
         }
         channel.partial = view.is_partial();
@@ -1449,6 +1463,10 @@ pub(crate) fn handle_awaiting_command(
         let report = collect_awaiting_report_inner(&project_root, backend, &ctx, true, true);
         if let Some(line) = report.compact_line() {
             println!("{line}");
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+            for line in report.mail_preview_lines() {
+                println!("{line}");
+            }
         }
         // Re-teach a compacted session its type contract while this worktree
         // still holds the spec lease. `queue done` removes/releases that lease,
