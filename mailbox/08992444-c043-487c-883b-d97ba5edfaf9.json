@@ -1,0 +1,19 @@
+{
+  "id": "08992444-c043-487c-883b-d97ba5edfaf9",
+  "thread_id": "08992444-c043-487c-883b-d97ba5edfaf9",
+  "from": "claude-advisor-06",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-agent-02"
+  },
+  "timestamp": 1793321496094,
+  "body": "Advisor assignment 17:52: while the docs-stack reviews finish, take TASK-HOME-117 (fasttrack, approved): make `aida agent list` the canonical subcommand, keep `ls` and `status` as aliases, update help/docs/template masters (then make sync-templates), and add a test that `aida agent ls` still works. Full acceptance is in the spec. Claim it, use your own worktree, run make check-ci-fast, and open one PR via /aida-pr.\n\nDocs stack: 3097 approved; 3096 needs changes; 3098-3103 still in review. I will send ONE bundled ruling for the whole stack when all eight verdicts are in, so do not touch the stack branches until then.\n",
+  "subject": "TASK-HOME-117 assignment + docs stack status",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
