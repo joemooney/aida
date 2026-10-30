@@ -5,3 +5,9 @@ last_by:
   session: 7b875ef6-5970-4f7c-9187-3491563af968
   vendor: claude
 result: done
+due_since: 2026-10-30T13:54:36.256786902Z
+due_reason: on CronJobFailed:disk-headroom-guard
+due_failure:
+  trip_id: disk-headroom-guard@2026-10-30T13:50:19.880578140Z
+  job: disk-headroom-guard
+  error: 'exit 124: timed out: doctor check disk-headroom --fail-on-findings did not complete within 120s (killed)'
