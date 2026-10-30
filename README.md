@@ -13,7 +13,7 @@ It is alpha software, Linux-only, and released under the MIT licence.
 - **A git-canonical requirements graph.** Specs (stories, tasks, bugs, spikes,
   epics, decisions) are YAML objects on an orphan `aida-store` branch with
   stable IDs and typed relationships. A local SQLite cache makes reads fast and
-  can always be rebuilt from git. Cloning the repository brings the graph with it.
+  is rebuildable from available canonical store history. Cloning the repository brings the graph with it.
 - **Code-to-intent links.** A `// trace:<SPEC-ID>` comment ties code to the spec
   it implements, and commits carry the spec ID in a trailer. `aida why
   <file>:<line>` reads that link back and shows the intent behind a line.
@@ -83,7 +83,8 @@ in a reader-friendly layout. Autonomous delivery is optional.
 ### Cloning an existing AIDA project
 
 The store travels on the `aida-store` branch, so a normal clone is enough to
-read it. The first read attaches the store and rebuilds the local cache:
+read it. Reads can attach the store and report stale or deferred cache context;
+use `aida cache status` or `aida cache rebuild` when cache maintenance is needed:
 
 ```bash
 git clone <repo-url> && cd <repo>
@@ -91,7 +92,10 @@ aida list
 ```
 
 Before creating specs in a new clone, run `aida init` (or `aida node acquire`)
-to claim a node ID so your spec IDs do not collide with other clones.
+in that clone. Follow the [operator setup guide](docs/operator-setup.md) for
+the project's attachment and clone-local identity. Allocation defaults to
+UUID-bound WORK IDs; global allocation requires explicit HOME enrollment. These
+policy names do not describe a person's physical workplace or sharing policy.
 
 ## Finding your way around
 
