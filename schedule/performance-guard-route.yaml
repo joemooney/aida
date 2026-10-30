@@ -8,13 +8,13 @@ result: done
 due_since: 2026-10-30T08:23:25.930540925Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-10-30T08:20:48.720050402Z
+  trip_id: performance-guard@2026-10-30T14:29:59.476937152Z
   performance:
   - command: show
     budget_ms: 2000
-    over_budget: 41
-    denominator: 186
-    proportion_millipercent: 22043
+    over_budget: 54
+    denominator: 207
+    proportion_millipercent: 26087
     tolerated_millipercent: 10000
     window_hours: 24
     worst_ms: 17666
