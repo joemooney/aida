@@ -32,12 +32,24 @@ description: |
   3. CI gates fail: "docs/architecture/external-tool-output-classifiers.md does not match the markers in the tree". Regenerate or update that doc to match.
   4. Every new commit message must end with "(Refs STORY-B6B1278890774EF993D2EBC327862470-096)". The PR's commit range has no REQ-ID trailer, so no review story could be filed.
   5. Gate: LIGHT. Run `cargo test -p aida-cli-lib story_1728` plus `make check-ci-fast`, then push. Do not run the full suite.
+
+
+  ADVISOR RULING 2026-10-29 22:05 (PR-3110 slice 1, round 1 review at ae5f330c). ONE rework push on PR-3110, no new PR. BUNDLE all of these:
+  1. CI lib-0/lib-1: two ratchets fail. orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:65): your new code calls current_exe directly, so route it through the aida-exe resolver. test_home::tests::no_direct_home_resolution_in_crate (test_home.rs:528): your new code resolves HOME directly, so use the crate's home helper.
+  2. CI gates (portability ratchet): mailbox_wake_run_tests.rs:195 builds TOML with format!("worktree_path = \"{}\""). Build it with toml serialization instead.
+  3. Authority: `wake-snapshot --recipient <handle>` must narrow, never widen. Try audience_for(&own_audience(), recipient) first; use the armed-row path only when the caller is that row's registered watcher. Any other caller is refused. Test it.
+  4. Regression: an agent asking for its OWN handle with no armed row falls back to its own audience (as before), not an error. Test it.
+  5. `wake-run --recover` requires exactly one of --accepted or --retry (a required ArgGroup). Test that the bare form is rejected.
+  6. recover_thread takes watch.lock (or the inflight path writes only health.json) so a running service cannot overwrite a recover. Test the interleaving if practical; otherwise add a comment explaining the lock order.
+  7. agent wake arm/retire: gate it the same way agent end/stop are gated (the owner or the operator only).
+  ACCEPTED, no action: no separate TASK for the health-job/doctor deviation. Slice 2 of THIS story carries it. The story is back to in-progress until slice 2 ships.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096 resolve_aida_exe no_direct_home` plus `make check-ci-fast` (which runs scripts/check-portability.sh), then push.
 status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T05:02:09.542233225Z
+modified_at: 2026-10-30T05:02:29.676484400Z
 req_type: Story
 relationships:
 - rel_type:
@@ -238,6 +250,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: InProgress
+- id: 01a18b30-266a-7391-b58a-dcbeacd50a70
+  author: joe
+  timestamp: 2026-10-30T05:02:31.018974466Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
