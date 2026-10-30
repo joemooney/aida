@@ -28,6 +28,10 @@ pub(crate) fn format_mail_age(ms: i64) -> String {
 }
 
 pub(crate) fn format_mail_timestamp(ts: i64) -> String {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    if !aida_core::mailbox::timestamp_is_known(ts) {
+        return "unknown time".into();
+    }
     chrono::DateTime::from_timestamp_millis(ts)
         .map(|dt| {
             dt.with_timezone(&chrono::Local)
@@ -237,13 +241,7 @@ pub(crate) fn print_mailbox_line_tagged(m: &aida_core::mailbox::Message, tag: Op
     };
     let short = m.id.split('-').next().unwrap_or(m.id.as_str());
     // Local time per the local-time convention (UTC only on disk).
-    let when = chrono::DateTime::from_timestamp_millis(m.timestamp)
-        .map(|dt| {
-            dt.with_timezone(&chrono::Local)
-                .format("%Y-%m-%d %H:%M")
-                .to_string()
-        })
-        .unwrap_or_else(|| "?".to_string());
+    let when = format_mail_timestamp(m.timestamp);
     let flag = if m.urgent {
         format!(
             "{} ",
@@ -526,4 +524,14 @@ pub(crate) fn render_mailbox_notice(
          act only on what you judge safe, surface the rest."
     );
     s
+}
+
+#[cfg(test)]
+mod tests {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    #[test]
+    fn format_mail_timestamp_shows_unknown_time_not_the_epoch() {
+        assert_eq!(super::format_mail_timestamp(0), "unknown time");
+        assert!(super::format_mail_timestamp(1_793_050_232_000).starts_with("2026-"));
+    }
 }

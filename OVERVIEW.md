@@ -206,7 +206,7 @@ Two value claims sit behind that sentence. **Survival:** the corpus outlives the
 **Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
 
 <!-- trace:TASK-885 -->
-For day-to-day usage see the [CLI reference](docs/cli/README.md). For project conventions, build commands, and developer workflow see [CLAUDE.md](CLAUDE.md). For getting set up see [docs/getting-started.md](docs/getting-started.md). For *"how does AIDA fit alongside X?"* — neighbor-by-neighbor comparisons against `/ultrareview`, Karpathy-style structured markdown, Linear/Jira, etc. — see [docs/positioning/](docs/positioning/).
+For a product tour, open the [website](docs/showcase/index.html) or [guide library](docs/showcase/library.html); the [capabilities](docs/product-capabilities.md) and [integrations](docs/product-integrations.md) guides connect intent, delivery and evidence. For day-to-day usage see the [CLI reference](docs/cli/README.md). For project conventions, build commands, and developer workflow see [CLAUDE.md](CLAUDE.md). For getting set up see [docs/getting-started.md](docs/getting-started.md). For *"how does AIDA fit alongside X?"* — neighbor-by-neighbor comparisons against `/ultrareview`, Karpathy-style structured markdown, Linear/Jira, etc. — see [docs/positioning/](docs/positioning/).
 
 ---
 
@@ -395,7 +395,7 @@ paths; unsupported or incomplete evidence refuses before any push. Private
 profile/policy/receipt IO uses anchored no-follow handles. Exact successful-push
 receipts bind endpoint/ref/tip/root/policy/scanner; every attempt rescans from the
 original root, so receipts neither cache scans nor grant trust to tracking refs.
-Intake enforcement and actual recoverable FF pull remain pending. This bounded
+Prepared sanitized writes and recoverable fast-forward store pull are implemented; unsupported writers and divergence refuse. This bounded
 known-identifier guard requires operator review; raw Git/foreign writers and
 PUBLIC forwarding remain outside enforcement. Fixed store refspecs cannot expand
 through environment defaults, and
@@ -408,7 +408,7 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)
 - **Branch:** `aida-store` on origin
-- **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; auto-rebuilt when the cache's recorded HEAD doesn't match the orphan's HEAD
+- **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; ordinary reads use the [bounded cache-read contract](#bounded-cache-reads) when freshness differs
 - **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
 <!-- trace:TASK-1604 | ai:codex -->
 

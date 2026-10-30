@@ -275,15 +275,29 @@ pub(crate) fn resolve_queue_work_batch<'a>(
 pub(crate) fn resolve_mail_sender_identity(
     explicit: Option<&str>,
 ) -> (String, aida_core::mailbox::SenderSource) {
-    let shell_user = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .ok();
     // A headless child sends as its own handle, not its shared seat name.
     // trace:STORY-1843 | ai:claude
     // Raw hooks cannot export into the parent. Resolve their persisted
     // session handle before falling back to the launch's seat label.
     // trace:STORY-1843 | ai:codex
-    let agent_name = crate::agent_handle::current_session_handle_for_cwd()
+    resolve_mail_sender_identity_with(
+        explicit,
+        crate::agent_handle::current_session_handle_for_cwd(),
+    )
+}
+
+/// [`resolve_mail_sender_identity`] with the session's persisted handle
+/// supplied by the caller (`None`: no registered session), so `aida whoami`
+/// can be checked against the exact tiering a send applies.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+pub(crate) fn resolve_mail_sender_identity_with(
+    explicit: Option<&str>,
+    session_handle: Option<String>,
+) -> (String, aida_core::mailbox::SenderSource) {
+    let shell_user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .ok();
+    let agent_name = session_handle
         .or_else(|| {
             std::env::var(crate::agent_handle::HANDLE_ENV)
                 .ok()

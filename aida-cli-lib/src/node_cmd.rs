@@ -60,18 +60,21 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 let binding = aida_core::work_binding::bootstrap(store_path)?.ok_or_else(|| {
                     anyhow::anyhow!("allocation mode changed during WORK repair; retry")
                 })?;
+                // The node role is prose, never a capitalised token an
+                // operator label could share. trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
                 println!(
-                    "WORK node {} ready (node-local allocation).",
+                    "Work node {} ready (node-local allocation).",
                     binding.node_id
                 );
                 return Ok(());
             }
             NodeCommand::Show { id: None } => {
                 if let Some(binding) = aida_core::work_binding::load(store_path)? {
-                    println!(
-                        "WORK node {} (node-local allocation; no global blocks).",
-                        binding.node_id
-                    );
+                    // Keep the role/label wording from main while list continues
+                    // through the complete inventory path below.
+                    // trace:BUG-HOME-026 | ai:codex
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+                    println!("{}", work_node_line(store_path, &binding.node_id));
                     print_allocation_report(store_path)?;
                     return Ok(());
                 }
@@ -522,7 +525,7 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
         }
 
         // trace:TASK-851 | ai:claude
-        NodeCommand::Whoami => return session_misc_cmd::handle_whoami_command(),
+        NodeCommand::Whoami(flags) => return session_misc_cmd::handle_whoami_command(flags),
         NodeCommand::Alias { cmd } => return handle_node_alias_command(cmd, store_path),
         NodeCommand::EnrollRoot { dry_run } => return handle_enroll_root(store_path, *dry_run),
         NodeCommand::Upstream { remote, clear } => {
@@ -746,6 +749,21 @@ fn alias_publish_warnings(reached: &[String], unreached: &[UnreachedHub]) -> Res
             )
         })
         .collect())
+}
+
+/// The heading `aida node list` / `show` print for a work node: its id,
+/// its current label when one is bound, and its role in lower-case prose.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+pub(crate) fn work_node_line(store_path: &std::path::Path, node_id: &str) -> String {
+    let aliases = aida_core::node_alias::NodeAliasMap::load(store_path);
+    work_node_heading(node_id, aliases.current_label(node_id))
+}
+
+/// [`work_node_line`] from an already-resolved label.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+pub(crate) fn work_node_heading(node_id: &str, label: Option<&str>) -> String {
+    let label = label.map(|l| format!("\n  Label: {l}")).unwrap_or_default();
+    format!("Node {node_id}{label}\n  Role:  work node (node-local allocation; no global blocks)")
 }
 
 /// `aida node show`'s delegation section: this clone's role and upstream,

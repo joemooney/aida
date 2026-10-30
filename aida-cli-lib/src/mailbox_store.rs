@@ -10,7 +10,9 @@
 //! The read/filter/merge logic lives in the pure `aida_core::mailbox` core;
 //! this module is only the file I/O around it. trace:STORY-493 trace:TASK-603 | ai:claude
 
-use aida_core::mailbox::{message_state_rank, Message};
+use aida_core::mailbox::{
+    message_state_rank, timestamp_is_known, timestamp_is_stamped, written_timestamp, Message,
+};
 use aida_core::mailbox_lifecycle::CanonicalPermit;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -142,7 +144,8 @@ fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
-        if let Ok(msg) = serde_json::from_slice::<Message>(&bytes) {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+        if let Ok(msg) = aida_core::mailbox::parse_message_file(&path, &bytes) {
             out.push(msg);
         }
     }
@@ -154,8 +157,10 @@ fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
 /// an error. The tolerant [`read_canonical_messages`] (for inbox views) skips
 /// those; a digest that skipped one would treat that id as absent and could
 /// overwrite a newer canonical state (a tombstone) with a stale local copy.
-// trace:TASK-1717 | ai:claude
-fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<Message>> {
+/// Each message comes with whether its file carried its own time (see
+/// [`aida_core::mailbox::timestamp_is_stamped`]).
+// trace:TASK-1717 trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<(Message, bool)>> {
     let dir = canonical_dir(store_root);
     aida_core::mailbox::mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
     let entries = match std::fs::read_dir(&dir) {
@@ -173,9 +178,11 @@ fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<Message>> {
         }
         let bytes = std::fs::read(&path)
             .with_context(|| format!("reading canonical message {}", path.display()))?;
-        let msg = serde_json::from_slice::<Message>(&bytes)
+        let msg = aida_core::mailbox::parse_message_file(&path, &bytes)
             .with_context(|| format!("canonical message {} is not valid", path.display()))?;
-        out.push(msg);
+        let stamped = serde_json::from_slice::<serde_json::Value>(&bytes)
+            .is_ok_and(|v| timestamp_is_stamped(written_timestamp(&v)));
+        out.push((msg, stamped));
     }
     Ok(out)
 }
@@ -228,21 +235,49 @@ fn write_snapshot_locked(
     permit: &CanonicalPermit,
 ) -> Result<usize> {
     use std::collections::HashMap;
-    let canonical_by_id: HashMap<String, Message> = read_canonical_messages_strict(store_root)?
-        .into_iter()
-        .map(|m| (m.id.clone(), m))
-        .collect();
+    let canonical_by_id: HashMap<String, (Message, bool)> =
+        read_canonical_messages_strict(store_root)?
+            .into_iter()
+            .map(|(m, stamped)| (m.id.clone(), (m, stamped)))
+            .collect();
+    let local_by_id: HashMap<&str, &Message> = local.iter().map(|m| (m.id.as_str(), m)).collect();
     let cdir = canonical_dir(store_root);
     let mut written = 0usize;
     for msg in local {
         let should_write = match canonical_by_id.get(&msg.id) {
             None => true,
-            Some(canonical) => message_state_rank(msg) > message_state_rank(canonical),
+            Some((canonical, _)) => message_state_rank(msg) > message_state_rank(canonical),
         };
         if !should_write {
             continue;
         }
         write_message_in(&cdir, msg, permit)?;
+        written += 1;
+    }
+    // A canonical file with no time of its own (or a seconds-scale one) is
+    // stamped once, here, rather than dated by its checkout mtime, which
+    // changes on every pull: the local copy's time when it has one, else the
+    // fallback it was read with. trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    for (canonical, _) in canonical_by_id.values().filter(|(_, stamped)| !stamped) {
+        let superseded = local_by_id
+            .get(canonical.id.as_str())
+            .is_some_and(|l| message_state_rank(l) > message_state_rank(canonical));
+        if superseded {
+            continue; // rewritten from the local copy above
+        }
+        let timestamp = local_by_id
+            .get(canonical.id.as_str())
+            .map(|l| l.timestamp)
+            .filter(|ts| timestamp_is_known(*ts))
+            .unwrap_or(canonical.timestamp);
+        if !timestamp_is_known(timestamp) {
+            continue;
+        }
+        let stamped = Message {
+            timestamp,
+            ..canonical.clone()
+        };
+        write_message_in(&cdir, &stamped, permit)?;
         written += 1;
     }
     Ok(written)
@@ -692,6 +727,48 @@ mod tests {
             1
         );
         assert_eq!(read_canonical_messages(store.path()).unwrap().len(), 3);
+    }
+
+    /// A canonical message with no time of its own is stamped once at sync,
+    /// from its local copy when there is one, so its date stops following
+    /// the checkout mtime; a second sync has nothing left to stamp.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    #[test]
+    fn bug_032_sync_stamps_unstamped_canonical_mail_once() {
+        let proj = tempdir().unwrap();
+        let store = tempdir().unwrap();
+        let cdir = canonical_dir(store.path());
+        std::fs::create_dir_all(&cdir).unwrap();
+        let put_unstamped = |m: &Message| {
+            let mut value = serde_json::to_value(m).unwrap();
+            value.as_object_mut().unwrap().remove("timestamp");
+            std::fs::write(
+                cdir.join(format!("{}.json", m.id)),
+                serde_json::to_vec(&value).unwrap(),
+            )
+            .unwrap();
+        };
+        let to = || Recipient::Agent("claude".into());
+        put_unstamped(&msg("bare", "codex", to(), 0));
+        let twin = msg("twin", "codex", to(), 1_793_000_000_000);
+        put_unstamped(&twin);
+        write_message(proj.path(), &twin).unwrap();
+
+        assert_eq!(
+            digest_local_to_canonical(store.path(), proj.path()).unwrap(),
+            2
+        );
+        let raw = |id: &str| -> serde_json::Value {
+            serde_json::from_slice(&std::fs::read(cdir.join(format!("{id}.json"))).unwrap())
+                .unwrap()
+        };
+        assert!(raw("bare")["timestamp"].as_i64().unwrap() > 1_700_000_000_000);
+        assert_eq!(raw("twin")["timestamp"], 1_793_000_000_000_i64);
+        assert_eq!(
+            digest_local_to_canonical(store.path(), proj.path()).unwrap(),
+            0,
+            "stamped once"
+        );
     }
 
     // trace:STORY-583 | ai:codex

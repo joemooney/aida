@@ -13,7 +13,7 @@ It is alpha software, Linux-only, and released under the MIT licence.
 - **A git-canonical requirements graph.** Specs (stories, tasks, bugs, spikes,
   epics, decisions) are YAML objects on an orphan `aida-store` branch with
   stable IDs and typed relationships. A local SQLite cache makes reads fast and
-  can always be rebuilt from git. Cloning the repository brings the graph with it.
+  is rebuildable from available canonical store history. Cloning the repository brings the graph with it.
 - **Code-to-intent links.** A `// trace:<SPEC-ID>` comment ties code to the spec
   it implements, and commits carry the spec ID in a trailer. `aida why
   <file>:<line>` reads that link back and shows the intent behind a line.
@@ -77,13 +77,16 @@ linked in AIDA. You develop and review the system; the agent handles the trackin
 commands as part of the work.
 
 The [getting-started guide](docs/getting-started.md) explains this journey and
-labels the one-time operator setup separately. The product showcase renders [that same guide source](docs/getting-started.md)
-in a reader-friendly layout. Autonomous delivery is optional.
+labels the one-time operator setup separately. Open the live [product website](https://joemooney.github.io/aida/) or the
+[local guide library](docs/showcase/library.html) for the rendered guides, including
+[capabilities](docs/product-capabilities.md) and [integrations](docs/product-integrations.md).
+GitHub renders the Markdown guides; it displays the HTML as source. Autonomous delivery is optional.
 
 ### Cloning an existing AIDA project
 
 The store travels on the `aida-store` branch, so a normal clone is enough to
-read it. The first read attaches the store and rebuilds the local cache:
+read it. Reads can attach the store and report stale or deferred cache context;
+use `aida cache status` or `aida cache rebuild` when cache maintenance is needed:
 
 ```bash
 git clone <repo-url> && cd <repo>
@@ -91,7 +94,10 @@ aida list
 ```
 
 Before creating specs in a new clone, run `aida init` (or `aida node acquire`)
-to claim a node ID so your spec IDs do not collide with other clones.
+in that clone. Follow the [operator setup guide](docs/operator-setup.md) for
+the project's attachment and clone-local identity. Allocation defaults to
+UUID-bound WORK IDs; global allocation requires explicit HOME enrollment. These
+policy names do not describe a person's physical workplace or sharing policy.
 
 ## Finding your way around
 
@@ -110,7 +116,7 @@ Useful starting points:
 
 - [OVERVIEW.md](OVERVIEW.md): vision, architecture, and feature surface in depth
 - [docs/what-is-aida.md](docs/what-is-aida.md): What is AIDA? (overview for managers and newcomers; a self-contained `what-is-aida.html` beside it is for offline reading)
-- [docs/getting-started.md](docs/getting-started.md): setup and first steps
+- [docs/getting-started.md](docs/getting-started.md): conversational development and one-time operator setup
 - [docs/cli/](docs/cli/README.md): CLI reference
 - [docs/lifecycle.md](docs/lifecycle.md): the spec lifecycle
 - [docs/autonomous-drain.md](docs/autonomous-drain.md): unattended queue drains

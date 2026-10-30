@@ -144,7 +144,7 @@ fn message(id: String, to: &str, subject: String, body: String) -> aida_core::ma
         thread_id: id,
         from: "review-watch".into(),
         to: Recipient::Agent(to.to_string()),
-        timestamp: chrono::Utc::now().timestamp(),
+        timestamp: chrono::Utc::now().timestamp_millis(), // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
         in_reply_to: None,
         body,
         subject: Some(subject),
