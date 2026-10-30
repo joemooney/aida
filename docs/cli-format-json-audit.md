@@ -140,6 +140,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida sandbox path` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox wake-snapshot` | JSON honoured | mailbox wake-snapshot --recipient advisor |
+| `aida mailbox wake-run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mailbox wake-service` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox migrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida mailbox retention` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox retention activate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -460,6 +462,9 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida agent resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent describe` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent stop` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida agent wake` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida agent wake arm` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida agent wake retire` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida agent list-roles` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida state-snapshot` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida statusbar` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
