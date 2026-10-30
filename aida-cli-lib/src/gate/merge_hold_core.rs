@@ -1113,7 +1113,10 @@ pub(crate) fn corpus_merge_gate(
 pub(crate) type CorpusCarryOverProver<'a> = &'a dyn Fn(
     &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<
-    Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>,
+    Result<
+        crate::gate::review_carryover::CarryOver,
+        crate::gate::review_carryover::CarryOverRefusal,
+    >,
 >;
 
 /// [`corpus_merge_gate`], except that a head nothing approves may still
@@ -1241,7 +1244,12 @@ fn corpus_carry_over(
     live: &[&(String, String)],
     head: &str,
     prove: CorpusCarryOverProver<'_>,
-) -> Option<Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>> {
+) -> Option<
+    Result<
+        crate::gate::review_carryover::CarryOver,
+        crate::gate::review_carryover::CarryOverRefusal,
+    >,
+> {
     use crate::gate::review_verdict as rv;
     let mut approved: Vec<String> = Vec::new();
     for (_, body) in live {
@@ -1399,7 +1407,7 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
 ) -> anyhow::Result<()> {
-    match corpus_gate_decision(project_root, pr, spec_hints, base_branch, head)? {
+    match corpus_gate_decision(project_root, pr, spec_hints, base_branch, head, true)? {
         CorpusMergeGate::Clear => Ok(()),
         CorpusMergeGate::Refuse { message, arm } => {
             if let Some(arm) = arm.filter(|_| pr > 0) {
@@ -1410,16 +1418,20 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     }
 }
 
-/// [`enforce_corpus_gate_before_merge`]'s decision, with no side effects:
-/// the mirrors a refusal arms are the caller's to write. `Err` when a
-/// verdict artifact exists but cannot be read.
+/// [`enforce_corpus_gate_before_merge`]'s decision: the mirrors a refusal
+/// arms are the caller's to write. `Err` when a verdict artifact exists but
+/// cannot be read. With `record_proof`, a carry-over proven here goes on the
+/// change's gate ledger for every later gate (STORY-080 AC4); without it
+/// (a read-only report) the decision leaves no state behind.
 // trace:TASK-1945 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn corpus_gate_decision(
     project_root: &Path,
     pr: u64,
     spec_hints: &[String],
     base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
+    record_proof: bool,
 ) -> anyhow::Result<CorpusMergeGate> {
     let main_root = crate::main_worktree_root_from(project_root);
     let mut roots: Vec<&Path> = vec![project_root];
@@ -1438,9 +1450,13 @@ pub(crate) fn corpus_gate_decision(
     }
     let head = head();
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
-    let site = crate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch);
+    let site = if record_proof {
+        crate::gate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch)
+    } else {
+        crate::gate::review_carryover::CarryOverSite::read_only(main_root.as_path(), base_branch)
+    };
     let prove = |refusal: &crate::gate::ship::ApprovalHeadRefusal| {
-        crate::review_carryover::prove_for_refusal(&site, pr, refusal)
+        crate::gate::review_carryover::prove_for_refusal(&site, pr, refusal)
     };
     Ok(corpus_merge_gate_carrying(
         pr,

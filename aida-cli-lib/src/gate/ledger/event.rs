@@ -44,7 +44,7 @@ pub(crate) struct GateEvent {
 }
 
 /// What happened. Slice 1 carried verdicts; slice 2 adds holds, their
-/// releases and label syncs; carry-over proofs join in slice 3.
+/// releases and label syncs; slice 3 adds carry-over proofs.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -75,6 +75,25 @@ pub(crate) enum EventBody {
     ReleaseWithdrawn { reason: String },
     /// The forge label's sync state for the open hold (BUG-1236).
     LabelSync { label_state: String },
+    /// AC4: the approval at `proof.approved_sha` carries over to
+    /// `proof.new_head` (clean base merges, unchanged patch identity). The
+    /// event's `head`/`patch_id`/`base_ref`/`base_tip` name what it is
+    /// authority for; computed once, read by every gate.
+    CarryOverProof {
+        proof: crate::gate::review_carryover::CarryOver,
+        proof_version: u32,
+    },
+    /// AC4: the approval at `approved_sha` does NOT carry over to `new_head`,
+    /// and `reason` says why (a changed patch identity, a non-merge commit,
+    /// an edited merge). Kept only for refusals that follow from the commits
+    /// alone, so a gate does not recompute them either.
+    CarryOverRefused {
+        approved_sha: String,
+        new_head: String,
+        refusal: crate::gate::review_carryover::CarryOverRefusal,
+        reason: String,
+        proof_version: u32,
+    },
 }
 
 impl EventBody {
@@ -141,7 +160,7 @@ pub(crate) fn patch_identity(
     repo: &Path,
     head: &str,
 ) -> (Option<String>, Option<String>, Option<String>) {
-    use crate::review_carryover as rc;
+    use crate::gate::review_carryover as rc;
     let Ok(base) = rc::protected_base(repo) else {
         return (None, None, None);
     };
