@@ -1319,6 +1319,12 @@ pub enum QueueCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         reason: Option<String>,
+        /// Record an advisor ruling on the spec. The next pickup prompt
+        /// leads with the latest ruling, so a relaunched lane works from it
+        /// rather than from the description alone.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+        #[clap(long, allow_hyphen_values = true, value_name = "TEXT")]
+        ruling: Option<String>,
         /// Chain `aida queue work --resume` to resume a prior claude
         /// session for this spec instead of cold-launching. Implies
         /// `--work`.

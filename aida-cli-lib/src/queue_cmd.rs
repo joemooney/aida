@@ -6817,6 +6817,7 @@ pub(crate) fn handle_queue_command(
             tail,
             status,
             reason,
+            ruling,
             resume,
             force,
             steal,
@@ -6842,6 +6843,7 @@ pub(crate) fn handle_queue_command(
                     tail: *tail,
                     status: status.as_deref(),
                     reason: reason.as_deref(),
+                    ruling: ruling.as_deref(),
                     resume: *resume,
                     force: *force,
                     steal: *steal,
@@ -7822,6 +7824,7 @@ pub(crate) struct ReworkFlags<'a> {
     pub tail: bool,
     pub status: Option<&'a str>,
     pub reason: Option<&'a str>,
+    pub ruling: Option<&'a str>,
     pub resume: bool,
     pub force: bool,
     pub steal: bool,
@@ -7845,6 +7848,9 @@ impl ReworkFlags<'_> {
         }
         if self.reason.is_some() {
             v.push("--reason");
+        }
+        if self.ruling.is_some() {
+            v.push("--ruling");
         }
         if self.resume {
             v.push("--resume");
@@ -7877,6 +7883,11 @@ pub(crate) fn handle_rework_entry(
     flags: &ReworkFlags<'_>,
 ) -> Result<()> {
     if let Some(id) = id {
+        // The ruling is recorded first so a chained `--work` launch reads it
+        // into its pickup prompt. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+        if let Some(ruling) = flags.ruling {
+            record_rework_ruling(storage, id, ruling)?;
+        }
         return handle_queue_rework(
             storage,
             id,
@@ -7921,6 +7932,31 @@ pub(crate) fn handle_rework_entry(
         &mut |spec| run_aida_interactive(&["decide", spec]),
         &mut |spec| run_aida_interactive(&["show", spec]),
     )
+}
+
+/// `aida rework --ruling TEXT`: record the ruling as a spec comment tagged so
+/// [`latest_ruling_comment`] finds it, and every later pickup prompt leads
+/// with it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn record_rework_ruling(storage: &Storage, id: &str, ruling: &str) -> Result<()> {
+    let ruling = ruling.trim();
+    anyhow::ensure!(!ruling.is_empty(), "--ruling needs the ruling text");
+    let store = storage.load()?;
+    let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_unambiguous(id)?
+    }
+    .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+    let comment = aida_core::Comment::new(get_default_author(), ruling_comment_text(ruling));
+    storage.update_spec_atomically(req, |r| {
+        r.add_comment(comment);
+    })?;
+    println!(
+        "  {} ruling recorded; the next pickup prompt leads with it",
+        "·".dimmed()
+    );
+    Ok(())
 }
 
 /// Run `aida <args>` with the terminal attached (the `[d]` and `[o]` keys).
@@ -10579,6 +10615,74 @@ pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&
         .map(|c| c.content.as_str())
 }
 
+/// The tag that marks a spec comment as an advisor ruling. Rulings are
+/// written by hand (`aida comment add ID "Advisor ruling …"`) as well as by
+/// `aida rework --ruling`, so the match is on the comment's first line.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) const RULING_TAG: &str = "Advisor ruling";
+
+/// Whether a comment is an advisor ruling: its first non-empty line starts
+/// with `Ruling` or `Advisor ruling` (any case, after markdown emphasis or a
+/// `[` bracket).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn is_ruling_comment(content: &str) -> bool {
+    let first = content
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .trim_start_matches(['#', '*', '_', '[', ' '])
+        .to_ascii_lowercase();
+    first.starts_with("ruling") || first.starts_with("advisor ruling")
+}
+
+/// `--ruling` text as stored: tagged unless the caller already tagged it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn ruling_comment_text(ruling: &str) -> String {
+    if is_ruling_comment(ruling) {
+        ruling.to_string()
+    } else {
+        format!("{RULING_TAG}: {ruling}")
+    }
+}
+
+/// The advisor ruling recorded LAST on the spec (by comment time), replies
+/// included. A later ruling supersedes an earlier one.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn latest_ruling_comment(
+    comments: &[aida_core::Comment],
+) -> Option<&aida_core::Comment> {
+    fn walk<'a>(comments: &'a [aida_core::Comment], out: &mut Vec<&'a aida_core::Comment>) {
+        for c in comments {
+            out.push(c);
+            walk(&c.replies, out);
+        }
+    }
+    let mut all = Vec::new();
+    walk(comments, &mut all);
+    all.into_iter()
+        .filter(|c| is_ruling_comment(&c.content))
+        .max_by_key(|c| c.created_at)
+}
+
+/// Lead a pickup prompt with the spec's latest advisor ruling, so a
+/// relaunched lane works from it rather than from the description alone.
+/// The pickup line stays last, as in [`rework_pickup_prompt`].
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn prepend_ruling(prompt: String, ruling: Option<&aida_core::Comment>) -> String {
+    // Agent gates wear a tighter verdict contract, as in `prepend_due_jobs`.
+    let Some(ruling) = ruling.filter(|_| std::env::var("AIDA_AGENT_GATE_NAME").is_err()) else {
+        return prompt;
+    };
+    format!(
+        "ADVISOR RULING ({} by {}) — binding; where it differs from the spec description, \
+         the ruling wins:\n{}\n\n{prompt}",
+        ruling.created_at.format("%Y-%m-%d %H:%M UTC"),
+        ruling.author,
+        ruling.content.trim()
+    )
+}
+
 // BUG-1213: the rework round a pickup is entering: the original
 /// implementation is round 1, and every recorded findings block (one per
 /// `queue rework`) opens the next round — so N recorded blocks ⇒ round N+1.
@@ -11840,6 +11944,23 @@ pub(crate) fn handle_queue_work(
         review_findings.as_deref(),
         &rework_comments,
     );
+    // An advisor ruling left as a spec comment leads the implementer pickup;
+    // a lane that read only the description repeated the overruled change.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+    if !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided {
+        if plan.mode == QueueWorkMode::Item {
+            let spec_id = plan
+                .entries
+                .first()
+                .map(|entry| entry.spec_id.as_str())
+                .unwrap_or(plan.anchor_display.as_str());
+            if let Ok(store) = storage.load() {
+                if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
+                    prompt = prepend_ruling(prompt, latest_ruling_comment(&req.comments));
+                }
+            }
+        }
+    }
     // Interactive implementers and every headless phase receive the same
     // resolved, capped type+lane protocol. Reviewers are included headlessly
     // because there is no conversational pickup hook to inject it later.
@@ -17020,6 +17141,10 @@ pub(crate) struct ReworkArgs {
     // trace:BUG-1294 | ai:claude
     #[clap(long, allow_hyphen_values = true)]
     pub reason: Option<String>,
+    /// Record an advisor ruling the next pickup prompt leads with.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+    #[clap(long, allow_hyphen_values = true, value_name = "TEXT")]
+    pub ruling: Option<String>,
     /// Chain `aida queue work --resume`.
     #[clap(long)]
     pub resume: bool,
@@ -17067,6 +17192,7 @@ fn run_rework(
                     tail,
                     status,
                     reason,
+                    ruling,
                     resume,
                     force,
                     steal,
@@ -17085,6 +17211,7 @@ fn run_rework(
                             tail: *tail,
                             status: status.as_deref(),
                             reason: reason.as_deref(),
+                            ruling: ruling.as_deref(),
                             resume: *resume,
                             force: *force,
                             steal: *steal,
@@ -17113,6 +17240,7 @@ fn run_rework(
                     tail,
                     status,
                     reason,
+                    ruling,
                     resume,
                     force,
                     steal,
@@ -17130,6 +17258,7 @@ fn run_rework(
                             tail: *tail,
                             status: status.as_deref(),
                             reason: reason.as_deref(),
+                            ruling: ruling.as_deref(),
                             resume: *resume,
                             force: *force,
                             steal: *steal,
