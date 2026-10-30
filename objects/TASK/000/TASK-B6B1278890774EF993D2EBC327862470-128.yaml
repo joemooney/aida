@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T16:44:47.009713085Z
-modified_at: 2026-10-30T16:53:15.084143527Z
+modified_at: 2026-10-30T17:07:01.083030942Z
 req_type: Task
 tags:
 - docs
@@ -22,6 +22,11 @@ comments:
   content: 'Assigned by operator/advisor brief 2026-10-30 to finish EPIC-HOME-002. Read-only gap pass recovered both PR-3096 follow-ups and identified book routes plus capability/integration pages and four missing original SVG diagrams. Draft content is prepared; source implementation will start after PR-3103 merges. Request advisor approval: add --status approved was downgraded to Draft and edit --status approved refused implementer authority. Role mail request 6bb0944b-691c-40e8-a1f3-731300d10011 queued with zero eligible reader; direct claude-advisor-08 send refused no live agent. No authority escalation or stack-branch push attempted.'
   created_at: 2026-10-30T16:53:15.084143527Z
   modified_at: 2026-10-30T16:53:15.084143527Z
+- id: 01a18dc7-735b-7182-b337-cc246f1178b6
+  author: joe
+  content: 'Docs implementation prerequisite remains unmet: at 17:04 UTC PR-3103 is OPEN/non-draft/BLOCKED at combined head 3d72cd54e096306759971c0eff41d659330e15de. Branch runs list only successful merge-hold-gate jobs at that head, with no required Build workflow registered. Advisor FYI queued as 31c7bfe3-bc60-41eb-944e-03014f4e9051. Do not edit/push any of the eight approved stack branches. Source drafts (two guides, four original SVGs) and single gap-table draft are prepared in temporary staging; fresh implementation worktree must wait for 3103 MERGED and child task approval.'
+  created_at: 2026-10-30T17:07:01.083030942Z
+  modified_at: 2026-10-30T17:07:01.083030942Z
 history:
 - id: 01a18db3-b707-74d1-9f73-ae5311a96cc9
   author: ai:codex:joe
