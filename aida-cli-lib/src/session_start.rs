@@ -777,6 +777,35 @@ pub(crate) fn pickup_worktree_path(
     ))
 }
 
+/// The leases that block a review of the PR whose source branch is
+/// `source_branch`. A dead lease whose tree was deleted by hand leaves
+/// nothing for `session end`'s dirty check to protect, so it is released
+/// here directly: neither a prompt nor store lock contention stands between
+/// it and the review.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn review_branch_conflicts(
+    project_root: &std::path::Path,
+    source_branch: &str,
+) -> Vec<SessionLease> {
+    let (released, conflicting) = crate::session_reap::release_gone_worktree_leases_among(
+        project_root,
+        list_leases(project_root)
+            .into_iter()
+            .filter(|l| l.branch == source_branch)
+            .collect(),
+    );
+    for l in &released {
+        eprintln!(
+            "{} released lease {} on `{}`: its worktree {} is gone and its session has exited",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            &l.id[..l.id.len().min(8)],
+            source_branch,
+            l.worktree_path.display()
+        );
+    }
+    conflicting
+}
+
 /// BUG-1628: the branch + worktree an ordinary pickup (`aida queue work
 /// <spec>` with no `--branch`/`--path`) would create for `scope`. This is the
 /// single resolver; the auto-complete phase-1 fallback calls it instead of the
@@ -2440,10 +2469,7 @@ pub(crate) fn session_start_with_receipt(
         // Gracefully skipped when gh/glab isn't installed.
         // trace:TASK-76 | ai:claude
         if let Some(source_branch) = query_pr_source_branch(forge, n, &project_root) {
-            let conflicting: Vec<_> = list_leases(&project_root)
-                .into_iter()
-                .filter(|l| l.branch == source_branch)
-                .collect();
+            let conflicting = review_branch_conflicts(&project_root, &source_branch);
             if !conflicting.is_empty() {
                 let l = &conflicting[0];
                 // BUG-1205: there is nobody to answer the prompt under a
