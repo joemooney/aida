@@ -21058,9 +21058,9 @@ Options:
           Show what would change without writing anything
 
       --force
-          Override the category strategy and overwrite every drifted file regardless of category.
-          Equivalent to today's `apply --force` but with the cleaner per-category output. Use
-          sparingly — overwrites your CLAUDE.md / AGENTS.md
+          Override the category strategy: overwrite drifted files regardless of category and replace
+          an existing README.md seed even when it reports no managed drift. Use sparingly — replaces
+          your README.md and can overwrite your CLAUDE.md / AGENTS.md
 
       --prune
           Remove obsolete `aida-*` skills/commands/hooks this AIDA version no longer ships (e.g. a
@@ -21100,8 +21100,9 @@ modified" this is how you actually see what changed.
 
 CLAUDE.md and AGENTS.md are diffed only on the AIDA-managed portion: CLAUDE.md is presence-only
 (drift = `@.claude/AIDA.md` import line missing); AGENTS.md compares just the content between `<!--
-AIDA-AUTOGEN-BEGIN -->` / `<!-- AIDA-AUTOGEN-END -->` markers. Everything else gets a full-content
-diff.
+AIDA-AUTOGEN-BEGIN -->` / `<!-- AIDA-AUTOGEN-END -->` markers. Existing README.md is a user-owned
+seed and is never compared, even with an explicit path (exit 0). A missing README.md is reported as
+drift (exit 1); upgrade creates the starter. Other files get a full-content diff.
 
 Usage: aida scaffold diff [OPTIONS] [PATH]
 
@@ -49849,7 +49850,7 @@ Working on aida itself
       {
         "name": "force",
         "takes_value": false,
-        "help": "Override the category strategy and overwrite every drifted file regardless of category. Equivalent to today's `apply --force` but with the cleaner per-category output. Use sparingly — overwrites your CLAUDE.md / AGENTS.md"
+        "help": "Override the category strategy: overwrite drifted files regardless of category and replace an existing README.md seed even when it reports no managed drift. Use sparingly — replaces your README.md and can overwrite your CLAUDE.md / AGENTS.md"
       },
       {
         "name": "format",

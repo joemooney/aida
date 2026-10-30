@@ -476,8 +476,8 @@ shared store. `aida config transport` manages the `work` profile before store
 initialization. Enabled push performs one pinned store-ref push through verified
 store hooks, without lifecycle actions. Push requires a reviewed private deny
 policy and original trusted baseline; it scans new reachable history and records
-exact successful acceptance without advancing trust. Intake enforcement and
-actual recoverable FF pull remain pending. See
+exact successful acceptance without advancing trust. Prepared sanitized writes and recoverable fast-forward store pull are implemented;
+unsupported writers and divergence refuse. See
 [transport configuration](docs/cli/07-project-setup.md#aida-config-transport).
 <!-- trace:STORY-1742 | ai:codex -->
 

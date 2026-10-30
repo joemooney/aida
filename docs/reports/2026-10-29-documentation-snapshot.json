@@ -1,0 +1,26 @@
+{
+  "reviewed_base": "1db74dba1129632c01b5bae9ee5681dd76069db1",
+  "date": "2026-10-29",
+  "tracked_documentation_files": 1017,
+  "classification_counts": {
+    "contextual-evidence": 21,
+    "current-reader-reference": 37,
+    "current-static-page": 10,
+    "decision-record": 8,
+    "derived-agent-mirror": 117,
+    "documentation-tool-or-asset": 74,
+    "historical-or-evidence": 358,
+    "reference-requires-context": 164,
+    "site-source-or-asset": 15,
+    "template-master": 213
+  },
+  "local_links_scanned": 2600,
+  "link_candidates": 220,
+  "self_derived_outputs_excluded_from_hash_cycle": [
+    "docs/reports/2026-10-29-documentation-inventory.csv",
+    "docs/reports/2026-10-29-documentation-links.csv",
+    "docs/reports/2026-10-29-documentation-review.md",
+    "docs/reports/2026-10-29-documentation-snapshot.json"
+  ],
+  "scope": "Post-fix working-tree hashes; Git history metadata from reviewed_base. Candidate scan is not semantic certification or external URL validation. Historical records remain unchanged."
+}
