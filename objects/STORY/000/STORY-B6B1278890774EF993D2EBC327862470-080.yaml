@@ -111,12 +111,12 @@ description: |
   2. AC2 dedupe: store::bind_unbound (gate/ledger/store.rs ~273) must skip unbound records already bound to ANY change in the spec's index, or project::verdict_events must dedupe by record identity. Test: two changes for one spec, and verdict_records(SPEC) returns each record once.
   3. AC2 wiring: bind from ONE shared open-change hook that every PR-open path calls: pr_ship_create_pr, orchestrator_leases open_orchestrator_pr_for_implementer_worktree and open_orchestrator_pr_for_pushed_branch, drain_batch open_cluster_pr, and pr_train. Add a wiring test for at least pr_ship_create_pr and one orchestrator path.
   Test tier: STRICT as before (gate:: plus the ship/mandate integration binaries you touch, plus make check-ci-fast). Run with env -u AIDA_CONTAINED.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T05:52:49.297932664Z
+modified_at: 2026-10-30T05:52:58.618028416Z
 req_type: Story
 tags:
 - architecture
@@ -809,6 +809,12 @@ comments:
   modified_at: 2026-10-30T05:41:33.641686433Z
   session_id: 01a18b09181f
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18b5e-58fa-7280-b81d-f4150621dd11
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC4 carry-over-on-ledger and AC2 binding are implemented and tested, and CI is green at c1aef1b. But this final slice uses the plain trailer and AC7 is unmet with no evidence, and AC2 binding duplicates across changes and only runs on one PR-open path.. No triage reason was given.'
+  created_at: 2026-10-30T05:52:58.618020393Z
+  modified_at: 2026-10-30T05:52:58.618020393Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -1270,6 +1276,14 @@ history:
   timestamp: 2026-10-30T05:52:50.392669787Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18b5e-58f9-7e01-a7ef-514ed697174f
+  author: joe
+  timestamp: 2026-10-30T05:52:58.618010219Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -1283,11 +1297,3 @@ implementation_info:
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
   reopened_at_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC4 carry-over-on-ledger and AC2 binding are implemented and tested, and CI is green at c1aef1b. But this final slice uses the plain trailer and AC7 is unmet with no evidence, and AC2 binding duplicates across changes and only runs on one PR-open path.
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-080 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T05:51:47.253539896Z

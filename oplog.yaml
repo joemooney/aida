@@ -90645,5 +90645,13 @@ operations:
       2. AC2 dedupe: store::bind_unbound (gate/ledger/store.rs ~273) must skip unbound records already bound to ANY change in the spec's index, or project::verdict_events must dedupe by record identity. Test: two changes for one spec, and verdict_records(SPEC) returns each record once.
       3. AC2 wiring: bind from ONE shared open-change hook that every PR-open path calls: pr_ship_create_pr, orchestrator_leases open_orchestrator_pr_for_implementer_worktree and open_orchestrator_pr_for_pushed_branch, drain_batch open_cluster_pr, and pr_train. Add a wiring test for at least pr_ship_create_pr and one orchestrator path.
       Test tier: STRICT as before (gate:: plus the ship/mandate integration binaries you touch, plus make check-ci-fast). Run with env -u AIDA_CONTAINED.
-clock: 7039
+- id: 01a18b5e-5ca6-7b80-9d48-adbd6fa9f65e
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 7040
+  timestamp: 2026-10-30T05:52:59.558747201Z
+  kind: !SetStatus
+    status: Approved
+clock: 7040
 node_id: '1'
