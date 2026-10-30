@@ -18,9 +18,11 @@ The initial version was published as an owner-private preview through Sites. The
 
 ## Source guide build
 
-`python3 docs/showcase/build.py` renders the selected source guide into the
-shared `page-template.html` layout. Edit `docs/getting-started.md`, the template
-or `guide.css`, then rebuild; do not hand-edit `getting-started.html`.
+`python3 docs/showcase/build.py` renders every manifest-selected guide into the
+shared `page-template.html` layout: `getting-started.html`, `configuration.html`,
+`workflow.html`, `autonomy.html`, `trust.html`, `metrics.html` and `setup.html`,
+plus `library.html` and `search-data.js`. Edit the corresponding Markdown,
+templates or `guide.css`, then rebuild; do not hand-edit derived outputs.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
 only the Markdown used by these guides, with explicit page selection in `publication.json`.
 Generated files are committed and can be read directly from disk.
@@ -54,4 +56,4 @@ handbook pages.
 
 ## Standalone overview
 
-`python3 docs/showcase/build.py --overview` also regenerates `docs/what-is-aida.html` from `docs/what-is-aida.md` and `overview-template.html`. This optional step requires Pandoc (the Markdown tables and nested lists use its GFM reader); the guide/library build without this flag still needs only Python 3 and Git. Edit the Markdown or the overview shell, then regenerate instead of hand-editing the standalone HTML. Local links to manifest guides are mapped into the showcase; other links keep their source-document paths.
+`python3 docs/showcase/build.py --overview` also regenerates `docs/what-is-aida.html` from `docs/what-is-aida.md` and `overview-template.html`. Use `python3 docs/showcase/build.py --overview --check` to verify it without writing files. This optional step requires Pandoc (the Markdown tables and nested lists use its GFM reader); the guide/library build without this flag still needs only Python 3 and Git. Edit the Markdown or the overview shell, then regenerate instead of hand-editing the standalone HTML. Local links to manifest guides are mapped into the showcase; other links keep their source-document paths.

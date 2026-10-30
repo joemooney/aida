@@ -8,7 +8,7 @@ AIDA separates what work means, how it is dispatched and who may authorize its n
 
 - **Per-spec execution mode:** `operator`, `guided`, `drive`, `drain` and `decide` describe different human involvement contracts. They do not grant roles or merge authority. Use the [overview](what-is-aida.md) and `aida do --help` to inspect the dispatch contract.
 - **Agent and launch defaults:** supported managed launchers include Claude Code, Codex and Antigravity. Machine and project `agents.toml` files carry vendor defaults. The launch commands support vendor-specific options; model names are opaque pass-through values, not AIDA validation of model availability. Effort, permission flags and containment support differ between harnesses.
-- **Work protocols:** editable META requirements tagged `protocol:<type>` define type guidance. Optional `protocol:lane:<lane>` overlays tailor research, documentation or consequential design work. Use `aida protocol list` and `aida protocol show task --lane docs` to inspect the actual store text before changing it.
+- **Work protocols:** editable META requirements tagged `protocol:<type>` define type guidance. Optional `protocol:lane:<lane>` overlays tailor research, documentation or consequential design work. Use `aida protocol list` to inspect installed protocols. If the store has none, an operator can install defaults with `aida protocol seed`; then use `aida protocol show task --lane docs` to inspect the actual text before changing it.
 - **Workflow policy:** project settings control such features as protocol enforcement, drain behavior and required CI treatment. Read the relevant command help and [lifecycle reference](cli/04-git-lifecycle.md) before editing policy. Changing documentation or guidance does not replace a runtime authority check.
 - **Project footprint:** full, minimal and memory-lane footprints select how much scaffolding a project adopts. `aida init --footprint memory-lane` installs the store and reflex capture/learn guidance; `--footprint minimal` installs store/config/cache without that guidance. The distinct `--minimal` demonstration option is not the same as `--footprint minimal`.
 - **Reporting preferences:** history layouts, output format, workflow hints and glyphs let operators and agents choose useful views. `aida history --help` describes named/inline templates; `aida config hints`, `aida config glyph` and the global `--format` option address different surfaces. A presentation setting does not change spec identity or authority.
@@ -38,6 +38,8 @@ These are illustrative requests, not live configuration writes or complete confi
 ```bash
 aida init --help
 aida do --help
+aida protocol list
+# If defaults have not been installed, run: aida protocol seed
 aida protocol show task --lane docs
 aida config permissions show
 aida agent new codex --help

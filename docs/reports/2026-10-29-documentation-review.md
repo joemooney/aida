@@ -10,7 +10,7 @@ The inventory covers 1,017 tracked documentation inputs: every `docs/` path and 
 
 Classification totals: 37 current reader references, 10 current static pages, 15 site sources/assets, 213 template masters, 117 derived agent mirrors, 358 historical/evidence inputs, eight decision records, 21 contextual evidence documents, 164 references requiring context, and 74 documentation tools/assets. Classification describes context and intended use; it does not certify the accuracy of every sentence.
 
-The post-fix scan examined 2,585 local links. There are **zero candidates in current reader references or static pages**. The remaining 220 candidates are retained for contextual verification: 86 template-master references, 47 historical/evidence references, 85 references requiring context and two documentation-tool/asset references. Template-relative and historical links can be valid in their original context; these are candidates, not 220 confirmed defects. External URLs are not fetched. Code fences, inline code and template placeholders are excluded from ordinary navigation checking. Candidate line numbers are navigation aids; confirmed evidence below was inspected in source.
+The post-fix scan examined 2,591 local links. There are **zero candidates in current reader references or static pages**. The remaining 220 candidates are retained for contextual verification: 86 template-master references, 47 historical/evidence references, 85 references requiring context and two documentation-tool/asset references. Template-relative and historical links can be valid in their original context; these are candidates, not 220 confirmed defects. External URLs are not fetched. Code fences, inline code and template placeholders are excluded from ordinary navigation checking. Candidate line numbers are navigation aids; confirmed evidence below was inspected in source.
 
 Substantive source/help checks cover the changed newcomer/operator routes, init profile and MCP behavior, clone allocation, transport, cache labels, modes/overrides, reporting/effort attribution and the seven curated guides across this PR stack. The site scripts, accessible names, keyboard controls, responsive rules, source provenance and generated navigation were inspected. Unchanged legacy/backend prose, external vendor setup and every historical statement were not re-executed or certified.
 
@@ -20,9 +20,9 @@ Eleven issue groups: one critical, eight important, two minor. The Git diff is t
 
 | Severity | Evidence | Before | After |
 |---|---|---|---|
-| Important | [First project](../first-project.md):53,69,86; `aida init --help`; allocation authority source | Guaranteed a shared global ID sequence, implicit MCP registration and an initialization role assumption | Illustrative IDs use actual CLI output; MCP opt-in is explicit; validated authority remains separate |
+| Critical | [First project](../first-project.md):53,69,86; `aida init --help`; allocation authority source | Guaranteed a shared global ID sequence, implicit MCP registration and an initialization role assumption | Illustrative IDs use actual CLI output; MCP opt-in is explicit; validated authority remains separate |
 | Important | [CLI journey](../cli/README.md):73; init help/source | MCP registration described as a default | Explicit opt-in and PATH-based profile selection |
-| Critical | [Administrator guide](../admin-guide.md):7 | Developer guide path missing | Link to the current repository guide |
+| Important | [Administrator guide](../admin-guide.md):7 | Developer guide path missing | Link to the current repository guide |
 | Important | [First project](../first-project.md), Where to go next | Comparison link targeted a removed README anchor; newcomer description was command-centric | Current positioning index and conversational newcomer route |
 | Important | [Lifecycle](../lifecycle.md):6,813 | Removed README lifecycle anchors | Current product-workflow guide |
 | Important | [Setup reference](../cli/07-project-setup.md):185 | Sanitized-intake anchor used an obsolete heading order | Anchor matches the current source heading |
@@ -43,9 +43,9 @@ Seven tracked Markdown guides are the curated publication set in `docs/showcase/
 ## Verification and reproduction
 
 - `python3 docs/showcase/build.py --overview` regenerated the source-derived site. Unchanged-input rebuild stability and seven source hashes were checked.
-- `python3 docs/audit-documentation.py --base origin/main` regenerates the inventory, candidates and snapshot. The helper is a reporting tool, not a new CI or runtime gate.
+- `python3 docs/audit-documentation.py --base 1db74dba1129632c01b5bae9ee5681dd76069db1` regenerates the inventory, candidates and snapshot. The helper is a reporting tool, not a new CI or runtime gate.
 - `make check-ci-fast` is the required repository gate. Its completed result and spawned author self-check findings are recorded in the PR/spec handoff. No direct cargo build/test was run.
-- Review the bounded before/after diff with `git diff origin/main..HEAD -- README.md docs/`.
+- Review the bounded before/after diff with `git diff 1db74dba1129632c01b5bae9ee5681dd76069db1...HEAD -- README.md docs/`.
 
 Artifacts: [inventory](2026-10-29-documentation-inventory.csv), [link candidates](2026-10-29-documentation-links.csv), [snapshot](2026-10-29-documentation-snapshot.json).
 
@@ -62,3 +62,13 @@ The correction pass also restored clone-local `aida init` / `aida node acquire` 
 The standalone overview is now generated by `build.py --overview` from its Markdown and `overview-template.html`; this optional step requires Pandoc for GFM tables and nested lists. The ordinary guide/library build continues to use Python's standard library plus Git. Rebuild stability is checked for both routes. No runtime or protected gate implementation was modified.
 
 Author self-check found a stale default-mode paragraph in the linked review-process guide denying the existing solo-human exception. That paragraph and the introductory absolute wording now distinguish ordinary independent review from the verified, explicitly enabled human exception. The exception never authorizes an implementing agent's self-approval. Overview desktop/mobile screenshots were inspected after regeneration; this is a bounded layout check, not an assistive-technology audit.
+
+## Round-2 verification
+
+The onboarding routes now describe the integrated conversational guide, and rendered assessment links preserve their section fragments. The internal Getting started button has no external-link glyph. The setup references require clone initialization before spec creation, describe bounded cache freshness, and restore per-user queue inspection and stable identity configuration.
+
+The [publication builder](../showcase/build.py) collects guide, library and search output in memory. `python3 docs/showcase/build.py --check` compares all tracked derived artifacts without writing them and reports every drifted file. The existing static CI step runs that check and its behavioral fixtures. `--overview --check` additionally verifies the standalone assessment and requires Pandoc; ordinary guide checks have no Pandoc dependency. Duplicate/reserved output names refuse, search retains legitimate punctuation and link labels, footer provenance is a template field, and Unicode excerpts use offsets from the original displayed string.
+
+The [page template](../showcase/page-template.html) places the source heading before the graphic; image descriptions come from the SVG title and description. Decorative configuration-link arrows are hidden from assistive technology. The showcase README lists every generated guide and data artifact, and the configuration guide explains protocol inspection and seeding before showing a protocol.
+
+The issue table gives onboarding/allocation/MCP misstatements priority over the broken administrator link. The reproduction commands pin the reviewed base and use a three-dot comparison. The regenerated inventory and candidate scan cover the final source set; the local fixtures cover drift/no-write behavior, output collisions, search, provenance, graphic descriptions/heading order and optional overview verification. These are author checks, not independent approval or an assistive-technology audit.

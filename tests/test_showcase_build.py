@@ -93,6 +93,31 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.assertIn('the source guide belongs here.', guide)
         self.assertIn('the source guide</a>', guide)
 
+    def test_graphic_description_follows_source_heading(self):
+        assets = self.site / 'assets'
+        assets.mkdir()
+        (assets / 'guide.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg"><title>Scope &amp; choices</title><desc>A &lt; B; distinct authority.</desc></svg>')
+        self.build()
+        page = (self.site / 'guide.html').read_text()
+        self.assertIn('alt="Scope &amp; choices A &lt; B; distinct authority."', page)
+        self.assertLess(page.index('</h1>'), page.index('<figure>'))
+        self.build('--check')
+
+    @unittest.skipUnless(shutil.which('pandoc'), 'Optional overview needs Pandoc')
+    def test_optional_overview_uses_read_only_check(self):
+        shutil.copyfile(REPO / 'docs/showcase/overview-template.html', self.site / 'overview-template.html')
+        overview = self.root / 'docs/what-is-aida.md'
+        overview.write_text('# Overview\n\nIntroduction.\n\n## Details\n\nOriginal details.\n')
+        self.git('add', '.')
+        self.build('--overview')
+        self.git('add', '.')
+        before = (overview.with_suffix('.html').read_bytes(), overview.with_suffix('.html').stat().st_mtime_ns)
+        self.build('--overview', '--check')
+        overview.write_text(overview.read_text() + '\nChanged details.\n')
+        result = self.build('--overview', '--check', expected=1)
+        self.assertIn('docs/what-is-aida.html', result.stderr)
+        self.assertEqual(before, (overview.with_suffix('.html').read_bytes(), overview.with_suffix('.html').stat().st_mtime_ns))
+
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_unicode_excerpt_and_literal_query(self):
         script = r'''
