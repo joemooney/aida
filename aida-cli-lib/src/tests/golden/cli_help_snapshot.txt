@@ -4975,6 +4975,9 @@ Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
   wake-snapshot  Read bounded unread message IDs without bodies or acknowledgement
+  wake-run       Watch every session armed for mail wake and wake its Codex thread when its own
+                 inbox has new mail (the service `wake-service` installs)
+  wake-service   Install, remove or inspect this project's mail-wake user service
   migrate        Preview legacy mailbox reconciliation before recipient migration
   retention      Mail retention: check whether worktree mail can be retired safely
   latency        Show mailbox read latency for the active identity (or an explicit recipient)
@@ -5052,6 +5055,90 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida mailbox wake-run
+Watch every session armed for mail wake and wake its Codex thread when its own inbox has new mail
+(the service `wake-service` installs)
+
+Usage: aida mailbox wake-run [OPTIONS]
+
+Options:
+      --project <PROJECT>
+          Project whose armed sessions are watched (defaults to this one)
+
+      --codex <CODEX>
+          The `codex` binary that queues the wake (defaults to PATH)
+
+      --interval <INTERVAL>
+          Seconds between passes (1..3600)
+          
+          [default: 30]
+
+      --batch-seconds <BATCH_SECONDS>
+          Seconds new mail waits so one wake can carry a burst (0..300)
+          
+          [default: 5]
+
+      --once
+          Run one pass and print each armed session's result
+
+      --recover <THREAD>
+          Resolve an uncertain wake on this Codex thread, after inspecting it. Exactly one of
+          --accepted or --retry is required with it
+
+      --accepted
+          With --recover: the thread received the wake
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --retry
+          With --recover: the thread did not receive it; offer it again
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox wake-service
+Install, remove or inspect this project's mail-wake user service
+
+Usage: aida mailbox wake-service [OPTIONS] <ACTION>
+
+Arguments:
+  <ACTION>
+          [possible values: install, uninstall, status]
+
+Options:
+      --codex <CODEX>
+          The `codex` binary the service uses (defaults to PATH at install)
+
+      --dry-run
+          Print what would change without touching systemd
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida mailbox migrate
 Preview legacy mailbox reconciliation before recipient migration
 
@@ -5091,6 +5178,9 @@ Commands:
             or reset until that is recorded. Recording runs only for a human operator at an
             interactive terminal, and only when the report shows every running mail writer taking a
             permit
+  prune     Drop worktrees that were deleted from disk but are still registered with Git. While
+            registered, each one keeps the mail view partial, which also blocks acknowledging mail.
+            A deleted worktree's mailbox went with it, so there is nothing left to retain
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -5121,6 +5211,40 @@ Usage: aida mailbox retention activate [OPTIONS]
 Options:
       --dry-run
           Report only; record nothing
+
+      --json
+          Print the report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox retention prune
+Drop worktrees that were deleted from disk but are still registered with Git. While registered, each
+one keeps the mail view partial, which also blocks acknowledging mail. A deleted worktree's mailbox
+went with it, so there is nothing left to retain
+
+Usage: aida mailbox retention prune [OPTIONS]
+
+Options:
+      --include-locked
+          Also drop worktrees Git has locked. A lock normally marks a worktree on removable media;
+          only a deleted worktree whose parent directory is still present is ever dropped
+
+      --dry-run
+          Report only; drop nothing
 
       --json
           Print the report as JSON
@@ -16889,6 +17013,85 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida agent wake
+Arm or retire a session's mail wake (internal; `agent new` arms it)
+
+Usage: aida agent wake [OPTIONS] <COMMAND>
+
+Commands:
+  arm     Wake this live Codex session's thread when its own inbox has mail
+  retire  Stop waking this session; its ledger is kept
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent wake arm
+Wake this live Codex session's thread when its own inbox has mail
+
+Usage: aida agent wake arm [OPTIONS] <AGENT>
+
+Arguments:
+  <AGENT>
+          Agent name, `<type>#<pid>`, or `<type>-<pid>` id
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent wake retire
+Stop waking this session; its ledger is kept
+
+Usage: aida agent wake retire [OPTIONS] <AGENT>
+
+Arguments:
+  <AGENT>
+          Agent name, `<type>#<pid>`, or `<type>-<pid>` id
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida agent list-roles
 List the supported agent roles in the taxonomy
 
@@ -23689,6 +23892,10 @@ Options:
           Capture a comment on the spec at rework time (added via the same path as `aida comment
           add`). Useful for the audit trail of why a Done or Completed spec is being re-opened
 
+      --ruling <TEXT>
+          Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling,
+          so a relaunched lane works from it rather than from the description alone
+
       --resume
           Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
           cold-launching. Implies `--work`
@@ -23707,13 +23914,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          When chaining `--work`, end any session holding the target scope first (passes through to
-          `aida queue work --steal`)
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          When chaining `--work`, end any session holding the target scope first (passes through to
+          `aida queue work --steal`)
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`; passed to `aida queue work --permission-mode`)
@@ -24389,6 +24596,9 @@ Options:
       --reason <REASON>
           Capture a comment on the spec at rework time
 
+      --ruling <TEXT>
+          Record an advisor ruling the next pickup prompt leads with
+
       --resume
           Chain `aida queue work --resume`
 
@@ -24405,12 +24615,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          Pass `--steal` through to chained `aida queue work`
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          Pass `--steal` through to chained `aida queue work`
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`)
@@ -33308,6 +33518,108 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "wake-run"
+    ],
+    "about": "Watch every session armed for mail wake and wake its Codex thread when its own inbox has new mail (the service `wake-service` installs)",
+    "flags": [
+      {
+        "name": "accepted",
+        "takes_value": false,
+        "help": "With --recover: the thread received the wake"
+      },
+      {
+        "name": "batch-seconds",
+        "takes_value": true,
+        "help": "Seconds new mail waits so one wake can carry a burst (0..300)"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "codex",
+        "takes_value": true,
+        "help": "The `codex` binary that queues the wake (defaults to PATH)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "interval",
+        "takes_value": true,
+        "help": "Seconds between passes (1..3600)"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Run one pass and print each armed session's result"
+      },
+      {
+        "name": "project",
+        "takes_value": true,
+        "help": "Project whose armed sessions are watched (defaults to this one)"
+      },
+      {
+        "name": "recover",
+        "takes_value": true,
+        "help": "Resolve an uncertain wake on this Codex thread, after inspecting it. Exactly one of --accepted or --retry is required with it"
+      },
+      {
+        "name": "retry",
+        "takes_value": false,
+        "help": "With --recover: the thread did not receive it; offer it again"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "wake-service"
+    ],
+    "about": "Install, remove or inspect this project's mail-wake user service",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "codex",
+        "takes_value": true,
+        "help": "The `codex` binary the service uses (defaults to PATH at install)"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Print what would change without touching systemd"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "migrate"
     ],
     "about": "Preview legacy mailbox reconciliation before recipient migration",
@@ -33394,6 +33706,48 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the report as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "retention",
+      "prune"
+    ],
+    "about": "Drop worktrees that were deleted from disk but are still registered with Git. While registered, each one keeps the mail view partial, which also blocks acknowledging mail. A deleted worktree's mailbox went with it, so there is nothing left to retain",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report only; drop nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "include-locked",
+        "takes_value": false,
+        "help": "Also drop worktrees Git has locked. A lock normally marks a worktree on removable media; only a deleted worktree whose parent directory is still present is ever dropped"
       },
       {
         "name": "json",
@@ -45184,6 +45538,86 @@ Working on aida itself
     "path": [
       "aida",
       "agent",
+      "wake"
+    ],
+    "about": "Arm or retire a session's mail wake (internal; `agent new` arms it)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "wake",
+      "arm"
+    ],
+    "about": "Wake this live Codex session's thread when its own inbox has mail",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "wake",
+      "retire"
+    ],
+    "about": "Stop waking this session; its ledger is kept",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
       "list-roles"
     ],
     "about": "List the supported agent roles in the taxonomy",
@@ -52163,6 +52597,11 @@ Working on aida itself
         "help": "Chain `aida queue work --resume` to resume a prior claude session for this spec instead of cold-launching. Implies `--work`"
       },
       {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling, so a relaunched lane works from it rather than from the description alone"
+      },
+      {
         "name": "status",
         "takes_value": true,
         "help": "Override the smart target status. Pass any status string (`in-progress`, `approved`, `planned`, …); the smart table above is bypassed"
@@ -52873,6 +53312,11 @@ Working on aida itself
         "name": "resume",
         "takes_value": false,
         "help": "Chain `aida queue work --resume`"
+      },
+      {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling the next pickup prompt leads with"
       },
       {
         "name": "status",

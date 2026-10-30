@@ -327,6 +327,9 @@ The record names the source build that made it: the version and git commit that 
 The dry run also lists mailbox leftovers. Reusing a worktree moves its emptied mailbox aside to `.aida/.mailbox-tomb-<id>/` before removing it. If a message lands there in that window and cannot be put back, the directory is kept as stranded mail: the report names it, and AIDA never deletes it. Move its messages out by hand. `aida agent gc` removes empty tombs and staging directories left by a crashed mailbox creation once they are ten minutes old, and never sooner. It also removes per-worktree markers whose worktree has since been removed or recreated. A mailbox that lost its identity file is refused with the command that moves it aside, so the next write creates a new one.
 <!-- trace:TASK-b6b1278890774ef993d2ebc327862470-052 | ai:claude -->
 
+A worktree deleted from disk without AIDA (for example, by another tool) stays registered with Git. While it is registered, every mail read reports the view as partial and mail cannot be acknowledged. The deleted worktree's mailbox is gone, so any mail it held cannot be recovered. Run `aida mailbox retention prune` to drop those registrations; add `--dry-run` to list them first, or `--json` for the report. Git keeps locked worktrees through its own prune, because a lock usually marks a worktree on removable media. AIDA does the same and keeps a locked worktree unless you pass `--include-locked`. A worktree whose parent directory is also missing is never dropped, since that directory may be on media that is not mounted.
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude -->
+
 The mail is checked once more right before the worktree is removed or reset. If something wrote to it after it was retired, the worktree is kept, that mail stays in place, and the session is not ended, exactly as above. Neither `aida session end` nor the automatic cleanups suggest removing such a worktree with a raw `git worktree remove --force`, which would delete that mail. Use `aida worktree dismiss <path>`, which runs the same check.
 <!-- trace:STORY-1843 | ai:claude -->
 
@@ -359,6 +362,13 @@ resolves); it narrows and never widens. `partial: true` (with safe
 it. It never acknowledges mail. `--local-root` selects the checkout the view is
 read from. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
 for opt-in setup, deduplication, and uncertain-delivery recovery.
+
+`--recipient <handle>` naming a registered agent reads that agent's own inbox
+(its handle plus its recorded role) when the agent is armed for mail wake and
+still live. `aida mailbox wake-run` watches every armed Codex agent of the
+project and wakes its thread; `aida mailbox wake-service install|uninstall|status`
+manages the one user service that runs it. Both are described in the
+[Codex mail wake adapter](../agents/codex-mail-wake.md).
 <!-- trace:STORY-1843 | ai:claude -->
 <!-- trace:TASK-2347 | ai:codex -->
 

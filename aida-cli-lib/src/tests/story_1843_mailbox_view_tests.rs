@@ -1040,3 +1040,75 @@ fn story1843_d1_notice_never_waits_on_a_held_lifecycle_lock() {
     assert_eq!(pending(&r, &audience), 3, "nothing was bound");
     fs2::FileExt::unlock(&lock).unwrap();
 }
+
+/// A worktree deleted from disk while Git still registers it (locked, so
+/// `git worktree prune` keeps it) holds the view partial and names the
+/// remedy; `aida mailbox retention prune --include-locked` drops it and the
+/// view is complete again. A lock is honoured without the flag, and a dry
+/// run drops nothing.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+#[test]
+fn task118_pruning_a_deleted_worktree_completes_the_view() {
+    use crate::mail_retention::{prune_removed_sources, removed_sources, PruneOutcome};
+    let r = mail_repo();
+    let audience = operator();
+    git(&r.main, &["worktree", "lock", r.sib.to_str().unwrap()]);
+    std::fs::remove_dir_all(&r.sib).unwrap();
+
+    let view = view_from(&r.main, &r.store, &audience);
+    assert!(view.is_partial());
+    let note = view.partial_note().unwrap();
+    assert!(
+        note.contains(crate::mail_retention::PRUNE_COMMAND),
+        "{note}"
+    );
+
+    let sources = removed_sources(&r.main).unwrap();
+    assert_eq!(sources.len(), 1, "{sources:?}");
+    assert_eq!(sources[0].path, r.sib);
+    assert!(sources[0].locked);
+
+    let kept = prune_removed_sources(&r.main, false, false).unwrap();
+    assert_eq!(kept[0].1, PruneOutcome::KeptLocked);
+    let dry = prune_removed_sources(&r.main, true, true).unwrap();
+    assert_eq!(dry[0].1, PruneOutcome::Dropped);
+    assert!(view_from(&r.main, &r.store, &audience).is_partial());
+
+    let done = prune_removed_sources(&r.main, true, false).unwrap();
+    assert_eq!(done[0].1, PruneOutcome::Dropped);
+    assert!(removed_sources(&r.main).unwrap().is_empty());
+    let view = view_from(&r.main, &r.store, &audience);
+    assert!(!view.is_partial(), "{:?}", view.partial_note());
+    assert!(view.partial_note().is_none());
+}
+
+/// A registered worktree whose parent directory is gone too may be on
+/// unmounted media: it is never offered for pruning.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+#[test]
+fn task118_a_worktree_on_absent_media_is_never_pruned() {
+    let r = mail_repo();
+    let media = r.main.parent().unwrap().join("media");
+    let tree = media.join("tree");
+    std::fs::create_dir_all(&media).unwrap();
+    git(
+        &r.main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "media",
+            tree.to_str().unwrap(),
+        ],
+    );
+    git(&r.main, &["worktree", "lock", tree.to_str().unwrap()]);
+    std::fs::remove_dir_all(&media).unwrap();
+
+    assert!(crate::mail_retention::removed_sources(&r.main)
+        .unwrap()
+        .is_empty());
+    let rows = crate::mail_retention::prune_removed_sources(&r.main, true, false).unwrap();
+    assert!(rows.is_empty());
+    assert!(view_from(&r.main, &r.store, &operator()).is_partial());
+}
