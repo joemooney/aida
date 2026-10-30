@@ -2,17 +2,26 @@ id: 01a189c5-3df0-7ea1-83a3-ed90136ced18
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-020
 title: aida alias --help still says 'Built-in shortcuts only.' though user aliases shipped
 description: 'The long help for `aida alias` ends with ''Built-in shortcuts only.'' That was true for STORY-667, but TASK-877 (PR #1096) added `aida alias add/remove` for personal (~/.aida/aliases.toml) and project (.aida/aliases.toml) aliases, and `aida alias list` now shows them. Acceptance: the `aida alias --help` text describes built-in shortcuts AND user aliases; no sentence says built-ins only.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T22:26:07.472529964Z
-modified_at: 2026-10-29T22:26:07.472529964Z
+modified_at: 2026-10-30T00:31:35.116079376Z
 req_type: Bug
 tags:
 - aida:alias
 - docs
 - ux
+history:
+- id: 01a18a38-1acc-79f2-baf2-652302d7f8f5
+  author: joe
+  timestamp: 2026-10-30T00:31:35.116076285Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
   branch: main
