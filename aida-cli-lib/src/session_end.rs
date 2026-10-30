@@ -122,7 +122,20 @@ pub(crate) fn resolve_session_to_end(
                 if msg.contains("ambiguous") {
                     return Err(id_err);
                 }
-                find_lease_by_branch(q, leases)
+                // A hex string is a session id, never a branch: say so,
+                // rather than reporting a missing branch.
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+                find_lease_by_branch(q, leases).map_err(|branch_err| {
+                    if looks_like_lease_id(q) {
+                        anyhow::anyhow!(
+                            "No session with id `{q}` — it may have ended already. \
+                             Run `aida session leases` to see active sessions; \
+                             any id it prints is accepted here"
+                        )
+                    } else {
+                        branch_err
+                    }
+                })
             }
         };
     }
@@ -310,6 +323,17 @@ pub(crate) fn find_lease_by_id_prefix(
             )
         }
     }
+}
+
+/// Does `s` look like a session id or a prefix of one (8+ hex digits,
+/// dashes allowed for UUID-shaped ids) rather than a branch name?
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn looks_like_lease_id(s: &str) -> bool {
+    let s = s.trim();
+    let hex = s.chars().filter(char::is_ascii_hexdigit).count();
+    hex >= 8
+        && s.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+        && s.starts_with(|c: char| c.is_ascii_hexdigit())
 }
 
 /// TASK-489: is the alpha prefix of `s` (the chars before the first `-`)

@@ -2440,9 +2440,27 @@ pub(crate) fn session_start_with_receipt(
         // Gracefully skipped when gh/glab isn't installed.
         // trace:TASK-76 | ai:claude
         if let Some(source_branch) = query_pr_source_branch(forge, n, &project_root) {
+            // A dead lease whose tree was deleted by hand leaves nothing for
+            // `session end`'s dirty check to protect: release it directly, so
+            // neither a prompt nor store lock contention stands between it
+            // and the review. trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
             let conflicting: Vec<_> = list_leases(&project_root)
                 .into_iter()
                 .filter(|l| l.branch == source_branch)
+                .filter(|l| {
+                    let released =
+                        crate::session_reap::release_gone_worktree_lease(&project_root, l);
+                    if released {
+                        eprintln!(
+                            "{} released lease {} on `{}`: its worktree {} is gone and its session has exited",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            &l.id[..l.id.len().min(8)],
+                            source_branch,
+                            l.worktree_path.display()
+                        );
+                    }
+                    !released
+                })
                 .collect();
             if !conflicting.is_empty() {
                 let l = &conflicting[0];

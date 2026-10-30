@@ -12518,6 +12518,31 @@ pub(crate) fn handle_queue_work(
             // they suggest is unambiguous.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
             let conflict_id = conflict.id.as_str();
+            // A dead lease whose worktree is gone has nothing left to lose, so
+            // it is released without `--force-claim`.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+            if crate::session_reap::gone_worktree_lease_releasable(&conflict, &recovery.verdict)
+                && crate::session_reap::release_gone_worktree_lease(
+                    &project_root_for_conflict,
+                    &conflict,
+                )
+            {
+                eprintln!(
+                    "  {} released orphaned lease {} ({})",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    conflict_id.yellow(),
+                    "owning session gone, worktree already removed".dimmed()
+                );
+                remaining -= 1;
+                if remaining == 0 {
+                    anyhow::bail!(
+                        "lease-recovery sweep gave up after 16 iterations on scope `{}` — \
+                         the lease store may be corrupt; inspect `.aida/sessions/`",
+                        plan.scope
+                    );
+                }
+                continue;
+            }
             match &recovery.verdict {
                 StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
                     eprintln!(
@@ -13613,6 +13638,28 @@ pub(crate) fn release_refused_review_lease(
     true
 }
 
+/// End the lease of a standalone reviewer whose process has exited: its
+/// verdict, if any, is already collected, and a lingering lease would block
+/// the next review of the same PR. Only the lease on `scope` over this
+/// review's own `worktree` goes; the worktree stays for any recovery the
+/// summary points at, and the next review of the PR reuses it. Returns the
+/// ids released.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn release_exited_reviewer_lease(
+    project_root: &std::path::Path,
+    scope: &str,
+    worktree: &std::path::Path,
+) -> Vec<String> {
+    list_leases(project_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
+        .map(|l| {
+            crate::session_reap::release_lease_files(project_root, &l.id);
+            l.id
+        })
+        .collect()
+}
+
 /// Advisor comment 35: whether a failed pickup's lease is released — only a
 /// PR-scoped review pickup whose child grant was refused. An implementer's
 /// lease stays for the manual continuation.
@@ -13982,6 +14029,19 @@ pub(crate) fn run_standalone_reviewer(
                 "  {} could not arm PR-{pr}'s merge hold for the reviewer's refusal ({err}) — run `aida merge-hold add {pr}` before shipping",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             ),
+        }
+    }
+
+    // The reviewer has exited and its verdict is collected (or known to be
+    // missing): its lease ends now, before any exit path below.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+    for id in release_exited_reviewer_lease(project_root, scope, worktree) {
+        if !quiet {
+            eprintln!(
+                "  {} ended reviewer lease {} for PR-{pr}",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                &id[..id.len().min(8)],
+            );
         }
     }
 
