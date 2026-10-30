@@ -89507,5 +89507,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 6974
+- id: 01a18ae4-c203-7292-bd79-7afad4244d0f
+  target_id: 01a18ae4-acc2-74b1-ba40-65b7059a5a92
+  author: aida
+  node_id: '1'
+  lamport: 6975
+  timestamp: 2026-10-30T03:40:10.115640391Z
+  kind: !Create
+    title: Mailbox messages with no created_at render as 1970-01-21 and sort as oldest
+    description: '2026-10-29: `aida mailbox inbox --unread` shows 39 messages dated 1970-01-21 (review-watch notices, and a seat-clone message whose JSON has created_at null). Acceptance: a missing timestamp is filled at send (writers always stamp created_at); readers fall back to the file mtime or show ''unknown time'' rather than the epoch; a test covers a message without created_at.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 6975
 node_id: '1'
