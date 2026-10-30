@@ -1,0 +1,42 @@
+id: 01a18a1e-913e-7f73-81c7-39db227c8cc7
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-002
+title: 'Spike: can AIDA wake an idle Antigravity (agy) session when mail arrives?'
+description: |
+  ## Question
+  Can AIDA wake an idle interactive Antigravity (agy) session when mail arrives, the way STORY-HOME-096 wakes Codex threads with `codex queue --thread <id> --message`?
+
+  ## Background
+  agy already surfaces mail through `antigravity-hooks.json` (`aida-mail-notice.sh --client agy` on SessionStart and PreInvocation; TASK-2253, STORY-1927). PreInvocation fires only when the session takes a turn, so an idle agy session waiting at its prompt never sees new mail. The conversation id is already known: it arrives as `conversationId` in the hook payload and the agent registry records it.
+
+  `agy --help` (installed CLI) has no queue/inject verb. Two candidates:
+  1. `agy --conversation <id> -p "<notice>"`: resume the same conversation in a second print-mode process while the interactive session still owns it.
+  2. `agy remote-control` (start/status/stop daemon): may expose a way to send a message into a live CLI session; interface undocumented in this repo.
+
+  ## Investigate (timebox: half a day)
+  - Candidate 1, in a throwaway conversation: does the live TUI see the injected turn? Is the conversation/brain directory intact afterwards (no corruption, no lost turns)? What happens if the live session is mid-turn?
+  - Candidate 2: what the remote-control daemon accepts (local socket/API), whether it can target a specific conversation id, auth model, whether it must be started per session.
+  - Check agy's builtin docs (`~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/`) and changelog for any notification/queue/inject feature.
+
+  ## Deliverable
+  A comment with findings and one recommendation: (a) a safe injection path exists, so file a story implementing the agy wake adapter under STORY-HOME-096's per-vendor wake interface; or (b) none is safe, so keep the next-turn warning and record what agy feature would unblock it. Do not use the operator's live sessions for experiments.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T00:03:41.502735184Z
+modified_at: 2026-10-30T00:03:41.502735184Z
+req_type: Spike
+tags:
+- agent-lifecycle
+- agy
+- from-operator
+- mailbox
+filed_at:
+  code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1db74dba112
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+human_only: true
