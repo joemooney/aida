@@ -1,13 +1,21 @@
 id: 01a18ae4-acc2-74b1-ba40-65b7059a5a92
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-032
 title: Mailbox messages with no created_at render as 1970-01-21 and sort as oldest
-description: '2026-10-29: `aida mailbox inbox --unread` shows 39 messages dated 1970-01-21 (review-watch notices, and a seat-clone message whose JSON has created_at null). Acceptance: a missing timestamp is filled at send (writers always stamp created_at); readers fall back to the file mtime or show ''unknown time'' rather than the epoch; a test covers a message without created_at.'
+description: |
+  2026-10-29: `aida mailbox inbox --unread` shows 39 messages dated 1970-01-21 (review-watch notices, and a seat-clone message whose JSON has created_at null). Acceptance: a missing timestamp is filled at send (writers always stamp created_at); readers fall back to the file mtime or show 'unknown time' rather than the epoch; a test covers a message without created_at.
+
+  ADVISOR RULING 2026-10-30 06:42 (PR-3135 round 1). ONE rework push on PR-3135; BUNDLE:
+  1. (major) mailbox_logical::read_source (aida-core/src/mailbox_logical.rs ~1739) still deserializes Message raw. That is the DEFAULT `aida mailbox inbox [--unread]` and MCP read_inbox path, so route it through parse_message_file (or the shared normalizer).
+  2. The acceptance test goes through the own-audience view (logical_snapshot / read_own_mail_binding): a message with a missing created_at and one with a seconds-scale created_at render correctly there.
+  3. mailbox_migration.rs ~149 also uses parse_message_file.
+  4. For canonical-store files with no timestamp, persist the fallback once (stamp on first read or sync) instead of using a git-checkout mtime that changes on every pull.
+  Gate: LIGHT. Run `cargo test -p aida-core mailbox` plus `cargo test -p aida-cli-lib --lib bug_032` and make check-ci-fast.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:40:04.674460929Z
-modified_at: 2026-10-30T13:39:01.610419504Z
+modified_at: 2026-10-30T13:40:42.712727097Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -55,6 +63,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18d0a-9cf4-7a72-a274-b7062770d438
+  author: joe
+  timestamp: 2026-10-30T13:40:45.428697423Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main

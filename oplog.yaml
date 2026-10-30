@@ -92975,5 +92975,21 @@ operations:
   timestamp: 2026-10-30T13:39:02.979878913Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7203
+- id: 01a18d0a-9d9d-75d2-b089-c0fba5a9e83f
+  target_id: 01a18ae4-acc2-74b1-ba40-65b7059a5a92
+  author: aida
+  node_id: '1'
+  lamport: 7204
+  timestamp: 2026-10-30T13:40:45.597987096Z
+  kind: !SetDescription
+    description: |
+      2026-10-29: `aida mailbox inbox --unread` shows 39 messages dated 1970-01-21 (review-watch notices, and a seat-clone message whose JSON has created_at null). Acceptance: a missing timestamp is filled at send (writers always stamp created_at); readers fall back to the file mtime or show 'unknown time' rather than the epoch; a test covers a message without created_at.
+
+      ADVISOR RULING 2026-10-30 06:42 (PR-3135 round 1). ONE rework push on PR-3135; BUNDLE:
+      1. (major) mailbox_logical::read_source (aida-core/src/mailbox_logical.rs ~1739) still deserializes Message raw. That is the DEFAULT `aida mailbox inbox [--unread]` and MCP read_inbox path, so route it through parse_message_file (or the shared normalizer).
+      2. The acceptance test goes through the own-audience view (logical_snapshot / read_own_mail_binding): a message with a missing created_at and one with a seconds-scale created_at render correctly there.
+      3. mailbox_migration.rs ~149 also uses parse_message_file.
+      4. For canonical-store files with no timestamp, persist the fallback once (stamp on first read or sync) instead of using a git-checkout mtime that changes on every pull.
+      Gate: LIGHT. Run `cargo test -p aida-core mailbox` plus `cargo test -p aida-cli-lib --lib bug_032` and make check-ci-fast.
+clock: 7204
 node_id: '1'
