@@ -2,12 +2,12 @@ id: 01a18ae4-acc2-74b1-ba40-65b7059a5a92
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-032
 title: Mailbox messages with no created_at render as 1970-01-21 and sort as oldest
 description: '2026-10-29: `aida mailbox inbox --unread` shows 39 messages dated 1970-01-21 (review-watch notices, and a seat-clone message whose JSON has created_at null). Acceptance: a missing timestamp is filled at send (writers always stamp created_at); readers fall back to the file mtime or show ''unknown time'' rather than the epoch; a test covers a message without created_at.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:40:04.674460929Z
-modified_at: 2026-10-30T13:30:32.004869833Z
+modified_at: 2026-10-30T13:39:01.610419504Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -46,6 +46,15 @@ history:
   timestamp: 2026-10-30T13:30:34.376579334Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18d09-076a-7c83-9ae3-ef5558e20543
+  author: aida-orchestrator
+  timestamp: 2026-10-30T13:39:01.610440295Z
+  session_id: 01a18d0795fe
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -58,3 +67,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T13:28:10.655110423Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Writers fixed and legacy readers normalized, but the default ''aida mailbox inbox'' own-audience path reads via mailbox_logical::read_source, which still deserializes Message raw: seconds-scale notices still render 1970-01-21 and a missing timestamp still fails the source'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-032 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T13:39:01.610419504Z
