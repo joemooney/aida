@@ -92206,5 +92206,13 @@ operations:
       2. (minor) Wiring tests: handle_queue_work releases a dead gone-worktree conflict without --force-claim; session_start (~2447) filters it before AutoEnd; run_standalone_reviewer calls the release.
       3. (cosmetic) Pass the existing recovery verdict into release_gone_worktree_lease instead of rescanning the process table.
       Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_024 session_reap` plus make check-ci-fast.
-clock: 7143
+- id: 01a18c59-673f-7330-b30d-ccc65ea5f46e
+  target_id: 01a18a3e-f42a-7a10-8ec0-e11746b63e44
+  author: aida
+  node_id: '1'
+  lamport: 7144
+  timestamp: 2026-10-30T10:27:11.807913505Z
+  kind: !SetStatus
+    status: Approved
+clock: 7144
 node_id: '1'
