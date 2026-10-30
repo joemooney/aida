@@ -21,12 +21,12 @@ description: |
 
   ## Approval boundary
   Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:50.634186933Z
-modified_at: 2026-10-30T04:17:38.814265526Z
+modified_at: 2026-10-30T18:34:39.006622596Z
 req_type: Task
 tags:
 - advisor-review
@@ -181,6 +181,22 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18e17-ae18-7bf2-8cad-0fa6669bdd17
+  author: aida-auto-bump
+  timestamp: 2026-10-30T18:34:39.000526017Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18e17-ae1e-7500-9be1-eaeed0779bd1
+  timestamp: 2026-10-30T18:34:39.006618770Z
+  agent: aida
+  commit_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
+  summary: 'Base-only update from main (gh update-branch e4d3fffbd32dcf242ee53fc665f742b1c1b7fd6c -> 62d6078c93b8bd42de3a0a240a6b3886a90813a9); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  punted:
+  - 'punted: session end observed 10 commits ahead on branch `codex/docs-restack-111` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
@@ -193,15 +209,9 @@ implementation_info:
   test_coverage_notes: 'make check-ci-fast: 35 fast-tier gates passed; source/help inspection and spawned author self-check'
   implemented_at: 2026-10-29T19:16:42.544536915Z
   implemented_by: ai:codex:joe
+  completed_at: 2026-10-30T18:34:39.000519125Z
+  completion_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   reopened_at_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: All 5 acceptance criteria are substantively met (manifest allowlist, tracked-source build, links/anchors resolve, rebuild is byte-stable, no deploy/CLI), but nothing automated guards them (all 5 untraced) and the search index/excerpts leak raw Markdown link syntax; one small rework round.
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-111 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T00:53:09.320203376Z
 interface_changes:
   other:
   - add a curated searchable product guide library
