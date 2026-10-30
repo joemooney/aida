@@ -1244,7 +1244,9 @@ pub fn format_dry_run_plan_with_method(
         out.push_str("  · --no-pull: aida pull step skipped\n");
     }
     if opts.no_cleanup {
-        out.push_str("  · --no-cleanup: aida session end and merged-worktree pruning skipped\n");
+        out.push_str(
+            "  · --no-cleanup: aida session end, session reap and merged-worktree pruning skipped\n",
+        );
     }
     if let Some(level) = opts.complexity {
         out.push_str(&format!(

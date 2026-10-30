@@ -401,20 +401,34 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
     })
 }
 
-/// One-line result of the post-ship GC. Names the unmerged worktrees it
-/// passed over and, when the time budget ran out, says the rest were deferred
-/// to `aida doctor`.
+/// One-line result of the post-ship GC. Names the worktrees it passed over for
+/// want of a local merge signal (a full `aida doctor` run may still reclaim
+/// them through the forge lookup) and, when the time budget ran out, how many
+/// were left unexamined or unremoved for `aida doctor` to finish.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
-pub(crate) fn post_ship_gc_summary(reclaimable: usize, skipped: usize, deferred: usize) -> String {
+pub(crate) fn post_ship_gc_summary(
+    reclaimable: usize,
+    skipped: usize,
+    unexamined: usize,
+    unremoved: usize,
+) -> String {
     let mut line = format!(
         "  ✓ merged-agent-worktrees cleanup checked ({reclaimable} reclaimable, \
-         {skipped} unmerged skipped)"
+         {skipped} without a local merge signal skipped)"
     );
-    if deferred > 0 {
+    if unexamined + unremoved > 0 {
+        let mut left = Vec::new();
+        if unexamined > 0 {
+            left.push(format!("{unexamined} worktree(s) not examined"));
+        }
+        if unremoved > 0 {
+            left.push(format!("{unremoved} reclaimable worktree(s) not removed"));
+        }
         line.push_str(&format!(
-            "; stopped at the {}s budget with {deferred} worktree(s) not examined — \
+            "; stopped at the {}s budget with {} — \
              run `aida doctor --category merged-agent-worktrees` to finish",
-            POST_SHIP_GC_BUDGET.as_secs()
+            POST_SHIP_GC_BUDGET.as_secs(),
+            left.join(" and ")
         ));
     } else {
         line.push_str("; details: `aida doctor --category merged-agent-worktrees`");
@@ -563,7 +577,12 @@ fn is_zero_usize(n: &usize) -> bool {
 }
 
 fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
-    let started = std::time::Instant::now();
+    // The post-ship GC (the quiet run) shares one deadline between the scan
+    // and the heal that removes what the scan found.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+    let gc_deadline = opts
+        .quiet_output
+        .then(|| std::time::Instant::now() + POST_SHIP_GC_BUDGET);
     let project_root = main_worktree_root_from(&find_project_root()?);
     // A bad `--since` fails the run with an error naming the flag rather than
     // silently applying no cutoff. trace:BUG-1622 | ai:claude
@@ -660,7 +679,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         let limits = if opts.quiet_output {
             AgentWorktreeScanLimits {
                 merged_only: true,
-                deadline: Some(started + POST_SHIP_GC_BUDGET),
+                deadline: gc_deadline,
             }
         } else {
             AgentWorktreeScanLimits::default()
@@ -981,7 +1000,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
     if opts.heal {
-        report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
+        report.healed = heal_doctor_findings(&project_root, &report.findings, &opts, gc_deadline)?;
     }
 
     // trace:BUG-1749 | ai:codex
@@ -1013,6 +1032,11 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
                 merged_agent_worktrees_reclaimable,
                 merged_agent_worktrees_skipped,
                 merged_agent_worktrees_deferred,
+                report
+                    .healed
+                    .iter()
+                    .filter(|r| r.status == HEAL_DEFERRED)
+                    .count(),
             )
         );
     } else {
@@ -7684,10 +7708,18 @@ fn doctor_heal_disposition(
     HealDisposition::Proceed
 }
 
+/// Heal status of a finding left alone because the run's deadline passed.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+pub(crate) const HEAL_DEFERRED: &str = "deferred";
+
+/// Heals `findings`. With a `deadline`, each finding reached after it passes
+/// is recorded as [`HEAL_DEFERRED`] instead of healed. The deadline is checked
+/// between findings, so a heal already running finishes.
 fn heal_doctor_findings(
     project_root: &std::path::Path,
     findings: &[DoctorFinding],
     opts: &DoctorRunOptions,
+    deadline: Option<std::time::Instant>,
 ) -> Result<Vec<DoctorHealResult>> {
     // STORY-666: detect the autonomous/unattended context ONCE for the whole
     // run — the destructive-heal gate keys off it. trace:STORY-666 | ai:claude
@@ -7753,7 +7785,20 @@ fn heal_doctor_findings(
             });
             continue;
         }
-        for finding in items {
+        for (index, finding) in items.iter().enumerate() {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+            if deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
+                out.extend(items[index..].iter().map(|finding| DoctorHealResult {
+                    category: category.clone(),
+                    id: finding.id.clone(),
+                    action: finding.action.clone(),
+                    status: HEAL_DEFERRED.to_string(),
+                    detail: Some(format!(
+                        "time budget spent; run `aida doctor --category {category}`"
+                    )),
+                }));
+                break;
+            }
             // BUG-471: a single finding's heal failure must not abort the whole
             // run (the resilient-drain discipline). Record it as a `failed`
             // result and continue; the caller surfaces failures + exits non-zero.
@@ -10618,6 +10663,7 @@ hostname = "localhost"
                 fail_on_findings: false,
                 quiet_output: false,
             },
+            None,
         )
         .unwrap();
 
@@ -12077,6 +12123,7 @@ User content.
                 fail_on_findings: false,
                 quiet_output: false,
             },
+            None,
         )
         .unwrap();
 
@@ -12150,6 +12197,7 @@ User content.
                 fail_on_findings: false,
                 quiet_output: false,
             },
+            None,
         )
         .unwrap();
 

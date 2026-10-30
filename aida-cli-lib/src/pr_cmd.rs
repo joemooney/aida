@@ -4017,10 +4017,9 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // flag's point is to leave post-merge state alone. The merge result has
     // already printed by now, so a slow cleanup never hides it.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
-    if merged_this_run && no_cleanup {
-        eprintln!("  step 6: skipping merged agent worktree pruning (--no-cleanup)");
-    }
-    if merged_this_run && !no_cleanup {
+    run_post_merge_worktree_gc(
+        merged_this_run,
+        no_cleanup,
         // TASK-1177: reap first — a session whose spec is now finished, whose
         // branch just merged, and whose process has already exited is torn down
         // whole (worktree + lease + branch) instead of leaving a stranded
@@ -4029,33 +4028,21 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // once it exits on its own. Quiet on the common no-op, and best-effort:
         // reaping must never turn a landed PR into a failed ship.
         // trace:TASK-1177 | ai:claude
-        if let Err(e) = crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
-            dry_run: false,
-            yes: true,
-            json: false,
-            quiet_when_empty: true,
-            release_unknown_owner: false,
-            // trace:BUG-2197 | ai:claude — never release leases unconfirmed.
-            release_protected: false,
-        }) {
-            eprintln!(
-                "  {} post-merge session reap failed or was partially applied: {e:#}",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-            );
-        }
-        eprintln!(
-            "  step 6: pruning verified merged agent worktrees (merged branches only, \
-             up to {}s; skip with --no-cleanup)",
-            doctor_cmd::POST_SHIP_GC_BUDGET.as_secs()
-        );
+        || {
+            crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
+                dry_run: false,
+                yes: true,
+                json: false,
+                quiet_when_empty: true,
+                release_unknown_owner: false,
+                // trace:BUG-2197 | ai:claude — never release leases unconfirmed.
+                release_protected: false,
+            })
+        },
         // trace:BUG-1718 | ai:codex
-        if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc_quiet() {
-            eprintln!(
-                "  {} post-merge worktree gc failed or was partially applied: {e:#}",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-            );
-        }
-    }
+        doctor_cmd::run_merged_agent_worktree_gc_quiet,
+        &mut std::io::stderr(),
+    );
 
     // BUG-1537: `merged_this_run` (set only where THIS invocation performed
     // the merge, never in the `already_merged` no-op path) is the one signal
@@ -4098,6 +4085,52 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // unused-import doesn't fire if a future refactor narrows usage.
     let _ = format_activity_event;
     Ok(())
+}
+
+/// Step 6 of `aida pr ship`: after a merge this run performed, reap exited
+/// sessions (`reap`) and prune merged agent worktrees (`prune`), in that
+/// order. `--no-cleanup` skips both and says so. Only the prune runs under the
+/// post-ship time budget; the reap is not bounded. Best-effort: a failure is
+/// printed as a warning and never fails the ship.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+pub(crate) fn run_post_merge_worktree_gc(
+    merged_this_run: bool,
+    no_cleanup: bool,
+    reap: impl FnOnce() -> Result<()>,
+    prune: impl FnOnce() -> Result<()>,
+    err: &mut impl std::io::Write,
+) {
+    use std::io::Write;
+    if !merged_this_run {
+        return;
+    }
+    if no_cleanup {
+        let _ = writeln!(
+            err,
+            "  step 6: skipping the session reap and merged agent worktree pruning (--no-cleanup)"
+        );
+        return;
+    }
+    if let Err(e) = reap() {
+        let _ = writeln!(
+            err,
+            "  {} post-merge session reap failed or was partially applied: {e:#}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    let _ = writeln!(
+        err,
+        "  step 6: pruning verified merged agent worktrees (merged branches only, \
+         up to {}s; skip with --no-cleanup)",
+        doctor_cmd::POST_SHIP_GC_BUDGET.as_secs()
+    );
+    if let Err(e) = prune() {
+        let _ = writeln!(
+            err,
+            "  {} post-merge worktree gc failed or was partially applied: {e:#}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
 }
 
 /// Merge-hold markers are canonical in the main clone, even when `aida pr ship`
