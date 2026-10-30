@@ -1,0 +1,33 @@
+id: 01a18f1a-4576-7d92-89a2-f5a15ff04837
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-046
+title: 'Spec IDs that differ only by leading zeros are distinct specs: 30 TASK-04xx/TASK-4xx collisions; the ID number must be numeric identity, and display padding a setting'
+description: |-
+  Operator report 2026-10-30: 'aida list' shows TASK-0418 (completed) and TASK-418 (rejected) as two different specs. The store holds 30 such pairs: TASK-0413..TASK-0446 (created 2026-06..10) alongside TASK-413..TASK-446 (created 2026-05). Legacy TYPE-NNN IDs are compared as strings, while node-local IDs already normalize the sequence (node_alias::expand re-pads, so BUG-HOME-36 finds BUG-<node>-036). Some allocator wrote 4-digit zero-padded legacy IDs without checking the numeric value against existing unpadded ones. Padded IDs are referenced in code traces (autopilot.rs, plan_cmd.rs, leases.rs, mcp_translate.rs), CHANGELOG.md and ~82 store objects.
+
+  Acceptance:
+  1. Identity is numeric: for every ID shape (legacy TYPE-N and node-local TYPE-NODE-N), lookup, edit, comment, link, trace-comment and commit-trailer resolution treat leading zeros as insignificant (TASK-0418 == TASK-418 == TASK-00418).
+  2. The allocator (every path that mints IDs, incl. db merge-gate promotion) refuses or skips a number already used under any padding; a regression test mints next to a padded existing ID and gets no collision.
+  3. One-time migration (single-user surgery, no compat shim): renumber one side of each of the 30 colliding pairs to fresh IDs, rewriting references in the store, code trace comments and docs; record old->new in each renumbered spec's history. Pick the side with fewer references; the sketch states which.
+  4. aida doctor reports any remaining numeric-collision group (should be zero after 3).
+  5. Display padding is a setting: [display] id_seq_width in .aida/config.toml (0 = no padding) pads the sequence on output only, never in stored IDs or filenames; default keeps today's look (legacy unpadded, node-local 3). aida list aligns its ID column to the widest rendered ID.
+
+  Architecture: this changes ID identity and needs a sketch on this spec plus advisor signoff before code.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T23:17:06.038259824Z
+modified_at: 2026-10-30T23:17:06.038259824Z
+req_type: Bug
+tags:
+- ids
+- sketch-required
+- store
+filed_at:
+  code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cdbecda7678
+  vendor: claude
+  session: 510d8c08-7912-4189-943d-65d110c7abc2
