@@ -16,12 +16,12 @@ description: |
   4. Criterion trace anchors (.acab779a, .acbcb0eb, .Test) on the tests in bug_035_seat_clone_log_range_tests.rs.
   5. queue_cmd.rs ~10386: surface the git_log_messages error (naming the range) instead of a silent `let Ok .. else return`.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_035 task_2001 task_2143 bug_775` plus make check-ci-fast.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:18:17.188008505Z
-modified_at: 2026-10-30T10:17:31.415500802Z
+modified_at: 2026-10-30T11:07:40.723962429Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -135,6 +135,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18c7e-772b-7f80-b1da-c557bc507570
+  author: aida-auto-bump
+  timestamp: 2026-10-30T11:07:40.715596298Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18c7e-7733-7e91-bc12-de76a54f848f
+  timestamp: 2026-10-30T11:07:40.723957611Z
+  agent: implementer
+  commit_sha: 3bd7aa16acf3a54b66bc3527d40d93494092a7f0
+  summary: 'All 3 ACs met and traced: resolve_log_range fetches origin/<head>+origin/<base> when head missing locally (incl. stale refresh); git_log failure surfaces as SkippedNeedsAttention naming the range (auto-queue test) and a warning in queue_cmd; fetch routed via host_git_command+remote_credentials; CI run 41043149453 green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -147,3 +161,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T09:00:02.533398743Z
   implemented_by: joe
+  completed_at: 2026-10-30T11:07:40.715591914Z
+  completion_sha: 3bd7aa16acf3a54b66bc3527d40d93494092a7f0
