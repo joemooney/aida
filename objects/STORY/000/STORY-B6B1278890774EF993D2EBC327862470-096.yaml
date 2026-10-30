@@ -72,7 +72,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T10:34:04.807252276Z
+modified_at: 2026-10-30T10:34:10.184827887Z
 req_type: Story
 relationships:
 - rel_type:
@@ -264,6 +264,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice 2 covers all four criteria with tests, but the new mail-wake stamp is an unlocked read-modify-write that races the SessionStart hook''s row write; it can lose the thread, the handle or the pending stamp, so a launched Codex never arms. CI was still running at review time (cli-1 and rest green, the rest pending).. No triage reason was given.'
   created_at: 2026-10-30T10:34:04.807250595Z
   modified_at: 2026-10-30T10:34:04.807250595Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c5f-c874-7d02-ba14-85d5ffbd59cd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-b6b1278890774ef993d2ebc327862470-096):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 89e5af33a92a
+    Recorded: 2026-10-30T10:32:13.692066532+00:00
+    Findings:
+    1. MAJOR correctness (AC1): agent_registry::set_mail_wake_on_row (agent_registry.rs ~L201-218) reads the row outside the namespace lock and then writes the whole row with write_entry. touch_session_start_agent (agent_registry.rs ~L766-866) does the same. Interleave hook-read, launcher-stamp, hook-write: the pending stamp is lost (mail_wake reset to None) and nothing arms it. Interleave launcher-read, hook-write(thread+handle), launcher-write: the hook's claude_session_id and assigned handle are clobbered, and the row stays pending with no thread forever (the hook has already fired). This is most likely when BUG-030's deferred registration delays the stamp. The doc comment's claim that a hook write since entry was read is kept does not hold. Fix: do the read-modify-write in set_mail_wake_on_row under agent_handle::lock_namespace, using write_entry_locked so the lock is not taken twice, and add a test that interleaves a hook write. Ideally the same applies to the hook-session-id carry in register_spawned_agent (agent_registry.rs ~L943-952), which is also an unlocked read.
+    2. MINOR traceability: none of the four acceptance criteria (096.aca8bab2, .acad6a24, .ac9979a7, .ac316a6a) is traced by a test. The story_home_096_* tests in mail_wake_tests.rs and codex_mail_health.rs carry only trace:STORY-HOME-096. Add the criterion-level trace tags: launch_decision -> ac9979a7, session_start_arms + launcher_row_keeps_a_hook_session_id -> aca8bab2, end_and_gc_retire -> acad6a24, wake_column + doctor_iterates_armed_rows -> ac316a6a.
+    3. MINOR (AC1 visibility): when the SessionStart hook fails to arm, the exact manual command goes only to the hook's stderr (status_awaiting.rs ~L1213-1219), which Codex may not show the operator. The row then reads 'failed', but neither agent ls nor doctor check codex-mail-wake (it iterates only Armed rows, codex_mail_health.rs scan) surfaces the manual command. Make the doctor report failed/pending-too-long rows with mail_wake::manual_arm_commands, or persist the warning.
+    4. MINOR robustness: mail_wake::codex_version (mail_wake.rs ~L101-113) runs '<codex> --version' with .output() and no timeout before the child is spawned, so a wedged codex binary or wrapper hangs agent new. Bound it the way systemctl() now is (try_wait loop), and treat a timeout as an unknown version.
+    5. MINOR: a non-boolean [agents.codex] mail_wake makes load_agents_tool_bool return Err, and agent_launch.rs (~L2924-2930) propagates it with '?'. A config typo therefore refuses the whole launch, while the spec says wake problems should degrade to a warning so the agent still starts. Consider warning and falling back to the default (the error-on-bad-value precedent exists for other agents.toml keys, so this is the advisor's call).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T10:34:09.908080660Z
+  modified_at: 2026-10-30T10:34:09.908080660Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
