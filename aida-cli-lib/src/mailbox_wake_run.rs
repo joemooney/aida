@@ -845,9 +845,10 @@ fn install_unit(path: &Path, name: &str, text: &str) -> Result<()> {
 pub(crate) fn health_job_block(project: &Path) -> String {
     let name = format!("aida-mail-wake-{}-health", project_key(project));
     format!(
-        "[[schedule.jobs]]\nname = \"{name}\"\n\
+        "[[schedule.jobs]]\nname = {}\n\
          command = \"doctor check codex-mail-wake --fail-on-findings\"\n\
-         every = \"15m\"\nenabled = true\n"
+         every = \"15m\"\nenabled = true\n",
+        aida_core::toml_quote::toml_string(&name)
     )
 }
 

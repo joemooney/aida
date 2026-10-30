@@ -196,6 +196,7 @@ fn pre_spawn_error_returns_without_starting_a_child() {
         None,
         false,
         false,
+        None,
         || spawned = true,
     )
     .unwrap_err();
