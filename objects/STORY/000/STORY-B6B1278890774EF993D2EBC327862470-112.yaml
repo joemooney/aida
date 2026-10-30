@@ -1,0 +1,33 @@
+id: 01a18b7f-f711-78f1-a745-99d109ce663c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-112
+title: 'Review PR-3124: [AI:claude] fix(permissions): classify codex --sandbox by value; flag widening default_flags and refused vendors (BUG-B6B1278890774EF993D2EBC327862470-028)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-028`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3124>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-028` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-028
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3124` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T06:29:41.777127878Z
+modified_at: 2026-10-30T06:29:41.777127878Z
+req_type: Story
+filed_at:
+  code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2742b18ee2e
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e

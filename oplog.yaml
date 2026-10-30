@@ -90836,5 +90836,31 @@ operations:
 
 
       ADVISOR NOTE 2026-10-29 23:26 (continuation): the 22:40 lane made all seven fixes in LOCAL commit 6bdf89bc8a7 on branch story-b6b1278890774ef993d2ebc327862470-096-2 in its seat clone, but timed out before pushing. RESUME that clone; do not redo the fixes. Then: (1) regenerate the help golden snapshot; (2) run ONE targeted test, `cargo test -p aida-cli-lib --lib story_home_096`, plus make check-ci-fast; (3) push to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096) and NOT as a new PR. If the targeted test is slow, push after check-ci-fast and let CI run it.
-clock: 7050
+- id: 01a18b7f-fe61-7420-bd69-0a50181c5287
+  target_id: 01a18b7f-f711-78f1-a745-99d109ce663c
+  author: aida
+  node_id: '1'
+  lamport: 7051
+  timestamp: 2026-10-30T06:29:43.649228356Z
+  kind: !Create
+    title: 'Review PR-3124: [AI:claude] fix(permissions): classify codex --sandbox by value; flag widening default_flags and refused vendors (BUG-B6B1278890774EF993D2EBC327862470-028)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-028`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3124>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-028` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-028
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3124` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7051
 node_id: '1'
