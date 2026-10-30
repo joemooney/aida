@@ -46,12 +46,12 @@ description: |
   4. NodeAliasMap::expand normalizes the sequence to the allocator's {seq:03} padding, so BUG-HOME-36 resolves. Add a test.
   5. CRITERION ac6dd87b is REWRITTEN by this ruling to: "A bare id resolves to the agreed spec only; it never matches a node-local number (ruling A)." Anchor a resolver test to .ac6dd87b: bare TYPE-100 opens the agreed spec when TYPE-<node>-100 also exists.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 source_doc_comments catalog_descriptions story_1728`, then make check-ci-fast (it runs verify-manual.py).
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T11:50:23.202533311Z
+modified_at: 2026-10-30T12:14:19.904228701Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -247,6 +247,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18cbb-7cf9-7fc2-b095-bc0af82fcc1e
+  author: aida-auto-bump
+  timestamp: 2026-10-30T12:14:19.897163896Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18cbb-7d00-7631-8f58-8789c0ed9ff0
+  timestamp: 2026-10-30T12:14:19.904225334Z
+  agent: implementer
+  commit_sha: 74fc5beea6c6de41d2268661a830b8163519edf1
+  summary: 'Round 3: every criterion is traced and verified (ac6dd87b as rewritten by the 04:14 ruling, acc7fcab, Rendering, ac12b260, ac4dbc90). The 04:14 bundle is fully addressed (placeholders, bare-id-twins rename with goldens/audit/docs, split_bare_id keys, expand padding plus test, resolver anchor). All CI build jobs are green at 1991820; merge-hold-gate is the operator hold.'
+  review_verdict: approved
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -259,3 +273,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T10:03:23.340988584Z
   implemented_by: joe
+  completed_at: 2026-10-30T12:14:19.897159752Z
+  completion_sha: 74fc5beea6c6de41d2268661a830b8163519edf1
