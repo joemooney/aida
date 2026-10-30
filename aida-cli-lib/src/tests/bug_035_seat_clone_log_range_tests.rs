@@ -67,6 +67,8 @@ fn push_lane_branch(seat: &std::path::Path) {
     git(seat, &["push", "-q", "origin", "lane-branch"]);
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035.acab779a | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035.Test | ai:claude
 #[test]
 fn head_branch_only_on_origin_is_fetched_and_trailers_found() {
     let (_tmp, _origin, primary, seat) = fixture();
@@ -79,6 +81,7 @@ fn head_branch_only_on_origin_is_fetched_and_trailers_found() {
     assert!(messages[0].contains("(BUG-HOME-035)"), "{messages:?}");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035.acab779a | ai:claude
 #[test]
 fn head_branch_present_as_remote_tracking_ref_resolves_without_local_branch() {
     let (_tmp, _origin, primary, seat) = fixture();
@@ -93,6 +96,35 @@ fn head_branch_present_as_remote_tracking_ref_resolves_without_local_branch() {
     assert_eq!(messages.len(), 1, "{messages:?}");
 }
 
+/// A remote-tracking ref fetched before the lane's latest push is refreshed,
+/// so trailers on the newer commits are not missed.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035.acab779a | ai:claude
+#[test]
+fn stale_remote_tracking_head_is_refreshed_before_logging() {
+    let (_tmp, _origin, primary, seat) = fixture();
+    push_lane_branch(&seat);
+    git(&primary, &["fetch", "-q", "origin"]);
+    git(
+        &seat,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "--no-verify",
+            "-m",
+            "[AI:claude] fix(x): later lane work (BUG-HOME-036)",
+        ],
+    );
+    git(&seat, &["push", "-q", "origin", "lane-branch"]);
+
+    let messages = git_log_messages(&primary, "main", "lane-branch").expect("resolves");
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert!(
+        messages.iter().any(|m| m.contains("(BUG-HOME-036)")),
+        "{messages:?}"
+    );
+}
+
 #[test]
 fn local_head_branch_is_used_as_is() {
     let (_tmp, _origin, primary, _seat) = fixture();
@@ -103,6 +135,7 @@ fn local_head_branch_is_used_as_is() {
     );
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035.acbcb0eb | ai:claude
 #[test]
 fn unresolvable_head_is_an_error_naming_the_range() {
     let (_tmp, _origin, primary, _seat) = fixture();
@@ -111,5 +144,75 @@ fn unresolvable_head_is_an_error_naming_the_range() {
     assert!(
         format!("{err:#}").contains("main..nowhere-branch"),
         "error must name the range: {err:#}"
+    );
+}
+
+/// AC2 at the auto-queue layer: a PR whose head branch exists nowhere this
+/// checkout or its origin can see is reported as needing attention with the
+/// unreadable range named, never as "no `(REQ-ID)` trailers", and no
+/// reviewer story is filed.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035.acbcb0eb | ai:claude
+#[test]
+fn auto_queue_names_an_unreadable_range_instead_of_reporting_no_trailers() {
+    let (tmp, _origin, primary, _seat) = fixture();
+    let store = primary.join(".aida-store");
+    std::fs::create_dir_all(primary.join(".aida")).unwrap();
+    std::fs::write(
+        primary.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .save(&aida_core::RequirementsStore::default())
+        .unwrap();
+
+    let gh = tmp.path().join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        "#!/bin/sh\n\
+         case \"$1 $2\" in\n\
+         'pr list') printf '42\\tlane\\thttps://github.com/acme/widget/pull/42\\tnowhere-branch\\n' ;;\n\
+         'pr view') printf '{\"state\":\"OPEN\",\"title\":\"lane\",\"baseRefName\":\"main\",\"headRefName\":\"nowhere-branch\"}\\n' ;;\n\
+         *) exit 1 ;;\n\
+         esac\n",
+    );
+    let log = tmp.path().join("aida.log");
+    let aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &aida,
+        format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", log.display()),
+    );
+    let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &gh);
+    let _aida = crate::kernel::test_aida_exe::set(aida);
+
+    let outcome = crate::review_gates::try_auto_queue_pr_review_unbumped(
+        &primary,
+        "nowhere-branch",
+        "session-bug-035",
+        crate::review_gates::AutoQueueOrigin::PrSkill,
+    );
+    let calls = std::fs::read_to_string(&log).unwrap_or_default();
+    assert!(
+        matches!(
+            outcome.status,
+            crate::review_gates::AutoQueueStatus::SkippedNeedsAttention
+        ),
+        "{}\n{calls}",
+        outcome.summary
+    );
+    assert!(
+        outcome.summary.contains("main..nowhere-branch"),
+        "{}",
+        outcome.summary
+    );
+    assert!(
+        !outcome.summary.contains("trailers"),
+        "an unreadable range is not a trailer problem: {}",
+        outcome.summary
+    );
+    assert!(
+        !calls.lines().any(|l| l.starts_with("add ")),
+        "no reviewer story may be filed:\n{calls}"
     );
 }

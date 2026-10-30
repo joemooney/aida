@@ -4639,9 +4639,7 @@ pub(crate) fn stale_base_note(
 
 /// True when `rev` names a commit in the repo at `project_root`.
 fn git_rev_resolves(project_root: &std::path::Path, rev: &str) -> bool {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    aida_core::git_ops::host_git_command(project_root)
         .args(["rev-parse", "--verify", "--quiet"])
         .arg(format!("{rev}^{{commit}}"))
         .output()
@@ -4649,13 +4647,28 @@ fn git_rev_resolves(project_root: &std::path::Path, rev: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Refresh `refs/remotes/origin/<branch>` from origin. Best effort: a missing
+/// branch or an unreachable origin leaves the ref as it was.
+fn fetch_origin_branch(project_root: &std::path::Path, branch: &str) {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let _ = aida_core::git_ops::host_git_command(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args(["fetch", "--quiet", "--no-tags", "origin"])
+        .arg(format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"))
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
+        .output();
+}
+
 /// Resolve a forge's bare `base`/`head` branch names into a range this
 /// checkout can actually log. A contained lane pushes its branch from a seat
-/// clone, so the primary may have no local `<head>` at all: fall back to
-/// `origin/<head>`, fetching that one ref when the remote-tracking ref is
-/// missing too, and pair it with `origin/<base>` so both ends come from the
-/// same remote. Leaves the names untouched when `head` resolves locally or
-/// nothing on origin does, so the caller's `git log` error names the range.
+/// clone, so the primary may have no local `<head>` at all, and whatever
+/// `origin/<head>` it has may predate the lane's latest push. In that case
+/// both ends are re-fetched from origin (a stale `origin/<base>` would pull
+/// already-merged trailers into the range) and the range is
+/// `origin/<base>..origin/<head>`. Leaves the names untouched when `head`
+/// resolves locally or nothing on origin does, so the caller's `git log`
+/// error names the range.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
 pub(crate) fn resolve_log_range(
     project_root: &std::path::Path,
@@ -4665,19 +4678,12 @@ pub(crate) fn resolve_log_range(
     if git_rev_resolves(project_root, head) {
         return (base.to_string(), head.to_string());
     }
+    fetch_origin_branch(project_root, head);
     let remote_head = format!("origin/{head}");
     if !git_rev_resolves(project_root, &remote_head) {
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .args(["fetch", "--quiet", "--no-tags", "origin"])
-            .arg(format!("+refs/heads/{head}:refs/remotes/origin/{head}"))
-            .output();
-        if !git_rev_resolves(project_root, &remote_head) {
-            return (base.to_string(), head.to_string());
-        }
+        return (base.to_string(), head.to_string());
     }
+    fetch_origin_branch(project_root, base);
     let remote_base = format!("origin/{base}");
     let base = if git_rev_resolves(project_root, &remote_base) {
         remote_base
