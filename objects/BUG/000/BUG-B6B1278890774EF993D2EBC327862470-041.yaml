@@ -30,11 +30,16 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T16:01:33.513503805Z
+modified_at: 2026-10-30T16:02:06.916291112Z
 req_type: Bug
 tags:
 - area:cache
 - area:locks
+relationships:
+- rel_type: Supersedes
+  target_id: 01a18c63-b5cd-78a1-8c9d-2d00362e7cee
+  created_at: 2026-10-30T16:02:06.916279011Z
+  created_by: joe
 comments:
 - id: 01a18d43-5066-7052-8702-bef3408e79f5
   author: joe
@@ -119,6 +124,11 @@ history:
   timestamp: 2026-10-30T15:13:22.424540412Z
   session_id: 01a18d5f09ef
   harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18d8c-0e41-74a2-ab4b-dffc34a08ab6
+  author: joe
+  timestamp: 2026-10-30T16:02:08.577316845Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
   changes: []
 filed_at:
   code_sha: bd35c50292a984ef4f0c29737f46c97b4305a030
