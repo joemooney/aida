@@ -36,7 +36,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:42.826469822Z
-modified_at: 2026-10-30T08:07:51.040393547Z
+modified_at: 2026-10-30T08:08:09.582640645Z
 req_type: Bug
 tags:
 - aida:scaffold
@@ -58,6 +58,14 @@ comments:
     Publication proof /tmp/aster001-push-proof.json pins the tested base and main lag, verifies no previous branch PR and a clean merge-tree; only incoming overlap is generated help in other command sections. Current-main integration validation remains separate. Spec is Done on branch, not Completed.
   created_at: 2026-10-30T07:58:59.503263105Z
   modified_at: 2026-10-30T07:58:59.503263105Z
+- id: 01a18bda-1c6e-74b1-8312-effb988d5a2c
+  author: ai:codex:joe
+  content: |
+    Published PR #3126: https://github.com/joemooney/aida/pull/3126, verified OPEN at 0a457addde239b96a6728ebb97c92b2b32b980dc. Code/store pushes and mirrors succeeded; the actual inbox checkpoint returned no new IDs, with the remaining partial-source warning.
+
+    Review routing is partial: auto-queue exited 1 after creating Draft STORY-B6B1278890774EF993D2EBC327862470-114 because requested Approved status needs advisor authority. The reviewer queue was not populated and implements/routing steps did not complete. Do not treat the Draft as an approved/runnable review request or create a duplicate. Advisor handoff 235aefc4-85e2-4731-a38c-d5effebf52da was accepted for live claude-advisor-08 and explicitly requests triage/approval/routing of that existing story. This is send acceptance, not acknowledgement or independent approval. No self-verdict, hold clearance or merge.
+  created_at: 2026-10-30T08:08:09.582640645Z
+  modified_at: 2026-10-30T08:08:09.582640645Z
 history:
 - id: 01a18a38-0240-7c51-b437-54e337bde5d0
   author: joe
