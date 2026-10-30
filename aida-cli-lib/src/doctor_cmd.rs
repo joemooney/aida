@@ -120,6 +120,19 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-HOME-128: the mail-backlog guard reads the mailbox and the
+            // agent registry only. trace:STORY-HOME-128 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::mail_backlog::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::mail_backlog::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // STORY-1688: lane liveness substrate check reads `.aida/` state
             // without loading the spec store.
             // trace:STORY-1688 | ai:antigravity
@@ -999,6 +1012,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-HOME-128: mail backlog (opt-in append path: only when --category
+    // is explicitly passed, like lane-liveness). trace:STORY-HOME-128 | ai:claude
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::mail_backlog::CATEGORY)?
+    {
+        findings.extend(crate::mail_backlog::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-1688: lane liveness (opt-in append path: only when --category is explicitly passed,
     // since it inspects open PRs via gh and session leases via git).
     // trace:STORY-1688 | ai:claude
@@ -1575,6 +1597,12 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:BUG-1934 | ai:claude
         crate::gate::seat_authority::DOCTOR_CATEGORY => {
             DoctorReport::from_findings(crate::gate::seat_authority::doctor_scan(&project_root))
+        }
+        // Routes like lane-liveness: only the scheduled tick nudges, and a
+        // nudged backlog is not a job failure. trace:STORY-HOME-128 | ai:claude
+        crate::mail_backlog::CATEGORY => {
+            let route = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+            DoctorReport::from_findings(crate::mail_backlog::scan_and_route(&project_root, route))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };

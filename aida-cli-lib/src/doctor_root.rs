@@ -1769,6 +1769,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2347 | ai:codex
     (&["codex-mail-wake"], "codex-mail-wake"),
+    // STORY-HOME-128: unread requests/handoffs older than the threshold
+    // addressed to a live agent or a role it holds. trace:STORY-HOME-128 | ai:claude
+    (
+        &["mail-backlog", "mail-backlog-guard", "unread-mail"],
+        "mail-backlog",
+    ),
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     (
