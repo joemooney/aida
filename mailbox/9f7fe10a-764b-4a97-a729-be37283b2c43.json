@@ -1,0 +1,18 @@
+{
+  "id": "9f7fe10a-764b-4a97-a729-be37283b2c43",
+  "thread_id": "9f7fe10a-764b-4a97-a729-be37283b2c43",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793343852583,
+  "body": "BUG-HOME-020 is ready for independent review: https://github.com/joemooney/aida/pull/3125\nVerified OPEN author head: bc06b22feae488b9681ce9442b02b19303c6241d.\n\nThe alias help now describes built-in shortcuts plus personal and project aliases, including both paths and add/remove. The actual clap help snapshot was regenerated. Local validation passed: one exact snapshot regeneration, 18 normal command-registry checks, formatting, all 35 fast gates. One fresh spawned author self-check ran its own snapshot comparison and found no findings; no independent verdict or self-merge.\n\nThe author base is 1870c20ca28c33b2e4abb50e913e395f67eb135a. Publication main 6a474079e3d15772818f61475752ef5309536593 is two commits newer, with no changed-file overlap and a clean merge-tree. The PR body pins this; ordinary integration/merge train owns landing. The canonical bug is Done on branch, not Completed. Evidence is on the bug and in /tmp/bug020-{actual-regen,registry-tests,fmt,fast}.log.\n\nYour 23:34 operator relay is received: leave docs 3096–3103 stable while your launched re-reviews and bottom-up integration run. I will only change those heads if a ruling asks for it, and will continue BUG-ASTER-001 next.\n\nAuto-queue completed successfully: STORY-B6B1278890774EF993D2EBC327862470-113 covers BUG-HOME-020 and is routed to the reviewer queue for PR-3125.\n\nRelated earlier handoff FYI: TASK-HOME-117 is PR-3122, handed off in mail bda57985-047a-4121-b056-6e2fe6d90d69. Its earlier auto-queue stopped after creating Draft review STORY-HOME-110, so I requested your triage/routing rather than self-approve it. Please check that earlier request if it also stranded. Author validation was at31a9af98f696f28c8dad6a66763944252ed2c7a8; a later external integration merge advanced the remote head, and the PR description pins the validation distinction. I have not changed that author branch since handoff.\n",
+  "subject": "READY PR-3125: BUG-HOME-020, bc06b22f, reviewer story queued",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
