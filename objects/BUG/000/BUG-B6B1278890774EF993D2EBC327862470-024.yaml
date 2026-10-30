@@ -19,12 +19,12 @@ description: |
   5. run_standalone_reviewer restores the previous cwd (or avoids set_current_dir and passes the root explicitly).
   6. Fold the duplicated 'released orphaned lease' message and bail into one release path.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_024 bug_2149 session_reap` plus make check-ci-fast.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T11:22:13.897316141Z
+modified_at: 2026-10-30T11:22:21.998284998Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -48,6 +48,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Gone-worktree release, id round-trip and reviewer-exit release all work, but ending the reviewer lease at exit orphans the aida-pr-N review worktree: the post-merge dead-reviewer reap that tears it down keys on that lease.. No triage reason was given.'
   created_at: 2026-10-30T10:27:10.915519893Z
   modified_at: 2026-10-30T10:27:10.915519893Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c8b-e9ae-77e2-bb00-83ac1a3d4881
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Behavior is correct and the ruling''s item 1 (finished review reaped at exit, kept review keeps its lease) and item 3 land, but ruling item 2''s wiring tests are 1 of 3: no test drives handle_queue_work''s gone-worktree release or run_standalone_reviewer''s exit reap. CI at head still in progress at record time.. No triage reason was given.'
+  created_at: 2026-10-30T11:22:21.998281668Z
+  modified_at: 2026-10-30T11:22:21.998281668Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a3f-2a1f-7903-9467-6c6bd617b8c3
@@ -129,6 +135,14 @@ history:
   timestamp: 2026-10-30T11:22:15.269010498Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c8b-e9ae-77e2-bb00-8396e5902c89
+  author: joe
+  timestamp: 2026-10-30T11:22:21.998255841Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -141,11 +155,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T10:13:42.480539593Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Behavior is correct and the ruling''s item 1 (finished review reaped at exit, kept review keeps its lease) and item 3 land, but ruling item 2''s wiring tests are 1 of 3: no test drives handle_queue_work''s gone-worktree release or run_standalone_reviewer''s exit reap. CI at head still in progress at record time.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-024 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T11:21:39.566354664Z
