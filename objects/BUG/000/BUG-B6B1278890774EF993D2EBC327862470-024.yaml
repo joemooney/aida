@@ -19,12 +19,12 @@ description: |
   5. run_standalone_reviewer restores the previous cwd (or avoids set_current_dir and passes the root explicitly).
   6. Fold the duplicated 'released orphaned lease' message and bail into one release path.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_024 bug_2149 session_reap` plus make check-ci-fast.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T11:54:02.994930459Z
+modified_at: 2026-10-30T13:09:43.215916093Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -166,6 +166,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18cee-3267-7e11-8d67-29e29ce6aa1d
+  author: aida-auto-bump
+  timestamp: 2026-10-30T13:09:43.143853587Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18cee-32af-7c53-af14-a3ced33d00a5
+  timestamp: 2026-10-30T13:09:43.215910915Z
+  agent: implementer
+  commit_sha: 06dd8485ef649662680d7bcbf917ea304c3ad86f
+  summary: 'Round 3: all six round-2 ruling items land with tests (queue_work gone-tree release w/o --force-claim, standalone reviewer exit reap through the mock-vendor harness incl. kept-on-no-verdict, scan_reapable no-row assertion, reap_quiet_outcomes wiring, cwd stepped out only when inside the doomed tree, one release path in handle_queue_work). Spec + comment acceptance verified; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -178,3 +192,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T10:13:42.480539593Z
   implemented_by: joe
+  completed_at: 2026-10-30T13:09:43.143847692Z
+  completion_sha: 06dd8485ef649662680d7bcbf917ea304c3ad86f
