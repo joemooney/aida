@@ -1,7 +1,7 @@
 id: 01a18ae6-b74a-78b0-83d8-c68c904be664
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-033
 title: aida pr ship post-merge worktree cleanup runs git status on every worktree serially (26 min for 240 worktrees, 0 reclaimed)
-description: |-
+description: |
   2026-10-29: `aida pr ship 3108` merged at 03:06Z but the process ran about 26 more minutes in the merged-agent-worktrees cleanup, calling `git status --porcelain` on each of 240 registered worktrees (114G under ../aida-worktrees), and reported '0 reclaimable'. That blocks serial-ship, so every other approved PR waits behind it.
 
   Acceptance:
@@ -9,12 +9,22 @@ description: |-
   2. Bounded total time (for example 60s), then defer the rest to `aida doctor --category merged-agent-worktrees`, saying so.
   3. The ship's merge result prints before cleanup starts, and cleanup can run detached or be skipped with a flag.
   4. Test with many worktrees showing that unmerged trees are not status-scanned.
+
+  ADVISOR RULING 2026-10-30 00:20 (PR-3123 round 1). ONE rework push on PR-3123, no new PR.
+  BUNDLE:
+  1. CI lib-0 fails help_surface_matches_golden_snapshot because the new --no-cleanup flag changed help. Regenerate the golden snapshot.
+  2. AC acac633f: a test that --no-cleanup skips the step-6 session reap and merged-worktree pruning, and that the step-3 'merged PR-N' line prints before step 6. Assert the new dry-run plan text (pr_ship.rs ~1247).
+  3. Per-test criterion anchors: .acbe47d8 and .ac7e8240 on merged_only_scan_never_status_scans_unmerged_worktrees; .ac152090 on spent_budget_defers_every_worktree_to_doctor and summary_names_the_doctor_follow_up_when_deferred; .acac633f on the new test from item 2.
+  4. Bounded time: the heal pass (heal_doctor_merged_agent_worktree per finding) and the TASK-1177 run_session_reap run under the SAME 60s deadline. Removals left undone are counted as deferred to `aida doctor`. Add a test.
+  5. Summary wording: '{n} without a local merge signal skipped', not 'unmerged skipped'.
+  ACCEPTED, no action: the deadline is checked between worktrees; one slow iteration is bounded by a single git status.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_033 bug_1719 story_1728` plus make check-ci-fast.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T07:14:55.274006463Z
+modified_at: 2026-10-30T07:17:01.438166777Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -80,6 +90,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18bab-5142-77e1-9a1a-1482ab2ce7d0
+  author: joe
+  timestamp: 2026-10-30T07:17:02.914536025Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
