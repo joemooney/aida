@@ -660,11 +660,10 @@ echo Usage
             let persisted = serde_json::to_value(&record).unwrap();
             assert!(persisted.to_string().contains("--help timed out"));
             if forks {
-                let pid = std::fs::read_to_string(&pid_file)
-                    .unwrap()
-                    .trim()
-                    .parse()
-                    .unwrap();
+                // trace:BUG-B6B1278890774EF993D2EBC327862470-037 | ai:claude
+                let pid = super::super::tests::read_descendant_pid(&pid_file).expect(
+                    "the group timeout fired before the fixture recorded its descendant's PID",
+                );
                 let start = std::fs::read_to_string(&start_file).ok();
                 super::super::tests::assert_group_member_exits(pid, start.as_deref());
             }
