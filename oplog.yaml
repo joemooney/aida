@@ -89165,5 +89165,38 @@ operations:
   timestamp: 2026-10-30T01:28:50.841254876Z
   kind: !SetStatus
     status: Approved
-clock: 6940
+- id: 01a18a6c-a576-7310-a8c9-92af51a1ed34
+  target_id: 01a18a3f-6619-7d82-b796-e3a5190d207b
+  author: aida
+  node_id: '1'
+  lamport: 6941
+  timestamp: 2026-10-30T01:28:58.486336533Z
+  kind: !AddTag
+    tag: docs:impacted
+- id: 01a18a6e-ab7d-7c83-a45b-cd0cf1b786a8
+  target_id: 01a18a6b-bbf9-7c20-9076-711d5474f058
+  author: aida
+  node_id: '1'
+  lamport: 6942
+  timestamp: 2026-10-30T01:31:11.101505144Z
+  kind: !SetTitle
+    title: Allow a pool of generic implementers per repo; exclusivity only at spec claim
+- id: 01a18a6e-b38e-7da0-b851-d1775b57a318
+  target_id: 01a18a6b-bbf9-7c20-9076-711d5474f058
+  author: aida
+  node_id: '1'
+  lamport: 6943
+  timestamp: 2026-10-30T01:31:13.166450218Z
+  kind: !SetDescription
+    description: |-
+      2026-10-29 18:26: operator ran `aida agent new antigravity --role implementer --bypass-sandbox` while a Codex implementer (codex-agent-02) held the repo scope; after the bypass confirmation and resume prompt it failed: 'agent role implementer is already active on this scope'. The working path is `--spec <SPEC>` (own worktree + lease). Acceptance: check the scope conflict BEFORE the bypass/resume prompts; the refusal names the fix (`--spec <ID>`) and, at a TTY, offers to pick an approved unclaimed spec from the queue for this role; docs state that several agents may share a role when each holds its own spec scope.
+
+      ## Operator ruling 2026-10-29 18:30 (widens the acceptance)
+      Several GENERIC implementers per repo must be allowed: `aida agent new <vendor> --role implementer` with no --spec launches another pool member with its own unique handle, even when other implementers (any vendor) are live. Exclusivity is enforced only where it matters: the spec claim/lease when a pool member picks up work. Acceptance:
+      1. N concurrent repo-scope implementers (mixed vendors) can launch; each gets a distinct handle and mail inbox.
+      2. Two pool members can never hold the same spec: the existing claim/lease refusal applies at pickup.
+      3. Role-addressed mail (`--to implementer`) is taken by exactly one reader; handle-addressed mail reaches only that agent.
+      4. `aida agent ls` shows the pool (role, handle, current spec or idle).
+      5. Roles that must stay singular (advisor, reviewer-at-a-PR, operator seats) keep their one-per-scope rule.
+clock: 6943
 node_id: '1'
