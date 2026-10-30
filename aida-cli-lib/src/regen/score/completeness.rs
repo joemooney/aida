@@ -664,7 +664,7 @@ echo Usage
                 let pid = super::super::tests::read_descendant_pid(&pid_file).expect(
                     "the group timeout fired before the fixture recorded its descendant's PID",
                 );
-                let start = std::fs::read_to_string(&start_file).ok();
+                let start = super::super::tests::read_descendant_start(&start_file);
                 super::super::tests::assert_group_member_exits(pid, start.as_deref());
             }
         }

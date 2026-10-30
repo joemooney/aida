@@ -1090,7 +1090,7 @@ mod tests {
             };
             // Absent only if the timeout struck between the two writes; the pidfd
             // wait then pins whatever the PID names now (still bounded).
-            let start = std::fs::read_to_string(dir.path().join("descendant.start")).ok();
+            let start = read_descendant_start(&dir.path().join("descendant.start"));
             assert_group_member_exits(pid, start.as_deref());
             return;
         }
@@ -1106,10 +1106,40 @@ mod tests {
         std::fs::read_to_string(path).ok()?.trim().parse().ok()
     }
 
+    /// The start identity a timed-out fixture recorded, in the exact form
+    /// `process_start_identity_exact` returns, or `None` when it is missing.
+    /// The fixture's `echo` ends the record with a newline, and a timeout that
+    /// strikes mid-write leaves it empty or as a bare `linux-starttime:`
+    /// prefix. Only a complete record may short-circuit the exit check; any
+    /// other content leaves the verdict to the pidfd poll.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-037 | ai:claude
+    pub(super) fn read_descendant_start(path: &std::path::Path) -> Option<String> {
+        normalize_descendant_start(&std::fs::read_to_string(path).ok()?)
+    }
+
+    fn normalize_descendant_start(raw: &str) -> Option<String> {
+        let record = raw.trim();
+        let ticks = record.strip_prefix("linux-starttime:")?;
+        (!ticks.is_empty() && ticks.bytes().all(|b| b.is_ascii_digit())).then(|| record.to_owned())
+    }
+
     /// A process SIGKILLed by a group timeout exits within a generous bound.
+    /// `start` must come from [`read_descendant_start`] (or the live identity).
     pub(super) fn assert_group_member_exits(pid: u32, start: Option<&str>) {
+        assert!(
+            group_member_exited_within(pid, start, std::time::Duration::from_secs(30)),
+            "sleeping descendant {pid} survived the group timeout"
+        );
+    }
+
+    /// True once the process `pid` (pinned by `start` when known) has exited,
+    /// false if it is still running when `wait` elapses.
+    fn group_member_exited_within(
+        pid: u32,
+        start: Option<&str>,
+        wait: std::time::Duration,
+    ) -> bool {
         use std::os::fd::{AsRawFd, FromRawFd};
-        let start = start.map(str::trim).filter(|s| !s.is_empty());
         // SIGKILL is delivered when killpg returns, but the descendant only
         // exits once the kernel next runs it, which can be well over a second
         // on a loaded runner (e.g. while it pages in from disk). The old 1s
@@ -1135,7 +1165,7 @@ mod tests {
                 Some(libc::ESRCH),
                 "pidfd_open({pid}): {error}"
             );
-            return;
+            return true;
         }
         let pidfd = unsafe { std::os::fd::OwnedFd::from_raw_fd(raw) };
         // Read after the open. A different identity means the PID was reused,
@@ -1146,7 +1176,7 @@ mod tests {
             aida_core::liveness::process_start_identity_exact(pid),
         ) {
             if live != start {
-                return;
+                return true;
             }
         }
         let mut poll = libc::pollfd {
@@ -1154,7 +1184,7 @@ mod tests {
             events: libc::POLLIN,
             revents: 0,
         };
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let deadline = std::time::Instant::now() + wait;
         while poll.revents & libc::POLLIN == 0 {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
             if left.is_zero() {
@@ -1162,10 +1192,7 @@ mod tests {
             }
             unsafe { libc::poll(&mut poll, 1, left.as_millis() as libc::c_int) };
         }
-        assert!(
-            poll.revents & libc::POLLIN != 0,
-            "sleeping descendant {pid} survived the group timeout"
-        );
+        poll.revents & libc::POLLIN != 0
     }
 
     // The states the old probe raced between: a SIGKILLed child that is still
@@ -1182,6 +1209,52 @@ mod tests {
         assert_group_member_exits(child.id(), Some(&start));
         child.wait().unwrap();
         assert_group_member_exits(child.id(), Some(&start));
+    }
+
+    // The callers read the start identity from the fixture's file, which
+    // `echo` newline-terminates and a timeout can truncate. A complete record
+    // must match the live identity so the pidfd poll decides: a live child
+    // with its own record has to read as NOT exited, never short-circuit.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-037 | ai:claude
+    #[test]
+    fn group_member_exit_check_polls_with_file_sourced_start() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let live = aida_core::liveness::process_start_identity_exact(child.id()).unwrap();
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("descendant.start");
+        std::fs::write(&path, format!("{live}\n")).unwrap();
+        let start = read_descendant_start(&path);
+        assert_eq!(start.as_deref(), Some(live.as_str()));
+        let short = std::time::Duration::from_millis(200);
+        assert!(!group_member_exited_within(
+            child.id(),
+            start.as_deref(),
+            short
+        ));
+        // A truncated record leaves the poll in charge, so it too sees the
+        // child alive rather than vacuously passing.
+        for partial in [
+            "",
+            "\n",
+            "linux-starttime:",
+            "linux-starttime:\n",
+            "linux-start",
+        ] {
+            std::fs::write(&path, partial).unwrap();
+            let partial_start = read_descendant_start(&path);
+            assert_eq!(partial_start, None, "{partial:?}");
+            assert!(!group_member_exited_within(child.id(), None, short));
+        }
+        assert_eq!(read_descendant_start(&dir.path().join("missing")), None);
+        // A complete record naming another process means the PID was reused.
+        let reused = format!("{live}9");
+        assert!(group_member_exited_within(child.id(), Some(&reused), short));
+        child.kill().unwrap();
+        assert_group_member_exits(child.id(), start.as_deref());
+        child.wait().unwrap();
     }
 
     // Both failure paths must yield serializable failed evidence, including an
