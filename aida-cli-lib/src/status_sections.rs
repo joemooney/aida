@@ -1585,6 +1585,11 @@ mod bug_2171_2170_contained_builders_tests;
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]
 mod bug_1609_gitlab_reviewer_preflight_tests;
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_035_seat_clone_log_range_tests.rs"]
+mod bug_035_seat_clone_log_range_tests;
+
 #[cfg(test)]
 #[path = "tests/queue_rework_tests.rs"]
 mod queue_rework_tests;
