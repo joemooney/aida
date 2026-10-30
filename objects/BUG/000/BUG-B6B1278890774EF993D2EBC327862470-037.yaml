@@ -17,12 +17,12 @@ description: |
   3. Bundle any other findings in the PR-3133 verdict.
   If `aida ship` refuses to publish from your seat again (BUG-HOME-038), commit and stop; the advisor publishes after inspection.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T06:13:41.027123386Z
-modified_at: 2026-10-30T11:18:29.679498018Z
+modified_at: 2026-10-30T11:55:08.963039262Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -156,6 +156,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18ca9-ed23-7e82-b14d-84cb12788d57
+  author: aida-session-start
+  timestamp: 2026-10-30T11:55:08.963038383Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
   branch: main
