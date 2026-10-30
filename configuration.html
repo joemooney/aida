@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html"><span aria-hidden="true">✳</span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html" aria-current="page">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html">Setup</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="configure-the-way-your-team-works">Configure the way your team works</h1><figure><img class="guide-graphic" src="assets/configuration.svg" alt="Six configuration surfaces Execution mode, agent defaults, type and lane protocols, workflow policy, project footprint and reporting. Each feature has its own scope; configuration does not grant authority."></figure>
+<p>AIDA separates what work means, how it is dispatched and who may authorize its next step. You can start with conversational development and configure more delegation for selected work. Configuration is a product capability: teams can choose agent profiles, execution modes, work protocols and presentation preferences without adopting one fixed operating pattern.</p>
+<h2 id="six-places-to-make-a-choice">Six places to make a choice</h2>
+<ul>
+<li><strong>Per-spec execution mode:</strong> <code>operator</code>, <code>guided</code>, <code>drive</code>, <code>drain</code> and <code>decide</code> describe different human involvement contracts. They do not grant roles or merge authority. Use the <a href="overview.html">overview</a> and <code>aida do --help</code> to inspect the dispatch contract.</li>
+<li><strong>Agent and launch defaults:</strong> supported managed launchers include Claude Code, Codex and Antigravity. Machine and project <code>agents.toml</code> files carry vendor defaults. The launch commands support vendor-specific options; model names are opaque pass-through values, not AIDA validation of model availability. Effort, permission flags and containment support differ between harnesses.</li>
+<li><strong>Work protocols:</strong> editable META requirements tagged <code>protocol:&lt;type&gt;</code> define type guidance. Optional <code>protocol:lane:&lt;lane&gt;</code> overlays tailor research, documentation or consequential design work. Use <code>aida protocol list</code> to inspect installed protocols. If the store has none, an operator can install defaults with <code>aida protocol seed</code>; then use <code>aida protocol show task --lane docs</code> to inspect the actual text before changing it.</li>
+<li><strong>Workflow policy:</strong> project settings control such features as protocol enforcement, drain behavior and required CI treatment. Read the relevant command help and <a href="https://github.com/joemooney/aida/blob/main/docs/cli/04-git-lifecycle.md">lifecycle reference</a> before editing policy. Changing documentation or guidance does not replace a runtime authority check.</li>
+<li><strong>Project footprint:</strong> full, minimal and memory-lane footprints select how much scaffolding a project adopts. <code>aida init --footprint memory-lane</code> installs the store and reflex capture/learn guidance; <code>--footprint minimal</code> installs store/config/cache without that guidance. The distinct <code>--minimal</code> demonstration option is not the same as <code>--footprint minimal</code>.</li>
+<li><strong>Reporting preferences:</strong> history layouts, output format, workflow hints and glyphs let operators and agents choose useful views. <code>aida history --help</code> describes named/inline templates; <code>aida config hints</code>, <code>aida config glyph</code> and the global <code>--format</code> option address different surfaces. A presentation setting does not change spec identity or authority.</li>
+</ul>
+<h2 id="scope-is-feature-specific">Scope is feature specific</h2>
+<p>There is no universal precedence ladder for every AIDA setting. Read each feature&#x27;s contract.</p>
+<p>Agent defaults are read from machine <code>~/.aida/agents.toml</code> and project <code>.aida/agents.toml</code>; individual readers determine merging and overrides. Default-flag lists and scalar permission fields do not necessarily combine the same way. <code>aida config permissions show</code> reports the effective launch posture. The interactive configuration menu needs a terminal; command help and read-only inspection remain available to non-TTY agents.</p>
+<p>Spec execution mode and META protocols belong to the requirements graph. Project guidance and policy files live with their documented project scope. Clone-local allocation and transport settings belong to the clone&#x27;s common Git directory; linked worktrees share that clone state. Machine preferences and grants have their own local scope and trust rules. Copying a project config file does not copy a live grant, and a friendly ID alias does not confer authority.</p>
+<h2 id="guidance-and-enforcement-are-different">Guidance and enforcement are different</h2>
+<p>Protocol precedence is type, then lane, then spec acceptance. Pickup carries labeled guidance with a combined 40-line body cap; a long protocol is not an unlimited instruction channel. The compact per-turn notice repeats type guidance while the spec lease is held. The CLI and MCP protocol resource expose the same rendered text.</p>
+<p>The prose protocol is guidance. Only specifically implemented machine checks enforce protocol deliverables; the default protocol enforcement posture is warn. A claim that all written instructions are enforced would be incorrect. Reviewers still evaluate acceptance and evidence.</p>
+<h2 id="explore-a-policy-request">Explore a policy request</h2>
+<p>For routine documentation you might ask: &quot;Use our preferred agent, preserve independent review, and let approved bounded work proceed with minimal interruption.&quot; For a sensitive design change: &quot;Keep the design conversation interactive and require the accountable person&#x27;s decision.&quot;</p>
+<p>These are illustrative requests, not live configuration writes or complete configuration recipes. Ask the agent to inspect current settings, identify the exact supported knobs and propose a reviewable change. Confirm the affected scope before applying it. AIDA&#x27;s permission posture and role authority remain separate from the amount of conversation you select.</p>
+<h2 id="inspect-before-you-change">Inspect before you change</h2>
+<pre><code>aida init --help
+aida do --help
+aida protocol list
+# If defaults have not been installed, run: aida protocol seed
+aida protocol show task --lane docs
+aida config permissions show
+aida agent new codex --help
+aida agent new claude --help
+aida agent new antigravity --help
+aida history --help</code></pre>
+<p>The <a href="https://github.com/joemooney/aida/blob/main/docs/cli/07-project-setup.md">setup reference</a>, <a href="https://github.com/joemooney/aida/blob/main/docs/cli/06-roles-sessions.md">roles and sessions</a> and <a href="https://github.com/joemooney/aida/blob/main/docs/cli/08-reporting.md">reporting reference</a> contain the operational details. Configuration should fit your team while preserving the source-backed limits of each feature.</p></main>
+<footer class="guide-footer"><p>Generated from <a href="https://github.com/joemooney/aida/blob/main/docs/configuration-guide.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>

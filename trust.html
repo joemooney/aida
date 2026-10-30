@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html"><span aria-hidden="true">✳</span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html" aria-current="page">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html">Setup</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="inspect-what-allows-a-change-to-advance">Inspect what allows a change to advance</h1><figure><img class="guide-graphic" src="assets/trust.svg" alt="Evidence and authority remain separate Agreed intent links to a change and independent current-head review. CI, holds and validated authority are separate shipping checks. Merge does not mean production deployment."></figure>
+<p>AIDA&#x27;s governed workflow makes evidence and authority explicit. Ask what was agreed, which change was checked, who checked it and what authorizes integration. The answers come from several records with different scopes, not from selecting a delivery mode.</p>
+<h2 id="intent-and-implementation">Intent and implementation</h2>
+<p>Acceptance criteria describe the agreed outcome. Code traces and spec-bearing commits connect implementation to that intent. A trace grants no approval or completion credit by itself. An author checks the change before handoff; that check is preparation for independent review.</p>
+<h2 id="independent-review-at-a-commit">Independent review at a commit</h2>
+<p>The ordinary review path requires a reviewer independent of the change&#x27;s author. Verdict evidence identifies the reviewed commit, and shipping evaluates applicable evidence against the current head. An old approval is not permission to ship arbitrary later work.</p>
+<p>There is an explicit, opt-in and audited solo-human self-approval exception for a verified person at a terminal. This does not turn an implementing agent&#x27;s self-check into independent approval. The <a href="https://github.com/joemooney/aida/blob/main/docs/review-process.md">review process</a> and current review command help describe the exact evidence and exception contracts.</p>
+<h2 id="ci-and-holds">CI and holds</h2>
+<p>Applicable required checks and merge holds are separate from the review judgment. A green CI result alone is not review approval or authority to clear a hold. Holds and their clearance rules preserve reasons that require additional action; a tool refusal should be resolved through the authorized path.</p>
+<p>This page explains the existing controls. It does not promise every rule is unbypassable by a user who controls the machine or the forge, and it does not introduce a new clearance mechanism.</p>
+<h2 id="grants-and-mandates">Grants and mandates</h2>
+<p>Role grants provide scoped, validated authority. An environment variable naming a role is not itself a grant. A person at an interactive terminal can start and stop a time-boxed mandate; an eligible advisor action still needs the mandate&#x27;s scope and applicable evidence. Current mandate help documents an eight-hour default and 24-hour maximum, and operator-only work remains outside mandate coverage.</p>
+<p>Protected paths and other mandatory human gates remain outside what a mandate can authorize. For example, the runtime gate directory and project authority configuration have protected-path treatment. Sensitive work has additional scope rules; inspect the current mandate and command help instead of assuming that all held work is covered.</p>
+<h2 id="know-the-boundary">Know the boundary</h2>
+<p>AIDA is alpha software and Linux-only. Current identity and local file controls operate under a shared Unix user; a same-UID process that forges trusted local files is outside the threat model. Multi-human identity separation is not a security boundary. Harness capabilities and containment support differ, and configuration is not a universal isolation guarantee.</p>
+<p>Merging a change is separate from release and production deployment. A project must supply its own deployment policy, credentials and automation. Choosing drain does not grant access to production or prove an application meets its operational obligations.</p>
+<h2 id="read-the-records-at-their-own-scope">Read the records at their own scope</h2>
+<p>The <a href="workflow.html">workflow guide</a> separates code history, canonical intent, the cache and local evidence. Store synchronization does not transfer every operational artifact or machine grant. Review, CI, authority and hold records need the validation defined by their own commands.</p>
+<p>For operators, inspect <code>aida mandate status</code>, <code>aida role status</code> and the relevant review/PR command help. Contributors can read the <a href="https://github.com/joemooney/aida/blob/main/aida-cli-lib/src/gate/review_verdict.rs">verdict implementation</a> and <a href="https://github.com/joemooney/aida/blob/main/aida-cli-lib/src/gate/mandate_gates.rs">mandate gates</a>. These are evidence references, not invitations to edit protected controls. Return to <a href="autonomy.html">selectable autonomy</a> to choose the human involvement contract.</p></main>
+<footer class="guide-footer"><p>Generated from <a href="https://github.com/joemooney/aida/blob/main/docs/trust-and-evidence.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>

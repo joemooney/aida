@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>What is AIDA?</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f6f7f9;
+  --bg-zebra: #f8f9fb;
+  --surface: #ffffff;
+  --text: #1b1f24;
+  --text-muted: #4f5866;
+  --heading: #0f1d33;
+  --accent: #1f4e8c;
+  --accent-soft: #e8f0fb;
+  --border: #d9dee5;
+  --border-strong: #b9c1cc;
+  --code-bg: #eef1f5;
+  --code-text: #23324a;
+  --callout-bg: #eef4fc;
+  --callout-border: #1f4e8c;
+  --notbuilt-bg: #fff6e8;
+  --notbuilt-border: #9a5b00;
+  --notbuilt-stripe: rgba(154, 91, 0, 0.06);
+  /* status pills: Okabe-Ito derived, colour-blind-safe, text always shown */
+  --pill-records-bg: #0b5c97;   --pill-records-fg: #ffffff;   --pill-records-bd: #0b5c97;
+  --pill-derivable-bg: #fdf0d5; --pill-derivable-fg: #6b4300; --pill-derivable-bd: #c78a00;
+  --pill-unsupported-bg: #f2f3f5; --pill-unsupported-fg: #3d434c; --pill-unsupported-bd: #6c737e;
+  --pill-proposed-bg: #f5ecf6;  --pill-proposed-fg: #6a2c70;  --pill-proposed-bd: #9b4f96;
+  --pill-notbuilt-bg: #fff1dc;  --pill-notbuilt-fg: #7a4500;  --pill-notbuilt-bd: #9a5b00;
+  --shadow: 0 1px 2px rgba(15, 29, 51, 0.06), 0 2px 8px rgba(15, 29, 51, 0.04);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  --measure: 72ch;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b;
+    --bg-soft: #161d27;
+    --bg-zebra: #141b24;
+    --surface: #111821;
+    --text: #e2e7ee;
+    --text-muted: #a8b2c0;
+    --heading: #f2f5f9;
+    --accent: #8ab8f5;
+    --accent-soft: #1a2a40;
+    --border: #2a3442;
+    --border-strong: #3a4656;
+    --code-bg: #1c2532;
+    --code-text: #d5e2f3;
+    --callout-bg: #142337;
+    --callout-border: #6fa6ee;
+    --notbuilt-bg: #241c10;
+    --notbuilt-border: #e0a24a;
+    --notbuilt-stripe: rgba(224, 162, 74, 0.06);
+    --pill-records-bg: #5aa6e6;   --pill-records-fg: #06182a;   --pill-records-bd: #5aa6e6;
+    --pill-derivable-bg: #3a2c0c; --pill-derivable-fg: #f5cd73; --pill-derivable-bd: #d9a530;
+    --pill-unsupported-bg: #222a35; --pill-unsupported-fg: #d0d6de; --pill-unsupported-bd: #8a94a2;
+    --pill-proposed-bg: #33203a;  --pill-proposed-fg: #e8b8e6;  --pill-proposed-bd: #c27fbf;
+    --pill-notbuilt-bg: #3a2a10;  --pill-notbuilt-fg: #f3c27a;  --pill-notbuilt-bd: #e0a24a;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 1.5rem; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  text-rendering: optimizeLegibility;
+}
+
+.skip-link {
+  position: absolute; left: -999px; top: 0;
+  background: var(--accent); color: var(--bg);
+  padding: 0.5rem 1rem; z-index: 10;
+}
+.skip-link:focus { left: 1rem; top: 1rem; }
+
+/* ---------- masthead ---------- */
+.masthead {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--accent-soft), var(--bg) 85%);
+}
+.masthead-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 3.5rem 1.5rem 2.5rem;
+}
+.masthead h1 {
+  font-size: clamp(2.2rem, 1.6rem + 2.4vw, 3.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--heading);
+  margin: 0 0 1.25rem;
+  font-weight: 750;
+}
+.lead-callout {
+  max-width: 62ch;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.25rem;
+  font-size: clamp(1.1rem, 1rem + 0.5vw, 1.35rem);
+  line-height: 1.45;
+  color: var(--heading);
+  background: var(--surface);
+  border-left: 4px solid var(--callout-border);
+  border-radius: 0 8px 8px 0;
+  box-shadow: var(--shadow);
+}
+.dateline {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* ---------- layout ---------- */
+.layout {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 1.5rem 4rem;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 3rem;
+}
+main { min-width: 0; padding-top: 2.25rem; }
+
+/* ---------- TOC ---------- */
+.toc {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 2.25rem 0 2rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.toc-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+  font-weight: 700;
+}
+.toc-list, .toc-list ol { list-style: none; margin: 0; padding: 0; }
+.toc-list > li { margin: 0 0 0.35rem; }
+.toc-list ol { margin: 0.25rem 0 0.5rem 0.75rem; border-left: 1px solid var(--border); }
+.toc-list ol li a { padding-left: 0.75rem; font-size: 0.82rem; }
+.toc a {
+  display: block;
+  padding: 0.2rem 0.5rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 4px;
+}
+.toc-list > li > a { color: var(--text); font-weight: 600; }
+.toc a:hover { color: var(--accent); background: var(--bg-soft); }
+.toc a.active { color: var(--accent); background: var(--accent-soft); }
+.toc a code { font-size: 0.9em; }
+
+@media (max-width: 960px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 1rem 3rem; }
+  .masthead-inner { padding: 2.5rem 1rem 2rem; }
+  .toc {
+    position: static;
+    max-height: none;
+    padding: 1.25rem 1rem;
+    margin-top: 1.5rem;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+}
+
+/* ---------- typography ---------- */
+main p, main ul, main ol, main blockquote { max-width: var(--measure); }
+main p { margin: 0 0 1rem; }
+main ul, main ol { padding-left: 1.4rem; margin: 0 0 1.1rem; }
+main li { margin: 0 0 0.45rem; }
+main li > ul, main li > ol { margin-top: 0.45rem; }
+main li > p { margin-bottom: 0.5rem; }
+strong { color: var(--heading); font-weight: 650; }
+
+section.major, section.appendix { padding-top: 2.5rem; margin-top: 2.5rem; border-top: 1px solid var(--border); }
+.intro p:first-child { font-size: 1.15rem; color: var(--heading); }
+
+h2, h3 { color: var(--heading); line-height: 1.25; letter-spacing: -0.01em; }
+h2 {
+  font-size: clamp(1.55rem, 1.3rem + 0.9vw, 2rem);
+  margin: 0 0 1.25rem;
+  font-weight: 720;
+  position: relative;
+}
+h3 { font-size: 1.28rem; margin: 2.25rem 0 0.85rem; font-weight: 680; }
+.anchor {
+  position: absolute; left: -1.1em; width: 1em;
+  color: var(--border-strong); text-decoration: none; font-weight: 400;
+  opacity: 0; transition: opacity .15s;
+}
+h2:hover .anchor, .anchor:focus { opacity: 1; }
+
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, .table-wrap:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  color: var(--code-text);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- callouts ---------- */
+.callout-sentence {
+  margin: 2rem 0;
+  padding: 1.25rem 1.5rem 0.5rem;
+  background: var(--callout-bg);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--callout-border);
+  border-radius: 0 10px 10px 0;
+  max-width: calc(var(--measure) + 3rem);
+}
+.callout-sentence h3 {
+  margin-top: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+.callout-sentence p:first-of-type { font-size: 1.2rem; line-height: 1.45; }
+
+.not-built {
+  margin: 2.25rem 0 1rem;
+  padding: 0.25rem 1.5rem 1rem;
+  border: 2px dashed var(--notbuilt-border);
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(135deg, transparent 0 14px, var(--notbuilt-stripe) 14px 28px),
+    var(--notbuilt-bg);
+}
+.not-built h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
+
+/* ---------- tables ---------- */
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.25rem 0 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+td + td, th + th { border-left: 1px solid var(--border); }
+thead th {
+  background: var(--bg-soft);
+  color: var(--heading);
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 2px solid var(--border-strong);
+  white-space: nowrap;
+}
+tbody tr:nth-child(even) { background: var(--bg-zebra); }
+tbody tr:last-child td { border-bottom: 0; }
+td code { font-size: 0.84em; }
+
+/* ---------- pills ---------- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.12em 0.6em;
+  margin: 0.1em 0.1em 0.1em 0;
+  border-radius: 999px;
+  border: 1.5px solid;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+.pill-icon { font-size: 0.95em; line-height: 1; }
+.pill-records { background: var(--pill-records-bg); color: var(--pill-records-fg); border-color: var(--pill-records-bd); }
+.pill-derivable { background: var(--pill-derivable-bg); color: var(--pill-derivable-fg); border-color: var(--pill-derivable-bd); }
+.pill-unsupported { background: var(--pill-unsupported-bg); color: var(--pill-unsupported-fg); border-color: var(--pill-unsupported-bd); border-style: dotted; }
+.pill-proposed { background: var(--pill-proposed-bg); color: var(--pill-proposed-fg); border-color: var(--pill-proposed-bd); border-style: dashed; }
+.pill-notbuilt { background: var(--pill-notbuilt-bg); color: var(--pill-notbuilt-fg); border-color: var(--pill-notbuilt-bd); border-style: dashed; text-transform: uppercase; font-size: 0.7rem; }
+.legend-item { list-style: none; margin-left: -1.4rem; }
+.legend-item .pill { margin-right: 0.35em; }
+
+/* ---------- appendices ---------- */
+.appendices {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 3px double var(--border-strong);
+  font-size: 0.94rem;
+  color: var(--text-muted);
+}
+.appendices-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  margin: 0;
+}
+.appendices strong { color: var(--text); }
+.appendices section.appendix { margin-top: 1.75rem; padding-top: 1.75rem; }
+.appendices h2 { font-size: 1.3rem; }
+.appendices li { margin-bottom: 0.55rem; }
+
+/* ---------- print ---------- */
+@media print {
+  :root {
+    --bg: #fff; --bg-soft: #f2f2f2; --bg-zebra: #f7f7f7; --surface: #fff;
+    --text: #000; --text-muted: #222; --heading: #000; --accent: #000;
+    --border: #bbb; --border-strong: #888; --code-bg: #f0f0f0; --code-text: #000;
+    --callout-bg: #f4f4f4; --callout-border: #000; --notbuilt-bg: #fff; --notbuilt-border: #000;
+    --notbuilt-stripe: transparent; --shadow: none;
+    color-scheme: light;
+  }
+  @page { margin: 18mm 16mm; }
+  body { font-size: 10.5pt; line-height: 1.45; background: #fff; color: #000; }
+  .toc, .skip-link, .anchor, script { display: none !important; }
+  .layout { display: block; max-width: none; padding: 0; }
+  .masthead { background: #fff; border-bottom: 2px solid #000; }
+  .masthead-inner { padding: 0 0 1rem; }
+  main { padding-top: 1rem; }
+  main p, main ul, main ol { max-width: none; }
+  h1, h2, h3 { page-break-after: avoid; break-after: avoid; page-break-inside: avoid; break-inside: avoid; }
+  .table-wrap { overflow: visible; box-shadow: none; border: 0; border-radius: 0; }
+  .table-wrap table { border: 1px solid #888; }
+  /* small tables stay whole; long ones break only between rows */
+  .table-wrap.short { page-break-inside: avoid; break-inside: avoid; }
+  h2 + p, h3 + p { page-break-before: avoid; break-before: avoid; }
+  table { min-width: 0; font-size: 8.5pt; }
+  tr, td, th { page-break-inside: avoid; break-inside: avoid; }
+  thead { display: table-header-group; }
+  .callout-sentence, .not-built { page-break-inside: avoid; break-inside: avoid; }
+  .pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  a { color: #000; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; word-break: break-all; }
+  section.major { page-break-before: auto; }
+  .appendices { page-break-before: always; break-before: page; }
+}
+
+</style>
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="masthead">
+  <div class="masthead-inner">
+    <h1>What is AIDA?</h1>
+    <p class="lead-callout">AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.</p>
+    <p class="dateline"><time datetime="2026-10">October 2026</time></p>
+  </div>
+</header>
+<div class="layout">
+<nav class="toc" aria-label="Table of contents">
+  <h2 class="toc-title">Contents</h2>
+  <ol class="toc-list"><li><a href="#in-short">In short</a><ol><li><a href="#in-one-sentence">In one sentence</a></li></ol></li><li><a href="#a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</a><ol><li><a href="#four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</a></li><li><a href="#where-a-dark-factory-fits">Where a dark factory fits</a></li></ol></li><li><a href="#how-big-is-it-and-why">How big is it, and why</a></li><li><a href="#what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</a><ol><li><a href="#proposed-extensions-not-built">Proposed extensions (not built)</a></li></ol></li><li><a href="#capabilities-and-when-to-use-each">Capabilities, and when to use each</a><ol><li><a href="#requirements-and-traceability">Requirements and traceability</a></li><li><a href="#doing-work-safely-in-parallel">Doing work safely in parallel</a></li><li><a href="#review-and-merging">Review and merging</a></li><li><a href="#autonomy-under-human-control">Autonomy under human control</a></li><li><a href="#communication-and-continuity">Communication and continuity</a></li><li><a href="#watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</a></li></ol></li><li><a href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</a><ol><li><a href="#1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</a></li><li><a href="#2-approvals-tied-to-exact-code">2. Approvals tied to exact code</a></li><li><a href="#3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</a></li><li><a href="#4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</a></li><li><a href="#5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</a></li><li><a href="#6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</a></li><li><a href="#the-common-thread">The common thread</a></li></ol></li><li><a href="#why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</a></li><li><a href="#appendices">Appendices</a></li><li><a href="#appendix-a-experience-so-far">Appendix A: Experience so far</a></li><li><a href="#appendix-b-verification-notes">Appendix B: Verification notes</a></li></ol>
+</nav>
+<main id="content">
+<section class="intro" aria-label="Introduction">
+<p>AIDA is a governed software factory with selectable autonomy: a coordination and enforcement layer for a software team made of AI agents, with explicit choices about where people stay involved.</p>
+
+<p>Begin with your usual conversational coding agent. AIDA-aware agents can record agreed intent alongside implementation, leaving the system you developed and a durable record for maintenance, enhancement and collaboration. See the <a href="getting-started.html">getting-started guide</a>; autonomous delivery is optional.</p>
+<p>AI coding agents can now write real code. On their own, though, several agents on one codebase tend to lose track of what has been decided, collide on the same files, review their own work, and leave no record of why a change was made. AIDA's aim is to give them a shared record, defined roles, independent review, and limits that a human sets, so their combined output can be checked and trusted.</p>
+
+</section>
+<section class="major" id="sec-in-short" aria-labelledby="in-short">
+<h2 id="in-short"><a class="anchor" href="#in-short" aria-label="Link to this section">#</a>In short</h2>
+<p><strong>What it is.</strong> A command-line tool (<code>aida</code>) plus an MCP server (<code>aida mcp-serve</code>) that sits inside a git repository. Requirements, decisions, comments, mail and lease records live in git on an orphan <code>aida-store</code> branch. Operational records such as review verdicts, merge holds, dispatch requests, handoff notes and standing orders live in local, git-ignored files under <code>.aida/</code>, and mandates live under <code>~/.aida/</code>. AIDA controls how AI agents pick up work, review each other, and merge.</p>
+<p><strong>Who it is for.</strong></p>
+<ul>
+<li>A developer who runs several AI coding agents (Claude Code, Codex CLI, Antigravity, or anything with a shell) on one codebase at the same time.</li>
+<li>Anyone who wants agents to work for hours without supervision while keeping control of what gets merged.</li>
+<li>Teams that need to answer, later, &quot;why does this code exist, who approved it, and on what evidence?&quot;</li>
+</ul>
+<p><strong>What it does, in plain terms:</strong></p>
+<ul>
+<li><strong>One shared source of truth.</strong> Requirements, decisions, bugs and design rulings are stored as versioned spec objects. Agents are told to read them before acting (through the project's instructions and skills), and <code>// trace:&lt;SPEC-ID&gt;</code> comments link code back to the spec that justified it.</li>
+<li><strong>Separation of duties.</strong> AIDA refuses an approval recorded by a session it identifies as the change's author, and if it cannot establish who the author is, it refuses. The one exception is an opt-in, audited &quot;solo human&quot; mode, in which a human verified at a terminal may approve their own work. The review is recorded against written acceptance criteria. Changes to the gate code itself (<code>aida-cli-lib/src/gate/</code>) and to <code>.aida/config.toml</code> are on a protected list that a mandate cannot ship, so they need a human merge.</li>
+<li><strong>Roles.</strong> An advisor plans and rules on designs, implementers build, reviewers check, and an integrator lands the work. Seat grants and gate checks enforce the key authorities: who may record a review, ship, clear a hold, or start a mandate.</li>
+<li><strong>Delegated autonomy with limits.</strong> A human at a terminal can start a time-boxed mandate (8 hours by default, at most 24) that lets the advisor seat ship held PRs and queue dispatch work while the human is away. Work outside the mandate's scope waits for the human, and specs marked operator-only are never covered.</li>
+<li><strong>A recorded trail.</strong> Review verdicts are recorded against exact commits. Mandate-driven actions, dispatch requests and their results, and spec status history are also recorded, so most &quot;who decided this, on what evidence?&quot; questions have a written answer.</li>
+</ul>
+<p><strong>Why it matters.</strong> The bottleneck in AI-assisted software is shifting from writing code to trust and coordination. AIDA is built so that a team, from a single developer up to a larger group, can supervise many agents working in parallel without losing control of quality or accountability. Multi-human use is still being hardened: today everything runs under one Unix user, and AIDA treats a same-user process that forges its files as outside its threat model, so separating one human from another is not yet a security boundary.</p>
+
+<section class="sub callout callout-sentence" aria-labelledby="in-one-sentence">
+<h3 id="in-one-sentence">In one sentence</h3>
+<p><strong>AIDA is a governed software factory with selectable autonomy: people set the intent and limits; agents carry out the work to the level of independence chosen for each spec.</strong></p>
+<p>AIDA also acts as an operating system for AI engineering teams: it grants authority, keeps shared state, and stops parallel workers from trampling each other. The coding agents write the code; AIDA coordinates and checks their work.</p>
+<p>In plain terms: AIDA gives a team of AI coding agents shared memory, defined roles, independent review and human-set limits, so that what they ship can be checked the way you would check a well-run engineering team's work.</p>
+<p>AIDA is alpha software and supports Linux only (README; internal spec).</p>
+
+
+</section>
+</section>
+<section class="major" id="sec-a-governed-software-factory-with-selectable-autonomy" aria-labelledby="a-governed-software-factory-with-selectable-autonomy">
+<h2 id="a-governed-software-factory-with-selectable-autonomy">A governed software factory with selectable autonomy</h2>
+<p><strong>Software factory</strong> describes the repeatable path from a specification to an implemented, tested, reviewed and merged change. <strong>Governed</strong> means that path has assigned responsibilities, recorded decisions, acceptance criteria and enforced authority limits. <strong>Selectable autonomy</strong> means the team chooses where human participation is required for each spec, rather than choosing one automation level for an entire project.</p>
+<h3 id="four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</h3>
+<p>These descriptive names explain the existing modes to a management audience; the CLI values in the second column remain the actual mode names. They are operating choices, not industry certification levels.</p>
+<div class="table-wrap" role="region" tabindex="0" aria-label="Selectable autonomy modes (scrollable table)"><table>
+<thead>
+<tr class="header">
+<th scope="col">Descriptive name</th>
+<th scope="col">AIDA mode</th>
+<th scope="col">What the agents do</th>
+<th scope="col">Where people participate</th>
+<th scope="col">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Human-led delivery</strong></td>
+<td><code>operator</code></td>
+<td>No implementation agent is launched; AIDA presents the checklist and stops.</td>
+<td>A person carries out the work.</td>
+<td>An action requiring human credentials or judgment.</td>
+</tr>
+<tr class="even">
+<td><strong>Collaborative delivery</strong></td>
+<td><code>guided</code></td>
+<td>Work through an interactive design session and prepare a change; no automatic merge.</td>
+<td>A person answers recorded design forks and reviews the resulting PR.</td>
+<td>An architectural change with unresolved trade-offs.</td>
+</tr>
+<tr class="odd">
+<td><strong>Supervised delivery</strong></td>
+<td><code>drive</code></td>
+<td>Implement, open a PR and run through CI, then stop.</td>
+<td>A person reviews and merges the change.</td>
+<td>A feature whose implementation can be delegated but whose release into the main branch needs human approval.</td>
+</tr>
+<tr class="even">
+<td><strong>Autonomous delivery</strong></td>
+<td><code>drain</code></td>
+<td>Run the lifecycle through implementation, CI, independent review, merge and pull, subject to the applicable gates.</td>
+<td>People define and authorize the work beforehand and handle escalations or work outside the delegated scope.</td>
+<td>A bounded fix with clear acceptance criteria and no unresolved design decision.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Decision pending</strong> (<code>decide</code>) sits outside this ladder. It blocks execution until the pending decision is resolved; no implementation harness runs. It is how AIDA represents work that is not ready to delegate, rather than asking an agent to invent an answer.</p>
+<p>The execution mode is recorded on the spec. The advisor classifies the work, and <code>aida do &lt;SPEC&gt;</code> uses that classification to select the execution path. Moving toward more human involvement is permitted; reducing involvement requires an explicit <code>--force</code> override or a durable reclassification. A <code>decide</code> block cannot be bypassed with a mode override. See <a href="https://github.com/joemooney/aida/blob/main/docs/cli/03-work-autonomy.md">Work &amp; autonomy</a> for operational commands.</p>
+<h3 id="where-a-dark-factory-fits">Where a dark factory fits</h3>
+<p>In the software use of <strong>dark factory</strong>, people define intent and validation while agents implement and validate changes without routine human coding or code review. <a href="https://factory.strongdm.ai/">StrongDM's software factory</a> is one explicit example of that approach.</p>
+<p><strong><code>drain</code> is AIDA's dark factory mode.</strong> For approved, authorized specs, agents implement, test, independently review and merge changes without routine human coding or code review. People define the intent, acceptance criteria and authority limits; the factory executes within them and escalates exceptions. AIDA lets a team run this mode alongside supervised, collaborative and human-led delivery, choosing the level of human involvement for each spec.</p>
+<p>Selecting autonomy does not grant authority to bypass reviews, CI, merge holds or protected operations. Mandates and seat grants determine which actions are authorized and for how long; the execution mode determines how the work is carried out. A stopped gate or unresolved decision can still require a person. Here, delivery means reaching the merged code state; production deployment requires its own policy and automation.</p>
+<p>For management, this supports a practical adoption path: start with supervised delivery, retain collaborative delivery for design-heavy work, and delegate well-specified work to autonomous delivery as its validation and operating evidence justify it. The goal is to choose the human attention each change needs and retain a record of what happened.</p>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-100 | ai:codex -->
+</section>
+<section class="major" id="sec-how-big-is-it-and-why" aria-labelledby="how-big-is-it-and-why">
+<h2 id="how-big-is-it-and-why"><a class="anchor" href="#how-big-is-it-and-why" aria-label="Link to this section">#</a>How big is it, and why</h2>
+<p>Counts are for files tracked in git at <code>origin/main</code> <code>28bbe9d540b</code>.</p>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="How big is it, and why (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">What</th>
+<th scope="col">Lines</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>All Rust</td>
+<td>about 1,042,000</td>
+</tr>
+<tr>
+<td>The main CLI library crate (<code>aida-cli-lib</code>)</td>
+<td>about 810,000 (78%)</td>
+</tr>
+<tr>
+<td><code>aida-core</code></td>
+<td>about 152,000</td>
+</tr>
+<tr>
+<td>Test files (<code>tests/</code> directories and <code>*_tests.rs</code>)</td>
+<td>about 269,000 (tests inside source files aren't counted)</td>
+</tr>
+<tr>
+<td>Comment lines (<code>//</code>, <code>///</code>, <code>//!</code>)</td>
+<td>about 174,000 (17%)</td>
+</tr>
+<tr>
+<td>Markdown, on top of that</td>
+<td>about 156,000</td>
+</tr>
+<tr>
+<td>Largest source files</td>
+<td><code>queue_cmd.rs</code> 17,170 lines (about 786 KB), <code>doctor_cmd.rs</code> 15,230, <code>mcp.rs</code> 14,997, <code>auto_complete.rs</code> 14,774</td>
+</tr>
+</tbody>
+</table></div>
+<p>Why it is large:</p>
+<ul>
+<li><strong>The scope is wide.</strong> A requirements store, git-backed sync, a merge train, a review gate, mandates and grants, sessions, mail, a scheduler, and four interfaces (command line, MCP, terminal UI and web server).</li>
+<li><strong>The safety rules are written as tests.</strong> Ratchet tests fail the build if a forbidden code pattern comes back. They are verbose, but they are what keep the guarantees in the section above true.</li>
+<li><strong>Comments carry explanations.</strong> Many record why a piece of code exists, with trace links to the spec, for the next agent to read.</li>
+</ul>
+<p>There is some overlap. Approval decisions used to be made in more than one place. The ship gate and the review watcher's readiness report now share a single decision function (internal spec), so they cannot disagree. The size has a real cost, whatever the cause: every agent session spends context and build time navigating it. The work under way is to make the size cheaper to work in. The <code>lib.rs</code> split is done, the follow-on split of the crate into dependency-ordered crates is still open (internal spec), and a 28 October spike looked at carving out <code>aida-core</code>. The plan is to propose deleting code only where tools or usage data show it is unused.</p>
+
+
+</section>
+<section class="major" id="sec-what-aida-can-measure-and-support-for-engineering-management" aria-labelledby="what-aida-can-measure-and-support-for-engineering-management">
+<h2 id="what-aida-can-measure-and-support-for-engineering-management">What AIDA can measure and support for engineering management</h2>
+<p>AIDA reports on captured delivery evidence. People develop and review conversationally while configured agents maintain structured intent; reporting coverage depends on what those tools recorded. This capability map was checked on 29 October 2026. It does not present live project values or claimed savings. See the <a href="metrics.html">Metrics guide</a> for sources and interpretation.</p>
+<ul>
+<li><strong>Reported today:</strong> cycle-time activity percentiles and work/wait/unknown splits; commit-trailer attribution and spec/criteria evidence; recorded drain outcomes; effort/load and calibration reports; local command latency and error reports when telemetry is enabled. Unknown time and excluded items remain explicit. CLI invocation counts include agent activity and do not measure human productivity.</li>
+<li><strong>Recorded with incomplete coverage:</strong> token usage from retained Claude Code/Codex artifacts with attributable session evidence, offline cost estimates for the pinned rate table&#x27;s supported model/token classes, and local review findings/classification. The built-in ledger does not parse Antigravity artifacts. Unpriced or missing usage is not zero; cost estimates are not billing. The bundled rate table is versioned 2026-09-22.1 and prices only Claude Sonnet 4 (20250514) and Opus 4.1 (20250805), plus their listed aliases. Newer Claude models and Codex models remain unpriced.</li>
+<li><strong>Derivable without a finished joined report:</strong> lines changed per spec and review rounds joined across change history require additional analysis, deduplication and coverage accounting. Existing cycle-time counters are not a complete verdict-history analysis.</li>
+<li><strong>Not supported:</strong> measured hours saved against equivalent human work, proven ROI and reliable feature-duration forecasts. Recorded buckets and counts are proxies, not proof of business value.</li>
+</ul>
+<p>Effort can be captured when work is opened, planned, shipped and reviewed. The capture model has open, plan, implementation/ship and review touchpoints; available records feed <code>aida load report</code> and <code>aida load calibration</code>. Calibration compares estimates/assessments with the implementer&#x27;s declared ship bucket, not stopwatch measurements or equivalent human time. Buckets are 15m, 1h, 4h, 1d (8 work-hours) and 1w (40 work-hours). Missing touchpoints limit coverage; heft is a graph score, not an effort estimate.</p>
+<p>Use <code>aida metrics cycle-time</code>, <code>aida metrics agent-lift</code>, <code>aida metrics ai-lift</code>, <code>aida usage show</code>, <code>aida usage show --cost</code>, <code>aida review classes</code> and command help to inspect the reports. Token provenance and local log coverage require interpretation; a project-wide total cannot be inferred from one attributed spec.</p>
+<p><strong>Air-gapped development.</strong></p>
+<ul>
+<li><strong>Works without a network:</strong> the requirements store, coordination, leases, mail, telemetry, the token ledger and the cost estimates are all local files or a git branch, and the MCP server talks over stdio. Any git server can act as the hub; this repo mirrors to a self-hosted GitLab. <code>aida pr ship</code> supports GitLab merge requests, but the merge train is GitHub only. Releases are prebuilt Linux tarballs (x86_64 and arm64), so installation can be offline, though <code>aida upgrade</code> needs a network.</li>
+<li><strong>Network containment:</strong> for agent sessions launched in contained mode, an opt-in <code>[contained] allowed_hosts</code> setting restricts outbound network access.</li>
+<li><strong>The coding agents are the limit:</strong> AIDA launches Claude Code, Codex CLI or Antigravity, and those CLIs need their model APIs. An air-gapped deployment therefore needs on-premises or local models that the vendor CLI itself can be pointed at. AIDA has no model layer of its own for coding agents. The only built-in local-model option is that the spec evaluator can call an OpenAI-compatible local endpoint (Ollama or vLLM, set with <code>AIDA_LOCAL_LLM_ENDPOINT</code>).</li>
+</ul>
+
+<section class="sub not-built" aria-labelledby="proposed-extensions-not-built">
+<h3 id="proposed-extensions-not-built">Proposed extensions (not built)<span class="pill pill-notbuilt"><span class="pill-icon" aria-hidden="true">&#9888;</span>Not built</span></h3>
+<p>The following extensions are proposals. Existing open/plan/ship/review effort capture and load calibration are already implemented and are covered above.</p>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Proposed extensions (not built) (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Need</th>
+<th scope="col">Proposal</th>
+<th scope="col">Data it would build on</th>
+<th scope="col">Status</th>
+</tr>
+</thead>
+<tbody>
+
+<tr>
+<td>Per-spec history metrics</td>
+<td><strong>History backfill</strong> (illustrative name <code>aida metrics backfill</code>), dry-run by default and idempotent. For each spec it would compute: time from first commit to merge; review rounds and changes-requested count; follow-up and carried-forward tasks (rework); lines changed; and lane-hours. It would write these as separate derived records in the store and never rewrite history.</td>
+<td>Trailers in git; per-commit verdict files; status history; the lease records already on the store branch; the local usage and drain logs.</td>
+<td><span class="pill pill-proposed"><span class="pill-icon" aria-hidden="true">&#9671;</span>PROPOSED</span></td>
+</tr>
+<tr>
+<td>Tokens and cost per spec</td>
+<td>Extend the token ledger to attribute sessions to specs by matching a session's working directory and branch to the spec's lease, instead of only by launch receipts.</td>
+<td>Verified fields. Each Claude Code assistant message has <code>message.usage</code>, with <code>input_tokens</code>, <code>output_tokens</code>, <code>cache_creation_input_tokens</code> and <code>cache_read_input_tokens</code>, alongside <code>message.model</code>, <code>cwd</code>, <code>gitBranch</code>, <code>sessionId</code>, <code>isSidechain</code> and a timestamp. Codex <code>token_count</code> events carry <code>input_tokens</code>, <code>cached_input_tokens</code>, <code>cache_write_input_tokens</code>, <code>output_tokens</code>, <code>reasoning_output_tokens</code> and <code>total_tokens</code>.</td>
+<td><span class="pill pill-proposed"><span class="pill-icon" aria-hidden="true">&#9671;</span>PROPOSED</span></td>
+</tr>
+</tbody>
+</table></div>
+<p>Caveats for the token and cost proposal:</p>
+<ul>
+<li>Prices change, so cost must use the rate in force on each message's date.</li>
+<li>Cache reads and cache writes are priced differently from fresh input and must not be added together as one figure.</li>
+<li>One session can span several specs, so its time and tokens need splitting by timestamp, not assigning whole.</li>
+<li>Subagent messages (<code>isSidechain</code>) and headless runs can live in other files and must be included without being counted twice.</li>
+<li>Transcripts are local and may be pruned, so a backfill can only cover what is still on disk.</li>
+</ul>
+
+
+</section>
+</section>
+<section class="major" id="sec-capabilities-and-when-to-use-each" aria-labelledby="capabilities-and-when-to-use-each">
+<h2 id="capabilities-and-when-to-use-each"><a class="anchor" href="#capabilities-and-when-to-use-each" aria-label="Link to this section">#</a>Capabilities, and when to use each</h2>
+<p>Each row names the situation that should make you reach for the capability. The commands below exist in <code>aida</code> 0.16.0; run <code>aida &lt;command&gt; --help</code> for the details.</p>
+
+<section class="sub" aria-labelledby="requirements-and-traceability">
+<h3 id="requirements-and-traceability">Requirements and traceability</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Requirements and traceability (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">When to use it</th>
+<th scope="col">Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Requirements graph.</strong> Specs (stories, tasks, bugs, decisions, epics and more) with a status, acceptance criteria, typed relationships and comments. Stored as YAML objects on a separate orphan <code>aida-store</code> git branch, so they are versioned, shareable and not tied to any one agent tool or vendor.</td>
+<td>You are about to start work, or an agent is, and needs to know what was asked for and what has already been decided. Also when you make a decision you want the next session to find.</td>
+<td><code>aida add</code>, <code>aida list</code>, <code>aida show</code>, <code>aida search</code>, <code>aida edit</code>, <code>aida comment add</code>, <code>aida done</code></td>
+</tr>
+<tr>
+<td><strong>Trace comments.</strong> A comment such as <code>// trace:&lt;SPEC-ID&gt; | ai:claude</code> beside code links it to the spec that justified it.</td>
+<td>You write or change code for a spec. Later, when someone asks &quot;why is this line here?&quot;</td>
+<td><code>rg 'trace:'</code> to find the spec for some code; <code>aida show &lt;ID&gt;</code> lists the commits and traced files for a spec; <code>aida doctor validate-trace-comments</code> checks the comments; <code>aida graph</code> shows relationships</td>
+</tr>
+<tr>
+<td><strong>Commit trailers that complete specs.</strong> A commit subject ending in <code>(SPEC-ID)</code> links the commit to the spec. Once the commit is on the default branch and you run <code>aida pull</code>, eligible specs move to Completed. A plain <code>git pull</code> does not do this, and <code>(Refs SPEC-ID)</code> links a spec without completing it.</td>
+<td>Every commit for spec work, so specs don't have to be closed by hand.</td>
+<td><code>aida commit</code>, <code>aida pull</code></td>
+</tr>
+<tr>
+<td><strong>History and digests.</strong> What changed, when, and how specs moved through their statuses.</td>
+<td>Catching up after time away, writing a status update, or checking what landed overnight.</td>
+<td><code>aida history</code> (<code>events</code>, <code>opened</code>, <code>completed</code>, ...), <code>aida digest</code></td>
+</tr>
+</tbody>
+</table></div>
+
+</section>
+<section class="sub" aria-labelledby="doing-work-safely-in-parallel">
+<h3 id="doing-work-safely-in-parallel">Doing work safely in parallel</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Doing work safely in parallel (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">When to use it</th>
+<th scope="col">Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Isolated sessions and worktrees.</strong> Each piece of work gets its own git worktree on its own branch, with a lease that records who holds it.</td>
+<td>Two or more agents (or you and an agent) work at the same time. Each needs a working copy no one else touches.</td>
+<td><code>aida session start --owns &lt;SCOPE&gt;</code>, <code>aida worktree add</code>, <code>aida session leases</code>, <code>aida session end</code></td>
+</tr>
+<tr>
+<td><strong>Claims.</strong> An advisory, spec-scoped lease. A duplicate <code>aida queue work &lt;spec&gt;</code> is refused while the claim holds, and <code>aida edit &lt;spec&gt;</code> warns. A claim holds only while the process that made it is alive, so a crash doesn't lock the spec forever.</td>
+<td>You hand a spec to an agent by some route AIDA didn't launch itself (for example a subagent), and want the duplicate-dispatch checks to see it.</td>
+<td><code>aida claim</code>, <code>aida unclaim</code></td>
+</tr>
+<tr>
+<td><strong>Roles and seats with grants.</strong> Advisor, implementer, reviewer and other seats. Entering a seat issues a time-limited grant (24 hours by default, configurable up to a 168-hour ceiling) bound to that terminal session. Single-occupancy seats can be claimed, released, and handed over with an acknowledgement.</td>
+<td>Before any agent does seat-specific work: planning and rulings (advisor), building (implementer), reviewing (reviewer).</td>
+<td><code>aida role enter &lt;seat&gt;</code>, <code>aida role status</code>, <code>aida session seat claim|status|takeover|ack|release</code></td>
+</tr>
+<tr>
+<td><strong>Launching agents from several vendors.</strong> Starts Claude Code, Codex CLI or Antigravity with the right directory, environment and registry tracking.</td>
+<td>You want an agent started in a known state and visible to AIDA's monitoring.</td>
+<td><code>aida agent new claude|codex|antigravity</code>, <code>aida init --agent ...</code></td>
+</tr>
+</tbody>
+</table></div>
+
+</section>
+<section class="sub" aria-labelledby="review-and-merging">
+<h3 id="review-and-merging">Review and merging</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Review and merging (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">When to use it</th>
+<th scope="col">Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Independent, recorded review.</strong> A reviewer records a verdict (approved, request-changes or rejected) against an exact commit. An approval recorded by the author's own session is refused. An approval of an older commit doesn't cover new code, except after a clean merge of the base branch that leaves the PR's own diff unchanged.</td>
+<td>Every change before it merges. Use <code>aida review classes</code> to see how often a kind of defect recurs.</td>
+<td><code>aida review record</code>, <code>aida review verdict</code>, <code>aida review list</code>, <code>aida review watch</code>, <code>aida review classes</code></td>
+</tr>
+<tr>
+<td><strong>Merge holds.</strong> A marker file and the <code>aida:merge-hold</code> label, which fail a required check so the PR cannot be auto-merged until the hold is cleared. <code>aida merge-hold clear</code> requires a human at a terminal. A sensitive spec's hold is released either by a human or under a mandate started with <code>--include-supervised</code>.</td>
+<td>A change touches something that needs a person's judgement, or you want to pause a PR outside the normal flow.</td>
+<td><code>aida merge-hold list|add|clear</code></td>
+</tr>
+<tr>
+<td><strong>Ship.</strong> Create the PR if needed, watch CI, squash-merge, pull, and clean up, after checking the approval, hold and CI gates. Ship refuses any PR whose head is behind its base branch.</td>
+<td>One approved, up-to-date PR is ready to land.</td>
+<td><code>aida pr ship</code>, <code>aida ship</code> (human-implemented work)</td>
+</tr>
+<tr>
+<td><strong>Merge train.</strong> Builds main plus one squash commit per approved PR, opens a <code>train/*</code> PR so normal CI runs on exactly that combination, and merges only if it is green and main hasn't moved. A red train is rerun once, then split in halves until each bad PR is isolated and left out. GitHub only for now.</td>
+<td>Several approved PRs are ready at once, or a PR is behind main, and you don't want PRs that are each green on their own to turn main red together.</td>
+<td><code>aida pr train &lt;N...&gt;</code>, <code>aida pr train --all-ready</code>, <code>--dry-run</code></td>
+</tr>
+</tbody>
+</table></div>
+
+</section>
+<section class="sub" aria-labelledby="autonomy-under-human-control">
+<h3 id="autonomy-under-human-control">Autonomy under human control</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Autonomy under human control (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">When to use it</th>
+<th scope="col">Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Mandates.</strong> A time-boxed grant (8 hours by default, at most 24) that lets the advisor seat ship held PRs, with an independent approval and green CI still required. <code>--drive</code> widens it to sketch signoff, dispatching fixers and a 15-minute drive tick. Starting and stopping a mandate are refused unless the process has an interactive terminal and is not an AIDA-launched agent session. A mandate cannot be extended: you stop it and start another.</td>
+<td>You are leaving and want agents to keep shipping reviewed work while you are away.</td>
+<td><code>aida mandate start --ship-held</code>, <code>--include-supervised</code>, <code>--scope dispatch</code>, <code>--drive</code>, <code>--ttl</code>, <code>aida mandate stop</code>, <code>aida mandate status</code></td>
+</tr>
+<tr>
+<td><strong>Typed dispatch requests.</strong> A sandboxed advisor queues a typed request: drive a PR to merge (<code>flow</code>), review a PR (<code>review</code>), take over a PR (<code>take</code>), start an implementer lane (<code>impl</code>), or train PRs (<code>train</code>). An executor outside the sandbox runs it: <code>aida dispatch tick</code> handles <code>take</code> and <code>impl</code>, and <code>aida dispatch serve</code>, started from a human advisor terminal, handles all five. Requests are validated and de-duplicated when queued, and authority is re-checked from disk at every checkpoint after a wait and before each side effect.</td>
+<td>The advisor runs in a sandbox that cannot write sibling worktrees or <code>.git/config</code>, but needs work launched or shipped.</td>
+<td><code>aida dispatch request flow|review|take|impl|train</code>, <code>aida dispatch serve</code>, <code>aida dispatch tick</code>, <code>aida dispatch list|show|cancel</code></td>
+</tr>
+<tr>
+<td><strong>Scheduler and due jobs.</strong> A registry of periodic jobs. Each tick runs the substrate jobs (cleanup, health checks) that are due. Seat jobs need judgement, so the tick only marks them due for whoever holds the seat; <code>aida schedule run</code> on a seat job prints its prompt rather than running it.</td>
+<td>A chore must happen whether or not any agent is alive, or a seat has recurring duties that shouldn't live in one session's memory.</td>
+<td><code>aida schedule tick|status|due|done</code>, <code>aida schedule install-cron</code>, <code>aida schedule install-systemd</code></td>
+</tr>
+<tr>
+<td><strong>Night shift.</strong> Launches bounded drain waves from the scheduler while no seat is awake, only if every safety guard passes. Off unless enabled for a clone.</td>
+<td>You want approved, low-risk work to keep moving overnight.</td>
+<td><code>aida shift status|tick --dry-run|enable</code></td>
+</tr>
+</tbody>
+</table></div>
+
+</section>
+<section class="sub" aria-labelledby="communication-and-continuity">
+<h3 id="communication-and-continuity">Communication and continuity</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Communication and continuity (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">When to use it</th>
+<th scope="col">Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Coordination inbox.</strong> One list of everything waiting on you: mergeable PRs, unacknowledged briefs, findings awaiting triage, reviewer verdicts, escalations, unread mail and pending directives.</td>
+<td>Start of a session, or any time you ask &quot;does anything need me?&quot;</td>
+<td><code>aida awaiting</code>, <code>aida status</code>; <code>aida human</code> lists the specs a human must decide, review or triage</td>
+</tr>
+<tr>
+<td><strong>Agent mailbox.</strong> Messages between agents, addressed to an agent id or role (or broadcast), with threads. <code>aida mailbox sync</code> digests local mail into the git store so it is durable and shared across clones.</td>
+<td>One agent needs to tell another something: a stale branch, a question, a handover.</td>
+<td><code>aida mailbox send --to &lt;id&gt;</code>, <code>aida mailbox inbox</code>, <code>aida mailbox thread</code></td>
+</tr>
+<tr>
+<td><strong>Handoffs and standing orders.</strong> A seat writes a handoff note (capped at about 4k tokens) that seeds the next session. Standing orders are dated rulings in a repo-local file per seat, printed before the handoff by <code>--show</code>.</td>
+<td>A session is near its context limit, or ending. Or you've made a ruling (&quot;always do X&quot;) that should outlive the conversation.</td>
+<td><code>aida session handoff --write</code>, <code>--show</code>, <code>--standing-orders add|list</code>, <code>--check</code></td>
+</tr>
+</tbody>
+</table></div>
+
+</section>
+<section class="sub" aria-labelledby="watching-the-fleet-and-the-infrastructure">
+<h3 id="watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="Watching the fleet and the infrastructure (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">When to use it</th>
+<th scope="col">Commands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Fleet view.</strong> One row per active session or agent, with a liveness verdict (live, dormant or stale). Also lists specs marked In-Progress that have no spec-scoped lease behind them.</td>
+<td>You want to know what is really running right now, and what only claims to be.</td>
+<td><code>aida ps</code>, <code>aida session leases</code>, <code>aida health</code></td>
+</tr>
+<tr>
+<td><strong>Multi-hub sync.</strong> <code>aida remote status</code> reports drift between git hubs (for example GitHub and GitLab). <code>mirror-sync</code> pushes origin's tips of main and the spec store to mirror hubs. <code>reconcile</code> repairs a diverged spec store by union-merging it, and is dry-run unless given <code>--execute</code>. Neither command force-pushes.</td>
+<td>You push to more than one hub, or a hub's spec store has diverged from the others.</td>
+<td><code>aida remote status</code>, <code>aida remote mirror-sync</code>, <code>aida remote reconcile</code> (add <code>--execute</code> to act)</td>
+</tr>
+<tr>
+<td><strong>Guards.</strong> <code>aida doctor check &lt;category&gt;</code> covers categories such as performance budgets, disk headroom, hub drift, stale remote branches, runaway seats and merged agent worktrees. Each reports by default, and fails only with <code>--fail-on-findings</code>, which is how the scheduled jobs use them.</td>
+<td>Run on a schedule so problems surface before they block a night of work.</td>
+<td><code>aida doctor check performance|disk-headroom|remote-drift|stale-remote-branches|merged-agent-worktrees --fail-on-findings</code></td>
+</tr>
+<tr>
+<td><strong>Disk reclaim.</strong> Deletes stale build caches in worktrees that are being kept, plus aged agent scratch. Dry-run by default. Skips the main checkout, anything held by a live session or job, worktrees whose branch has an open PR, and caches touched in the last hour.</td>
+<td>The disk is filling up with build caches from many worktrees.</td>
+<td><code>aida worktree reclaim</code>, then <code>--apply</code></td>
+</tr>
+<tr>
+<td><strong>MCP server.</strong> Exposes the requirements graph as typed tools to MCP clients over stdio. For agents that have a shell, the CLI's compact output is the default and costs fewer tokens.</td>
+<td>Your agent client prefers MCP tools to shell commands.</td>
+<td><code>aida mcp-serve</code>, <code>aida init --with-mcp</code></td>
+</tr>
+</tbody>
+</table></div>
+
+
+</section>
+</section>
+<section class="major" id="sec-what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents" aria-labelledby="what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">
+<h2 id="what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents"><a class="anchor" href="#what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents" aria-label="Link to this section">#</a>What AIDA adds to GitHub, CI and Jira when the developers are AI agents</h2>
+<p>The real alternative to AIDA is not a pile of scripts. It is a team's standard tooling with AI agents plugged in: GitHub or GitLab with branch protection and required reviews, a merge queue, CI, an issue tracker such as Jira, and an agent such as Codex. That stack is mature, and AIDA builds on it rather than replacing it: AIDA ships through GitHub or GitLab and relies on their CI and required checks. The question is what that stack misses when the developers are agents. The common answer is that standard tooling assumes each developer is a separate, accountable human account. In this repository, all 36 PRs merged on 28 October were opened under one GitHub account (<code>joemooney</code>), whichever agent wrote them. GitHub therefore cannot tell the implementing agent from the reviewing agent. AIDA supplies that missing layer: agent identity and authority, coordination between concurrent agents, independent AI review in the loop, and traceability down to which agent acted on whose authority. The examples are from 28 October 2026.</p>
+
+<section class="sub" aria-labelledby="1-parallel-work-that-can-t-break-main">
+<h3 id="1-parallel-work-that-can-t-break-main">1. Parallel work that can't break main</h3>
+<p><strong>What standard tooling already does.</strong> GitHub's merge queue (and GitLab's merge trains) tests each PR on top of the latest main plus the PRs queued ahead of it, and drops a PR that fails. Branch protection can also require a branch to be up to date before merging. This is a real equivalent. AIDA's merge train does the same job, and in this repository it runs through ordinary <code>train/*</code> PRs and normal CI (39 opened on 28 October, 35 merged).</p>
+<p><strong>What AIDA adds because the developers are agents.</strong> Agents need coordination <em>before</em> the merge. Each agent works in its own leased worktree. A second pickup of the same spec is refused while a live lease or claim holds it. Agents can send each other mail, and a stalled PR can be handed to a new agent (<code>take</code>). The review watcher holds back an automatic review of a head that is behind main with overlapping paths, so no agent's review time is spent on stale code. On 28 October, an agent's request to ship PR #3040 was refused because the branch was 2 commits behind main; the refusal named the fix (<code>aida pr train 3040</code>), and the PR then landed through train #3046. GitHub's equivalent is a human noticing. The merge step itself has no real advantage over a merge queue.</p>
+
+</section>
+<section class="sub" aria-labelledby="2-approvals-tied-to-exact-code">
+<h3 id="2-approvals-tied-to-exact-code">2. Approvals tied to exact code</h3>
+<p><strong>What standard tooling already does.</strong> GitHub records the commit each review was made on. It can dismiss stale approvals when new commits are pushed and require approval of the most recent push. It also blocks a PR's author from approving their own PR. All of this is real, but it is keyed to GitHub accounts.</p>
+<p><strong>What AIDA adds because the developers are agents.</strong> When every agent pushes through the same account, GitHub's author check cannot separate them, and an account cannot approve its own PR at all. So this repository's <code>main</code> protection requires CI and AIDA's <code>merge-hold-gate</code> check rather than GitHub reviews. Reviews are recorded by AIDA and posted as PR comments (PR #3074 has no GitHub reviews). Each AIDA verdict carries:</p>
+<ul>
+<li>the exact <code>reviewed_sha</code>;</li>
+<li>the reviewer's seat;</li>
+<li>an attestation tying it to that seat's grant and session.</li>
+</ul>
+<p>AIDA refuses an approval from the session that authored the work (<code>gate/approval.rs</code>), and the merge is pinned to the approved head. An approval carries over only a clean merge from main that leaves the PR's diff unchanged (checked by patch-id). The review itself is an independent AI review run inside the loop against written acceptance criteria: on 28 October reviewers recorded 37 approvals and 21 request-changes verdicts.</p>
+
+</section>
+<section class="sub" aria-labelledby="3-delegated-authority-that-a-human-starts-and-only-a-human-stops">
+<h3 id="3-delegated-authority-that-a-human-starts-and-only-a-human-stops">3. Delegated authority that a human starts and only a human stops</h3>
+<p><strong>What standard tooling already does.</strong> Tokens can expire. Deployment environments can require a named human reviewer or a wait timer. Admins can bypass protection. None of these is a time-boxed grant that lets an agent ship reviewed-but-held work while the human is away.</p>
+<p><strong>What AIDA adds because the developers are agents.</strong> A mandate is a time-boxed, scoped grant (8 hours by default, at most 24). It can be started or stopped only from an interactive terminal outside an AIDA-launched agent session (<code>gate/mandate.rs</code>, <code>gate/seat_authority.rs</code>), it is checked on every action, and every action it drives is ledgered. On 28 October an attempt to stop the mandate from the operator's agent loop was refused (&quot;a mandate can only be stopped by a human at an interactive terminal&quot;). After the mandate expired at 21:17:04Z, the advisor's next request (<code>aida dispatch request review 3065</code>) was refused at submit, and the refusal named the command to start a new mandate. AIDA states its own limit: a same-user process that forges files in the AIDA home directory is outside its threat model.</p>
+
+</section>
+<section class="sub" aria-labelledby="4-sandboxed-agents-that-can-still-get-work-done">
+<h3 id="4-sandboxed-agents-that-can-still-get-work-done">4. Sandboxed agents that can still get work done</h3>
+<p><strong>What standard tooling already does.</strong> Bots and workflow triggers (for example GitHub Actions <code>workflow_dispatch</code>) can run jobs on request, and hosted agents run in the vendor's own sandbox. Neither checks which agent asked, or whether it currently holds the authority to ask.</p>
+<p><strong>What AIDA adds because the developers are agents.</strong> A local agent kept in a sandbox (one that cannot write sibling worktrees or <code>.git/config</code>) queues typed requests (<code>flow</code>, <code>review</code>, <code>take</code>, <code>impl</code>, <code>train</code>). Each request is validated and de-duplicated when queued, and authority is re-checked from disk at every checkpoint before a side effect (<code>gate/dispatch_auth.rs</code>). On 28 October the advisor queued five: one shipped, one was refused as behind main, one was wrongly refused by a fail-closed lease check (a bug fixed the same day in #3052) and then succeeded, and one take-over launched.</p>
+
+</section>
+<section class="sub" aria-labelledby="5-sessions-that-end-without-losing-the-thread">
+<h3 id="5-sessions-that-end-without-losing-the-thread">5. Sessions that end without losing the thread</h3>
+<p><strong>What standard tooling already does.</strong> Issues and PR comments keep history, and agent CLIs can resume or compact their own conversations. That covers a human team well.</p>
+<p><strong>What AIDA adds because the developers are agents.</strong> Agents hit context limits several times a day, and each new session starts with no memory. Each seat writes a size-capped handoff note (about 4k tokens) that seeds the next session, and dated standing orders from the operator are printed before it. On 28 October seats wrote more than 40 such notes (38 by the advisor). The advantage is real but modest: this is structure and convention more than hard enforcement.</p>
+
+</section>
+<section class="sub" aria-labelledby="6-guards-on-the-agents-own-infrastructure">
+<h3 id="6-guards-on-the-agents-own-infrastructure">6. Guards on the agents' own infrastructure</h3>
+<p><strong>What standard tooling already does.</strong> CI flags flaky tests. Monitoring catches full disks and slow services. Git hosts mirror code. For most of this example, standard tooling is the equivalent, and AIDA's guards mainly keep AIDA's own machinery healthy. For instance, the inode-reuse collision found in a merge-train run on 28 October was a bug in AIDA's own mailbox code (fixed in #3043).</p>
+<p><strong>What AIDA adds because the developers are agents.</strong> One part is specific to agents. Dozens of agent worktrees each build their own cache, and deciding what is safe to delete depends on agent state. <code>aida worktree reclaim</code> skips anything held by a live session or job, any worktree with an open PR, and recently touched caches. On 28 October <code>--apply</code> freed 532.9 GiB across 151 directories (disk use went from 94% to 55%).</p>
+
+</section>
+<section class="sub" aria-labelledby="the-common-thread">
+<h3 id="the-common-thread">The common thread</h3>
+<div class="table-wrap short" role="region" tabindex="0" aria-label="The common thread (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Need</th>
+<th scope="col">What standard tooling gives you</th>
+<th scope="col">What AIDA adds for agent developers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identity and authority</strong></td>
+<td>One identity per account; a PR's author can't approve it</td>
+<td>Identity per agent session and seat, even under one shared account; authored work can't be self-approved; time-boxed mandates that only a human at a terminal can start or stop</td>
+</tr>
+<tr>
+<td><strong>Coordination between concurrent developers</strong></td>
+<td>Assignees, branch naming, people talking</td>
+<td>Leased, isolated worktrees; duplicate pickups refused; agent mail; take-overs of stalled PRs</td>
+</tr>
+<tr>
+<td><strong>Merging safely</strong></td>
+<td>Merge queue or merge train, required CI</td>
+<td>The same, plus refusal to ship a branch that is behind main, and review held back on stale heads</td>
+</tr>
+<tr>
+<td><strong>Review</strong></td>
+<td>Human reviewers; approvals pinned to commits</td>
+<td>Independent AI review in the loop, recorded per commit with the reviewer's seat and grant</td>
+</tr>
+<tr>
+<td><strong>Continuity</strong></td>
+<td>Issue history; per-tool resume</td>
+<td>Per-seat handoffs and standing orders sized for the next agent's context</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>Issue keys in commits; development panels (in Jira, for example)</td>
+<td>Spec ↔ code ↔ action: trace comments, commit trailers, and ledgers that record which agent acted under which grant or mandate</td>
+</tr>
+<tr>
+<td><strong>Refusing when state is unknown</strong></td>
+<td>Mostly a matter of configuration</td>
+<td>A design rule in AIDA's gate code: refuse and say why when evidence can't be read. It is checked in review, not guaranteed: on 27–28 October reviewers still found and sent back fail-open edge cases</td>
+</tr>
+</tbody>
+</table></div>
+
+
+</section>
+</section>
+<section class="major" id="sec-why-not-just-codex-skills-plus-a-wrapper" aria-labelledby="why-not-just-codex-skills-plus-a-wrapper">
+<h2 id="why-not-just-codex-skills-plus-a-wrapper"><a class="anchor" href="#why-not-just-codex-skills-plus-a-wrapper" aria-label="Link to this section">#</a>Why not just Codex skills plus a wrapper?</h2>
+<p>A fair question: why not write a few skills (instructions the agent loads) and a wrapper script instead?</p>
+<p><strong>When that is good enough.</strong> One human, one or two agents, low stakes, no parallel merges, and it's acceptable if the agent sometimes ignores a rule. In that setting, skills plus a wrapper are simpler and cheaper, and AIDA would be overkill.</p>
+<p><strong>The core difference.</strong> A skill is instructions to the model, so it works as advice. The model can misread it or skip it, and an agent can't reliably enforce rules on itself, especially one running in a sandbox that can't see the whole system. AIDA puts its key rules in code that runs outside the model's control:</p>
+<ul>
+<li><code>aida pr ship</code> refuses a PR whose head is behind its base, and the review watcher holds back an automatic review of a behind head with overlapping paths, whatever the agent thinks.</li>
+<li>Verdicts are bound to an exact commit, and the merge is pinned to the approved head.</li>
+<li>Merge holds fail a required check until cleared. Clearing one by hand needs a human at a terminal, and a sensitive spec needs either that or a mandate the human started with <code>--include-supervised</code>.</li>
+<li>Mandates can only be started or stopped from an interactive terminal, outside an AIDA-launched agent session.</li>
+<li>Dispatch requests are validated when queued, and authority is re-checked at every checkpoint before a side effect. A replacement mandate does not revive requests that lapsed under an earlier one.</li>
+<li>Claims and leases are tied to live processes (PID plus start time). In the paths checked here, unreadable ownership or evidence makes the operation refuse.</li>
+</ul>
+<p><strong>What is already stable and isolated.</strong> These guarantees are not scattered through the codebase:</p>
+<ul>
+<li>The authority decisions (ship, merge, hold, verdict, seat, dispatch, mandate) live in one module, <code>aida-cli-lib/src/gate/</code>: 34 modules and about 24,000 non-test lines. That directory, plus the drift ratchet test that keeps the list complete, is on the mandate's protected list, so a mandate cannot ship changes to it.</li>
+<li>Ratchet tests keep that boundary and the other conventions from eroding. They catch new gate-like functions outside <code>gate/</code>, aliased imports into the dispatch code, raw <code>git</code> command builders beyond an allow-list, and growth of the legacy CLI <code>Command</code> enum.</li>
+<li>CLI commands are registered through a typed registry (<code>command_registry::REGISTRY</code>). A golden help snapshot test guards it, along with a test that every top-level name has exactly one owner.</li>
+<li>Skills, hooks and agent docs come from one template master (<code>aida-core/templates/</code>, with 59 skills), and <code>make sync-templates</code> and <code>make check-templates</code> keep the mirrors in line.</li>
+</ul>
+<p><strong>What sitting above the vendors buys you.</strong> The deeper question isn't size. It is whether a layer that sits above the vendor tools gives you security and options that being tied to one vendor's agent would not. In short, it means owning your data and keeping control of your own direction.</p>
+<ul>
+<li><strong>You own the data.</strong> Specs, decisions, comments, mail, leases and the operation log live on the <code>aida-store</code> branch of your own git repository, so they move to any hub you choose. Review verdicts, merge holds, dispatch requests and results, handoff notes and standing orders are plain files in your checkout's <code>.aida/</code> directory (git-ignored, so local to that clone), and mandates live in <code>~/.aida/</code>. None of it is held in a vendor's cloud. Skills are authored once in a template master and shipped both as Claude skills and as a vendor-neutral pack (<code>.agents/skills/</code>) that Codex and Antigravity read. A unit test fails if a skill is neither shipped to that pack nor explicitly excluded.</li>
+<li><strong>You aren't tied to one vendor.</strong> AIDA launches and drives Claude Code, Codex CLI and Antigravity, interactively (<code>aida agent new claude|codex|antigravity</code>) and headless (<code>--vendor</code>), behind the same roles, gates and records. You can mix vendors or switch between them, which helps when negotiating on price and protects you if a vendor changes its terms or features. The token ledger already reads both Claude Code and Codex logs.</li>
+<li><strong>Enforcement doesn't rely on a vendor's model.</strong> The gates are AIDA code: ship and train checks, verdicts bound to a commit, merge holds, terminal-only mandates and dispatch re-checks. They behave the same whichever model wrote the change. They are not prompts that a different model might follow differently.</li>
+<li><strong>You keep strategic options open.</strong> Because history and coordination aren't tied to a vendor, the whole record can move with you, and on-premises or air-gapped models remain an option later. Today the only built-in local-model hook is the spec evaluator's OpenAI-compatible endpoint (Ollama or vLLM). The coding agents still need whatever model API their vendor CLI uses.</li>
+<li><strong>Today's limits, stated plainly.</strong> Vendor parity is uneven. Contained (sandboxed) sessions are supported only for Claude: the code applies containment to Claude alone, and refuses a contained launch on Codex or Antigravity with &quot;the <code>codex</code> vendor cannot run a contained session&quot; rather than quietly launching it uncontained. Much of the tooling and dogfood evidence is Claude-first. And the data lives in two places, the git store and local files, so moving the full history means copying <code>.aida/</code> as well as the repository.</li>
+</ul>
+<p>These protections aren't free to build. Concurrency control, crash-safe retries and identity that survives reused PIDs and inodes are where real bugs were found and fixed on 27–28 October: the inode-reuse identity collision (#3043), the dispatch occupancy scan misreading lease companion files (#3052), and writer build identity being compared by executable path instead of build (#3037).</p>
+<p><strong>To be fair to the other side.</strong> AIDA is large partly because it grew fast, and some of its approval logic has had overlapping paths (see &quot;How big is it&quot; above). Skills are still the right tool for guidance: how to plan, review or write a commit. AIDA ships its own skills for exactly that. So the real comparison is &quot;skills plus an enforcement layer&quot; against &quot;skills alone&quot;.</p>
+<div class="table-wrap" role="region" tabindex="0" aria-label="Why not just Codex skills plus a wrapper? (scrollable table)"><table>
+<thead>
+<tr>
+<th scope="col">Concern</th>
+<th scope="col">Skills plus a wrapper</th>
+<th scope="col">AIDA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Guidance for the agent</td>
+<td>Skills written by hand for each tool and kept in sync by hand. The skill is the only safeguard: if the model skips it, nothing stops the action.</td>
+<td>Skills come from one template master (<code>aida-core/templates/</code>). They ship as Claude skills and as a vendor-neutral pack for Codex and Antigravity, are kept in sync by <code>make sync-templates</code> and <code>make check-templates</code>, and are versioned with the project. Their size is capped by budgets in <code>context-budget.toml</code> that CI tests enforce. They also have enforcement behind them: a skill tells the agent to run AIDA commands (<code>aida pr ship</code>, <code>aida review record</code>), and those commands apply the gates even if the agent misreads the skill.</td>
+</tr>
+<tr>
+<td>Rules being followed</td>
+<td>Depends on the model complying</td>
+<td>Key rules enforced in code outside the model</td>
+</tr>
+<tr>
+<td>Many agents at once</td>
+<td>Usually not handled</td>
+<td>Leases, locks, claims, merge train</td>
+</tr>
+<tr>
+<td>Who may approve or ship</td>
+<td>Convention</td>
+<td>Verdicts recorded per commit, merge holds, terminal-only mandates</td>
+</tr>
+<tr>
+<td>Crashes and retries</td>
+<td>Ad hoc</td>
+<td>Recovery records, de-duplicated requests</td>
+</tr>
+<tr>
+<td>History</td>
+<td>Git log and chat transcripts</td>
+<td>Spec store, verdict and mandate ledgers, history</td>
+</tr>
+<tr>
+<td>Data ownership</td>
+<td>Wherever the wrapper and vendor keep it</td>
+<td>Your git store plus local <code>.aida/</code> files</td>
+</tr>
+<tr>
+<td>Vendor choice</td>
+<td>Usually written for one vendor</td>
+<td>Claude Code, Codex CLI, Antigravity behind the same gates (containment: Claude only)</td>
+</tr>
+<tr>
+<td>Size and setup cost</td>
+<td>Smaller</td>
+<td>Large; takes time to learn</td>
+</tr>
+</tbody>
+</table></div>
+
+
+</section>
+<div class="appendices" aria-labelledby="appendices">
+<h2 id="appendices" class="appendices-title">Appendices</h2>
+<section class="appendix" id="sec-appendix-a-experience-so-far" aria-labelledby="appendix-a-experience-so-far">
+<h2 id="appendix-a-experience-so-far"><a class="anchor" href="#appendix-a-experience-so-far" aria-label="Link to this section">#</a>Appendix A: Experience so far</h2>
+<p>From 27–28 October 2026 (local time), with an advisor agent coordinating implementer and reviewer lanes, and an 8-hour human-started mandate for part of 28 October:</p>
+<ul>
+<li><strong>Throughput.</strong> 58 commits landed on main (38 of them on 28 October). The main lines of work were (internal spec) mailbox and relay slices, (internal spec) adoption, gate-boundary ratchet follow-ups, (internal spec) and a follow-up <code>aida show</code> latency fix, and (internal spec) ID allocation.</li>
+<li><strong>The checks held.</strong> Reviewers recorded 59 approvals and 51 request-changes verdicts against PR commits. Among the defects they sent back were fail-open paths, for example an adoption check that failed open on a discovery error. Earlier, on 27 October, the mandate refused an approval the advisor had carried over after an update-branch, treating it as self-approval (#2925).</li>
+<li><strong>Where it's still rough (advisor's observation).</strong> Much of the delay came from coordination overhead: re-reviews after branch updates, rounds of follow-up findings, and handoffs to the human that the safety rules require. On 28 October the advisor recommended ruling each minor non-blocking finding once, instead of opening new follow-up PRs.</li>
+</ul>
+
+</section>
+<section class="appendix" id="sec-appendix-b-verification-notes" aria-labelledby="appendix-b-verification-notes">
+<h2 id="appendix-b-verification-notes"><a class="anchor" href="#appendix-b-verification-notes" aria-label="Link to this section">#</a>Appendix B: Verification notes</h2>
+<p>Checked on 2026-10-28 against <code>origin/main</code> <code>28bbe9d540b</code>, <code>aida</code> 0.16.0 <code>--help</code>, the code under <code>aida-cli-lib/src/</code>, <code>.aida/review-verdicts/</code>, <code>.aida/dispatch/</code>, <code>.aida/handoff/</code>, <code>aida mandate status</code>, <code>git log origin/main</code>, and <code>gh pr list</code>. Changed or removed claims, with the evidence:</p>
+<ol>
+<li><strong>&quot;Keeps requirements, decisions and work state in git.&quot;</strong> Only partly true. The <code>aida-store</code> branch holds spec objects, coordination leases, mailbox, schedule and registry. Verdicts, holds, dispatch, handoffs and standing orders are git-ignored local files (<code>git check-ignore</code>), and mandates are in <code>~/.aida/mandates</code>. Reworded.</li>
+<li><strong>&quot;The agent that writes a change can never approve it.&quot;</strong> The refusal is real (internal spec, <code>gate/approval.rs</code>), but (internal spec) adds an opt-in solo-human mode in which a TTY-verified human may approve their own claim. Exception added.</li>
+<li><strong>&quot;Sensitive areas, such as the rules that decide what may merge, can only be changed with a human's sign-off.&quot;</strong> Narrowed to what <code>GATE_PROTECTED_PATHS</code> lists: <code>.aida/config.toml</code>, <code>gate/</code>, and the ratchet test.</li>
+<li><strong>&quot;Sensitive work can only be cleared by a human&quot; (merge holds).</strong> <code>gate/merge_hold_core.rs</code> also lets an <code>--include-supervised</code> mandate release it. Corrected.</li>
+<li><strong>Mandate &quot;requires a human at an interactive terminal, so an agent cannot grant itself authority.&quot;</strong> The check (<code>require_direct_human</code>) is: no <code>AIDA_AGENT_NAME</code>/<code>AIDA_AGENT_TYPE</code>, and stdin and stderr are TTYs. <code>--help</code> says same-uid forgery is outside the threat model. The absolute claim is softened, and the script comparison no longer implies identity &quot;a process can't fake&quot;.</li>
+<li><strong>Example 1, &quot;the review gate refused to review it... No reviewer approved code it hadn't seen against current main.&quot;</strong> No review-watch overlap notice dated 28 October was found in the primary mailbox, and the second sentence could not be verified. Replaced with the recorded #3040 ship refusal and the train that landed it (#3046), keeping the watcher behaviour as a code fact (<code>review_watch.rs</code>).</li>
+<li><strong>Example 3, &quot;When the mandate expired, every dispatch request was refused.&quot;</strong> Narrowed to the one request made after expiry. An earlier check found no post-expiry request in <code>.aida/dispatch/</code>, because a refusal at submit writes no dispatch record. The advisor pointed to the evidence, which was verified against the &quot;DEMO EVIDENCE step 9&quot; comment on an internal spec (<code>aida show &lt;ID&gt; --comments --full</code>): <code>aida dispatch request review 3065</code> was refused at submit with the expiry message, and a non-TTY <code>aida mandate stop</code> was refused before that. &quot;Every request&quot; is reduced to that single request. The message matches <code>dispatch_authority.rs:1139</code>.</li>
+<li><strong>Example 4, &quot;malformed or out-of-scope requests were refused when submitted... authority that lapsed mid-run stopped the run.&quot;</strong> There is no record of either on 28 October. Replaced with the actual five requests, including the false fail-closed refusal caused by (internal spec) and fixed in #3052.</li>
+<li><strong>Example 5, &quot;when an agent lane hit its context limit&quot;.</strong> The cause of each handoff was not recorded. Replaced with counts of handoff notes.</li>
+<li><strong>Example 6, inode.</strong> &quot;Failed only in CI&quot; refined: it failed on train runs #3039 and #3041 while main was green (internal spec description). The &quot;operating system reused its inode&quot; detail is kept, with the actual subject (the mailbox source key).</li>
+<li><strong>Example 6, &quot;a performance budget tripped and flagged a slow path before it spread.&quot;</strong> &quot;Before it spread&quot; was unsupported. Replaced with the (internal spec) figures, the #3012 fix, and the advisor's &quot;pre-fix samples&quot; ruling.</li>
+<li><strong>Example 6, 533 GiB.</strong> Now cited as command output, as reported first-hand by the advisor: <code>aida worktree reclaim --apply</code> printed &quot;freed 532.9 GiB across 151 dir(s)&quot;, and <code>df</code> went from 94% to 55% used. The advisor's 28 October handoff notes say the same (&quot;Reclaimed 533 GiB of build caches&quot;). No saved copy of that output exists in the repo or in <code>~/.aida</code> logs. The &quot;nothing in live use&quot; part is stated as the tool's skip rules (<code>worktree reclaim --help</code>).</li>
+<li><strong>&quot;Multi-hub sync... Dry-run by default.&quot;</strong> True only for <code>reconcile</code>. <code>mirror-sync</code> pushes, though it never force-pushes (<code>--help</code>). Corrected.</li>
+<li><strong>&quot;Authority can only be lost during a run, never gained.&quot;</strong> Not found as a general rule. Replaced with the verified rule that a replacement mandate does not revive requests that lapsed under an earlier one (<code>dispatch_authority.rs:1930</code>).</li>
+<li><strong>&quot;These aren't theoretical... the reused inode, the expired mandate, and the diverged hubs&quot; (as bugs found and fixed).</strong> The expired mandate and the hub divergence were not bugs. Replaced with three bugs fixed on 27–28 October (#3043, #3052, #3037).</li>
+<li><strong>&quot;Approvals don't carry forward&quot; (only exception a clean merge of main).</strong> Added the patch-id condition (internal spec) and the <code>--override-stale-approval</code> escape hatch, which is non-author only and refused under a mandate (<code>gate/ship.rs</code>, <code>gate/mandate.rs</code>).</li>
+<li><strong>Trace-comment commands.</strong> <code>aida why</code> explains why a spec is still open, and does not answer &quot;why is this line here?&quot;. Replaced with <code>rg 'trace:'</code>, <code>aida show</code> git-linkage and <code>aida doctor validate-trace-comments</code>.</li>
+<li><strong>Commit-trailer completion, &quot;when the change merges and you pull&quot;.</strong> Clarified that <code>aida pull</code> triggers it and <code>git pull</code> does not, and that <code>(Refs ...)</code> does not complete (<code>db_reconcile.rs</code>, repository guide).</li>
+<li><strong>Guard category names.</strong> &quot;Stale branches, merged worktrees&quot; become the real categories <code>stale-remote-branches</code> and <code>merged-agent-worktrees</code> (<code>doctor_cmd.rs</code>).</li>
+<li><strong>Smaller command and flag corrections.</strong> Added <code>session seat ack</code>, <code>review classes</code>, <code>--scope dispatch</code> and the tick/serve split for dispatch verbs. Mailbox addressing is &quot;agent id or role (or broadcast)&quot;; &quot;user&quot; is not a <code>--to</code> form in <code>--help</code>. <code>aida human</code> is the human-decision list, not the full inbox.</li>
+<li><strong>Size table.</strong> Test files: 258,000 → about 269,000. Comments: 171,000 → about 174,000. Largest files: &quot;15,000 to 17,000 each&quot; → the four named files, 14,774 to 17,170 lines. An earlier draft's claim that <code>lib.rs</code> is &quot;over 1 MiB&quot; was wrong: it is about 20 KB. The 786 KB largest file was added. All Rust (1,042,330), aida-cli-lib (809,786) and Markdown (156,392) were verified with <code>git ls-files | xargs wc -l</code>.</li>
+<li><strong>&quot;An earlier estimate that the code could be cut to a third of its size was withdrawn.&quot;</strong> No record of this was found in the repository. Removed.</li>
+<li><strong>&quot;Capping file sizes&quot; as current direction.</strong> No file-size cap spec or CI gate was found. Removed. The <code>lib.rs</code> split (internal spec) and the 28 October core-split spike were verified and are cited instead.</li>
+<li><strong>&quot;Several approval paths that have disagreed with each other and caused stalls.&quot;</strong> Reworded to the verified history: the ship gate and the watcher readiness report were unified into one decision (internal spec, <code>gate/approval.rs</code>), and a carry-over stall was refused as self-approval (#2925, advisor handoff of 27 October).</li>
+<li><strong>Experience section.</strong> &quot;About 40 reviewed changes and half a dozen major features&quot; and &quot;mostly unattended&quot; became measured counts (58 commits; 59 approved and 51 request-changes per-commit verdicts) and named lines of work. <strong>&quot;Blocked the coordinating agent... from impersonating a human&quot;</strong>: no instance in the two-day window. Removed (the closest is (internal spec), from 8 October). The &quot;rough&quot; bullet is labelled as the advisor's observation.</li>
+<li><strong>Marketing phrasing.</strong> &quot;Turns them into a team that can be trusted&quot;, &quot;operating system for a team of AI software engineers&quot; and &quot;Every decision, approval, refusal and merge is recorded&quot; were toned down to what the code records. &quot;Why it matters&quot; is the author's judgement; the label &quot;(opinion)&quot; was dropped on request as implied.</li>
+<li><strong>Added: &quot;What is already stable and isolated&quot;.</strong> Verified facts: <code>gate/</code> (34 modules, about 24,000 non-test lines, on the protected list), the ratchet tests (<code>story_1888_gate_paths_tests.rs</code>, <code>task_2143_clone_git_ratchet_tests.rs</code>, the import ratchets in <code>gate/dispatch_deps.rs</code>), the typed registry tests (<code>story_1728_command_registry_tests.rs</code>), and the template master (<code>aida-core/templates/</code>, 59 skills, Makefile targets).</li>
+<li><strong>Verified unchanged</strong> (sampled): alpha and Linux-only; vendor list; mandate default of 8h, maximum 24h and no extension; grant binding to the terminal session; train behaviour (rerun once, then split; GitHub only); shift guards; scheduler seat jobs; claim liveness; <code>ps</code> orphaned In-Progress; reclaim dry-run; MCP over stdio; the four interfaces (<code>aida-tui</code>, <code>aida-server</code>, <code>aida-web-react</code>).</li>
+<ol start="29" type="1">
+<li><strong>Management metrics capability map (updated 29 October 2026).</strong> The categories above and the <a href="https://github.com/joemooney/aida/blob/main/docs/metrics-guide.md">Metrics guide</a> replace the earlier RECORDS TODAY table. Commands and scope were checked against help and source in <code>metrics_cycle_time.rs</code>, <code>metrics_cmd.rs</code> and <code>token_ledger.rs</code>; the earlier live report values are historical evidence, not current project measurements. The ledger reads retained Claude Code and Codex artifacts, with attribution coverage limits. <code>data/token-rates/v1.toml</code> prices only Claude Sonnet 4 (20250514) and Opus 4.1 (20250805) and their listed aliases. Newer Claude models and Codex models remain unpriced; missing prices do not imply zero cost. Heft is a relationship-graph score, not an effort estimate.</li>
+<li><strong>Effort touchpoints.</strong> <code>effort_calibration.rs</code> defines open, plan, implementation/ship and review capture. <code>aida load report</code> and <code>aida load calibration</code> consume available records. Calibration treats the implementer's declared ship bucket as its actual value; neither that bucket nor the reviewer's advisory assessment is a stopwatch measurement or equivalent human effort. Missing touchpoints limit the report.</li>
+<li><strong>Cycle-time interpretation.</strong> <code>metrics_cycle_time.rs</code> uses recorded status transitions and the local drain feed, without fetching forge timestamps. Work/wait/unknown splits and bounce counters must be read with their coverage. The older sample's bounce and unknown-time values are not current measurements and are no longer used as product figures.</li>
+<li><strong>&quot;No code-coverage or complexity metrics&quot;.</strong> No <code>llvm-cov</code>, <code>tarpaulin</code> or cyclomatic-complexity code was found in <code>aida-cli-lib</code> or <code>aida-core</code>. No forecasting command was found in <code>aida --help</code> or the metrics subcommands.</li>
+<li><strong>Air-gap claims.</strong></li>
+</ol>
+<ul>
+<li>The store branch contents were checked with <code>git ls-tree aida-store</code>.</li>
+<li>The GitLab hub is the <code>gitlab</code> remote, and GitLab ship support is the <code>ForgeKind::GitLab</code> path in <code>pr_ship.rs</code>. The train is GitHub only, per <code>pr train --help</code>.</li>
+<li>The release tarballs and Linux-only status come from the README.</li>
+<li>The <code>[contained] allowed_hosts</code> allowlist is in <code>session.rs</code>. It is written into the contained Claude Code settings and is opt-in.</li>
+<li>The local-model evaluator is <code>LocalLlmEvaluator</code> in <code>evaluator.rs</code>: <code>AIDA_LOCAL_LLM_ENDPOINT</code>, defaulting to Ollama on loopback with model <code>qwen2.5:7b</code>. It is used only for evaluation.</li>
+<li>No local-model or base-URL support for the coding agents was found. Whether a vendor CLI can be pointed at on-premises models depends on that vendor, and was not verified.</li>
+</ul>
+<ol start="34">
+<li><strong>Token fields (proposal 3).</strong></li>
+</ol>
+<ul>
+<li>The keys were read from one current Claude Code transcript in <code>~/.claude/projects/</code>. Besides the four token counts, <code>message.usage</code> also holds <code>cache_creation</code>, <code>service_tier</code>, <code>server_tool_use</code>, <code>output_tokens_details</code> and other keys.</li>
+<li>The Codex fields were read from a 2026-10-28 rollout file under <code>~/.codex/sessions/</code>.</li>
+<li>The current ledger attributes sessions to specs only through pickup manifests and <code>.aida/orchestrator-handoffs</code> receipts (<code>token_ledger.rs</code>). Matching by working directory and branch is therefore new.</li>
+<li>The 634 lease records on the store branch were counted under <code>coordination/leases</code>.</li>
+</ul>
+<ol start="35">
+<li><strong>Skills-section reframe (on request).</strong> The old &quot;what a small wrapper would have to grow into&quot; list was replaced with &quot;What sitting above the vendors buys you&quot;, and every size-diminishing wrapper phrasing (&quot;small wrapper&quot;, &quot;5,000 to 10,000-line&quot;) was removed, including the comparison-table header. The new claims were checked as follows:</li>
+</ol>
+<ul>
+<li><strong>Data locations</strong> were checked with <code>git ls-tree aida-store</code> and <code>git check-ignore</code>, as in note 1.</li>
+<li><strong>Vendor-neutral skill pack:</strong> see <code>aida-core/templates/skill-inventory.toml</code>, which says skills ship to <code>.agents/skills/</code> for Codex and Antigravity and that a unit test enforces the inventory.</li>
+<li><strong>Vendors:</strong> <code>aida agent new --help</code> lists claude, codex and antigravity. <code>HeadlessVendor</code> in <code>session.rs</code> has Claude, Codex and Agy.</li>
+<li><strong>Containment is Claude-only:</strong> <code>containment_applied</code> returns true only for Claude, and the test <code>containment_applied_reports_only_claude_as_contained</code> pins this. <code>require_vendor_containment</code> refuses with &quot;cannot run a contained session&quot; instead of downgrading.</li>
+<li><strong>The 28 October refusal itself:</strong> a report that <code>--vendor codex</code> hit this refusal on 28 October was not found in local handoffs or mail. The doc therefore cites the code behaviour, not that event.</li>
+<li><strong>The token ledger</strong> reads both Claude and Codex logs (note 29). The local-model hook is described in note 33.</li>
+<li><strong>Opinion, labelled as such:</strong> &quot;Negotiate on price&quot; and &quot;survive a vendor changing terms&quot; are judgements about the value of the design, not measured facts.</li>
+</ul>
+<ol start="36">
+<li><strong>Comparison table, &quot;Guidance for the agent&quot; row.</strong> The row was rewritten to show the real difference. The new cell rests on four checks:</li>
+</ol>
+<ul>
+<li><strong>Template master:</strong> the <code>aida-core/templates/</code> master is read by the Makefile <code>sync-templates</code> target, and <code>check-templates</code> verifies the mirrors and the portable-pack hook master (<code>hooks/aida-sync-agent-skills.sh</code>).</li>
+<li><strong>Portable pack:</strong> the pack for Codex and Antigravity is described in note 35.</li>
+<li><strong>Size budget:</strong> <code>aida-core/templates/context-budget.toml</code> says &quot;CI tests enforce these values&quot; (for example, <code>skill_description_max_bytes = 240</code>).</li>
+<li><strong>Enforcement:</strong> the &quot;backed by enforcement&quot; claim rests on the gate code paths in notes 2–5 and 16.</li>
+</ul>
+<p>The other rows were checked for the same &quot;identical on both sides&quot; problem. None remained once the old &quot;Size and setup cost: Small&quot; cell was changed to &quot;Smaller&quot;, and the Data ownership and Vendor choice rows were added (note 35).
+37. <strong>Section reframed to compare against standard tooling (on request).</strong> The old &quot;What AIDA does that simple scripts can't easily do&quot; section was replaced by &quot;What AIDA adds to GitHub, CI and Jira when the developers are AI agents&quot;.</p>
+<ul>
+<li><strong>One shared account:</strong> <code>gh pr list --search &quot;merged:2026-10-28&quot;</code> shows all 36 merged PRs authored by <code>joemooney</code>, and <code>git log</code> authors are all one identity.</li>
+<li><strong>Branch protection on <code>main</code>:</strong> <code>gh api .../branches/main/protection</code> shows required checks <code>merge-hold-gate</code> and <code>Build (ubuntu-latest)</code>, no required GitHub reviews, and <code>strict: false</code>.</li>
+<li><strong>Reviews:</strong> <code>gh api .../pulls/3074/reviews</code> returns 0 reviews. All 36 <code>comment_url</code> values in the <code>PR-30xx</code> verdict files are issue comments.</li>
+<li><strong>Merge-hold workflow:</strong> <code>.github/workflows/merge-hold-gate.yml</code> exists.</li>
+<li><strong>Verdict contents:</strong> each verdict carries <code>reviewed_sha</code> plus <code>recorder_attestation</code> (seat, <code>grant_id</code>, identity), as in <code>PR-3074.json</code>.</li>
+<li><strong>Other AIDA claims</strong> reuse the evidence in notes 2–8, 12 and 16 (<code>gate/approval.rs</code>, <code>gate/mandate.rs</code>, <code>gate/seat_authority.rs</code>, <code>gate/dispatch_auth.rs</code>, the (internal spec) step 9 comment, <code>worktree reclaim --help</code>).</li>
+</ul>
+<ol start="38">
+<li><strong>GitHub, GitLab and Jira capabilities are stated from product knowledge, not checked in this repo.</strong> These are: the merge queue testing on top of the latest base and dropping failing PRs; GitLab merge trains; the up-to-date branch requirement; reviews recorded per commit; dismissing stale approvals; requiring approval of the most recent push; authors unable to approve their own PR; deployment-environment reviewers and wait timers; token expiry; <code>workflow_dispatch</code>; and Jira development panels and issue keys. The doc deliberately avoids claiming the details of how GitHub's merge queue bisects a failing group. Example 6 is now stated to have mostly no advantage over standard tooling, with only the agent-aware disk reclaim kept as an addition.</li>
+<li><strong>Team framing.</strong> &quot;One person can supervise many agents&quot; became &quot;a team, from a single developer up to a larger group&quot;. A multi-human caveat was added: everything runs under one Unix user, and a same-user process forging files is outside the threat model (<code>aida mandate start --help</code>, <code>gate/mandate.rs</code> module doc). The README describes broader-team scale as still being validated. Two uses of &quot;solo&quot; were kept on purpose: &quot;solo human&quot; is the name of an AIDA review mode (note 2), and &quot;one human, one or two agents&quot; describes when skills alone are enough.</li>
+</ol>
+
+</section>
+</div>
+</main>
+</div>
+<script>
+(function () {
+  if (!("IntersectionObserver" in window)) return;
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a[href^='#']"));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+  var heads = Array.prototype.slice.call(document.querySelectorAll("main h2[id], main h3[id]"));
+  var current = null;
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting && map[e.target.id]) {
+        if (current) current.classList.remove("active");
+        current = map[e.target.id];
+        current.classList.add("active");
+      }
+    });
+  }, { rootMargin: "0px 0px -75% 0px" });
+  heads.forEach(function (h) { obs.observe(h); });
+})();
+
+</script>
+</body>
+</html>
