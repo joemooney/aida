@@ -140,6 +140,55 @@ pub(crate) struct AgentRegistryEntry {
     // trace:STORY-790 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) spec_status_at_end: Option<String>,
+    /// Whether the project's mail-wake watcher wakes this session's native
+    /// thread for its own mail. `None` on rows nothing has armed.
+    // trace:STORY-HOME-096 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mail_wake: Option<MailWake>,
+}
+
+/// A registry row's mail-wake state. Only `armed` rows are watched; a
+/// retired row keeps its ledger on disk.
+// trace:STORY-HOME-096 | ai:claude
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum MailWake {
+    /// Requested at launch; the session has no thread to bind yet.
+    Pending,
+    /// The watcher wakes this session's thread for its own mail.
+    Armed,
+    /// Arming was attempted and failed.
+    Failed,
+    /// The operator opted out.
+    Off,
+    /// The session ended; the watcher stopped waking it.
+    Retired,
+}
+
+impl MailWake {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Armed => "armed",
+            Self::Failed => "failed",
+            Self::Off => "off",
+            Self::Retired => "retired",
+        }
+    }
+}
+
+/// Set the mail-wake state of the live session `target` (name or
+/// `<type>#<pid>`). Returns the updated row.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn set_mail_wake(
+    project_root: &Path,
+    target: &str,
+    state: MailWake,
+) -> Result<AgentRegistryEntry> {
+    let (_, mut entry) = resolve_target_entry(project_root, target)?;
+    entry.mail_wake = Some(state);
+    write_entry(project_root, &entry)?;
+    Ok(entry)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -582,6 +631,7 @@ pub(crate) fn touch_mcp_agent(
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         });
 
@@ -727,6 +777,7 @@ pub(crate) fn touch_session_start_agent(
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         });
 
@@ -886,6 +937,7 @@ pub(crate) fn register_spawned_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from,
     };
     write_entry(project_root, &entry)?;
@@ -933,6 +985,7 @@ pub(crate) fn register_role_enter_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1101,6 +1154,7 @@ pub(crate) fn register_existing_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1124,10 +1178,35 @@ pub(crate) fn agent_scope(
     if let Some(spec) = current_spec.filter(|s| !s.trim().is_empty()) {
         return format!("spec:{}", spec.to_ascii_uppercase());
     }
-    match role.unwrap_or("").to_ascii_lowercase().as_str() {
-        "advisor" | "product" | "integrator" => "repo".to_string(),
-        _ => format!("worktree:{}", worktree_path.display()),
+    if role.is_some_and(is_repo_scoped_role) {
+        return "repo".to_string();
     }
+    format!("worktree:{}", worktree_path.display())
+}
+
+/// Roles whose singleton scope is the whole repo rather than a spec/worktree.
+pub(crate) fn is_repo_scoped_role(role: &str) -> bool {
+    matches!(
+        role.to_ascii_lowercase().as_str(),
+        "advisor" | "product" | "integrator"
+    )
+}
+
+/// Roles whose generic (no `--spec`) members form a pool: any number may run
+/// per repo, each under its own handle, and exclusivity applies only at the
+/// spec claim/lease. Advisor, product, integrator and reviewer stay singular.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) const POOL_ROLES: &[&str] = &["implementer"];
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn is_pool_role(role: &str) -> bool {
+    POOL_ROLES.iter().any(|r| r.eq_ignore_ascii_case(role))
+}
+
+/// A pool-role member launched without a spec: it holds no exclusive scope.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn is_pool_launch(role: Option<&str>, current_spec: Option<&str>) -> bool {
+    role.is_some_and(is_pool_role) && current_spec.is_none_or(|s| s.trim().is_empty())
 }
 
 pub(crate) fn same_scope_conflict(
@@ -1139,6 +1218,12 @@ pub(crate) fn same_scope_conflict(
 ) -> Option<AgentScopeConflict> {
     let role = role?;
     if !cfg.role_is_singleton(role) {
+        return None;
+    }
+    // A generic pool member never conflicts; two members still cannot share
+    // a spec, because the spec scope below (and the lease) is exclusive.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    if is_pool_launch(Some(role), current_spec) {
         return None;
     }
     let scope = agent_scope(Some(role), current_spec, worktree_path);
@@ -1566,6 +1651,12 @@ fn resolve_target_entry(
             )
         }
     }
+}
+
+/// The single live registry entry `target` names.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn resolve_live_target(project_root: &Path, target: &str) -> Result<AgentRegistryEntry> {
+    resolve_target_entry(project_root, target).map(|(_, entry)| entry)
 }
 
 /// Mark a live agent `Paused`. Returns the updated entry so the caller can
@@ -2922,6 +3013,7 @@ mod tests {
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         }
     }
@@ -3911,6 +4003,49 @@ mod tests {
             &tmp.path().join("task-2")
         )
         .is_none());
+    }
+
+    // TASK-121: generic implementers form a pool — several repo-scope members
+    // (any vendor) coexist, while a spec stays exclusive and singular roles
+    // keep their one-per-scope rule.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    #[test]
+    fn same_scope_conflict_allows_a_pool_of_generic_implementers() {
+        let tmp = TempDir::new().unwrap();
+        let binary = AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        for (vendor, role) in [("codex", "implementer"), ("claude", "reviewer")] {
+            register_spawned_agent(
+                tmp.path(),
+                vendor,
+                std::process::id(),
+                Some(role.to_string()),
+                None,
+                tmp.path().to_path_buf(),
+                Some(&binary),
+                Some(format!("{vendor}-{role}-1")),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        }
+        let cfg = Config::default();
+
+        // Another generic implementer (any vendor) launches beside the live one.
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("implementer"), None, tmp.path()).is_none()
+        );
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("Implementer"), Some(" "), tmp.path())
+                .is_none()
+        );
+        // A singular role on the same scope is still refused.
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("reviewer"), None, tmp.path()).is_some()
+        );
+        assert!(is_pool_launch(Some("implementer"), None));
+        assert!(!is_pool_launch(Some("implementer"), Some("TASK-1")));
+        assert!(!is_pool_launch(Some("advisor"), None));
     }
 
     // TASK-1184: dead rows without a resumable native session are pruned.
