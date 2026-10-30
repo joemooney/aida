@@ -93,7 +93,7 @@ fn bug_1719_no_reason_or_summary_contains_controls_decisions() {
         .next()
         .unwrap();
     let scanner = source
-        .split("fn scan_merged_agent_worktrees_with_count")
+        .split("fn scan_merged_agent_worktrees_limited")
         .nth(1)
         .unwrap()
         .split("\nfn ")
