@@ -58,12 +58,12 @@ description: |
 
 
   ADVISOR NOTE 2026-10-30 02:09 (PR-3129, slice 2): the branch CONFLICTS with main (3 commits behind, 5 overlapping files; the 3116/3117/3123 merges touched agent_launch and the registry). Merge origin/main into the slice-2 branch (merge, no rebase), resolve the conflicts keeping both sides' behaviour, regenerate the help golden if help changed, run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast, and push to the SAME PR-3129 branch.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T09:09:19.504919014Z
+modified_at: 2026-10-30T10:00:26.761063913Z
 req_type: Story
 relationships:
 - rel_type:
@@ -436,6 +436,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a18c40-e989-7200-84bd-cfb5b0aab4cc
+  author: aida-session-start
+  timestamp: 2026-10-30T10:00:26.761060253Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
