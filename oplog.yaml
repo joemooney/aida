@@ -89668,5 +89668,31 @@ operations:
       4. On completion, supersede TASK-1992, TASK-1316, STORY-1375, TASK-2008 (carry-over part) and STORY-1683 with `aida edit <ID> --status superseded --superseded-by <this spec>`.
       Tests: base-only update keeps approval; a content change drops it; the CI gate and ship agree on the same event; the proof is computed once (counted).
       Test tier STRICT: targeted `cargo test -p aida-cli-lib --lib gate::` plus the ship/mandate integration binaries you touch, plus make check-ci-fast. Never the workspace suite. Run with env -u AIDA_CONTAINED.
-clock: 6978
+- id: 01a18ae8-bb71-7e02-9a21-7fa2ea66483a
+  target_id: 01a18ae8-aac9-79d1-8702-93c27a144e49
+  author: aida
+  node_id: '1'
+  lamport: 6979
+  timestamp: 2026-10-30T03:44:30.577988280Z
+  kind: !Create
+    title: 'aida agent new: relaunch the session under the same handle when it exits with a fresh handoff (context rotation)'
+    description: |-
+      Operator idea 2026-10-29 20:43. Context rotation currently means: write a handoff, exit, the operator starts a new session by hand, and it gets a NEW mail handle (tonight claude-advisor-06 became claude-advisor-08; mail and agents addressed to the old handle missed it). aida-relay used to cover this and is gone.
+
+      Proposal: `aida agent new` supervises its child. When the child exits AND a handoff for that seat/handle was written after this run started, it relaunches the same vendor in the same worktree under the SAME handle and lease, with the handoff injected at SessionStart. Without a fresh handoff, an exit is a real exit.
+
+      Acceptance:
+      1. Same handle, lease, spec claim, worktree and mail identity across the relaunch. Unread mail is not lost and nothing is double-acked.
+      2. Trigger is a handoff written after this child's start (by mtime or the handoff's own session id), never a stale one. `aida session handoff --final` (or an equivalent end marker) means exit for real.
+      3. Crash-loop guard: at most N relaunches per window (default 3 in 10 min); a child that exits within 60s of start without a new handoff counts as a crash, and the supervisor stops and says why.
+      4. Ctrl-C at the supervisor prompt (a 5s 'relaunching in 5s, Ctrl-C to stop' countdown) stops it.
+      5. `aida agent ls` shows the generation (for example claude-advisor-08 #3) and the last rotation time.
+      6. Works for interactive claude and codex. Headless lanes keep their own budgeted rework flow (out of scope).
+      7. Interacts with STORY-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
+
+      Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 6979
 node_id: '1'

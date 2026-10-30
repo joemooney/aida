@@ -1,0 +1,33 @@
+id: 01a18ae8-aac9-79d1-8702-93c27a144e49
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-101
+title: 'aida agent new: relaunch the session under the same handle when it exits with a fresh handoff (context rotation)'
+description: |-
+  Operator idea 2026-10-29 20:43. Context rotation currently means: write a handoff, exit, the operator starts a new session by hand, and it gets a NEW mail handle (tonight claude-advisor-06 became claude-advisor-08; mail and agents addressed to the old handle missed it). aida-relay used to cover this and is gone.
+
+  Proposal: `aida agent new` supervises its child. When the child exits AND a handoff for that seat/handle was written after this run started, it relaunches the same vendor in the same worktree under the SAME handle and lease, with the handoff injected at SessionStart. Without a fresh handoff, an exit is a real exit.
+
+  Acceptance:
+  1. Same handle, lease, spec claim, worktree and mail identity across the relaunch. Unread mail is not lost and nothing is double-acked.
+  2. Trigger is a handoff written after this child's start (by mtime or the handoff's own session id), never a stale one. `aida session handoff --final` (or an equivalent end marker) means exit for real.
+  3. Crash-loop guard: at most N relaunches per window (default 3 in 10 min); a child that exits within 60s of start without a new handoff counts as a crash, and the supervisor stops and says why.
+  4. Ctrl-C at the supervisor prompt (a 5s 'relaunching in 5s, Ctrl-C to stop' countdown) stops it.
+  5. `aida agent ls` shows the generation (for example claude-advisor-08 #3) and the last rotation time.
+  6. Works for interactive claude and codex. Headless lanes keep their own budgeted rework flow (out of scope).
+  7. Interacts with STORY-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
+
+  Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T03:44:26.313784050Z
+modified_at: 2026-10-30T03:44:26.313784050Z
+req_type: Story
+filed_at:
+  code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9a86ae54ce5
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
