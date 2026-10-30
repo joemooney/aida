@@ -117,13 +117,13 @@ fn suggestion_lookup_never_scaffolds_an_unattached_store() {
 // A bare id whose number belongs to this node's local spec suggests that
 // spec in its alias form, ahead of the spelling near-miss: `BUG-030` was
 // `did you mean BUG-1030?` and never named BUG-HOME-030.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.acc7fcab | ai:claude
 #[test]
 fn bare_id_not_found_suggests_the_node_local_alias() {
     let mut map = aida_core::node_alias::NodeAliasMap::default();
     map.set("HOME", "b6b1278890774ef993d2ebc327862470").unwrap();
     let _guard = aida_core::node_alias::install_for_thread(map);
-    let known = ids(&[
+    let known = pairs(&[
         "BUG-1030",
         "BUG-B6B1278890774EF993D2EBC327862470-030",
         "STORY-100",
@@ -140,4 +140,26 @@ fn bare_id_not_found_suggests_the_node_local_alias() {
         not_found_suggestion("BUG-1031", &known).as_deref(),
         Some("BUG-1030")
     );
+}
+
+// A local twin that already has an agreed id is suggested by that id, not
+// its alias form (ruling C).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.acc7fcab | ai:claude
+#[test]
+fn bare_id_not_found_suggests_the_twins_agreed_id_when_it_has_one() {
+    let mut map = aida_core::node_alias::NodeAliasMap::default();
+    map.set("HOME", "b6b1278890774ef993d2ebc327862470").unwrap();
+    let _guard = aida_core::node_alias::install_for_thread(map);
+    let known = vec![(
+        "BUG-B6B1278890774EF993D2EBC327862470-030".to_string(),
+        Some("BUG-4120".to_string()),
+    )];
+    assert_eq!(
+        not_found_suggestion("BUG-030", &known).as_deref(),
+        Some("BUG-4120")
+    );
+}
+
+fn pairs(list: &[&str]) -> Vec<(String, Option<String>)> {
+    list.iter().map(|s| (s.to_string(), None)).collect()
 }

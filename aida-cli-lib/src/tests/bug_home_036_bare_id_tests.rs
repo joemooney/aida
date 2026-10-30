@@ -1,6 +1,6 @@
 //! Bare ids vs this node's local numbers: the three operator cases
 //! (STORY-100, TASK-123, BUG-030) on the show signpost and the doctor lint.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac4dbc90 | ai:claude
 
 use crate::doctor_cmd::ambiguous_bare_id_lines;
 use crate::requirements_cli::local_twin_note;
@@ -33,6 +33,7 @@ fn store() -> Vec<Requirement> {
     ]
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac4dbc90 | ai:claude
 #[test]
 fn show_note_names_the_local_twin_of_an_agreed_bare_id() {
     let _guard = home();
@@ -50,8 +51,17 @@ fn show_note_names_the_local_twin_of_an_agreed_bare_id() {
     // A local id itself, or a bare id with no local twin, prints nothing.
     assert_eq!(local_twin_note(&objects, "STORY-HOME-100", &reqs[2]), None);
     assert_eq!(local_twin_note(&objects, "STORY-101", &reqs[0]), None);
+    // A twin that has an agreed id is named by it (ruling C).
+    let mut agreed_twin = reqs[3].clone();
+    agreed_twin.agreed_id = Some("TASK-4120".into());
+    aida_core::object_store::write_object(&objects, &agreed_twin).unwrap();
+    let note = local_twin_note(&objects, "TASK-123", &reqs[1]).expect("TASK-123 has a twin");
+    assert!(note.contains("TASK-4120"), "{note}");
+    assert!(!note.contains("TASK-HOME-123"), "{note}");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac12b260 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.ac4dbc90 | ai:claude
 #[test]
 fn doctor_lint_flags_bare_ids_that_also_name_a_local_spec() {
     let _guard = home();
@@ -74,4 +84,14 @@ fn doctor_lint_flags_bare_ids_that_also_name_a_local_spec() {
             "TASK-900:description:1: BUG-030 also names local BUG-HOME-030 (bare BUG-030 is not found)",
         ],
     );
+    // A twin with an agreed id is named by it (ruling C).
+    reqs[4].agreed_id = Some("BUG-4120".into());
+    assert_eq!(
+        ambiguous_bare_id_lines(&reqs)[2],
+        "TASK-900:description:1: BUG-030 also names local BUG-4120 (bare BUG-030 is not found)",
+    );
+    // A bare id that is the twin's own agreed id opens that very spec, so it
+    // is not ambiguous.
+    reqs[4].agreed_id = Some("BUG-030".into());
+    assert_eq!(ambiguous_bare_id_lines(&reqs).len(), 2);
 }

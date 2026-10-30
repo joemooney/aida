@@ -6103,7 +6103,8 @@ pub(crate) struct ShowArgs {
 /// The stderr note `aida show <bare id>` prints when the bare id resolved to
 /// an agreed spec and a node-local spec with the same type and number also
 /// exists (`STORY-100` vs `STORY-HOME-100`). Probes only the twin filenames
-/// the installed node labels name, so it never scans the store.
+/// the installed node labels name, so it never scans the store. A twin with an
+/// agreed id is named by that id.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
 pub(crate) fn local_twin_note(
     objects_root: &std::path::Path,
@@ -6120,7 +6121,13 @@ pub(crate) fn local_twin_note(
                 .is_none_or(|s| !s.eq_ignore_ascii_case(c))
         })
         .filter(|c| aida_core::object_store::object_exists(objects_root, c).unwrap_or(false))
-        .map(|c| aida_core::node_alias::display_spec_id(&c))
+        .map(|c| {
+            let twin = aida_core::object_store::read_object(objects_root, &c).ok();
+            aida_core::node_alias::local_twin_label(
+                &c,
+                twin.as_ref().and_then(|t| t.agreed_id.as_deref()),
+            )
+        })
         .collect();
     if twins.is_empty() {
         return None;

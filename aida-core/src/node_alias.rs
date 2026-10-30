@@ -571,6 +571,16 @@ pub fn local_twins<'a>(bare: &str, known: impl IntoIterator<Item = &'a str>) -> 
     out
 }
 
+/// How a surface names a local twin: its agreed id when it has one, else its
+/// alias form (`STORY-HOME-100`). Never the bare number alone.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn local_twin_label(local_id: &str, agreed_id: Option<&str>) -> String {
+    match agreed_id.map(str::trim).filter(|agreed| !agreed.is_empty()) {
+        Some(agreed) => agreed.to_ascii_uppercase(),
+        None => display_spec_id(local_id),
+    }
+}
+
 impl NodeAliasMap {
     /// The canonical local-twin ids a bare id could have on the nodes this map
     /// labels (current or retired labels name the same node), formatted the

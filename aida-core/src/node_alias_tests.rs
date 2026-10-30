@@ -220,7 +220,7 @@ fn node_alias_stored_spec_ids_cover_spec_id_and_agreed_id() {
     );
 }
 
-// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.acc7fcab | ai:claude
 #[test]
 fn bare_id_local_twins_ignore_leading_zeros_and_agreed_ids() {
     let local = format!("BUG-{}-030", NODE_A.to_ascii_uppercase());
@@ -254,6 +254,7 @@ fn bare_id_local_twins_ignore_leading_zeros_and_agreed_ids() {
     }
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.Rendering | ai:claude
 #[test]
 fn bare_id_local_twin_candidates_use_the_allocator_padding() {
     let map = home();
@@ -274,6 +275,12 @@ fn bare_id_local_twin_candidates_use_the_allocator_padding() {
     assert!(NodeAliasMap::default()
         .local_twin_candidates("TASK-1")
         .is_empty());
+    // A twin is named by its agreed id when it has one, else its alias form.
+    let twin = map.local_twin_candidates("STORY-100").remove(0);
+    let _guard = install_for_thread(map);
+    assert_eq!(local_twin_label(&twin, None), "STORY-HOME-100");
+    assert_eq!(local_twin_label(&twin, Some(" ")), "STORY-HOME-100");
+    assert_eq!(local_twin_label(&twin, Some("story-4120")), "STORY-4120");
 }
 
 #[test]

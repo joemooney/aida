@@ -323,16 +323,27 @@ fn doctor_ambiguous_ids() -> Result<()> {
 /// One report line per bare id in a description or comment that has a
 /// node-local twin: `SPEC:field:line: BARE also names local ALIAS (...)`. The
 /// local ids are indexed once by `(TYPE, number)`, so the scan is linear in
-/// the prose. Pure over `reqs` so a fixture can drive it.
+/// the prose. A twin is named by its agreed id when it has one, and a bare id
+/// that IS that twin's agreed id is not ambiguous. Pure over `reqs` so a
+/// fixture can drive it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
 pub(crate) fn ambiguous_bare_id_lines(reqs: &[aida_core::Requirement]) -> Vec<String> {
-    use aida_core::node_alias::{bare_id_tokens, display_spec_id, local_id_key, split_bare_id};
-    let mut locals: std::collections::HashMap<(String, u32), Vec<String>> = Default::default();
+    use aida_core::node_alias::{
+        bare_id_tokens, display_spec_id, local_id_key, local_twin_label, split_bare_id,
+    };
+    // (TYPE, number) -> (label, upper-cased agreed id) per local spec.
+    let mut locals: std::collections::HashMap<(String, u32), Vec<(String, Option<String>)>> =
+        Default::default();
     let mut agreed = std::collections::HashSet::new();
     for req in reqs {
         for id in req.spec_id.iter().chain(req.agreed_id.iter()) {
             match local_id_key(id) {
-                Some(key) => locals.entry(key).or_default().push(display_spec_id(id)),
+                Some(key) => locals.entry(key).or_default().push((
+                    local_twin_label(id, req.agreed_id.as_deref()),
+                    req.agreed_id
+                        .as_deref()
+                        .map(|a| a.trim().to_ascii_uppercase()),
+                )),
                 None => {
                     agreed.insert(id.trim().to_ascii_uppercase());
                 }
@@ -352,6 +363,14 @@ pub(crate) fn ambiguous_bare_id_lines(reqs: &[aida_core::Requirement]) -> Vec<St
                 let Some(twins) = split_bare_id(&token).and_then(|key| locals.get(&key)) else {
                     continue;
                 };
+                let twins: Vec<&str> = twins
+                    .iter()
+                    .filter(|(_, twin_agreed)| twin_agreed.as_deref() != Some(token.as_str()))
+                    .map(|(label, _)| label.as_str())
+                    .collect();
+                if twins.is_empty() {
+                    continue;
+                }
                 let resolves = if agreed.contains(&token) {
                     format!("bare {token} opens the agreed spec")
                 } else {

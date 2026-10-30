@@ -486,6 +486,7 @@ doctor --heal	Write	false	false	false
 doctor --json	Write	false	false	false
 doctor --since TASK-1	Write	false	false	false
 doctor --yes	Write	false	false	false
+doctor ambiguous-ids	Write	false	false	false
 doctor check --all TASK-1	Write	false	false	false
 doctor check --fail-on-findings TASK-1	Write	false	false	false
 doctor check --json TASK-1	Write	false	false	false
