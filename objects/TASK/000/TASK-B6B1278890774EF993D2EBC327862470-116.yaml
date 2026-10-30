@@ -9,12 +9,12 @@ description: |-
   2. aida-cli-lib/src/doctor_cmd.rs, test this_repo_configures_a_ceiling_for_the_show_budget (~line 4261): assert budget_ms == 2000 and reword its message/doc-comment to cite this operator host decision (TASK-HOME-116); keep the ceiling_ms.is_some() limb unchanged. Without this, CI lib-1 is red (advisor ruling 16:53, reviewer round 1 on PR-3107).
   Leave init_cmd.rs scaffold defaults unchanged (host decision).
   Validate: cargo test --profile agent -p aida-cli-lib --lib this_repo_configures_a_ceiling_for_the_show_budget, then make check-ci-fast. Commit with the plain trailer for this task and push to the PR-3109 branch.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:37:09.111996566Z
-modified_at: 2026-10-30T00:22:14.917186212Z
+modified_at: 2026-10-30T00:23:27.900407603Z
 req_type: Task
 comments:
 - id: 01a18a14-846c-7710-b8c9-963d086cdf35
@@ -22,6 +22,12 @@ comments:
   content: 'Advisor ruling 2026-10-29 16:53: reviewer round-1 finding accepted. Scope widened to the paired test edit: update aida-cli-lib/src/doctor_cmd.rs this_repo_configures_a_ceiling_for_the_show_budget to assert budget_ms == 2000, reword its message/doc-comment to cite the operator''s 2026-10-29 host decision (TASK-HOME-116), keep the ceiling_ms.is_some() limb. Validate with the single targeted test: cargo test --profile agent -p aida-cli-lib --lib this_repo_configures_a_ceiling_for_the_show_budget, then make check-ci-fast, push to the existing PR-3107 branch.'
   created_at: 2026-10-29T23:52:42.860262935Z
   modified_at: 2026-10-29T23:52:42.860262935Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+- id: 01a18a30-ab9c-7231-aa65-403000a1ea7e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Config change matches the spec exactly, but it breaks the dogfood test doctor_cmd.rs:4262 (asserts the repo''s show budget_ms == 1000); CI lib-1 is red because of this PR.. No triage reason was given.'
+  created_at: 2026-10-30T00:23:27.900405203Z
+  modified_at: 2026-10-30T00:23:27.900405203Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
 history:
 - id: 01a189cf-91da-7d81-816e-7b839b4d7b79
@@ -62,6 +68,14 @@ history:
   timestamp: 2026-10-30T00:22:15.774394377Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
   changes: []
+- id: 01a18a30-ab9c-7231-aa65-402d76b5d998
+  author: joe
+  timestamp: 2026-10-30T00:23:27.900388795Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -74,11 +88,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T22:50:46.881775244Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Config change matches the spec exactly, but it breaks the dogfood test doctor_cmd.rs:4262 (asserts the repo's show budget_ms == 1000); CI lib-1 is red because of this PR.
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-116 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-29T23:03:22.621490618Z
