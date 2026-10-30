@@ -276,6 +276,7 @@ requests one at a time with `aida pr ship N`.
 
 **Key options (rationale only).**
 - `--reason` — capture *why* it's being reworked as a comment at rework time. Do this; future-you will want the audit trail.
+- `--ruling` — record an advisor ruling on the spec. The next `aida queue work` pickup prompt leads with the latest ruling (one you passed here, or a comment whose first line starts with `Advisor ruling` or `Ruling`), so a relaunched lane works from it instead of from the description alone.
 - `--work` (+ `--resume`, `--steal`, `--permission-mode`) — also launch (or resume) a session immediately, so rework-and-pickup is one step. The pass-through flags only matter with `--work`.
 - `--force` — bypass the terminal-status / already-in-progress guards. The escape hatch for "yes, I really am reopening this." It does not override another session's live claim on the spec: end that session first (`aida session end <id>`).
 

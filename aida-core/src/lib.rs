@@ -88,6 +88,9 @@ pub mod allocation_authority;
 // trace:BUG-2017 | ai:claude
 #[cfg(feature = "native")]
 pub mod allocation_conflicts;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+#[cfg(feature = "native")]
+pub mod allocation_lineage;
 // trace:BUG-2017 | ai:codex
 pub mod conflict;
 #[cfg(all(unix, feature = "native"))]
