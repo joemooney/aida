@@ -15126,6 +15126,11 @@ Options:
           keeps the branch alive when it detects stacked children, so deleting it can't auto-close
           their PRs; pass this to orphan the children deliberately
 
+      --allow-stacked-base
+          Merge a PR whose base is not the default branch. Without this, ship refuses such a PR: a
+          stacked PR whose parent already merged would land on the parent's branch instead of the
+          default
+
       --complexity <LEVEL>
           Implementer's self-assessed actual complexity at ship time: `low` / `med` / `high`.
           Captured to `.aida/complexity-calibration/<SPEC>.yaml` alongside the punt count from
@@ -15152,14 +15157,14 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
       --no-trailer-check
           Bypass the client-side trailer spec-ID check (Guard 1). Ship even when a commit's
           `(SPEC-ID)` trailer does not resolve to a live spec. Use only when you know the trailer is
           intentional (e.g. a cross-repo id the local store can't see)
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
 
       --override-stale-check
           Retired: ship now refuses any PR whose head is behind its base branch, CI-definition
@@ -43588,6 +43593,11 @@ Working on aida itself
     ],
     "about": "Ship a PR: create-if-needed → watch CI → squash-merge → pull → worktree-aware cleanup. The direct-publish counterpart to `aida queue work PR-N --auto-complete` (which drives the full reviewer pipeline) — use this for human-pre-approved work where no orchestrator review phase is needed (docs PRs, master-signed architecture work, recovery merges)",
     "flags": [
+      {
+        "name": "allow-stacked-base",
+        "takes_value": false,
+        "help": "Merge a PR whose base is not the default branch. Without this, ship refuses such a PR: a stacked PR whose parent already merged would land on the parent's branch instead of the default"
+      },
       {
         "name": "canonical-ids",
         "takes_value": false,

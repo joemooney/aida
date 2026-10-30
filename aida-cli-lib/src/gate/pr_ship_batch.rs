@@ -49,6 +49,8 @@ pub(crate) struct PrView {
     pub draft: bool,
     pub head_sha: String,
     pub head_ref: String,
+    /// The branch the PR merges into.
+    pub base_ref: String,
     pub title: String,
     pub body: String,
 }
@@ -116,6 +118,11 @@ pub(crate) trait BatchPorts {
     fn sleep(&mut self, secs: u64);
     fn elapsed_secs(&self) -> u64;
     fn say(&mut self, line: &str);
+    /// The repository's default branch; `None` when it cannot be told.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    fn default_branch(&mut self) -> Option<String> {
+        None
+    }
     fn record(&mut self, pr: Option<u64>, outcome: &str, detail: &str);
 }
 
@@ -193,6 +200,26 @@ pub(crate) fn open_or_outcome(pr: u64, view: &PrView) -> Option<PrOutcome> {
         )),
         PrState::Open => None,
     }
+}
+
+/// BUG-HOME-042: stop on a PR whose base is not the default branch. Its
+/// parent may have merged without the PR being retargeted; refreshing and
+/// shipping it would merge it into that dead branch.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub(crate) fn stacked_base_stop(
+    pr: u64,
+    view: &PrView,
+    default: Option<&str>,
+) -> Option<PrOutcome> {
+    let default = default?;
+    if view.base_ref.is_empty() || view.base_ref == default {
+        return None;
+    }
+    Some(PrOutcome::Stopped(format!(
+        "PR #{pr} targets `{}`, not `{default}`; retarget it (`gh pr edit {pr} --base {default}`) \
+         and push a commit so CI runs, then re-run the batch",
+        view.base_ref
+    )))
 }
 
 pub(crate) fn confirm_and_ship(
@@ -330,6 +357,7 @@ pub(crate) fn parse_pr_view(v: &serde_json::Value) -> PrView {
         draft: v.get("isDraft").and_then(|d| d.as_bool()).unwrap_or(false),
         head_sha: json_str(v, "headRefOid"),
         head_ref: json_str(v, "headRefName"),
+        base_ref: json_str(v, "baseRefName"),
         title: json_str(v, "title"),
         body: json_str(v, "body"),
     }

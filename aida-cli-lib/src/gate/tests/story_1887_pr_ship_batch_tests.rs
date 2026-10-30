@@ -14,6 +14,7 @@ fn open(head: &str) -> PrView {
         draft: false,
         head_sha: head.to_string(),
         head_ref: "branch".to_string(),
+        base_ref: "main".to_string(),
         title: "title".to_string(),
         body: String::new(),
     }
@@ -46,6 +47,7 @@ struct Fake {
     said: Vec<String>,
     fetches: u32,
     recorded: Vec<(Option<u64>, String)>,
+    default_branch: Option<String>,
 }
 
 impl Fake {
@@ -169,6 +171,9 @@ impl BatchPorts for Fake {
     }
     fn record(&mut self, pr: Option<u64>, outcome: &str, _detail: &str) {
         self.recorded.push((pr, outcome.to_string()));
+    }
+    fn default_branch(&mut self) -> Option<String> {
+        self.default_branch.clone()
     }
 }
 
@@ -850,4 +855,57 @@ fn task_2194_review_wait_surfaces_ci_read_errors() {
     assert_eq!(said.len(), 1, "the same error is said once: {:?}", f.said);
     assert!(said[0].contains("retrying"), "{said:?}");
     assert!(f.shipped.is_empty());
+}
+
+// BUG-HOME-042: a PR still based on its merged parent's branch stops the
+// batch before any refresh or ship; the dry run says it would stop; a PR on
+// the default branch, or an unknown default, ships as before.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+#[test]
+fn bug_home_042_stacked_base_stops_before_refresh() {
+    let mut stacked = open("333333333333a");
+    stacked.base_ref = "task-106-work".to_string();
+    stacked.behind = true;
+    let mut f = ready(Fake::human(), 2, "222222222222a")
+        .views(3, vec![stacked.clone()])
+        .answers(&["go", "3", "2"]);
+    f.default_branch = Some("main".to_string());
+    let out = run_batch(&mut f, &[3, 2], OPTS).unwrap();
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert!(
+        matches!(&out[0], (3, PrOutcome::Stopped(why))
+            if why.contains("targets `task-106-work`, not `main`")
+                && why.contains("gh pr edit 3 --base main")),
+        "{out:?}"
+    );
+    assert!(
+        f.updates.is_empty() && f.shipped.is_empty(),
+        "nothing refreshed or shipped"
+    );
+
+    let dry = BatchOptions {
+        dry_run: true,
+        ..OPTS
+    };
+    let mut f = Fake::human().views(3, vec![stacked]);
+    f.default_branch = Some("main".to_string());
+    let out = run_batch(&mut f, &[3], dry).unwrap();
+    assert!(
+        matches!(&out[0].1, PrOutcome::Planned(p) if p.contains("targets `task-106-work`")
+            && p.contains("the batch would stop here")),
+        "{out:?}"
+    );
+
+    let mut f = ready(Fake::human(), 2, "222222222222a").answers(&["go", "2"]);
+    f.default_branch = Some("main".to_string());
+    assert_eq!(
+        run_batch(&mut f, &[2], OPTS).unwrap()[0].1,
+        PrOutcome::Shipped
+    );
+}
+
+#[test]
+fn bug_home_042_parse_pr_view_reads_the_base() {
+    let v = serde_json::json!({"state": "OPEN", "baseRefName": "task-106-work"});
+    assert_eq!(parse_pr_view(&v).base_ref, "task-106-work");
 }
