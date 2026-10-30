@@ -16,12 +16,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3119` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T05:11:05.337047748Z
-modified_at: 2026-10-30T05:11:45.328622966Z
+modified_at: 2026-10-30T07:40:42.737268676Z
 req_type: Story
 relationships:
 - rel_type:
@@ -29,12 +29,25 @@ relationships:
   target_id: 01a18b1d-9aef-70e0-bf2c-13c0560ee242
   created_at: 2026-10-30T05:11:45.328619446Z
   created_by: joe
+comments:
+- id: 01a18bc0-fb71-7cc0-90e6-75684595a7dc
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3119 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-30T07:40:42.737267405Z
+  modified_at: 2026-10-30T07:40:42.737267405Z
 history:
 - id: 01a18b38-a63a-7572-87c4-441c15104ee9
   author: joe
   timestamp: 2026-10-30T05:11:48.026241789Z
   session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
   changes: []
+- id: 01a18bc0-fb71-7cc0-90e6-75561360693c
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:40:42.737255907Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 822accb470dbfe9049604dc70a75c2b72db4c259
   branch: docs/task-home-123-speckit-kiro-refresh
@@ -43,3 +56,7 @@ filed_at:
   aida_build_sha: f0dfbd03d09
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-30T07:40:42.737251059Z
+  completion_sha: 170f657817b5ccdc6ba82a8e26de62e57ae00f85
