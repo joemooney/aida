@@ -63,9 +63,21 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
         return Ok(());
     }
 
+    // trace:STORY-HOME-096 | ai:claude — WAKE: the session's mail-wake state.
     println!(
-        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} WORKTREE",
-        "HANDLE", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
+        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<14} {:<24} WORKTREE",
+        "HANDLE",
+        "PID",
+        "TTY",
+        "KIND",
+        "ROLE",
+        "SPEC",
+        "SCOPE",
+        "STATUS",
+        "AGE",
+        "CPU",
+        "WAKE",
+        "DESC"
     );
     let now = chrono::Utc::now();
     let notes = unobserved_liveness_notes(&agents, observer);
@@ -130,7 +142,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
                     .unwrap_or_else(|| "?".to_string())
             };
             println!(
-                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} {}{}",
+                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<14} {:<24} {}{}",
                 identity,
                 pid_str,
                 terminal,
@@ -146,6 +158,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
                 ),
                 format!("({elapsed})"),
                 cpu,
+                crate::mail_wake::wake_cell(&agent.agent_type, agent.mail_wake),
                 desc,
                 agent.worktree_path.display(),
                 paused_note

@@ -87,6 +87,16 @@ pub const GIT_INDEX_LOCK: &[&str] = &[
     "unable to create",
     "another git process seems to be running",
 ];
+/// Git 2.43.x: a `.lock` file held by a concurrent git process — the index,
+/// `HEAD`, or a branch ref. The first token is required with any later one.
+/// "Unable to create" alone is not contention: it also prefixes permanent
+/// failures such as "Permission denied" or "Read-only file system".
+// trace:BUG-034 | ai:claude
+pub const GIT_LOCK_CONTENTION: &[&str] = &[
+    ".lock",
+    "file exists",
+    "another git process seems to be running",
+];
 /// Git 2.43.x: a commit had no staged tree change.
 // trace:BUG-1815 | ai:antigravity
 pub const GIT_NOTHING_TO_COMMIT: &[&str] = &["nothing to commit", "nothing added to commit"];
