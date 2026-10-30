@@ -308,7 +308,7 @@ pub(super) fn live_approval(
         None,
         Some(head),
     );
-    let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
+    let site = crate::gate::review_carryover::CarryOverSite::read_only(root, Some(&change.base));
     approval_then_corpus(
         || approval_at(change.id, &candidates, head, &policy, &site),
         || corpus_at(root, change, &ids),
@@ -330,7 +330,7 @@ pub(super) fn live_approval_only(
         None,
         Some(head),
     );
-    let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
+    let site = crate::gate::review_carryover::CarryOverSite::read_only(root, Some(&change.base));
     approval_at(change.id, &candidates, head, &policy, &site)
 }
 
@@ -360,6 +360,7 @@ pub(super) fn corpus_at(
         ids,
         Some(&change.base),
         || Some(change.head.clone()),
+        false,
     ) {
         Ok(crate::gate::merge_hold_core::CorpusMergeGate::Clear) => Ok(()),
         Ok(crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. }) => Err(message),
@@ -426,7 +427,7 @@ pub(super) fn approval_at(
     candidates: &[crate::gate::review_verdict::RecordedVerdict],
     head: &str,
     policy: &crate::gate::ship::ShipApprovalPolicy,
-    site: &crate::review_carryover::CarryOverSite<'_>,
+    site: &crate::gate::review_carryover::CarryOverSite<'_>,
 ) -> std::result::Result<Approval, String> {
     debug_assert!(site.quiet, "readiness never records a carry-over");
     let carried = match crate::gate::approval::approval_decision(

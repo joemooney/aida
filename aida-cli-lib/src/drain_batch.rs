@@ -1455,15 +1455,21 @@ pub(crate) fn open_cluster_pr(
         anyhow::bail!("`git push -u origin {branch}` failed — investigate before retrying");
     }
     aida_core::git_ops::repair_push_upstream(project_root, "origin", Some(branch), branch);
-    let change = crate::forge::forge_for_open_change(project_root)
-        .open_change(crate::forge::OpenChange {
+    // STORY-080 AC2: every member spec the cluster names binds its pre-PR
+    // verdicts to the cluster change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let change = crate::gate::ledger::open_change_bound(
+        &*crate::forge::forge_for_open_change(project_root),
+        project_root,
+        crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
             title: title.to_string(),
             body: body.to_string(),
             draft: false,
-        })
-        .context("could not open the cluster pull request")?;
+        },
+        &crate::pr_ship::extract_spec_ids_from_text(&format!("{title}\n{body}")),
+    )
+    .context("could not open the cluster pull request")?;
     if change.id == 0 {
         anyhow::bail!(
             "the cluster pull request opened but no number was found in its output: {}",

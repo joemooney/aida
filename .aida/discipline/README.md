@@ -42,6 +42,11 @@ The full workspace suite runs only in CI, at the PR head. Never run
 | LIGHT (the default) | ONE targeted `cargo test --profile agent -p <crate> <module filter>` run plus `make check-ci-fast`, then push; CI's full shards are the gate |
 | STRICT, or heft >= 7 | LIGHT plus the area's integration test binaries (`cargo test --profile agent -p <crate> --test <name>`) |
 
+A change that adds or changes a CLI command or flag, in any tier, regenerates
+the help golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot`
+and commits `aida-cli-lib/src/tests/golden/cli_help_snapshot.txt`; `make check-ci-fast` fails
+when an `*_args.rs` or `command_registry.rs` edit ships without it.
+
 `make check-ci-fast` runs before every push. `make test-touched` and
 `make check-ci-compile` are conditional: run them only when the change touches
 shared test infra (`test_env`, `test_git`, ratchet baselines) or more than 10

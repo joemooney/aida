@@ -15,6 +15,35 @@ The script above wakes one advisor thread for advisor mail. To wake other Codex
 agents for their **own** mail, use the project's single mail-wake service. It
 runs `aida mailbox wake-run` and watches every agent that is armed for mail wake.
 
+`aida agent new codex` arms this for you. The launch marks the agent's registry
+row `pending`. The Codex thread id first reaches AIDA through the agent's own
+SessionStart hook, so once that hook records the exact thread it arms the row
+and installs the project's service if it is missing (a bounded `systemctl
+--user` call). It never guesses the thread or uses `--last`. If arming fails,
+the agent still starts and AIDA prints the exact commands to run by hand. When
+the launcher and the hook both try to arm one launch, a success wins: the row
+reads `armed` even if the other attempt failed first. Ending
+the agent, or `aida agent gc` finding its process gone, retires the row; the
+ledger is kept.
+
+- `--no-mail-wake` opts one launch out. `[agents.codex] mail_wake = false` in
+  `~/.aida/agents.toml` or `.aida/agents.toml` makes off the default. A value
+  that is not `true` or `false` gets a warning, and the launch uses the default.
+- Codex older than 0.164.0 has no `codex queue`: the launch warns and the row
+  reads `unsupported`. Antigravity launches warn once that mail arrives on the
+  next turn.
+- `aida agent ls` shows a `WAKE` column: `armed`, `pending-thread`, `failed`,
+  `off`, `unsupported`, `retired`, or `-`.
+- `aida doctor check codex-mail-wake` reads every armed agent's thread health
+  (stale snapshots, unread accepted mail, uncertain submissions) as well as the
+  advisor registration below. It also lists every live agent whose wake
+  `failed`, or is still `pending` ten minutes after it started, with the exact
+  commands that arm it by hand. `wake-service install` prints the
+  `[[schedule.jobs]]` block that runs it every 15 minutes; add it to
+  `.aida/config.toml` yourself.
+
+By hand:
+
 ```bash
 aida mailbox wake-service install --dry-run   # print the user unit
 aida mailbox wake-service install             # from the main checkout

@@ -439,7 +439,6 @@ default_limit = 10
 "requirements_cli" = 1.9
 "resolve_gh_binary_tests" = 0.3
 "review_authority" = 0.6
-"review_carryover" = 4.8
 "review_gates" = 0.7
 "review_verdict" = 0.4
 "reviewer_summary" = 0.1

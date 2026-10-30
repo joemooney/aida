@@ -8993,15 +8993,65 @@ pub(crate) fn preclaim_collision_check(
     PreclaimDecision::Proceed
 }
 
+/// BUG-022: whether this pickup resolves the spec's open PR head as its
+/// branch. `aida queue rework` sends a refused spec back to Approved, which the
+/// status test alone reads as a fresh pickup — so a Rework hold standing on
+/// the spec's PR also qualifies. An explicit `--branch` always wins: it is the
+/// deliberate way to start a new branch instead.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+pub(crate) fn queue_work_wants_rework_pr_branch(
+    plan: &QueueWorkPlan,
+    explicit_branch: Option<&str>,
+    spec_rework_held: bool,
+) -> bool {
+    explicit_branch.is_none()
+        && (queue_work_plan_wants_pr_head_branch(plan)
+            || (spec_rework_held && plan.review_target.is_none() && plan.entries.len() == 1))
+}
+
+/// BUG-022: an open PR carrying a Rework hold for the spec is the spec's PR —
+/// the hold record names the spec, so no title/branch match is needed.
+/// Any other open PR still has to name the spec (BUG-1074).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+pub(crate) fn rework_pr_head_accepted(
+    held_prs: &[u64],
+    pr_number: u64,
+    matches_spec: impl FnOnce() -> bool,
+) -> bool {
+    held_prs.contains(&pr_number) || matches_spec()
+}
+
+/// BUG-022: the PRs whose Rework hold names `spec`, read from the primary's
+/// merge-hold markers. Ids are compared canonically, so a node-label id and
+/// its node-local twin match.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+fn rework_held_prs_for_spec(project_root: &std::path::Path, spec: &str) -> Vec<u64> {
+    use crate::gate::merge_hold_core as mh;
+    let canonical = |id: &str| aida_core::node_alias::expand_or_keep(id).to_ascii_uppercase();
+    let wanted = canonical(spec);
+    let root = mh::hold_store_root(project_root);
+    mh::list_holds(&root)
+        .into_iter()
+        .filter_map(|(pr, _)| mh::read_hold_record(&root, pr).map(|r| (pr, r)))
+        .filter(|(_, r)| r.reason_kind == mh::HoldReasonKind::Rework)
+        .filter(|(_, r)| r.spec.as_deref().is_some_and(|s| canonical(s) == wanted))
+        .map(|(pr, _)| pr)
+        .collect()
+}
+
 fn rework_pr_head_branch_override(
     project_root: &std::path::Path,
     plan: &QueueWorkPlan,
     explicit_branch: Option<&str>,
-) -> Option<String> {
-    if explicit_branch.is_some() || !queue_work_plan_wants_pr_head_branch(plan) {
+) -> Option<(u64, String)> {
+    if explicit_branch.is_some() || plan.review_target.is_some() || plan.entries.len() != 1 {
         return None;
     }
     let spec = plan.entries.first()?.spec_id.as_str();
+    let held_prs = rework_held_prs_for_spec(project_root, spec);
+    if !queue_work_wants_rework_pr_branch(plan, explicit_branch, !held_prs.is_empty()) {
+        return None;
+    }
     // BUG-1023: a findings-led rework belongs on the already-open PR branch.
     // Seed session_start with that head so the implementer lease and phase 2
     // drive the same branch instead of deriving the plain spec branch.
@@ -9018,10 +9068,13 @@ fn rework_pr_head_branch_override(
     let Some(head_branch) = pr.head_branch.filter(|branch| !branch.trim().is_empty()) else {
         return None;
     };
-    let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
-        .map(|meta| meta.body)
-        .unwrap_or_default();
-    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body).then_some(head_branch)
+    rework_pr_head_accepted(&held_prs, pr.number, || {
+        let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
+            .map(|meta| meta.body)
+            .unwrap_or_default();
+        rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body)
+    })
+    .then_some((pr.number, head_branch))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11631,8 +11684,16 @@ pub(crate) fn handle_queue_work(
     // lease creation, or status writes. Shell roles route; grants authorize.
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
-    let rework_branch_override =
-        rework_pr_head_branch_override(&project_root, &plan, branch_override);
+    let rework_pr = rework_pr_head_branch_override(&project_root, &plan, branch_override);
+    // BUG-022: say where the rework goes, and how to fork instead.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+    if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
+        eprintln!(
+            "  rework: continuing open PR #{pr} on its branch `{branch}`; \
+             pass --branch <name> to start a new branch instead"
+        );
+    }
+    let rework_branch_override = rework_pr.map(|(_, branch)| branch);
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
     // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
     // --path or --branch naming another one refuses rather than guess.
@@ -12529,8 +12590,19 @@ pub(crate) fn handle_queue_work(
             // they suggest is unambiguous.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
             let conflict_id = conflict.id.as_str();
+            // A dead lease whose worktree is gone has nothing left to lose, so
+            // it is released without `--force-claim`; only a verdict of
+            // ReclaimableClean { worktree_missing: true } is released here.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+            let released_gone = crate::session_reap::release_gone_worktree_lease(
+                &project_root_for_conflict,
+                &conflict,
+                &recovery.verdict,
+            );
             match &recovery.verdict {
-                StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
+                StaleLeaseRecovery::ReclaimableClean { worktree_missing }
+                    if force_claim || released_gone =>
+                {
                     eprintln!(
                         "  {} released orphaned lease {} ({})",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -12541,7 +12613,9 @@ pub(crate) fn handle_queue_work(
                             "owning session gone, worktree clean".dimmed()
                         }
                     );
-                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    if !released_gone {
+                        let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    }
                     remaining -= 1;
                     if remaining == 0 {
                         anyhow::bail!(
@@ -12810,6 +12884,9 @@ pub(crate) fn handle_queue_work(
         || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
     let preclaim_bypass = force_claim
         || queue_work_plan_wants_pr_head_branch(&plan)
+        // BUG-022: the open PR is the one this pickup continues, not a
+        // collision. trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+        || rework_branch_override.is_some()
         || preclaim_review_session
         || preclaim_orchestrator_corroborated
         || resume.is_some()
@@ -13624,6 +13701,35 @@ pub(crate) fn release_refused_review_lease(
     true
 }
 
+/// A standalone reviewer has exited: once its verdict is on the ledger, its
+/// review (`scope` over this review's own `worktree`) is reaped — tree,
+/// lease, and review branch — so neither the lease nor the tree blocks the
+/// next review of the PR. With no verdict collected, the tree is what the
+/// recovery text points at, so the review is kept; a review the reap refuses
+/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
+/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn end_finished_review(
+    project_root: &std::path::Path,
+    scope: &str,
+    worktree: &std::path::Path,
+    verdict_collected: bool,
+) -> Vec<(String, std::result::Result<String, String>)> {
+    list_leases(project_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
+        .map(|l| {
+            let outcome = if verdict_collected {
+                crate::session_reap::reap_finished_review(project_root, &l)
+            } else {
+                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+            };
+            (l.id, outcome)
+        })
+        .collect()
+}
+
 /// Advisor comment 35: whether a failed pickup's lease is released — only a
 /// PR-scoped review pickup whose child grant was refused. An implementer's
 /// lease stays for the manual continuation.
@@ -13993,6 +14099,34 @@ pub(crate) fn run_standalone_reviewer(
                 "  {} could not arm PR-{pr}'s merge hold for the reviewer's refusal ({err}) — run `aida merge-hold add {pr}` before shipping",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             ),
+        }
+    }
+
+    // The reviewer has exited and its verdict is collected (or known to be
+    // missing): its finished review is reaped now, before any exit path
+    // below. A launcher still sitting in the tree steps out of it first; any
+    // other cwd is left alone (it is process-wide state).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+    if std::env::current_dir().is_ok_and(|cwd| {
+        cwd.starts_with(worktree)
+            || worktree
+                .canonicalize()
+                .is_ok_and(|tree| cwd.starts_with(tree))
+    }) {
+        let _ = std::env::set_current_dir(project_root);
+    }
+    for (id, outcome) in end_finished_review(project_root, scope, worktree, collected.is_ok()) {
+        let id = &id[..id.len().min(8)];
+        match outcome {
+            Ok(_) if !quiet => eprintln!(
+                "  {} ended reviewer session {id} for PR-{pr} and removed its review tree",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            Err(why) if !quiet => eprintln!(
+                "  {} kept reviewer session {id} for PR-{pr}: {why}",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            _ => {}
         }
     }
 
