@@ -2,12 +2,12 @@ id: 01a18a3d-be2c-7952-8f76-9b72ff576e7b
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-021
 title: Headless rework lanes ignore advisor rulings left as spec comments; they read only the description
 description: '2026-10-29: rulings for TASK-HOME-116 (16:53) and STORY-080 round 2 (17:07) were written with aida comment add; the relaunched lanes worked from the description alone (PR-3109 repeated the config-only change; CI lib-1 red again). Acceptance: queue work / pickup brief includes advisor ruling comments newer than the last push (or the latest Ruling-tagged comment), and aida rework offers --ruling to append to the brief.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:37:44.620197146Z
-modified_at: 2026-10-30T01:06:07.253700742Z
+modified_at: 2026-10-30T01:34:00.908343047Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -27,6 +27,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18a71-42cc-7583-8ddf-7102933db02b
+  author: aida-session-start
+  timestamp: 2026-10-30T01:34:00.908340373Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
