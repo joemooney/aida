@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "advisor"
   },
-  "timestamp": 1793149411,
+  "timestamp": 1793149411000,
   "body": "PR-2994 reached the two-round review cap: the reviews of `c455ee0b7544ac997305c84044f60df9b4b45f7f`, `dc30119a8914b67e3549ade612434de51e1dce34` each blocked done. Its head 6f264fe2006460884e62bc58532bf7acd91049b8 has no review, and the watcher will not start another. Decide the next step: review the head by hand, or re-scope or close the change. Its findings are in `.aida/review-verdicts/PR-2994.json`.",
   "subject": "PR-2994: two-round review cap reached",
   "urgent": false,

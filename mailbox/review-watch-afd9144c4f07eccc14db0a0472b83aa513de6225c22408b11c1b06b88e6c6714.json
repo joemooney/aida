@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "joemooney"
   },
-  "timestamp": 1792983279,
+  "timestamp": 1792983279000,
   "body": "PR-2936 at 4bb388f4235051a59b94ae7e10dc5e1ef209e784 is behind its base branch `main` with overlapping paths. Merge `main` into the branch and push before review. The watcher did not update the branch.",
   "subject": "PR-2936: merge `main` before review",
   "urgent": false,

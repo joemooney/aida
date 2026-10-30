@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "joemooney"
   },
-  "timestamp": 1792997792,
+  "timestamp": 1792997792000,
   "body": "PR-2938 at 86f7fe118a5e572e55280f3e8f546c06b042749a: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 8 finding(s), round 1 of 2. The findings are in `.aida/review-verdicts/PR-2938.json` and `.aida/review-verdicts/PR-2938/86f7fe118a5e572e55280f3e8f546c06b042749a.json`. Address them and push a new head; the watcher starts its review when it sees the head.",
   "subject": "PR-2938: review requested changes (round 1 of 2)",
   "urgent": false,

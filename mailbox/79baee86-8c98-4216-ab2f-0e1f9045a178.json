@@ -1,0 +1,19 @@
+{
+  "id": "79baee86-8c98-4216-ab2f-0e1f9045a178",
+  "thread_id": "79baee86-8c98-4216-ab2f-0e1f9045a178",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1793385298543,
+  "body": "PR-3103 is MERGED: stack 107-113 is on main, and 3097-3102 are closed as included. TASK-HOME-128 is APPROVED. Start now in a fresh worktree from origin/main, per the 11:05 ruling on EPIC-HOME-002 and my brief: the gap table, the 4 PR-3103 findings, the 2 PR-3096 findings, and fixes for every gap, in ONE PR. Gate: FASTTRACK. Mail the advisor the PR number. After that: PR-3130 (resolve_aida_exe one-liner) and PR-3122 (merge main).",
+  "subject": "GO: PR-3103 merged; start TASK-HOME-128",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

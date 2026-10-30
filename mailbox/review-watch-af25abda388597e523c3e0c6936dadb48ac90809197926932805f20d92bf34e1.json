@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "joemooney"
   },
-  "timestamp": 1793113650,
+  "timestamp": 1793113650000,
   "body": "PR-2973 at 5eedc265993f11ae75c6c68fe1d3d092b07ef979 is behind its base branch `story-1843-c1` with overlapping paths. Merge `story-1843-c1` into the branch and push before review. The watcher did not update the branch.",
   "subject": "PR-2973: merge `story-1843-c1` before review",
   "urgent": false,

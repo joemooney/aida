@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "advisor"
   },
-  "timestamp": 1793114718,
+  "timestamp": 1793114718000,
   "body": "PR-2949 at a6cba889bf5277f085fe6dadf345a8bb62f3e9be is ready to ship: an authorized approval of a6cba889bf5277f085fe6dadf345a8bb62f3e9be covers the head, every CI check on a6cba889bf5277f085fe6dadf345a8bb62f3e9be passed, it is 0 commits behind `main`, and no merge hold or review in progress is recorded. Run `aida pr ship 2949` to merge it. The watcher only reports; it did not merge or update the branch.",
   "subject": "PR-2949: ready to ship",
   "urgent": false,

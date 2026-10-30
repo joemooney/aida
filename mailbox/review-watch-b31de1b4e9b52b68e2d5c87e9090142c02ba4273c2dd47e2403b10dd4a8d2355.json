@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "advisor"
   },
-  "timestamp": 1792958762,
+  "timestamp": 1792958762000,
   "body": "PR-2930 at bb72604900720cc8862b44bb2508a2bcb604faf8 is ready to ship: an authorized approval of bb72604900720cc8862b44bb2508a2bcb604faf8 covers the head, every CI check on bb72604900720cc8862b44bb2508a2bcb604faf8 passed, it is 0 commits behind `main`, and no merge hold or review in progress is recorded. Run `aida pr ship 2930` to merge it. The watcher only reports; it did not merge or update the branch.",
   "subject": "PR-2930: ready to ship",
   "urgent": false,

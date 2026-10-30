@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "advisor"
   },
-  "timestamp": 1793162885,
+  "timestamp": 1793162885000,
   "body": "PR-3002 at 8df2b0173babb17067d14bde5f2503148e205800 is ready to ship: an authorized approval of 8df2b0173babb17067d14bde5f2503148e205800 covers the head, every CI check on 8df2b0173babb17067d14bde5f2503148e205800 passed, it is 0 commits behind `main`, and no merge hold or review in progress is recorded. Run `aida pr ship 3002` to merge it. The watcher only reports; it did not merge or update the branch.",
   "subject": "PR-3002: ready to ship",
   "urgent": false,

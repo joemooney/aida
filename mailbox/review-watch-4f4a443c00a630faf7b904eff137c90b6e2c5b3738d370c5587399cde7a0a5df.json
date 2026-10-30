@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "advisor"
   },
-  "timestamp": 1793084250,
+  "timestamp": 1793084250000,
   "body": "PR-2950 at 7b9743b0cbaeb47a6e324f0c9dcda75990f2424b is ready to ship: an authorized approval of 7b9743b0cbaeb47a6e324f0c9dcda75990f2424b covers the head, every CI check on 7b9743b0cbaeb47a6e324f0c9dcda75990f2424b passed, it is 1 commit(s) behind `main` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 2950`, then run `aida pr ship 2950` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
   "subject": "PR-2950: ready to ship after its branch is updated",
   "urgent": false,

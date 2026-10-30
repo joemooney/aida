@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "joemooney"
   },
-  "timestamp": 1793028717,
+  "timestamp": 1793028717000,
   "body": "PR-2952 at c1acc33c89bd66c6143603fe55505d2338d36ed7 is behind its base branch `story-1843-b2` with overlapping paths. Merge `story-1843-b2` into the branch and push before review. The watcher did not update the branch.",
   "subject": "PR-2952: merge `story-1843-b2` before review",
   "urgent": false,

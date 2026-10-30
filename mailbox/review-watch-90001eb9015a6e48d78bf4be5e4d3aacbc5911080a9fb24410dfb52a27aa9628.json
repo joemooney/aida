@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "advisor"
   },
-  "timestamp": 1793084338,
+  "timestamp": 1793084338000,
   "body": "PR-2952 at 38bdccd26add3aa8e94c61f1f4c070efb599f52b is ready to ship: an authorized approval of 12a382bd5fbd8361f5814d17df76741ce34a1193 (carried over clean merges of `main` to the head, the PR's own diff unchanged) covers the head, every CI check on 38bdccd26add3aa8e94c61f1f4c070efb599f52b passed, it is 1 commit(s) behind `main` on paths it does not touch, and no merge hold or review in progress is recorded. Update the branch with `gh pr update-branch 2952`, then run `aida pr ship 2952` once CI on the new head is green. The watcher only reports; it did not merge or update the branch.",
   "subject": "PR-2952: ready to ship after its branch is updated",
   "urgent": false,

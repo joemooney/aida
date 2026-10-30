@@ -6,7 +6,7 @@
     "kind": "agent",
     "agent": "joemooney"
   },
-  "timestamp": 1793148096,
+  "timestamp": 1793148096000,
   "body": "PR-2994 at dc30119a8914b67e3549ade612434de51e1dce34: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 3 finding(s), round 2 of 2. The findings are in `.aida/review-verdicts/PR-2994.json`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
   "subject": "PR-2994: review requested changes (round 2 of 2)",
   "urgent": false,
