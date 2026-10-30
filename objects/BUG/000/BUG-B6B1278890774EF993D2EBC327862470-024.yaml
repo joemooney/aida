@@ -2,12 +2,12 @@ id: 01a18a3e-f42a-7a10-8ec0-e11746b63e44
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-024
 title: Finished reviewer sessions linger and block the next review of the same PR
 description: '2026-10-29: reviewer lease 01a189c1 (worktree GONE) blocked aida queue work PR-3106 --role reviewer; dormant reviewer sessions for merged PR-3105 and ruled PR-3107 stayed in aida ps. Acceptance: a reviewer session ends its lease when its verdict is written or the reviewer process exits; a lease whose worktree is gone is reaped automatically.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T10:15:48.026192142Z
+modified_at: 2026-10-30T10:26:17.171676175Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -62,6 +62,15 @@ history:
   timestamp: 2026-10-30T10:15:49.836799967Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c58-91d3-7372-b777-59a6409c8092
+  author: aida-orchestrator
+  timestamp: 2026-10-30T10:26:17.171693972Z
+  session_id: 01a18c53e60f
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -74,3 +83,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T10:13:42.480539593Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Gone-worktree release, id round-trip and reviewer-exit release all work, but ending the reviewer lease at exit orphans the aida-pr-N review worktree: the post-merge dead-reviewer reap that tears it down keys on that lease.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-024 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T10:26:17.171676175Z
