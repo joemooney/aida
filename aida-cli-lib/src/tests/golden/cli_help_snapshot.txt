@@ -23626,6 +23626,10 @@ Options:
           Capture a comment on the spec at rework time (added via the same path as `aida comment
           add`). Useful for the audit trail of why a Done or Completed spec is being re-opened
 
+      --ruling <TEXT>
+          Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling,
+          so a relaunched lane works from it rather than from the description alone
+
       --resume
           Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
           cold-launching. Implies `--work`
@@ -23644,13 +23648,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          When chaining `--work`, end any session holding the target scope first (passes through to
-          `aida queue work --steal`)
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          When chaining `--work`, end any session holding the target scope first (passes through to
+          `aida queue work --steal`)
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`; passed to `aida queue work --permission-mode`)
@@ -24326,6 +24330,9 @@ Options:
       --reason <REASON>
           Capture a comment on the spec at rework time
 
+      --ruling <TEXT>
+          Record an advisor ruling the next pickup prompt leads with
+
       --resume
           Chain `aida queue work --resume`
 
@@ -24342,12 +24349,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          Pass `--steal` through to chained `aida queue work`
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          Pass `--steal` through to chained `aida queue work`
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`)
@@ -52038,6 +52045,11 @@ Working on aida itself
         "help": "Chain `aida queue work --resume` to resume a prior claude session for this spec instead of cold-launching. Implies `--work`"
       },
       {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling, so a relaunched lane works from it rather than from the description alone"
+      },
+      {
         "name": "status",
         "takes_value": true,
         "help": "Override the smart target status. Pass any status string (`in-progress`, `approved`, `planned`, …); the smart table above is bypassed"
@@ -52748,6 +52760,11 @@ Working on aida itself
         "name": "resume",
         "takes_value": false,
         "help": "Chain `aida queue work --resume`"
+      },
+      {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling the next pickup prompt leads with"
       },
       {
         "name": "status",
