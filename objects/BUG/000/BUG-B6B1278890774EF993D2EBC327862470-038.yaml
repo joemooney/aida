@@ -2,12 +2,12 @@ id: 01a18c84-6948-7090-a032-b6fd22c81261
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-038
 title: Some contained seat clones are flagged 'writable git config/hooks', so the lane can never publish (BUG-HOME-037 seats, twice)
 description: '2026-10-30: two consecutive --fresh implementer seats for BUG-HOME-037 committed a fix, but `aida ship` refused to run git in the seat (''the seat can write to its git config and hooks''), and the host''s `aida ship` from the primary refused the same way. Other --fresh seats launched the same night (BUG-HOME-024, 034, 035, 036) published fine. The advisor inspected the clone''s .git/config (stock: core plus origin) and hooks (none), then published by fetching from the clone (PR-3133). Acceptance: (1) find why these seats were created with seat-writable git metadata (likely the clone''s .git is not made read-only for the seat, or a sandbox profile difference) and fix it at creation; (2) when the guard refuses, offer a host-side verified publish path: `aida ship --from-seat <clone>` inspects config and hooks and fetches the commit, and never runs the seat''s hooks; (3) test both.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T16:09:41.173904804Z
+modified_at: 2026-10-30T16:13:46.080876579Z
 req_type: Bug
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
@@ -18,6 +18,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18d96-b2e0-7b40-962a-7e411cfcd73e
+  author: joe
+  timestamp: 2026-10-30T16:13:46.080913619Z
+  session_id: 01a18d92f173
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3bd7aa16acf3a54b66bc3527d40d93494092a7f0
   branch: main
@@ -26,3 +35,9 @@ filed_at:
   aida_build_sha: d3d60856bea
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+attention_reason:
+  category: design-fork
+  detail: 'Root cause differs from the spec''s premise, and both fixes change a security boundary with a recorded advisor ruling. FINDINGS: (a) No creation difference. Seats 021-041 and the parked 037 clone all have the same layout (real .git dir plus marker). Inside the seat, Claude''s sandbox already mounts .git/config, hooks/ and info/ read-only. (b) host_git_command (aida-core/src/git_ops.rs:136) refuses EVERY seat clone: seat_clone_detect::seat_clone_root matches by the aida-seat-* name, so the refusal text ''its git configuration and hooks are writable by the seat'' fires for any clone, host or seat. (c) In aida ship, ship::tracked_changes_pending (aida-cli-lib/src/ship.rs:185) treats that refusal as ''tracked changes pending''. So step 1 always runs, and its refuse_staged_sandbox_placeholders host-git call fails even on a clean tree. Reproduced in this seat: the tree is clean, yet ''aida ship <spec> --no-merge --dry-run'' plans ''1. commit uncommitted work''. Any seat clone that publishes through aida ship hits this; lanes that published presumably used raw git push and gh. FORK 1 (seat side): letting the ship prefix run git in its own clone means relaxing host_git_command''s BUG-2169 refusal (seat_clone.rs module doc: ''advisor signoff, condition 1''). The alternative leaves the refusal in place and only stops reporting it as dirty work, which still cannot commit. FORK 2 (host side): the spec asks that ''--from-seat fetches the commit''. seat_clone::salvage records the rule ''The host never fetches from the clone: that would run upload-pack in a repository the seat controls'' (TASK-2053). The publish path must either break that rule or go through a sandboxed bundle. The CLAUDE.md architecture rule requires a sketch plus advisor signoff before implementation.'
+  lean: 'Seat side: in ship, stop reading a host-git refusal as dirty work (tracked_changes_pending should surface the refusal). Also allow the ship prefix''s git in a seat clone only when this process is proven contained by the filesystem: it cannot write <main>/.git, the same test as store_commit_deferred_to_host, never AIDA_CONTAINED. Run it through a seat_clone accessor, so the seat''s own config only ever runs inside its own sandbox. Host side: add ''aida ship --from-seat <clone>''. It verifies the clone (main_for / host_recorded_clone), runs the existing SALVAGE_BUNDLE_SCRIPT-style bundle of just the branch inside probe_sandbox_args, fetches the BUNDLE into main (never ''git fetch <clone>''), reports the clone''s config/hooks for audit, then pushes the branch from main and opens the PR. Tests: a unit test that a refusal is not ''pending''; a fixture seat clone with a planted hooks/pre-push and core.hooksPath, which --from-seat publishes without running the planted hook.'
+  raised_by: implementer
+  raised_at: 2026-10-30T16:13:46.080876579Z
