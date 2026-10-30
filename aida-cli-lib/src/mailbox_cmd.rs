@@ -14,7 +14,7 @@
 //! `digest_mailbox_to_canonical`) stay in `main.rs`; this dispatcher reaches
 //! them via `crate::`.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use colored::Colorize;
 use std::io::Read;
 
@@ -224,8 +224,13 @@ pub(crate) fn handle_mailbox_command(
             // caller budget is the explicit read profile.
             // trace:STORY-1843 | ai:claude
             let root = local_root.as_deref().unwrap_or(project_root);
-            let audience =
-                crate::mailbox_wake::audience_for(&crate::mailbox_view::own_audience(), recipient)?;
+            // trace:STORY-HOME-096 | ai:claude — narrows only: this CLI never
+            // holds the watcher's lock, so it reads only the caller's own mail.
+            let audience = crate::mailbox_wake::audience_for_recipient(
+                &crate::mailbox_view::own_audience(),
+                recipient,
+                None,
+            )?;
             let snapshot = crate::mailbox_wake::snapshot(
                 root,
                 store_root,
@@ -234,6 +239,58 @@ pub(crate) fn handle_mailbox_command(
             )?;
             println!("{}", serde_json::to_string(&snapshot)?);
             Ok(())
+        }
+        // trace:STORY-HOME-096 | ai:claude
+        MailboxCommand::WakeRun {
+            project,
+            codex,
+            interval,
+            batch_seconds,
+            once,
+            recover,
+            accepted,
+            retry: _,
+        } => {
+            let project = project
+                .as_deref()
+                .unwrap_or(project_root)
+                .canonicalize()
+                .context("resolving --project")?;
+            let state_root = crate::mailbox_wake_run::state_root(&project);
+            if let Some(thread) = recover {
+                let recovered =
+                    crate::mailbox_wake_run::recover_thread(&state_root, thread, *accepted)?;
+                println!("{}", serde_json::json!({ "recovered": recovered }));
+                return Ok(());
+            }
+            if !(1..=3600).contains(interval) || !(0.0..=300.0).contains(batch_seconds) {
+                anyhow::bail!("--interval must be 1..3600 seconds and --batch-seconds 0..300");
+            }
+            let codex = match codex {
+                Some(c) => c.clone(),
+                None => crate::mailbox_wake_run::which("codex")
+                    .ok_or_else(|| anyhow::anyhow!("codex is not on PATH; pass --codex <path>"))?,
+            };
+            crate::mailbox_wake_run::run(&crate::mailbox_wake_run::RunOptions {
+                store: project.join(".aida-store"),
+                state_root,
+                project,
+                codex,
+                interval: std::time::Duration::from_secs(*interval),
+                batch_seconds: *batch_seconds,
+                once: *once,
+            })
+        }
+        // trace:STORY-HOME-096 | ai:claude
+        MailboxCommand::WakeService {
+            action,
+            codex,
+            dry_run,
+        } => {
+            let project = crate::main_worktree_root_from(project_root)
+                .canonicalize()
+                .context("resolving the project root")?;
+            crate::mailbox_wake_run::service(&project, *action, codex.as_deref(), *dry_run)
         }
         MailboxCommand::Migrate { dry_run, json } => {
             // trace:STORY-1843 | ai:codex
@@ -259,6 +316,16 @@ pub(crate) fn handle_mailbox_command(
                 }
                 record_retention_activation(project_root, json)
             }
+            self::mailbox_cmd_args::RetentionCommand::Prune {
+                include_locked,
+                dry_run,
+                json,
+            } => print_retention_prune(
+                project_root,
+                *include_locked,
+                *dry_run,
+                *json || crate::output_format_is_json(),
+            ),
         },
         MailboxCommand::Latency { recipient, json } => {
             let (rows, note) = latency_rows(
@@ -1211,6 +1278,71 @@ fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Re
 #[cfg(not(unix))]
 fn record_retention_activation(_project_root: &std::path::Path, _json: bool) -> Result<()> {
     anyhow::bail!("mail retention is only available on Unix")
+}
+
+/// `aida mailbox retention prune`: drop the registrations of worktrees
+/// deleted from disk, so the mail view stops reporting them as missing.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+fn print_retention_prune(
+    project_root: &std::path::Path,
+    include_locked: bool,
+    dry_run: bool,
+    json: bool,
+) -> Result<()> {
+    use crate::mail_retention::PruneOutcome;
+    let rows = crate::mail_retention::prune_removed_sources(project_root, include_locked, dry_run)?;
+    if json {
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|(source, outcome)| {
+                serde_json::json!({
+                    "path": source.path,
+                    "locked": source.locked,
+                    "outcome": match outcome {
+                        PruneOutcome::Dropped if dry_run => "would-drop",
+                        PruneOutcome::Dropped => "dropped",
+                        PruneOutcome::KeptLocked => "kept-locked",
+                        PruneOutcome::Declined => "declined",
+                    },
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "dry_run": dry_run,
+                "removed_worktrees": rows,
+            }))?
+        );
+        return Ok(());
+    }
+    if rows.is_empty() {
+        println!("No deleted worktree is still registered; nothing to prune.");
+        return Ok(());
+    }
+    let mut kept_locked = 0;
+    for (source, outcome) in &rows {
+        let verdict = match outcome {
+            PruneOutcome::Dropped if dry_run => "would drop",
+            PruneOutcome::Dropped => "dropped",
+            PruneOutcome::KeptLocked => {
+                kept_locked += 1;
+                "kept (locked)"
+            }
+            PruneOutcome::Declined => "kept (could not be cleared safely)",
+        };
+        println!("  {verdict:<34} {}", source.path.display());
+    }
+    if kept_locked > 0 {
+        println!(
+            "{kept_locked} locked worktree(s) kept. If they were deleted on purpose, re-run \
+             with --include-locked."
+        );
+    }
+    if dry_run {
+        println!("Dry run; nothing was dropped.");
+    }
+    Ok(())
 }
 
 /// What `aida mailbox gc --phantoms` did: counts plus one line per message.
@@ -3029,15 +3161,24 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
+    use self::mailbox_cmd_args::RetentionCommand;
     crate::command_registry::CmdPolicy {
+        // A real prune removes Git worktree registrations, so only its dry
+        // run is a read.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
         stakeholder: if matches!(
             inner,
             Some(
                 MailboxCommand::Inbox { .. }
                     | MailboxCommand::WakeSnapshot { .. }
+                    | MailboxCommand::WakeRun { .. }
+                    | MailboxCommand::WakeService { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
-                    | MailboxCommand::Retention { .. }
+                    | MailboxCommand::Retention {
+                        command: RetentionCommand::Activate { .. }
+                            | RetentionCommand::Prune { dry_run: true, .. }
+                    }
             )
         ) {
             SA::Read

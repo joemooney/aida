@@ -957,6 +957,12 @@ pub(crate) struct PermissionPostureRow {
     pub interactive_prompts: String,
     pub headless_prompts: String,
     pub sandboxed: String,
+    /// Which source decided `sandboxed`: a launch flag in `default_flags`
+    /// beats Codex's own `sandbox_mode`. trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    pub sandbox_source: String,
+    /// `[agents] contained` is on and this vendor cannot run contained, so
+    /// AIDA refuses the launch; `flags` apply only once containment is off.
+    pub refused_under_containment: bool,
     pub network: String,
     pub writable_roots: Vec<String>,
     pub net_effect: String,
@@ -1406,15 +1412,28 @@ pub(crate) fn scan_permission_posture_findings(
     permission_posture_report(project_root)
         .findings
         .into_iter()
-        .map(|f| DoctorFinding {
-            category: "permission-posture".to_string(),
-            id: f.id,
-            summary: format!("{}: {} ({})", f.agent, f.summary, f.severity),
-            action: format!(
-                "apply contained posture with `aida config permissions set contained`; current source: {}",
-                f.source
-            ),
-            safe_heal: true,
+        .map(|f| {
+            // Applying contained posture cannot make a non-claude vendor
+            // containable, so this one is not a safe heal.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+            let vendor_refused = f.id == "default-headless-vendor-refused-under-containment";
+            DoctorFinding {
+                category: "permission-posture".to_string(),
+                summary: format!("{}: {} ({})", f.agent, f.summary, f.severity),
+                action: if vendor_refused {
+                    format!(
+                        "set the default headless vendor to claude, or turn containment off; current source: {}",
+                        f.source
+                    )
+                } else {
+                    format!(
+                        "apply contained posture with `aida config permissions set contained`; current source: {}",
+                        f.source
+                    )
+                },
+                safe_heal: !vendor_refused,
+                id: f.id,
+            }
         })
         .collect()
 }
@@ -1472,6 +1491,28 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
     for agent in ["claude", "codex", "antigravity"] {
         agents.push(permission_posture_for_agent(project_root, agent, &codex));
     }
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    if let Some((vendor, source)) = configured_headless_vendor(project_root) {
+        let row_agent = match vendor {
+            crate::session::HeadlessVendor::Agy => "antigravity",
+            other => other.as_str(),
+        };
+        if let Some(row) = agents
+            .iter_mut()
+            .find(|row| row.agent == row_agent && row.refused_under_containment)
+        {
+            row.findings.push(PermissionPostureFinding {
+                severity: "high".to_string(),
+                id: "default-headless-vendor-refused-under-containment".to_string(),
+                agent: row_agent.to_string(),
+                summary: format!(
+                    "the default headless vendor is {}, which cannot run contained; drains are refused while containment is on",
+                    vendor.as_str()
+                ),
+                source,
+            });
+        }
+    }
     let findings = agents
         .iter()
         .flat_map(|a| a.findings.iter().cloned())
@@ -1523,9 +1564,10 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
             row.headless_prompts.dimmed()
         );
         println!(
-            "    scope: tier={} · flags={} · network={} · writable_roots={}",
+            "    scope: tier={} · flags={} · sandbox={} · network={} · writable_roots={}",
             row.tier_source.dimmed(),
             row.flags_source.dimmed(),
+            row.sandbox_source.dimmed(),
             row.network.dimmed(),
             if row.writable_roots.is_empty() {
                 "(none)".dimmed().to_string()
@@ -1591,9 +1633,18 @@ fn permission_posture_for_agent(
     });
 
     let (tier, tier_source, flags, flags_source) = if let Some(flags) = per_tool {
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+        let codex_flags = codex_flag_posture(if agent == "codex" { &flags.value } else { &[] });
+        let codex_flag_sandbox = codex_flags.effective_sandbox();
         let tier = if flags.value.iter().any(|f| nuclear_permission_flag(f)) {
             "bypass"
-        } else if flags.value.iter().any(|f| contained_permission_flag(f)) {
+        } else if let Some(mode) = codex_flag_sandbox {
+            match mode {
+                "danger-full-access" => "bypass",
+                "workspace-write" | "read-only" => "contained",
+                _ => "native",
+            }
+        } else if agent != "codex" && flags.value.iter().any(|f| contained_permission_flag(f)) {
             "contained"
         } else {
             "native"
@@ -1666,23 +1717,55 @@ fn permission_posture_for_agent(
     } else {
         format!("interactive {interactive_prompts}; headless {headless_prompts}")
     };
-    let sandboxed = if tier == "bypass" {
-        "no".to_string()
+    // A codex launch flag beats `sandbox_mode` in ~/.codex/config.toml, so
+    // the flag value (either spelling) decides the sandbox when present.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    let codex_flags = codex_flag_posture(if agent == "codex" { &flags } else { &[] });
+    let codex_flag_sandbox = codex_flags.effective_sandbox();
+    let codex_mode_sandboxed = |mode: &str| match mode {
+        "danger-full-access" => "no",
+        "workspace-write" | "read-only" => "yes",
+        _ => "native",
+    };
+    let (sandboxed, sandbox_source) = if let Some(mode) = codex_flag_sandbox {
+        let state = codex_mode_sandboxed(mode);
+        let state = if state == "yes" && tier == "contained" && !codex_has_workspace_table {
+            "intended"
+        } else {
+            state
+        };
+        (
+            state.to_string(),
+            format!("default_flags {mode} ({flags_source})"),
+        )
+    } else if tier == "bypass" {
+        ("no".to_string(), tier_source.clone())
     } else if tier == "contained" {
         if agent == "codex" && !codex_has_workspace_table {
-            "intended".to_string()
+            ("intended".to_string(), tier_source.clone())
         } else {
-            "yes".to_string()
+            ("yes".to_string(), tier_source.clone())
         }
     } else if agent == "codex" {
-        match codex_sandbox_mode {
-            "danger-full-access" => "no".to_string(),
-            "workspace-write" | "read-only" => "yes".to_string(),
-            _ => "native".to_string(),
+        match &codex.sandbox_mode {
+            Some(mode) => (
+                codex_mode_sandboxed(&mode.value).to_string(),
+                format!(
+                    "sandbox_mode {} ({})",
+                    mode.value,
+                    mode.source.plain_label()
+                ),
+            ),
+            None => ("native".to_string(), "native-default".to_string()),
         }
     } else {
-        "native".to_string()
+        ("native".to_string(), "native-default".to_string())
     };
+    // BUG-2144: only claude runs an AIDA-contained session; every other
+    // vendor's launch is refused while containment is on, whatever its flags.
+    let refused_under_containment = contained.value
+        && !crate::session::HeadlessVendor::parse(agent)
+            .is_some_and(|v| crate::session::containment_applied(v, true));
 
     if tier == "bypass" && !codex_has_workspace_table {
         findings.push(PermissionPostureFinding {
@@ -1706,22 +1789,52 @@ fn permission_posture_for_agent(
             source: tier_source.clone(),
         });
     }
-    if agent == "codex"
-        && codex.sandbox_mode.is_some()
-        && flags.iter().any(|f| nuclear_permission_flag(f))
-    {
-        findings.push(PermissionPostureFinding {
-            severity: "high".to_string(),
-            id: "codex-sandbox-overridden-by-default-flags".to_string(),
-            agent: agent.to_string(),
-            summary:
-                "Codex sandbox_mode is set, but nuclear default_flags override it with full access"
-                    .to_string(),
-            source: flags_source.clone(),
-        });
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    if agent == "codex" {
+        if let Some(configured) = &codex.sandbox_mode {
+            let nuclear = flags.iter().any(|f| nuclear_permission_flag(f));
+            let widened = codex_flag_sandbox.is_some_and(|mode| {
+                match (
+                    codex_sandbox_rank(mode),
+                    codex_sandbox_rank(&configured.value),
+                ) {
+                    (Some(flag_rank), Some(config_rank)) => flag_rank > config_rank,
+                    _ => false,
+                }
+            });
+            if nuclear || widened {
+                findings.push(PermissionPostureFinding {
+                    severity: "high".to_string(),
+                    id: "codex-sandbox-overridden-by-default-flags".to_string(),
+                    agent: agent.to_string(),
+                    summary: format!(
+                        "Codex sandbox_mode is {} ({}), but default_flags override it with {}",
+                        configured.value,
+                        configured.source.plain_label(),
+                        if nuclear {
+                            "full access (sandbox and approvals bypassed)".to_string()
+                        } else {
+                            format!("--sandbox {}", codex_flag_sandbox.unwrap_or_default())
+                        }
+                    ),
+                    source: flags_source.clone(),
+                });
+            }
+        }
     }
 
-    let net_effect = if tier == "bypass" {
+    let nuclear = flags.iter().any(|f| nuclear_permission_flag(f));
+    let sandboxed = if refused_under_containment {
+        "refused".to_string()
+    } else {
+        sandboxed
+    };
+    let net_effect = if refused_under_containment {
+        "refused under containment (only claude runs contained); flags apply only when containment is off"
+            .to_string()
+    } else if tier == "bypass" && agent == "codex" && !nuclear {
+        format!("unsandboxed (--sandbox danger-full-access); prompts {prompts}")
+    } else if tier == "bypass" {
         "no prompts; unsandboxed".to_string()
     } else if tier == "contained" {
         "AIDA-contained launch".to_string()
@@ -1743,6 +1856,8 @@ fn permission_posture_for_agent(
         interactive_prompts,
         headless_prompts,
         sandboxed,
+        sandbox_source,
+        refused_under_containment,
         network,
         writable_roots,
         net_effect,
@@ -1808,12 +1923,22 @@ fn prompts_for_agent_flags(
     flags: &[String],
     codex: &CodexConfigPosture,
 ) -> String {
-    let codex_approval = codex
-        .approval_policy
-        .as_ref()
-        .map(|v| v.value.as_str())
+    // A codex `--ask-for-approval` flag (either spelling) beats
+    // `approval_policy`; `--sandbox danger-full-access` alone still prompts.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    let codex_flags = codex_flag_posture(flags);
+    let codex_approval = codex_flags
+        .approval
+        .as_deref()
+        .or(codex.approval_policy.as_ref().map(|v| v.value.as_str()))
         .unwrap_or("native-default");
-    if tier == "bypass"
+    if agent == "codex" && !codex_flags.bypass && codex_flags.sandbox.is_some() {
+        if codex_approval == "never" {
+            "no".to_string()
+        } else {
+            "native".to_string()
+        }
+    } else if tier == "bypass"
         || flags
             .iter()
             .any(|f| f == "bypassPermissions" || f.contains("dontAsk"))
@@ -1837,6 +1962,90 @@ fn nuclear_permission_flag(flag: &str) -> bool {
 
 fn contained_permission_flag(flag: &str) -> bool {
     matches!(flag, "dontAsk" | "--sandbox" | "--settings")
+}
+
+/// The codex posture a set of launch flags selects, read by value. The
+/// tokens come from the launch path's own posture parser
+/// ([`crate::agent_launch::split_posture_flags`]), so `--sandbox X` and
+/// `--sandbox=X` classify the same here as they launch.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+#[derive(Debug, Default)]
+struct CodexFlagPosture {
+    sandbox: Option<String>,
+    approval: Option<String>,
+    bypass: bool,
+    full_auto: bool,
+}
+
+impl CodexFlagPosture {
+    /// The sandbox mode the launch runs under, if the flags pick one. The
+    /// bypass flag is full access; `--full-auto` is workspace-write.
+    fn effective_sandbox(&self) -> Option<&str> {
+        if self.bypass {
+            Some("danger-full-access")
+        } else if let Some(mode) = self.sandbox.as_deref() {
+            Some(mode)
+        } else if self.full_auto {
+            Some("workspace-write")
+        } else {
+            None
+        }
+    }
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+fn codex_flag_posture(flags: &[String]) -> CodexFlagPosture {
+    let (_, posture) = crate::agent_launch::split_posture_flags("codex", flags.to_vec());
+    let mut out = CodexFlagPosture::default();
+    let mut tokens = posture.into_iter();
+    while let Some(arg) = tokens.next() {
+        let (name, inline) = match arg.split_once('=') {
+            Some((name, value)) => (name.to_string(), Some(value.to_string())),
+            None => (arg, None),
+        };
+        match name.as_str() {
+            // Last occurrence wins, as it does for the vendor CLI.
+            "--sandbox" => out.sandbox = inline.or_else(|| tokens.next()),
+            "--ask-for-approval" => out.approval = inline.or_else(|| tokens.next()),
+            "--dangerously-bypass-approvals-and-sandbox" => out.bypass = true,
+            "--full-auto" => out.full_auto = true,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Codex sandbox modes ordered by how much they allow.
+fn codex_sandbox_rank(mode: &str) -> Option<u8> {
+    match mode {
+        "read-only" => Some(0),
+        "workspace-write" => Some(1),
+        "danger-full-access" => Some(2),
+        _ => None,
+    }
+}
+
+/// The configured default headless vendor and where it was set, ignoring
+/// per-invocation overrides (`--vendor`, `AIDA_HEADLESS_VENDOR`). Same
+/// config precedence as `session::resolve_headless_vendor`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+fn configured_headless_vendor(
+    project_root: &std::path::Path,
+) -> Option<(crate::session::HeadlessVendor, String)> {
+    let cfg = read_project_config_value(project_root);
+    if let Some(v) = config_lookup(cfg.as_ref(), "orchestrator", "headless_vendor")
+        .and_then(|v| v.as_str())
+        .and_then(crate::session::HeadlessVendor::parse)
+    {
+        return Some((
+            v,
+            ".aida/config.toml [orchestrator] headless_vendor".to_string(),
+        ));
+    }
+    aida_core::agents_config::resolve_default_vendor(project_root)
+        .as_deref()
+        .and_then(crate::session::HeadlessVendor::parse)
+        .map(|v| (v, "[agents] vendor".to_string()))
 }
 
 fn agent_default_flags_with_source(
@@ -4363,6 +4572,159 @@ mod bug_533_config_show_tests {
             .expect("codex row");
         assert_eq!(codex.network, "true (~/.codex/config.toml)");
         assert_eq!(codex.writable_roots, vec!["/tmp/cache".to_string()]);
+    }
+
+    fn codex_row(report: &PermissionPostureReport) -> &PermissionPostureRow {
+        report
+            .agents
+            .iter()
+            .find(|row| row.agent == "codex")
+            .expect("codex row")
+    }
+
+    // Both flag spellings × every sandbox mode classify by value.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    #[test]
+    fn permission_posture_classifies_codex_sandbox_flag_by_value_in_both_forms() {
+        for (mode, tier, sandboxed) in [
+            ("danger-full-access", "bypass", "no"),
+            ("workspace-write", "contained", "yes"),
+            ("read-only", "contained", "yes"),
+        ] {
+            for flags in [
+                format!("[\"--sandbox\", \"{mode}\", \"--ask-for-approval\", \"never\"]"),
+                format!("[\"--sandbox={mode}\", \"--ask-for-approval=never\"]"),
+            ] {
+                let dir = tempfile::tempdir().unwrap();
+                let home = tempfile::tempdir().unwrap();
+                let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+                std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+                std::fs::create_dir_all(home.path().join(".codex")).unwrap();
+                std::fs::write(
+                    home.path().join(".aida/agents.toml"),
+                    format!("[agents.codex]\ndefault_flags = {flags}\n"),
+                )
+                .unwrap();
+                std::fs::write(
+                    home.path().join(".codex/config.toml"),
+                    "sandbox_mode = \"workspace-write\"\n[sandbox_workspace_write]\nnetwork_access = true\n",
+                )
+                .unwrap();
+
+                let report = permission_posture_report(dir.path());
+                let codex = codex_row(&report);
+
+                assert_eq!(codex.tier, tier, "{flags}: {codex:?}");
+                assert_eq!(codex.sandboxed, sandboxed, "{flags}: {codex:?}");
+                assert_eq!(codex.prompts, "no", "{flags}: {codex:?}");
+                assert_eq!(
+                    codex.sandbox_source,
+                    format!("default_flags {mode} (~/.aida/agents.toml)"),
+                    "the flag beats sandbox_mode: {codex:?}"
+                );
+                let widened = codex.findings.iter().any(|f| {
+                    f.severity == "high" && f.id == "codex-sandbox-overridden-by-default-flags"
+                });
+                assert_eq!(
+                    widened,
+                    mode == "danger-full-access",
+                    "{flags}: only a flag wider than sandbox_mode is a finding: {codex:?}"
+                );
+            }
+        }
+    }
+
+    // The observed case: user agents.toml is workspace-write, the untracked
+    // project agents.toml overrides it with full access.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    #[test]
+    fn permission_posture_project_full_access_flags_override_user_sandbox() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+        std::fs::create_dir_all(home.path().join(".codex")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            home.path().join(".aida/agents.toml"),
+            "[agents.codex]\ndefault_flags = [\"--sandbox\", \"workspace-write\", \"--ask-for-approval\", \"never\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".aida/agents.toml"),
+            "[agents.codex]\ndefault_flags = [\"--ask-for-approval=never\", \"--sandbox=danger-full-access\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            home.path().join(".codex/config.toml"),
+            "sandbox_mode = \"workspace-write\"\n[sandbox_workspace_write]\nnetwork_access = true\n",
+        )
+        .unwrap();
+
+        let report = permission_posture_report(dir.path());
+        let codex = codex_row(&report);
+
+        assert_eq!(codex.tier, "bypass", "{codex:?}");
+        assert_eq!(codex.sandboxed, "no", "{codex:?}");
+        assert_eq!(codex.flags_source, ".aida/agents.toml");
+        assert_eq!(
+            codex.sandbox_source,
+            "default_flags danger-full-access (.aida/agents.toml)"
+        );
+        let doctor = scan_permission_posture_findings(dir.path());
+        assert!(
+            doctor
+                .iter()
+                .any(|f| f.id == "codex-sandbox-overridden-by-default-flags"),
+            "doctor's permission-posture category must report the widening: {doctor:?}"
+        );
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
+    #[test]
+    fn permission_posture_marks_uncontainable_vendors_refused_under_containment() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            home.path().join(".aida/agents.toml"),
+            "[agents]\ncontained = true\n[agents.codex]\ndefault_flags = [\"--sandbox=danger-full-access\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+
+        let report = permission_posture_report(dir.path());
+        let row = |agent: &str| report.agents.iter().find(|r| r.agent == agent).unwrap();
+
+        assert!(!row("claude").refused_under_containment);
+        for agent in ["codex", "antigravity"] {
+            assert!(row(agent).refused_under_containment, "{:?}", row(agent));
+            assert_eq!(row(agent).sandboxed, "refused");
+            assert!(row(agent)
+                .net_effect
+                .starts_with("refused under containment"));
+        }
+        assert!(
+            report.findings.iter().any(|f| f.severity == "high"
+                && f.id == "default-headless-vendor-refused-under-containment"
+                && f.agent == "codex"),
+            "a codex default vendor cannot drain while contained: {report:?}"
+        );
+        let doctor = scan_permission_posture_findings(dir.path());
+        let vendor = doctor
+            .iter()
+            .find(|f| f.id == "default-headless-vendor-refused-under-containment")
+            .expect("doctor reports the refused default vendor");
+        assert!(
+            !vendor.safe_heal,
+            "contained posture cannot fix the vendor: {vendor:?}"
+        );
     }
 
     // trace:STORY-1128 | ai:codex
