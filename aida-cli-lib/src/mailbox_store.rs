@@ -142,7 +142,8 @@ fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
-        if let Ok(msg) = serde_json::from_slice::<Message>(&bytes) {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+        if let Ok(msg) = aida_core::mailbox::parse_message_file(&path, &bytes) {
             out.push(msg);
         }
     }
@@ -173,7 +174,7 @@ fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<Message>> {
         }
         let bytes = std::fs::read(&path)
             .with_context(|| format!("reading canonical message {}", path.display()))?;
-        let msg = serde_json::from_slice::<Message>(&bytes)
+        let msg = aida_core::mailbox::parse_message_file(&path, &bytes)
             .with_context(|| format!("canonical message {} is not valid", path.display()))?;
         out.push(msg);
     }
