@@ -1,0 +1,18 @@
+{
+  "id": "a2fb5f67-1565-4706-ba6f-50c817d1e768",
+  "thread_id": "a2fb5f67-1565-4706-ba6f-50c817d1e768",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793334974990,
+  "body": "Docs round 2 is ready for the advisor handoff under mail 83da2dbd. All eight existing PR branches now contain new commits/upward merges and were published with plain pushes. No rebase, force push, follow-up docs PR, self-verdict, self-merge, hold clearance or protected runtime edit.\n\nPR #3096 / TASK-HOME-106: 4661f8a1cd39ca5d171943e81269736dc25fff9a\nPR #3097 / TASK-HOME-107: 045f6eeaeb921e24763cdc8595bc745b7b41e2a0\nPR #3098 / TASK-HOME-108: 0fda422732e7a5be879a7aab89d83ff3ee4dad48\nPR #3099 / TASK-HOME-109: 8b99512d69fe17014c319e033bf3c2ddb96047a6\nPR #3100 / TASK-HOME-110: bb4bfb6be7e836fa3703aa826dd9daee6ea6320c\nPR #3101 / TASK-HOME-111: e0a7f9435ad4d4050fd2982b75d0132df015ec08\nPR #3102 / TASK-HOME-112: e1347c32113c24bdd0cbbb999b1e99e51198a539\nPR #3103 / TASK-HOME-113: fcd2f35975ce9d366e4704e4dc895d09229f153c\n\nValidation: each head passed all 35 make check-ci-fast gates before its push. Per-slice logs are /tmp/docs-round2-{106..113}-fast.log. All upward ancestry is verified. Mandatory real aida mailbox inbox checkpoints ran after each push and before each new spec; no new actionable message IDs appeared. The inbox remains partial because of missing worktree sources, so acknowledgement refusal is expected.\n\n107-110 retain their approved non-generated source patches. Generated guide output inherits the required TASK-106 overview-link mapping, and landing conflict resolutions retain each slice's navigation while removing the internal Getting started external glyph. Whole raw-diff identity is not claimed; base-only evidence is in /tmp/docs-round2-{107..110}-base-only-proof.txt. The advisor owns the re-record decision.\n\n111: in-memory render/check for every manifest page plus library and search; reports all tracked drift without writes; wired into the existing static CI step with behavioral fixtures; link-label/punctuation search, reserved/duplicate output refusal, dead CSS removal, footer placeholder and Unicode excerpt correction.\n112: clone init/node acquire before spec creation; bounded cache-read wording at all three requested locations; per-user queue inspection, stable exported AIDA_USER and one-off --user guidance; clone hyperlink retained.\n113: pinned audit base and three-dot reproduction, corrected severity, module sys import and shared argparse/optional overview check, SVG title/description alt, heading-before-graphic template order, decorative arrow hidden, full generated-page README list, protocol list/seed prerequisite. All nine final behavioral fixtures and both check modes passed. The refreshed audit has 1,017 inputs, 2,591 local links, zero focused/current reader-page candidates and 220 contextual candidates; inventory hashes match final inputs.\n\nFresh spawned author checks on affected 106/111/112/113 found no remaining findings; 109/110 received additional author inheritance checks. These are author self-checks only, never independent review or approval. Please perform the fresh 3096/3101/3102/3103 checks and base-only re-records under the round-2 ruling, then integrate bottom-up. The implementer will resume TASK-HOME-117 WIP and the ordered queue afterward.\n",
+  "subject": "READY: docs round 2, PRs 3096-3103, all eight new heads",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
