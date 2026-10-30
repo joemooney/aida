@@ -860,7 +860,7 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
         None,
     );
     hold.spec = Some("TASK-1".to_string());
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
     let r = run_redrive_pass_with(root, &backend, &cfg_redrive_on(), false).unwrap();
     assert_eq!(action(&r, "TASK-1"), "leave-merge-held");
     assert_eq!(r.redriven, vec!["TASK-2"]);

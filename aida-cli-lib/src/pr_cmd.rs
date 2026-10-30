@@ -3399,16 +3399,18 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     reason,
                 );
             } else {
-                let _ = crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number);
-                if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
+                // M1 slice 2: one `hold-release` event on the PR's gate
+                // ledger, naming the verdict that met the release condition
+                // when one did. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+                if let Some(record) = &hold_record {
                     let actor = crate::gate::merge_hold_core::PrincipalIdentity::human(
                         crate::current_user_id(None),
                     );
-                    if let Err(err) = crate::gate::merge_hold_core::record_clearance_with_verdict(
+                    if let Err(err) = crate::gate::merge_hold_core::release_hold(
                         &hold_root,
                         record,
                         &actor,
-                        Some(verdict.clone()),
+                        released_by_verdict.clone(),
                     ) {
                         eprintln!(
                             "  {} could not record the hold release on PR-{pr_number}: {err}",

@@ -54,7 +54,8 @@ fn ship_release_site_gates_on_the_floor_before_clearing() {
         .expect("the gate must be fed the integrity-floor (or mandate) authority");
     assert!(floor < 400, "authority must be the gate's own argument");
     let clear = src
-        .find("crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number)")
+        // M1 slice 2: the release is a `hold-release` event on the gate ledger.
+        .find("crate::gate::merge_hold_core::release_hold(")
         .expect("release site present");
     let unlabel = src
         .find("crate::merge_hold::sync_label(&hold_root, pr_number, false)")
@@ -319,7 +320,7 @@ fn verdict_released_hold_always_merges_pinned_to_the_head() {
         .find("Ok(pin) => merge_opts.match_head = pin")
         .expect("pin assigned to the merge");
     let clear = src
-        .find("crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number)")
+        .find("crate::gate::merge_hold_core::release_hold(")
         .expect("release site");
     let merge = src[clear..]
         .find("&merge_opts,")
@@ -352,7 +353,7 @@ fn ship_hold_gate_runs_before_ci_and_ignores_drive_liveness() {
         .find("crate::ci_gate::wait_for_ship_ci(")
         .expect("ci wait present");
     let clear = src
-        .find("crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number)")
+        .find("crate::gate::merge_hold_core::release_hold(")
         .expect("release site present");
     assert!(
         gate < ci && gate < clear,

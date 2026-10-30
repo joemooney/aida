@@ -2789,8 +2789,14 @@ fn t1458_run_merge(
         "test",
     )
     .unwrap();
-    let mut body: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&verdict).unwrap()).unwrap();
+    // M1 slice 2: the record is on the gate ledger; the re-attested record
+    // is appended there as the newest. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let mut body: serde_json::Value = serde_json::from_str(
+        &crate::gate::review_verdict::current_verdict_at(&verdict)
+            .expect("the recorded verdict")
+            .body,
+    )
+    .unwrap();
     body[crate::gate::review_verdict::ATTESTATION_KEY] =
         serde_json::to_value(crate::gate::review_verdict::RecorderAttestation {
             sha: reviewed_sha.to_string(),
@@ -2803,7 +2809,7 @@ fn t1458_run_merge(
             ..Default::default()
         })
         .unwrap();
-    std::fs::write(&verdict, serde_json::to_string_pretty(&body).unwrap()).unwrap();
+    crate::gate::ledger::record_verdict_at(&verdict, body.as_object().unwrap(), None).unwrap();
     let mut d = driver(root, "TASK-1458");
     d.pr_number = Some(77);
     d.merge()
