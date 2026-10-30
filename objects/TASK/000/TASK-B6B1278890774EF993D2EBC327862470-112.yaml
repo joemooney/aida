@@ -25,12 +25,12 @@ description: |
 
   ADVISOR RULING 2026-10-30 00:15 (PR-3102 round 3, FINAL round: one push, then a scoped check of these items only)
   FIX all six: (1) docs/cli/10-storage.md:19 and :54: merge-gate runs inside `aida pull` only on an enrolled HOME clone (store_push_pull.rs ~2442). (2) OVERVIEW.md:411: drop "auto-rebuilt when HEAD differs" to match the "Bounded cache reads" section. (3) docs/storage-modes.md:67-68 and :179-180: use current id forms and say agreed short ids need HOME, matching :29-30. (4) docs/admin-guide.md:7: remove or fix the link to the nonexistent DEVELOPER_GUIDE.md. (5) docs/cli/07-project-setup.md:185: the anchor is #aida-add---sanitized-sanitized-intake. (6) docs/cli/01-getting-started.md:29: restore the two init --force refusals (nested repos; re-initialize).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-30T14:53:57.516075152Z
+modified_at: 2026-10-30T18:34:42.282534952Z
 req_type: Task
 tags:
 - advisor-review
@@ -200,6 +200,22 @@ history:
   timestamp: 2026-10-30T07:08:55.304097258Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18e17-bae5-78e1-8fa8-6ea842cf85a0
+  author: aida-auto-bump
+  timestamp: 2026-10-30T18:34:42.277577903Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18e17-baea-7311-86d0-09793ebe3f2f
+  timestamp: 2026-10-30T18:34:42.282530901Z
+  agent: aida
+  commit_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
+  summary: 'Base-only update from main (gh update-branch e4d3fffbd32dcf242ee53fc665f742b1c1b7fd6c -> 62d6078c93b8bd42de3a0a240a6b3886a90813a9); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  punted:
+  - 'punted: session end observed 12 commits ahead on branch `codex/docs-restack-112` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
@@ -212,15 +228,9 @@ implementation_info:
   test_coverage_notes: 'make check-ci-fast: 35 fast-tier gates passed; source/help inspection and spawned author self-check'
   implemented_at: 2026-10-29T19:37:14.239316444Z
   implemented_by: ai:codex:joe
+  completed_at: 2026-10-30T18:34:42.277571931Z
+  completion_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   reopened_at_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Operator guide, transport, install, init/MCP, allocation and queue claims verify against source/help and the showcase build check passes, but touched docs still contradict the HOME/WORK and bounded-cache corrections, and two broken links remain in touched docs (AC2/AC3/AC4/AC5 partial).
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-112 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T06:48:12.296180805Z
 interface_changes:
   other:
   - refresh supported operator and storage guidance
