@@ -92367,5 +92367,28 @@ operations:
   timestamp: 2026-10-30T10:48:33.378800840Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7154
+- id: 01a18c6e-bb49-7ae3-b0ba-34256de5d52f
+  target_id: 01a18b71-4e23-78b1-92ef-f10f26cf87ca
+  author: aida
+  node_id: '1'
+  lamport: 7155
+  timestamp: 2026-10-30T10:50:29.577897765Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a18c6e-bcd0-79b2-9a15-73218a80abfd
+  target_id: 01a18b71-4e23-78b1-92ef-f10f26cf87ca
+  author: aida
+  node_id: '1'
+  lamport: 7156
+  timestamp: 2026-10-30T10:50:29.968258855Z
+  kind: !SetDescription
+    description: |
+      2026-10-29 23:13: CI lib-1 on PR-3112 (run 41011660578) failed at aida-cli-lib/src/regen/score.rs:1135 in regen::score::tests::generated_tool_help_timeout_kills_group_and_retains_reason. PR-3112 touches only mailbox retention, and the same test passes on main, so this is a flake. It made a ship stop, and the failed jobs were rerun by hand. Acceptance: find the race (likely the timeout window versus process-group kill timing under a loaded runner), fix it at the race, not by widening the window (TASK-1956 convention), and stress it locally (for example 200 iterations under load) with zero failures.
+
+      ADVISOR NOTE 2026-10-30 03:53: the first lane fixed this (commit 185421df638) but could not publish: its seat clone was flagged as having writable git config/hooks, so both the lane's and the host's `aida ship` refused to run git there (a correct safety refusal). That clone is parked at ../aida-worktrees/.parked/037-unpublishable-20261030 for audit. REDO the same fix in a fresh seat:
+      - assert_group_member_exits (aida-cli-lib/src/regen/score.rs ~1135) decides liveness from a pidfd only: a missing pid or a start-time mismatch means gone; otherwise wait on the pidfd for exit. Keep the 30s deadline.
+      - Unit test group_member_exit_check_accepts_zombie_and_reaped_child (a killed-but-unreaped child and a reaped one).
+      - ALSO fix the follow-up the lane found: under load the timeout can fire before the script writes descendant.pid, and the test panics on unwrap(). Wait for the pid file (bounded) or treat its absence as a clear test failure message.
+      Then open the PR. Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
+clock: 7156
 node_id: '1'
