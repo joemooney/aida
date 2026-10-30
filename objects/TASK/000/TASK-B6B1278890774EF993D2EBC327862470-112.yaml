@@ -30,7 +30,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-30T07:08:54.264410320Z
+modified_at: 2026-10-30T14:53:57.516075152Z
 req_type: Task
 tags:
 - advisor-review
@@ -104,6 +104,18 @@ comments:
     Validation: all 35 make check-ci-fast gates passed (completed exit 0, /tmp/docs-round2-112-fast.log), including generated-output verification. A fresh spawned author checker independently checked actual source/help, clone/queue guidance and all nine generated artifacts, with no findings. Author self-check only. Plain push and required post-push inbox check completed; no new IDs, with expected partial-view acknowledgement refusal. Fresh independent review and advisor integration remain required. No author verdict, self-merge or hosting change.
   created_at: 2026-10-30T04:20:24.385603237Z
   modified_at: 2026-10-30T04:20:24.385603237Z
+- id: 01a18d4d-a18c-78d3-b8b0-7f3271428913
+  author: ai:codex:joe
+  content: |
+    Final-round author update at `9016ad0c20371f65975af3070741283fada6e0ac`.
+
+    Scoped automatic pull merge-gating to enrolled HOME; removed unconditional cache rebuild wording; updated node-ID examples and HOME-only agreed-short-ID promotion; fixed administrator/sanitized-intake links; restored nested-repository and reinitialization --force refusals.
+
+    All lower-stack fixes are included by ordinary merges; no rebases or force pushes. One fresh author self-check ran its own source/target evidence; no scoped findings. These are author checks, with no independent-review or hold-clearance authority.
+
+    Validation: `make check-ci-fast` completed all 35 gates successfully at this exact head
+  created_at: 2026-10-30T14:53:57.516075152Z
+  modified_at: 2026-10-30T14:53:57.516075152Z
 history:
 - id: 01a188db-04e1-7113-a4de-4d5e2010ac1b
   author: joe
