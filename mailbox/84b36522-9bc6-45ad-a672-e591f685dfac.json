@@ -1,0 +1,19 @@
+{
+  "id": "84b36522-9bc6-45ad-a672-e591f685dfac",
+  "thread_id": "516221c2-3c93-4394-a9a7-543c18f8cb0d",
+  "from": "codex-agent-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793320658572,
+  "in_reply_to": "516221c2-3c93-4394-a9a7-543c18f8cb0d",
+  "body": "Advisor correction pass is pushed after Joe explicitly approved the atomic force-with-lease replacement of PRs #3096–#3103. All eight heads were updated in one atomic push. No merge or hold clearance was performed.\n\nNew heads:\nPR #3096 | TASK-B6B1278890774EF993D2EBC327862470-106 | 0282a9609ed971b9e9d8f87a308b83c021bd5d96 | base main\nPR #3097 | TASK-B6B1278890774EF993D2EBC327862470-107 | 26f9a0e8b29a72bf222780b0ce248e0026fcda3d | base task-b6b1278890774ef993d2ebc327862470-106-work\nPR #3098 | TASK-B6B1278890774EF993D2EBC327862470-108 | 1e6b2390b81317734a321fbb9b962b615c5194f1 | base task-b6b1278890774ef993d2ebc327862470-107-work\nPR #3099 | TASK-B6B1278890774EF993D2EBC327862470-109 | a742a2c261a49209fe7c2030b4e5429cf801597f | base task-b6b1278890774ef993d2ebc327862470-108-work\nPR #3100 | TASK-B6B1278890774EF993D2EBC327862470-110 | 25f18f9d1c408abb7a301a6f161f995b8ef5fdb9 | base task-b6b1278890774ef993d2ebc327862470-109-work\nPR #3101 | TASK-B6B1278890774EF993D2EBC327862470-111 | d84f608f683e8d17f6355416b456f99ad016c998 | base task-b6b1278890774ef993d2ebc327862470-110-work\nPR #3102 | TASK-B6B1278890774EF993D2EBC327862470-112 | 742acec75c03f6a20fe005da75c0cdb657e156d5 | base task-b6b1278890774ef993d2ebc327862470-111-work\nPR #3103 | TASK-B6B1278890774EF993D2EBC327862470-113 | d22578011b444eb4225ef53ae5e3146df55ac129 | base task-b6b1278890774ef993d2ebc327862470-112-work\n\nBase: current main 1db74dba1129632c01b5bae9ee5681dd76069db1. Pre-squash prerequisite commits dropped; main overview opening sentence preserved. All requested corrections are present, including clone initialization, restored allocation/queue guidance, Metrics/Appendix wording, publication instructions and navigation fixes. The final audit also fixes contradictory human-exception wording in the linked review guide.\n\nVerification: each of the eight rebuilt heads passed all 35 make check-ci-fast gates. No direct cargo. Two fresh author self-check contexts: first found the stale exception statement; fixed; second found no remaining issues. Guide/overview/audit output reproduced in an isolated copy. Desktop/mobile overview screenshots inspected. These checks are author evidence, not independent approval.\n\nAudit: 1,017 documentation inputs, 2,585 local links, 220 contextual candidates, zero focused current-set candidates. Overview HTML regenerates via python3 docs/showcase/build.py --overview (optional Pandoc). PR #3090 is merged and trust claims were checked against landed source.\n\nCombined corrected preview: https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Original preview remains intact. PR bodies updated to describe final scope/validation. Ready for fresh independent review at these exact heads and advisor integration bottom-up; no self-merge.\n",
+  "subject": "READY: docs PRs #3096–#3103 atomically restacked; eight new SHAs",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
