@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T01:13:25.564984742Z
+modified_at: 2026-10-30T01:51:11.755688668Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -23,6 +23,13 @@ tags:
 - from-operator
 - lifecycle:no-review
 - ux
+comments:
+- id: 01a18a80-fd8b-7963-bdce-e6c78d46bf99
+  author: joe
+  content: |
+    Operator priority changed to docs round2 before TASK117 completion. Work-in-progress committed locally as5292f3f222c; not pushed, no PR. Source implements canonical List + visible ls alias, existing status behavior, argv pre-parser routing, focused parse/alias test, docs/template text. Template sync completed. Initial make check-ci-fast completed35 gates. Targeted Rust test process was still compiling and was deliberately terminated (exit143) for operator priority; do not claim those tests passed. It can be resumed from cached artifacts after docs106/111/112/113 are handed back. Help snapshot still needs regeneration from actual definitions, and the fresh author self-check/PR workflow remain unfinished.
+  created_at: 2026-10-30T01:51:11.755688668Z
+  modified_at: 2026-10-30T01:51:11.755688668Z
 history:
 - id: 01a18a38-865a-73b1-baec-dc0e2fc248fb
   author: joe
