@@ -1,0 +1,33 @@
+id: 01a18b59-712f-7623-a9c5-ef9c13f8166f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-108
+title: 'Review PR-3121: [AI:claude] fix(mailbox): seat-clone mail reaches the primary checkout''s inbox (BUG-B6B1278890774EF993D2EBC327862470-031)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-031`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3121>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-031` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-031
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3121` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T05:47:37.135433579Z
+modified_at: 2026-10-30T05:47:37.135433579Z
+req_type: Story
+filed_at:
+  code_sha: 2742b18ee2e7b5dd32643ec149ca9ac8176a4fca
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 88dbfd8c194
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
