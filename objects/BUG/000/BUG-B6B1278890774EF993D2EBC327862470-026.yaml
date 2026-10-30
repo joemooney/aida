@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-30T17:12:15.988909669Z
+modified_at: 2026-10-30T23:40:58.024761700Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -50,6 +50,11 @@ comments:
   content: PR-3130 requested delta is pushed at 9330169f753157c46187d0ae685755d1875ef6b2 (origin and configured GitLab mirror accepted). Merged origin/main 1da6f81bbf1173bb05675eb489be8390982bcdd9 via merge commit 3b97bbcfac0fa96ab30ab006ca86afbe0b06f265; replaced raw current_exe unwrap with crate::resolve_aida_exe in the inventory regression, no allowlist. Six actual node_inventory tests pass, including worker subprocess; resolver architecture ratchet passes; formatting and all 36 fast gates pass. Literal bug026 filter selects zero because included module is node_cmd::node_inventory::tests, so reran with node_inventory and nonzero counts. Fresh author checker ran its own six tests, guard and separate unchanged-contents/modes child fixture, no findings. PR description current. Advisor independent delta review and current-head CI remain required; no hold clearance, self-verdict or ship performed.
   created_at: 2026-10-30T17:12:15.988909669Z
   modified_at: 2026-10-30T17:12:15.988909669Z
+- id: 01a18f30-1f28-7c93-9d52-248bfad49109
+  author: ai:codex:joe
+  content: 'PR-3130 merge conflicts resolved and plain-pushed at fb17a888f53c2e31b6f76e86a0b93b199f33239f. Normal merge parents are prior author head9330169f753157c46187d0ae685755d1875ef6b2 and current maincdbecda76786aa4df79e0b965ae401e8db20d633. One node_cmd.rs conflict: preserve complete inventory List path, main work_node_line role/label wording and Show allocation report. Inventory implementation/tests and node-show helper bodies match their respective parents; resolver fix retained. Full make check-ci-compile passed every workspace test target; all36 fast gates passed; focused tests27passed (inventory6 + show-label1 + resolver1 + command-registry/help19; one ignored child helper). Fresh spawned author checker independently ran its own27 focused tests plus parent-preservation/whitespace checks, no findings; this is author validation, not independent approval. Latest-main merge simulation clean and origin accepted the exact new head. PR body updated. Code mirror pre-push skipped before origin acceptance, so no GitLab code-mirror confirmation is claimed. Advisor owns remaining delta review/hold/ship; no spec status escalation, self-verdict, clearance or merge.'
+  created_at: 2026-10-30T23:40:58.024761700Z
+  modified_at: 2026-10-30T23:40:58.024761700Z
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
   author: joe
