@@ -40,12 +40,14 @@ fn register(root: &std::path::Path) -> Result<agent_registry::AgentRegistryEntry
 
 /// Records whether `marker` existed when the first byte was written, so a
 /// test can prove output came after the child finished.
+#[cfg(unix)]
 struct AfterExitWriter {
     marker: std::path::PathBuf,
     child_done_at_first_write: Option<bool>,
     out: Vec<u8>,
 }
 
+#[cfg(unix)]
 impl std::io::Write for AfterExitWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.child_done_at_first_write
@@ -86,6 +88,7 @@ fn launcher_registration_waits_out_lock_held_past_sessionstart_budget() {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-030.ac1d0e79 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-030.ac181de7 | ai:claude
 #[test]
+#[cfg(unix)]
 fn launcher_waits_for_child_when_registration_lock_stays_busy() {
     let tmp = tempfile::tempdir().unwrap();
     let marker = tmp.path().join("child-exited");
