@@ -92335,5 +92335,21 @@ operations:
   timestamp: 2026-10-30T10:38:17.511319549Z
   kind: !SetStatus
     status: Completed
-clock: 7151
+- id: 01a18c63-bf33-7ef1-a42c-1355ae0be449
+  target_id: 01a18c63-b5cd-78a1-8c9d-2d00362e7cee
+  author: aida
+  node_id: '1'
+  lamport: 7152
+  timestamp: 2026-10-30T10:38:29.683037184Z
+  kind: !Create
+    title: 'minor (non-blocking, follow-up): the advisor ruling asks that removing a stale …'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-034, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor (non-blocking, follow-up): the advisor ruling asks that removing a stale store index.lock print a one-line warning ('removed stale store index.lock from <mtime>') and that the test assert it. ensure_index_lock_clear_for_write (aida-core/src/git_ops.rs:3002-3034) removes the lock silently, and bug034_commit_recovers_a_stale_index_lock (git_ops.rs:7681) asserts only that the lock is gone. Add the eprintln with the lock mtime in the remove branch and assert it in a test.
+      Reviewed sha: c73acaf0b3420595c5518d14df0020823478051c
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 7152
 node_id: '1'
