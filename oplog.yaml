@@ -89489,5 +89489,23 @@ operations:
   timestamp: 2026-10-30T03:30:28.238433964Z
   kind: !SetStatus
     status: In Progress
-clock: 6973
+- id: 01a18ae3-f06a-7af1-81f0-3589400f4d94
+  target_id: 01a18ae3-db17-7913-a5b5-5f38563782c6
+  author: aida
+  node_id: '1'
+  lamport: 6974
+  timestamp: 2026-10-30T03:39:16.458710618Z
+  kind: !Create
+    title: Mail sent from a contained seat's private clone never reaches the advisor inbox in the primary checkout
+    description: |-
+      2026-10-29 20:28: claude-implementer-229 (contained seat clone /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-021) sent 'BUG-021 PR-3113 ready for review' to {kind:agent, agent:advisor}. It was written only to that clone's .aida/mailbox/0f11319f-...json. The advisor's `aida mailbox inbox` and `--all` in /home/joe/ai/aida never showed it; the operator had to relay it by hand. The sender was told it 'went to the durable inbox'.
+
+      Acceptance:
+      1. A message sent from a seat clone is visible in the recipient's inbox in the primary checkout within one inbox read (pushed to the canonical store on send, or the primary's inbox reads registered seat-clone mailboxes).
+      2. The send output tells the truth: if the message is only local, say so and name the sync command.
+      3. Regression test: send from a seat clone to role advisor, then read the inbox from the primary and see it.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 6974
 node_id: '1'
