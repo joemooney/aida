@@ -1,7 +1,7 @@
 id: 01a18b22-974c-7f91-b2c0-2293b1395170
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-105
 title: Every new spec gets a globally agreed ID from a reserved block, plus its local ID; backfill the local-only specs
-description: |-
+description: |
   Follow-up to STORY-HOME-095 (block delegation slice 1, Done at 9a86ae5), whose slice-2 work (root enrollment checks, dispensing from blocks) has no owner. Operator model 2026-10-29: everyday use is the bare, globally agreed ID based on reservations; every spec also keeps a local ID.
 
   Today: `aida node show` on the home primary says 'node-local allocation; no global blocks', Root: not enrolled, Pools: none. So every spec filed since the node change (BUG-HOME-0xx, STORY-HOME-0xx, TASK-HOME-1xx) has only a local ID.
@@ -13,12 +13,18 @@ description: |-
   4. `aida show` and `aida list` display the agreed ID first and the local ID beside it.
   5. Finish STORY-HOME-095 slice 2: effective_policy refuses when the local role says root but registry/root.yaml names another holder, plus dispensing from delegated blocks.
   Process: architecture-adjacent. A short sketch comment (allocation flow, backfill plan, interaction with BUG-HOME-036's resolver) and advisor signoff come before code.
+
+  ADVISOR NOTES 2026-10-29 21:55 (operator input plus store census):
+  - Operator: "this clone really is the root" and "this is where 99.9% of the work happens". Enroll the home primary (/home/joe/ai/aida) as root. No election or remote handshake is needed.
+  - Census of .aida-store/objects: 5746 flat agreed specs; 412 node-1 local ids (BUG-1-nnn), of which 411 already have an agreed_id; 269 node-b6b local ids, of which 0 have an agreed_id. The backfill target is the 269 b6b specs (plus the single node-1 spec with no agreed id).
+  - Operator offered to migrate the node-1 local ids into the b6b namespace. RULED: do not renumber. b6b local numbers 001-2xx are already taken, so a move would need an offset and would rewrite 412 ids for no lookup gain (they already resolve bare through their agreed ids). Instead, record node 1 as a retired identity of this node, so BUG-1-nnn keeps resolving and the old node never allocates again.
+  - Agreed ids for the backfill continue each type's existing global sequence (next after the highest flat agreed id per type).
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-30T04:47:42.412744068Z
+modified_at: 2026-10-30T04:50:45.742890971Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -28,6 +34,11 @@ history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
   timestamp: 2026-10-30T04:48:01.244679775Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
+- id: 01a18b25-6eec-7b11-9357-2bd3a760cc07
+  author: joe
+  timestamp: 2026-10-30T04:50:48.684898861Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
