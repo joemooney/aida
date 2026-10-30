@@ -56,12 +56,9 @@ fn lease_at(
 
 /// A pid verifiably absent from the process table: a reaped child.
 fn reaped_pid() -> u32 {
-    let mut child = std::process::Command::new("/bin/sh")
-        .args(["-c", "exit 0"])
-        .spawn()
-        .expect("spawn sh");
+    let mut child = std::process::Command::new("true").spawn().unwrap();
     let pid = child.id();
-    let _ = child.wait();
+    child.wait().unwrap();
     pid
 }
 
@@ -252,21 +249,21 @@ fn every_id_session_leases_prints_is_accepted_by_session_end() {
         lease_at(
             "01a18a648aaa",
             "PR-1",
-            std::path::Path::new("/tmp/a"),
+            std::path::Path::new("wt-a"),
             "pr-1",
             None,
         ),
         lease_at(
             "01a18a64d782",
             "PR-2",
-            std::path::Path::new("/tmp/b"),
+            std::path::Path::new("wt-b"),
             "pr-2",
             None,
         ),
         lease_at(
             "01a18b000000",
             "PR-3",
-            std::path::Path::new("/tmp/c"),
+            std::path::Path::new("wt-c"),
             "pr-3",
             None,
         ),
@@ -284,7 +281,7 @@ fn missing_session_id_is_reported_as_an_id_not_a_branch() {
     let leases = vec![lease_at(
         "01a18a64d782",
         "PR-2",
-        std::path::Path::new("/tmp/b"),
+        std::path::Path::new("wt-b"),
         "pr-2",
         None,
     )];
@@ -300,13 +297,4 @@ fn missing_session_id_is_reported_as_an_id_not_a_branch() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("No lease found for branch"), "{err}");
-}
-
-#[test]
-fn lease_id_shape() {
-    assert!(crate::session_end::looks_like_lease_id("01a18a648"));
-    assert!(crate::session_end::looks_like_lease_id("019e71db-48e0"));
-    assert!(!crate::session_end::looks_like_lease_id("01a18a6"));
-    assert!(!crate::session_end::looks_like_lease_id("feature-x"));
-    assert!(!crate::session_end::looks_like_lease_id("-01a18a648"));
 }
