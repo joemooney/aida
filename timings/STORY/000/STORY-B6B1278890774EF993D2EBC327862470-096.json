@@ -5,6 +5,10 @@
     {
       "at": "2026-10-30T07:59:55.460615127Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-30T13:29:53.913851682Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -128,6 +132,129 @@
       "kind": {
         "event": "SpecCompleted",
         "commit": "6893558f16742586e86776b31f555700c9884b66",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-30T08:19:51.114073578Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-096",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T10:00:31.755313268Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-096",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T10:34:09.769238310Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-096",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T10:59:08.990376790Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-096",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T11:58:43.221321Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+        "branch": "pr-3110",
+        "first_seen": "2026-10-30T11:58:43.221273533+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T11:58:43.505443170Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+        "branch": "story-b6b1278890774ef993d2ebc327862470-096",
+        "first_seen": "2026-10-30T11:58:43.505394668+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T12:05:40.493822494Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-096",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T12:17:57.112836397Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-096",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T13:16:53.939116887Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3129,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e3c41397e7b056a8bfe78a38abb68fecc4a8a0d3"
+      }
+    },
+    {
+      "ts": "2026-10-30T13:28:49.098399941Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T13:29:05.762843482Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3129
+      }
+    },
+    {
+      "ts": "2026-10-30T13:29:53.522723621Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-096",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7ee1fa1789a1285dba7a9790422628d1043b62d5",
+        "pr": 3129,
         "closed_by": "auto-bump"
       }
     }
