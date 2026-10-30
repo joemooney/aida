@@ -1,9 +1,9 @@
 job: cache-refresh-tick
-last_run: 2026-10-30T01:39:54.924736999Z
+last_run: 2026-10-30T02:03:08.748154602Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:124
+result: ok
 failure_trips:
 - trip_id: cache-refresh-tick@2026-10-30T01:39:54.924736999Z
   at: 2026-10-30T01:39:54.924736999Z
