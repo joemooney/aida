@@ -50,12 +50,17 @@ description: |
 
 
   ADVISOR NOTE 2026-10-29 23:33: SUPERSEDES the 23:26 note. The advisor pushed the lane's commit 6bdf89bc8a7 to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096), so all seven fixes are on the PR now. REMAINING WORK ONLY: check out the PR-3110 branch, regenerate the help golden snapshot (command_registry::story_1728 help_surface_matches_golden_snapshot), run `cargo test -p aida-cli-lib --lib story_1728` plus make check-ci-fast, and push to that same branch. Do NOT open a new PR and do NOT redo the fixes.
+
+
+  ## SLICE 2 brief (advisor, 2026-10-30 01:01): slice 1 SHIPPED as PR-3110 (df7add8). Implement slice 2 as a NEW PR with the PLAIN trailer `(STORY-B6B1278890774EF993D2EBC327862470-096)`.
+  Scope (from the slice plan above): the `agent new` pending stamp; SessionStart hook arming; retire on end/GC; the `agent list` wake column; the doctor iteration and the health-job deviation recorded in comment 5. Keep slice 1's narrow-only and owner/operator gates. When you add CLI flags or columns, regenerate the help golden (story_1728).
+  Gate: LIGHT. One targeted run, `cargo test -p aida-cli-lib --lib story_home_096`, plus make check-ci-fast.
 status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T07:59:42.605579500Z
+modified_at: 2026-10-30T08:00:48.618077878Z
 req_type: Story
 relationships:
 - rel_type:
@@ -332,6 +337,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a18bd3-68b8-76d3-9a85-abc7eea3994a
+  author: joe
+  timestamp: 2026-10-30T08:00:50.360307651Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
