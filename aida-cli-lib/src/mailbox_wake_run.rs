@@ -415,16 +415,28 @@ pub(crate) fn recover(ledger: &mut Ledger, accepted: bool) -> bool {
 }
 
 /// A private (0700) per-thread state directory holding `ledger.json` and
-/// `health.json`.
+/// `health.json`, held under its exclusive `thread.lock` for as long as
+/// this value lives.
+///
+/// Lock order: the watcher holds the project's `watch.lock` for its whole
+/// life and takes a thread's `thread.lock` for one load-tick-write step;
+/// `--recover` takes only `thread.lock` (never `watch.lock`), so it runs
+/// beside a live service without deadlock, and neither side can write a
+/// ledger the other loaded before it.
 pub(crate) struct ThreadState {
     dir: PathBuf,
+    _lock: std::fs::File,
 }
 
 impl ThreadState {
     pub(crate) fn open(state_root: &Path, thread: &str) -> Result<Self> {
+        use fs2::FileExt;
         let dir = state_root.join(thread);
         private_dir(&dir)?;
-        Ok(Self { dir })
+        let lock = lock_file(&dir.join("thread.lock"))?;
+        lock.lock_exclusive()
+            .context("locking the thread's mail-wake state")?;
+        Ok(Self { dir, _lock: lock })
     }
 
     pub(crate) fn load(&self) -> Result<Option<Ledger>> {
@@ -445,11 +457,28 @@ impl ThreadState {
 
     pub(crate) fn write(&self, ledger: &Ledger, now: f64) -> Result<()> {
         write_private(&self.dir.join("ledger.json"), &serde_json::to_vec(ledger)?)?;
+        self.write_health(ledger, now)
+    }
+
+    /// Refresh only `health.json`: the ledger itself is left untouched.
+    pub(crate) fn write_health(&self, ledger: &Ledger, now: f64) -> Result<()> {
         write_private(
             &self.dir.join("health.json"),
             &serde_json::to_vec(&ledger.health(now))?,
         )
     }
+}
+
+fn lock_file(path: &Path) -> Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .with_context(|| format!("opening {}", path.display()))
 }
 
 fn private_dir(dir: &Path) -> Result<()> {
@@ -491,9 +520,7 @@ pub(crate) fn state_root(project: &Path) -> PathBuf {
 }
 
 fn dirs_home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"))
+    crate::home_dir().unwrap_or_else(|| PathBuf::from("/"))
 }
 
 /// A short stable key for a project root.
@@ -512,11 +539,44 @@ pub(crate) fn row_thread(entry: &AgentRegistryEntry) -> Option<String> {
         .map(|u| u.to_string())
 }
 
-/// The verified audience of the armed row at `path`.
-pub(crate) fn armed_audience(path: &Path) -> Result<ResolvedAudience> {
-    MailIdentityFacts::watched(path)
-        .map(|facts| ResolvedAudience::from_facts(&facts))
-        .map_err(|why| anyhow::anyhow!("registry row is not a watchable session ({why:?})"))
+/// Proof that this process is a project's running mail-wake watcher: only
+/// the holder of its exclusive `watch.lock` can construct one, and only it
+/// may read another session's inbox (an armed row's own).
+pub(crate) struct WatchLock {
+    project: PathBuf,
+    _file: std::fs::File,
+}
+
+impl WatchLock {
+    /// Take the watcher lock under `state_root` for `project`'s rows.
+    pub(crate) fn acquire(state_root: &Path, project: &Path) -> Result<Self> {
+        use fs2::FileExt;
+        private_dir(state_root)?;
+        let file = lock_file(&state_root.join("watch.lock"))?;
+        file.try_lock_exclusive()
+            .map_err(|_| anyhow::anyhow!("another mail-wake watcher owns this project"))?;
+        Ok(Self {
+            project: project.to_path_buf(),
+            _file: file,
+        })
+    }
+
+    /// The verified audience of the armed row at `row`, which must be a
+    /// row of this watcher's project naming `recipient` as its handle.
+    pub(crate) fn armed_audience(&self, row: &Path, recipient: &str) -> Result<ResolvedAudience> {
+        if row.parent() != Some(crate::agent_registry::agents_dir(&self.project).as_path()) {
+            bail!("registry row is not one of this watcher's project");
+        }
+        let facts = MailIdentityFacts::watched(row)
+            .map_err(|why| anyhow::anyhow!("registry row is not a watchable session ({why:?})"))?;
+        if !facts
+            .own_handle()
+            .is_some_and(|h| h.eq_ignore_ascii_case(recipient.trim()))
+        {
+            bail!("registry row does not belong to `{recipient}`");
+        }
+        Ok(ResolvedAudience::from_facts(&facts))
+    }
 }
 
 /// One armed row's outcome, as the watcher prints it.
@@ -542,23 +602,13 @@ pub(crate) struct RunOptions {
 
 /// The watcher loop. One watcher per project holds `watch.lock`.
 pub(crate) fn run(opts: &RunOptions) -> Result<()> {
-    use fs2::FileExt;
-    private_dir(&opts.state_root)?;
-    let lock = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(opts.state_root.join("watch.lock"))?;
-    lock.try_lock_exclusive()
-        .map_err(|_| anyhow::anyhow!("another mail-wake watcher owns this project"))?;
+    let lock = WatchLock::acquire(&opts.state_root, &opts.project)?;
+    let own = crate::mailbox_view::own_audience();
     let queue = CodexQueue {
         codex: opts.codex.clone(),
     };
     loop {
-        for report in run_once(opts, &queue) {
+        for report in run_once(opts, &lock, &own, &queue) {
             let quiet = report.skipped.is_none()
                 && report
                     .tick
@@ -583,14 +633,19 @@ fn now_secs() -> f64 {
 }
 
 /// One pass over every armed row.
-fn run_once(opts: &RunOptions, queue: &dyn ThreadQueue) -> Vec<RowReport> {
+fn run_once(
+    opts: &RunOptions,
+    lock: &WatchLock,
+    own: &ResolvedAudience,
+    queue: &dyn ThreadQueue,
+) -> Vec<RowReport> {
     crate::agent_registry::load_active_entries(&opts.project)
         .into_iter()
         .filter(|(_, e)| e.mail_wake == Some(MailWake::Armed))
         .map(|(path, entry)| {
             let handle = entry.name.clone().unwrap_or_else(|| entry.id.clone());
             let thread = row_thread(&entry);
-            match watch_row(opts, queue, &path, &entry) {
+            match watch_row(opts, lock, own, queue, &path, &entry) {
                 Ok(tick) => RowReport {
                     handle,
                     thread,
@@ -611,6 +666,8 @@ fn run_once(opts: &RunOptions, queue: &dyn ThreadQueue) -> Vec<RowReport> {
 
 fn watch_row(
     opts: &RunOptions,
+    lock: &WatchLock,
+    own: &ResolvedAudience,
     queue: &dyn ThreadQueue,
     path: &Path,
     entry: &AgentRegistryEntry,
@@ -619,8 +676,8 @@ fn watch_row(
         bail!("unsupported: only Codex sessions have a live wake primitive");
     }
     let thread = row_thread(entry).context("the session has no Codex thread yet")?;
-    let audience = armed_audience(path)?;
     let handle = entry.name.clone().unwrap_or_default();
+    let audience = crate::mailbox_wake::audience_for_recipient(own, &handle, Some((lock, path)))?;
     let inbox = Inbox::from_audience(&handle, &audience, entry.role.as_deref());
     let state = ThreadState::open(&opts.state_root, &thread)?;
     let mut ledger = match state.load()? {
@@ -632,7 +689,8 @@ fn watch_row(
     }
     let now = now_secs();
     if ledger.inflight.is_some() {
-        state.write(&ledger, now)?;
+        // Health only: the ledger belongs to `--recover` now.
+        state.write_health(&ledger, now)?;
         bail!(
             "uncertain prior submission; inspect the thread, then run `aida mailbox wake-run \
              --recover {thread} --accepted` (or `--retry`)"
@@ -789,7 +847,7 @@ pub(crate) fn service(
                     crate::main_worktree_root_from(project).display()
                 );
             }
-            let aida = std::env::current_exe().context("locating the aida binary")?;
+            let aida = crate::resolve_aida_exe();
             let codex = match codex {
                 Some(c) => c.to_path_buf(),
                 None => which("codex").context("codex is not on PATH; pass --codex <path>")?,

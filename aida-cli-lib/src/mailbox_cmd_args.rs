@@ -28,8 +28,7 @@ pub enum MailboxCommand {
         #[clap(long)]
         local_root: Option<PathBuf>,
         /// One of this process's own inboxes; narrows, never widens, the
-        /// audience a notice would read. A registered agent handle reads that
-        /// session's own inbox when it is armed for mail wake.
+        /// audience a notice would read.
         #[clap(long, default_value = "advisor")]
         recipient: String,
         /// Print the versioned read-only envelope as JSON.
@@ -39,6 +38,12 @@ pub enum MailboxCommand {
     /// Watch every session armed for mail wake and wake its Codex thread
     /// when its own inbox has new mail (the service `wake-service` installs).
     // trace:STORY-HOME-096 | ai:claude
+    #[clap(group(
+        ArgGroup::new("recovery")
+            .args(["accepted", "retry"])
+            .multiple(false)
+            .requires("recover")
+    ))]
     WakeRun {
         /// Project whose armed sessions are watched (defaults to this one).
         #[clap(long)]
@@ -56,13 +61,14 @@ pub enum MailboxCommand {
         #[clap(long)]
         once: bool,
         /// Resolve an uncertain wake on this Codex thread, after inspecting it.
-        #[clap(long, value_name = "THREAD")]
+        /// Exactly one of --accepted or --retry is required with it.
+        #[clap(long, value_name = "THREAD", requires = "recovery")]
         recover: Option<String>,
         /// With --recover: the thread received the wake.
-        #[clap(long, requires = "recover", conflicts_with = "retry")]
+        #[clap(long)]
         accepted: bool,
         /// With --recover: the thread did not receive it; offer it again.
-        #[clap(long, requires = "recover")]
+        #[clap(long)]
         retry: bool,
     },
     /// Install, remove or inspect this project's mail-wake user service.

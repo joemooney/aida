@@ -27,12 +27,18 @@ example `codex-agent-02` and `implementer`), never for another seat's mail. The
 watcher takes the audience from the agent's registry row, not from the service's
 environment. A row is watched only while it is armed, has not ended, and its
 process is still the one it recorded. Each notice names the inbox it read.
+Only the running watcher, which holds the project's `watch.lock`, reads another
+agent's inbox. `aida mailbox wake-snapshot --recipient <handle>` only narrows the
+caller's own inboxes, so an agent can name its own handle but never another's.
+Only the agent itself, or the operator at a terminal, can arm or retire its wake.
 
 `aida agent wake retire <agent>` stops the wakes for that agent. Its ledger stays
 under `$XDG_STATE_HOME/aida/mail-wake/<project-key>/<thread>/`. Each thread
 keeps the ledger semantics the script uses (deduplication, batching and backoff).
 After an uncertain submission the agent is paused until you inspect the thread
-and run `aida mailbox wake-run --recover <thread> --accepted` (or `--retry`).
+and run `aida mailbox wake-run --recover <thread> --accepted` (or `--retry`;
+exactly one is required). A recovery waits for the service's current step on
+that thread, so the service cannot overwrite it.
 `aida mailbox wake-run --once` runs one pass and prints each armed agent's
 result. Antigravity has no live wake primitive, so its mail still arrives on its
 next turn.

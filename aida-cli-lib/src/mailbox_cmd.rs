@@ -218,9 +218,13 @@ pub(crate) fn handle_mailbox_command(
             // caller budget is the explicit read profile.
             // trace:STORY-1843 | ai:claude
             let root = local_root.as_deref().unwrap_or(project_root);
-            // trace:STORY-HOME-096 | ai:claude — a registered handle reads
-            // its armed row's own inbox, verified from the row.
-            let audience = crate::mailbox_wake::audience_for_recipient(project_root, recipient)?;
+            // trace:STORY-HOME-096 | ai:claude — narrows only: this CLI never
+            // holds the watcher's lock, so it reads only the caller's own mail.
+            let audience = crate::mailbox_wake::audience_for_recipient(
+                &crate::mailbox_view::own_audience(),
+                recipient,
+                None,
+            )?;
             let snapshot = crate::mailbox_wake::snapshot(
                 root,
                 store_root,

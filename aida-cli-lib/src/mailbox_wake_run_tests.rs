@@ -181,23 +181,34 @@ fn register_self(main: &Path, handle: &str, mail_wake: Option<&str>) -> PathBuf 
     let pid = std::process::id();
     let id = format!("codex-{pid}");
     let start = aida_core::liveness::process_start_identity(pid).unwrap();
-    let wake = mail_wake
-        .map(|w| format!("mail_wake = \"{w}\"\n"))
-        .unwrap_or_default();
+    let mut row = toml::Table::new();
+    for (key, value) in [
+        ("id", id.clone()),
+        ("agent_type", "codex".into()),
+        ("pid_start", start),
+        ("name", handle.into()),
+        ("role", "implementer".into()),
+        ("native_session_id", THREAD.into()),
+        ("started_at", "2026-10-29T00:00:00Z".into()),
+        ("last_active_at", "2026-10-29T00:00:00Z".into()),
+        ("worktree_path", main.to_string_lossy().into_owned()),
+        ("source", "agent-launcher".into()),
+    ] {
+        row.insert(key.into(), toml::Value::String(value));
+    }
+    row.insert("pid".into(), toml::Value::Integer(i64::from(pid)));
+    if let Some(wake) = mail_wake {
+        row.insert("mail_wake".into(), toml::Value::String(wake.into()));
+    }
     let path = crate::agent_registry::agents_dir(main).join(format!("{id}.toml"));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(
-        &path,
-        format!(
-            "id = \"{id}\"\nagent_type = \"codex\"\npid = {pid}\npid_start = \"{start}\"\n\
-             name = \"{handle}\"\nrole = \"implementer\"\nnative_session_id = \"{THREAD}\"\n\
-             started_at = \"2026-10-29T00:00:00Z\"\nlast_active_at = \"2026-10-29T00:00:00Z\"\n\
-             worktree_path = \"{}\"\nsource = \"agent-launcher\"\n{wake}",
-            main.display()
-        ),
-    )
-    .unwrap();
+    std::fs::write(&path, toml::to_string(&row).unwrap()).unwrap();
     path
+}
+
+/// A caller whose own verified audience holds `user` (and `role`).
+fn own(user: &str, role: Option<&str>) -> ResolvedAudience {
+    ResolvedAudience::from_facts(&crate::mailbox_view::unbound_facts(user, role, None))
 }
 
 fn options(r: &crate::mailbox_view::tests::MailRepo, state: &Path) -> RunOptions {
@@ -227,13 +238,16 @@ fn story_home_096_run_wakes_armed_rows_for_their_own_inbox_only() {
     }
     let path = register_self(&r.main, "codex-agent-02", None);
     let queue = FakeQueue::ok();
+    let opts = options(&r, state.path());
+    let lock = WatchLock::acquire(state.path(), &r.main).unwrap();
+    let watcher = own("operator", None);
     assert!(
-        run_once(&options(&r, state.path()), &queue).is_empty(),
+        run_once(&opts, &lock, &watcher, &queue).is_empty(),
         "unarmed"
     );
 
     register_self(&r.main, "codex-agent-02", Some("armed"));
-    let reports = run_once(&options(&r, state.path()), &queue);
+    let reports = run_once(&opts, &lock, &watcher, &queue);
     assert_eq!(reports.len(), 1, "{reports:?}");
     let tick = reports[0]
         .tick
@@ -243,8 +257,13 @@ fn story_home_096_run_wakes_armed_rows_for_their_own_inbox_only() {
     assert_eq!(tick.ids, vec!["to-handle", "to-role"]);
     assert!(!queue.sent.borrow()[0].contains("to-advisor"));
 
-    // The verified recipient path of `wake-snapshot` reads the same inbox.
-    let audience = crate::mailbox_wake::audience_for_recipient(&r.main, "codex-agent-02").unwrap();
+    // Only the watcher holding the lock reads the armed row's own inbox.
+    let audience = crate::mailbox_wake::audience_for_recipient(
+        &watcher,
+        "codex-agent-02",
+        Some((&lock, &path)),
+    )
+    .unwrap();
     assert_eq!(
         audience.keys().collect::<Vec<_>>(),
         vec!["codex-agent-02", "implementer"]
@@ -257,8 +276,13 @@ fn story_home_096_run_wakes_armed_rows_for_their_own_inbox_only() {
             .replace("mail_wake = \"armed\"", "mail_wake = \"retired\""),
     )
     .unwrap();
-    assert!(run_once(&options(&r, state.path()), &queue).is_empty());
-    assert!(crate::mailbox_wake::audience_for_recipient(&r.main, "codex-agent-02").is_err());
+    assert!(run_once(&opts, &lock, &watcher, &queue).is_empty());
+    assert!(crate::mailbox_wake::audience_for_recipient(
+        &watcher,
+        "codex-agent-02",
+        Some((&lock, &path))
+    )
+    .is_err());
     assert!(
         state.path().join(THREAD).join("ledger.json").exists(),
         "retiring keeps the ledger"
@@ -282,4 +306,119 @@ fn story_home_096_unit_quotes_specifiers_and_carries_its_marker() {
         unit_name(Path::new("/a")),
         format!("aida-mail-wake-{}.service", project_key(Path::new("/a")))
     );
+}
+
+// `wake-snapshot --recipient` narrows, never widens: another session's
+// armed inbox is refused to any caller that does not hold the watcher lock,
+// and a second watcher cannot take the lock.
+#[test]
+fn story_home_096_recipient_narrows_and_only_the_watcher_reads_an_armed_row() {
+    use crate::mailbox_wake::audience_for_recipient;
+    let r = mail_repo();
+    let state = tempfile::tempdir().unwrap();
+    let path = register_self(&r.main, "codex-agent-02", Some("armed"));
+    let stranger = own("codex-agent-07", Some("reviewer"));
+    let err = audience_for_recipient(&stranger, "codex-agent-02", None).unwrap_err();
+    assert!(format!("{err:#}").contains("only the project's mail-wake watcher"));
+
+    let lock = WatchLock::acquire(state.path(), &r.main).unwrap();
+    assert!(
+        WatchLock::acquire(state.path(), &r.main).is_err(),
+        "one watcher"
+    );
+    // The watcher reads only the row that names the recipient, in its project.
+    assert!(audience_for_recipient(&stranger, "codex-agent-03", Some((&lock, &path))).is_err());
+    let elsewhere = tempfile::tempdir().unwrap();
+    let foreign = elsewhere.path().join("codex-1.toml");
+    std::fs::copy(&path, &foreign).unwrap();
+    assert!(lock.armed_audience(&foreign, "codex-agent-02").is_err());
+    assert!(audience_for_recipient(&stranger, "codex-agent-02", Some((&lock, &path))).is_ok());
+}
+
+// An agent asking for its OWN handle reads its own audience whether or not a
+// row is armed, as before slice 1.
+#[test]
+fn story_home_096_own_handle_without_an_armed_row_reads_its_own_audience() {
+    let r = mail_repo();
+    register_self(&r.main, "codex-agent-02", None);
+    let me = own("codex-agent-02", Some("implementer"));
+    let audience =
+        crate::mailbox_wake::audience_for_recipient(&me, "codex-agent-02", None).unwrap();
+    assert_eq!(audience.keys().collect::<Vec<_>>(), vec!["codex-agent-02"]);
+}
+
+// `--recover` needs exactly one of `--accepted` / `--retry`.
+#[test]
+fn story_home_096_recover_requires_exactly_one_outcome() {
+    use clap::Parser;
+    #[derive(Parser)]
+    struct Cli {
+        #[clap(subcommand)]
+        command: crate::cli::MailboxCommand,
+    }
+    let parse = |extra: &[&str]| {
+        let mut argv = vec!["mailbox", "wake-run"];
+        argv.extend_from_slice(extra);
+        Cli::try_parse_from(argv).map(|_| ())
+    };
+    assert!(parse(&["--recover", THREAD]).is_err(), "bare --recover");
+    assert!(parse(&["--recover", THREAD, "--accepted", "--retry"]).is_err());
+    assert!(parse(&["--accepted"]).is_err(), "outcome without --recover");
+    assert!(parse(&["--recover", THREAD, "--accepted"]).is_ok());
+    assert!(parse(&["--recover", THREAD, "--retry"]).is_ok());
+    assert!(parse(&["--once"]).is_ok());
+}
+
+// A recover waits for the watcher's in-progress step on that thread and
+// applies on top of what the watcher wrote, so neither overwrites the other.
+#[test]
+fn story_home_096_recover_waits_for_the_watcher_thread_lock() {
+    let root = tempfile::tempdir().unwrap();
+    let mut held = ledger();
+    held.inflight = Some(Receipt {
+        ids: vec!["m1".into()],
+        at: 1.0,
+    });
+    let watcher = ThreadState::open(root.path(), THREAD).unwrap();
+    watcher.write(&ledger(), 1.0).unwrap();
+    let state_root = root.path().to_path_buf();
+    let recovering = std::thread::spawn(move || recover_thread(&state_root, THREAD, true).unwrap());
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(
+        !recovering.is_finished(),
+        "recover waits for the thread lock"
+    );
+    // The watcher's step ends with an in-flight submission, then unlocks.
+    watcher.write(&held, 2.0).unwrap();
+    drop(watcher);
+    assert!(
+        recovering.join().unwrap(),
+        "recover saw the watcher's write"
+    );
+    let after = ThreadState::open(root.path(), THREAD)
+        .unwrap()
+        .load()
+        .unwrap()
+        .unwrap();
+    assert!(after.inflight.is_none());
+    assert!(after.accepted.contains("m1"));
+}
+
+// Arming or retiring is the session's own act or the operator's, as with
+// `agent stop`: another agent is refused.
+#[test]
+fn story_home_096_wake_arm_is_the_owner_or_the_operator_only() {
+    use crate::agent_launch::require_wake_authority;
+    let r = mail_repo();
+    register_self(&r.main, "codex-agent-02", None);
+    let (_, row) = crate::agent_registry::load_active_entries(&r.main)
+        .into_iter()
+        .next()
+        .unwrap();
+    let no_human = || -> Result<()> { bail!("not a direct terminal") };
+    assert!(require_wake_authority(&row, Some("codex-agent-02"), no_human).is_ok());
+    let err = require_wake_authority(&row, Some("codex-agent-07"), no_human).unwrap_err();
+    assert!(format!("{err:#}").contains("only the session itself or the operator"));
+    assert!(require_wake_authority(&row, None, no_human).is_err());
+    assert!(require_wake_authority(&row, Some("codex-agent-07"), || Ok(())).is_ok());
 }
