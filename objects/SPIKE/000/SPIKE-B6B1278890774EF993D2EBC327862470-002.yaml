@@ -19,12 +19,12 @@ description: |
 
   ## Deliverable
   A comment with findings and one recommendation: (a) a safe injection path exists, so file a story implementing the agy wake adapter under STORY-HOME-096's per-vendor wake interface; or (b) none is safe, so keep the next-turn warning and record what agy feature would unblock it. Do not use the operator's live sessions for experiments.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:03:41.502735184Z
-modified_at: 2026-10-30T09:44:04.812685761Z
+modified_at: 2026-10-30T09:44:13.559156875Z
 req_type: Spike
 tags:
 - agent-lifecycle
@@ -66,6 +66,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18c32-0ff7-7552-904d-3356ddf8cccb
+  author: joe
+  timestamp: 2026-10-30T09:44:13.559153790Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
