@@ -88372,5 +88372,24 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 6871
+- id: 01a18a37-1214-7393-bc99-5b568ba3537a
+  target_id: 01a18a37-0960-72b0-8a16-dadde0e30969
+  author: aida
+  node_id: '1'
+  lamport: 6872
+  timestamp: 2026-10-30T00:30:27.348361705Z
+  kind: !Create
+    title: Make aida agent list canonical; keep ls as an alias
+    description: |
+      `aida agent ls` is the only subcommand spelled `ls`. Everywhere else `list` is canonical and `ls` is the alias (`aida list` / `aida ls`, TASK-1463), and STORY-HOME-096's acceptance already says `aida agent list`.
+
+      Acceptance:
+      1. `aida agent list` is the canonical subcommand (clap variant renamed); `ls` stays as a visible alias, and `status` stays as an alias with its current behaviour.
+      2. Help text, docs (docs/cli/, docs/agents/), templates/skills and hook messages that tell users to run `aida agent ls` say `aida agent list` (edit template masters, then `make sync-templates`).
+      3. Existing scripts calling `aida agent ls` keep working unchanged (test).
+      4. `aida agent list` does not collide with `list-roles`.
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 6872
 node_id: '1'
