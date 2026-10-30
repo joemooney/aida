@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-116",
+  "publishes": [
+    {
+      "at": "2026-10-30T02:19:04.421866789Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-29T22:37:28.591443084Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-116",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T22:39:52.259823305Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-116",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T00:23:30.974962100Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-116",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T00:30:43.880672170Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-116",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T01:17:49.219342784Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-116",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3109
+      }
+    },
+    {
+      "ts": "2026-10-30T01:19:23.370392351Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-116",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-116",
+        "branch": "origin/task-b6b1278890774ef993d2ebc327862470-116",
+        "first_seen": "2026-10-30T01:19:23.370351986+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T02:19:04.278828697Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-116",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5e4ec0c39e38f1b62108e4ede81c9abd24dfe7fe",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
