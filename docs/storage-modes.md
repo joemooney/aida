@@ -48,7 +48,7 @@ aida init
 - Requirements live on an orphan git branch named `aida-store` (separate history from your code)
 - One YAML file per requirement: `objects/<TYPE>/000/SPEC-ID.yaml`
 - A worktree at `.aida-store/` (gitignored) is the live working copy
-- A SQLite read cache at `.aida/cache.db` (gitignored, auto-rebuilt) projects summary fields for fast list/filter/search
+- A SQLite read cache at `.aida/cache.db` (gitignored, derived; bounded reads can report stale context) projects summary fields for fast list/filter/search
 - Writes persist through the git-canonical backend and its derived cache. Cache freshness is checked against store revisions; bounded reads may label stale/deferred/busy context rather than promise a synchronous full rebuild.
 - Default WORK clones allocate UUID-bound, per-type node-local IDs. Only an explicitly enrolled HOME clone may consume global blocks or promote IDs; cached blocks and shared metadata are not authority. These are clone allocation names, not privacy profiles or physical locations.
 - Clone-local identity, counters and transport policy are shared by linked worktrees through the common Git directory. Store history, the cache and local operational evidence have different recovery and backup requirements.
@@ -79,6 +79,8 @@ aida db sync --pull --push
 **New developer setup**:
 ```bash
 git clone <repo>
+cd <repo-directory>
+aida init                                  # or: aida node acquire; establish this clone before creating specs
 aida list                                  # attaches available store history; inspect freshness labels
 ```
 

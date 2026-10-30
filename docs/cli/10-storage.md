@@ -152,7 +152,7 @@ Every other custom edge type — for example `implements`, `implemented-by`, or 
 
 **Mental model.** The cache (`.aida/cache.db`) is a **derived, disposable** index over the git store — never a source of truth. The honest operations on a derived projection are to **look at its state** (`status`), **bring it current** (`refresh`), **cross-check it row by row** (`verify`), and **throw it away and recompute** (`rebuild`). You never *edit* the cache; writes flow through the spec commands and the cache updates itself write-through.
 
-**Reach for it when** — you suspect the cache drifted from the store (a `list` that disagrees with `show`, or after a manual poke at the `.aida-store/` worktree): `cache status` to confirm, `cache rebuild` to fix. In normal operation the HEAD-SHA stale-check rebuilds automatically, so reaching for `rebuild` by hand means the auto-detect somehow didn't fire — rare, and worth a mental note if it recurs.
+**Reach for it when** — you suspect the cache drifted from the store (a `list` that disagrees with `show`, or after a manual poke at the `.aida-store/` worktree): `cache status` to confirm, `cache rebuild` to fix. Read paths check store revisions within a bounded budget and may return stale/deferred/busy context. Those labels do not promise a synchronous rebuild or background progress. Use explicit cache maintenance when a strict rebuild is needed.
 
 **Don't reach for it when** — `list`/`search` are simply *empty* and you assume the cache is broken. Empty results are far more often a *filter* (a role scope, an archive flag, the wrong `$USER` for the queue) than a stale cache. Diagnose the query before rebuilding.
 
