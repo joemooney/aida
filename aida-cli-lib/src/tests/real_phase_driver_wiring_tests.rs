@@ -1576,6 +1576,59 @@ fn post_push_pr_recovery_adopts_existing_open_pr_instead_of_creating_another() {
     );
 }
 
+/// STORY-080 AC2 (round-3 review finding 3): a PR opened outside aida and
+/// adopted by the orchestrator binds the head commit's credited specs'
+/// pre-PR verdicts, exactly as a PR aida opens does. Before the fix the
+/// adopt path returned before binding, so `newest_verdict(PR-2042)` stayed
+/// empty until a verdict was recorded on the PR itself.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[cfg(unix)]
+#[test]
+fn adopting_an_open_pr_binds_the_specs_pre_pr_verdicts() {
+    let (_tmp, work, _remote) = repo_with_pushed_branch_ahead_of_origin_default();
+    let gone = work.parent().unwrap().join("torn-down-worktree");
+
+    let fake_gh = fake_gh_with_existing_open_pr(work.parent().unwrap(), 2042, "bug-878");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_TEST_GH_BINARY", Some(fake_gh.to_str().unwrap())),
+        ("AIDA_CONTAINED", None),
+    ]);
+    let store = crate::gate::ledger::store_root(&work).unwrap();
+    let mut early = crate::gate::review_verdict::JsonObj::new();
+    for (k, v) in [
+        ("verdict", "approved"),
+        ("reviewed_sha", "1111111111111111111111111111111111111111"),
+        ("recorded_by", "reviewer"),
+        ("recorded_at", "2026-10-30T09:00:00Z"),
+    ] {
+        early.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+    }
+    crate::gate::review_verdict::write_verdict_object(
+        &crate::gate::review_verdict::verdict_path(&store, "BUG-878"),
+        &early,
+    )
+    .unwrap();
+    assert_eq!(
+        crate::gate::ledger::project::newest_verdict(&work, "PR-2042"),
+        None
+    );
+
+    let (_ahead, pr) = try_open_orchestrator_pr_for_no_pr_worktree(
+        &work,
+        &gone,
+        "bug-878",
+        crate::forge::ForgeKind::GitHub,
+        "BUG-878",
+    )
+    .expect("the open PR is adopted");
+    assert_eq!(pr, 2042);
+    assert_eq!(
+        crate::gate::ledger::project::newest_verdict(&work, "PR-2042"),
+        Some(early),
+        "the adopted PR answers with the spec's pre-PR verdict"
+    );
+}
+
 /// TASK-1442 follow-up (containment for BUG-1510): the drain's own PR-open
 /// recovery path must refuse to open a PR when the branch's commits are
 /// trailered for a DIFFERENT spec than the one this drive is for — the exact

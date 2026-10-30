@@ -1008,6 +1008,14 @@ pub enum AgentCommand {
         name: String,
     },
 
+    /// Arm or retire a session's mail wake (internal; `agent new` arms it).
+    // trace:STORY-HOME-096 | ai:claude
+    #[clap(hide = true)]
+    Wake {
+        #[clap(subcommand)]
+        command: AgentWakeCommand,
+    },
+
     /// List the supported agent roles in the taxonomy.
     // trace:TASK-587 | ai:antigravity
     #[clap(name = "list-roles")]
@@ -1015,6 +1023,22 @@ pub enum AgentCommand {
         /// Format output as JSON.
         #[clap(long)]
         json: bool,
+    },
+}
+
+/// `aida agent wake` verbs.
+// trace:STORY-HOME-096 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum AgentWakeCommand {
+    /// Wake this live Codex session's thread when its own inbox has mail.
+    Arm {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
+    },
+    /// Stop waking this session; its ledger is kept.
+    Retire {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
     },
 }
 
@@ -1313,6 +1337,12 @@ pub enum AgentNewCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
+
+        /// Do not wake this session's thread when its inbox has mail (default:
+        /// `[agents.codex] mail_wake` in agents.toml, else on).
+        // trace:STORY-HOME-096 | ai:claude
+        #[clap(long)]
+        no_mail_wake: bool,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.

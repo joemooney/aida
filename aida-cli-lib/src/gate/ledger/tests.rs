@@ -103,6 +103,8 @@ fn kinds(events: &[GateEvent]) -> Vec<&'static str> {
             EventBody::ReleaseAuthorized { .. } => "release-authorized",
             EventBody::ReleaseWithdrawn { .. } => "release-withdrawn",
             EventBody::LabelSync { .. } => "label-sync",
+            EventBody::CarryOverProof { .. } => "carry-over-proof",
+            EventBody::CarryOverRefused { .. } => "carry-over-refused",
         })
         .collect()
 }
@@ -326,6 +328,164 @@ fn a_pr_keyed_verdict_write_lands_on_the_change_and_a_spec_keyed_one_on_the_spec
         "no legacy file is written for a spec-only verdict"
     );
     assert!(store::unbound_file(&root, "STORY-8").is_file());
+}
+
+/// STORY-080 AC2 (slice 3): a spec-only verdict recorded before any change
+/// existed binds to the change when it opens. It then reads under the change
+/// and, once, under the spec; the unbound ledger keeps its line (binding
+/// never deletes evidence); a later spec record lands on the change after
+/// it; and binding twice adds nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_spec_only_verdict_binds_to_the_change_when_it_opens() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let a = attestation("reviewer");
+    let early = record("request-changes", "2026-10-29T09:00:00Z", Some(&a));
+    rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-21"), None);
+
+    super::bind_specs(&root, ChangeKey::pr(21), &["story-9".to_string()]);
+    assert_eq!(project::newest_verdict(&root, "PR-21"), Some(early.clone()));
+    assert_eq!(
+        project::changes_for_spec(&root, "STORY-9"),
+        vec![ChangeKey::pr(21)]
+    );
+    assert_eq!(
+        project::verdict_records(&root, "STORY-9"),
+        vec![early.clone()],
+        "the bound record reads once under the spec"
+    );
+    assert_eq!(store::read_unbound(&root, "STORY-9").len(), 1);
+
+    super::bind_specs(&root, ChangeKey::pr(21), &["STORY-9".to_string()]);
+    let bound = store::read_file(&root, ChangeKey::pr(21))
+        .into_iter()
+        .filter(|e| e.verdict_record().is_some())
+        .count();
+    assert_eq!(bound, 1, "binding again adds nothing");
+
+    let later = record("approved", "2026-10-29T11:00:00Z", Some(&a));
+    rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &later).unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-21"), Some(later.clone()));
+    assert_eq!(project::newest_verdict(&root, "STORY-9"), Some(later));
+}
+
+/// STORY-080 AC2 (round-2 review finding 2): a pre-PR spec verdict binds to
+/// the first change opened for the spec only. A second change for the same
+/// spec does not inherit it: the spec reads the record once, and the second
+/// change answers with nothing until a verdict is recorded on it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_bound_spec_verdict_does_not_bind_again_to_a_second_change() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let a = attestation("reviewer");
+    let early = record("approved", "2026-10-29T09:00:00Z", Some(&a));
+    rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
+
+    super::bind_specs(&root, ChangeKey::pr(21), &["STORY-9".to_string()]);
+    super::bind_specs(&root, ChangeKey::pr(22), &["STORY-9".to_string()]);
+
+    assert_eq!(project::newest_verdict(&root, "PR-21"), Some(early.clone()));
+    assert_eq!(
+        project::newest_verdict(&root, "PR-22"),
+        None,
+        "PR-22 does not answer with a verdict that predates it and belongs to PR-21"
+    );
+    assert_eq!(
+        project::verdict_records(&root, "STORY-9"),
+        vec![early],
+        "the spec reads the record once, not once per change"
+    );
+
+    let later = record("request-changes", "2026-10-29T11:00:00Z", Some(&a));
+    rv::write_verdict_object_for_spec(&rv::verdict_path(&root, "PR-22"), &later, Some("STORY-9"))
+        .unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-22"), Some(later.clone()));
+    assert_eq!(project::verdict_records(&root, "STORY-9").len(), 2);
+}
+
+/// STORY-080 AC2 (round-2 review finding 3): every PR-open site goes through
+/// [`super::open_change_bound`], which binds the credited specs' pre-PR
+/// verdicts to the opened change. Driven with a stub forge.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn opening_a_change_through_the_hook_binds_the_credited_specs() {
+    let opens = |id| {
+        let mut forge = crate::forge::fake::RecordingForge::new();
+        forge.opens_as = Some(id);
+        forge
+    };
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let a = attestation("reviewer");
+    let early = record("approved", "2026-10-29T09:00:00Z", Some(&a));
+    rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
+    let req = crate::forge::OpenChange {
+        branch: "feat".into(),
+        base: "main".into(),
+        title: "t".into(),
+        body: String::new(),
+        draft: false,
+    };
+
+    let change =
+        super::open_change_bound(&opens(31), &root, req.clone(), &["STORY-9".to_string()]).unwrap();
+    assert_eq!(change.id, 31);
+    assert_eq!(project::newest_verdict(&root, "PR-31"), Some(early));
+
+    super::open_change_bound(&opens(0), &root, req, &["STORY-9".to_string()]).unwrap();
+    assert_eq!(
+        project::changes_for_spec(&root, "STORY-9"),
+        vec![ChangeKey::pr(31)],
+        "an open with no change number binds nothing"
+    );
+}
+
+/// STORY-080 AC2 ratchet: production code opens a change only through
+/// [`super::open_change_bound`], so no PR-open path (ship, the orchestrator,
+/// the drain cluster, the train, queue recover) skips the binding.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn every_pr_open_site_binds_through_the_hook() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut offenders = Vec::new();
+    let mut stack = vec![src.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n != "tests") {
+                    stack.push(path);
+                }
+                continue;
+            }
+            let rel = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            if path.extension().is_none_or(|e| e != "rs")
+                || rel.ends_with("tests.rs")
+                || rel == "gate/ledger/mod.rs"
+            {
+                continue;
+            }
+            let body = std::fs::read_to_string(&path).unwrap();
+            // Unit-test modules sit at the end of their file.
+            let live = body.split("#[cfg(test)]\nmod ").next().unwrap_or("");
+            if live.contains(".open_change(") {
+                offenders.push(rel);
+            }
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "these files open a change without `gate::ledger::open_change_bound`, so pre-PR \
+         spec verdicts never bind to it: {offenders:?}"
+    );
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -1396,7 +1556,8 @@ fn call_sites(src: &str, name: &str) -> usize {
 /// Inline `#[cfg(test)]` modules are stripped before counting.
 ///
 /// `write_verdict_atomic` is the one atomic file publisher left, and only at
-/// the sites below, each with its reason. `record_carry_over` is slice 3.
+/// the sites below, each with its reason. Slice 3 moved carry-over proofs
+/// onto the ledger, so `record_carry_over` is gone too.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
 fn legacy_gate_writers_do_not_gain_call_sites() {
@@ -1424,21 +1585,15 @@ fn legacy_gate_writers_do_not_gain_call_sites() {
         "local_hold_path",
         "local_clearance_path",
         "superseded_clearance_path",
+        // Carry-over proof records (slice 3: `carry-over-proof` events).
+        "record_carry_over",
     ];
-    const ATOMIC_ALLOWED: &[(&str, usize, &str)] = &[
-        (
-            "gate/review_verdict.rs",
-            2,
-            "a contained seat's hand-off file in its own seat clone (the launcher collects it), \
+    const ATOMIC_ALLOWED: &[(&str, usize, &str)] = &[(
+        "gate/review_verdict.rs",
+        2,
+        "a contained seat's hand-off file in its own seat clone (the launcher collects it), \
              and the operator's one-shot `aida review backfill-shas` over legacy files",
-        ),
-        (
-            "review_carryover.rs",
-            1,
-            "carry-over proof records: slice 3 moves them onto the ledger",
-        ),
-    ];
-    const SLICE_3: &[(&str, usize)] = &[("record_carry_over", 1)];
+    )];
     let src_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let stripped: Vec<(String, String)> = non_test_sources()
         .iter()
@@ -1471,16 +1626,6 @@ fn legacy_gate_writers_do_not_gain_call_sites() {
         assert!(
             n <= allowed,
             "{n} non-test calls of write_verdict_atomic in {file} (allowed {allowed}): verdicts go on the gate ledger"
-        );
-    }
-    for (writer, baseline) in SLICE_3 {
-        let found: usize = stripped
-            .iter()
-            .map(|(_, src)| call_sites(src, writer))
-            .sum();
-        assert!(
-            found <= *baseline,
-            "{found} non-test calls of {writer} (baseline {baseline})"
         );
     }
 }
@@ -1547,7 +1692,7 @@ fn legacy_gate_paths_do_not_gain_new_references() {
         ("review-verdicts", 32),
         ("merge-holds", 0),
         ("merge-hold-clearances", 0),
-        ("review-carryover", 1),
+        ("review-carryover", 0),
         ("review-in-progress", 6),
     ];
     let sanctioned = Path::new(env!("CARGO_MANIFEST_DIR"))

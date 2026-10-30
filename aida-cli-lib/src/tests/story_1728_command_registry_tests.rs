@@ -1,13 +1,17 @@
 //! Command-registry migration guards. The golden help snapshot pins every
 //! command's `--help` text and the full command catalog, so moving a command
 //! from the legacy enum into the registry must be byte-identical. Regenerate
-//! with `AIDA_UPDATE_SNAPSHOTS=1 cargo test -p aida-cli-lib
-//! story_1728_command_registry`, then review the diff.
+//! with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib
+//! help_surface_matches_golden_snapshot`, then review the diff.
 // trace:STORY-1728 | ai:claude
 
 use super::*;
 use crate::stakeholder_role::StakeholderAction;
 use std::fmt::Write as _;
+
+/// The exact command that regenerates the golden file; every failure names it.
+/// trace:TASK-B6B1278890774EF993D2EBC327862470-125 | ai:claude
+const UPDATE_GOLDEN_CMD: &str = "AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot";
 
 fn golden_path() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/golden/cli_help_snapshot.txt")
@@ -79,7 +83,7 @@ fn help_surface_matches_golden_snapshot() {
     }
     let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
-            "missing snapshot {}; run with AIDA_UPDATE_SNAPSHOTS=1",
+            "missing snapshot {}; regenerate it with:\n  {UPDATE_GOLDEN_CMD}",
             path.display()
         )
     });
@@ -97,7 +101,9 @@ fn help_surface_matches_golden_snapshot() {
                 .join("\n")
         };
         panic!(
-            "help surface differs from {} at line {}\n--- expected ---\n{}\n--- actual ---\n{}",
+            "help surface differs from {} at line {}\n--- expected ---\n{}\n--- actual ---\n{}\n\n\
+             If the change is intended, regenerate the golden file, review its diff, and commit it:\n  \
+             {UPDATE_GOLDEN_CMD}",
             path.display(),
             first + 1,
             show(&expected),
@@ -417,6 +423,38 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
     }
     let cli = try_parse_from(["aida", "role", "list"]).unwrap();
     assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
+}
+
+// A real `mailbox retention prune` removes Git worktree registrations, so a
+// read-only seat is refused it; its dry run stays a read.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+#[test]
+fn task118_retention_prune_is_a_write_and_its_dry_run_a_read() {
+    use crate::stakeholder_role::stakeholder_action_allowed;
+    let action = |argv: &[&str]| {
+        let cli = try_parse_from(argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        crate::stakeholder_cli_action(&cli.command)
+    };
+    for argv in [
+        &["aida", "mailbox", "retention", "prune"][..],
+        &["aida", "mailbox", "retention", "prune", "--include-locked"][..],
+    ] {
+        let want = action(argv);
+        assert_eq!(want, StakeholderAction::Write, "{argv:?}");
+        for role in ["guest", "requester"] {
+            assert!(!stakeholder_action_allowed(role, want), "{role} {argv:?}");
+        }
+    }
+    let dry = action(&[
+        "aida",
+        "mailbox",
+        "retention",
+        "prune",
+        "--include-locked",
+        "--dry-run",
+    ]);
+    assert_eq!(dry, StakeholderAction::Read);
+    assert!(stakeholder_action_allowed("guest", dry));
 }
 
 thread_local! {
