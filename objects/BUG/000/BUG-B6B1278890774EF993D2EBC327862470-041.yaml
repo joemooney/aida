@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T16:22:11.646732978Z
+modified_at: 2026-10-30T16:23:39.299765883Z
 req_type: Bug
 tags:
 - area:cache
@@ -106,6 +106,20 @@ comments:
   content: 'ADVISOR ADDENDUM 08:52 (bundles TASK-HOME-126): item 5. When ensure_index_lock_clear_for_write (aida-core/src/git_ops.rs, around line 3002) removes a stale store index.lock, print one warning line: ''removed stale store index.lock from <mtime>''. Assert that line in bug034_commit_recovers_a_stale_index_lock. The reviewer checks this item.'
   created_at: 2026-10-30T16:01:33.513503805Z
   modified_at: 2026-10-30T16:01:33.513503805Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18d9f-c023-71b3-be0e-a2384dba0ad2
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 09:27 (PR-3140 round 1, BUG-HOME-041). ONE rework push to branch bug-b6b1278890774ef993d2ebc327862470-041 (merge origin/main first; no rebase, no force). Bundle every item. No follow-up specs.
+    1. CI lib-1 'Test time budget' is red. Find any new test that sleeps or waits on real deadlines and make it deterministic: inject the clock and deadline, or use fixture heartbeats. Each new test must finish in well under 1 s.
+    2. ac0b5d93: give `rel add` and `pr auto-queue-review` a fail-fast bound. When the store or cache lock wait reports a foreign-namespace or disk-blocked holder, give up within 30 s total with the IO-pressure message, not 120 s + 25 s. Implement it as an overall deadline parameter on the lock wait used by those two commands, and test the deadline logic with an injected clock.
+    3. ac6fb004: re-running `aida pr auto-queue-review --branch B` after an interrupted run (review story filed, rel/route missing) must repair the missing links instead of refusing or duplicating. Test it with a fixture where the story exists without the rel.
+    4. Addendum item 5: the 'removed stale store index.lock from <mtime>' warning, asserted in bug034_commit_recovers_a_stale_index_lock.
+    5. Finding 5: apply the D-state no-steal check only when the visible pid's start identity MATCHES the recorded holder. A reused pid that belongs to an unrelated process never keeps a stale record alive. Fix the test to assert that, plus a matching-identity D-state holder that is not removed.
+    6. Bound the heal step of `doctor stale-locks` by the same deadline, and add one test for the bounded path.
+    Gate: LIGHT (one targeted cargo test plus make check-ci-fast). If the seat cannot push, commit and stop; the advisor publishes.
+  created_at: 2026-10-30T16:23:39.299765883Z
+  modified_at: 2026-10-30T16:23:39.299765883Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d4b-c6ce-72a0-a586-c58512a5c7e1
