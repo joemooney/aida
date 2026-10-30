@@ -1,0 +1,46 @@
+id: 01a18a5d-29ab-74b3-bfaa-462fdb975f48
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-028
+title: Permission posture view reports Codex as sandboxed when default_flags set --sandbox=danger-full-access; doctor raises no finding
+description: |
+  ## Observed (2026-10-29, primary checkout)
+  `aida config permissions show --json` reports for codex: `tier: native`, `sandbox: yes`, flags `["--ask-for-approval=never", "--sandbox=danger-full-access"]`, no findings. The flags come from the local, untracked project file `.aida/agents.toml` (mtime 2026-10-14), which overrides `~/.aida/agents.toml`'s `["--sandbox", "workspace-write", "--ask-for-approval", "never"]`. A launch with those flags runs Codex with full access, because the CLI flag beats `sandbox_mode = "workspace-write"` in `~/.codex/config.toml`. The view says sandboxed, and doctor's posture check (STORY-1127) raises nothing.
+
+  ## Root cause (aida-cli-lib/src/config_cmd.rs)
+  `permission_posture_for_agent` classifies the tier by exact token match and ignores flag values:
+  - `contained_permission_flag` matches only the bare token `--sandbox`, so `--sandbox=danger-full-access` matches nothing and the tier falls to `native`; the sandbox column then reads `sandbox_mode` from `~/.codex/config.toml` (workspace-write) and shows `yes`, though the launch flag overrides it.
+  - The two-token form `--sandbox danger-full-access` is worse: any `--sandbox` token classifies as `contained`, so full access shows as contained/sandboxed.
+  - The `codex-sandbox-overridden-by-default-flags` finding fires only for `nuclear_permission_flag`, which does not include `--sandbox danger-full-access` in either form.
+  The launch path is correct: `split_posture_flags` (agent_launch.rs) already handles both `--flag value` and `--flag=value`.
+
+  ## Current exposure (limits severity)
+  With `[agents] contained = true` in `~/.aida/agents.toml`, AIDA refuses Codex launches via `aida agent new codex` and headless drains (BUG-2144, BUG-2223), and an explicit command-line posture drops the agents.toml posture flags (BUG-1699). So on this machine these flags do not currently reach a launch. They will as soon as containment is off for a run, or on any machine without it. The view also does not say that codex/agy rows are refused under containment, and that the tracked `.aida/config.toml` `[agents] vendor = "codex"` default therefore cannot drain while contained.
+
+  ## Acceptance
+  1. Posture classification parses codex `--sandbox` and `--ask-for-approval` by value in both `--flag value` and `--flag=value` forms (reuse the `split_posture_flags` parser): `danger-full-access` is bypass/full access with sandbox `no`; `workspace-write`/`read-only` is contained/sandboxed.
+  2. The sandbox column reflects the effective launch value (flag beats `~/.codex/config.toml`) and names which source won.
+  3. A high finding fires when default_flags widen the sandbox beyond the configured `sandbox_mode`, for either form; doctor's posture category reports it.
+  4. Under `[agents] contained`, rows for vendors that cannot run contained say "refused under containment" rather than presenting their flags as the live posture; a finding notes when the configured default headless vendor is one of them.
+  5. Regression tests: both flag forms × {danger-full-access, workspace-write, read-only}, and the user-vs-project override case above.
+
+  Note: `aida doctor --category permission-posture` did not finish within 60 s in this session; not investigated here.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T01:12:03.755273489Z
+modified_at: 2026-10-30T01:12:03.755273489Z
+req_type: Bug
+tags:
+- codex
+- doctor
+- permissions
+- sandbox
+- security
+filed_at:
+  code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 1db74dba112
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
