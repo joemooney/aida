@@ -133,6 +133,8 @@ pub mod id_order;
 pub mod idle;
 pub mod import;
 pub mod integrations;
+// Disk-saturation evidence for lock waits. trace:BUG-HOME-041 | ai:claude
+pub mod io_pressure;
 pub mod project_manifest;
 // trace:TASK-737 | ai:claude
 pub mod lifecycle;

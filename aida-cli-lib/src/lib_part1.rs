@@ -152,6 +152,54 @@ mod task_1562_worktree_reclaim_tests;
 #[path = "tests/bug_1723_config_trust_tests.rs"]
 mod bug_1723_config_trust_tests;
 
+/// The commands whose store and cache lock waits run under the fail-fast
+/// deadline ([`aida_core::io_pressure::FAIL_FAST_LOCK_BUDGET`]).
+// trace:BUG-HOME-041 | ai:claude
+fn fail_fast_lock_command(name: &str, subcommand: Option<&str>) -> bool {
+    matches!(
+        (name, subcommand),
+        ("rel" | "relationship", Some("add")) | ("pr", Some("auto-queue-review"))
+    )
+}
+
+#[cfg(test)]
+mod bug_home_041_fail_fast_command_tests {
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn only_rel_add_and_auto_queue_review_fail_fast() {
+        assert!(super::fail_fast_lock_command("rel", Some("add")));
+        assert!(super::fail_fast_lock_command(
+            "pr",
+            Some("auto-queue-review")
+        ));
+        assert!(!super::fail_fast_lock_command("rel", Some("remove")));
+        assert!(!super::fail_fast_lock_command("pr", None));
+        assert!(!super::fail_fast_lock_command("add", None));
+        // The parsed name and subcommand are what the gate keys on.
+        for (argv, expected) in [
+            (
+                &["aida", "rel", "add", "A", "B", "--type", "implements"][..],
+                true,
+            ),
+            (
+                &["aida", "pr", "auto-queue-review", "--branch", "b"][..],
+                true,
+            ),
+            (
+                &["aida", "rel", "remove", "A", "B", "--type", "implements"][..],
+                false,
+            ),
+        ] {
+            let cli = crate::command_registry::try_parse_from(argv).unwrap();
+            assert_eq!(
+                super::fail_fast_lock_command(cli.command.name(), cli.command.subcommand_name()),
+                expected,
+                "{argv:?}"
+            );
+        }
+    }
+}
+
 /// The whole CLI: sigpipe setup, telemetry wrapping, error rendering,
 /// dispatch. The `aida` binary is a stub that calls this — keeping the
 /// entry point in the lib means only this one symbol is `pub` and every
@@ -1769,6 +1817,17 @@ pub(crate) fn run() -> Result<()> {
     aida_core::node_alias::set_canonical_ids(cli.globals.canonical_ids);
     // trace:TASK-1526 | ai:codex
     cache_output::set_toon_cache_output(matches!(cli.command.name(), "history" | "graph"));
+    // `rel add` and `pr auto-queue-review` run inside automated hand-offs: a
+    // lock held by a holder that cannot let go soon must fail them fast. A
+    // child they spawn (`aida add`, `aida queue add`) inherits the deadline.
+    // trace:BUG-HOME-041 | ai:claude
+    if fail_fast_lock_command(cli.command.name(), cli.command.subcommand_name())
+        || std::env::var_os(aida_core::io_pressure::FAIL_FAST_DEADLINE_ENV).is_some()
+    {
+        aida_core::io_pressure::arm_fail_fast_lock_deadline(
+            aida_core::io_pressure::FAIL_FAST_LOCK_BUDGET,
+        );
+    }
     // Only human output at a real terminal may perform the pre-C inline full
     // rebuild. Explicit JSON/TOON and advisory paths stay bounded at a TTY too.
     // trace:TASK-1526 | ai:codex
