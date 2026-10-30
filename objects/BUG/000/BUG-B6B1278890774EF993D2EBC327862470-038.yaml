@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T16:21:04.427138975Z
+modified_at: 2026-10-30T17:42:35.811322108Z
 req_type: Bug
 comments:
 - id: 01a18d9a-34cb-7a72-b993-2d699c36fda6
@@ -36,6 +36,13 @@ comments:
   created_at: 2026-10-30T16:17:41.874096890Z
   modified_at: 2026-10-30T16:17:41.874096890Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18de8-0623-7f83-bea7-4c762851a3f8
+  author: joe
+  content: 'Implemented per the 2026-10-30 ruling in commit d31debc0ce4, pushed to origin/bug-b6b1278890774ef993d2ebc327862470-038. The seat could not open the PR (gh pr create was denied in this seat), so the advisor needs to open it. Seat side: tracked_changes_pending returns a host-git refusal as its own error naming the clone. host_git_command allows git in a seat clone only when a write probe under the main checkout''s .git fails with EROFS/EACCES, and that git runs with hooks and fsmonitor off and no system or global config. Host side: aida ship --from-seat <clone> checks the lease, bundles inside the probe sandbox, verifies the bundle (exactly one ref, prerequisites present), fetches it into refs/aida/seat-import/<branch>, prints the diff stat and the config/hooks report, pushes and opens the PR. Gate LIGHT: cargo test bug_home_038 passes 6/6, including live bwrap end to end, and make check-ci-fast is green. Four s4_host_git_tests fail only inside the seat, because the path-isolated harness cannot create its HOME on a read-only filesystem (EROFS). That is environmental.'
+  created_at: 2026-10-30T17:42:35.811322108Z
+  modified_at: 2026-10-30T17:42:35.811322108Z
+  session_id: 01a18d9d27ec
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
   author: aida-session-start
