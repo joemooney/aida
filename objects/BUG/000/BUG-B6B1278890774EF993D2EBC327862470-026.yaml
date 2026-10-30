@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-30T15:04:00.509217467Z
+modified_at: 2026-10-30T15:11:17.249956065Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -39,6 +39,12 @@ comments:
     PR-3130 is OPEN against main at exact author head 1c50dd5cd89872b7e95d691eb5c51086964776f0. Code/store/mirror push succeeded; real inbox checked after push and PR creation (no new IDs; partial view prevents acknowledgement). Auto-queue completed successfully: STORY-B6B1278890774EF993D2EBC327862470-119 covers this bug and was routed to reviewer queue. Advisor handoff accepted as 2434ec53-b2b7-4a8a-a236-7a0fbf476c55; final routing receipt follows with spike findings. Independent review and integration remain pending; no self-verdict or ship was performed.
   created_at: 2026-10-30T09:44:12.198047823Z
   modified_at: 2026-10-30T09:44:12.198047823Z
+- id: 01a18d5d-7f01-7a42-ad05-8d37d6369c70
+  author: joe
+  content: 'ADVISOR RULING 2026-10-30 08:16 (PR-3130 round 1, BUG-HOME-026). The code review is otherwise clean. The ONE blocker is red CI: lib-1 ratchet no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup flags aida-cli-lib/src/tests/bug026_node_inventory_tests.rs. In node_inventory_worker_dispatch_lists_other_nodes_without_allocating, replace std::env::current_exe().unwrap() with crate::resolve_aida_exe() (precedent: bug_1749_doctor_toon_tests.rs:59 and bug_1745_error_channel_tests.rs:26). Do not add an allowlist entry. Merge origin/main (no rebase, no force), run cargo test -p aida-cli-lib --lib bug026 plus make check-ci-fast, push, and mail the advisor the new head. A delta-scoped re-review follows.'
+  created_at: 2026-10-30T15:11:17.249956065Z
+  modified_at: 2026-10-30T15:11:17.249956065Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
   author: joe
