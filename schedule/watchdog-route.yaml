@@ -7,6 +7,6 @@ result: done
 due_since: 2026-10-30T01:53:37.525402103Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-10-30T05:05:10.809400593Z
+  trip_id: watchdog@2026-10-30T14:04:33.612056780Z
   job: watchdog
-  error: 'exit 124: timed out: doctor check runaway-seats --fail-on-findings did not complete within 120s (killed)'
+  error: 'exit 1: '
