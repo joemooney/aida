@@ -36,7 +36,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:10.785877389Z
-modified_at: 2026-10-30T14:05:50.336820866Z
+modified_at: 2026-10-30T14:16:33.215761382Z
 req_type: Story
 tags:
 - cli
@@ -44,6 +44,49 @@ tags:
 - identity
 - mailbox
 - ux
+comments:
+- id: 01a18d24-337d-78a3-b04f-3f1ca54f09e6
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (AC1):** for claude / codex / antigravity bound-session fixtures (`mailbox_view::bound_facts`), whoami's handle equals `facts.own_handle()`, and a message written to that handle (what `mailbox send <handle>` delivers) is counted as the whoami mail line's direct unread through the SAME extracted `collect_mail_channel` the awaiting/notice path uses.
+    - **Unit (AC2):** mail line renders unread · shared · urgent, a `partial` marker when `MailChannel.partial`, and `→ aida mailbox inbox`; collection uses the passive (non-acking) read, so a second collection still sees the mail unread.
+    - **Unit (AC3):** working line = lease/claim spec with age, else `idle` + next queued item for the role (pure render tests on the view struct).
+    - **Unit (AC4):** goal line from `mandate::status_line` + seat purpose; omitted when both absent.
+    - **Unit (AC5):** worktree line path + branch.
+    - **Unit (AC6):** `--json` round-trips the view; toon when piped. Latency: no network calls by construction (file + read-only sqlite reads only); manual timing check on this repo, no automated <300ms assertion (flaky under CI load).
+    - **Unit (AC7):** `--verbose` appends the legacy identity block (role/agent-type/agent-name/user-id/headless/ai-tool/scope/project/purpose/session-id).
+    - **Unit (operator add.):** node line `node: HOME (<id>) · work node, node-local allocation`; `aida node show` says `work node` lower-case with the label printed separately.
+
+    ### Expected files
+    - `aida-cli-lib/src/whoami_view.rs` (new: collect + render)
+    - `aida-cli-lib/src/session_misc_cmd.rs` (args, top-level whoami visible)
+    - `aida-cli-lib/src/status_awaiting.rs` (extract mail-channel collection, no behaviour change)
+    - `aida-cli-lib/src/node_cmd.rs`, `node_cmd_args.rs`, `init_cmd.rs` (alias args, role wording)
+    - `aida-cli-lib/src/tests/story_098_whoami_tests.rs`
+    - `aida-core/templates/skills/aida-whoami.md` + generated mirrors
+    - help golden snapshot
+
+    ### Ambiguities / conflicts as questions
+    - Which "session id" to show? Resolved: the registry row's native harness session id (8-char), falling back to `AIDA_SESSION_ID`.
+  created_at: 2026-10-30T14:08:42.365588042Z
+  modified_at: 2026-10-30T14:08:42.365588042Z
+  session_id: 01a18d217056
+  harness_version: 2.1.314 (Claude Code)
+- id: 01a18d2b-62bf-7611-b3d0-09aaa066752f
+  author: joe
+  content: |-
+    ## Implementer finding (kind:deviation, severity:minor)
+
+    The `/aida-whoami` skill wrapper from the Proposal did not ship with this PR (it is not in Acceptance). The headless sandbox denies writes under `.claude/skills/` and `.claude/commands/`, so `make sync-templates` could not create the tracked mirror symlinks, and a master without mirrors fails `make check-templates`. Filing a draft TASK also failed: node-local ID allocation hit a read-only filesystem.
+
+    Follow-up: add `aida-core/templates/skills/aida-whoami.md` + `aida-core/templates/commands/aida-whoami.md` (run `aida whoami`, relay its lines, `--verbose` for identity sources, point at /aida-read-mail and /aida-pickup), then `make sync-templates && make check-templates` from a seat that can write `.claude/`.
+  created_at: 2026-10-30T14:16:33.215761382Z
+  modified_at: 2026-10-30T14:16:33.215761382Z
+  session_id: 01a18d217056
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a38-6c62-7cb1-b0db-eecb5124c34e
   author: joe
