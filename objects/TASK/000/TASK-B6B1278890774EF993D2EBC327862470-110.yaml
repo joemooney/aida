@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:25.953259931Z
-modified_at: 2026-10-30T03:49:50.468286842Z
+modified_at: 2026-10-30T04:14:45.699917230Z
 req_type: Task
 tags:
 - advisor-review
@@ -86,6 +86,14 @@ comments:
     Published advisor correction pass: PR #3100 at 25f18f9d1c408abb7a301a6f161f995b8ef5fdb9; base task-b6b1278890774ef993d2ebc327862470-109-work. All eight heads updated in one user-approved atomic force-with-lease push. Remote heads, bases and preserved previews verified. All 35 FASTTRACK gates passed for this rebuilt head. Advisor notified with all eight full SHAs for fresh independent review and bottom-up integration. No self-merge.
   created_at: 2026-10-30T00:39:11.629532956Z
   modified_at: 2026-10-30T00:39:11.629532956Z
+- id: 01a18b04-6dc3-7862-801b-9726536be759
+  author: ai:codex:joe
+  content: |
+    Round-2 upward merge published: PR #3100 at bb4bfb6be7e836fa3703aa826dd9daee6ea6320c, preserving the previously approved head and corrected TASK-109 base. The approved non-generated source/overview patch is unchanged. Generated guides inherit TASK-106's overview-link mapping; the landing conflict resolution retains Metrics and trust navigation and removes the Getting started external arrow. Whole raw-diff identity is not claimed.
+
+    Validation: all 35 make check-ci-fast gates passed (completed exit 0, /tmp/docs-round2-110-fast.log). Fresh spawned author checker independently reproduced all six guides and checked source patch, links and merge parents; no findings. Author self-check only. Plain push succeeded; required post-push aida mailbox inbox found no new IDs, with expected partial-view acknowledgement refusal. Advisor owns base-only re-record and bottom-up integration. No author verdict or self-merge.
+  created_at: 2026-10-30T04:14:45.699917230Z
+  modified_at: 2026-10-30T04:14:45.699917230Z
 history:
 - id: 01a188da-516b-7ca3-a052-e38c4cb388b5
   author: joe
