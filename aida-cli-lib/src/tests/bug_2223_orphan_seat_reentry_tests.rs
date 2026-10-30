@@ -511,6 +511,39 @@ fn a_seat_clone_hint_names_the_contained_resume() {
     );
 }
 
+/// BUG-B6B1278890774EF993D2EBC327862470-023: every scope-conflict hint names
+/// the FULL lease id. An 8-hex prefix is a timestamp that two sessions often
+/// share, so `aida session end <prefix>` it suggested was ambiguous.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+#[test]
+fn scope_conflict_hints_name_the_full_lease_id() {
+    let id = "01a18a18c31c";
+    for hint in [
+        crate::queue_cmd::scope_conflict_resume_hint("TASK-1", id, None, None, false),
+        crate::queue_cmd::scope_conflict_resume_hint("TASK-1", id, Some("why"), None, false),
+        crate::queue_cmd::scope_conflict_resume_hint(
+            "TASK-1",
+            id,
+            None,
+            Some("01a18a18aaaa"),
+            false,
+        ),
+    ] {
+        assert!(
+            hint.contains(&format!("aida session end {id} --force")),
+            "{hint}"
+        );
+    }
+    let adopted = crate::queue_cmd::scope_conflict_resume_hint(
+        "TASK-1",
+        id,
+        None,
+        Some("01a18a18aaaa"),
+        false,
+    );
+    assert!(adopted.contains("(01a18a18aaaa)"), "{adopted}");
+}
+
 /// `aida queue work <scope>` as the CLI runs it, with `--no-launch`.
 fn queue_work(
     storage: &crate::Storage,
