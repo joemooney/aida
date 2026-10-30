@@ -1335,26 +1335,56 @@ pub fn timestamp_is_known(ts: i64) -> bool {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
 pub fn parse_message_file(path: &Path, bytes: &[u8]) -> serde_json::Result<Message> {
     let mut value: serde_json::Value = serde_json::from_slice(bytes)?;
-    if let Some(obj) = value.as_object_mut() {
-        let written = obj.get("timestamp").and_then(serde_json::Value::as_i64);
-        let mtime = || {
-            std::fs::metadata(path)
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .and_then(|d| i64::try_from(d.as_millis()).ok())
-        };
-        let fallback = if written.is_some_and(|ts| ts > 0) {
-            None
-        } else {
-            mtime()
-        };
-        obj.insert(
-            "timestamp".into(),
-            normalize_timestamp(written, fallback).into(),
-        );
-    }
+    normalize_message_value(&mut value, || {
+        std::fs::metadata(path).ok().and_then(|m| mtime_millis(&m))
+    });
     serde_json::from_value(value)
+}
+
+/// A file's mtime in epoch millis.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn mtime_millis(meta: &std::fs::Metadata) -> Option<i64> {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
+}
+
+/// The `timestamp` a message file carries as written (`None` when absent,
+/// `null`, or not an integer).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn written_timestamp(value: &serde_json::Value) -> Option<i64> {
+    value.get("timestamp").and_then(serde_json::Value::as_i64)
+}
+
+/// Whether a written timestamp is already a real epoch-millis time, so the
+/// file needs no stamp: absent, non-positive, and seconds-scale values do.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn timestamp_is_stamped(written: Option<i64>) -> bool {
+    written.is_some_and(|ts| ts > 0 && !SECONDS_SCALE.contains(&ts))
+}
+
+/// Normalize the `timestamp` of a parsed message value in place (see
+/// [`normalize_timestamp`]); `fallback_ms` is consulted only when the
+/// message carries no time. The one normalizer every message reader uses.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn normalize_message_value(
+    value: &mut serde_json::Value,
+    fallback_ms: impl FnOnce() -> Option<i64>,
+) {
+    let written = written_timestamp(value);
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    let fallback = if written.is_some_and(|ts| ts > 0) {
+        None
+    } else {
+        fallback_ms()
+    };
+    obj.insert(
+        "timestamp".into(),
+        normalize_timestamp(written, fallback).into(),
+    );
 }
 
 /// Read one agent's LOCAL read-watermark (epoch millis of the newest message

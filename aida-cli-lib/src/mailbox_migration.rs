@@ -146,8 +146,10 @@ fn messages(snapshot: &mut Snapshot, dir: &Path) -> Result<Vec<Message>> {
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }
-        let message: Message = serde_json::from_slice(&snapshot.read(&path)?)
-            .with_context(|| format!("invalid mailbox envelope {}", path.display()))?;
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+        let message: Message =
+            aida_core::mailbox::parse_message_file(&path, &snapshot.read(&path)?)
+                .with_context(|| format!("invalid mailbox envelope {}", path.display()))?;
         if !ids.insert(message.id.clone()) {
             bail!("duplicate message ID '{}' in {}", message.id, dir.display());
         }
