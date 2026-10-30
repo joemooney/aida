@@ -1,7 +1,7 @@
 id: 01a18ad3-2880-73f2-ad71-cb6746f463b4
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-030
 title: aida agent new claude --role advisor crashes the claude session at launch (allocator lock message flashes)
-description: |-
+description: |
   Operator report 2026-10-29 ~20:05 MST: running `aida agent new claude --role advisor` in the operator terminal started claude, which crashed almost immediately. A message mentioning the allocator being locked flashed briefly before the crash. The operator fell back to a plain `claude` launch (session claude-advisor-08 now runs fine). Context: STORY-095 slice 1 (block delegation lineage records) merged at 9a86ae5 shortly before, and the lineage/allocation code is the likeliest source of a lock message.
 
   Acceptance:
@@ -9,12 +9,21 @@ description: |-
   2. Root-cause the allocator/lock message and the crash. If the launcher fails, it must exit with a readable error that stays on screen, not a crashed child.
   3. Fix it, with a regression test in the launcher or allocation module.
   4. Any launcher preflight error stays visible (do not clear or exec over it).
+
+  ADVISOR RULING 2026-10-29 21:45 (PR-3117 round 1, ONE rework push on the SAME PR, no new PR):
+  BUNDLE these (reviewer findings 1-4):
+  1. Per-criterion trace anchors on the tests that prove each AC, for example `// trace:BUG-b6b1278890774ef993d2ebc327862470-030.ac1d0e79`. Use the ids `aida criteria` prints.
+  2. A regression test that drives run_tracked_agent_after_spawn (agent_launch.rs ~5671) with a short-lived child (sh -c 'sleep 0.3') while the namespace lock is held past the budget, and asserts that the launcher waits for the child and returns its exit status. Restoring the old `register_spawned_agent(...)?` early return must make this test fail.
+  3. Print the deferred warnings when child.wait() errors too (agent_launch.rs ~5858 returns before the print loop), with a test.
+  4. mark_agent_ended (agent_registry.rs ~1321) uses LAUNCHER_LOCK_BUDGET (write_entry_within), so the row is marked ended under the same contention.
+  ACCEPTED, no action (finding 5): launcher_registration_waits_out_lock_held_past_sessionstart_budget is the deterministic reproduction of the 'handle allocation lock busy' message. No captured stderr artifact is needed.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_030` plus `make check-ci-fast`, then push.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T04:40:34.116969271Z
+modified_at: 2026-10-30T04:41:23.942591388Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -117,6 +126,11 @@ history:
   timestamp: 2026-10-30T04:40:36.167929689Z
   session_id: 01a18b18d080
   harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18b1c-d6f1-7983-9a10-7e1db3db0d08
+  author: joe
+  timestamp: 2026-10-30T04:41:25.489500297Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
