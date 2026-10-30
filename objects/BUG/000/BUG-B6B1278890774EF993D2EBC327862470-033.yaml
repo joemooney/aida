@@ -9,12 +9,12 @@ description: |-
   2. Bounded total time (for example 60s), then defer the rest to `aida doctor --category merged-agent-worktrees`, saying so.
   3. The ship's merge result prints before cleanup starts, and cleanup can run detached or be skipped with a flag.
   4. Test with many worktrees showing that unmerged trees are not status-scanned.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T06:28:35.354233436Z
+modified_at: 2026-10-30T07:14:55.274006463Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -71,6 +71,15 @@ history:
   timestamp: 2026-10-30T06:28:37.025296602Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18ba9-5eaa-7970-8302-623504604b3d
+  author: aida-orchestrator
+  timestamp: 2026-10-30T07:14:55.274028394Z
+  session_id: 01a18b856140
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -83,3 +92,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T06:23:21.973894774Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Core fix is sound (local merge signal before git status, 60s scan deadline, --no-cleanup skips pruning) and the 5 targeted tests pass locally, but PR CI is red (lib-0), AC3 has no test, no test carries criterion anchors, and the 60s budget covers only the scan loop
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-033 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T07:14:55.274006463Z

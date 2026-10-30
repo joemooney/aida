@@ -91126,5 +91126,13 @@ operations:
       ADVISOR RULING 2026-10-30 00:15 (PR-3103 round 2, FINAL round: one push, then a scoped check of these items only)
       (1)+(2) Do NOT regenerate docs/what-is-aida.html through the Pandoc --overview path in this PR. Restore the file's content from the base branch and remove the --overview regeneration step (or leave it unused and undocumented). That removes the accessibility and heading regressions. A Pandoc template that preserves th scope, aria-labelledby, anchors and the nested TOC can be a later task only if someone wants it; nothing is filed now.
       FIX (3): correct the report's first-project.md line citations (49-52, 65, ~80-86) and drop any accessibility claim about the regenerated overview. FIX (4): docs/showcase/index.html: aria-hide every "↗" arrow, not just the first.
-clock: 7067
+- id: 01a18ba9-6307-72c2-a5f5-1ad6b37ac319
+  target_id: 01a18ae6-b74a-78b0-83d8-c68c904be664
+  author: aida
+  node_id: '1'
+  lamport: 7068
+  timestamp: 2026-10-30T07:14:56.391236643Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 7068
 node_id: '1'
