@@ -986,7 +986,7 @@ impl MailPreview {
         Self {
             from: m.from.clone(),
             intent: m.intent,
-            age_secs: now.saturating_sub(m.timestamp).max(0),
+            age_secs: mail_age_secs(m, now).unwrap_or(0).max(0),
             subject: aida_core::mailbox::subject_line(m, 72),
         }
     }
@@ -1031,7 +1031,17 @@ pub(crate) fn is_automated_sender(from: &str) -> bool {
 /// An automated notice left unread past [`STALE_AUTOMATED_MAIL_SECS`].
 // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
 pub(crate) fn is_stale_automated(m: &aida_core::mailbox::Message, now: i64) -> bool {
-    is_automated_sender(&m.from) && now - m.timestamp > STALE_AUTOMATED_MAIL_SECS
+    is_automated_sender(&m.from)
+        && mail_age_secs(m, now).is_some_and(|age| age > STALE_AUTOMATED_MAIL_SECS)
+}
+
+/// Seconds since a message was sent, given `now` in unix SECONDS. Message
+/// timestamps are epoch MILLIS (BUG-032); `None` when the time is unknown, so
+/// an unstamped message is neither stale nor overdue.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+pub(crate) fn mail_age_secs(m: &aida_core::mailbox::Message, now: i64) -> Option<i64> {
+    aida_core::mailbox::timestamp_is_known(m.timestamp)
+        .then(|| now.saturating_sub(m.timestamp / 1000))
 }
 
 fn mail_age_label(secs: i64) -> String {
@@ -1155,7 +1165,10 @@ pub(crate) fn split_mail_scopes_for_role(
         .iter()
         .chain(&role_mail)
         .copied()
-        .filter(|m| m.intent == Intent::Request && now - m.timestamp > OVERDUE_REQUEST_SECS)
+        .filter(|m| {
+            m.intent == Intent::Request
+                && mail_age_secs(m, now).is_some_and(|age| age > OVERDUE_REQUEST_SECS)
+        })
         .collect();
     overdue.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
 
@@ -3778,7 +3791,8 @@ mod tests {
         intent: aida_core::mailbox::Intent,
         age: i64,
     ) -> aida_core::mailbox::Message {
-        let mut m = mail(id, from, to(recipient), NOW - age);
+        // Message timestamps are epoch millis; `NOW` and `age` are seconds.
+        let mut m = mail(id, from, to(recipient), (NOW - age) * 1000);
         m.intent = intent;
         m.subject = Some(format!("subject {id}"));
         m
