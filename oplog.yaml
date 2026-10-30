@@ -91484,5 +91484,33 @@ operations:
   timestamp: 2026-10-30T08:28:03.515385843Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7098
+- id: 01a18bee-207c-7142-92b2-32b93f91127a
+  target_id: 01a18ae6-b74a-78b0-83d8-c68c904be664
+  author: aida
+  node_id: '1'
+  lamport: 7099
+  timestamp: 2026-10-30T08:30:01.340073470Z
+  kind: !SetDescription
+    description: |
+      2026-10-29: `aida pr ship 3108` merged at 03:06Z but the process ran about 26 more minutes in the merged-agent-worktrees cleanup, calling `git status --porcelain` on each of 240 registered worktrees (114G under ../aida-worktrees), and reported '0 reclaimable'. That blocks serial-ship, so every other approved PR waits behind it.
+
+      Acceptance:
+      1. Cleanup only examines worktrees whose branch is merged (cheap ref check first); it never runs git status on unmerged ones.
+      2. Bounded total time (for example 60s), then defer the rest to `aida doctor --category merged-agent-worktrees`, saying so.
+      3. The ship's merge result prints before cleanup starts, and cleanup can run detached or be skipped with a flag.
+      4. Test with many worktrees showing that unmerged trees are not status-scanned.
+
+      ADVISOR RULING 2026-10-30 00:20 (PR-3123 round 1). ONE rework push on PR-3123, no new PR.
+      BUNDLE:
+      1. CI lib-0 fails help_surface_matches_golden_snapshot because the new --no-cleanup flag changed help. Regenerate the golden snapshot.
+      2. AC acac633f: a test that --no-cleanup skips the step-6 session reap and merged-worktree pruning, and that the step-3 'merged PR-N' line prints before step 6. Assert the new dry-run plan text (pr_ship.rs ~1247).
+      3. Per-test criterion anchors: .acbe47d8 and .ac7e8240 on merged_only_scan_never_status_scans_unmerged_worktrees; .ac152090 on spent_budget_defers_every_worktree_to_doctor and summary_names_the_doctor_follow_up_when_deferred; .acac633f on the new test from item 2.
+      4. Bounded time: the heal pass (heal_doctor_merged_agent_worktree per finding) and the TASK-1177 run_session_reap run under the SAME 60s deadline. Removals left undone are counted as deferred to `aida doctor`. Add a test.
+      5. Summary wording: '{n} without a local merge signal skipped', not 'unmerged skipped'.
+      ACCEPTED, no action: the deadline is checked between worktrees; one slow iteration is bounded by a single git status.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_033 bug_1719 story_1728` plus make check-ci-fast.
+
+
+      ADVISOR RULING 2026-10-30 01:30 (PR-3123 round 2): AMENDS item 4 of the 00:20 ruling. The post-merge session reap (TASK-1177 run_session_reap) may stay outside the 60s deadline, since it is documented as such. Reason: the 26-minute stall was the worktree scan and heal pass, which are now bounded; the reap's cost is linear in session count, and the operator ship path already cuts cleanup 60s after merge. Items 1-3 and 5 are verified. A re-review checks only CI green at head plus this amendment; there is no new work.
+clock: 7099
 node_id: '1'
