@@ -88515,5 +88515,17 @@ operations:
   timestamp: 2026-10-30T00:38:32.267964250Z
   kind: !SetStatus
     status: Done
-clock: 6886
+- id: 01a18a3e-a2f8-7d41-81f8-193d1214e00c
+  target_id: 01a18a3e-7f9d-7ca0-b00e-2622a713c8fc
+  author: aida
+  node_id: '1'
+  lamport: 6887
+  timestamp: 2026-10-30T00:38:43.192442273Z
+  kind: !Create
+    title: Orphaned seat lease blocks relaunch even with --steal when only ignored files differ
+    description: '2026-10-29: relaunching TASK-116 and STORY-080 refused with ''looks orphaned ... 1 uncommitted change(s)'' though git status --porcelain was clean (only ignored state like .aida/seat-clone.toml); --steal was refused too; aida session end <8-hex> was ambiguous (01a18a18 matched TASK-116 and a Codex TASK-111 session). Acceptance: the uncommitted-change count ignores gitignored seat state; --steal ends a dormant orphan whose tree has no tracked changes; the refusal hint prints the FULL unambiguous lease id.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6887
 node_id: '1'
