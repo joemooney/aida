@@ -15,6 +15,16 @@ feature: Uncategorized
 created_at: 2026-10-30T04:18:17.188008505Z
 modified_at: 2026-10-30T04:18:17.188008505Z
 req_type: Bug
+relationships:
+- rel_type: Child
+  target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
+  created_at: 2026-10-30T04:18:27.254839979Z
+history:
+- id: 01a18b07-d64b-7dd0-904d-2f1c3715f87c
+  author: joe
+  timestamp: 2026-10-30T04:18:29.067477925Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
