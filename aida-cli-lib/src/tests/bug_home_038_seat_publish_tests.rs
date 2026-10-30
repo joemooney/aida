@@ -42,27 +42,25 @@ fn bug_home_038_host_git_refusal_is_not_pending_work() {
     assert!(!crate::ship::tracked_changes_pending(&fx.main).unwrap());
 }
 
-/// Makes main's `.git` unwritable for the guard's lifetime, the way the
-/// seat sandbox does, so the write probe proves containment.
+/// Run `f` with the containment probe reporting `EROFS`, as it does under
+/// the seat sandbox's read-only bind of main (no real mount needed).
 #[cfg(unix)]
-struct ReadOnlyDir<'a>(&'a Path);
-
-#[cfg(unix)]
-impl<'a> ReadOnlyDir<'a> {
-    fn new(dir: &'a Path) -> Self {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555)).unwrap();
-        ReadOnlyDir(dir)
-    }
+fn read_only_main<R>(f: impl FnOnce() -> R) -> R {
+    aida_core::seat_clone_detect::with_containment_probe(Some(libc::EROFS), f)
 }
 
+/// Main's `.git` chmod 0555 (`EACCES`, which a seat can arrange for any
+/// directory it owns) does not prove containment.
 #[cfg(unix)]
-impl Drop for ReadOnlyDir<'_> {
-    fn drop(&mut self) {
-        // Back to 0o755 through the shared helper (the fixture ratchet).
-        let ro = self.0;
-        crate::test_exec::mark_executable(&ro);
-    }
+#[test]
+fn bug_home_038_eacces_on_main_git_is_not_containment() {
+    let fx = fixture();
+    let clone = leased_clone(&fx, "eacces", "c0ffee038010");
+    let _session = session("c0ffee038010");
+    let refused = aida_core::seat_clone_detect::with_containment_probe(Some(libc::EACCES), || {
+        aida_core::seat_clone_detect::contained_in_clone(&clone)
+    });
+    assert!(!refused);
 }
 
 /// Plant a hook in the clone's `.git/hooks` and in a `core.hooksPath`
@@ -89,17 +87,13 @@ fn session(id: &str) -> crate::test_env::EnvVarsGuard {
     ])
 }
 
-/// Condition 2: with main's `.git` unwritable and this process's session
-/// leasing the clone, host git runs in the seat's own clone, and neither a
-/// planted pre-push hook nor a `core.hooksPath` hook ever runs. Without the
-/// session's lease, the refusal is back.
+/// Condition 2: with main's `.git` read-only (EROFS) and this process's
+/// session leasing the clone, host git runs in the seat's own clone, and
+/// neither a planted pre-push hook nor a `core.hooksPath` hook ever runs.
+/// Without the session's lease, the refusal is back.
 #[cfg(unix)]
 #[test]
 fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
-    if unsafe { libc::geteuid() } == 0 {
-        eprintln!("SKIP (root ignores directory permissions)");
-        return;
-    }
     let fx = fixture();
     let clone = leased_clone(&fx, "hooks", "c0ffee038002");
     let sentinel = fx.root.join("hook-ran");
@@ -109,10 +103,8 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
     git_ok(&clone, &["config", "maintenance.auto", "false"]);
     git_ok(&clone, &["config", "gc.auto", "0"]);
 
-    let main_git = fx.main.join(".git");
-    {
-        let _session = session("c0ffee038002");
-        let _ro = ReadOnlyDir::new(&main_git);
+    let own = session("c0ffee038002");
+    read_only_main(|| {
         assert!(aida_core::seat_clone_detect::contained_in_clone(&clone));
         assert_eq!(aida_core::git_ops::refused_seat_clone(&clone), None);
         std::fs::write(clone.join("README.md"), "seat\n").unwrap();
@@ -128,20 +120,25 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
             "{}",
             String::from_utf8_lossy(&push.stderr)
         );
-    }
+    });
     assert!(
         !sentinel.exists(),
         "a seat hook ran: {}",
         std::fs::read_to_string(&sentinel).unwrap_or_default()
     );
     assert!(ref_exists(&fx.origin, "refs/heads/seat-pushed"));
-    // Not this process's lease any more: git is refused.
-    let _other = session("c0ffee0380ff");
+    // Main writable again (the host's view): git is refused.
     assert!(!aida_core::seat_clone_detect::contained_in_clone(&clone));
-    assert_eq!(
-        aida_core::git_ops::refused_seat_clone(&clone),
-        Some(clone.clone())
-    );
+    // Not this process's lease any more: git is refused.
+    drop(own);
+    let _other = session("c0ffee0380ff");
+    read_only_main(|| {
+        assert!(!aida_core::seat_clone_detect::contained_in_clone(&clone));
+        assert_eq!(
+            aida_core::git_ops::refused_seat_clone(&clone),
+            Some(clone.clone())
+        );
+    });
 }
 
 /// Ruling item 1: a contained process holding seat A's lease is refused in
@@ -149,31 +146,27 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
 #[cfg(unix)]
 #[test]
 fn bug_home_038_contained_seat_is_refused_in_another_seats_clone() {
-    if unsafe { libc::geteuid() } == 0 {
-        eprintln!("SKIP (root ignores directory permissions)");
-        return;
-    }
     let fx = fixture();
     let seat_a = super::s4_host_git_tests::leased_clone_on(&fx, "seat-a", "c0ffee038005", "a");
     let seat_b = super::s4_host_git_tests::leased_clone_on(&fx, "seat-b", "c0ffee038006", "b");
     let _session = session("c0ffee038005");
-    let main_git = fx.main.join(".git");
-    let _ro = ReadOnlyDir::new(&main_git);
-    assert!(aida_core::seat_clone_detect::contained_in_clone(&seat_a));
-    assert!(!aida_core::seat_clone_detect::contained_in_clone(&seat_b));
-    assert_eq!(
-        aida_core::git_ops::refused_seat_clone(&seat_b),
-        Some(seat_b.clone())
-    );
-    let err = crate::ship::tracked_changes_pending(&seat_b)
-        .expect_err("seat B's clone is refused to seat A")
-        .to_string();
-    assert!(err.contains(&seat_b.display().to_string()), "{err}");
-    let status = aida_core::git_ops::host_git_command(&seat_b)
-        .args(["status", "--porcelain"])
-        .output()
-        .unwrap();
-    assert!(!status.status.success(), "git ran in seat B's clone");
+    read_only_main(|| {
+        assert!(aida_core::seat_clone_detect::contained_in_clone(&seat_a));
+        assert!(!aida_core::seat_clone_detect::contained_in_clone(&seat_b));
+        assert_eq!(
+            aida_core::git_ops::refused_seat_clone(&seat_b),
+            Some(seat_b.clone())
+        );
+        let err = crate::ship::tracked_changes_pending(&seat_b)
+            .expect_err("seat B's clone is refused to seat A")
+            .to_string();
+        assert!(err.contains(&seat_b.display().to_string()), "{err}");
+        let status = aida_core::git_ops::host_git_command(&seat_b)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(!status.status.success(), "git ran in seat B's clone");
+    });
 }
 
 /// A commit on `branch` in main, then the branch deleted: the objects stay
@@ -493,6 +486,66 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
         opened[0].body
     );
     assert_eq!(*opened_for.borrow(), vec!["seat-feat".to_string()]);
+}
+
+/// Review finding 2: a failed open-PR lookup after the push is reported as
+/// an error, and no (possibly duplicate) PR is opened.
+#[test]
+fn bug_home_038_from_seat_failed_pr_lookup_opens_no_pr() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(
+        &fx,
+        "lookup",
+        "c0ffee03800b",
+        "seat-lookup",
+        "fix: seat change (BUG-1)",
+    );
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(78),
+        open_for_branch: crate::forge::ChangeLookup::Unreachable("connection reset".into()),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| panic!("after_open ran without an open PR"),
+    };
+    let err = crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("connection reset"), "{err}");
+    assert!(err.contains("no PR was opened"), "{err}");
+    assert!(forge.opened.lock().unwrap().is_empty(), "a PR was opened");
+}
+
+/// Review finding 3: an explicit spec the seat's commits do not name is
+/// refused before anything is pushed; the named one is accepted.
+#[test]
+fn bug_home_038_from_seat_explicit_spec_must_match_trailers() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(
+        &fx,
+        "mismatch",
+        "c0ffee03800c",
+        "seat-mismatch",
+        "fix: seat change (BUG-2)",
+    );
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| panic!("forge reached despite a spec mismatch"),
+        after_open: &|_, _| {},
+    };
+    let err = crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, true), &deps)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("you named BUG-1"), "{err}");
+    assert!(err.contains("BUG-2"), "{err}");
+    assert!(!ref_exists(&fx.origin, "refs/heads/seat-mismatch"));
+
+    let ids = vec!["BUG-2".to_string(), "TASK-7".to_string()];
+    crate::ship_from_seat::explicit_spec_check("bug-2", &ids).unwrap();
+    crate::ship_from_seat::explicit_spec_check("TASK-7", &ids).unwrap();
+    assert!(crate::ship_from_seat::explicit_spec_check("BUG-3", &ids).is_err());
 }
 
 /// `--from-seat` run from inside a seat clone is refused before anything.

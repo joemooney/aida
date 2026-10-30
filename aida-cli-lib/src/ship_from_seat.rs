@@ -287,9 +287,9 @@ pub(crate) fn import_seat_branch(
 /// The STORY-469 commit-trailer check on the seat's commits in `range`
 /// (read in `repo`): some commit carries a `(SPEC-ID)` trailer, and every
 /// trailer resolves to a live spec through `resolve`. A seat branch with no
-/// commit in `range` has nothing to publish.
+/// commit in `range` has nothing to publish. Returns every trailer ID.
 // trace:BUG-HOME-038 trace:STORY-469 | ai:claude
-pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Result<()>
+pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Result<Vec<String>>
 where
     F: FnMut(&str) -> crate::trace::SpecResolution,
 {
@@ -297,10 +297,11 @@ where
     if commits.is_empty() {
         anyhow::bail!("refusing to publish: the seat branch adds no commit ({range})");
     }
-    let trailered = commits
+    let trailer_ids: Vec<String> = commits
         .iter()
-        .any(|(_, subject)| !crate::extract_spec_ids_from_commit(subject).is_empty());
-    if !trailered {
+        .flat_map(|(_, subject)| crate::extract_spec_ids_from_commit(subject))
+        .collect();
+    if trailer_ids.is_empty() {
         anyhow::bail!(
             "refusing to publish: no seat commit carries a `(SPEC-ID)` trailer. Amend the \
              commit inside the seat, then publish again"
@@ -313,7 +314,32 @@ where
             crate::trace::format_trailer_guard_refusal("ship --from-seat", &violations).join("\n")
         );
     }
-    Ok(())
+    Ok(trailer_ids)
+}
+
+/// An explicit `aida ship <SPEC> --from-seat` spec must be one the seat's
+/// commits name in their trailers (aliases expanded, case ignored); a branch
+/// whose commits name another spec is refused rather than published under
+/// the wrong one.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn explicit_spec_check(explicit: &str, trailer_ids: &[String]) -> Result<()> {
+    let canonical = |id: &str| aida_core::node_alias::expand_or_keep(id).to_ascii_uppercase();
+    let want = canonical(explicit);
+    if trailer_ids.iter().any(|id| canonical(id) == want) {
+        return Ok(());
+    }
+    let mut named: Vec<String> = trailer_ids
+        .iter()
+        .map(|id| aida_core::node_alias::display_spec_id(id))
+        .collect();
+    named.sort();
+    named.dedup();
+    anyhow::bail!(
+        "refusing to publish: you named {}, but the seat's commits name {}. Drop the spec \
+         argument, or fix the commit trailer inside the seat",
+        aida_core::node_alias::display_spec_id(explicit),
+        named.join(", ")
+    )
 }
 
 /// What `aida ship --from-seat` needs from outside the repository, so a test
@@ -414,9 +440,13 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
             "warning:".yellow().bold()
         );
     }
-    seat_trailer_check(&staged.repo, &format!("{base_oid}..{quarantine}"), |id| {
-        crate::trace::resolve_spec_in_store(store.as_ref(), id)
-    })?;
+    let trailer_ids =
+        seat_trailer_check(&staged.repo, &format!("{base_oid}..{quarantine}"), |id| {
+            crate::trace::resolve_spec_in_store(store.as_ref(), id)
+        })?;
+    if let Some(explicit) = opts.spec.as_deref() {
+        explicit_spec_check(explicit, &trailer_ids)?;
+    }
     if opts.dry_run {
         eprintln!(
             "  dry run: would push {tip} to origin/{branch}{}; nothing was imported",
@@ -453,12 +483,27 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
     }
 
     let forge = (deps.forge)(&main);
+    // Only a clean "no open change" opens one: a failed lookup could hide an
+    // open PR, and opening another would duplicate it.
     let pr = match forge.change_for_branch(&branch) {
         Ok(crate::forge::ChangeLookup::Found(change)) => {
             eprintln!("  found open PR-{} for branch {branch}", change.id);
             change.id
         }
-        _ => open_seat_pr(&*forge, &main, &seat, &branch, tip)?,
+        Ok(crate::forge::ChangeLookup::NoChange) => {
+            open_seat_pr(&*forge, &main, &seat, &branch, tip)?
+        }
+        Ok(other) => anyhow::bail!(
+            "{branch} was pushed, but looking up its open PR failed ({}); no PR was opened. \
+             Check the forge CLI, then run `aida ship --from-seat {}` again",
+            describe_lookup(&other),
+            seat.root.display()
+        ),
+        Err(err) => {
+            return Err(err.context(format!(
+                "{branch} was pushed, but looking up its open PR failed; no PR was opened"
+            )))
+        }
     };
     (deps.after_open)(&main, &branch);
     eprintln!(
@@ -467,6 +512,17 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         aida_core::node_alias::display_spec_id(&spec).bold()
     );
     Ok(())
+}
+
+/// Why a lookup that neither found nor ruled out an open change failed.
+fn describe_lookup(lookup: &crate::forge::ChangeLookup) -> String {
+    use crate::forge::ChangeLookup;
+    match lookup {
+        ChangeLookup::CliMissing => "the forge CLI is not on PATH".to_string(),
+        ChangeLookup::CliFailed(why) => format!("the forge CLI failed: {}", why.trim()),
+        ChangeLookup::Unreachable(why) => format!("the forge is unreachable: {}", why.trim()),
+        ChangeLookup::Found(_) | ChangeLookup::NoChange => "no failure".to_string(),
+    }
 }
 
 /// The PR body for a published seat commit: the commit body, then the note
