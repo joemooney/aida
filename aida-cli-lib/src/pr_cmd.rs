@@ -4013,7 +4013,14 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // rather than a forced removal. Best-effort: post-merge GC must never turn a
     // landed PR into a failed ship.
     // trace:TASK-1145 | ai:codex
-    if merged_this_run {
+    // `--no-cleanup` skips this step too: it is worktree cleanup, and the
+    // flag's point is to leave post-merge state alone. The merge result has
+    // already printed by now, so a slow cleanup never hides it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+    if merged_this_run && no_cleanup {
+        eprintln!("  step 6: skipping merged agent worktree pruning (--no-cleanup)");
+    }
+    if merged_this_run && !no_cleanup {
         // TASK-1177: reap first — a session whose spec is now finished, whose
         // branch just merged, and whose process has already exited is torn down
         // whole (worktree + lease + branch) instead of leaving a stranded
@@ -4036,7 +4043,11 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
         }
-        eprintln!("  step 6: pruning verified merged agent worktrees");
+        eprintln!(
+            "  step 6: pruning verified merged agent worktrees (merged branches only, \
+             up to {}s; skip with --no-cleanup)",
+            doctor_cmd::POST_SHIP_GC_BUDGET.as_secs()
+        );
         // trace:BUG-1718 | ai:codex
         if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc_quiet() {
             eprintln!(
