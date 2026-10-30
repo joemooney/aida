@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-29T23:58:57.605478971Z
+modified_at: 2026-10-30T00:09:40.704605342Z
 req_type: Task
 tags:
 - advisor-review
@@ -70,6 +70,22 @@ comments:
     Stacked on PR #3101. TASK-B6B1278890774EF993D2EBC327862470-112.
   created_at: 2026-10-29T19:37:27.292959811Z
   modified_at: 2026-10-29T19:37:27.292959811Z
+- id: 01a18a24-0c60-71d2-b23c-205d9030a15c
+  author: joe
+  content: |
+    Advisor correction pass prepared for PR #3102. Replacement head: 742acec75c03f6a20fe005da75c0cdb657e156d5 on codex/docs-restack-112.
+
+    Operators have a supported Linux setup route separate from conversational onboarding. Fresh clones must run aida init (or aida node acquire) before creating specs. Installation/MCP opt-in, adoption/sibling stores, UUID allocation/HOME authority, cache/local state and transport documentation agree with source. Restored allocation retry/duplicate-ID refusal details, queue list --sync and unpublished-store history checks preserve operational guidance. This adds the seventh curated guide.
+
+    Rebuilt on current main (`1db74dba112`) after advisor feedback; only this slice's changes follow PR #3101. Pre-squash prerequisite commits were not replayed.
+
+    Validation: `make check-ci-fast` completed all 35 gates for this rebuilt head. Each slice's generated guide output reproduced. The final stack's guide/search/overview builds and audit reproduced in isolated author-check copies; desktop/mobile overview screenshots were inspected. No direct cargo, protected runtime changes, deployment or self-merge.
+
+    Author self-check: two fresh contexts; the first found stale human-exception wording in a linked guide, corrected in the final audit slice; the second found no remaining issues. These are author checks, not independent approval. Fresh independent review at each new head is required; the advisor integrates bottom-up.
+
+    The combined corrected stack is pushed at https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Existing PR heads are unchanged while explicit operator confirmation for the atomic force-with-lease update is pending (required by the operator Git workflow preference). Original preview preserved. No self-merge.
+  created_at: 2026-10-30T00:09:40.704605342Z
+  modified_at: 2026-10-30T00:09:40.704605342Z
 history:
 - id: 01a188db-04e1-7113-a4de-4d5e2010ac1b
   author: joe
