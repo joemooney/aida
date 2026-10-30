@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+  "publishes": [
+    {
+      "at": "2026-10-30T05:05:38.777007845Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T01:06:20.123353328Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-023",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T02:24:56.635688149Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-023",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T03:26:04.126424426Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+        "branch": "origin/bug-b6b1278890774ef993d2ebc327862470-023",
+        "first_seen": "2026-10-30T03:26:04.126325369+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T04:47:19.379736921Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3115,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ebef66d0399761e798cf2f2150dfaf27c5330192"
+      }
+    },
+    {
+      "ts": "2026-10-30T05:00:20.612866238Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T05:00:38.403905624Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3115
+      }
+    },
+    {
+      "ts": "2026-10-30T05:05:38.566442062Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-023",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "88dbfd8c194107f2e531182e532f07356c09e5bd",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
