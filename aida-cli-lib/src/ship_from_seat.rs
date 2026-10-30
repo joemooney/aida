@@ -158,6 +158,7 @@ pub(crate) fn quarantine_bundle(
     tip: &str,
 ) -> Result<String> {
     let quarantine = format!("{QUARANTINE_PREFIX}{branch}");
+    // remote-creds-ok(TASK-2001): fetches from a local bundle file; contacts no remote.
     let fetch = aida_core::git_ops::host_git_command(main)
         .args(["fetch", "--quiet", "--no-tags", "--no-write-fetch-head"])
         .arg(bundle)

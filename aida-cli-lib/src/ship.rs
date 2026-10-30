@@ -186,25 +186,19 @@ pub(crate) fn format_ship_plan(spec: &str, branch: &str, mode: FinishMode, dirty
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn tracked_changes_pending(project_root: &std::path::Path) -> anyhow::Result<bool> {
     if let Some(clone) = aida_core::git_ops::refused_seat_clone(project_root) {
-        anyhow::bail!("{}", seat_clone_refusal(&clone));
+        anyhow::bail!(
+            "{}",
+            crate::gate::ship::seat_clone_refusal(
+                &clone,
+                &aida_core::seat_clone_detect::host_git_refusal(&clone)
+            )
+        );
     }
     Ok(aida_core::git_ops::host_git_command(project_root)
         .args(["status", "--porcelain", "--untracked-files=no"])
         .output()
         .map(|o| !o.status.success() || !o.stdout.is_empty())
         .unwrap_or(true))
-}
-
-/// Why `aida ship` stops in a seat clone it cannot prove it is contained in,
-/// and how the host publishes the seat's commit instead.
-// trace:BUG-HOME-038 | ai:claude
-pub(crate) fn seat_clone_refusal(clone: &std::path::Path) -> String {
-    format!(
-        "{} — this is not uncommitted work. Commit inside the seat, then publish from the \
-         main checkout with `aida ship --from-seat {}`",
-        aida_core::seat_clone_detect::host_git_refusal(clone),
-        clone.display()
-    )
 }
 
 /// Step 1's commit: stage tracked changes only (`git add -u`) and commit them
