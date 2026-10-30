@@ -2,12 +2,12 @@ id: 01a18a46-a7d1-7431-864c-91275c88e2c9
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-025
 title: node alias set reports Error when only the GitHub push fails, though the label was committed
 description: '2026-10-29: operator ran `aida node alias set ASTER --node a65b...` where github.com did not resolve; it printed ''Error: git push failed ... Could not resolve host: github.com'' yet the label was committed (a re-run said ''already labelled ASTER'' and mirror-sync published it). Acceptance: registry writes push to every reachable hub (respecting a clone''s configured push hubs, see STORY-HOME-097), report a partial publish as a warning naming the unreached hub and the retry command, and exit 0 when the label is committed locally and on at least one hub.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:47:28.721950072Z
-modified_at: 2026-10-30T14:01:58.176862689Z
+modified_at: 2026-10-30T15:13:55.939319039Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -60,6 +60,20 @@ history:
   timestamp: 2026-10-30T14:01:59.841255594Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18d5f-eadd-7e91-b2d5-ecdcf2652c58
+  author: aida-auto-bump
+  timestamp: 2026-10-30T15:13:55.933364694Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18d5f-eae3-7e21-aeec-8ecbf7cf207e
+  timestamp: 2026-10-30T15:13:55.939314386Z
+  agent: aida
+  commit_sha: 0416e22597c6036e7cb7981e17271509bcc6dea2
+  summary: 'Base-only update from main (gh update-branch c4e441a72c59b2139fc76b7dc35df1808891eb9f -> aa64e0e50b670c219c3474467c7347a8540870b1); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -72,3 +86,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T13:58:21.264816598Z
   implemented_by: joe
+  completed_at: 2026-10-30T15:13:55.933360036Z
+  completion_sha: 0416e22597c6036e7cb7981e17271509bcc6dea2
