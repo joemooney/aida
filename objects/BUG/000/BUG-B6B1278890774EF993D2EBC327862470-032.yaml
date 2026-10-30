@@ -10,12 +10,12 @@ description: |
   3. mailbox_migration.rs ~149 also uses parse_message_file.
   4. For canonical-store files with no timestamp, persist the fallback once (stamp on first read or sync) instead of using a git-checkout mtime that changes on every pull.
   Gate: LIGHT. Run `cargo test -p aida-core mailbox` plus `cargo test -p aida-cli-lib --lib bug_032` and make check-ci-fast.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:40:04.674460929Z
-modified_at: 2026-10-30T13:41:08.894178636Z
+modified_at: 2026-10-30T13:56:34.297263951Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -83,6 +83,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18d19-1779-7b52-99d2-ad7b19abc972
+  author: aida-session-start
+  timestamp: 2026-10-30T13:56:34.297263116Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
