@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T16:44:47.009713085Z
-modified_at: 2026-10-30T16:44:47.009713085Z
+modified_at: 2026-10-30T16:53:15.084143527Z
 req_type: Task
 tags:
 - docs
@@ -16,6 +16,12 @@ relationships:
 - rel_type: Child
   target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
   created_at: 2026-10-30T16:45:25.082676213Z
+comments:
+- id: 01a18dba-d8cc-7e72-b273-3f6a9807f3bb
+  author: joe
+  content: 'Assigned by operator/advisor brief 2026-10-30 to finish EPIC-HOME-002. Read-only gap pass recovered both PR-3096 follow-ups and identified book routes plus capability/integration pages and four missing original SVG diagrams. Draft content is prepared; source implementation will start after PR-3103 merges. Request advisor approval: add --status approved was downgraded to Draft and edit --status approved refused implementer authority. Role mail request 6bb0944b-691c-40e8-a1f3-731300d10011 queued with zero eligible reader; direct claude-advisor-08 send refused no live agent. No authority escalation or stack-branch push attempted.'
+  created_at: 2026-10-30T16:53:15.084143527Z
+  modified_at: 2026-10-30T16:53:15.084143527Z
 history:
 - id: 01a18db3-b707-74d1-9f73-ae5311a96cc9
   author: ai:codex:joe
