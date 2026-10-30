@@ -1409,7 +1409,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     // Tracked/staged changes only: untracked paths (sandbox device mounts,
     // stray scratch files) never trigger or join the step-1 commit.
     // trace:TASK-2351 | ai:claude
-    let dirty = ship::tracked_changes_pending(&project_root);
+    // trace:BUG-HOME-038 | ai:claude
+    let dirty = ship::tracked_changes_pending(&project_root)?;
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if opts.dry_run {
@@ -7899,6 +7900,18 @@ pub(crate) struct ShipArgs {
     // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
     #[clap(long)]
     pub no_trailer_check: bool,
+
+    /// Publish a contained seat's committed branch from the main checkout:
+    /// bundle it inside the seat sandbox, verify the bundle, print its diff
+    /// stat and the clone's git config and hooks, push it and open the PR.
+    /// The seat's hooks never run. Never merges.
+    // trace:BUG-HOME-038 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(
+        long,
+        value_name = "CLONE",
+        conflicts_with_all = ["message", "keep_worktree", "no_trailer_check"]
+    )]
+    pub from_seat: Option<std::path::PathBuf>,
 }
 
 // STORY-720: `aida ship` dispatches before storage init for the same
@@ -7919,7 +7932,17 @@ fn run_ship(
         keep_worktree,
         dry_run,
         no_trailer_check,
+        from_seat,
     } = &args;
+    // trace:BUG-HOME-038 | ai:claude
+    if let Some(clone) = from_seat {
+        return crate::ship_from_seat::run(crate::ship_from_seat::FromSeatOptions {
+            clone: clone.clone(),
+            spec: spec.clone(),
+            no_pr: *no_pr,
+            dry_run: *dry_run,
+        });
+    }
     return run_human_finish_ceremony(HumanFinishOptions {
         spec: spec.clone(),
         message: message.clone(),

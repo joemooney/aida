@@ -269,6 +269,54 @@ pub fn has_real_git_dir(clone_root: &Path) -> bool {
     is_real_dir(&clone_root.join(".git"))
 }
 
+/// Whether THIS process is proven contained inside the seat clone at
+/// `clone_root`, by capability alone: the clone verifies against its main
+/// ([`clone_writer_main`]) and a write probe under that main's `.git` is
+/// denied (`EROFS` or `EACCES`). A process that can write main's git
+/// directory is the host, and host git never runs seat-written config. No
+/// environment variable is consulted.
+// trace:BUG-HOME-038 | ai:claude
+pub fn contained_in_clone(clone_root: &Path) -> bool {
+    clone_writer_main(clone_root).is_some_and(|main| git_dir_write_denied(&main.join(".git")))
+}
+
+/// Whether creating a scratch file directly under `git_dir` fails with
+/// `EROFS` or `EACCES`. A probe that succeeds is removed at once; any other
+/// failure proves nothing, so it reads as `false`.
+// trace:BUG-HOME-038 | ai:claude
+pub fn git_dir_write_denied(git_dir: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        let probe = git_dir.join(format!(
+            "aida-containment-probe-{}-{nanos}",
+            std::process::id()
+        ));
+        // O_WRONLY | O_CREAT | O_EXCL, never through a symlink.
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&probe)
+        {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&probe);
+                false
+            }
+            Err(err) => matches!(err.raw_os_error(), Some(libc::EROFS | libc::EACCES)),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = git_dir;
+        false
+    }
+}
+
 /// The refusal text for host git aimed at a seat clone.
 // trace:BUG-2169 | ai:claude
 pub fn host_git_refusal(clone_root: &Path) -> String {

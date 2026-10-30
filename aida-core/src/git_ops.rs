@@ -134,6 +134,13 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     // hooks; host git never runs there. Same fixed refusal process as below.
     // trace:BUG-2169 | ai:claude
     if let Some(clone_root) = crate::seat_clone_detect::seat_clone_root(cwd) {
+        // BUG-HOME-038: the seat itself, proven contained by capability, may
+        // run git in its own clone, with hooks, fsmonitor and every config
+        // file but the clone's own switched off.
+        // trace:BUG-HOME-038 | ai:claude
+        if crate::seat_clone_detect::contained_in_clone(&clone_root) {
+            return contained_seat_git_command(cwd);
+        }
         let mut refused = Command::new("sh");
         refused
             .args([
@@ -238,6 +245,62 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
                     ])
                     .arg(format!("{err:#}"));
                 return refused;
+            }
+        }
+    }
+    cmd
+}
+
+/// The seat clone [`host_git_command`] refuses for `cwd`: the clone `cwd` is
+/// in, unless this process is proven contained there
+/// ([`crate::seat_clone_detect::contained_in_clone`]). `None` when git may run.
+// trace:BUG-HOME-038 | ai:claude
+pub fn refused_seat_clone(cwd: impl AsRef<Path>) -> Option<PathBuf> {
+    let clone_root = crate::seat_clone_detect::seat_clone_root(cwd.as_ref())?;
+    (!crate::seat_clone_detect::contained_in_clone(&clone_root)).then_some(clone_root)
+}
+
+/// Git for a contained seat in its own clone (BUG-HOME-038 ruling, condition
+/// 2): no hooks, no fsmonitor, no system or global config file. The clone's
+/// own config is the seat's to write and is read as usual. The author and
+/// committer default to the user's global identity, which the disabled
+/// global config would otherwise drop.
+// trace:BUG-HOME-038 | ai:claude
+fn contained_seat_git_command(cwd: &Path) -> Command {
+    // raw-git-ok(TASK-2053): only for a process proven contained in its own
+    // clone (BUG-HOME-038), hardened below.
+    let mut cmd = Command::new("git");
+    cmd.current_dir(cwd)
+        .args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "core.fsmonitor=false",
+        ])
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null");
+    for (key, vars) in [
+        ("user.name", ["GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"]),
+        ("user.email", ["GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"]),
+    ] {
+        if vars.iter().all(|v| std::env::var_os(v).is_some()) {
+            continue;
+        }
+        // `--global` reads only the user's own file; `/` is no repository.
+        // raw-git-ok(TASK-2053): runs in `/`, never in a clone.
+        let value = Command::new("git")
+            .current_dir("/")
+            .args(["config", "--global", "--get", key])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|v| !v.is_empty());
+        if let Some(value) = value {
+            for var in vars {
+                if std::env::var_os(var).is_none() {
+                    cmd.env(var, &value);
+                }
             }
         }
     }

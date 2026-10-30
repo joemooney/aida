@@ -519,6 +519,7 @@ pub(crate) use aida_core::liveness::{
 };
 mod prompts;
 mod ship;
+mod ship_from_seat;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
 mod queue_recover;
