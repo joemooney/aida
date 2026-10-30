@@ -3094,7 +3094,11 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
+    use self::mailbox_cmd_args::RetentionCommand;
     crate::command_registry::CmdPolicy {
+        // A real prune removes Git worktree registrations, so only its dry
+        // run is a read.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
         stakeholder: if matches!(
             inner,
             Some(
@@ -3102,7 +3106,10 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
                     | MailboxCommand::WakeSnapshot { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
-                    | MailboxCommand::Retention { .. }
+                    | MailboxCommand::Retention {
+                        command: RetentionCommand::Activate { .. }
+                            | RetentionCommand::Prune { dry_run: true, .. }
+                    }
             )
         ) {
             SA::Read
