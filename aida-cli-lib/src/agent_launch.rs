@@ -5822,46 +5822,34 @@ fn run_tracked_agent_after_spawn(
         "could not forward Ctrl+C/SIGTERM to the agent",
         &mut deferred_warnings,
     );
-    let registry_entry = post_spawn_step(
-        agent_registry::register_spawned_agent(
-            &plan.project_root,
-            config.agent_type,
-            child_pid,
-            plan.role.clone(),
-            plan.current_spec.clone(),
-            plan.launch_cwd.clone(),
-            Some(&binary),
-            Some(plan.name.clone()),
-            plan.native_session_id.clone(),
-            plan.resumed_from.clone(),
-            description,
-        ),
-        "could not record this agent in the registry, so `aida agent ls` will not list it",
-        &mut deferred_warnings,
-    );
-    // TASK-1498: `--verbose` process-registration diagnostics — confirms the
-    // spawned pid and the registry entry id it was recorded under, right
-    // after the write that makes it visible to `aida agent ls`.
-    // trace:TASK-1498 | ai:claude
-    if verbose {
-        if let Some(entry) = &registry_entry {
-            eprintln!(
-                "  {}: spawned pid {} registered as {}",
-                "diagnostics".bold(),
+    let status = supervise_spawned_child(
+        config.agent_type,
+        child_pid,
+        deferred_warnings,
+        || {
+            agent_registry::register_spawned_agent(
+                &plan.project_root,
+                config.agent_type,
                 child_pid,
-                entry.id
-            );
-        }
-    }
-    let status = child
-        .wait()
-        .with_context(|| format!("failed to wait for {}", config.agent_type))?;
+                plan.role.clone(),
+                plan.current_spec.clone(),
+                plan.launch_cwd.clone(),
+                Some(&binary),
+                Some(plan.name.clone()),
+                plan.native_session_id.clone(),
+                plan.resumed_from.clone(),
+                description,
+            )
+            .map(|entry| entry.id)
+        },
+        || child.wait(),
+        verbose,
+        &mut std::io::stderr(),
+    );
     if let Some(forwarder) = signal_forwarder {
         forwarder.stop();
     }
-    for warning in &deferred_warnings {
-        eprintln!("{} {warning}", "warning:".yellow().bold());
-    }
+    let status = status?;
     // TASK-1498: `--verbose` child exit/result diagnostics — reported clearly
     // without changing launch semantics (the exit-code propagation below is
     // unchanged). trace:TASK-1498 | ai:claude
@@ -5905,6 +5893,47 @@ fn run_tracked_agent_after_spawn(
         std::process::exit(status.code().unwrap_or(1));
     }
     Ok(())
+}
+
+/// Register a spawned child, wait for it, then print any deferred warnings.
+/// A failed registration never returns early: the launcher keeps waiting so
+/// the shell cannot take the terminal back while the agent runs. Warnings
+/// print after the child exits, including when the wait itself fails.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn supervise_spawned_child(
+    agent_type: &str,
+    child_pid: u32,
+    mut deferred_warnings: Vec<String>,
+    register: impl FnOnce() -> Result<String>,
+    wait: impl FnOnce() -> std::io::Result<std::process::ExitStatus>,
+    verbose: bool,
+    warn_out: &mut dyn std::io::Write,
+) -> Result<std::process::ExitStatus> {
+    use std::io::Write as _;
+    let registry_id = post_spawn_step(
+        register(),
+        "could not record this agent in the registry, so `aida agent ls` will not list it",
+        &mut deferred_warnings,
+    );
+    // TASK-1498: `--verbose` process-registration diagnostics — confirms the
+    // spawned pid and the registry entry id it was recorded under, right
+    // after the write that makes it visible to `aida agent ls`.
+    // trace:TASK-1498 | ai:claude
+    if verbose {
+        if let Some(id) = &registry_id {
+            eprintln!(
+                "  {}: spawned pid {} registered as {}",
+                "diagnostics".bold(),
+                child_pid,
+                id
+            );
+        }
+    }
+    let status = wait().with_context(|| format!("failed to wait for {agent_type}"));
+    for warning in &deferred_warnings {
+        let _ = writeln!(warn_out, "{} {warning}", "warning:".yellow().bold());
+    }
+    status
 }
 
 /// Keep a post-spawn step's value, or record why it failed for printing

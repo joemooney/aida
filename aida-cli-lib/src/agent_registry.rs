@@ -1318,7 +1318,15 @@ pub(crate) fn mark_agent_ended(
     entry.paused_since = None;
     entry.paused_reason = None;
     entry.expected_back = None;
-    write_entry(project_root, &entry)?;
+    // The launcher marks its child ended under the same launch-time
+    // contention it registered through; the SessionStart budget would leave
+    // a dead pid listed as running.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    write_entry_within(
+        project_root,
+        &entry,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+    )?;
     Ok(Some(entry))
 }
 
