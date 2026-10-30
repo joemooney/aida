@@ -19,12 +19,12 @@ description: |
   5. run_standalone_reviewer restores the previous cwd (or avoids set_current_dir and passes the root explicitly).
   6. Fold the duplicated 'released orphaned lease' message and bail into one release path.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_024 bug_2149 session_reap` plus make check-ci-fast.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T11:22:27.413345168Z
+modified_at: 2026-10-30T11:54:02.994930459Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -158,6 +158,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18ca8-eb72-7052-bc0b-f4cd99ac0e03
+  author: aida-session-start
+  timestamp: 2026-10-30T11:54:02.994927347Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
