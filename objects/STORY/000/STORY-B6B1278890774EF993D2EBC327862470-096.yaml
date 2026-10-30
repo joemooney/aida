@@ -49,7 +49,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T05:45:16.646292675Z
+modified_at: 2026-10-30T06:11:48.110370592Z
 req_type: Story
 relationships:
 - rel_type:
@@ -145,6 +145,22 @@ comments:
   modified_at: 2026-10-30T02:06:20.612689837Z
   session_id: 01a18a5c20bb
   harness_version: 2.1.312 (Claude Code)
+- id: 01a18b6f-950e-76e1-a7f8-54233576b202
+  author: joe
+  content: |-
+    ## Rework round 1 status (implementer, ai:claude, 2026-10-29 23:12)
+    All 7 items from the 22:05 ruling are implemented in local commit 6bdf89bc8a7, on branch story-b6b1278890774ef993d2ebc327862470-096-2. That branch is based on PR-3110's head ae5f330c. The commit is NOT pushed yet.
+    - 1: crate::resolve_aida_exe() and crate::home_dir() replace the raw lookups. 2: the fixture TOML is built through toml::Table.
+    - 3/4: audience_for_recipient(own, recipient, watcher) narrows own first. Only a WatchLock (held watch.lock) proof reads an armed row of its own project naming that handle. The CLI passes None, so others are refused. Own handle with no armed row reads its own audience. Tests: story_home_096_recipient_narrows..., story_home_096_own_handle_without_an_armed_row...
+    - 5: ArgGroup 'recovery' (accepted|retry, required by --recover). Test: story_home_096_recover_requires_exactly_one_outcome.
+    - 6: per-thread thread.lock is held for each load-tick-write step and by --recover. The in-flight path writes health.json only. Lock order is commented: recover never takes watch.lock, so it works beside a live service. Test: story_home_096_recover_waits_for_the_watcher_thread_lock.
+    - 7: require_wake_authority (own handle names the row, else require_direct_human). Test: story_home_096_wake_arm_is_the_owner_or_the_operator_only.
+    Not done: the targeted test run never completed. The first compile surfaced one test-only import error, now fixed. The reruns stalled in the cargo slot queue while cargo ps showed 0/2 busy, and the sandbox cannot write the slot dir. Because the --recipient/--recover help text changed, the help golden still needs AIDA_UPDATE_SNAPSHOTS=1 on story_1728. make check-ci-fast: only the formatting gate failed, and cargo fmt has fixed it since.
+    To finish: cargo test --profile agent -p aida-cli-lib --lib -- story_home_096 resolve_aida_exe no_direct_home; AIDA_UPDATE_SNAPSHOTS=1 ... story_1728; amend the golden in a Refs commit; make check-ci-fast; git push origin HEAD:story-b6b1278890774ef993d2ebc327862470-096.
+  created_at: 2026-10-30T06:11:48.110370592Z
+  modified_at: 2026-10-30T06:11:48.110370592Z
+  session_id: 01a18b573ec5
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
   author: joe
