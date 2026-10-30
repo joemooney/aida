@@ -30,7 +30,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T16:25:48.260734321Z
+modified_at: 2026-10-30T17:42:04.535331825Z
 req_type: Bug
 tags:
 - area:cache
@@ -144,6 +144,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-30T16:24:29.954194599Z
   modified_at: 2026-10-30T16:24:29.954194599Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18de7-8bf7-7b12-aab9-cca6d054ccc9
+  author: joe
+  content: 'performance-guard trip 10:45: aida show was over budget on 27.8% of 223 calls in 24h (worst 17.7 s). Ruled NOT a code regression: it matches today''s HDD (sda) IO saturation window. Budget unchanged. Re-evaluate after the IO-pressure reporting lands and after the operator decides whether to move worktrees and the cache to the SSD.'
+  created_at: 2026-10-30T17:42:04.535331825Z
+  modified_at: 2026-10-30T17:42:04.535331825Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d4b-c6ce-72a0-a586-c58512a5c7e1
