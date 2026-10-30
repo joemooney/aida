@@ -589,11 +589,12 @@ fn handle_node_alias_command(cmd: &NodeAliasCommand, store_path: &std::path::Pat
             let label = node_alias::validate_label(label).map_err(anyhow::Error::msg)?;
             // `mutate_cas` refuses a label equal to a registered node id (for
             // set and rename alike).
-            let changed =
+            let outcome =
                 node_alias::mutate_cas(store_path, &format!("label node {node} {label}"), |map| {
                     map.set(&label, &node)
                 })?;
-            if changed {
+            publish_alias_write(store_path, &outcome)?;
+            if outcome.changed() {
                 println!("Labelled node {node} {label}. TASK-{label}-NNN now names its specs.");
             } else {
                 println!("Node {node} is already labelled {label}.");
@@ -602,12 +603,13 @@ fn handle_node_alias_command(cmd: &NodeAliasCommand, store_path: &std::path::Pat
         NodeAliasCommand::Rename { old, new } => {
             let old = node_alias::validate_label(old).map_err(anyhow::Error::msg)?;
             let new = node_alias::validate_label(new).map_err(anyhow::Error::msg)?;
-            let changed = node_alias::mutate_cas(
+            let outcome = node_alias::mutate_cas(
                 store_path,
                 &format!("relabel node {old} -> {new}"),
                 |map| map.rename(&old, &new),
             )?;
-            if changed {
+            publish_alias_write(store_path, &outcome)?;
+            if outcome.changed() {
                 println!("Relabelled {old} to {new}. {old} is retired and still resolves to the same node.");
             } else {
                 println!("{old} is already the current label.");
@@ -651,6 +653,140 @@ fn handle_node_alias_command(cmd: &NodeAliasCommand, store_path: &std::path::Pat
         }
     }
     Ok(())
+}
+
+/// A hub a committed node-alias write did not reach: why, and the command
+/// that publishes it later.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UnreachedHub {
+    hub: String,
+    reason: String,
+    retry: String,
+}
+
+/// Publish a committed node-alias write to every configured hub: `origin`
+/// (already pushed or attempted by `mutate_cas`) plus each `[store.sync]
+/// mirror_remotes` entry, by exact commit. A hub that cannot be reached is a
+/// warning naming it and the retry command; the command fails only when the
+/// label reached no hub at all.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+fn publish_alias_write(
+    store_path: &std::path::Path,
+    outcome: &aida_core::node_alias::MutateCasOutcome,
+) -> Result<()> {
+    use aida_core::git_ops::{self, PushFailure, PushOutcome};
+    use aida_core::node_alias::{MutateCasOutcome, OriginPublish};
+    let MutateCasOutcome::Committed {
+        sha,
+        branch,
+        origin,
+    } = outcome
+    else {
+        return Ok(());
+    };
+    let mut reached = Vec::new();
+    let mut unreached = Vec::new();
+    match origin {
+        OriginPublish::Pushed => reached.push("origin".to_string()),
+        OriginPublish::NoOrigin => {}
+        OriginPublish::Unreached(stderr) => unreached.push(UnreachedHub {
+            hub: "origin".into(),
+            reason: crate::remote_create::git_push_failure_detail(stderr),
+            retry: "aida db sync --push".into(),
+        }),
+    }
+    let project_root = find_project_root_from(store_path.parent().unwrap_or(store_path)).ok();
+    let mirrors = project_root
+        .as_deref()
+        .and_then(|root| crate::store_sync::read_store_sync_config(root).ok())
+        .map(|cfg| cfg.mirror_remotes)
+        .unwrap_or_default();
+    // Once origin holds the label, mirror-sync copies it on; otherwise the
+    // store push re-publishes to origin and fans out to every mirror.
+    let mirror_retry = if reached.is_empty() {
+        "aida db sync --push"
+    } else {
+        "aida remote mirror-sync"
+    };
+    for mirror in mirrors.iter().filter(|m| m.as_str() != "origin") {
+        let miss = |reason: String, retry: &str| UnreachedHub {
+            hub: mirror.clone(),
+            reason,
+            retry: retry.to_string(),
+        };
+        if !git_ops::has_remote(store_path, mirror) {
+            unreached.push(miss(
+                "listed in [store.sync] mirror_remotes but not a git remote in this clone".into(),
+                &format!("aida remote mirror {mirror} --url <url>"),
+            ));
+            continue;
+        }
+        let missed = match git_ops::push_exact_outcome(store_path, mirror, sha, branch) {
+            Ok(PushOutcome::Pushed) => None,
+            Ok(PushOutcome::Failed {
+                kind: PushFailure::NonFastForward,
+                ..
+            }) => Some(miss("the hub has diverged".into(), "aida remote reconcile")),
+            Ok(PushOutcome::Failed { stderr, .. }) => Some(miss(
+                crate::remote_create::git_push_failure_detail(&stderr),
+                mirror_retry,
+            )),
+            Err(e) => Some(miss(e.to_string(), mirror_retry)),
+        };
+        match missed {
+            None => {
+                if let Some(root) = &project_root {
+                    crate::doctor_root::clear_store_mirror_fanout_failure(
+                        root, store_path, branch, mirror,
+                    );
+                }
+                reached.push(mirror.clone());
+            }
+            Some(hub) => {
+                if let Some(root) = &project_root {
+                    crate::doctor_root::record_store_mirror_fanout_failure(
+                        root,
+                        store_path,
+                        branch,
+                        mirror,
+                        &hub.reason,
+                    );
+                }
+                unreached.push(hub);
+            }
+        }
+    }
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    for line in alias_publish_warnings(&reached, &unreached)? {
+        eprintln!("{warn} {line}");
+    }
+    Ok(())
+}
+
+/// Warning lines for the hubs a committed label missed, or an error when it
+/// reached none of them (the label is then only in this clone).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+fn alias_publish_warnings(reached: &[String], unreached: &[UnreachedHub]) -> Result<Vec<String>> {
+    if reached.is_empty() && !unreached.is_empty() {
+        let hubs: Vec<String> = unreached
+            .iter()
+            .map(|u| format!("{} ({})", u.hub, u.reason))
+            .collect();
+        anyhow::bail!(
+            "the node label is committed in this clone but reached no hub: {}. Publish it with `aida db sync --push` once a hub is reachable.",
+            hubs.join("; ")
+        );
+    }
+    Ok(unreached
+        .iter()
+        .map(|u| {
+            format!(
+                "Node label not published to `{}`: {}. Retry with `{}`.",
+                u.hub, u.reason, u.retry
+            )
+        })
+        .collect())
 }
 
 /// `aida node show`'s delegation section: this clone's role and upstream,
@@ -975,3 +1111,42 @@ pub(crate) static NODE: crate::command_registry::CommandReg = crate::command_reg
 #[cfg(test)]
 #[path = "tests/story_095_upstream_tests.rs"]
 mod story_095_upstream_tests;
+
+#[cfg(test)]
+mod alias_publish_tests {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+    use super::{alias_publish_warnings, UnreachedHub};
+
+    fn github_down() -> UnreachedHub {
+        UnreachedHub {
+            hub: "origin".into(),
+            reason: "fatal: unable to access: Could not resolve host: github.com".into(),
+            retry: "aida db sync --push".into(),
+        }
+    }
+
+    #[test]
+    fn a_label_on_one_hub_warns_about_the_other_and_succeeds() {
+        let lines = alias_publish_warnings(&["gitlab".into()], &[github_down()]).unwrap();
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("`origin`"), "{}", lines[0]);
+        assert!(lines[0].contains("Could not resolve host"), "{}", lines[0]);
+        assert!(lines[0].contains("`aida db sync --push`"), "{}", lines[0]);
+    }
+
+    #[test]
+    fn a_label_on_no_hub_fails_naming_each() {
+        let err = alias_publish_warnings(&[], &[github_down()]).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("committed in this clone"), "{msg}");
+        assert!(msg.contains("origin (fatal"), "{msg}");
+    }
+
+    #[test]
+    fn every_hub_reached_or_solo_is_silent() {
+        assert!(alias_publish_warnings(&["origin".into()], &[])
+            .unwrap()
+            .is_empty());
+        assert!(alias_publish_warnings(&[], &[]).unwrap().is_empty());
+    }
+}

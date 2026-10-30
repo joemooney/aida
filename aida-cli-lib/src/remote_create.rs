@@ -1711,7 +1711,7 @@ fn mirror_refspec_label(refspec: &str) -> String {
 /// Surface git's diagnostic line (a rejected ref, an unreachable repo), not
 /// its trailing advice prose.
 // trace:BUG-1676 | ai:claude
-fn git_push_failure_detail(stderr: &str) -> String {
+pub(crate) fn git_push_failure_detail(stderr: &str) -> String {
     stderr
         .lines()
         .find(|l| {

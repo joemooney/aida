@@ -193,7 +193,7 @@ fn add_car(repo: &Path, base: &str, tip: &str, m: &Member) -> std::result::Resul
             )
         }
     };
-    let want = crate::review_carryover::patch_id(repo, &fork, &head)
+    let want = crate::gate::review_carryover::patch_id(repo, &fork, &head)
         .map_err(|e| format!("its own diff has no patch-id: {}", e.reason()))?;
     let out = git_raw(
         repo,
@@ -233,7 +233,7 @@ fn add_car(repo: &Path, base: &str, tip: &str, m: &Member) -> std::result::Resul
         return Err("`git merge-tree` printed no tree".to_string());
     }
     let commit = commit_tree(repo, &tree, tip, &car_message(m)).map_err(|e| e.to_string())?;
-    let got = crate::review_carryover::patch_id(repo, tip, &commit)
+    let got = crate::gate::review_carryover::patch_id(repo, tip, &commit)
         .map_err(|e| format!("its car has no patch-id: {}", e.reason()))?;
     if got != want {
         return Err(format!(
@@ -1539,13 +1539,25 @@ impl TrainForge for LiveTrainForge<'_> {
             .iter()
             .map(|c| format!("#{}", c.member.pr))
             .collect();
-        self.forge.open_change(crate::forge::OpenChange {
-            branch: branch.to_string(),
-            base: self.base.clone(),
-            title: format!("[train] land {}", prs.join(", ")),
-            body: train_pr_body(train),
-            draft: false,
-        })
+        // STORY-080 AC2: the cars' specs bind their pre-PR verdicts to the
+        // train change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let specs: Vec<String> = train
+            .cars
+            .iter()
+            .flat_map(|c| crate::pr_ship::extract_trailing_spec_ids_from_subject(&c.member.subject))
+            .collect();
+        crate::gate::ledger::open_change_bound(
+            self.forge,
+            &self.main_worktree,
+            crate::forge::OpenChange {
+                branch: branch.to_string(),
+                base: self.base.clone(),
+                title: format!("[train] land {}", prs.join(", ")),
+                body: train_pr_body(train),
+                draft: false,
+            },
+            &specs,
+        )
     }
 
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict> {
@@ -2249,7 +2261,7 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         anyhow::bail!(why);
     }
     let forge = crate::forge::forge_for(&project_root);
-    let base = crate::review_carryover::protected_base(&main_worktree)
+    let base = crate::gate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
     let mut candidates: Vec<u64> = if opts.all_ready {
         let mut ids: Vec<u64> = forge
