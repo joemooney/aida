@@ -116,7 +116,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T05:52:58.618028416Z
+modified_at: 2026-10-30T05:53:12.103445523Z
 req_type: Story
 tags:
 - architecture
@@ -814,6 +814,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC4 carry-over-on-ledger and AC2 binding are implemented and tested, and CI is green at c1aef1b. But this final slice uses the plain trailer and AC7 is unmet with no evidence, and AC2 binding duplicates across changes and only runs on one PR-open path.. No triage reason was given.'
   created_at: 2026-10-30T05:52:58.618020393Z
   modified_at: 2026-10-30T05:52:58.618020393Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18b5e-7eb8-7c51-b3e0-78885d1e44ed
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-b6b1278890774ef993d2ebc327862470-080):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c1aef1b9044f
+    Recorded: 2026-10-30T05:51:47.102195604+00:00
+    Findings:
+    1. AC7 (major): this final slice completes the story with AC7 unmet. review_carryover.rs (the carry-over proof AC4 names) is still at aida-cli-lib/src/review_carryover.rs, outside gate/ (STORY-1889 boundary). The signed-off sketch said AC7 would be checked by line/function counts in the final PR body; the PR body has none. Measured from 5fbe1e39c0d^ to c1aef1b, the named modules did not collapse: review_verdict 2809->3202, merge_hold_core 2157->2219, rework_hold_release 953->988, review_marker 377->377 (review-in-progress markers still on files, path baseline 6), approval 507->507, review_carryover 769->872, plus ~1,490 new lines in gate/ledger. Fix: move review_carryover into gate/ and post the counts, or get an advisor ruling that amends AC7 (or ship this slice with a Refs trailer).
+    2. AC2 (minor): store::bind_unbound (gate/ledger/store.rs:273) filters by 'newer than what THIS change holds for the spec'. Unbound records already bound to PR-A are therefore copied again onto PR-B when PR-B opens for the same spec. project::verdict_events (project.rs:170) flat-maps every indexed change, so verdict_records(SPEC) returns the record twice and newest_verdict(PR-B) answers with a pre-PR-A verdict. The test (a_spec_only_verdict_binds_to_the_change_when_it_opens) only covers one change. Fix: skip unbound records already bound to any change in the spec's index, or dedupe the bound list by record, and add a two-change test.
+    3. AC2 (minor): binding at PR open runs only in pr_cmd::pr_ship_create_pr (pr_cmd.rs:4325). The drain and orchestrator PR opens do not bind: orchestrator_leases.rs open_orchestrator_pr_for_implementer_worktree (:1404), open_orchestrator_pr_for_pushed_branch (:1730), drain_batch.rs open_cluster_pr (:1459), and pr_train (:1542). Until a first PR-keyed verdict is recorded, a pre-PR spec verdict is invisible under PR-N on those paths. No test drives the pr_ship_create_pr wiring either. Fix: bind from a shared open-change hook (or each site) and add a wiring test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T05:53:08.280342922Z
+  modified_at: 2026-10-30T05:53:08.280342922Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
