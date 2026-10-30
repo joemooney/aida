@@ -92925,5 +92925,31 @@ operations:
   timestamp: 2026-10-30T13:29:43.485127177Z
   kind: !SetStatus
     status: Completed
-clock: 7199
+- id: 01a18d00-e239-7093-b69d-64828752f427
+  target_id: 01a18d00-d0bc-7041-bc9b-3fc352c9fbde
+  author: aida
+  node_id: '1'
+  lamport: 7200
+  timestamp: 2026-10-30T13:30:07.801210414Z
+  kind: !Create
+    title: 'Review PR-3135: [AI:claude] fix(mailbox): stamp message times in millis; unstamped mail reads as mtime or unknown time (BUG-B6B1278890774EF993D2EBC327862470-032)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-032`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3135>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-032` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-032
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3135` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7200
 node_id: '1'
