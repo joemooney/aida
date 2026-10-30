@@ -770,6 +770,115 @@ fn parse_proc_stat_starttime(stat: &str) -> Option<u64> {
     rest.split_whitespace().nth(22 - 3)?.parse().ok()
 }
 
+/// Liveness and exact start identity of one pid, taken from ONE observation.
+///
+/// Probing liveness with `kill(pid, 0)` and then reading the process stat file
+/// for the zombie state or start time is two reads: a zombie reaped between
+/// them leaves the stat read failing, which reads as "not a zombie" / "start
+/// time unknown", so the gone process is reported alive (BUG-HOME-039). On
+/// Linux the snapshot is one stat-file read that yields existence, state and
+/// start time together; `kill` is consulted only when that read fails.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProcessSnapshot {
+    alive: bool,
+    /// The exact identity read in the same observation as `alive`. `None` when
+    /// the stat file was unreadable and only `kill` vouched for the pid.
+    #[cfg(target_os = "linux")]
+    exact_identity: Option<String>,
+}
+
+impl ProcessSnapshot {
+    const DEAD: Self = Self {
+        alive: false,
+        #[cfg(target_os = "linux")]
+        exact_identity: None,
+    };
+
+    /// The exact start identity to compare against. Linux returns the value
+    /// read with the liveness verdict; elsewhere there is no single-read
+    /// source, so it is probed now.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+    fn exact_identity(self, pid: u32) -> Option<String> {
+        #[cfg(target_os = "linux")]
+        {
+            let _ = pid;
+            self.exact_identity
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            if self.alive {
+                process_start_identity_exact(pid)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+#[cfg(target_os = "linux")]
+fn process_snapshot(pid: u32) -> ProcessSnapshot {
+    process_snapshot_with(
+        pid,
+        |pid| std::fs::read_to_string(format!("/proc/{pid}/stat")).ok(),
+        kill_probe,
+    )
+}
+
+#[cfg(not(target_os = "linux"))]
+fn process_snapshot(pid: u32) -> ProcessSnapshot {
+    ProcessSnapshot {
+        alive: pid_is_alive(pid),
+    }
+}
+
+/// Linux snapshot from the stat file, read once.
+///
+/// - Readable, state `Z`: dead. `kill(pid, 0)` answers 0 for a zombie because
+///   the kernel keeps the entry until the parent reaps it, but a zombie cannot
+///   do work or hold anything meaningfully (BUG-1741).
+/// - Readable, any other state: alive, with the start time from the same read.
+/// - Unreadable or unparsable: `kill` decides, with no identity. The stat file
+///   vanishes once the process is reaped, and `kill` runs after that, so a
+///   process reaped before or during the read is reported dead. `kill` also
+///   keeps another user's process alive (EPERM) where procfs hides it.
+///
+/// The comm field (field 2) is parenthesised and may contain spaces or `)`,
+/// so the state is parsed after the LAST `)`.
+// trace:BUG-1741 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+#[cfg(target_os = "linux")]
+fn process_snapshot_with(
+    pid: u32,
+    read_stat: impl FnOnce(u32) -> Option<String>,
+    kill_probe: impl FnOnce(u32) -> bool,
+) -> ProcessSnapshot {
+    if pid == 0 {
+        return ProcessSnapshot::DEAD;
+    }
+    if let Some(stat) = read_stat(pid) {
+        let state = stat
+            .rfind(')')
+            .and_then(|i| stat[i + 1..].split_whitespace().next());
+        match state {
+            Some("Z") => return ProcessSnapshot::DEAD,
+            Some(_) => {
+                return ProcessSnapshot {
+                    alive: true,
+                    exact_identity: parse_proc_stat_starttime(&stat)
+                        .map(|ticks| format!("{EXACT_LINUX_SCHEME}{ticks}")),
+                }
+            }
+            None => {}
+        }
+    }
+    ProcessSnapshot {
+        alive: kill_probe(pid),
+        exact_identity: None,
+    }
+}
+
 /// True when the PID is alive unless both the recorded and live kernel start
 /// times are available and differ. Missing start-time data degrades to the
 /// pre-TASK-1284 PID-only check so legacy lock holders are never reclaimed
@@ -783,16 +892,30 @@ fn parse_proc_stat_starttime(stat: &str) -> Option<u64> {
 /// against the exact identity. A value in neither recognised format, or one
 /// whose live identity is in a different scheme, cannot be compared and reads
 /// alive: fail closed toward holding a lock, never toward reclaiming it.
+///
+/// Liveness and the exact identity come from one [`ProcessSnapshot`], so a
+/// process reaped mid-check reads dead rather than alive-with-unknown-identity.
 // trace:TASK-1284 | ai:codex
 // trace:TASK-1750 | ai:claude
 // trace:BUG-2130 | ai:agy
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
 pub fn process_identity_is_alive(pid: u32, recorded_start_time: Option<&str>) -> bool {
+    identity_alive_from_snapshot(pid, recorded_start_time, process_snapshot(pid))
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+fn identity_alive_from_snapshot(
+    pid: u32,
+    recorded_start_time: Option<&str>,
+    snapshot: ProcessSnapshot,
+) -> bool {
+    let alive = snapshot.alive;
     process_identity_is_alive_with(
         pid,
         recorded_start_time,
-        pid_is_alive,
+        |_| alive,
         process_start_identity_legacy,
-        process_start_identity_exact,
+        |pid| snapshot.exact_identity(pid),
     )
 }
 
@@ -895,13 +1018,16 @@ fn compare_recorded_identity(
 /// callers keep the lenient [`process_identity_is_alive`].
 // trace:TASK-1768 | ai:claude
 // trace:BUG-2130 | ai:agy
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
 pub fn process_identity_matches_strict(pid: u32, recorded_start_time: &str) -> bool {
+    let snapshot = process_snapshot(pid);
+    let alive = snapshot.alive;
     process_identity_matches_strict_with(
         pid,
         recorded_start_time,
-        pid_is_alive,
+        |_| alive,
         process_start_identity_legacy,
-        process_start_identity_exact,
+        |pid| snapshot.exact_identity(pid),
     )
 }
 
@@ -952,13 +1078,16 @@ fn process_identity_is_alive_with(
 /// so it fails closed toward keeping the lease. A pid of 0 is never a real
 /// recorded owner and is not proof of anything.
 // trace:BUG-2197 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
 pub fn process_provably_dead(pid: u32, recorded_start_time: Option<&str>) -> bool {
+    let snapshot = process_snapshot(pid);
+    let alive = snapshot.alive;
     process_provably_dead_with(
         pid,
         recorded_start_time,
-        pid_is_alive,
+        |_| alive,
         process_start_identity_legacy,
-        process_start_identity_exact,
+        |pid| snapshot.exact_identity(pid),
     )
 }
 
@@ -1034,12 +1163,34 @@ pub fn recorded_lease_owner(
 /// system time, dominated by `/proc/*/task/*` recursion). A single-pid probe
 /// removes the whole hotspot.
 ///
+/// Linux takes one [`ProcessSnapshot`]: a single read of the process stat
+/// file decides existence and the zombie state together, so a process reaped
+/// between two probes cannot read alive (BUG-HOME-039). Other unix platforms
+/// use [`kill_probe`] alone; their process state is not readable from a cheap
+/// procfs file, so a zombie still reads alive there rather than failing closed
+/// and risking live processes reported dead (BUG-1741 acceptance 3).
+// trace:BUG-613 | ai:claude
+// trace:BUG-1741 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+#[cfg(unix)]
+fn pid_is_alive_impl(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        process_snapshot(pid).alive
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        kill_probe(pid)
+    }
+}
+
 /// Unix: `kill(pid, 0)` sends no signal but performs the existence + permission
 /// check. `0` → alive and signalable; `EPERM` → the pid exists but is owned by
 /// another user (still alive); `ESRCH` → no such process. Any other errno is
 /// treated as not-alive (fail-safe, matching the prior platform-degrade
-/// contract). `pid == 0` is rejected by the `pid_is_alive` wrapper before it
-/// reaches here, so `kill` never addresses the caller's whole process group.
+/// contract). `pid == 0` is rejected by callers before it reaches here, so
+/// `kill` never addresses the caller's whole process group. `kill` answers 0
+/// for a zombie too; callers that can see process state reject zombies.
 ///
 /// A pid above `pid_t::MAX` would wrap negative under an `as` cast, and a
 /// negative pid makes `kill` address a process GROUP — `u32::MAX` becomes
@@ -1048,55 +1199,14 @@ pub fn recorded_lease_owner(
 // trace:BUG-613 | ai:claude
 // trace:TASK-1750 | ai:claude
 #[cfg(unix)]
-fn pid_is_alive_impl(pid: u32) -> bool {
+fn kill_probe(pid: u32) -> bool {
     let Ok(raw_pid) = libc::pid_t::try_from(pid) else {
         return false;
     };
     // SAFETY: `kill` with signal 0 only probes; it never delivers a signal.
     let rc = unsafe { libc::kill(raw_pid, 0) };
     // errno == EPERM means the process exists but we may not signal it.
-    let exists = rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
-    // BUG-1741: `kill(pid, 0)` answers 0 for a defunct (zombie) process too —
-    // the kernel keeps the entry until the parent reaps it, so an unreaped
-    // child that exited days ago still probes as alive. A zombie cannot do
-    // work, hold locks meaningfully, or be signalled into action, so it is
-    // dead for every liveness consumer here.
-    // trace:BUG-1741 | ai:claude
-    exists && !pid_is_zombie(pid)
-}
-
-/// Linux: is `pid` in process state `Z` (zombie/defunct)? Reads the single
-/// file `/proc/<pid>/stat`, keeping BUG-613's O(1) no-table-walk property.
-///
-/// The second field (`comm`) is parenthesised and may itself contain spaces
-/// and `)` — e.g. `123 (a) b) Z ...` — so the state field is parsed from the
-/// **last** `)`, never by splitting the whole line on whitespace.
-///
-/// Unreadable state (procfs missing, pid vanished between the `kill` probe
-/// and this read, permission oddities) degrades to "not a zombie" so the
-/// `kill(2)` answer stands — this check only ever demotes a provably defunct
-/// process, it never reports a live one dead.
-// trace:BUG-1741 | ai:claude
-#[cfg(target_os = "linux")]
-fn pid_is_zombie(pid: u32) -> bool {
-    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
-        return false;
-    };
-    let Some(after_comm) = stat.rfind(')').map(|i| &stat[i + 1..]) else {
-        return false;
-    };
-    after_comm.split_whitespace().next() == Some("Z")
-}
-
-/// Non-Linux unix (macOS, BSDs): process state is not readable via a cheap
-/// procfs file here, so this deliberately degrades to today's behaviour — a
-/// zombie still reads as alive — rather than failing closed and risking live
-/// processes reported dead (BUG-1741 acceptance 3). A platform-native probe
-/// (`proc_pidinfo` / `sysctl KERN_PROC_PID`) can tighten this later.
-// trace:BUG-1741 | ai:claude
-#[cfg(all(unix, not(target_os = "linux")))]
-fn pid_is_zombie(_pid: u32) -> bool {
-    false
+    rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
 /// Non-Unix fallback: refresh ONLY the target pid rather than the whole table.
@@ -2267,6 +2377,123 @@ mod tests {
         assert!(
             rejected,
             "identity guard + zombie-aware liveness rejects it"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    fn read_real_stat(pid: u32) -> Option<String> {
+        std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()
+    }
+
+    // BUG-HOME-039: the zombie is reaped after the stat read but before
+    // anything else looks. The single read already saw state Z, so it is
+    // dead, with or without a recorded identity. Mutation proof: the old
+    // `kill` → reap → stat-read order saw `kill` succeed, then a missing stat
+    // file, and reported the reaped process alive.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn snapshot_dead_when_zombie_reaped_after_the_stat_read() {
+        let mut child = spawn_unreaped_zombie();
+        let pid = child.id();
+        let recorded = process_start_identity_exact(pid).expect("zombie identity");
+        let snapshot = process_snapshot_with(
+            pid,
+            |pid| {
+                let stat = read_real_stat(pid);
+                child.wait().expect("reap zombie");
+                stat
+            },
+            kill_probe,
+        );
+        assert_eq!(snapshot, ProcessSnapshot::DEAD);
+        assert!(!identity_alive_from_snapshot(
+            pid,
+            Some(&recorded),
+            snapshot.clone()
+        ));
+        assert!(!identity_alive_from_snapshot(pid, None, snapshot));
+    }
+
+    // BUG-HOME-039: the zombie is reaped before the stat read lands, so the
+    // read fails. `kill` runs after the reap, finds no process, and the
+    // snapshot is dead rather than alive-with-unknown-identity.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn snapshot_dead_when_zombie_reaped_before_the_stat_read() {
+        let mut child = spawn_unreaped_zombie();
+        let pid = child.id();
+        let recorded = process_start_identity_exact(pid).expect("zombie identity");
+        let snapshot = process_snapshot_with(
+            pid,
+            |pid| {
+                child.wait().expect("reap zombie");
+                read_real_stat(pid)
+            },
+            kill_probe,
+        );
+        assert_eq!(snapshot, ProcessSnapshot::DEAD);
+        assert!(!identity_alive_from_snapshot(
+            pid,
+            Some(&recorded),
+            snapshot
+        ));
+    }
+
+    // The single read keeps the live verdict and the identity together: a
+    // running child is alive with the identity its writer would record, and
+    // `kill` is not consulted.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn snapshot_of_running_child_carries_its_identity_without_kill() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn `sleep 30`");
+        let pid = child.id();
+        let snapshot = process_snapshot_with(pid, read_real_stat, |_| {
+            panic!("kill must not be consulted when the stat file is readable")
+        });
+        let recorded = process_start_identity(pid);
+        child.kill().expect("kill child");
+        child.wait().expect("reap child");
+        assert!(snapshot.alive);
+        assert_eq!(snapshot.exact_identity, recorded);
+        assert!(identity_alive_from_snapshot(
+            pid,
+            recorded.as_deref(),
+            snapshot
+        ));
+    }
+
+    // An unreadable stat file (procfs hiding another user's process) defers to
+    // `kill`: EPERM still means alive, and with no identity read the recorded
+    // one cannot be compared, so the pid stays alive.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-039 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn snapshot_falls_back_to_kill_when_stat_is_unreadable() {
+        let alive = process_snapshot_with(42, |_| None, |_| true);
+        assert!(alive.alive);
+        assert_eq!(alive.exact_identity, None);
+        assert!(identity_alive_from_snapshot(
+            42,
+            Some("linux-starttime:1"),
+            alive
+        ));
+        assert_eq!(
+            process_snapshot_with(42, |_| None, |_| false),
+            ProcessSnapshot::DEAD
+        );
+        assert_eq!(
+            process_snapshot_with(42, |_| Some("garbage".into()), |_| false),
+            ProcessSnapshot::DEAD
+        );
+        assert_eq!(
+            process_snapshot_with(0, |_| panic!("pid 0 is never read"), |_| true),
+            ProcessSnapshot::DEAD
         );
     }
 

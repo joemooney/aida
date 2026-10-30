@@ -534,6 +534,13 @@ impl Command {
         invocation.reg.name
     }
 
+    /// The registered command's own subcommand (`"add"` for `rel add`).
+    // trace:BUG-HOME-041 | ai:claude
+    pub(crate) fn subcommand_name(&self) -> Option<&str> {
+        let Command::Registered(invocation) = self;
+        invocation.matches.subcommand_name()
+    }
+
     /// The command's typed args when it is the command `T` describes, for
     /// the few cross-cutting hooks in `run()` that key on one command's flags.
     pub(crate) fn args<T: FromArgMatches + CommandFactory>(&self) -> Option<T> {

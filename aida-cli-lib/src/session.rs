@@ -4692,8 +4692,29 @@ pub(crate) fn with_lease_write_lock<T>(
         .write(true)
         .open(&lock_path)
         .with_context(|| format!("opening {}", lock_path.display()))?;
-    lock.lock_exclusive()
-        .with_context(|| format!("locking {}", lock_path.display()))?;
+    // Polled tightly only until the disk-saturation notice has had its one
+    // look, so a long wait can say when the disk, not a stuck holder, is the
+    // cause; then a plain blocking wait, so contended stamps hand the lock
+    // over at once. trace:BUG-HOME-041 | ai:claude
+    let mut notice = aida_core::io_pressure::LockWaitNotice::new();
+    let started = std::time::Instant::now();
+    loop {
+        match lock.try_lock_exclusive() {
+            Ok(()) => break,
+            Err(e) if aida_core::file_lock::is_lock_contended(&e) => {
+                notice.tick("session lease lock", || None);
+                if started.elapsed() > aida_core::io_pressure::LOCK_WAIT_NOTICE_AFTER {
+                    lock.lock_exclusive()
+                        .with_context(|| format!("locking {}", lock_path.display()))?;
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(e) => {
+                return Err(e).with_context(|| format!("locking {}", lock_path.display()));
+            }
+        }
+    }
     let out = write();
     let _ = FileExt::unlock(&lock);
     out
