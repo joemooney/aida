@@ -88463,5 +88463,17 @@ operations:
   timestamp: 2026-10-30T00:32:49.116662890Z
   kind: !AddTag
     tag: batch:fasttrack
-clock: 6881
+- id: 01a18a3d-451b-79f3-978f-acbec15cfa1c
+  target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
+  author: aida
+  node_id: '1'
+  lamport: 6882
+  timestamp: 2026-10-30T00:37:13.627208381Z
+  kind: !Create
+    title: 'Regroup 2026-10-29: lane-orchestration friction seen while draining the open list'
+    description: 'Advisor regroup list (operator goal 2026-10-29: open list to zero, then improve AIDA from this list). Each child is one observed friction with evidence from the 2026-10-29 advisor session. Already tracked elsewhere: STORY-HOME-096 (Codex mail-wake on agent new), STORY-HOME-097 (hub-bridge store reconcile), STORY-080 slice-2 item 6 (reviewer verdict collect fails as contained).'
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 6882
 node_id: '1'
