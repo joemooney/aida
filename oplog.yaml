@@ -89137,5 +89137,17 @@ operations:
   timestamp: 2026-10-30T01:27:53.712824291Z
   kind: !SetStatus
     status: Approved
-clock: 6937
+- id: 01a18a6b-e014-74a0-85dd-0f2eca0428c8
+  target_id: 01a18a6b-bbf9-7c20-9076-711d5474f058
+  author: aida
+  node_id: '1'
+  lamport: 6938
+  timestamp: 2026-10-30T01:28:07.956239141Z
+  kind: !Create
+    title: 'agent new: when the repo-scope role is taken, offer a spec-scoped launch instead of refusing'
+    description: '2026-10-29 18:26: operator ran `aida agent new antigravity --role implementer --bypass-sandbox` while a Codex implementer (codex-agent-02) held the repo scope; after the bypass confirmation and resume prompt it failed: ''agent role implementer is already active on this scope''. The working path is `--spec <SPEC>` (own worktree + lease). Acceptance: check the scope conflict BEFORE the bypass/resume prompts; the refusal names the fix (`--spec <ID>`) and, at a TTY, offers to pick an approved unclaimed spec from the queue for this role; docs state that several agents may share a role when each holds its own spec scope.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6938
 node_id: '1'
