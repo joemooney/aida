@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:03:41.502735184Z
-modified_at: 2026-10-30T09:44:13.559156875Z
+modified_at: 2026-10-30T14:03:06.482541460Z
 req_type: Spike
 tags:
 - agent-lifecycle
@@ -50,6 +50,13 @@ comments:
     No adapter story filed because no safe path was established. Do not substitute model polling or enable a global daemon as a workaround. Local evidence: /tmp/spike002-{tui,current-tui,print,current-print,midturn-print}.log; /tmp/spike002-{print-result,current-print-result,midturn-result}.json; /tmp/spike002-{first-db-report,current-db-before-followup,current-db-final,final-integrity}.json. Throwaway conversation IDs: 4d5c61a9-cc9a-41a5-9ce8-f5ae32e21487 and a7a21b48-9f2c-4e99-89c9-e5d11ec3862c; project e3c8a331-c0b8-4c29-9044-5b6f30242cb3. Retained only as reproduction evidence; all experiment processes and the session tunnel are stopped. No formal independent review or upstream guarantee is claimed.
   created_at: 2026-10-30T09:44:04.812685761Z
   modified_at: 2026-10-30T09:44:04.812685761Z
+- id: 01a18d1f-1372-7ee0-ad2d-c4c91b7555f6
+  author: joe
+  content: |
+    Codex result 2026-10-30 ~07:00 (relayed by the operator): the concurrent resume failed to wake the live Antigravity session and produced inconsistent history. Recommendation: keep next-turn warnings and do not wake agy by concurrent resume. Advisor: ACCEPTED; spike complete.
+  created_at: 2026-10-30T14:03:06.482541460Z
+  modified_at: 2026-10-30T14:03:06.482541460Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a38-34a7-79d3-9a80-1ebb9a1ad645
   author: joe
