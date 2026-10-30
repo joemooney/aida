@@ -107,7 +107,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T03:43:50.165800994Z
+modified_at: 2026-10-30T04:23:45.848906162Z
 req_type: Story
 tags:
 - architecture
@@ -753,6 +753,32 @@ comments:
   modified_at: 2026-10-30T00:54:08.969805342Z
   session_id: 01a18a35885c
   harness_version: 2.1.312 (Claude Code)
+- id: 01a18b0c-abb8-7562-921e-7803eb990146
+  author: joe
+  content: |-
+    ## Implementer approach — slice 3 (final: carry-over proof on the ledger, AC2 binding)
+
+    ### Acceptance criteria as tests
+    - **AC4 base-only keeps approval (unit/fixture, `review_carryover::tests` + `gate::ledger::tests`):** approve at A, merge the base into the PR → H; `carry_over_for_refusal` returns the proof AND PR-N's ledger holds exactly one `carry-over-proof` event naming A, H and the patch id.
+    - **AC4 content change drops it (fixture):** an extra non-merge commit (or a different diff) → no carry-over; the ledger holds a `carry-over-refused` event whose reason names the cause (`project::carry_over` returns it, so "the projection says why").
+    - **AC4 computed once (fixture, counted):** a test-only counter on `prove_carry_over`; ship's approval gate, the mandate prover and the corpus (merge-hold) gate run against the same PR/head and the counter reads 1; all three read the same event's seq.
+    - **AC4 no legacy write:** `.aida/review-carryover/` is not created by any path (assert in the fixture); `record_carry_over`/`record_path`/`read_record` deleted.
+    - **AC2 binding (unit):** a spec-only verdict on the unbound ledger, then `bind_specs(PR-7, [SPEC])` → the record reads under `PR-7` and under the spec, once each (no duplicate), and a later spec record lands on PR-7 after it.
+    - **Serial-ship (no automated test):** `~/.local/share/aida/ops/serial-ship.sh` is outside the repo and outside this seat's writable set; the base-only re-record loop (lines 12-20) becomes removable once this merges. Stated in the PR body for the operator.
+
+    ### Expected files
+    - `aida-cli-lib/src/review_carryover.rs` (ledger lookup before proving, append after; file record deleted; refusal serde)
+    - `aida-cli-lib/src/gate/ledger/{event,project,store,mod}.rs` (+ `tests.rs`)
+    - `aida-cli-lib/src/tests/task_1960_carryover_tests.rs` (retarget record-file assertions to the event)
+    - `aida-cli-lib/src/pr_cmd.rs` (bind specs at PR open), `gate/approval.rs` only if `RecordOutcome` shape changes
+    - Supersede TASK-1992, TASK-1316, STORY-1375, TASK-2008, STORY-1683 at the end.
+
+    ### Ambiguities / conflicts as questions
+    - Q3's "authority for exactly the (change, head, protected base tip)": I key reuse on (change, approved sha, new head, proof_version, base branch) and require the stored base tip to equal the local `origin/<base>` tip read without a fetch; a moved tip recomputes once and appends a fresh proof. Transient refusals (unresolvable ref, git failure, base not protected) are not stored, so they never pin a refusal.
+  created_at: 2026-10-30T04:23:45.848906162Z
+  modified_at: 2026-10-30T04:23:45.848906162Z
+  session_id: 01a18b09181f
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe

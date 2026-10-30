@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:39:10.999893193Z
-modified_at: 2026-10-30T04:20:23.897966166Z
+modified_at: 2026-10-30T04:32:47.294579293Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -23,6 +23,31 @@ relationships:
   target_id: 01a18ae5-f60d-7122-8066-666c4f29cd59
   created_at: 2026-10-30T03:41:41.871236075Z
   created_by: joe
+comments:
+- id: 01a18b14-eebe-7d22-b4ea-0a420c3a83a2
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Root cause: `handle_mailbox_command` (and the MCP mail tools) derive the project root from the store path's parent. In a seat clone that is the clone itself (its `.aida-store` is a symlink to the primary's store), so `send` writes `<clone>/.aida/mailbox`. The primary's logical inbox enumerates only `git worktree list` worktrees plus the canonical store; a seat clone is a separate repo, so the message is invisible. The contained sandbox already grants the seat write access to the primary's `.aida/mailbox` (`contained_boundary::contained_mailbox_write_paths`), so the fix is to route a *verified* seat clone's mailbox ops to its primary checkout (`seat_clone::main_for`).
+
+    ### Acceptance criteria as tests
+    - **Unit (cli-lib):** `mailbox_home` resolves a verified seat clone to its primary, a plain checkout to itself, and an unverified clone to itself flagged local-only.
+    - **Command-level:** send from a verified seat clone to role advisor via `handle_mailbox_command` with the clone's store path; read the primary's local mailbox / logical inbox and see it (AC1 + AC3).
+    - **Command-level / unit:** an unverified clone's send keeps the message local and the output says so and names `aida mailbox sync` (AC2) - tested on the notice helper.
+
+    ### Expected files
+    - `aida-cli-lib/src/mailbox_store.rs` (resolver)
+    - `aida-cli-lib/src/mailbox_cmd.rs` (use it; truthful send output)
+    - `aida-cli-lib/src/mcp.rs` (send/inbox parity)
+    - `aida-cli-lib/src/tests/` new regression test file + mod registration
+
+    ### Ambiguities / conflicts as questions
+    - None: the sandbox grant already shows the primary mailbox is the intended write target.
+  created_at: 2026-10-30T04:32:47.294579293Z
+  modified_at: 2026-10-30T04:32:47.294579293Z
+  session_id: 01a18b0992c3
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18ae4-1f66-7ee3-b73f-022316abd7c5
   author: joe
