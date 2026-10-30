@@ -22,7 +22,6 @@ MANIFEST = json.loads((SITE / 'publication.json').read_text())
 PAGES = [(p['source'], p['output'], p['label']) for p in MANIFEST['pages']]
 
 
-
 def inline(text):
     text = html.escape(text)
     text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
@@ -123,10 +122,12 @@ def render_outputs():
         graphic = ''
         if graphic_path.exists():
             svg = ET.fromstring(graphic_path.read_text())
-            description = ' '.join(' '.join(node.itertext()).strip()
+            # trace:TASK-HOME-128 | ai:codex
+            description = '. '.join(' '.join(node.itertext()).strip().rstrip('.')
                                    for tag in ('title', 'desc')
                                    for node in svg.findall('{http://www.w3.org/2000/svg}' + tag))
-            graphic = f'<figure><img class="guide-graphic" src="assets/{graphic_path.name}" alt="{html.escape(description or title, quote=True)}"></figure>'
+            description = description + '.' if description else title
+            graphic = f'<figure><img class="guide-graphic" src="assets/{graphic_path.name}" alt="{html.escape(description, quote=True)}"></figure>'
         interactive = ''
         scripts = ''
         # trace:TASK-B6B1278890774EF993D2EBC327862470-109 | ai:codex
@@ -175,7 +176,6 @@ def main(argv=None):
     for path, content in outputs.items():
         path.write_text(content, encoding='utf-8')
     return 0
-
 
 
 if __name__ == '__main__':

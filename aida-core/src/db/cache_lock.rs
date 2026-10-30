@@ -28,6 +28,12 @@ pub const CACHE_WRITE_LOCK_KIND: &str = "cache-write";
 /// Overridable with `AIDA_CACHE_LOCK_EXPECTED_SECS`. Diagnostic only.
 const DEFAULT_EXPECTED_SECS: u64 = 120;
 
+/// A holder in another PID namespace cannot be probed, so only its heartbeat
+/// speaks for it: silent for `max(10 x expected, 30 min)` means dead.
+// trace:BUG-HOME-041 | ai:claude
+const UNSEEN_HOLDER_EXPECTED_MULTIPLE: u64 = 10;
+const UNSEEN_HOLDER_MIN_STALE_SECS: u64 = 30 * 60;
+
 /// One lock-info record. The first five fields are the BUG-1595 format; every
 /// later field is optional and skipped when absent, so old files parse and old
 /// binaries can still read files written by this one (serde ignores unknown
@@ -158,6 +164,39 @@ impl CacheLockInfo {
         (now > deadline).then(|| now.signed_duration_since(deadline))
     }
 
+    /// True when the record names a different PID namespace than ours, so its
+    /// pid cannot be probed from here.
+    // trace:BUG-HOME-041 | ai:claude
+    pub fn in_foreign_pid_ns(&self) -> bool {
+        identity_differs(self.pid_ns.as_deref(), local_pid_ns().as_deref())
+    }
+
+    /// The recorded pid when it names a process this one can see (same boot,
+    /// same PID namespace), else `None`.
+    // trace:BUG-HOME-041 | ai:claude
+    pub fn visible_pid(&self) -> Option<u32> {
+        let foreign_boot = identity_differs(self.boot_id.as_deref(), local_boot_id().as_deref());
+        (!foreign_boot && !self.in_foreign_pid_ns()).then_some(self.pid)
+    }
+
+    /// The last sign of life: the heartbeat, else the acquired time.
+    // trace:BUG-HOME-041 | ai:claude
+    pub fn last_seen_utc(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.heartbeat_at_utc().or_else(|| self.started_at_utc())
+    }
+
+    /// How long a holder we cannot see may stay silent before it is presumed
+    /// dead: `max(10 x expected duration, 30 min)`.
+    // trace:BUG-HOME-041 | ai:claude
+    pub fn unseen_holder_stale_after(&self) -> chrono::Duration {
+        let expected = self.expected_duration_secs.unwrap_or(DEFAULT_EXPECTED_SECS);
+        let secs = expected
+            .saturating_mul(UNSEEN_HOLDER_EXPECTED_MULTIPLE)
+            .max(UNSEEN_HOLDER_MIN_STALE_SECS)
+            .min(i64::MAX as u64);
+        chrono::Duration::seconds(secs as i64)
+    }
+
     fn command_label(&self) -> &str {
         if self.command.trim().is_empty() {
             "unknown command"
@@ -200,13 +239,41 @@ impl LockOwnerState {
 /// Classify the recorded owner of `info`.
 // trace:TASK-1484 | ai:claude
 pub fn classify_lock_owner(info: &CacheLockInfo) -> LockOwnerState {
+    classify_lock_owner_in(
+        info,
+        local_boot_id().as_deref(),
+        local_pid_ns().as_deref(),
+        chrono::Utc::now(),
+    )
+}
+
+/// [`classify_lock_owner`] with this host's boot id, PID namespace and clock
+/// injected.
+fn classify_lock_owner_in(
+    info: &CacheLockInfo,
+    local_boot: Option<&str>,
+    local_ns: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> LockOwnerState {
     // Identity must be checked before even probing PID liveness: the PID may
     // belong to an entirely different machine or namespace. Hostname is display only.
     // trace:TASK-1526 | ai:codex
-    if identity_differs(info.boot_id.as_deref(), local_boot_id().as_deref())
-        || identity_differs(info.pid_ns.as_deref(), local_pid_ns().as_deref())
-    {
+    if identity_differs(info.boot_id.as_deref(), local_boot) {
         return LockOwnerState::Unknown;
+    }
+    if identity_differs(info.pid_ns.as_deref(), local_ns) {
+        // A holder in another PID namespace (a sandboxed seat) is not proven
+        // alive: its pid means nothing here. Only its heartbeat speaks for it,
+        // so a heartbeat silent past the unseen-holder window is a dead holder.
+        // trace:BUG-HOME-041 | ai:claude
+        let silent_too_long = info
+            .last_seen_utc()
+            .is_some_and(|seen| now.signed_duration_since(seen) > info.unseen_holder_stale_after());
+        return if silent_too_long {
+            LockOwnerState::Dead { pid_reused: false }
+        } else {
+            LockOwnerState::Unknown
+        };
     }
     classify_lock_owner_with(
         info,
@@ -620,6 +687,10 @@ pub enum LockInfoReclaim {
     /// The owner is not provably dead (or the record changed underneath us,
     /// or it could not be parsed); left in place.
     Kept(Option<LockOwnerState>),
+    /// The recorded pid is visible here and in `D` state (waiting on disk):
+    /// a disk-blocked process is never treated as stale, so the record stays.
+    // trace:BUG-HOME-041 | ai:claude
+    HolderOnDisk { pid: u32 },
 }
 
 /// Remove the sidecar at `path` only if its recorded owner is provably dead.
@@ -634,12 +705,30 @@ pub enum LockInfoReclaim {
 // SQLite is the actual lock, so no write is ever unguarded by this race.
 // trace:TASK-1484 | ai:claude
 pub fn reclaim_dead_lock_info(path: &Path) -> Result<LockInfoReclaim> {
-    reclaim_dead_lock_info_with(path, classify_lock_owner)
+    reclaim_dead_lock_info_probed(path, classify_lock_owner, |info| {
+        info.visible_pid()
+            .and_then(crate::io_pressure::process_state)
+    })
 }
 
+#[cfg(test)]
 fn reclaim_dead_lock_info_with(
     path: &Path,
     classify: impl Fn(&CacheLockInfo) -> LockOwnerState,
+) -> Result<LockInfoReclaim> {
+    reclaim_dead_lock_info_probed(path, classify, |_| None)
+}
+
+/// The reclaim with the owner classifier and the visible-holder process-state
+/// probe injected. The `D`-state no-steal check applies only to a pid whose
+/// start identity still matches the record: a reused pid belongs to an
+/// unrelated process, whose disk wait says nothing about the recorded holder,
+/// so it never keeps a stale record alive (BUG-HOME-041). A matching live
+/// holder classifies `Alive` and is kept before the probe runs.
+fn reclaim_dead_lock_info_probed(
+    path: &Path,
+    classify: impl Fn(&CacheLockInfo) -> LockOwnerState,
+    visible_state: impl Fn(&CacheLockInfo) -> Option<char>,
 ) -> Result<LockInfoReclaim> {
     let body = match std::fs::read_to_string(path) {
         Ok(body) => body,
@@ -658,6 +747,10 @@ fn reclaim_dead_lock_info_with(
     let LockOwnerState::Dead { pid_reused } = owner else {
         return Ok(LockInfoReclaim::Kept(Some(owner)));
     };
+    // trace:BUG-HOME-041 | ai:claude
+    if !pid_reused && visible_state(&info) == Some('D') {
+        return Ok(LockInfoReclaim::HolderOnDisk { pid: info.pid });
+    }
     match std::fs::read_to_string(path) {
         Ok(again) if again == body => {}
         Ok(_) => return Ok(LockInfoReclaim::Kept(None)),
@@ -701,6 +794,59 @@ impl std::fmt::Display for CacheLockExhausted {
 
 impl std::error::Error for CacheLockExhausted {}
 
+/// Evidence that the cache lock's holder will not let go soon: the disk is
+/// saturated, or the recorded holder runs in another PID namespace. Feeds the
+/// fail-fast lock deadline ([`crate::io_pressure::give_up_lock_wait`]).
+// trace:BUG-HOME-041 | ai:claude
+pub(crate) fn blocked_lock_holder(
+    lock_info_path: &Path,
+) -> Option<crate::io_pressure::BlockedHolder> {
+    let observation = observe_lock_info_file(lock_info_path).ok().flatten();
+    let disk = crate::io_pressure::observe_disk_saturation(
+        observation.as_ref().and_then(|obs| obs.info.visible_pid()),
+    );
+    blocked_holder_from(observation.as_ref(), disk, chrono::Utc::now())
+}
+
+fn blocked_holder_from(
+    observation: Option<&CacheLockObservation>,
+    disk: Option<crate::io_pressure::DiskSaturation>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<crate::io_pressure::BlockedHolder> {
+    use crate::io_pressure::BlockedHolder;
+    if let Some(disk) = disk {
+        return Some(BlockedHolder::Disk(disk));
+    }
+    let obs = observation?;
+    if obs.owner == LockOwnerState::Current || !obs.info.in_foreign_pid_ns() {
+        return None;
+    }
+    Some(BlockedHolder::ForeignNamespace {
+        pid: obs.info.pid,
+        command: obs.info.command_label().to_string(),
+        silent: obs
+            .info
+            .last_seen_utc()
+            .and_then(|seen| now.signed_duration_since(seen).to_std().ok()),
+    })
+}
+
+/// The cache-lock error for a wait that spent its fail-fast deadline against
+/// a blocked holder.
+// trace:BUG-HOME-041 | ai:claude
+pub(crate) fn fail_fast_cache_lock_error(
+    action: &str,
+    blocked: &crate::io_pressure::BlockedHolder,
+    err: anyhow::Error,
+) -> anyhow::Error {
+    anyhow::Error::new(CacheLockExhausted(format!(
+        "database is locked while trying to {action}; gave up at the {}s fail-fast deadline: {}. \
+         Retry when IO pressure drops.\ncaused by: {err}",
+        crate::io_pressure::FAIL_FAST_LOCK_BUDGET.as_secs(),
+        blocked.describe()
+    )))
+}
+
 /// Build the terminal "database is locked" error, distinguishing live
 /// contention from stale metadata left by a dead owner.
 // trace:TASK-1484 | ai:claude
@@ -709,7 +855,51 @@ pub(crate) fn enrich_cache_lock_error(
     observation: Option<&CacheLockObservation>,
     err: anyhow::Error,
 ) -> anyhow::Error {
+    let disk = crate::io_pressure::observe_disk_saturation(
+        observation.and_then(|obs| obs.info.visible_pid()),
+    );
+    enrich_cache_lock_error_with(action, observation, disk.as_ref(), err)
+}
+
+/// [`enrich_cache_lock_error`] with the disk-saturation evidence injected.
+/// On a saturated disk the holder is waiting on the device, so the message
+/// says so instead of calling the holder stuck or its record stale.
+// trace:BUG-HOME-041 | ai:claude
+fn enrich_cache_lock_error_with(
+    action: &str,
+    observation: Option<&CacheLockObservation>,
+    disk: Option<&crate::io_pressure::DiskSaturation>,
+    err: anyhow::Error,
+) -> anyhow::Error {
     let now = chrono::Utc::now();
+    let message = match (observation, disk) {
+        (Some(obs), Some(disk)) => format!(
+            "database is locked while trying to {action} by pid={} ({}) held since {} ({} ago): {}. \
+             Retry when IO pressure drops.\ncaused by: {}",
+            obs.info.pid,
+            obs.info.command_label(),
+            obs.info.started_at,
+            age_label(obs, now),
+            disk.describe(),
+            err
+        ),
+        (None, Some(disk)) => format!(
+            "database is locked while trying to {action}: {}. \
+             Retry when IO pressure drops.\ncaused by: {}",
+            disk.describe(),
+            err
+        ),
+        (observation, None) => return enrich_without_disk(action, observation, err, now),
+    };
+    anyhow::Error::new(CacheLockExhausted(message))
+}
+
+fn enrich_without_disk(
+    action: &str,
+    observation: Option<&CacheLockObservation>,
+    err: anyhow::Error,
+    now: chrono::DateTime<chrono::Utc>,
+) -> anyhow::Error {
     let message = match observation {
         Some(obs) if obs.owner == LockOwnerState::Current => format!(
             "database is locked while trying to {action}. \
@@ -832,6 +1022,185 @@ mod tests {
         assert_eq!(classify_lock_owner(&info), LockOwnerState::Unknown);
         clear_dead_owner_lock_info_at(&path);
         assert!(path.exists());
+    }
+
+    // BUG-HOME-041: the incident's sidecar. A `cache refresh --worker` in a
+    // sandboxed seat's PID namespace, heartbeat never advanced.
+    fn foreign_ns_fixture(
+        silent_for: chrono::Duration,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> CacheLockInfo {
+        let seen = (now - silent_for).to_rfc3339();
+        CacheLockInfo {
+            pid: 19,
+            boot_id: Some("boot-a".into()),
+            pid_ns: Some("4026535667".into()),
+            command: "aida cache refresh --worker".into(),
+            started_at: seen.clone(),
+            heartbeat_at: Some(seen),
+            expected_duration_secs: Some(120),
+            phase: Some("rebuild cache".into()),
+            kind: Some(CACHE_WRITE_LOCK_KIND.to_string()),
+            ..Default::default()
+        }
+    }
+
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_foreign_ns_holder_with_stale_heartbeat_is_dead() {
+        let now = chrono::Utc::now();
+        let classify = |info: &CacheLockInfo| {
+            classify_lock_owner_in(info, Some("boot-a"), Some("4026531836"), now)
+        };
+        // 10 x 120 s = 20 min is under the 30 min floor, so 30 min rules.
+        let stale = foreign_ns_fixture(chrono::Duration::hours(10), now);
+        assert_eq!(
+            stale.unseen_holder_stale_after(),
+            chrono::Duration::minutes(30)
+        );
+        assert_eq!(classify(&stale), LockOwnerState::Dead { pid_reused: false });
+        // Inside the window it stays unknown (fail closed).
+        let recent = foreign_ns_fixture(chrono::Duration::minutes(25), now);
+        assert_eq!(classify(&recent), LockOwnerState::Unknown);
+        // A long expected duration widens the window: 10 x 1 h.
+        let long = CacheLockInfo {
+            expected_duration_secs: Some(3600),
+            ..foreign_ns_fixture(chrono::Duration::hours(9), now)
+        };
+        assert_eq!(classify(&long), LockOwnerState::Unknown);
+        // No heartbeat and no acquired time: nothing speaks for it; unknown.
+        let blank = CacheLockInfo {
+            started_at: String::new(),
+            heartbeat_at: None,
+            ..stale.clone()
+        };
+        assert_eq!(classify(&blank), LockOwnerState::Unknown);
+        // Another boot is never healed by heartbeat alone.
+        assert_eq!(
+            classify_lock_owner_in(&stale, Some("boot-b"), Some("4026531836"), now),
+            LockOwnerState::Unknown
+        );
+
+        // The healer removes it.
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db.lock-info");
+        std::fs::write(&path, serde_json::to_string(&stale).unwrap()).unwrap();
+        assert_eq!(
+            reclaim_dead_lock_info_probed(&path, classify, |_| None).unwrap(),
+            LockInfoReclaim::Removed {
+                pid: 19,
+                pid_reused: false
+            }
+        );
+        assert!(!path.exists());
+    }
+
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_healer_never_steals_from_a_d_state_holder() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db.lock-info");
+        let classify = |i: &CacheLockInfo| classify_lock_owner_with(i, 1, alive, identity);
+
+        // The recorded holder itself (start identity matches) waits on disk:
+        // it is alive, never removed.
+        let holder = fixture(OTHER, Some("linux-starttime:100"));
+        std::fs::write(&path, serde_json::to_string(&holder).unwrap()).unwrap();
+        assert_eq!(
+            reclaim_dead_lock_info_probed(&path, classify, |_| Some('D')).unwrap(),
+            LockInfoReclaim::Kept(Some(LockOwnerState::Alive))
+        );
+        assert!(path.exists(), "a disk-blocked holder's record must stay");
+
+        // The pid was reused by an unrelated process that happens to wait on
+        // disk: its state says nothing about the dead holder, so the stale
+        // record is reclaimed.
+        let reused = fixture(OTHER, Some("linux-starttime:1"));
+        std::fs::write(&path, serde_json::to_string(&reused).unwrap()).unwrap();
+        assert_eq!(
+            reclaim_dead_lock_info_probed(&path, classify, |_| Some('D')).unwrap(),
+            LockInfoReclaim::Removed {
+                pid: OTHER,
+                pid_reused: true
+            }
+        );
+        assert!(!path.exists(), "a reused pid never keeps a stale record");
+    }
+
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_blocked_holder_evidence_for_the_fail_fast_deadline() {
+        let now = chrono::Utc::now();
+        let foreign = CacheLockObservation::at(
+            // Never an inode number, so never this process's namespace.
+            CacheLockInfo {
+                pid_ns: Some("not-a-local-ns".into()),
+                ..foreign_ns_fixture(chrono::Duration::hours(10), now)
+            },
+            LockOwnerState::Dead { pid_reused: false },
+            now,
+        );
+        match blocked_holder_from(Some(&foreign), None, now) {
+            Some(crate::io_pressure::BlockedHolder::ForeignNamespace { pid, silent, .. }) => {
+                assert_eq!(pid, 19);
+                assert_eq!(silent.map(|s| s.as_secs()), Some(36_000));
+            }
+            other => panic!("expected a foreign-namespace holder, got {other:?}"),
+        }
+        // A same-namespace holder is ordinary contention: no evidence.
+        let local = CacheLockObservation::at(
+            fixture(OTHER, Some("linux-starttime:100")),
+            LockOwnerState::Alive,
+            now,
+        );
+        assert_eq!(blocked_holder_from(Some(&local), None, now), None);
+        assert_eq!(blocked_holder_from(None, None, now), None);
+        // A saturated disk is evidence whoever holds the lock.
+        let disk = crate::io_pressure::disk_saturation_with(Some(80.0), None, |_| None);
+        assert!(matches!(
+            blocked_holder_from(Some(&local), disk, now),
+            Some(crate::io_pressure::BlockedHolder::Disk(_))
+        ));
+        let err = fail_fast_cache_lock_error(
+            "rebuild cache",
+            &blocked_holder_from(Some(&foreign), None, now).unwrap(),
+            anyhow::anyhow!("database is locked"),
+        );
+        assert!(is_cache_lock_error_for_test(&err));
+        let text = err.to_string();
+        assert!(text.contains("30s fail-fast deadline"), "{text}");
+        assert!(text.contains("Retry when IO pressure drops"), "{text}");
+    }
+
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_saturated_disk_error_never_calls_the_holder_stuck() {
+        let obs = CacheLockObservation::at(
+            fixture(OTHER, Some("linux-starttime:100")),
+            LockOwnerState::Alive,
+            chrono::Utc::now(),
+        );
+        let disk = crate::io_pressure::disk_saturation_with(Some(85.0), Some(OTHER), |_| Some('D'));
+        let err = enrich_cache_lock_error_with(
+            "rebuild cache",
+            Some(&obs),
+            disk.as_ref(),
+            anyhow::anyhow!("database is locked"),
+        );
+        assert!(is_cache_lock_error_for_test(&err));
+        let text = err.to_string();
+        assert!(text.contains("by pid=4242"), "{text}");
+        assert!(
+            text.contains("disk is saturated (IO pressure 85%"),
+            "{text}"
+        );
+        assert!(text.contains("state D (waiting on disk)"), "{text}");
+        assert!(!text.contains("If it's stuck"), "{text}");
+        assert!(!text.contains("heal stale-locks"), "{text}");
+    }
+
+    fn is_cache_lock_error_for_test(err: &anyhow::Error) -> bool {
+        err.downcast_ref::<CacheLockExhausted>().is_some()
     }
 
     // Probes: OTHER and 1000 are alive; OTHER's live identity is `ticks:100`.
