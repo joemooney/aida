@@ -17,12 +17,12 @@ description: |
   3. Bundle any other findings in the PR-3133 verdict.
   If `aida ship` refuses to publish from your seat again (BUG-HOME-038), commit and stop; the advisor publishes after inspection.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T06:13:41.027123386Z
-modified_at: 2026-10-30T11:18:20.236071594Z
+modified_at: 2026-10-30T11:18:25.567137866Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -61,6 +61,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: work complete locally but unable to publish: aida ship refuses to run git in this contained seat''s private clone (git config/hooks writable by the seat). Commit 185421df638 is on branch bug-b6b1278890774ef993d2ebc327862470-037, not pushed. Also could not file an implementer finding: the store is read-only in the seat. The finding: (1) the fixture''s descendant.pid can be absent if the timeout fires before the shell records it, so the test panics at unwrap. Fix: write pid and start atomically, and re-run the scenario if no record was written. (2) ScoreEnv hard-codes /tmp and /var/tmp, so the two scenario tests could not run in the sandbox. The stress run used the new helper unit test: 200/200 under load.. No triage reason was given.'
   created_at: 2026-10-30T10:50:28.458648351Z
   modified_at: 2026-10-30T10:50:28.458648351Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c88-4e1f-7e01-a67a-c85812f89c86
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: pidfd-only exit check is vacuous for both fixture callers: the start identity is compared untrimmed (fixture writes a trailing newline), so the check always reads ''PID reused'' and returns without verifying the kill; no stress evidence for this PR. It was punted on: other: work complete locally but unable to publish: aida ship refuses to run git in this seat (contained seat''s private clone with seat-writable git config/hooks) — same refusal that parked the first lane. Fix is commit 460a2bd4d73 on branch bug-b6b1278890774ef993d2ebc327862470-037 in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-037; tree clean.. No triage reason was given.'
+  created_at: 2026-10-30T11:18:25.567136224Z
+  modified_at: 2026-10-30T11:18:25.567136224Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18b73-67a9-76e3-94e9-c28ffb6fe20f
@@ -126,6 +132,14 @@ history:
   timestamp: 2026-10-30T11:18:21.190617328Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c88-4e1f-7e01-a67a-c8480cde877f
+  author: joe
+  timestamp: 2026-10-30T11:18:25.567114228Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
   branch: main
@@ -134,17 +148,3 @@ filed_at:
   aida_build_sha: 2742b18ee2e
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
-attention_reason:
-  category: other
-  detail: 'work complete locally but unable to publish: aida ship refuses to run git in this seat (contained seat''s private clone with seat-writable git config/hooks) — same refusal that parked the first lane. Fix is commit 460a2bd4d73 on branch bug-b6b1278890774ef993d2ebc327862470-037 in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-037; tree clean.'
-  lean: 'Seat provisioning is producing unpublishable clones; fix that (or publish from a host-owned clone after auditing .git/config and .git/hooks), then cherry-pick 460a2bd4d73 and run aida ship --no-merge. Validation: new unit test group_member_exit_check_accepts_zombie_and_reaped_child 200/200 under 8-way CPU load; make check-ci-fast 35/35 pass; the ScoreEnv tests (incl. generated_tool_help_timeout_kills_group_and_retains_reason) cannot run in this sandbox because ScoreEnv writes to hard-coded /tmp and /var/tmp (EROFS) — CI must exercise them.'
-  raised_by: implementer
-  raised_at: 2026-10-30T11:11:38.581431235Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'pidfd-only exit check is vacuous for both fixture callers: the start identity is compared untrimmed (fixture writes a trailing newline), so the check always reads ''PID reused'' and returns without verifying the kill; no stress evidence for this PR'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-037 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T11:16:56.180615219Z
