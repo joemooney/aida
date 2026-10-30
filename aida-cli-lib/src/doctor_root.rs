@@ -550,6 +550,174 @@ pub(crate) fn collect_doctor_findings(
     collect_doctor_findings_at(project_root, store, category_filter, &doctor_proc_root())
 }
 
+/// The `stale-locks` findings: the cache lock-info sidecar (and any unshared
+/// stray copy) read and classified. Reads two small files and nothing else,
+/// so `aida doctor heal stale-locks` can run it without loading the store or
+/// the cache it is healing (BUG-HOME-041).
+// trace:BUG-HOME-041 | ai:claude
+pub(crate) fn stale_lock_findings(
+    project_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Vec<DoctorFinding>> {
+    let mut out = Vec::new();
+    let cache_path =
+        aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+    // TASK-1484: owner liveness is PID-reuse aware (process start identity) and
+    // fails closed when the identity cannot be read. A dead owner's record past
+    // the age threshold is a safe heal; a LIVE owner past its expected duration
+    // is diagnostic evidence only (never healed). trace:TASK-1484 | ai:claude
+    // BUG-1644: the sidecar is resolved from the SHARED (symlink-resolved)
+    // cache location; an unshared sidecar an older binary left beside the
+    // symlinked cache path is checked too, and reported even when its owner
+    // is alive (its arm precedes the generic overrun arm so a live, overdue
+    // stray keeps its explanation). trace:BUG-1644 | ai:claude
+    let stray_lock_info = aida_core::stray_cache_lock_info_path(&cache_path);
+    let lock_info_paths = std::iter::once(aida_core::cache_lock_info_path(&cache_path))
+        .chain(stray_lock_info.clone());
+    for lock_info_path in lock_info_paths {
+        let is_stray = stray_lock_info.as_ref() == Some(&lock_info_path);
+        let Some(obs) = aida_core::observe_lock_info_file(&lock_info_path)? else {
+            continue;
+        };
+        let stale_secs = std::env::var("AIDA_CACHE_LOCK_STALE_SECS")
+            .ok()
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(300);
+        let age_secs = obs.age_secs(now).unwrap_or(0) as i64;
+        let command = if obs.info.command.trim().is_empty() {
+            "unknown command"
+        } else {
+            obs.info.command.as_str()
+        };
+        // A visible holder waiting on disk is never called stuck or stale.
+        // trace:BUG-HOME-041 | ai:claude
+        let on_disk = obs
+            .info
+            .visible_pid()
+            .is_some_and(aida_core::io_pressure::waiting_on_disk);
+        match obs.owner {
+            // trace:BUG-HOME-041 | ai:claude
+            aida_core::LockOwnerState::Dead { .. }
+                if age_secs >= stale_secs && obs.info.in_foreign_pid_ns() =>
+            {
+                let silent = obs
+                    .info
+                    .last_seen_utc()
+                    .map(|seen| now.signed_duration_since(seen).num_seconds().max(0) as u64)
+                    .unwrap_or(age_secs.max(0) as u64);
+                out.push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "cache lock-info from pid {} ({}) in another PID namespace has had no heartbeat for {} (past the {} window), so its holder is presumed dead",
+                        obs.info.pid,
+                        command,
+                        humanize_duration_secs(silent),
+                        humanize_duration_secs(
+                            obs.info.unseen_holder_stale_after().num_seconds().max(0) as u64
+                        ),
+                    ),
+                    action: format!("remove stale lock-info file {}", lock_info_path.display()),
+                    safe_heal: true,
+                });
+            }
+            aida_core::LockOwnerState::Dead { .. } if on_disk => {}
+            aida_core::LockOwnerState::Dead { pid_reused } if age_secs >= stale_secs => {
+                out.push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "cache lock-info from dead pid {} ({}) is {} old{}",
+                        obs.info.pid,
+                        command,
+                        humanize_duration_secs(age_secs.max(0) as u64),
+                        if pid_reused {
+                            " (the pid now belongs to a different process)"
+                        } else {
+                            ""
+                        }
+                    ),
+                    action: format!("remove stale lock-info file {}", lock_info_path.display()),
+                    safe_heal: true,
+                });
+            }
+            // trace:TASK-1526 | ai:codex
+            aida_core::LockOwnerState::Unknown if obs.overrun.is_some() => {
+                out.push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!("cache lock-info for pid {} ({command}) has unknown owner identity and is past its expected duration (diagnostic only)", obs.info.pid),
+                    // trace:BUG-HOME-041 | ai:claude
+                    action: if obs.info.in_foreign_pid_ns() {
+                        format!(
+                            "holder in another PID namespace: liveness unknown from here. It is presumed dead once its heartbeat is silent for {}; sooner, confirm from an unsandboxed shell that no `{command}` process runs, then remove {}",
+                            humanize_duration_secs(obs.info.unseen_holder_stale_after().num_seconds().max(0) as u64),
+                            lock_info_path.display()
+                        )
+                    } else {
+                        "check the recorded host and process namespace; preserve the record while ownership is unknown".to_string()
+                    },
+                    safe_heal: false,
+                });
+            }
+            _ if is_stray && obs.owner == aida_core::LockOwnerState::Alive => {
+                out.push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "unshared lock-info beside a symlinked cache, from live pid {} ({}); current binaries read the sidecar at the resolved cache location, so this record is ignored{}",
+                        obs.info.pid,
+                        command,
+                        obs.overrun_note()
+                            .map(|note| format!("; {note}"))
+                            .unwrap_or_default()
+                    ),
+                    action: format!(
+                        "upgrade the aida binary that pid {} runs; the file is removed once its owner exits",
+                        obs.info.pid
+                    ),
+                    safe_heal: false,
+                });
+            }
+            // trace:BUG-HOME-041 | ai:claude
+            _ if on_disk && obs.live_overrun().is_some() => {
+                out.push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "cache lock held by pid {} ({}) for {}; it is waiting on disk (state D), not stuck",
+                        obs.info.pid,
+                        command,
+                        humanize_duration_secs(age_secs.max(0) as u64),
+                    ),
+                    action: "wait for the disk to catch up (see /proc/pressure/io); the record is never removed while its holder waits on disk".to_string(),
+                    safe_heal: false,
+                });
+            }
+            _ if obs.live_overrun().is_some() => {
+                out.push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!(
+                        "cache lock held by live pid {} ({}) for {}; {}",
+                        obs.info.pid,
+                        command,
+                        humanize_duration_secs(age_secs.max(0) as u64),
+                        obs.overrun_note().unwrap_or_default()
+                    ),
+                    action: format!(
+                        "check pid {}; the lock clears when it finishes (not removed while the owner is alive)",
+                        obs.info.pid
+                    ),
+                    safe_heal: false,
+                });
+            }
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
 /// TASK-2216: the process table the doctor scans for a claude daemon holding
 /// a grant. `/proc`, except under `cfg(test)`, where no doctor test reads the
 /// real machine's processes; a test that wants the scan injects a fake root
@@ -789,104 +957,9 @@ pub(crate) fn collect_doctor_findings_at(
         }
     }
 
-    let cache_path =
-        aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
-    // TASK-1484: owner liveness is PID-reuse aware (process start identity) and
-    // fails closed when the identity cannot be read. A dead owner's record past
-    // the age threshold is a safe heal; a LIVE owner past its expected duration
-    // is diagnostic evidence only (never healed). trace:TASK-1484 | ai:claude
-    // BUG-1644: the sidecar is resolved from the SHARED (symlink-resolved)
-    // cache location; an unshared sidecar an older binary left beside the
-    // symlinked cache path is checked too, and reported even when its owner
-    // is alive (its arm precedes the generic overrun arm so a live, overdue
-    // stray keeps its explanation). trace:BUG-1644 | ai:claude
-    let stray_lock_info = aida_core::stray_cache_lock_info_path(&cache_path);
-    let lock_info_paths = std::iter::once(aida_core::cache_lock_info_path(&cache_path))
-        .chain(stray_lock_info.clone());
-    for lock_info_path in lock_info_paths {
-        let is_stray = stray_lock_info.as_ref() == Some(&lock_info_path);
-        let Some(obs) = aida_core::observe_lock_info_file(&lock_info_path)? else {
-            continue;
-        };
-        let stale_secs = std::env::var("AIDA_CACHE_LOCK_STALE_SECS")
-            .ok()
-            .and_then(|v| v.parse::<i64>().ok())
-            .unwrap_or(300);
-        let age_secs = obs.age_secs(now).unwrap_or(0) as i64;
-        let command = if obs.info.command.trim().is_empty() {
-            "unknown command"
-        } else {
-            obs.info.command.as_str()
-        };
-        match obs.owner {
-            aida_core::LockOwnerState::Dead { pid_reused } if age_secs >= stale_secs => {
-                push(DoctorFinding {
-                    category: "stale-locks".to_string(),
-                    id: lock_info_path.display().to_string(),
-                    summary: format!(
-                        "cache lock-info from dead pid {} ({}) is {} old{}",
-                        obs.info.pid,
-                        command,
-                        humanize_duration_secs(age_secs.max(0) as u64),
-                        if pid_reused {
-                            " (the pid now belongs to a different process)"
-                        } else {
-                            ""
-                        }
-                    ),
-                    action: format!("remove stale lock-info file {}", lock_info_path.display()),
-                    safe_heal: true,
-                });
-            }
-            // trace:TASK-1526 | ai:codex
-            aida_core::LockOwnerState::Unknown if obs.overrun.is_some() => {
-                push(DoctorFinding {
-                    category: "stale-locks".to_string(),
-                    id: lock_info_path.display().to_string(),
-                    summary: format!("cache lock-info for pid {} ({command}) has unknown owner identity and is past its expected duration (diagnostic only)", obs.info.pid),
-                    action: "check the recorded host and process namespace; preserve the record while ownership is unknown".to_string(),
-                    safe_heal: false,
-                });
-            }
-            _ if is_stray && obs.owner == aida_core::LockOwnerState::Alive => {
-                push(DoctorFinding {
-                    category: "stale-locks".to_string(),
-                    id: lock_info_path.display().to_string(),
-                    summary: format!(
-                        "unshared lock-info beside a symlinked cache, from live pid {} ({}); current binaries read the sidecar at the resolved cache location, so this record is ignored{}",
-                        obs.info.pid,
-                        command,
-                        obs.overrun_note()
-                            .map(|note| format!("; {note}"))
-                            .unwrap_or_default()
-                    ),
-                    action: format!(
-                        "upgrade the aida binary that pid {} runs; the file is removed once its owner exits",
-                        obs.info.pid
-                    ),
-                    safe_heal: false,
-                });
-            }
-            _ if obs.live_overrun().is_some() => {
-                push(DoctorFinding {
-                    category: "stale-locks".to_string(),
-                    id: lock_info_path.display().to_string(),
-                    summary: format!(
-                        "cache lock held by live pid {} ({}) for {}; {}",
-                        obs.info.pid,
-                        command,
-                        humanize_duration_secs(age_secs.max(0) as u64),
-                        obs.overrun_note().unwrap_or_default()
-                    ),
-                    action: format!(
-                        "check pid {}; the lock clears when it finishes (not removed while the owner is alive)",
-                        obs.info.pid
-                    ),
-                    safe_heal: false,
-                });
-            }
-            _ => {}
-        }
+    // trace:BUG-HOME-041 | ai:claude
+    for finding in stale_lock_findings(project_root, now)? {
+        push(finding);
     }
 
     // STORY-496: reap stale agent-registry entries. A record under

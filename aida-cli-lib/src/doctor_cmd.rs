@@ -676,6 +676,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     if let Some(raw) = opts.since.as_deref() {
         resolve_completed_since_cutoff(&project_root, raw)?;
     }
+    // The stale-lock healer must not need the store or cache it heals, and
+    // must not hang on a saturated disk. trace:BUG-HOME-041 | ai:claude
+    if !opts.all
+        && !opts.quiet_output
+        && opts
+            .category
+            .as_deref()
+            .and_then(|c| normalize_doctor_category(c).ok())
+            .as_deref()
+            == Some("stale-locks")
+    {
+        return doctor_stale_locks_bounded(&project_root, &opts);
+    }
     let store_path = project_root.join(".aida-store");
     let store = Storage::new(&store_path)
         .load()
@@ -1393,6 +1406,71 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
             print!("{}", crate::disk_emergency::render_status(status));
         }
     })
+}
+
+/// Default bound on `aida doctor [heal] stale-locks`; overridable with
+/// `AIDA_STALE_LOCKS_DEADLINE_SECS`.
+// trace:BUG-HOME-041 | ai:claude
+const STALE_LOCKS_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// `aida doctor [heal] --category stale-locks`: scan only the lock-info files
+/// (no store load, no cache open) on a worker thread, and fail with the
+/// holder diagnosis when the scan outlives its deadline (a saturated disk can
+/// park even a two-file read). Heals run after the scan, sharing the deadline.
+// trace:BUG-HOME-041 | ai:claude
+fn doctor_stale_locks_bounded(
+    project_root: &std::path::Path,
+    opts: &DoctorRunOptions,
+) -> Result<()> {
+    let budget = std::env::var("AIDA_STALE_LOCKS_DEADLINE_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(std::time::Duration::from_secs)
+        .unwrap_or(STALE_LOCKS_DEADLINE);
+    let deadline = std::time::Instant::now() + budget;
+    let (tx, rx) = std::sync::mpsc::channel();
+    let root = project_root.to_path_buf();
+    std::thread::spawn(move || {
+        let _ = tx.send(stale_lock_findings(&root, chrono::Utc::now()));
+    });
+    let findings = match rx.recv_timeout(budget) {
+        Ok(found) => found?,
+        Err(_) => {
+            let cause = aida_core::io_pressure::observe_disk_saturation(None)
+                .map(|disk| disk.describe())
+                .unwrap_or_else(|| "the filesystem did not answer".to_string());
+            anyhow::bail!(
+                "timed out after {}s reading the cache lock-info under {}: {cause}. \
+                 Nothing was removed; re-run when the disk is responsive.",
+                budget.as_secs(),
+                project_root.join(".aida").display()
+            );
+        }
+    };
+    let mut report = DoctorReport::from_findings(findings);
+    if opts.heal {
+        report.healed = heal_doctor_findings(project_root, &report.findings, opts, Some(deadline))?;
+    }
+    let failed = report
+        .healed
+        .iter()
+        .filter(|r| r.status == "failed")
+        .count();
+    let reason = if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
+        Some(format!(
+            "{} finding(s) in stale-locks — failing because --fail-on-findings was requested",
+            report.findings.len()
+        ))
+    } else {
+        (failed > 0).then(|| format!("{failed} finding(s) failed to heal — see the report above"))
+    };
+    emit_doctor_report(
+        report,
+        reason,
+        doctor_render_mode(opts.json),
+        opts.heal,
+        |_| {},
+    )
 }
 
 // trace:TASK-1544 | ai:codex
@@ -8972,6 +9050,14 @@ fn heal_doctor_stale_lock(finding: &DoctorFinding) -> Result<DoctorHealResult> {
         aida_core::LockInfoReclaim::Absent => (
             "skipped",
             Some("lock-info file was already gone".to_string()),
+        ),
+        // trace:BUG-HOME-041 | ai:claude
+        aida_core::LockInfoReclaim::HolderOnDisk { pid } => (
+            "skipped",
+            Some(format!(
+                "pid {pid} is waiting on disk (state D), not stuck; left in place. \
+                 Retry when IO pressure drops"
+            )),
         ),
         aida_core::LockInfoReclaim::Kept(Some(owner)) if owner.presumed_alive() => (
             "skipped",

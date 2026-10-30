@@ -4692,8 +4692,21 @@ pub(crate) fn with_lease_write_lock<T>(
         .write(true)
         .open(&lock_path)
         .with_context(|| format!("opening {}", lock_path.display()))?;
-    lock.lock_exclusive()
-        .with_context(|| format!("locking {}", lock_path.display()))?;
+    // Polled rather than blocking so a long wait can say when the disk, not
+    // a stuck holder, is the cause. trace:BUG-HOME-041 | ai:claude
+    let mut notice = aida_core::io_pressure::LockWaitNotice::new();
+    loop {
+        match lock.try_lock_exclusive() {
+            Ok(()) => break,
+            Err(e) if aida_core::file_lock::is_lock_contended(&e) => {
+                notice.tick("session lease lock", || None);
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(e) => {
+                return Err(e).with_context(|| format!("locking {}", lock_path.display()));
+            }
+        }
+    }
     let out = write();
     let _ = FileExt::unlock(&lock);
     out

@@ -187,6 +187,7 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
     let start = Instant::now();
     let limit = timeout();
     let mut recorded_contention = false;
+    let mut notice = crate::io_pressure::LockWaitNotice::new();
     loop {
         use fs2::FileExt;
         match file.try_lock_exclusive() {
@@ -212,6 +213,16 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
                     }
                 }
                 if start.elapsed() >= limit {
+                    // On a saturated disk the holder is waiting on the device,
+                    // not stuck: say so. trace:BUG-HOME-041 | ai:claude
+                    if let Some(disk) = crate::io_pressure::observe_disk_saturation(None) {
+                        anyhow::bail!(
+                            "Timed out after {}s waiting for the store write lock {}: {}.",
+                            limit.as_secs(),
+                            path.display(),
+                            disk.describe()
+                        );
+                    }
                     anyhow::bail!(
                         "Timed out after {}s waiting for the store write lock {}. \
                          Another AIDA command is writing the store; retry when it finishes.",
@@ -219,6 +230,8 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
                         path.display()
                     );
                 }
+                // trace:BUG-HOME-041 | ai:claude
+                notice.tick("store write lock", || None);
                 std::thread::sleep(Duration::from_millis(20));
             }
             Err(e) => {

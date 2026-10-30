@@ -1204,6 +1204,8 @@ where
 {
     let delays = cache_retry_delays();
     let mut attempts = 0usize;
+    // trace:BUG-HOME-041 | ai:claude
+    let mut notice = crate::io_pressure::LockWaitNotice::new();
     loop {
         #[cfg(test)]
         if holding_write() {
@@ -1223,6 +1225,12 @@ where
                         &format!("waiting for sqlite lock: {action} (retry {})", attempts + 1),
                     );
                 }
+                notice.tick("cache write lock", || {
+                    observe_lock_info_file(lock_info_path)
+                        .ok()
+                        .flatten()
+                        .and_then(|obs| obs.info.visible_pid())
+                });
                 #[cfg(test)]
                 super::cache_refresh::test_count("retry_sleep");
                 std::thread::sleep(delay);
