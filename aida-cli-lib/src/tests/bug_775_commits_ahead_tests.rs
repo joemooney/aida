@@ -381,23 +381,22 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
     })
     .unwrap();
 
+    // M1 slice 2: both records are on the gate ledger, the handshake at the
+    // anchor's root and the spec record at the drive root.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let body_at = |root: &std::path::Path, key: &str| {
+        crate::gate::review_verdict::current_verdict_body(root, key, None)
+    };
     assert!(
-        verdict_file.exists(),
+        body_at(parent.path(), "PR-1706").is_some(),
         "handshake must land at the orchestrator-provided anchor"
     );
     // BUG-1466: exercise the real writer and prove the PR-keyed handshake
     // carries the exact same provenance as the spec-keyed record.
     // trace:BUG-1466 | ai:codex
-    let spec_body = std::fs::read_to_string(
-        drive
-            .path()
-            .join(".aida")
-            .join("review-verdicts")
-            .join("STORY-993.json"),
-    )
-    .unwrap();
+    let spec_body = body_at(drive.path(), "STORY-993").unwrap();
     let spec_json: serde_json::Value = serde_json::from_str(&spec_body).unwrap();
-    let handshake_body = std::fs::read_to_string(&verdict_file).unwrap();
+    let handshake_body = body_at(parent.path(), "PR-1706").unwrap();
     let handshake_json: serde_json::Value = serde_json::from_str(&handshake_body).unwrap();
     for field in [
         "reviewed_sha",
@@ -414,8 +413,8 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
         !drive
             .path()
             .join(".aida")
-            .join("review-verdicts")
-            .join("PR-1706.json")
+            .join("gate-ledger")
+            .join("PR-1706.jsonl")
             .exists(),
         "the worktree drive root must not receive the PR handshake when the explicit anchor exists"
     );

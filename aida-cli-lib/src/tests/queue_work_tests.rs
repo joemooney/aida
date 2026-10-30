@@ -3679,12 +3679,13 @@ fn closed_refusal_does_not_count_as_outstanding() {
         "reviewer",
     )
     .unwrap();
-    // Close it the way BUG-1529's merge-close path does.
-    let path = crate::gate::review_verdict::verdict_path(root, "BUG-1515");
-    let body = std::fs::read_to_string(&path).unwrap();
-    let mut value: serde_json::Value = serde_json::from_str(&body).unwrap();
-    value["closed_by_merge"] = serde_json::Value::String("abc1234".to_string());
-    crate::gate::review_verdict::write_verdict_atomic(&path, &value.to_string()).unwrap();
+    // Close it through BUG-1529's merge-close path, which appends the closed
+    // round to the gate ledger (M1 slice 2: no legacy verdict file exists).
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    assert!(
+        crate::gate::review_verdict::close_verdict_on_merge(root, "BUG-1515", "abc1234").unwrap(),
+        "the refusal must be closed"
+    );
 
     let mut store = aida_core::RequirementsStore::default();
     let mut r = Requirement::new("closed refusal".to_string(), String::new());

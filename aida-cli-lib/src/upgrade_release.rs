@@ -1107,7 +1107,7 @@ mod bug_1173_detection_hold_tests {
             .unwrap_or(src.len());
         let body = &src[start..end];
         assert!(
-            body.contains("merge_hold_core::write_typed_hold")
+            body.contains("merge_hold_core::place_hold")
                 && body.contains("HoldReasonKind::Supervision"),
             "set_pr_number must stamp a typed supervision marker at PR-detection"
         );

@@ -3,6 +3,7 @@
 // mandate-gate
 
 use super::ChangeKey;
+use crate::gate::merge_hold_core::MergeHoldRecord;
 use crate::gate::review_verdict::{JsonObj, RecorderAttestation, ATTESTATION_KEY};
 use std::path::Path;
 
@@ -42,8 +43,8 @@ pub(crate) struct GateEvent {
     pub body: EventBody,
 }
 
-/// What happened. Slice 1 carries verdicts; holds, releases, mandate cover
-/// and carry-over proofs join in slices 2 and 3.
+/// What happened. Slice 1 carried verdicts; slice 2 adds holds, their
+/// releases and label syncs; carry-over proofs join in slice 3.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -54,6 +55,46 @@ pub(crate) enum EventBody {
     /// The change's legacy files, verbatim, captured on its first ledger
     /// write so the ledger alone carries the history.
     LegacyImported { legacy: Vec<LegacyFile> },
+    /// A merge hold placed (or re-composed, re-armed, re-routed): the full
+    /// record as it now stands. The newest `hold` after the newest
+    /// `hold-release` is the open hold.
+    Hold {
+        hold: MergeHoldRecord,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        rearmed: bool,
+    },
+    /// The open hold was released. Appended, never a deletion: the `hold`
+    /// it answers stays on the ledger as evidence (AC3). `clearance` is the
+    /// audit record (`HoldClearance` plus any release-path extras).
+    HoldRelease { clearance: JsonObj },
+    /// An automatic release was authorized and its audit comment posted,
+    /// before the release-time recheck (TASK-1757). Not a release.
+    ReleaseAuthorized { clearance: JsonObj },
+    /// The release-time recheck refused after an authorization: the hold
+    /// stays armed and the authorization no longer counts.
+    ReleaseWithdrawn { reason: String },
+    /// The forge label's sync state for the open hold (BUG-1236).
+    LabelSync { label_state: String },
+}
+
+impl EventBody {
+    /// A hold placement or release: the events whose time decides whether a
+    /// legacy marker file is newer than the ledger's answer.
+    pub(crate) fn is_hold_transition(&self) -> bool {
+        matches!(self, Self::Hold { .. } | Self::HoldRelease { .. })
+    }
+
+    /// Any event of the hold family.
+    pub(crate) fn is_hold_family(&self) -> bool {
+        matches!(
+            self,
+            Self::Hold { .. }
+                | Self::HoldRelease { .. }
+                | Self::ReleaseAuthorized { .. }
+                | Self::ReleaseWithdrawn { .. }
+                | Self::LabelSync { .. }
+        )
+    }
 }
 
 /// One legacy file preserved in a `legacy-imported` event.
@@ -140,5 +181,15 @@ pub(crate) fn verdict_event(
     if let Some(head) = event.head.as_deref() {
         (event.base_ref, event.base_tip, event.patch_id) = patch_identity(root, head);
     }
+    event
+}
+
+/// The `verdict` event for `record` on `spec`'s unbound ledger: `change` is
+/// the spec key, and the patch identity is taken at the record's head.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn verdict_event_unbound(root: &Path, spec: &str, record: &JsonObj) -> GateEvent {
+    let mut event = verdict_event(root, ChangeKey::pr(0), record, Some(spec));
+    event.change = spec.trim().to_ascii_uppercase();
+    event.spec = Some(event.change.clone());
     event
 }
