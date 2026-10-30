@@ -58,12 +58,12 @@ description: |
 
 
   ADVISOR NOTE 2026-10-30 02:09 (PR-3129, slice 2): the branch CONFLICTS with main (3 commits behind, 5 overlapping files; the 3116/3117/3123 merges touched agent_launch and the registry). Merge origin/main into the slice-2 branch (merge, no rebase), resolve the conflicts keeping both sides' behaviour, regenerate the help golden if help changed, run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast, and push to the SAME PR-3129 branch.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T10:00:26.761063913Z
+modified_at: 2026-10-30T10:25:20.139079041Z
 req_type: Story
 relationships:
 - rel_type:
@@ -235,6 +235,20 @@ comments:
   created_at: 2026-10-30T09:02:57.738518428Z
   modified_at: 2026-10-30T09:02:57.738518428Z
   session_id: 01a18be4bff1
+  harness_version: 2.1.314 (Claude Code)
+- id: 01a18c57-92de-7613-b93f-9f2a13adb68d
+  author: joe
+  content: |-
+    ## Slice 2 merge rework done (implementer, ai:claude, 2026-10-30 03:25)
+    Merged origin/main into PR-3129 (merge ba6075595b7, no rebase) and pushed 89e5af33a92. PR is MERGEABLE now.
+    - agent_launch.rs: BUG-030 moved registration into supervise_spawned_child's closure. The mail-wake stamp now runs inside that closure (after register, before wait), and the BUG-030 deferred warnings are kept.
+    - agent_registry.rs mark_agent_ended: keeps both the mail_wake::retire and write_entry_within(LAUNCHER_LOCK_BUDGET).
+    - docs/cli/06-roles-sessions.md: kept both the --no-mail-wake bullet and the implementer-pool bullet.
+    - Fallout: added the new mail_wake arg (None) to the BUG-030 test call. health_job_block now quotes its name via toml_quote::toml_string, which clears the portability ratchet.
+    Verification: cargo test --profile agent -p aida-cli-lib --lib -- story_home_096 bug_030 story_1728 gave 48 passed, 0 failed, and the help golden is unchanged. make check-ci-fast: rc=0.
+  created_at: 2026-10-30T10:25:11.902788245Z
+  modified_at: 2026-10-30T10:25:11.902788245Z
+  session_id: 01a18c40e3a9
   harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
@@ -444,6 +458,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18c57-b37f-7c92-a4e6-eb989c4548f6
+  author: joe
+  timestamp: 2026-10-30T10:25:20.255830503Z
+  session_id: 01a18c40e3a9
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
