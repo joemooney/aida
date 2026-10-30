@@ -7,12 +7,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:26:07.472529964Z
-modified_at: 2026-10-30T06:59:47.615107568Z
+modified_at: 2026-10-30T07:00:20.901059444Z
 req_type: Bug
 tags:
 - aida:alias
 - docs
 - ux
+comments:
+- id: 01a18b9c-0725-79c1-8eab-745839fbf21b
+  author: ai:codex:joe
+  content: Implemented alias help correction at bc06b22feae488b9681ce9442b02b19303c6241d. Both personal/project alias paths and add/remove are described; built-ins-only wording removed. Regenerated actual full CLI help snapshot (one exact regeneration test), then18 command-registry tests passed in normal comparison mode; fmt and all35fast gates passed. Logs /tmp/bug020-{actual-regen,registry-tests,fmt,fast}.log. One fresh spawned AUTHOR self-check independently ran snapshot comparison and diff checks; no findings, no independent verdict. Three-dot own diff is two files; publication main is2commits newer with no touched-file overlap and a clean merge-tree, proof /tmp/bug020-push-proof.json. Independent review/integration still required. No hold cleared or self-merge attempted.
+  created_at: 2026-10-30T07:00:20.901059444Z
+  modified_at: 2026-10-30T07:00:20.901059444Z
 history:
 - id: 01a18a38-1acc-79f2-baf2-652302d7f8f5
   author: joe
