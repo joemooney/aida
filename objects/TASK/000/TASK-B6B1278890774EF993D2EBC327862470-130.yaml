@@ -7,11 +7,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T18:43:26.394246896Z
-modified_at: 2026-10-30T18:43:26.394246896Z
+modified_at: 2026-10-30T18:46:57.586526129Z
 req_type: Task
 tags:
 - docs
 - github-pages
+comments:
+- id: 01a18e22-f332-7c52-9d83-110fd096310d
+  author: joe
+  content: Operator explicitly requested immediate Pages publication in the active conversation. Published only reviewed merged-main static website at main 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa to new gh-pages branch (deployment head 44bcc264b03e2ce52c5b9df7ff93a4febf694a49). Pages source gh-pages:/, .nojekyll; live URL https://joemooney.github.io/aida/ . GitHub Pages build run 41109451189 succeeded; all 21 HTML/CSS/JS/SVG files returned HTTP 200/nonempty bodies. Local asset/link validation passed before publication. Source/reference links resolve to public GitHub main; no unmerged TASK-HOME-128 content deployed and owner-private Sites preview unchanged. This is a manual merged-main snapshot; it does not automatically follow main. add --status approved was downgraded to Draft; advisor should reconcile tracking under the explicit operator assignment. No role escalation or main source merge.
+  created_at: 2026-10-30T18:46:57.586526129Z
+  modified_at: 2026-10-30T18:46:57.586526129Z
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: codex/task-home-128-docs-completion
