@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T04:39:41.633680257Z
+modified_at: 2026-10-30T04:40:34.116969271Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -106,6 +106,18 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18b1b-c6bf-77d2-95e8-6c34030cf09a
+  author: joe
+  timestamp: 2026-10-30T04:40:15.807190792Z
+  session_id: 01a18b18d080
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18b1c-1647-7c91-bb4c-5da74a586c54
+  author: joe
+  timestamp: 2026-10-30T04:40:36.167929689Z
+  session_id: 01a18b18d080
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -122,7 +134,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Root cause and fix are sound and CI is green, but no test traces any acceptance criterion, the launcher-waits behaviour has no integration test, and the post-exit registry write still uses the 250 ms budget.
+  detail: Root cause and fix are sound and CI is green, but no test traces any acceptance criterion, the launcher-waits behaviour has no integration test, and the post-exit registry write still uses the 250 ms budget. (Supersedes an accidental 'probe' round recorded at the same SHA.)
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-030 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-30T04:39:41.633680257Z
+  shelved_at: 2026-10-30T04:40:34.116969271Z
