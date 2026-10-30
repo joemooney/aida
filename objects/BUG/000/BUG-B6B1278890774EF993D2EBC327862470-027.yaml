@@ -2,12 +2,12 @@ id: 01a18a51-620b-7772-a957-23d490e5310d
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-027
 title: Headless lane wrapper holds an implementer slot after the agent's final result (claude -p lingers with its aida mcp-serve child)
 description: '2026-10-29 17:58: the STORY-080 round-2 lane logged ''✓ result 765914ms'' and its PR was approved, yet 31 minutes later `aida queue work` (pid 1276045, in do_wait) still waited on `claude -p` (1279725), whose child `aida mcp-serve` (1279800) kept it alive. The lane still counted toward standalone_implementer_cap=3, so the STORY-096 launch was refused. Killing the three processes freed the slot. Acceptance: after the vendor emits its final result event, the wrapper gives the process a bounded grace period (e.g. 30 s), then terminates the vendor process group including MCP children, records exited_at in .aida/lanes/*.json, and releases the cap slot. The cap count ignores lanes whose final result was logged.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:59:11.755260345Z
-modified_at: 2026-10-30T02:07:48.795272767Z
+modified_at: 2026-10-30T04:05:07.719680648Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -43,6 +43,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18afb-9b26-7003-8ee8-cdaadf031bfe
+  author: aida-auto-bump
+  timestamp: 2026-10-30T04:05:07.494527158Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18afb-9c07-7940-a8c1-46f7113f3011
+  timestamp: 2026-10-30T04:05:07.719676198Z
+  agent: aida
+  commit_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
+  summary: 'All BUG-027 acceptance met: 30s post-result grace then SIGTERM/SIGKILL of vendor tree incl. MCP children (headless_linger.rs, linux test reaps grandchild); exited_at still written via finish_headless_lane_for_child after the reaping wait; cap ignores slots whose log holds the final result (cap_ignores_a_launcher_whose_child_logged_its_final_result); bug protocol met (test file touched); CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -55,3 +69,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:07:48.795272767Z
   implemented_by: joe
+  completed_at: 2026-10-30T04:05:07.494522395Z
+  completion_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
