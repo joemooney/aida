@@ -1,0 +1,19 @@
+id: 01a18a40-43b4-7ae0-9afc-a68a9ce1373f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-119
+title: Codex mail-wake wakes on mail the woken seat cannot act on
+description: '2026-10-29: the codex-mail-wake service bound to Codex''s thread delivered six advisor-addressed historical dispatch receipts; Codex (implementer) could not ack them. Acceptance: the adapter wakes only for mail addressed to the woken agent''s own handle/role (configurable), and the notice says which inbox it came from. Fold into STORY-HOME-096 if that lands first.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T00:40:29.876190271Z
+modified_at: 2026-10-30T00:40:29.876190271Z
+req_type: Task
+filed_at:
+  code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 1db74dba112
+  vendor: claude
+  session: 1fccff89-db7b-4173-8b69-6417ae15d5ea

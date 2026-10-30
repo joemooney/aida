@@ -88599,5 +88599,17 @@ operations:
   timestamp: 2026-10-30T00:40:30.518911658Z
   kind: !SetStatus
     status: Done
-clock: 6895
+- id: 01a18a40-637e-7c90-8f38-05f67839a789
+  target_id: 01a18a40-43b4-7ae0-9afc-a68a9ce1373f
+  author: aida
+  node_id: '1'
+  lamport: 6896
+  timestamp: 2026-10-30T00:40:38.014858523Z
+  kind: !Create
+    title: Codex mail-wake wakes on mail the woken seat cannot act on
+    description: '2026-10-29: the codex-mail-wake service bound to Codex''s thread delivered six advisor-addressed historical dispatch receipts; Codex (implementer) could not ack them. Acceptance: the adapter wakes only for mail addressed to the woken agent''s own handle/role (configurable), and the notice says which inbox it came from. Fold into STORY-HOME-096 if that lands first.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6896
 node_id: '1'
