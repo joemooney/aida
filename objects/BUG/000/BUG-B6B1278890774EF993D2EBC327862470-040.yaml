@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T21:59:07.419389750Z
+modified_at: 2026-10-30T22:03:11.324762253Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -62,6 +62,12 @@ comments:
   modified_at: 2026-10-30T20:37:59.430682972Z
   session_id: 01a18e6f8d21
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18ed6-9a5c-7db0-8a8a-8f1bbbb0f910
+  author: joe
+  content: 'ADVISOR NOTE 15:08: the advisor read PR-3142''s ''CI (rest)'' failure on run 41124758485: it is ONLY a time-budget overrun on an unrelated test (aida-core bug_1677_concurrent_queue_writers..., 15.1s vs 15s), a flake. It is not caused by this PR, so ignore it. The 13:00 ruling still stands: merge origin/main, fix story_465 role_addressed_cross_vendor_handoff_shows_by_sender_and_subject_in_the_notice on the merged head, run that test by filter plus make check-ci-fast, COMMIT, and PUSH. Run the cargo test in the FOREGROUND with a long timeout (no background runs, no sleep loops). Your seat holds an unpushed clean merge b565f8a24e7: build on it.'
+  created_at: 2026-10-30T22:03:11.324762253Z
+  modified_at: 2026-10-30T22:03:11.324762253Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d27-53e3-7762-9954-20226499df1b
   author: joe
