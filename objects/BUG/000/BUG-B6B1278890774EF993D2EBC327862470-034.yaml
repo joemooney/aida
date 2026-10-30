@@ -7,12 +7,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T03:45:48.780708400Z
-modified_at: 2026-10-30T03:45:48.780708400Z
+modified_at: 2026-10-30T05:44:15.518907730Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T03:46:07.802304254Z
+comments:
+- id: 01a18b56-5d9e-7b93-b722-b6d758582e71
+  author: joe
+  content: |
+    Cause confirmed 2026-10-29 22:43: the 3117 reviewer launch failed with 'fatal: Unable to create /home/joe/ai/aida/.git/worktrees/-aida-store/index.lock: File exists' while other store writers ran. The lock was gone a minute later, so this is transient contention on the store worktree index. The fix needs a bounded retry on index.lock contention for store commits during launch.
+  created_at: 2026-10-30T05:44:15.518907730Z
+  modified_at: 2026-10-30T05:44:15.518907730Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18aea-4634-7890-b81b-b37aba622a8e
   author: joe
