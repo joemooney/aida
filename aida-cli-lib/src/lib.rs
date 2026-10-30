@@ -586,6 +586,8 @@ mod session;
 mod session_liveness;
 mod session_manifest;
 mod session_misc_cmd;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+mod whoami_view;
 // trace:TASK-1177 | ai:claude — the substrate-state reap pass for sessions
 // whose spec is finished, branch merged, and process exited.
 mod session_reap;

@@ -134,12 +134,12 @@ pub enum NodeCommand {
         cmd: Option<TeamCommand>,
     },
 
-    /// Print the caller identity AIDA resolved — role, agent-type, agent-name,
-    /// user-id, headless flag, ai-tool, and active session/scope. Read-only.
-    /// Identity introspection under the `node` namespace; equivalent to the
-    /// hidden top-level `aida whoami`.
+    /// Who this session is: mail handle, node, unread mail, current spec,
+    /// goal and worktree. Read-only. Equivalent to the top-level
+    /// `aida whoami`; `--verbose` adds the caller-identity details.
     // trace:TASK-851 | ai:claude
-    Whoami,
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+    Whoami(crate::session_misc_cmd::WhoamiFlags),
 
     /// Friendly labels for node-local spec IDs: bind `HOME` to a node so
     /// `TASK-<node>-095` can be typed and shown as `TASK-HOME-095`. Labels

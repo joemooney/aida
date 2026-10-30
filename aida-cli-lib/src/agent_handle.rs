@@ -1182,7 +1182,7 @@ fn live_session_entries(
         .collect()
 }
 
-fn valid_handle(e: &AgentRegistryEntry) -> Option<String> {
+pub(crate) fn valid_handle(e: &AgentRegistryEntry) -> Option<String> {
     e.name
         .as_deref()
         .filter(|n| handle_spelling_rejection(n).is_none())

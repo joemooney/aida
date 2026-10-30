@@ -725,6 +725,59 @@ pub(crate) fn github_update_branch_argv(id: u64, expected_head: &str) -> Vec<Str
     ]
 }
 
+/// The `gh` argv that points PR `id` at `base`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub(crate) fn github_retarget_argv(id: u64, base: &str) -> Vec<String> {
+    vec![
+        "pr".to_string(),
+        "edit".to_string(),
+        id.to_string(),
+        "--base".to_string(),
+        base.to_string(),
+    ]
+}
+
+/// The message of the empty commit `aida pr ship` pushes to a retargeted PR.
+pub(crate) const RETRIGGER_CI_COMMIT_MESSAGE: &str =
+    "chore(ci): re-run CI after retarget (empty commit by aida pr ship)";
+
+/// The `gh api` argv that creates an empty commit on top of `parent`: same
+/// `tree`, one parent. Nothing changes on disk; the commit exists only so the
+/// head moves and GitHub fires a `synchronize` run.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub(crate) fn github_empty_commit_argv(tree: &str, parent: &str) -> Vec<String> {
+    vec![
+        "api".to_string(),
+        "--method".to_string(),
+        "POST".to_string(),
+        "repos/{owner}/{repo}/git/commits".to_string(),
+        "-f".to_string(),
+        format!("message={RETRIGGER_CI_COMMIT_MESSAGE}"),
+        "-f".to_string(),
+        format!("tree={tree}"),
+        "-f".to_string(),
+        format!("parents[]={parent}"),
+        "--jq".to_string(),
+        ".sha".to_string(),
+    ]
+}
+
+/// The `gh api` argv that fast-forwards `branch` to `sha`. `force=false`
+/// makes GitHub refuse when the branch moved since its head was read.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub(crate) fn github_fast_forward_ref_argv(branch: &str, sha: &str) -> Vec<String> {
+    vec![
+        "api".to_string(),
+        "--method".to_string(),
+        "PATCH".to_string(),
+        format!("repos/{{owner}}/{{repo}}/git/refs/heads/{branch}"),
+        "-f".to_string(),
+        format!("sha={sha}"),
+        "-F".to_string(),
+        "force=false".to_string(),
+    ]
+}
+
 /// TASK-1458: the `gh pr merge` argv for `opts`. Squash reuses the
 /// SPEC-410-pinned `pr_ship::merge_args`; a `match_head` pin appends
 /// `--match-head-commit <sha>` so GitHub itself refuses a head that moved
@@ -979,6 +1032,29 @@ pub trait Forge {
         let _ = (id, expected_head);
         anyhow::bail!(
             "updating a change's branch from its base is not supported on {}",
+            self.kind().cli_name()
+        )
+    }
+
+    /// Point open change `id` at `base` (`gh pr edit --base`). `aida pr ship`
+    /// uses it to move PRs stacked on a branch it just merged.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    fn retarget_change(&self, id: u64, base: &str) -> Result<()> {
+        let _ = (id, base);
+        anyhow::bail!(
+            "retargeting a change is not supported on {}",
+            self.kind().cli_name()
+        )
+    }
+
+    /// Start CI on change `id` by pushing an empty commit to its head. A base
+    /// change alone fires no CI run on GitHub (`pull_request` runs on
+    /// opened/synchronize/reopened, not on `edited`).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    fn retrigger_change_ci(&self, id: u64) -> Result<()> {
+        let _ = id;
+        anyhow::bail!(
+            "re-triggering CI is not supported on {}",
             self.kind().cli_name()
         )
     }
@@ -1661,6 +1737,71 @@ impl Forge for GitHubForge {
             crate::detect_merged_pr_for_branch_github(&self.project_root, branch),
             branch,
         ))
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    fn retarget_change(&self, id: u64, base: &str) -> Result<()> {
+        let argv = github_retarget_argv(id, base);
+        let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+        let out = self.gh(&argv)?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr edit {id} --base {base} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    fn retrigger_change_ci(&self, id: u64) -> Result<()> {
+        let run = |argv: Vec<String>| -> Result<String> {
+            let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+            let out = self.gh(&argv)?;
+            anyhow::ensure!(
+                out.status.success(),
+                "gh {} failed: {}",
+                argv.first().copied().unwrap_or_default(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        };
+        let head = run(vec![
+            "pr".into(),
+            "view".into(),
+            id.to_string(),
+            "--json".into(),
+            "headRefOid,headRefName,isCrossRepository".into(),
+            "--jq".into(),
+            "[.headRefOid, .headRefName, .isCrossRepository] | @tsv".into(),
+        ])?;
+        let mut cols = head.split('\t');
+        let (sha, branch, cross) = (
+            cols.next().unwrap_or_default(),
+            cols.next().unwrap_or_default(),
+            cols.next().unwrap_or_default(),
+        );
+        anyhow::ensure!(
+            !sha.is_empty() && !branch.is_empty(),
+            "could not read PR #{id}'s head"
+        );
+        anyhow::ensure!(
+            cross != "true",
+            "PR #{id}'s branch lives in a fork, which this repository cannot push to"
+        );
+        let tree = run(vec![
+            "api".into(),
+            format!("repos/{{owner}}/{{repo}}/git/commits/{sha}"),
+            "--jq".into(),
+            ".tree.sha".into(),
+        ])?;
+        anyhow::ensure!(!tree.is_empty(), "could not read the tree of {sha}");
+        let commit = run(github_empty_commit_argv(&tree, sha))?;
+        anyhow::ensure!(
+            !commit.is_empty(),
+            "GitHub returned no commit for the empty commit"
+        );
+        run(github_fast_forward_ref_argv(branch, &commit))?;
+        Ok(())
     }
 
     // trace:STORY-1887 | ai:claude

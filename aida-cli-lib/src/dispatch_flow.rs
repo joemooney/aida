@@ -282,6 +282,7 @@ fn invoke_pr_ship_with_ctx(pr: u64, ctx: &DispatchExecutionContext) -> Result<()
         false,
         crate::forge::MergeMethod::Squash,
         false,
+        false,
         Some(ctx),
     )
 }
