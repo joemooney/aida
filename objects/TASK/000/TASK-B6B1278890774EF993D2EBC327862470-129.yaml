@@ -5,13 +5,22 @@ description: |-
   FASTTRACK. In scripts/test-time-budget.toml [budget], add:
   "aida-cli-lib gate::dispatch_auth::story_1917_dispatch_flow_schedule_tests::story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its_release" = 25  # max 10.3s (PR-3140, PR-3135 runs 2026-10-30), x2 rounded up to 5 s
   Keep the file's key ordering convention (sorted by limit, descending, if that is the convention; otherwise append next to the other gate::dispatch_auth entries). Evidence: it failed 'Test time budget' on lib-1 for PR-3135 (run 41093014220, 10.2s) and PR-3140 (10.3s), and the reruns passed. Gate: make check-ci-fast only, no cargo. Trace in the commit trailer only (TOML comment optional).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T17:04:46.693992141Z
-modified_at: 2026-10-30T17:04:46.693992141Z
+modified_at: 2026-10-30T17:05:02.098610134Z
 req_type: Task
+history:
+- id: 01a18dc5-a292-78d1-b05b-06c5cf6ee1c0
+  author: joe
+  timestamp: 2026-10-30T17:05:02.098607550Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
   branch: main
