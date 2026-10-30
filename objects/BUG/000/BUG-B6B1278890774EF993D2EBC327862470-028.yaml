@@ -23,12 +23,12 @@ description: |
   5. Regression tests: both flag forms × {danger-full-access, workspace-write, read-only}, and the user-vs-project override case above.
 
   Note: `aida doctor --category permission-posture` did not finish within 60 s in this session; not investigated here.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:12:03.755273489Z
-modified_at: 2026-10-30T06:29:58.713600927Z
+modified_at: 2026-10-30T07:29:06.829047723Z
 req_type: Bug
 tags:
 - codex
@@ -95,6 +95,20 @@ history:
   timestamp: 2026-10-30T06:30:00.387479086Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18bb6-5c31-78c0-a365-81c1b069d579
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:29:06.609894503Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18bb6-5d0d-7752-bf82-a6e4e52035e2
+  timestamp: 2026-10-30T07:29:06.829042506Z
+  agent: aida
+  commit_sha: c9b2741c2a957468d5a73f5d308217902f9e0d4f
+  summary: 'Base-only update from main (gh update-branch 0007917895422e2b7ef1b7479391bcb6250245c2 -> cee0679ec87f1a53f9c85ec144fd9e297130d0ef); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -107,3 +121,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T06:25:57.309395335Z
   implemented_by: joe
+  completed_at: 2026-10-30T07:29:06.609889506Z
+  completion_sha: c9b2741c2a957468d5a73f5d308217902f9e0d4f
