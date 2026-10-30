@@ -1,0 +1,18 @@
+{
+  "id": "58b761c0-eb6a-4231-83b2-4be2acb622c0",
+  "thread_id": "58b761c0-eb6a-4231-83b2-4be2acb622c0",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793371043866,
+  "body": "leases released\n\nVerified all four lease files, worktree directories and Git worktree registrations are absent: 01a18a5e6541 (TASK117/PR3122),01a18b6837d9 (BUG020/PR3125),01a18ba3e0e3 (ASTER001/PR3126),01a18bdce5a5 (BUG026/PR3130). Normal --force -y --skip-ci session ends after recorded retention activation performed cleanup; branches retained and mail preserved. First three commands returned0; the fourth has completed removal and is still finishing its post-cleanup review handoff. Proof /tmp/code-leases-released-proof.json. Reviews can proceed under normal authority checks. Session-end reused canonical review stories HOME109 (3122),HOME113 (3125),HOME115 (3126).\n\nDocs3096..3099 finalheads are already pushed with35fast/head;3100..3103 remaininvalidation, finalfixescomplete local. I will send docs final pushed after3102/3103 publication.\n",
+  "subject": "leases released — code reviews 3122 3125 3126 3130 unblocked",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
