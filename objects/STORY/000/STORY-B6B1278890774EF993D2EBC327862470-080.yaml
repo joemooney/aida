@@ -85,12 +85,12 @@ description: |
   ACCEPTED (reason: one-time or cosmetic): label-sync events piling up on unchanged state; the hold-lock path change across old and new binaries during rollout.
   6. NEW, found by the advisor, a slice-1 regression on the shipped collect route: on 2026-10-29 both `aida queue work PR-N --role reviewer --no-human` launches (PR-3105, PR-3106), run from an UNCONTAINED operator shell with no AIDA_CONTAINED in its env, failed at collect with "a contained seat cannot collect a verdict onto the gate ledger" (gate/ledger/mod.rs:242 record_collected_verdict). So the launcher process acquires AIDA_CONTAINED itself before collecting (suspect: it sources .aida/session-env.sh or sets the child's env on its own process). Find the cause and fix it so the launcher's collect runs uncontained. Add a test that launcher collect succeeds when the parent env has no AIDA_CONTAINED. This is BLOCKING: without it, no reviewer verdict reaches the gate.
   Test tier LIGHT plus the cli tests named in item 1. Run tests with env -u AIDA_CONTAINED. Push, and stop early rather than run out of context.
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T00:06:20.777825567Z
+modified_at: 2026-10-30T00:23:34.844215282Z
 req_type: Story
 tags:
 - architecture
@@ -1086,6 +1086,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18a30-d28c-7582-9dba-daea955c1590
+  author: joe
+  timestamp: 2026-10-30T00:23:37.868253620Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
@@ -1098,4 +1106,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-29T13:10:45.145576393Z
   implemented_by: joe
-  reopened_at_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
+  reopened_at_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
