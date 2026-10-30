@@ -2505,7 +2505,7 @@ pub(crate) fn agent_new_antigravity(
 pub(crate) fn agent_new_with_config(
     mut config: AgentLaunchConfig,
     role: Option<String>,
-    spec: Option<String>,
+    mut spec: Option<String>,
     force: bool,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
@@ -2625,13 +2625,8 @@ pub(crate) fn agent_new_with_config(
         cwd.unwrap_or(&project_root),
     );
     // trace:BUG-1697 | ai:claude
-    if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
-        enforce_agent_singleton_preflight(
-            &project_root,
-            role.as_deref(),
-            spec.as_deref(),
-            cwd.unwrap_or(&project_root),
-        )?;
+    if launch_runs_scope_preflight(&resume) && early_role_instance == RoleInstanceKind::Driver {
+        spec = scope_preflight_before_consent(&project_root, role.as_deref(), spec, cwd)?;
     }
 
     // Validate before any real agent launch even when --verbose is absent;
@@ -2800,7 +2795,7 @@ pub(crate) fn agent_new_with_config(
 pub(crate) fn agent_new_bg_dispatch(
     mut config: AgentLaunchConfig,
     role: Option<String>,
-    spec: Option<String>,
+    mut spec: Option<String>,
     force: bool,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
@@ -2913,13 +2908,8 @@ pub(crate) fn agent_new_bg_dispatch(
     // Same ordering as the foreground path: refuse a scope conflict before
     // the bypass consent gate. trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
     // trace:BUG-1697 | ai:claude
-    if resume.duplicate_check {
-        enforce_agent_singleton_preflight(
-            &project_root,
-            role.as_deref(),
-            spec.as_deref(),
-            cwd.unwrap_or(&project_root),
-        )?;
+    if launch_runs_scope_preflight(&resume) {
+        spec = scope_preflight_before_consent(&project_root, role.as_deref(), spec, cwd)?;
     }
 
     // Validate before the detached/background launch too, and before the
@@ -4043,6 +4033,190 @@ pub(crate) fn enforce_agent_singleton_preflight(
         );
     }
     Ok(())
+}
+
+/// Whether a launch runs the scope check before the consent prompts. A direct
+/// `--resume <id|latest>` reopens an ended agent in that agent's own scope, so
+/// the launch's cwd/role/spec say nothing about it; it skips the check here as
+/// it always has in `maybe_handle_agent_resume_or_duplicate`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn launch_runs_scope_preflight(resume: &AgentResumeOptions) -> bool {
+    resume.duplicate_check && resume.direct_target.is_none()
+}
+
+/// The pre-consent scope check for a new launch; returns the spec the launch
+/// proceeds on (the picked one when the operator took a spec from the queue,
+/// whose lease ownership is then checked like an explicit `--spec`).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn scope_preflight_before_consent(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    spec: Option<String>,
+    cwd: Option<&std::path::Path>,
+) -> Result<Option<String>> {
+    match singleton_preflight_or_pick_spec(
+        project_root,
+        role,
+        spec.as_deref(),
+        cwd.unwrap_or(project_root),
+    )? {
+        Some(picked) => {
+            preflight_agent_launch_lease(project_root, role, Some(&picked), cwd)?;
+            eprintln!("launching on {picked}");
+            Ok(Some(picked))
+        }
+        None => Ok(spec),
+    }
+}
+
+/// An approved, unclaimed spec the scope-conflict picker can offer: `(spec id, title)`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) type SpecChoice = (String, String);
+
+/// The launch-time scope check: [`enforce_agent_singleton_preflight`], and on a
+/// refusal of a spec-scoped role at a terminal, an offer to take an approved
+/// unclaimed spec queued for the role instead. `Ok(Some(id))` = launch on that
+/// spec; `Ok(None)` = no conflict, launch as asked.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn singleton_preflight_or_pick_spec(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &std::path::Path,
+) -> Result<Option<String>> {
+    let interactive = agent_launch_should_prompt(
+        std::env::var("AIDA_HEADLESS").as_deref() == Ok("1"),
+        authority_stdin_is_terminal(),
+        authority_stderr_is_terminal(),
+    );
+    singleton_preflight_or_pick_spec_with(
+        project_root,
+        role,
+        current_spec,
+        worktree_path,
+        interactive,
+        |role| approved_unclaimed_queued_specs(project_root, role, worktree_path),
+        choose_spec_for_scope_conflict,
+    )
+}
+
+/// [`singleton_preflight_or_pick_spec`] with the terminal check, the candidate
+/// read and the chooser injected, so the decision is testable without a TTY.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn singleton_preflight_or_pick_spec_with(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &std::path::Path,
+    interactive: bool,
+    candidates: impl FnOnce(&str) -> Vec<SpecChoice>,
+    choose: impl FnOnce(&[SpecChoice]) -> Result<Option<String>>,
+) -> Result<Option<String>> {
+    let Err(refusal) =
+        enforce_agent_singleton_preflight(project_root, role, current_spec, worktree_path)
+    else {
+        return Ok(None);
+    };
+    // Only a spec-scoped role can take its own spec; a repo-scoped seat's
+    // only way out is stopping the holder.
+    let Some(role) = role.filter(|r| !agent_registry::is_repo_scoped_role(r)) else {
+        return Err(refusal);
+    };
+    if !interactive {
+        return Err(refusal);
+    }
+    let offer: Vec<SpecChoice> = candidates(role)
+        .into_iter()
+        .filter(|(id, _)| current_spec.is_none_or(|s| !s.eq_ignore_ascii_case(id)))
+        .collect();
+    if offer.is_empty() {
+        return Err(refusal);
+    }
+    eprintln!("{refusal:#}");
+    let Some(picked) = choose(&offer)? else {
+        return Err(refusal);
+    };
+    // The pick is re-checked: the spec may have been claimed meanwhile.
+    enforce_agent_singleton_preflight(project_root, Some(role), Some(&picked), worktree_path)?;
+    Ok(Some(picked))
+}
+
+/// Approved specs queued for `role` that no live session or agent holds.
+/// Best-effort: an unreadable store or queue offers nothing.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn approved_unclaimed_queued_specs(
+    project_root: &std::path::Path,
+    role: &str,
+    worktree_path: &std::path::Path,
+) -> Vec<SpecChoice> {
+    use aida_core::DatabaseBackend;
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Vec::new();
+    };
+    let Ok(backend) = advance_backend(&store_path) else {
+        return Vec::new();
+    };
+    let Ok(entries) = queue_role_fallback::queue_entries_routed_to_role(
+        &backend,
+        &canonical_role_name(role),
+        false,
+    ) else {
+        return Vec::new();
+    };
+    let leases = list_leases(project_root);
+    let live = process_probe::probe_live_claude_sessions();
+    let is_live = lease_is_live(&live, chrono::Utc::now());
+    let cfg = agent_registry::Config::load(project_root);
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let req = backend.get_requirement(&entry.requirement_id).ok()??;
+            if req.status != aida_core::RequirementStatus::Approved {
+                return None;
+            }
+            let id = req.spec_id.clone()?;
+            let leased =
+                live_spec_claim_by_other(&leases, None, &[id.as_str()], &is_live).is_some();
+            let held = agent_registry::same_scope_conflict(
+                project_root,
+                &cfg,
+                Some(role),
+                Some(&id),
+                worktree_path,
+            )
+            .is_some();
+            (!leased && !held).then_some((id, req.title))
+        })
+        .collect()
+}
+
+/// Ask which offered spec to take; Esc or "Cancel" keeps the refusal.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn choose_spec_for_scope_conflict(offer: &[SpecChoice]) -> Result<Option<String>> {
+    let cancel = "Cancel".to_string();
+    let labels: Vec<String> = offer
+        .iter()
+        .map(|(id, title)| format!("{id}  {title}"))
+        .chain(std::iter::once(cancel.clone()))
+        .collect();
+    // ?-exempt: the refusal printed above is the local context card.
+    let pick = match inquire::Select::new(
+        "Launch on an approved unclaimed spec from the queue instead?",
+        labels.clone(),
+    )
+    .with_help_message("arrows to move, type to filter, Enter to choose, Esc to cancel")
+    .prompt()
+    {
+        Ok(pick) => pick,
+        Err(inquire::InquireError::OperationCanceled)
+        | Err(inquire::InquireError::OperationInterrupted) => return Ok(None),
+        Err(e) => return Err(anyhow::anyhow!("spec picker failed: {e}")),
+    };
+    Ok(labels
+        .iter()
+        .position(|l| *l == pick)
+        .and_then(|i| offer.get(i))
+        .map(|(id, _)| id.clone()))
 }
 
 // trace:STORY-791 | ai:codex

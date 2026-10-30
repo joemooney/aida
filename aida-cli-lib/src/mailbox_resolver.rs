@@ -523,10 +523,11 @@ impl RecipientDirectory {
                 // queues for the first reader with a UUID (advisor ruling,
                 // PR-3042 round 1). trace:STORY-1843 | ai:claude
                 // A pool role (several generic implementers) never fans out:
-                // its mail queues so exactly one member takes it.
+                // its mail queues so exactly one member takes it — also when
+                // every live member is UUID-less (the first with a UUID takes it).
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
                 cohort.queued = if agent_registry::is_pool_role(role) {
-                    !cohort.readers.is_empty() || queue_for_role
+                    !cohort.readers.is_empty() || !cohort.uuidless.is_empty() || queue_for_role
                 } else {
                     queue_for_role && cohort.readers.is_empty()
                 };
@@ -1492,6 +1493,25 @@ mod tests {
 
         // A handle send is not a role send: it reaches only that member.
         assert!(d.resolve("impl-a").unwrap().cohort.is_none());
+
+        // Every live member UUID-less, no --queue-for-role: still queued for
+        // one taker, never refused like a non-pool role.
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        registry(tmp.path(), "row-old", "impl-old", "implementer", false);
+        let d = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let resolved = d.resolve("implementer").unwrap();
+        let cohort = resolved.cohort.as_ref().unwrap();
+        assert!(cohort.readers.is_empty() && !cohort.uuidless.is_empty());
+        assert!(cohort.queued);
+        let (sidecar, warnings) = delivery_sidecar(&resolved, "m2", 7, true).unwrap();
+        let sidecar = sidecar.unwrap();
+        assert_eq!(sidecar.deliveries.len(), 1);
+        assert!(sidecar.deliveries[0].queued_for_role);
+        assert!(
+            warnings.iter().any(|w| w.contains("impl-old")),
+            "{warnings:?}"
+        );
     }
 
     // trace:STORY-1843 | ai:claude
