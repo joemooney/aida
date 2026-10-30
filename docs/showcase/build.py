@@ -161,11 +161,8 @@ def render_library(template, entries):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='Report generated-file drift without writing files')
-    parser.add_argument('--overview', action='store_true', help='Also render the standalone overview (requires Pandoc)')
     args = parser.parse_args(argv)
     outputs = render_outputs()
-    if args.overview:
-        outputs.update(render_overview())
     if args.check:
         # Check tracked publication artifacts; no generated writes occur in this mode.
         paths = [str(path.relative_to(ROOT)) for path in outputs]
@@ -179,42 +176,6 @@ def main(argv=None):
         path.write_text(content, encoding='utf-8')
     return 0
 
-
-
-def render_overview():
-    """Render the standalone assessment; Pandoc handles its tables/nested lists."""
-    # trace:TASK-B6B1278890774EF993D2EBC327862470-113 | ai:codex
-    source = (ROOT / 'docs/what-is-aida.md').read_text()
-    body = subprocess.run(
-        ['pandoc', '--from=gfm', '--to=html5', '--wrap=none'],
-        input=source.split('\n', 1)[1], text=True, capture_output=True,
-        check=True).stdout
-    headings, aliases = [], {}
-    def heading(match):
-        level, old_id, title = match.groups()
-        text = html.unescape(re.sub(r'<[^>]*>', '', title))
-        slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
-        if slug in aliases.values():
-            raise ValueError('Duplicate overview heading: ' + text)
-        aliases[old_id] = slug
-        if level in ('2', '3'):
-            headings.append((level, slug, title))
-        return f'<h{level} id="{slug}">{title}</h{level}>'
-    body = re.sub(r'<h([1-6]) id="([^"]+)">(.*?)</h\1>', heading, body)
-    for old_id, slug in aliases.items():
-        body = body.replace(f'href="#{old_id}"', f'href="#{slug}"')
-    for source, output, _ in PAGES:
-        body = body.replace(f'href="{source}"', f'href="showcase/{output}"')
-    body = re.sub(r'<table>.*?</table>', lambda m: '<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0">' + m[0] + '</div>', body, flags=re.S)
-    parts = re.split(r'(?=<h2 id=)', body)
-    body = '<section class="intro" aria-label="Introduction">' + parts[0] + '</section>\n'
-    body += '\n'.join('<section class="major">' + part + '</section>' for part in parts[1:])
-    toc = '<ol class="toc-list">' + ''.join(
-        f'<li' + (' class="toc-sub"' if level == '3' else '') + f'><a href="#{slug}">{title}</a></li>'
-        for level, slug, title in headings) + '</ol>'
-    template = (SITE / 'overview-template.html').read_text()
-    return {ROOT / 'docs/what-is-aida.html':
-            template.replace('{{overview_toc}}', toc).replace('{{overview_content}}', body)}
 
 
 if __name__ == '__main__':

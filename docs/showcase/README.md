@@ -56,4 +56,4 @@ handbook pages.
 
 ## Standalone overview
 
-`python3 docs/showcase/build.py --overview` also regenerates `docs/what-is-aida.html` from `docs/what-is-aida.md` and `overview-template.html`. Use `python3 docs/showcase/build.py --overview --check` to verify it without writing files. This optional step requires Pandoc (the Markdown tables and nested lists use its GFM reader); the guide/library build without this flag still needs only Python 3 and Git. Edit the Markdown or the overview shell, then regenerate instead of hand-editing the standalone HTML. Local links to manifest guides are mapped into the showcase; other links keep their source-document paths.
+`docs/what-is-aida.html` is outside this publication builder. This slice preserves the existing HTML from its base branch, including its table semantics, section labels, anchors and nested navigation. The guide/library build and `--check` do not regenerate or certify that page.

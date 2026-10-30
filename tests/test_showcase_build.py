@@ -103,21 +103,6 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.assertLess(page.index('</h1>'), page.index('<figure>'))
         self.build('--check')
 
-    @unittest.skipUnless(shutil.which('pandoc'), 'Optional overview needs Pandoc')
-    def test_optional_overview_uses_read_only_check(self):
-        shutil.copyfile(REPO / 'docs/showcase/overview-template.html', self.site / 'overview-template.html')
-        overview = self.root / 'docs/what-is-aida.md'
-        overview.write_text('# Overview\n\nIntroduction.\n\n## Details\n\nOriginal details.\n')
-        self.git('add', '.')
-        self.build('--overview')
-        self.git('add', '.')
-        before = (overview.with_suffix('.html').read_bytes(), overview.with_suffix('.html').stat().st_mtime_ns)
-        self.build('--overview', '--check')
-        overview.write_text(overview.read_text() + '\nChanged details.\n')
-        result = self.build('--overview', '--check', expected=1)
-        self.assertIn('docs/what-is-aida.html', result.stderr)
-        self.assertEqual(before, (overview.with_suffix('.html').read_bytes(), overview.with_suffix('.html').stat().st_mtime_ns))
-
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_unicode_excerpt_and_literal_query(self):
         script = r'''
