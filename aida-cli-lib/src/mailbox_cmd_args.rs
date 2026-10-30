@@ -4,6 +4,15 @@
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+/// What `aida mailbox wake-service` does.
+// trace:STORY-HOME-096 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WakeServiceAction {
+    Install,
+    Uninstall,
+    Status,
+}
+
 /// Inter-agent mailbox — peer↔peer messaging between agents (distinct from
 /// operator→agent briefs and top-down directives). Hybrid storage: a fast
 /// local layer now, a git-canonical durable digest in a later slice.
@@ -25,6 +34,54 @@ pub enum MailboxCommand {
         /// Print the versioned read-only envelope as JSON.
         #[clap(long)]
         json: bool,
+    },
+    /// Watch every session armed for mail wake and wake its Codex thread
+    /// when its own inbox has new mail (the service `wake-service` installs).
+    // trace:STORY-HOME-096 | ai:claude
+    #[clap(group(
+        ArgGroup::new("recovery")
+            .args(["accepted", "retry"])
+            .multiple(false)
+            .requires("recover")
+    ))]
+    WakeRun {
+        /// Project whose armed sessions are watched (defaults to this one).
+        #[clap(long)]
+        project: Option<PathBuf>,
+        /// The `codex` binary that queues the wake (defaults to PATH).
+        #[clap(long)]
+        codex: Option<PathBuf>,
+        /// Seconds between passes (1..3600).
+        #[clap(long, default_value_t = 30)]
+        interval: u64,
+        /// Seconds new mail waits so one wake can carry a burst (0..300).
+        #[clap(long, default_value_t = 5.0)]
+        batch_seconds: f64,
+        /// Run one pass and print each armed session's result.
+        #[clap(long)]
+        once: bool,
+        /// Resolve an uncertain wake on this Codex thread, after inspecting it.
+        /// Exactly one of --accepted or --retry is required with it.
+        #[clap(long, value_name = "THREAD", requires = "recovery")]
+        recover: Option<String>,
+        /// With --recover: the thread received the wake.
+        #[clap(long)]
+        accepted: bool,
+        /// With --recover: the thread did not receive it; offer it again.
+        #[clap(long)]
+        retry: bool,
+    },
+    /// Install, remove or inspect this project's mail-wake user service.
+    // trace:STORY-HOME-096 | ai:claude
+    WakeService {
+        #[clap(value_enum)]
+        action: WakeServiceAction,
+        /// The `codex` binary the service uses (defaults to PATH at install).
+        #[clap(long)]
+        codex: Option<PathBuf>,
+        /// Print what would change without touching systemd.
+        #[clap(long)]
+        dry_run: bool,
     },
     /// Preview legacy mailbox reconciliation before recipient migration.
     // trace:STORY-1843 | ai:codex

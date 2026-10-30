@@ -37,6 +37,7 @@ fn ended_entry(
         ended_at: Some(Utc::now() - ended_ago),
         resumed_from: None,
         spec_status_at_end: spec_status_at_end.map(str::to_string),
+        mail_wake: None,
     }
 }
 
