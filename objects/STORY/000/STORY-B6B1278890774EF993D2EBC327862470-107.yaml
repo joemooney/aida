@@ -1,0 +1,33 @@
+id: 01a18b54-f766-7c42-8272-bd249691908a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-107
+title: 'Review PR-3120: [AI:claude] feat(gate): M1 slice 3 - carry-over proof on the gate ledger, spec binding (STORY-B6B1278890774EF993D2EBC327862470-080)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-080-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3120>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-080-2` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-080
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3120` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T05:42:43.814409482Z
+modified_at: 2026-10-30T05:42:43.814409482Z
+req_type: Story
+filed_at:
+  code_sha: 88dbfd8c194107f2e531182e532f07356c09e5bd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 88dbfd8c194
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
