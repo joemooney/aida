@@ -225,7 +225,7 @@ fn node_inventory_unions_every_source_and_keeps_roles_separate() {
 fn node_inventory_worker_dispatch_lists_other_nodes_without_allocating() {
     let fixture = Fixture::populated();
     let before = snapshot(fixture.root.path());
-    let out = std::process::Command::new(std::env::current_exe().unwrap())
+    let out = std::process::Command::new(crate::resolve_aida_exe())
         .args([
             "--ignored",
             "--exact",
