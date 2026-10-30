@@ -107,13 +107,22 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T05:27:13.914793182Z
+modified_at: 2026-10-30T05:41:33.641686433Z
 req_type: Story
 tags:
 - architecture
 - dedup
 - gate
 - regroup
+relationships:
+- rel_type: Supersedes
+  target_id: 01a108d6-fab7-725c-a949-8b075faed74a
+  created_at: 2026-10-30T05:40:30.822762169Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a0bdea-440c-7d92-8712-3d607e07fdf6
+  created_at: 2026-10-30T05:41:03.759019307Z
+  created_by: joe
 comments:
 - id: 01a1874e-a272-7ee2-959b-719772d45194
   author: joe
@@ -779,6 +788,13 @@ comments:
   modified_at: 2026-10-30T04:23:45.848906162Z
   session_id: 01a18b09181f
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18b53-e549-7912-81ad-35011a4213f2
+  author: joe
+  content: 'Slice 3 PR opened: #3120 (head c1aef1b, plain trailer). Supersede (brief item 4): TASK-1316 and STORY-1375 are now superseded-by this story. TASK-1992, TASK-2008 and STORY-1683 are still deferred: this implementer seat cannot undefer them (''only the product, advisor, or operator seat may lift this hold''). Advisor: run `aida undefer <ID>` and then `aida edit <ID> --superseded-by STORY-b6b1278890774ef993d2ebc327862470-080` for each. Also remove lines 12-20 of ~/.local/share/aida/ops/serial-ship.sh after merge; that file is outside this seat''s writable set. Auto-queue review failed here (aida add: node-local ID refusal).'
+  created_at: 2026-10-30T05:41:33.641686433Z
+  modified_at: 2026-10-30T05:41:33.641686433Z
+  session_id: 01a18b09181f
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
@@ -1209,6 +1225,18 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18b52-f7c6-71d2-9a91-8db6e5f2c746
+  author: joe
+  timestamp: 2026-10-30T05:40:32.838270876Z
+  session_id: 01a18b09181f
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18b53-7825-7cc2-bbb1-ba559161cf4a
+  author: joe
+  timestamp: 2026-10-30T05:41:05.701381087Z
+  session_id: 01a18b09181f
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
