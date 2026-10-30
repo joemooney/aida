@@ -28,12 +28,21 @@ description: |
   B. The 'not found' error for a bare ID that matches a local number suggests the alias form (BUG-030 → 'did you mean BUG-HOME-030?').
   C. Rendering: show the agreed id when the spec has one and the alias-local id otherwise; never a bare local number.
   Agreed-id assignment (blocks, root, backfill) belongs to STORY-HOME-104. This bug is the resolver and rendering half. Surgery is allowed.
+
+
+  ADVISOR RULING 2026-10-30 03:21 (PR-3131 round 1). ONE rework push on PR-3131; BUNDLE:
+  1. CI lib-0/cli-0: the new `aida doctor ambiguous-ids` subcommand needs every checked-in command-surface artifact regenerated (help golden cli_help_snapshot.txt via story_1728, plus any cli-0 audit or golden the failure names).
+  2. docs/cli/07-project-setup.md ~332: add `ambiguous-ids` with a one-line description (report-only; flags bare TYPE-NNN tokens that also name a node-local spec).
+  3. Criterion trace anchors on the matching tests (ac6dd87b, acc7fcab, rendering, ac12b260, ac4dbc90).
+  4. Ruling C: not_found_suggestion and ambiguous_bare_id_lines show the twin's agreed_id when it has one, else the alias-local form.
+  ACCEPTED, no action: the local-twin signpost stays on `aida show` only (bare = agreed under ruling A).
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 story_1728` plus make check-ci-fast.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T10:19:01.368485286Z
+modified_at: 2026-10-30T10:19:58.235992394Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -135,6 +144,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18c52-ccf5-7753-b7f2-49ce7a0dd50e
+  author: joe
+  timestamp: 2026-10-30T10:19:59.093742611Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
