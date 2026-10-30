@@ -97,7 +97,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T00:29:37.620974107Z
+modified_at: 2026-10-30T00:41:16.078872575Z
 req_type: Story
 tags:
 - architecture
@@ -714,6 +714,26 @@ comments:
     - None; the 17:07 ruling fixes scope.
   created_at: 2026-10-30T00:29:37.620974107Z
   modified_at: 2026-10-30T00:29:37.620974107Z
+  session_id: 01a18a35885c
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18a40-f82e-7cb0-82a5-d04b61e4332e
+  author: joe
+  content: |-
+    ## Round-2 rework (5fb1323): both red tests fixed
+
+    **Root cause.** The ruling suspected alias keying and the refusal projection. Neither caused these failures. CI run 40976271233 shows both tests failing where they open the legacy `.aida/review-verdicts/<KEY>.json` file, which slice 2 no longer writes (the writer baselines are 0).
+    - `story_078 …node_alias_review_record_keys_the_verdict_under_the_canonical_id` failed with `no verdict under the canonical id: []`: the legacy directory is empty.
+    - `closed_refusal_does_not_count_as_outstanding` panicked at `:3684:47`, the `read_to_string(verdict_path).unwrap()` in its fixture setup, before the projection is ever asked.
+
+    **Deviation from the literal ruling.** Keeping these tests byte-identical would mean writing the legacy file again. Slice-2 acceptance forbids that ("the story cannot complete with dual writes"). So I applied the 13:40 rule instead: retarget to the equivalent ledger state, and weaken nothing.
+    - story_078: the canonical-id file check now points at the gate ledger's `by-spec/<CANONICAL>.json` index entry. A record keyed by the alias would put `STORY-HOME-001` there instead, so the check still proves canonical keying. All other assertions are unchanged: a ledger file names the canonical id, no file anywhere under `.aida` names the alias, and reading back by the alias still works.
+    - closed_refusal: the fixture closes the refusal through `close_verdict_on_merge`, which is the BUG-1529 path and now appends to the ledger, in place of hand-editing the file. The `AwaitingMerge` assertion is unchanged.
+
+    No production code changed.
+
+    **Validation limits in this seat.** This sandbox mounts the cargo build-slot lock directory (`/run/user/1000/cargo-slots-1000`) read-only, so every cargo command waits forever for a build slot. Neither targeted run could execute here, and the cargo-backed gate in `make check-ci-fast` (no-default-features check) failed on the same cause. Because that runner stops at the first failure, no other fast gate ran either. Locally verified: `rustfmt --check` on both files. CI is the gate for both tests.
+  created_at: 2026-10-30T00:41:16.078872575Z
+  modified_at: 2026-10-30T00:41:16.078872575Z
   session_id: 01a18a35885c
   harness_version: 2.1.312 (Claude Code)
 history:
