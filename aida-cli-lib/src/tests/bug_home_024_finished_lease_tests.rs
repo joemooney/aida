@@ -4,7 +4,11 @@
 //!   * a dead lease whose worktree was deleted is released directly, with its
 //!     stale git registration cleared, and no store write;
 //!   * a live, unrecorded-owner, or still-present-worktree lease is kept;
-//!   * a standalone reviewer's lease is released once the reviewer exits;
+//!   * a standalone reviewer's finished review (tree, lease, branch) is
+//!     reaped once it exits with its verdict collected; one kept at exit
+//!     keeps its lease, so the reap reclaims the tree after the merge;
+//!   * a review pickup releases a dead gone-tree lease before its conflict
+//!     check;
 //!   * a session id `aida session leases` prints is accepted by `aida session
 //!     end`, and a missing one is reported as a session id, not a branch.
 //!
@@ -102,6 +106,13 @@ fn write_lease(project_root: &std::path::Path, lease: &SessionLease) {
     .unwrap();
 }
 
+/// The gone-tree release, judged by the same verdict `aida queue work`
+/// computes for a blocking lease.
+fn release_gone(project_root: &std::path::Path, lease: &SessionLease) -> bool {
+    let recovery = crate::leases::stale_lease_recovery_for_lease(lease).verdict;
+    crate::session_reap::release_gone_worktree_lease(project_root, lease, &recovery)
+}
+
 /// A linked worktree on `branch`, deleted by hand (git still lists it).
 fn deleted_worktree(
     repo: &std::path::Path,
@@ -139,10 +150,7 @@ fn dead_lease_with_deleted_worktree_is_released_and_its_branch_freed() {
     );
     write_lease(repo.path(), &lease);
 
-    assert!(crate::session_reap::release_gone_worktree_lease(
-        repo.path(),
-        &lease
-    ));
+    assert!(release_gone(repo.path(), &lease));
     assert!(!lease_path(repo.path(), &lease.id).exists());
     // The branch is no longer held by the missing tree, so a new review can
     // check it out again.
@@ -168,10 +176,7 @@ fn lease_whose_owner_is_alive_is_kept_even_with_its_worktree_gone() {
     );
     write_lease(repo.path(), &lease);
 
-    assert!(!crate::session_reap::release_gone_worktree_lease(
-        repo.path(),
-        &lease
-    ));
+    assert!(!release_gone(repo.path(), &lease));
     assert!(lease_path(repo.path(), &lease.id).exists());
 }
 
@@ -183,10 +188,7 @@ fn lease_with_no_recorded_owner_is_kept() {
     let lease = lease_at("01a189c30000", "PR-2", &path, "pr-2", None);
     write_lease(repo.path(), &lease);
 
-    assert!(!crate::session_reap::release_gone_worktree_lease(
-        repo.path(),
-        &lease
-    ));
+    assert!(!release_gone(repo.path(), &lease));
     assert!(lease_path(repo.path(), &lease.id).exists());
 }
 
@@ -219,27 +221,182 @@ fn sweep_releases_only_dead_leases_whose_worktree_is_gone() {
     assert!(lease_path(repo.path(), &advisory.id).exists());
 }
 
+/// A primary checkout plus a clean review worktree `aida-pr-<pr>` on
+/// `review/pr-<pr>`, held by a dead reviewer's lease that recorded the tree's
+/// HEAD as the PR head. Returns `(tempdir, root, review tree, lease)`.
+fn finished_review(
+    pr: u32,
+) -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    SessionLease,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let root = base.join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    for args in [
+        &["init", "-q", "-b", "main"][..],
+        &["config", "user.name", "AIDA Test"],
+        &["config", "user.email", "aida@example.test"],
+        &["config", "commit.gpgsign", "false"],
+    ] {
+        assert!(git(&root, args).status.success(), "git {args:?}");
+    }
+    std::fs::write(root.join("README.md"), "seed\n").unwrap();
+    assert!(git(&root, &["add", "README.md"]).status.success());
+    assert!(git(&root, &["commit", "-qm", "seed"]).status.success());
+    // Like the real clone: per-checkout `.aida/` state is not tracked.
+    std::fs::write(root.join(".git/info/exclude"), "/.aida/\n").unwrap();
+    let review = base.join(format!("aida-pr-{pr}"));
+    let branch = format!("review/pr-{pr}");
+    let added = git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            &branch,
+            review.to_str().unwrap(),
+        ],
+    );
+    assert!(added.status.success(), "{added:?}");
+    let head = String::from_utf8_lossy(&git(&review, &["rev-parse", "HEAD"]).stdout)
+        .trim()
+        .to_string();
+    let mut lease = lease_at(
+        &format!("01a18a6{pr:05}"),
+        &format!("PR-{pr}"),
+        &review,
+        &branch,
+        Some(reaped_pid()),
+    );
+    lease.review_verb = true;
+    lease.pr_head_sha = Some(head);
+    write_lease(&root, &lease);
+    (tmp, root, review, lease)
+}
+
+fn local_branch_exists(root: &std::path::Path, branch: &str) -> bool {
+    git(
+        root,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .status
+    .success()
+}
+
+#[cfg(unix)]
 #[test]
-fn exited_reviewer_releases_only_its_own_lease() {
-    let root = tempfile::tempdir().unwrap();
-    let worktree = root.path().join("aida-pr-3107");
-    std::fs::create_dir_all(&worktree).unwrap();
-    let other_tree = root.path().join("elsewhere");
-    let own = lease_at("01a18a640000", "PR-3107", &worktree, "pr-3107", None);
-    let other_scope = lease_at("01a18a650000", "PR-3105", &worktree, "pr-3105", None);
-    let other_tree_lease = lease_at("01a18a660000", "PR-3107", &other_tree, "pr-3107", None);
-    for l in [&own, &other_scope, &other_tree_lease] {
-        write_lease(root.path(), l);
+fn finished_review_with_a_collected_verdict_is_reaped_at_exit() {
+    let (_tmp, root, review, lease) = finished_review(3107);
+    // Another review sharing nothing with this one is left alone.
+    let other = lease_at(
+        "01a18a650000",
+        "PR-3105",
+        &root.join("aida-pr-3105"),
+        "review/pr-3105",
+        None,
+    );
+    write_lease(&root, &other);
+
+    let ended = crate::queue_cmd::end_finished_review(&root, "pr-3107", &review, true);
+    assert_eq!(ended.len(), 1, "{ended:?}");
+    assert_eq!(ended[0].0, lease.id);
+    assert!(ended[0].1.is_ok(), "{ended:?}");
+    // Tree, lease, and review branch go together: nothing blocks the next
+    // review of the PR, and nothing is left behind for after the merge.
+    assert!(!review.exists());
+    assert!(!lease_path(&root, &lease.id).exists());
+    assert!(!local_branch_exists(&root, "review/pr-3107"));
+    assert!(lease_path(&root, &other.id).exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn review_kept_at_exit_keeps_its_lease_and_is_reaped_after_merge() {
+    let (_tmp, root, review, lease) = finished_review(3108);
+
+    // No verdict collected: the recovery text points at the tree.
+    let ended = crate::queue_cmd::end_finished_review(&root, "PR-3108", &review, false);
+    assert!(ended[0].1.is_err(), "{ended:?}");
+    assert!(review.exists());
+    assert!(lease_path(&root, &lease.id).exists());
+
+    // The kept lease is the dead-reviewer reap's handle: once the PR is
+    // merged, the tree is reclaimed.
+    let report = crate::session_reap::scan_reapable_with(&root, |pr| Some(pr == 3108));
+    let row = report
+        .reapable
+        .iter()
+        .find(|r| r.session == lease.id)
+        .unwrap_or_else(|| panic!("kept review is reapable after merge: {report:?}"));
+    let outcome = crate::session_reap::reap_one(&root, &lease, row.branch_tip.as_deref());
+    assert!(!review.exists(), "review tree reclaimed: {outcome}");
+    assert!(!lease_path(&root, &lease.id).exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn dirty_review_tree_is_never_reaped_at_exit() {
+    let (_tmp, root, review, lease) = finished_review(3109);
+    std::fs::write(review.join("notes.txt"), "unsaved\n").unwrap();
+
+    let ended = crate::queue_cmd::end_finished_review(&root, "PR-3109", &review, true);
+    let why = ended[0].1.as_ref().unwrap_err();
+    assert!(why.contains("uncommitted"), "{why}");
+    assert!(review.join("notes.txt").exists());
+    assert!(lease_path(&root, &lease.id).exists());
+}
+
+/// The `aida queue work PR-N --role reviewer` pickup's branch-conflict check
+/// (BUG-HOME-034): a dead lease on the PR's source branch whose tree was
+/// deleted by hand is released before the check, with no `session end` and
+/// so no store write to contend on; a live one still blocks.
+#[test]
+fn review_pickup_releases_a_dead_gone_tree_lease_before_the_conflict_check() {
+    let repo = committed_repo();
+    let holder = tempfile::tempdir().unwrap();
+    let dead_tree = deleted_worktree(repo.path(), holder.path(), "feature-x");
+    let mut dead = lease_at(
+        "01a18a700000",
+        "BUG-7",
+        &dead_tree,
+        "feature-x",
+        Some(reaped_pid()),
+    );
+    dead.role = Some("implementer".into());
+    let live = lease_at(
+        "01a18a710000",
+        "BUG-8",
+        &holder.path().join("wt-live"),
+        "feature-x",
+        Some(std::process::id()),
+    );
+    let elsewhere = lease_at(
+        "01a18a720000",
+        "BUG-9",
+        &holder.path().join("wt-other"),
+        "feature-y",
+        Some(reaped_pid()),
+    );
+    for l in [&dead, &live, &elsewhere] {
+        write_lease(repo.path(), l);
     }
 
-    let released =
-        crate::queue_cmd::release_exited_reviewer_lease(root.path(), "pr-3107", &worktree);
-    assert_eq!(released, vec![own.id.clone()]);
-    assert!(!lease_path(root.path(), &own.id).exists());
-    assert!(lease_path(root.path(), &other_scope.id).exists());
-    assert!(lease_path(root.path(), &other_tree_lease.id).exists());
-    // The worktree stays for recovery and reuse by the next review.
-    assert!(worktree.exists());
+    let conflicting = crate::session_start::review_branch_conflicts(repo.path(), "feature-x");
+    let ids: Vec<&str> = conflicting.iter().map(|l| l.id.as_str()).collect();
+    assert_eq!(ids, vec![live.id.as_str()]);
+    assert!(!lease_path(repo.path(), &dead.id).exists());
+    assert!(lease_path(repo.path(), &live.id).exists());
+    assert!(lease_path(repo.path(), &elsewhere.id).exists());
 }
 
 #[test]

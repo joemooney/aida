@@ -12521,12 +12521,11 @@ pub(crate) fn handle_queue_work(
             // A dead lease whose worktree is gone has nothing left to lose, so
             // it is released without `--force-claim`.
             // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-            if crate::session_reap::gone_worktree_lease_releasable(&conflict, &recovery.verdict)
-                && crate::session_reap::release_gone_worktree_lease(
-                    &project_root_for_conflict,
-                    &conflict,
-                )
-            {
+            if crate::session_reap::release_gone_worktree_lease(
+                &project_root_for_conflict,
+                &conflict,
+                &recovery.verdict,
+            ) {
                 eprintln!(
                     "  {} released orphaned lease {} ({})",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -13638,24 +13637,31 @@ pub(crate) fn release_refused_review_lease(
     true
 }
 
-/// End the lease of a standalone reviewer whose process has exited: its
-/// verdict, if any, is already collected, and a lingering lease would block
-/// the next review of the same PR. Only the lease on `scope` over this
-/// review's own `worktree` goes; the worktree stays for any recovery the
-/// summary points at, and the next review of the PR reuses it. Returns the
-/// ids released.
+/// A standalone reviewer has exited: once its verdict is on the ledger, its
+/// review (`scope` over this review's own `worktree`) is reaped — tree,
+/// lease, and review branch — so neither the lease nor the tree blocks the
+/// next review of the PR. With no verdict collected, the tree is what the
+/// recovery text points at, so the review is kept; a review the reap refuses
+/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
+/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-pub(crate) fn release_exited_reviewer_lease(
+pub(crate) fn end_finished_review(
     project_root: &std::path::Path,
     scope: &str,
     worktree: &std::path::Path,
-) -> Vec<String> {
+    verdict_collected: bool,
+) -> Vec<(String, std::result::Result<String, String>)> {
     list_leases(project_root)
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
         .map(|l| {
-            crate::session_reap::release_lease_files(project_root, &l.id);
-            l.id
+            let outcome = if verdict_collected {
+                crate::session_reap::reap_finished_review(project_root, &l)
+            } else {
+                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+            };
+            (l.id, outcome)
         })
         .collect()
 }
@@ -14033,15 +14039,22 @@ pub(crate) fn run_standalone_reviewer(
     }
 
     // The reviewer has exited and its verdict is collected (or known to be
-    // missing): its lease ends now, before any exit path below.
+    // missing): its finished review is reaped now, before any exit path
+    // below. The launcher still sits in the tree, so it steps out first.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-    for id in release_exited_reviewer_lease(project_root, scope, worktree) {
-        if !quiet {
-            eprintln!(
-                "  {} ended reviewer lease {} for PR-{pr}",
+    let _ = std::env::set_current_dir(project_root);
+    for (id, outcome) in end_finished_review(project_root, scope, worktree, collected.is_ok()) {
+        let id = &id[..id.len().min(8)];
+        match outcome {
+            Ok(_) if !quiet => eprintln!(
+                "  {} ended reviewer session {id} for PR-{pr} and removed its review tree",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                &id[..id.len().min(8)],
-            );
+            ),
+            Err(why) if !quiet => eprintln!(
+                "  {} kept reviewer session {id} for PR-{pr}: {why}",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            _ => {}
         }
     }
 
