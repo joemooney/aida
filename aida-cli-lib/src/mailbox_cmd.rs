@@ -202,9 +202,15 @@ pub(crate) fn handle_mailbox_command(
     // <store_root>/mailbox); its parent is the project root (the local layer at
     // <project_root>/.aida/mailbox).
     let store_root = store_path;
-    let project_root = store_path
+    let checkout_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+    // A seat clone's `.aida-store` aliases the primary's store, so its parent
+    // is the clone; mail written there reaches no other inbox. Route a
+    // verified clone to the primary checkout's mailbox.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+    let home = mailbox_store::mailbox_home(checkout_root);
+    let project_root = home.root();
 
     match cmd {
         // trace:TASK-2347 | ai:codex
@@ -492,6 +498,10 @@ pub(crate) fn handle_mailbox_command(
                 thread_id.dimmed(),
                 flag
             );
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+            if let Some(note) = home.send_note() {
+                println!("  {}", note.dimmed());
+            }
             Ok(())
         }
         MailboxCommand::Inbox {

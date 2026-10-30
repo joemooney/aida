@@ -796,9 +796,10 @@ pub(crate) fn acquire_review_lease_with_mode(
                      {dirty_entries} uncommitted change(s) — resolve that session first \
                      (`aida queue work {spec_id} --resume` keeps the work; \
                      `aida session end {} --force` discards it).",
-                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.id,
                     conflict.worktree_path.display(),
-                    &conflict.id[..conflict.id.len().min(8)],
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+                    conflict.id,
                 );
             }
             orchestrator::AutoReleaseDecision::Live => {
@@ -817,7 +818,8 @@ pub(crate) fn acquire_review_lease_with_mode(
                     &conflict.id[..conflict.id.len().min(8)],
                     conflict.owner,
                     conflict.started_at.format("%Y-%m-%d %H:%M UTC"),
-                    &conflict.id[..conflict.id.len().min(8)],
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+                    conflict.id,
                 );
             }
         }
