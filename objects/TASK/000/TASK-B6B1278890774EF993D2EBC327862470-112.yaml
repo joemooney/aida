@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-30T00:51:35.913719368Z
+modified_at: 2026-10-30T04:20:24.385603237Z
 req_type: Task
 tags:
 - advisor-review
@@ -92,6 +92,14 @@ comments:
     Published advisor correction pass: PR #3102 at 742acec75c03f6a20fe005da75c0cdb657e156d5; base task-b6b1278890774ef993d2ebc327862470-111-work. All eight heads updated in one user-approved atomic force-with-lease push. Remote heads, bases and preserved previews verified. All 35 FASTTRACK gates passed for this rebuilt head. Advisor notified with all eight full SHAs for fresh independent review and bottom-up integration. No self-merge.
   created_at: 2026-10-30T00:39:50.162086368Z
   modified_at: 2026-10-30T00:39:50.162086368Z
+- id: 01a18b09-98c1-7e21-ba87-089bd2ee19c3
+  author: ai:codex:joe
+  content: |
+    Round-2 corrections published: PR #3102 at e1347c32113c24bdd0cbbb999b1e99e51198a539, with corrected TASK-111 merged upward. New-developer setup now runs aida init (or node acquire) in the cloned repository before spec creation. Three blanket cache auto-rebuild claims are replaced with bounded stale/deferred/busy-read wording. Multi-node guidance restores per-user project queue inspection, a stable exported AIDA_USER per machine, and --user for one-off views. The merge retains both the README clone hyperlink and the initialization requirement in the conversational guide.
+
+    Validation: all 35 make check-ci-fast gates passed (completed exit 0, /tmp/docs-round2-112-fast.log), including generated-output verification. A fresh spawned author checker independently checked actual source/help, clone/queue guidance and all nine generated artifacts, with no findings. Author self-check only. Plain push and required post-push inbox check completed; no new IDs, with expected partial-view acknowledgement refusal. Fresh independent review and advisor integration remain required. No author verdict, self-merge or hosting change.
+  created_at: 2026-10-30T04:20:24.385603237Z
+  modified_at: 2026-10-30T04:20:24.385603237Z
 history:
 - id: 01a188db-04e1-7113-a4de-4d5e2010ac1b
   author: joe
