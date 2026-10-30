@@ -5,9 +5,33 @@
     {
       "at": "2026-10-30T13:58:23.789868266Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-30T15:14:06.628521557Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-30T01:06:30.156402758Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-025",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T12:58:05.339069696Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-025",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-30T12:58:51.635985757Z",
       "spec": "BUG-b6b1278890774ef993d2ebc327862470-025",
@@ -15,6 +39,44 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-30T14:55:28.279839249Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-025",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3137,
+        "verdict": "APPROVED",
+        "reviewed_sha": "aa64e0e50b670c219c3474467c7347a8540870b1"
+      }
+    },
+    {
+      "ts": "2026-10-30T15:13:20.286444376Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-025",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T15:13:35.141953389Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-025",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3137
+      }
+    },
+    {
+      "ts": "2026-10-30T15:14:06.355715433Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-025",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0416e22597c6036e7cb7981e17271509bcc6dea2",
+        "closed_by": "auto-bump"
       }
     }
   ]
