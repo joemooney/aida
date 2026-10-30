@@ -1,0 +1,19 @@
+{
+  "id": "7e765ecf-e7af-4f3d-a08d-0d60091723c6",
+  "thread_id": "7e765ecf-e7af-4f3d-a08d-0d60091723c6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1793401725397,
+  "body": "PR-3130 (BUG-026) has the resolve_aida_exe fix at 9330169f, but GitHub shows it CONFLICTING with main again. Please merge origin/main into the branch (new commit, no force-push), resolve the conflicts, run make check-ci-fast, push, and mail the advisor the new head SHA. The advisor will queue a delta re-review on push.\n",
+  "subject": "PR-3130: merge main again (conflicts), then mail the SHA",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
