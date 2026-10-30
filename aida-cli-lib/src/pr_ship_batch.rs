@@ -13,8 +13,9 @@
 
 use crate::gate::pr_ship_batch::{
     ci_from_rollup, confirm_and_ship, confirm_batch_start, ensure_human_at_terminal,
-    open_or_outcome, parse_pr_view, review_state, short, validate_order, BatchPorts, CiAtHead,
-    Mergeable, PrOutcome, PrState, PrView, ReviewAtHead, ShipOverrides, Staleness,
+    open_or_outcome, parse_pr_view, review_state, short, stacked_base_stop, validate_order,
+    BatchPorts, CiAtHead, Mergeable, PrOutcome, PrState, PrView, ReviewAtHead, ShipOverrides,
+    Staleness,
 };
 use anyhow::Result;
 
@@ -112,6 +113,10 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
         PrState::Open => {}
     }
     let mut steps = Vec::new();
+    let default = ports.default_branch();
+    if let Some(PrOutcome::Stopped(why)) = stacked_base_stop(pr, &view, default.as_deref()) {
+        steps.push(format!("{why}: the batch would stop here"));
+    }
     if view.draft {
         steps.push("draft: the batch would stop here".to_string());
     }
@@ -171,6 +176,11 @@ fn ship_one(ports: &mut dyn BatchPorts, pr: u64, opts: BatchOptions) -> PrOutcom
     };
     if let Some(done) = open_or_outcome(pr, &view) {
         return done;
+    }
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    let default = ports.default_branch();
+    if let Some(stop) = stacked_base_stop(pr, &view, default.as_deref()) {
+        return stop;
     }
     ports.say(&format!("PR #{pr} {}", view.title));
     let stale = match ports.staleness(pr, &view, true) {
@@ -475,7 +485,7 @@ impl BatchPorts for GitHubPorts {
     fn view(&mut self, pr: u64) -> Result<PrView> {
         let v = self.gh_pr_json(
             pr,
-            "state,mergeable,mergeStateStatus,isDraft,headRefOid,headRefName,title,body",
+            "state,mergeable,mergeStateStatus,isDraft,headRefOid,headRefName,baseRefName,title,body",
         )?;
         Ok(parse_pr_view(&v))
     }
@@ -628,6 +638,11 @@ impl BatchPorts for GitHubPorts {
 
     fn say(&mut self, line: &str) {
         println!("{line}");
+    }
+
+    fn default_branch(&mut self) -> Option<String> {
+        crate::forge::local_origin_head_branch(&self.project_root)
+            .or_else(|| crate::forge::probe_default_branch(&self.project_root))
     }
 
     fn record(&mut self, pr: Option<u64>, outcome: &str, detail: &str) {

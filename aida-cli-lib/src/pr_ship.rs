@@ -919,6 +919,125 @@ pub fn ship_branch_context(
     (branch_to_delete, retarget_base, child_prs)
 }
 
+/// BUG-HOME-042: why `aida pr ship` refuses a PR whose base is not the
+/// repository's default branch. A stacked PR whose parent already merged
+/// still targets the parent's branch until it is retargeted, so merging it
+/// lands the work on a dead branch instead of the default. `None` means ship
+/// may proceed: the base is the default, the default is unknown (never refuse
+/// on a guess), or the operator passed `--allow-stacked-base`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub fn stacked_base_refusal(
+    pr: u64,
+    base: &str,
+    default_branch: Option<&str>,
+    allow_stacked_base: bool,
+) -> Option<String> {
+    let default = default_branch?;
+    if allow_stacked_base || base.is_empty() || base == default {
+        return None;
+    }
+    Some(format!(
+        "PR-{pr} targets `{base}`, not the default branch `{default}`: merging it now would land \
+         it on `{base}`, not `{default}`.\n  \
+         If `{base}`'s own PR has merged, retarget this one first: gh pr edit {pr} --base {default} \
+         (then push a commit so CI runs against `{default}`).\n  \
+         To merge into `{base}` on purpose, re-run with --allow-stacked-base."
+    ))
+}
+
+/// BUG-HOME-042: what the post-merge stacked-children step drives. The real
+/// implementation goes through the forge and `git push origin --delete`;
+/// tests stand in a mock forge.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub(crate) trait StackRetargetPorts {
+    /// Point open change `pr` at `base`.
+    fn retarget(&mut self, pr: u64, base: &str) -> anyhow::Result<()>;
+    /// Start CI on `pr` at its new base. A base change alone does not fire a
+    /// `pull_request` run, so this has to push to the head.
+    fn retrigger_ci(&mut self, pr: u64) -> anyhow::Result<()>;
+    /// Delete the merged branch on the remote.
+    fn delete_remote_branch(&mut self, branch: &str) -> anyhow::Result<()>;
+    fn say(&mut self, line: &str);
+}
+
+/// What [`retarget_stacked_children`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct StackRetargetReport {
+    pub retargeted: Vec<u64>,
+    pub retarget_failed: Vec<u64>,
+    pub ci_retriggered: Vec<u64>,
+    pub ci_not_retriggered: Vec<u64>,
+    pub branch_deleted: bool,
+}
+
+/// BUG-HOME-042: after `aida pr ship` merges a PR into `merged_into`, move
+/// every open PR based on the merged branch onto `merged_into`, re-trigger
+/// its CI, and then delete the merged branch. The branch is deleted only when
+/// every child retargeted and `may_delete` holds (no sibling worktree or local
+/// stacked branch still needs it); a child that could not be moved keeps its
+/// base alive.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+pub(crate) fn retarget_stacked_children(
+    ports: &mut dyn StackRetargetPorts,
+    merged_branch: &str,
+    merged_into: &str,
+    children: &[u64],
+    may_delete: bool,
+) -> StackRetargetReport {
+    let mut report = StackRetargetReport::default();
+    for &pr in children {
+        if let Err(e) = ports.retarget(pr, merged_into) {
+            ports.say(&format!(
+                "  could not retarget PR-{pr} from `{merged_branch}` to `{merged_into}`: {e:#}\n    \
+                 retarget it by hand: gh pr edit {pr} --base {merged_into}"
+            ));
+            report.retarget_failed.push(pr);
+            continue;
+        }
+        ports.say(&format!(
+            "  retargeted PR-{pr} from `{merged_branch}` to `{merged_into}`"
+        ));
+        report.retargeted.push(pr);
+        match ports.retrigger_ci(pr) {
+            Ok(()) => {
+                ports.say(&format!(
+                    "  re-triggered CI on PR-{pr} with an empty commit (a base change alone does not start CI)"
+                ));
+                report.ci_retriggered.push(pr);
+            }
+            Err(e) => {
+                ports.say(&format!(
+                    "  could not re-trigger CI on PR-{pr}: {e:#}\n    \
+                     push a commit to its branch so CI runs against `{merged_into}`"
+                ));
+                report.ci_not_retriggered.push(pr);
+            }
+        }
+    }
+    if !report.retarget_failed.is_empty() {
+        ports.say(&format!(
+            "  keeping `{merged_branch}`: a PR still targets it"
+        ));
+        return report;
+    }
+    if !may_delete {
+        ports.say(&format!(
+            "  keeping `{merged_branch}`: it is checked out in a worktree or a local branch is stacked on it"
+        ));
+        return report;
+    }
+    match ports.delete_remote_branch(merged_branch) {
+        Ok(()) => {
+            ports.say(&format!("  deleted merged branch `{merged_branch}`"));
+            report.branch_deleted = true;
+        }
+        Err(e) => ports.say(&format!(
+            "  could not delete merged branch `{merged_branch}`: {e:#}"
+        )),
+    }
+    report
+}
+
 /// BUG-732: after a forge merge command returns non-zero, decide whether the
 /// caller should keep going because a fresh forge-state probe shows the squash
 /// merge actually landed and only post-merge cleanup failed.
@@ -1545,3 +1664,7 @@ pub fn cluster_pr_body(batch_name: &str, branch: &str, members: &[String]) -> St
 #[cfg(test)]
 #[path = "tests/pr_ship_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/bug_home_042_stacked_ship_tests.rs"]
+mod bug_home_042_stacked_ship_tests;
