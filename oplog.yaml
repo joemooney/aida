@@ -93417,5 +93417,13 @@ operations:
   timestamp: 2026-10-30T14:55:47.007454800Z
   kind: !SetStatus
     status: Completed
-clock: 7233
+- id: 01a18d50-f87e-71b2-8f5f-1ca9ab1a6e30
+  target_id: 01a13390-5bef-7720-baaf-e6f6fb853d55
+  author: aida
+  node_id: '1'
+  lamport: 7234
+  timestamp: 2026-10-30T14:57:36.382337052Z
+  kind: !RemoveTag
+    tag: operator-held
+clock: 7234
 node_id: '1'
