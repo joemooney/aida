@@ -127,6 +127,7 @@ fn bug_2017_cli_local_and_global_refusals() {
         range_end: 599,
         next: 500,
         allocated_at: chrono::Utc::now(),
+        pool_id: None,
     });
     let incoming = f._dir.path().join("incoming-blocks.yaml");
     blocks.save(&incoming).unwrap();

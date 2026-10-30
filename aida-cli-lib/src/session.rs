@@ -4619,9 +4619,26 @@ fn run_vendor_headless_child(
         vendor.as_str(),
         child.id(),
     );
-    let status = child
-        .wait()
-        .with_context(|| format!("failed to wait for {}", vendor.program()));
+    // A vendor still alive after its final result (held up by an MCP child)
+    // is terminated past a bounded grace, so it frees its lane and cap slot.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+    let status = crate::headless_linger::wait_reaping_after_result(
+        &mut child,
+        log_path,
+        crate::headless_linger::result_grace(),
+    )
+    .map(|waited| {
+        if waited.reaped {
+            eprintln!(
+                "{} {} was still running {}s after its final result; terminated it and its children",
+                "Note:".cyan().bold(),
+                vendor.program(),
+                crate::headless_linger::result_grace().as_secs()
+            );
+        }
+        waited.status
+    })
+    .with_context(|| format!("failed to wait for {}", vendor.program()));
     // trace:STORY-1688 | ai:claude
     crate::lane_liveness::finish_headless_lane_for_child(
         log_path,

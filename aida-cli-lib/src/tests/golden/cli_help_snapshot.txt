@@ -5567,34 +5567,40 @@ node-aware spec ids (e.g. `FR-<node>-<NNN>`) until the merge gate promotes them 
 Usage: aida node [OPTIONS] <COMMAND>
 
 Commands:
-  list       List all nodes registered in the shared registry. The current node (the one whose
-             `.aida/node.toml` matches an entry) is marked with `*`
-  show       Show details for a single node. With no id, defaults to the current node (read from
-             `.aida/node.toml`)
-  acquire    Acquire a node id for this clone. Performs a CAS push loop on the shared registry to
-             claim the next sequential id, then writes the per-clone identity file at
-             `.aida-store/.aida/node.toml`. Defaults pull `git config user.email` for the email
-             stamp and the system hostname for the hostname stamp
-  set-owner  Backfill the owner ($USER string) on an existing node entry in the shared registry,
-             then push (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is updated
-             too. Errors clearly if the id is absent. For legacy nodes that predate the owner/name
-             identity fields
-  set-name   Backfill the friendly name on an existing node entry in the shared registry, then push
-             (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is updated too.
-             Errors clearly if the id is absent
-  release    Remove a node entry from the shared registry. Does not invalidate any IDs already
-             issued by that node. The node id is not reused
-  team       List the team: every registered node/clone sharing this store, with each member's role.
-             Identity introspection under the `node` namespace. Equivalent to the top-level `aida
-             team` (kept visible because the multi-clone harness invokes it); with a subcommand,
-             manage per-user roles (`set-role`, `my-role`)
-  whoami     Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id,
-             headless flag, ai-tool, and active session/scope. Read-only. Identity introspection
-             under the `node` namespace; equivalent to the hidden top-level `aida whoami`
-  alias      Friendly labels for node-local spec IDs: bind `HOME` to a node so `TASK-<node>-095` can
-             be typed and shown as `TASK-HOME-095`. Labels are display and input only; stored data
-             keeps the canonical ID
-  help       Print this message or the help of the given subcommand(s)
+  list         List all nodes registered in the shared registry. The current node (the one whose
+               `.aida/node.toml` matches an entry) is marked with `*`
+  show         Show details for a single node. With no id, defaults to the current node (read from
+               `.aida/node.toml`)
+  acquire      Acquire a node id for this clone. Performs a CAS push loop on the shared registry to
+               claim the next sequential id, then writes the per-clone identity file at
+               `.aida-store/.aida/node.toml`. Defaults pull `git config user.email` for the email
+               stamp and the system hostname for the hostname stamp
+  set-owner    Backfill the owner ($USER string) on an existing node entry in the shared registry,
+               then push (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is
+               updated too. Errors clearly if the id is absent. For legacy nodes that predate the
+               owner/name identity fields
+  set-name     Backfill the friendly name on an existing node entry in the shared registry, then
+               push (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is updated
+               too. Errors clearly if the id is absent
+  release      Remove a node entry from the shared registry. Does not invalidate any IDs already
+               issued by that node. The node id is not reused
+  team         List the team: every registered node/clone sharing this store, with each member's
+               role. Identity introspection under the `node` namespace. Equivalent to the top-level
+               `aida team` (kept visible because the multi-clone harness invokes it); with a
+               subcommand, manage per-user roles (`set-role`, `my-role`)
+  whoami       Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id,
+               headless flag, ai-tool, and active session/scope. Read-only. Identity introspection
+               under the `node` namespace; equivalent to the hidden top-level `aida whoami`
+  alias        Friendly labels for node-local spec IDs: bind `HOME` to a node so `TASK-<node>-095`
+               can be typed and shown as `TASK-HOME-095`. Labels are display and input only; stored
+               data keeps the canonical ID
+  enroll-root  Make this clone the allocation root: the one node per store that owns the unallocated
+               ID space and grants blocks down the tree. Records the root in the shared store
+               (refused when another node is already root) and marks this clone in its Git
+               directory. Run once, on the primary clone
+  upstream     Show or declare this clone's upstream: the one git remote it claims ID blocks from. A
+               store mirror is never an upstream, and the root has none
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -6158,6 +6164,63 @@ Arguments:
 Options:
       --json
           Machine-readable JSON output
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node enroll-root
+Make this clone the allocation root: the one node per store that owns the unallocated ID space and
+grants blocks down the tree. Records the root in the shared store (refused when another node is
+already root) and marks this clone in its Git directory. Run once, on the primary clone
+
+Usage: aida node enroll-root [OPTIONS]
+
+Options:
+      --dry-run
+          Show what would be recorded without writing anything
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node upstream
+Show or declare this clone's upstream: the one git remote it claims ID blocks from. A store mirror
+is never an upstream, and the root has none
+
+Usage: aida node upstream [OPTIONS] [REMOTE]
+
+Arguments:
+  [REMOTE]
+          Git remote name to claim blocks from (omit to show the current one)
+
+Options:
+      --clear
+          Remove the declared upstream (this clone issues node-local IDs)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -23626,6 +23689,10 @@ Options:
           Capture a comment on the spec at rework time (added via the same path as `aida comment
           add`). Useful for the audit trail of why a Done or Completed spec is being re-opened
 
+      --ruling <TEXT>
+          Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling,
+          so a relaunched lane works from it rather than from the description alone
+
       --resume
           Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
           cold-launching. Implies `--work`
@@ -23644,13 +23711,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          When chaining `--work`, end any session holding the target scope first (passes through to
-          `aida queue work --steal`)
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          When chaining `--work`, end any session holding the target scope first (passes through to
+          `aida queue work --steal`)
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`; passed to `aida queue work --permission-mode`)
@@ -24326,6 +24393,9 @@ Options:
       --reason <REASON>
           Capture a comment on the spec at rework time
 
+      --ruling <TEXT>
+          Record an advisor ruling the next pickup prompt leads with
+
       --resume
           Chain `aida queue work --resume`
 
@@ -24342,12 +24412,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          Pass `--steal` through to chained `aida queue work`
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          Pass `--steal` through to chained `aida queue work`
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`)
@@ -34375,6 +34445,68 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Machine-readable JSON output"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "enroll-root"
+    ],
+    "about": "Make this clone the allocation root: the one node per store that owns the unallocated ID space and grants blocks down the tree. Records the root in the shared store (refused when another node is already root) and marks this clone in its Git directory. Run once, on the primary clone",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Show what would be recorded without writing anything"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "upstream"
+    ],
+    "about": "Show or declare this clone's upstream: the one git remote it claims ID blocks from. A store mirror is never an upstream, and the root has none",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "clear",
+        "takes_value": false,
+        "help": "Remove the declared upstream (this clone issues node-local IDs)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -52038,6 +52170,11 @@ Working on aida itself
         "help": "Chain `aida queue work --resume` to resume a prior claude session for this spec instead of cold-launching. Implies `--work`"
       },
       {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling, so a relaunched lane works from it rather than from the description alone"
+      },
+      {
         "name": "status",
         "takes_value": true,
         "help": "Override the smart target status. Pass any status string (`in-progress`, `approved`, `planned`, …); the smart table above is bypassed"
@@ -52748,6 +52885,11 @@ Working on aida itself
         "name": "resume",
         "takes_value": false,
         "help": "Chain `aida queue work --resume`"
+      },
+      {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling the next pickup prompt leads with"
       },
       {
         "name": "status",
