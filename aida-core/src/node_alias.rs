@@ -710,17 +710,53 @@ pub fn refuse_node_id_colliding_with_label(store_root: &Path, node_id: &str) -> 
     Ok(())
 }
 
+/// What [`mutate_cas`] did with a node-alias write.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MutateCasOutcome {
+    /// The map already said this; nothing was committed.
+    Unchanged,
+    /// The write is committed locally as `sha` on `branch`.
+    Committed {
+        sha: String,
+        branch: String,
+        origin: OriginPublish,
+    },
+}
+
+impl MutateCasOutcome {
+    pub fn changed(&self) -> bool {
+        matches!(self, Self::Committed { .. })
+    }
+}
+
+/// How a committed node-alias write fared against `origin`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OriginPublish {
+    Pushed,
+    /// No `origin` remote: a solo clone, the commit stays local.
+    NoOrigin,
+    /// The push failed for a reason other than a moved ref (offline, no
+    /// access, a declining hook). The local commit is kept, since the CAS
+    /// already won locally; carries git's stderr.
+    Unreached(String),
+}
+
 /// Commit-and-push a mutation of the node-alias map with the registry CAS
 /// push-wins loop (mirrors [`crate::alias::link_cas`]): pull, strict-load,
 /// mutate, save, commit, push; a rejected push resets and retries. Solo (no
-/// `origin`) commits locally. Returns whether the map changed.
+/// `origin`) commits locally. An `origin` that cannot be reached keeps the
+/// local commit and reports [`OriginPublish::Unreached`] so the caller can
+/// publish to the other hubs and warn, instead of failing a write that landed.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
 #[cfg(feature = "native")]
 pub fn mutate_cas(
     store_root: &Path,
     describe: &str,
     mutate: impl Fn(&mut NodeAliasMap) -> Result<bool, String>,
-) -> anyhow::Result<bool> {
-    use crate::git_ops;
+) -> anyhow::Result<MutateCasOutcome> {
+    use crate::git_ops::{self, PushFailure, PushOutcome};
 
     const MAX_RETRIES: u32 = 10;
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
@@ -743,12 +779,28 @@ pub fn mutate_cas(
             Ok(Some(git_ops::head_sha(store_root)?))
         })?;
         let Some(sha) = committed else {
-            return Ok(false);
+            return Ok(MutateCasOutcome::Unchanged);
         };
-        if local_only || git_ops::push_exact(store_root, "origin", &sha, &branch)? {
-            return Ok(true);
-        }
-        let _ = git_ops::rollback_commit_if_head_matches(store_root, &sha);
+        let origin = if local_only {
+            OriginPublish::NoOrigin
+        } else {
+            match git_ops::push_exact_outcome(store_root, "origin", &sha, &branch)? {
+                PushOutcome::Pushed => OriginPublish::Pushed,
+                PushOutcome::Failed {
+                    kind: PushFailure::NonFastForward,
+                    ..
+                } => {
+                    let _ = git_ops::rollback_commit_if_head_matches(store_root, &sha);
+                    continue;
+                }
+                PushOutcome::Failed { stderr, .. } => OriginPublish::Unreached(stderr),
+            }
+        };
+        return Ok(MutateCasOutcome::Committed {
+            sha,
+            branch,
+            origin,
+        });
     }
     anyhow::bail!(
         "could not write the node label after {MAX_RETRIES} attempts (store push kept being rejected) — run `aida db sync --pull` and retry"

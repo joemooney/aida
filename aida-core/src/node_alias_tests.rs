@@ -313,3 +313,73 @@ fn bare_id_tokens_skip_local_alias_and_legacy_node_forms() {
         ]
     );
 }
+
+#[cfg(feature = "native")]
+fn store_repo(origin_url: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?} failed");
+    };
+    git(&["init", "-q", "-b", "aida-store"]);
+    git(&["config", "user.email", "t@t.t"]);
+    git(&["config", "user.name", "t"]);
+    std::fs::write(dir.path().join("README.md"), "seed").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "seed"]);
+    git(&["remote", "add", "origin", origin_url]);
+    dir
+}
+
+/// An origin that cannot be reached keeps the committed label and reports
+/// it, instead of failing a write that already landed locally.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[cfg(feature = "native")]
+#[test]
+fn node_alias_unreachable_origin_keeps_the_commit_and_reports_it() {
+    let missing = tempfile::tempdir().unwrap();
+    let origin = missing.path().join("no-such-hub.git");
+    let dir = store_repo(origin.to_str().unwrap());
+    let outcome = mutate_cas(dir.path(), "label node test", |map| map.set("HOME", NODE_A)).unwrap();
+    let MutateCasOutcome::Committed { origin, branch, .. } = &outcome else {
+        panic!("expected a commit, got {outcome:?}");
+    };
+    assert_eq!(branch, "aida-store");
+    assert!(matches!(origin, OriginPublish::Unreached(_)), "{origin:?}");
+    assert_eq!(NodeAliasMap::load(dir.path()), home());
+    // A re-run sees the committed label rather than writing it again.
+    let again = mutate_cas(dir.path(), "label node test", |map| map.set("HOME", NODE_A)).unwrap();
+    assert_eq!(again, MutateCasOutcome::Unchanged);
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[cfg(feature = "native")]
+#[test]
+fn node_alias_reachable_origin_reports_pushed() {
+    let hub = tempfile::tempdir().unwrap();
+    let ok = std::process::Command::new("git")
+        .args(["init", "-q", "--bare"])
+        .arg(hub.path())
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok);
+    let dir = store_repo(hub.path().to_str().unwrap());
+    let outcome = mutate_cas(dir.path(), "label node test", |map| map.set("HOME", NODE_A)).unwrap();
+    assert!(
+        matches!(
+            outcome,
+            MutateCasOutcome::Committed {
+                origin: OriginPublish::Pushed,
+                ..
+            }
+        ),
+        "{outcome:?}"
+    );
+}
