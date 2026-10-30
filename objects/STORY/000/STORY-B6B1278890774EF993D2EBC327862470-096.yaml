@@ -73,12 +73,12 @@ description: |
   1. (blocking) CI lib-1 'Test time budget' fails since bca7ff2: a test added in the rework (likely the registry-lock interleaving test) runs over 10s. Make it fast (shorter waits or barriers instead of sleeps). If it genuinely needs more time, add a justified entry to scripts/test-time-budget.toml. Find it with scripts/test-timings.py.
   2. (minor) mail_wake::arm_pending: when the launcher and the SessionStart hook race, success wins. Armed overrides an earlier Failed; Failed never overrides Armed. Add a test.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T12:48:16.790032086Z
+modified_at: 2026-10-30T13:29:29.781795672Z
 req_type: Story
 relationships:
 - rel_type:
@@ -592,12 +592,25 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18d00-4d5b-7102-8dd8-fdca21695c38
+  author: aida-auto-bump
+  timestamp: 2026-10-30T13:29:29.691068917Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
   agent: aida
   commit_sha: 6893558f16742586e86776b31f555700c9884b66
   summary: 'Base-only update from main (gh update-branch b9617bcbe049818302db057bb59d9d25b9595521 -> df7add8fc50d44dc2cd80551b7444e944c45bc5e); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
+- id: 01a18d00-4db5-7c22-bdc3-b4fa36147746
+  timestamp: 2026-10-30T13:29:29.781792004Z
+  agent: implementer
+  commit_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
+  summary: 'Base-only update from main (gh update-branch c66b57eb3987cc4a41f8e25b336106709ab2edbf -> e3c41397e7b056a8bfe78a38abb68fecc4a8a0d3); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
   review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
@@ -611,5 +624,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:07:29.315511399Z
   implemented_by: joe
+  completed_at: 2026-10-30T13:29:29.691063082Z
   completion_sha: 6893558f16742586e86776b31f555700c9884b66
   reopened_at_sha: 1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5
