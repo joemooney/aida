@@ -123,9 +123,3 @@
   added_by: role:implementer
   added_at: 2026-10-29T22:38:54.527123912Z
   for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a189d8-a9a8-75d1-aae7-bbdd1a230a49
-  position: 493000
-  added_by: role:implementer
-  added_at: 2026-10-29T22:50:21.497064999Z
-  for_role: advisor
