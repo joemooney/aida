@@ -341,7 +341,10 @@ pub fn downgrade_reason(root: &Path, type_prefix: &str) -> Result<Option<String>
 
 /// True the first time `reason` is seen in this session (the AIDA session,
 /// else the invoking shell), so the downgrade notice prints once, not on
-/// every `aida add`. The marker lives beside the clone-local setting.
+/// every `aida add`. Every reason seen in the session is remembered (reasons
+/// name their type, so this is per type); a new session starts empty. The
+/// marker lives beside the clone-local setting: the session id on the first
+/// line, then one seen reason per line.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
 pub fn first_notice_this_session(root: &Path, reason: &str) -> bool {
     let session = std::env::var("AIDA_SESSION_ID")
@@ -352,11 +355,19 @@ pub fn first_notice_this_session(root: &Path, reason: &str) -> bool {
         return true;
     };
     let marker = common.join("aida-allocation-notice");
-    let line = format!("{session}\t{reason}");
-    if std::fs::read_to_string(&marker).is_ok_and(|seen| seen == line) {
+    let reason = reason.replace(['\n', '\r'], " ");
+    let text = std::fs::read_to_string(&marker).unwrap_or_default();
+    let mut lines = text.lines();
+    let mut seen: Vec<&str> = if lines.next() == Some(session.as_str()) {
+        lines.collect()
+    } else {
+        Vec::new()
+    };
+    if seen.contains(&reason.as_str()) {
         return false;
     }
-    let _ = crate::write_atomic(&marker, &line);
+    seen.push(&reason);
+    let _ = crate::write_atomic(&marker, format!("{session}\n{}\n", seen.join("\n")));
     true
 }
 
@@ -880,11 +891,34 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("upstream `gitlab`"), "{err}");
+        let _session = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ID", "s-095-a");
         assert!(first_notice_this_session(dir.path(), &reason));
         assert!(!first_notice_this_session(dir.path(), &reason));
         assert!(first_notice_this_session(dir.path(), "a different reason"));
+        drop(_session);
         let (home, _) = fixture(true);
         assert_eq!(downgrade_reason(home.path(), "BUG").unwrap(), None);
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    #[test]
+    fn downgrade_notice_remembers_every_reason_until_the_session_changes() {
+        let (dir, _) = fixture(false);
+        write_mode(dir.path(), AllocationRole::Node, Some("gitlab")).unwrap();
+        let bug = downgrade_reason(dir.path(), "BUG").unwrap().unwrap();
+        let task = downgrade_reason(dir.path(), "TASK").unwrap().unwrap();
+        assert_ne!(bug, task);
+        let mut session = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ID", "s-095-b");
+        // Alternating types prints each reason once, never again.
+        assert!(first_notice_this_session(dir.path(), &bug));
+        assert!(first_notice_this_session(dir.path(), &task));
+        assert!(!first_notice_this_session(dir.path(), &bug));
+        assert!(!first_notice_this_session(dir.path(), &task));
+        // A new session starts with nothing seen.
+        session.reset("s-095-c");
+        assert!(first_notice_this_session(dir.path(), &bug));
+        assert!(!first_notice_this_session(dir.path(), &bug));
+        assert!(first_notice_this_session(dir.path(), &task));
     }
 
     // trace:BUG-b6b1278890774ef993d2ebc327862470-019 | ai:claude

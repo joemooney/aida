@@ -176,12 +176,32 @@ pub enum LineageConflict {
     DuplicatePoolId(String),
     InvalidRange(String),
     WildcardType(String),
-    UnknownParent { record: String, parent: String },
-    TypeMismatch { record: String, parent: String },
-    OutsideParent { record: String, parent: String },
-    Overlap { a: String, b: String },
-    Cycle(String),
-    RootPoolNotHeldByRoot { pool: String, holder: String },
+    UnknownParent {
+        record: String,
+        parent: String,
+    },
+    TypeMismatch {
+        record: String,
+        parent: String,
+    },
+    OutsideParent {
+        record: String,
+        parent: String,
+    },
+    Overlap {
+        a: String,
+        b: String,
+    },
+    /// `pool`'s lineage enters a cycle at `at`; `at == pool` when `pool`
+    /// itself lies on the cycle.
+    Cycle {
+        pool: String,
+        at: String,
+    },
+    RootPoolNotHeldByRoot {
+        pool: String,
+        holder: String,
+    },
 }
 
 impl std::fmt::Display for LineageConflict {
@@ -204,7 +224,10 @@ impl std::fmt::Display for LineageConflict {
                 write!(f, "{record} lies outside its parent {parent}")
             }
             Self::Overlap { a, b } => write!(f, "{a} overlaps {b}"),
-            Self::Cycle(id) => write!(f, "pool {id} is its own ancestor"),
+            Self::Cycle { pool, at } if pool == at => write!(f, "pool {pool} is its own ancestor"),
+            Self::Cycle { pool, at } => {
+                write!(f, "the lineage of pool {pool} reaches a cycle at pool {at}")
+            }
             Self::RootPoolNotHeldByRoot { pool, holder } => {
                 write!(
                     f,
@@ -275,7 +298,10 @@ pub fn check_invariants(
         let mut current = p;
         while let Some(parent) = current.parent_pool_id.as_deref() {
             if !seen.insert(current.pool_id.as_str()) {
-                conflicts.push(LineageConflict::Cycle(p.pool_id.clone()));
+                conflicts.push(LineageConflict::Cycle {
+                    pool: p.pool_id.clone(),
+                    at: current.pool_id.clone(),
+                });
                 break;
             }
             match by_id.get(parent) {
@@ -494,6 +520,11 @@ impl LineageView<'_> {
         Ok(())
     }
 
+    /// The block's pool chain must reach a root pool held by the store's
+    /// root, and on a non-root node the block's immediate parent pool must
+    /// live on the declared upstream. Slice 1 checks only that immediate
+    /// parent's `home_ref`; the ancestors' `home_ref`s are not yet walked
+    /// against the upstream's own upstream chain.
     fn block_lineage(&self, block: &AgreedIdBlock, typ: &str) -> Result<(), Unusable> {
         let no_lineage = || Unusable::NoLineage(typ.to_string());
         let pool_id = block.pool_id.as_deref().ok_or_else(no_lineage)?;

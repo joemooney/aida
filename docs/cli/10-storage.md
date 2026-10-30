@@ -283,15 +283,19 @@ children, a child outside its parent, a type mismatch, an unknown parent, a
 cycle, or a root pool not held by the root are listed as conflicts and never
 resolved automatically. A clone may spend a block only when the block is bound
 to its node and the block's pool chain reaches a root pool held by the root.
-Off the root, the block's pool must also be homed on the declared upstream. A
-block that merely appears in an imported store is never spendable.
+Off the root, the block's pool must also be homed on the declared upstream.
+Only that immediate parent pool's `home_ref` is checked against the upstream
+for now; the home refs of pools further up the chain are not yet matched
+against the upstream's own upstream. A block that merely appears in an imported
+store is never spendable.
 
 When blocks are configured but this clone cannot use one, `aida add` issues a
 node-local ID and prints the reason once per session: no upstream, no block
-from the upstream yet, no lineage, or an exhausted block. Claiming blocks from
-the upstream during `aida push` and `aida node claim`, promoting a node's own
-node-local IDs into a block, migrating existing blocks, and handing the root
-role over are not available yet.
+from the upstream yet, no lineage, or an exhausted block. Each distinct reason
+prints once; a new session prints them again. Claiming blocks from the
+upstream (planned to run during `aida push` and on request), promoting a node's
+own node-local IDs into a block, migrating existing blocks, and handing the
+root role over are not available yet.
 
 #### Allocation claims at every store sync
 

@@ -694,6 +694,20 @@ fn print_allocation_report(store_path: &std::path::Path) -> Result<()> {
             None => "not enrolled (`aida node enroll-root` on the primary clone)".into(),
         }
     );
+    // The clone-local role is not authority on its own: the store's root
+    // record names the one root. Refusing on this mismatch is slice 2.
+    if let (AllocationRole::Root, Some(r)) = (mode.role, &root) {
+        if node.as_deref() != Some(r.holder_node.as_str()) {
+            println!(
+                "  {} Mismatch: this clone is marked root, but the store's root is node {}{}",
+                "!".yellow().bold(),
+                r.holder_node,
+                node.as_deref()
+                    .map(|n| format!(" (this clone is node {n})"))
+                    .unwrap_or_default(),
+            );
+        }
+    }
     if pools.pools.is_empty() {
         println!("  Pools:     none");
     } else {
@@ -850,15 +864,39 @@ fn handle_upstream(store_path: &std::path::Path, remote: Option<&str>, clear: bo
             "node {node} is this store's allocation root; declaring an upstream for it would make a cycle"
         );
     }
-    if let Ok(project_root) = find_project_root_from(store_path.parent().unwrap_or(store_path)) {
-        let sync = crate::store_sync::read_store_sync_config(&project_root)?;
-        anyhow::ensure!(
-            !sync.mirror_remotes.iter().any(|m| m == remote),
-            "`{remote}` is a store mirror ([store.sync] mirror_remotes); a mirror copies records and never grants blocks"
-        );
-    }
+    refuse_mirror_upstream(store_path, remote)?;
     authority::write_mode(store_path, AllocationRole::Node, Some(remote))?;
     println!("Upstream set to `{remote}`. This clone takes ID blocks only from that remote; until it holds one, it issues node-local IDs.");
+    Ok(())
+}
+
+/// Refuse `remote` as an upstream when it is a store mirror. Fails closed:
+/// when the project root or its config cannot be read, the mirror list is
+/// unknown, so the remote is refused rather than accepted.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+fn refuse_mirror_upstream(store_path: &std::path::Path, remote: &str) -> Result<()> {
+    use anyhow::Context as _;
+    let project_root = find_project_root_from(store_path.parent().unwrap_or(store_path))
+        .with_context(|| {
+            format!(
+                "cannot find the project for store {}; refusing to set an upstream without checking [store.sync] mirror_remotes",
+                store_path.display()
+            )
+        })?;
+    let config = crate::config_init::config_path_for_project(&project_root);
+    match std::fs::read_to_string(&config) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => anyhow::bail!(
+            "cannot read {}: {e}; refusing to set an upstream without checking [store.sync] mirror_remotes",
+            config.display()
+        ),
+    }
+    let sync = crate::store_sync::read_store_sync_config(&project_root)?;
+    anyhow::ensure!(
+        !sync.mirror_remotes.iter().any(|m| m == remote),
+        "`{remote}` is a store mirror ([store.sync] mirror_remotes); a mirror copies records and never grants blocks"
+    );
     Ok(())
 }
 
@@ -933,3 +971,7 @@ pub(crate) static NODE: crate::command_registry::CommandReg = crate::command_reg
     },
     run: crate::command_registry::Handler::Store(run_node),
 };
+
+#[cfg(test)]
+#[path = "tests/story_095_upstream_tests.rs"]
+mod story_095_upstream_tests;

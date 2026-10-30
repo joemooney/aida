@@ -192,6 +192,7 @@ fn enroll_root_is_dry_run_first_single_and_refuses_an_upstream() {
     let show = f.ok(&["node", "show"]);
     assert!(show.contains("Role:      root"), "{show}");
     assert!(show.contains("Root:      node 7 (epoch 1)"), "{show}");
+    assert!(!show.contains("Mismatch"), "{show}");
 
     // Another clone's node cannot enroll while this one holds the role.
     fs::write(
@@ -201,6 +202,12 @@ fn enroll_root_is_dry_run_first_single_and_refuses_an_upstream() {
     .unwrap();
     let err = f.refused(&["node", "enroll-root"]);
     assert!(err.contains("already the allocation root"), "{err}");
+    // The clone-local role disagrees with the store's root record: flagged.
+    let show = f.ok(&["node", "show"]);
+    assert!(
+        show.contains("Mismatch: this clone is marked root, but the store's root is node 9"),
+        "{show}"
+    );
 }
 
 #[test]

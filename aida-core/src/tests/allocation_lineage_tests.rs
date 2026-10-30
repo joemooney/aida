@@ -189,7 +189,7 @@ fn every_structural_violation_is_listed() {
     assert!(has(|c| matches!(c, LineageConflict::OutsideParent { .. })));
     assert!(has(|c| matches!(c, LineageConflict::TypeMismatch { .. })));
     assert!(has(|c| matches!(c, LineageConflict::UnknownParent { .. })));
-    assert!(has(|c| matches!(c, LineageConflict::Cycle(_))));
+    assert!(has(|c| matches!(c, LineageConflict::Cycle { .. })));
     assert!(has(|c| matches!(
         c,
         LineageConflict::RootPoolNotHeldByRoot { .. }
@@ -421,6 +421,8 @@ fn enrollment_refuses_a_second_root_and_is_idempotent_for_the_holder() {
 fn enroll_root_commits_the_root_record_once() {
     let dir = tempfile::tempdir().unwrap();
     crate::git_ops::init(dir.path()).unwrap();
+    // CI runners have no global git identity; the store commit needs one.
+    crate::git_ops::configure_user(dir.path(), "Test", "test@example.com").unwrap();
     assert_eq!(
         enroll_root(dir.path(), ROOT).unwrap(),
         EnrollOutcome::Enrolled
@@ -431,4 +433,30 @@ fn enroll_root_commits_the_root_record_once() {
         EnrollOutcome::AlreadyRoot
     );
     assert!(enroll_root(dir.path(), LEAF).is_err());
+}
+
+#[test]
+fn cycle_message_tells_on_cycle_pools_from_pools_that_reach_one() {
+    let pools = vec![
+        pool("a", "BUG", 1, 2, Some("b"), HUB, "x/y"),
+        pool("b", "BUG", 1, 2, Some("a"), HUB, "x/y"),
+        pool("c", "BUG", 1, 2, Some("a"), HUB, "x/y"),
+    ];
+    let messages: Vec<String> = check_invariants(&pools, &[], Some(&root()))
+        .iter()
+        .filter(|c| matches!(c, LineageConflict::Cycle { .. }))
+        .map(ToString::to_string)
+        .collect();
+    assert!(
+        messages.contains(&"pool a is its own ancestor".to_string()),
+        "{messages:?}"
+    );
+    assert!(
+        messages.contains(&"pool b is its own ancestor".to_string()),
+        "{messages:?}"
+    );
+    assert!(
+        messages.contains(&"the lineage of pool c reaches a cycle at pool a".to_string()),
+        "{messages:?}"
+    );
 }
