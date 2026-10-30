@@ -11,12 +11,26 @@ description: |-
   4. `aida agent list` / doctor show per-agent wake state.
 
   Needs a sketch + advisor signoff (touches agent lifecycle + user systemd units). Open questions for the sketch: thread-UUID discovery race; one unit per thread vs one multiplexed service.
+
+  ## Advisor sketch signoff 2026-10-29 18:08 (implementer sketch comment 01a18a55 — APPROVED with these rulings)
+  - Q1 → A1. `agent new codex` stamps `mail_wake = pending` on the launch row (honour `--no-mail-wake`, an agents.toml `[codex] mail_wake` default, and a codex < 0.164.0 version downgrade to a warning). The Codex SessionStart hook arms it on first thread binding, with a bounded timeout. On failure it prints the exact manual command and never blocks the session.
+  - Q2 → B2. One multiplexed user unit per project (installed once, from the main checkout) iterates the armed registry rows. Each row keeps its own per-thread ledger with today's dedupe and recovery semantics. No per-agent systemd units, and no per-agent edits to tracked config.
+  - Q3 → each agent's OWN inbox (its handle plus its routed role). Add a verified `aida mailbox wake-snapshot --recipient <handle>` whose audience is checked against the registry row, never env-asserted. The advisor-thread install keeps today's advisor-only path unchanged and explicit. The notification names the inbox it read. This also delivers TASK-HOME-119.
+  - Q4 → Rust. The multiplexed watcher is an `aida mailbox wake-run --project <root>` subcommand (registered in its own module, clap types in *_args.rs, not the legacy Command enum), and the unit execs it. scripts/codex-mail-wake.py stays as the advisor-thread path. Do not extend it.
+  - Retire: `agent end` and the dead-agent GC flip the row to `retired`. Ledgers are kept.
+  - Visibility: `aida agent list` gets a `wake` column (armed / pending-thread / failed / off / unsupported), and the doctor check iterates armed rows.
+  - Antigravity: the adapter returns Unsupported, plus one launch warning (operator ruling 17:03).
+
+  ### Slices (each its own PR)
+  - Slice 1 (this lane): verified `wake-snapshot --recipient <handle>` + `mailbox wake-run` over armed rows (rows armed manually via a hidden `aida agent wake arm <handle>` for now) + the unit/health-job install + tests. Closes TASK-HOME-119's acceptance.
+  - Slice 2: the `agent new` pending stamp, SessionStart hook arming, retire on end/GC, the `agent list` wake column and the doctor iteration.
+  LIGHT tier: targeted tests + make check-ci-fast. trace:STORY-HOME-096.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T01:03:35.633015171Z
+modified_at: 2026-10-30T01:05:29.530959144Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -89,6 +103,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18a57-291e-7492-9632-617c8c2cdd17
+  author: joe
+  timestamp: 2026-10-30T01:05:30.398101069Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
