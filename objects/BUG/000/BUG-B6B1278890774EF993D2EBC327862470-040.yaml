@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T22:59:19.585384944Z
+modified_at: 2026-10-30T23:12:34.064378872Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -75,6 +75,23 @@ comments:
   modified_at: 2026-10-30T22:59:19.585384944Z
   session_id: 01a18efa6ff3
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18f16-1f10-7231-8943-c1d158e80d93
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 16:15 on PR-3142 at ee8fafe282 (independent review, verdict request-changes; the reviewer's `aida review record` was refused by its sandbox, so this comment carries the findings). All findings are ruled once here (2026-10-28 rule). Push ONE new commit (no force-push) that does items 1-5:
+
+    1. [MUST, authority] status_awaiting.rs:631-651: the inspected role (ctx/env role that is NOT a verified audience key) must go back to COUNT-ONLY: no sender, no subject, no overdue-request projection in the notice, render() or JSON. This restores the TASK-1245/STORY-1843 invariant (story1843_bound_child_never_sees_inherited_parent_mail). Add a refusal test: a session whose role is inspected-only sees the count and NO sender/subject. AC5 (role-addressed handoff shown by sender and subject) must be met through the VERIFIED audience role_key path (status_awaiting.rs:613-617).
+    2. story_465_awaiting_report_tests.rs:922: fix the misleading comment and make the AC5 test (plus a preview/overdue/stale-summary command-level test) exercise the verified role_key path, i.e. a seat whose facts include the role as an audience key.
+    3. awaiting_you.rs:256 + whoami_view.rs:984: count urgent ROLE mail in MailChannel.urgent and the whoami urgent fold; add a test.
+    4. Add per-criterion trace tags (criterion ids) to the five tests that prove the ACs so `aida criteria` shows them traced.
+    5. awaiting_you.rs:~2661: the stale-automated summary line must check and decrement the line budget like every other mail row.
+
+    ACCEPTED (no change): is_stale_automated with ts == 0. An unknown-time automated notice stays counted as new mail; erring toward visibility is the safe direction for a mail surface.
+
+    Gate: LIGHT — one targeted `cargo test -p aida-cli-lib story_465` (plus the story1843 filter) and make check-ci-fast, then push. Delta re-review follows.
+  created_at: 2026-10-30T23:12:34.064378872Z
+  modified_at: 2026-10-30T23:12:34.064378872Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18d27-53e3-7762-9954-20226499df1b
   author: joe
