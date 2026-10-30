@@ -1,0 +1,29 @@
+id: 01a18ae5-f60d-7122-8066-666c4f29cd59
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-100
+title: 'aida agent new: non-advisor agents handshake with the advisor (hello + ack) at start'
+description: |-
+  Operator idea 2026-10-29 20:41: when `aida agent new` starts any non-advisor agent, its first act is a mail round trip with the advisor. On 2026-10-29 claude-implementer-229's mail was stranded in its seat clone (BUG-031), and nobody knew until the operator relayed it by hand. A handshake at start surfaces a broken mail path in minutes, not hours.
+
+  Acceptance:
+  1. On start (the SessionStart hook for an `agent new` session whose role is not advisor), the agent sends a typed 'hello' to the advisor role naming its handle, role, spec and worktree/clone path.
+  2. A live advisor's per-turn mail notice shows the hello and acks it with one command (or acks automatically when it reads its inbox). The ack lands in the new agent's inbox.
+  3. If no ack arrives within a bounded window (default 10 minutes), the agent shows 'advisor unreachable: <reason>' in its own notice and in `aida agent ls`, and `aida doctor` raises a finding naming the mail path that failed (for example: a seat-clone local layer that the primary inbox does not read).
+  4. When no advisor is live, the hello waits durably and the agent is told 'no live advisor; hello queued' (not a silent success).
+  5. Test: an agent in a seat clone sends hello; the advisor in the primary sees it; the agent sees the ack. This test fails until BUG-031 is fixed.
+
+  Depends on BUG-031 (seat-clone mail reaches the primary inbox).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T03:41:28.973506961Z
+modified_at: 2026-10-30T03:41:28.973506961Z
+req_type: Story
+filed_at:
+  code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9a86ae54ce5
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
