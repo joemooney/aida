@@ -8,12 +8,12 @@ description: |
   - Deviation RATIFIED: acceptance 2 is met by the explicit `aida mailbox retention prune` verb instead of relaxing the view rule. No change needed there.
   - REQUIRED FIX (bundle into PR-3112, then push for a delta re-review): mailbox_cli_policy (aida-cli-lib/src/mailbox_cmd.rs ~3105) classifies every MailboxCommand::Retention as StakeholderAction::Read, so read-only guest/requester seats can run the mutating prune (removes .git/worktrees/<admin>, including locked ones). Classify Retention::Prune without --dry-run as a write-class action; keep --dry-run and the other retention reads as Read. Add a test: a guest seat is refused for prune while the dry run is allowed.
   - Gate: LIGHT. One targeted `cargo test -p aida-cli-lib mailbox` run plus `make check-ci-fast`, then push. Do not run the full suite.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:33.145162743Z
-modified_at: 2026-10-30T03:27:48.910042820Z
+modified_at: 2026-10-30T07:26:57.019342318Z
 req_type: Task
 tags:
 - docs:impacted
@@ -120,6 +120,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18bb4-61f4-76e1-8590-e5ad0ea9a15d
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:26:57.012554273Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18bb4-61fb-7f73-b3ac-a290f3019f80
+  timestamp: 2026-10-30T07:26:57.019338473Z
+  agent: implementer
+  commit_sha: fcb1686c4bbbee2efe3a786979bd33b9d0d51ce0
+  summary: 'Base-only update from main (gh update-branch 84d61ecf4cf76739f94a13bbd81dad245dc479db -> 93f137f786b46df6c83b5d7a6c5b57f5dcec6693); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -132,3 +147,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:08:06.248929677Z
   implemented_by: joe
+  completed_at: 2026-10-30T07:26:57.012550145Z
+  completion_sha: fcb1686c4bbbee2efe3a786979bd33b9d0d51ce0
