@@ -19,12 +19,12 @@ description: |
   2. Ordering test: prove the scope-conflict refusal happens before the bypass and resume prompts, on both the foreground and --bg paths.
   3. Role mail to the pool queues for the role when no live member has a mail id (mailbox_resolver.rs ~528), with no --queue-for-role needed. Test it.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib generic_implementers pool_role_mail same_scope_conflict` plus `make check-ci-fast`, then push.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:27:58.713113531Z
-modified_at: 2026-10-30T05:14:19.370183579Z
+modified_at: 2026-10-30T06:38:12.177315186Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -134,6 +134,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18b87-c0d1-7ad3-8881-bca2daf6444a
+  author: aida-session-start
+  timestamp: 2026-10-30T06:38:12.177312950Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5e4ec0c39e38f1b62108e4ede81c9abd24dfe7fe
   branch: main
