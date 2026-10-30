@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:25.953259931Z
-modified_at: 2026-10-30T00:09:35.284364423Z
+modified_at: 2026-10-30T00:39:11.629532956Z
 req_type: Task
 tags:
 - advisor-review
@@ -80,6 +80,12 @@ comments:
     The combined corrected stack is pushed at https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Existing PR heads are unchanged while explicit operator confirmation for the atomic force-with-lease update is pending (required by the operator Git workflow preference). Original preview preserved. No self-merge.
   created_at: 2026-10-30T00:09:35.284364423Z
   modified_at: 2026-10-30T00:09:35.284364423Z
+- id: 01a18a3f-120d-7891-9ad9-f870ad4141ae
+  author: joe
+  content: |
+    Published advisor correction pass: PR #3100 at 25f18f9d1c408abb7a301a6f161f995b8ef5fdb9; base task-b6b1278890774ef993d2ebc327862470-109-work. All eight heads updated in one user-approved atomic force-with-lease push. Remote heads, bases and preserved previews verified. All 35 FASTTRACK gates passed for this rebuilt head. Advisor notified with all eight full SHAs for fresh independent review and bottom-up integration. No self-merge.
+  created_at: 2026-10-30T00:39:11.629532956Z
+  modified_at: 2026-10-30T00:39:11.629532956Z
 history:
 - id: 01a188da-516b-7ca3-a052-e38c4cb388b5
   author: joe
