@@ -10383,8 +10383,19 @@ pub(crate) fn append_untraced_criteria_prompt_block(
     let Ok((base, head)) = pr_base_head(project_root, forge, pr_n) else {
         return;
     };
-    let Ok(messages) = git_log_messages(project_root, &base, &head) else {
-        return;
+    // BUG-035: an unreadable range still never blocks the launch, but it is
+    // not silent: the operator learns which range failed and why the prompt
+    // carries no criteria list.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
+    let messages = match git_log_messages(project_root, &base, &head) {
+        Ok(messages) => messages,
+        Err(err) => {
+            eprintln!(
+                "warning: cannot read commits {base}..{head} for PR-{pr_n} ({err:#}); \
+                 the reviewer prompt omits the untraced acceptance criteria list"
+            );
+            return;
+        }
     };
     let mut spec_ids: Vec<String> = Vec::new();
     for msg in &messages {
