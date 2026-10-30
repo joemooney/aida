@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T17:18:07.787845892Z
+modified_at: 2026-10-30T19:58:21.467400336Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -49,6 +49,12 @@ comments:
   modified_at: 2026-10-30T16:12:03.314512271Z
   session_id: 01a18d92b72d
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18e64-511b-7661-bbb9-becd6f976266
+  author: joe
+  content: 'ADVISOR RULING 2026-10-30 13:00 (PR-3142, CI red after update-branch). The PR''s own test status_awaiting::story_465_awaiting_report_tests::role_addressed_cross_vendor_handoff_shows_by_sender_and_subject_in_the_notice (story_465_awaiting_report_tests.rs:614) fails on the merged-with-main head: the notice renders ''⦿ Awaiting you: 2 mail to advisor — run `aida awaiting`'' with no sender or subject (run 41117481308, lib job). Main moved under the PR: a merged change (most likely PR-3135 BUG-032''s mail timestamp and read-source path, or another awaiting/notice change) now takes a notice path that bypasses your by-sender/subject rendering. ONE rework: merge origin/main (no rebase, no force), find which path the notice now takes, apply the by-sender/subject rendering there (do not loosen the test), and run cargo test -p aida-cli-lib --lib story_465 plus make check-ci-fast. A scoped re-review follows.'
+  created_at: 2026-10-30T19:58:21.467400336Z
+  modified_at: 2026-10-30T19:58:21.467400336Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d27-53e3-7762-9954-20226499df1b
   author: joe
