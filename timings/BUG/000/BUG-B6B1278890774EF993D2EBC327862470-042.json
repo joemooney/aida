@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-042",
+  "publishes": [
+    {
+      "at": "2026-10-30T22:34:55.485649383Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T17:46:22.523539646Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-042",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T20:40:47.964184682Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-042",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T21:47:29.854890048Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-042",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3149,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c77f4e884990260153f342eabbc2f5cf500aca86"
+      }
+    },
+    {
+      "ts": "2026-10-30T22:34:12.764071127Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-042",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T22:34:31.524327658Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-042",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3149
+      }
+    },
+    {
+      "ts": "2026-10-30T22:34:55.230997873Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-042",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cdbecda76786aa4df79e0b965ae401e8db20d633",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
