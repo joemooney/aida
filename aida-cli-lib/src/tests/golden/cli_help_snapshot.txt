@@ -5032,9 +5032,7 @@ Options:
           worktree of its repository is included
 
       --recipient <RECIPIENT>
-          One of this process's own inboxes; narrows, never widens, the audience a notice would
-          read. A registered agent handle reads that session's own inbox when it is armed for mail
-          wake
+          One of this process's own inboxes; narrows, never widens, the audience a notice would read
           
           [default: advisor]
 
@@ -5084,7 +5082,8 @@ Options:
           Run one pass and print each armed session's result
 
       --recover <THREAD>
-          Resolve an uncertain wake on this Codex thread, after inspecting it
+          Resolve an uncertain wake on this Codex thread, after inspecting it. Exactly one of
+          --accepted or --retry is required with it
 
       --accepted
           With --recover: the thread received the wake
@@ -33466,7 +33465,7 @@ Working on aida itself
       {
         "name": "recipient",
         "takes_value": true,
-        "help": "One of this process's own inboxes; narrows, never widens, the audience a notice would read. A registered agent handle reads that session's own inbox when it is armed for mail wake"
+        "help": "One of this process's own inboxes; narrows, never widens, the audience a notice would read"
       }
     ],
     "hidden": false
@@ -33527,7 +33526,7 @@ Working on aida itself
       {
         "name": "recover",
         "takes_value": true,
-        "help": "Resolve an uncertain wake on this Codex thread, after inspecting it"
+        "help": "Resolve an uncertain wake on this Codex thread, after inspecting it. Exactly one of --accepted or --retry is required with it"
       },
       {
         "name": "retry",
