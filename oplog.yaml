@@ -90679,5 +90679,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 7041
+- id: 01a18b60-9a24-7da2-a2d0-655313069164
+  target_id: 01a18b60-755f-7642-b3d6-192e36205918
+  author: aida
+  node_id: '1'
+  lamport: 7042
+  timestamp: 2026-10-30T05:55:26.372610148Z
+  kind: !Create
+    title: 'Review PR-3122: [AI:codex] fix(agent): make list canonical (TASK-B6B1278890774EF993D2EBC327862470-117)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a18a5e`) for branch `task-b6b1278890774ef993d2ebc327862470-117-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3122>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-117-work` → `main`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-117
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3122` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 7042
 node_id: '1'
