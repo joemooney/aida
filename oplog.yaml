@@ -93292,5 +93292,31 @@ operations:
   timestamp: 2026-10-30T14:28:24.505479376Z
   kind: !SetStatus
     status: Completed
-clock: 7223
+- id: 01a18d37-d389-7603-9d68-e8b36f26b6b9
+  target_id: 01a18d37-c4a4-7450-b988-c8cbadeeae14
+  author: aida
+  node_id: '1'
+  lamport: 7224
+  timestamp: 2026-10-30T14:30:08.521145276Z
+  kind: !Create
+    title: 'Review PR-3139: [AI:claude] docs(roster): add OpenCode to the platforms AIDA coordinates (TASK-B6B1278890774EF993D2EBC327862470-127)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/task-home-127-opencode-roster`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3139>
+      - Branch: `docs/task-home-127-opencode-roster` → `main`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-127
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3139` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 7224
 node_id: '1'
