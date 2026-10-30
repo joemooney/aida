@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "scope": "Curated product guides; expansion pending advisor curation review. Historical/internal material is excluded. No hosting access change.",
+  "scope": "Curated current product guides for human and operator readers. Historical/internal material is excluded. No hosting access change.",
   "pages": [
     {
       "source": "getting-started.md",
@@ -42,6 +42,18 @@
       "source": "operator-setup.md",
       "output": "setup.html",
       "label": "Setup",
+      "category": "operator"
+    },
+    {
+      "source": "product-capabilities.md",
+      "output": "capabilities.html",
+      "label": "Capabilities",
+      "category": "human"
+    },
+    {
+      "source": "product-integrations.md",
+      "output": "integrations.html",
+      "label": "Integrations",
       "category": "operator"
     }
   ]

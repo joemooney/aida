@@ -20,7 +20,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ### `aida scaffold`
 
-**One line** — manage the Claude Code furniture `init` wrote (skills, commands, hooks, MCP config, templates) after the fact.
+**One line** — manage the Claude Code furniture `init` wrote (skills, commands, hooks, templates, and MCP config when explicitly requested) after the fact.
 
 **Mental model.** `init` scaffolds once; the *binary* keeps evolving. `scaffold` is the family that reconciles the on-disk scaffolding against the binary's *current* embedded templates: `status` reports drift, `diff` shows it, `upgrade` heals it **category-aware**, `apply` (re)writes it, `extract` pulls templates out for hand-customization. The key insight is the category model — AIDA-owned template files (skills/commands/hooks) are safe to overwrite; user-owned seed files (CLAUDE.md, AGENTS.md) are not — which is exactly why `upgrade` exists instead of a blunt `apply --force`.
 
@@ -33,7 +33,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - `diff` — exits non-zero on drift, so it pairs with `status`: `status` says "N modified," `diff` shows you *what* before you decide to `upgrade`. CI/pre-commit-hookable.
 - `extract` — materializes the embedded templates to disk so you can edit them; the deliberate "I want to diverge from the defaults" path.
 
-**Gotchas.** `status` reporting "modified" on a file you *intended* to edit (CLAUDE.md) is expected, not an error — that's a seed file; drift there is your content, and `upgrade` will correctly leave it. Don't reflexively "fix" it.
+**Seed ownership.** An existing `README.md` belongs to the project: authored content is not scaffold drift, and ordinary `upgrade` and `refresh` preserve it. `scaffold diff README.md` also skips the starter comparison and exits 0. A missing README is reported by `status` and by default or explicit `diff` (exit 1); `upgrade` creates the starter when it is absent. Pack-only `refresh` neither creates nor replaces README. Explicit `upgrade --force` can replace it. `CLAUDE.md` import checks and `AGENTS.md` managed-block checks still report AIDA-owned drift, as do stale template files. <!-- trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex -->
 
 **Chains with** — runs after a binary `aida upgrade`; pairs `status` → `diff` → `upgrade`.
 
