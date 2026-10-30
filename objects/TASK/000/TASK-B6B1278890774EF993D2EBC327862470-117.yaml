@@ -9,12 +9,12 @@ description: |
   2. Help text, docs (docs/cli/, docs/agents/), templates/skills and hook messages that tell users to run `aida agent ls` say `aida agent list` (edit template masters, then `make sync-templates`).
   3. Existing scripts calling `aida agent ls` keep working unchanged (test).
   4. `aida agent list` does not collide with `list-roles`.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T05:40:44.237620599Z
+modified_at: 2026-10-30T05:44:33.526753404Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -75,6 +75,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18b56-a3f6-7b82-be81-a6522ed81849
+  author: joe
+  timestamp: 2026-10-30T05:44:33.526750801Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
