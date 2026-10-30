@@ -6076,36 +6076,46 @@ fn run_tracked_agent_after_spawn(
         ),
         (RoleInstanceKind::Driver, text) => text,
     };
-    let registry_entry = agent_registry::register_spawned_agent(
-        &plan.project_root,
+    // From here the child owns the terminal. A failed bookkeeping step must
+    // not return early: the launcher would exit, the shell would take the
+    // terminal back, and the agent would die mid-startup with the error
+    // painted over by its UI. Collect warnings and print them after the
+    // child exits, where they stay on screen.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    let mut deferred_warnings = Vec::new();
+    let signal_forwarder = post_spawn_step(
+        install_child_signal_forwarder(child_pid),
+        "could not forward Ctrl+C/SIGTERM to the agent",
+        &mut deferred_warnings,
+    );
+    let status = supervise_spawned_child(
         config.agent_type,
         child_pid,
-        plan.role.clone(),
-        plan.current_spec.clone(),
-        plan.launch_cwd.clone(),
-        Some(&binary),
-        Some(plan.name.clone()),
-        plan.native_session_id.clone(),
-        plan.resumed_from.clone(),
-        description,
-    )?;
-    // TASK-1498: `--verbose` process-registration diagnostics — confirms the
-    // spawned pid and the registry entry id it was recorded under, right
-    // after the write that makes it visible to `aida agent ls`.
-    // trace:TASK-1498 | ai:claude
-    if verbose {
-        eprintln!(
-            "  {}: spawned pid {} registered as {}",
-            "diagnostics".bold(),
-            child_pid,
-            registry_entry.id
-        );
+        deferred_warnings,
+        || {
+            agent_registry::register_spawned_agent(
+                &plan.project_root,
+                config.agent_type,
+                child_pid,
+                plan.role.clone(),
+                plan.current_spec.clone(),
+                plan.launch_cwd.clone(),
+                Some(&binary),
+                Some(plan.name.clone()),
+                plan.native_session_id.clone(),
+                plan.resumed_from.clone(),
+                description,
+            )
+            .map(|entry| entry.id)
+        },
+        || child.wait(),
+        verbose,
+        &mut std::io::stderr(),
+    );
+    if let Some(forwarder) = signal_forwarder {
+        forwarder.stop();
     }
-    let signal_forwarder = install_child_signal_forwarder(child_pid)?;
-    let status = child
-        .wait()
-        .with_context(|| format!("failed to wait for {}", config.agent_type))?;
-    signal_forwarder.stop();
+    let status = status?;
     // TASK-1498: `--verbose` child exit/result diagnostics — reported clearly
     // without changing launch semantics (the exit-code propagation below is
     // unchanged). trace:TASK-1498 | ai:claude
@@ -6151,10 +6161,73 @@ fn run_tracked_agent_after_spawn(
     Ok(())
 }
 
+/// Register a spawned child, wait for it, then print any deferred warnings.
+/// A failed registration never returns early: the launcher keeps waiting so
+/// the shell cannot take the terminal back while the agent runs. Warnings
+/// print after the child exits, including when the wait itself fails.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn supervise_spawned_child(
+    agent_type: &str,
+    child_pid: u32,
+    mut deferred_warnings: Vec<String>,
+    register: impl FnOnce() -> Result<String>,
+    wait: impl FnOnce() -> std::io::Result<std::process::ExitStatus>,
+    verbose: bool,
+    warn_out: &mut dyn std::io::Write,
+) -> Result<std::process::ExitStatus> {
+    use std::io::Write as _;
+    let registry_id = post_spawn_step(
+        register(),
+        "could not record this agent in the registry, so `aida agent ls` will not list it",
+        &mut deferred_warnings,
+    );
+    // TASK-1498: `--verbose` process-registration diagnostics — confirms the
+    // spawned pid and the registry entry id it was recorded under, right
+    // after the write that makes it visible to `aida agent ls`.
+    // trace:TASK-1498 | ai:claude
+    if verbose {
+        if let Some(id) = &registry_id {
+            eprintln!(
+                "  {}: spawned pid {} registered as {}",
+                "diagnostics".bold(),
+                child_pid,
+                id
+            );
+        }
+    }
+    let status = wait().with_context(|| format!("failed to wait for {agent_type}"));
+    for warning in &deferred_warnings {
+        let _ = writeln!(warn_out, "{} {warning}", "warning:".yellow().bold());
+    }
+    status
+}
+
+/// Keep a post-spawn step's value, or record why it failed for printing
+/// after the child exits.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn post_spawn_step<T>(
+    result: Result<T>,
+    what: &str,
+    deferred_warnings: &mut Vec<String>,
+) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(err) => {
+            deferred_warnings.push(format!("{what}: {err:#}"));
+            None
+        }
+    }
+}
+
 // trace:BUG-2002 | ai:codex
 #[cfg(test)]
 #[path = "tests/bug_2002_launch_lease_tests.rs"]
 mod bug_2002_launch_lease_tests;
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_030_launch_registry_lock_tests.rs"]
+mod bug_030_launch_registry_lock_tests;
 
 /// Inspect or resume past Claude Code sessions in this project,
 /// enriched with the AIDA role + most-recent spec for each session
