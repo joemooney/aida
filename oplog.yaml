@@ -88145,5 +88145,20 @@ operations:
   timestamp: 2026-10-30T00:20:38.147732718Z
   kind: !SetStatus
     status: Needs Attention
-clock: 6862
+- id: 01a18a2f-9254-7721-9c20-f7e9de315238
+  target_id: 01a189cf-5677-7063-80cc-cc0d0f2ed1f7
+  author: aida
+  node_id: '1'
+  lamport: 6863
+  timestamp: 2026-10-30T00:22:15.892275365Z
+  kind: !SetDescription
+    description: |-
+      Operator ruling 2026-10-29 15:37 (agreed in session): this host is shared with continuous cargo builds, so the 1000 ms show budget trips on load, not regressions (BUG-HOME-018; the real 700 ms scan was removed in PR-3105).
+
+      Change exactly TWO files, on the existing PR-3109 branch (task-b6b1278890774ef993d2ebc327862470-116-2); do NOT open a new PR:
+      1. .aida/config.toml [performance.budgets] show = { budget_ms = 2000, ceiling_ms = 5000 }, with a comment line above it: the operator raised the budget deliberately on 2026-10-29 for a build-loaded host; the ceiling still catches a hung call (ADR-53). (Already on PR-3109.)
+      2. aida-cli-lib/src/doctor_cmd.rs, test this_repo_configures_a_ceiling_for_the_show_budget (~line 4261): assert budget_ms == 2000 and reword its message/doc-comment to cite this operator host decision (TASK-HOME-116); keep the ceiling_ms.is_some() limb unchanged. Without this, CI lib-1 is red (advisor ruling 16:53, reviewer round 1 on PR-3107).
+      Leave init_cmd.rs scaffold defaults unchanged (host decision).
+      Validate: cargo test --profile agent -p aida-cli-lib --lib this_repo_configures_a_ceiling_for_the_show_budget, then make check-ci-fast. Commit with the plain trailer for this task and push to the PR-3109 branch.
+clock: 6863
 node_id: '1'
