@@ -9,6 +9,16 @@ feature: Uncategorized
 created_at: 2026-10-30T00:40:29.876190271Z
 modified_at: 2026-10-30T00:40:29.876190271Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
+  created_at: 2026-10-30T00:40:40.970528416Z
+history:
+- id: 01a18a40-77fb-7b00-9340-27de1e3d10d0
+  author: joe
+  timestamp: 2026-10-30T00:40:43.259183520Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
