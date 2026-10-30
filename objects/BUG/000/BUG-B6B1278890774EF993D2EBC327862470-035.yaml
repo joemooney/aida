@@ -16,12 +16,12 @@ description: |
   4. Criterion trace anchors (.acab779a, .acbcb0eb, .Test) on the tests in bug_035_seat_clone_log_range_tests.rs.
   5. queue_cmd.rs ~10386: surface the git_log_messages error (naming the range) instead of a silent `let Ok .. else return`.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_035 task_2001 task_2143 bug_775` plus make check-ci-fast.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:18:17.188008505Z
-modified_at: 2026-10-30T09:39:32.423582092Z
+modified_at: 2026-10-30T10:17:31.415500802Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -127,6 +127,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18c50-8c17-7d90-a947-2803ea89e450
+  author: aida-session-start
+  timestamp: 2026-10-30T10:17:31.415499991Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
