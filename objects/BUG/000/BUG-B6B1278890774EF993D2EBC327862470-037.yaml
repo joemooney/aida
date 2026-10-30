@@ -2,12 +2,12 @@ id: 01a18b71-4e23-78b1-92ef-f10f26cf87ca
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-037
 title: 'Flaky: regen::score generated_tool_help_timeout_kills_group_and_retains_reason fails on CI lib-1 under load'
 description: '2026-10-29 23:13: CI lib-1 on PR-3112 (run 41011660578) failed at aida-cli-lib/src/regen/score.rs:1135 in regen::score::tests::generated_tool_help_timeout_kills_group_and_retains_reason. PR-3112 touches only mailbox retention, and the same test passes on main, so this is a flake. It made a ship stop, and the failed jobs were rerun by hand. Acceptance: find the race (likely the timeout window versus process-group kill timing under a loaded runner), fix it at the race, not by widening the window (TASK-1956 convention), and stress it locally (for example 200 iterations under load) with zero failures.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T06:13:41.027123386Z
-modified_at: 2026-10-30T10:32:28.959506743Z
+modified_at: 2026-10-30T10:48:32.326710587Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -50,6 +50,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18c6c-f146-7563-bd98-c4ad11ed9508
+  author: joe
+  timestamp: 2026-10-30T10:48:32.326748899Z
+  session_id: 01a18c5a4d74
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
   branch: main
@@ -58,3 +67,9 @@ filed_at:
   aida_build_sha: 2742b18ee2e
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: aida ship refuses to run git in this contained seat''s private clone (git config/hooks writable by the seat). Commit 185421df638 is on branch bug-b6b1278890774ef993d2ebc327862470-037, not pushed. Also could not file an implementer finding: the store is read-only in the seat. The finding: (1) the fixture''s descendant.pid can be absent if the timeout fires before the shell records it, so the test panics at unwrap. Fix: write pid and start atomically, and re-run the scenario if no record was written. (2) ScoreEnv hard-codes /tmp and /var/tmp, so the two scenario tests could not run in the sandbox. The stress run used the new helper unit test: 200/200 under load.'
+  lean: branch is ready; publish from the host (aida ship BUG-b6b1278890774ef993d2ebc327862470-037 --no-merge), and let CI lib-1 run the scenario tests
+  raised_by: implementer
+  raised_at: 2026-10-30T10:48:32.326710587Z
