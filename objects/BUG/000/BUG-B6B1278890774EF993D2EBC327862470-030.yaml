@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T04:44:18.971428956Z
+modified_at: 2026-10-30T04:47:58.596867934Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -94,6 +94,13 @@ comments:
   created_at: 2026-10-30T04:41:43.855643764Z
   modified_at: 2026-10-30T04:41:43.855643764Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18b22-d684-7731-b773-8a66c11710a2
+  author: joe
+  content: 'Reproduce criterion evidence (review round 2, finding 5): no stderr capture from the original operator launch survived; the agent UI painted over the message and the operator relaunched plain claude. The deterministic reproduction of the flashed ''handle allocation lock busy'' message is the test launcher_registration_waits_out_lock_held_past_sessionstart_budget (aida-cli-lib/src/tests/bug_030_launch_registry_lock_tests.rs), traced to .Reproduce: it holds the handle-namespace lock on another thread and shows the 250 ms SessionStart-budget acquire fails with exactly that message, which is the error register_spawned_agent returned via ''?'' before the fix. The lock path is independent of primary checkout vs worktree: both resolve the same common-root namespace lock (agent_handle::lock_namespace on the project root), so one reproduction covers both launch locations. The crash half is covered by launcher_waits_for_child_when_registration_lock_stays_busy (real sh child, lock held past the budget, launcher waits and the warning prints after the child exits).'
+  created_at: 2026-10-30T04:47:58.596867934Z
+  modified_at: 2026-10-30T04:47:58.596867934Z
+  session_id: 01a18b1f74c9
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18ad9-05f9-7f40-95b8-771fc2e06f7b
   author: aida-session-start

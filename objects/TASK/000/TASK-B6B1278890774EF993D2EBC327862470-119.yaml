@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T00:40:29.876190271Z
-modified_at: 2026-10-30T04:28:26.989278496Z
+modified_at: 2026-10-30T04:56:01.894132135Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -47,6 +47,12 @@ history:
   timestamp: 2026-10-30T04:28:28.684262910Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18b2b-fc67-7e10-a563-71331370a5e9
+  author: joe
+  timestamp: 2026-10-30T04:57:58.119137860Z
+  session_id: 01a18b1dde6d
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -55,3 +61,11 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Slice 1 design matches the advisor ruling and TASK-119 ACs are tested (own handle+role wake, inbox-named notice), but CI is red at head (gates portability ratchet + lib-0/lib-1 test failures; main base f0dfbd03 green) and the wake-snapshot handle path widens authority and regresses the own-handle case. AC status: TASK-119 install-with-recipient(handle+role) verified by story_home_096_run_wakes_armed_rows_for_their_own_inbox_only + mailbox_identity watched-row test; notice names inbox verified by story_home_096_notice_names_the_recipient_inbox; advisor path unchanged verified by audience_for fallback (unchanged code, script untouched). STORY-096 .aca8bab2/.acad6a24/.ac9979a7/.ac316a6a not-applicable-because advisor sliced them to slice 2 and this PR only Refs STORY-096 (trailing completion group is TASK-119).'
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-119 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T04:56:01.894132135Z
