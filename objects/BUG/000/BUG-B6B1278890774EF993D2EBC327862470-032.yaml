@@ -10,12 +10,12 @@ description: |
   3. mailbox_migration.rs ~149 also uses parse_message_file.
   4. For canonical-store files with no timestamp, persist the fallback once (stamp on first read or sync) instead of using a git-checkout mtime that changes on every pull.
   Gate: LIGHT. Run `cargo test -p aida-core mailbox` plus `cargo test -p aida-cli-lib --lib bug_032` and make check-ci-fast.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:40:04.674460929Z
-modified_at: 2026-10-30T15:14:39.845292422Z
+modified_at: 2026-10-30T17:33:55.239647215Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -124,6 +124,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18de0-14a2-7363-9c25-ce7181ecfb56
+  author: aida-auto-bump
+  timestamp: 2026-10-30T17:33:55.234316013Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18de0-14a7-76d3-89bb-3e234f879b66
+  timestamp: 2026-10-30T17:33:55.239644131Z
+  agent: implementer
+  commit_sha: 18019938e1be04afe1c0a42971e83d48d91b8f5a
+  summary: 'Base-only update from main (gh update-branch 7ad27f02156893f06195c96db1d7eede4c9870c1 -> 4a167f261f5875978384df9e0d2a4590565612b3); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -136,3 +150,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T13:28:10.655110423Z
   implemented_by: joe
+  completed_at: 2026-10-30T17:33:55.234312149Z
+  completion_sha: 18019938e1be04afe1c0a42971e83d48d91b8f5a
