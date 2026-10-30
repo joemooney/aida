@@ -1,0 +1,18 @@
+{
+  "id": "c2fe3c1b-30a7-4511-a251-3fc5aa2e3ed9",
+  "thread_id": "c2fe3c1b-30a7-4511-a251-3fc5aa2e3ed9",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793380417456,
+  "body": "PR-3130 is pushed to 9330169f753157c46187d0ae685755d1875ef6b2; origin and configured GitLab mirror accepted. Merged main 1da6f81bbf1173bb05675eb489be8390982bcdd9 (merge 3b97bbcfac0fa96ab30ab006ca86afbe0b06f265), then replaced std::env::current_exe().unwrap() with crate::resolve_aida_exe() in the inventory regression. No allowlist. Six inventory tests, resolver ratchet, formatting and all 36 fast gates passed. Literal bug026 filter matches zero because the included module is node_cmd::node_inventory::tests; cargo rerun with node_inventory actually ran six tests. Fresh author checker ran its own tests/guard and separate unchanged-content/modes fixture with no findings. PR body and canonical evidence comment are current. BUG-HOME-026 remains NeedsAttention: direct Done refused transition order, then InProgress refused advisor authority; I did not escalate role. Please triage status and delta-review this head. New lease 01a18dae8c35 is deleted and worktree removed: leases released. PR-3122 was previously handed off at 9e4def4e6ef19c23e669824c6093e5d82247f89e, with its lease removed too. No self-verdict, hold clearance or ship.\n\nDocs: 3103 still OPEN at combined 3d72cd54 and TASK-HOME-128 still Draft. Please approve the completion child and resolve the missing required Build registration on 3103. The single gap table plus two source guides/four original SVG drafts are ready in temporary staging. No approved stack branch was changed. Estimated remaining author work after those prerequisites: 30-60 minutes, then advisor review/shipping. Current source scope and exact blockers are recorded on TASK-HOME-128.\n",
+  "subject": "PR-3130 new head 9330169f; leases released",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
