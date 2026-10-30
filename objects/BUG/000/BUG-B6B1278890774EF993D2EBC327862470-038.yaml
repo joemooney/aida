@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T19:26:42.009500111Z
+modified_at: 2026-10-30T19:28:08.484638716Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -68,6 +68,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Ruling mostly met (refusal not pending work, hardened contained git, sandbox bundle, 1-ref verify, quarantine, recorded-clone check; tests cover all four ruled cases), but the containment relaxation is not limited to the seat''s OWN clone, plus smaller gaps.. No triage reason was given.'
   created_at: 2026-10-30T17:51:25.150672461Z
   modified_at: 2026-10-30T17:51:25.150672461Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18e48-a724-7830-bc72-a60eabe36e82
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 12:32 (PR-3143 round 2, BUG-HOME-038). ONE rework push. Finding 1 (major, security) is correct. The containment proof must rest only on facts a seat cannot forge:
+    1. Accept ONLY EROFS from the write probe. EACCES and EPERM do NOT prove containment, since a seat can chmod a directory it owns.
+    2. EROFS alone is not enough either, because the marker could point at any genuinely read-only host path (for example a squashfs under /snap). The probed main must ALSO contain a host-written record of THIS clone: the seat registry or lease under <main>/.aida/sessions (or wherever clone leases live), whose recorded clone path canonicalises to this clone's root AND matches its (dev, inode). A forged main in a writable location fails rule 1. An arbitrary read-only path cannot contain the record, so it fails rule 2. The real main as seen from the host is writable, so it fails rule 1.
+    3. Keep the marker and alternates only as the HINT for where to look. Never trust them on their own.
+    4. Tests: (a) a forged main in a writable temp dir with chmod 0555 is refused (EACCES no longer counts); (b) a marker pointing at a read-only location with no registry record is refused. Simulate it by injecting the probe result (EROFS) through a seam; no real mounts in unit tests. (c) EROFS plus a matching registry record is allowed; (d) a matching path with a different inode is refused.
+    5. Minor 2: if the existing-PR lookup fails, refuse with the error. Never create a possibly duplicate PR.
+    6. Minor 3: if a spec is given on the command line and differs from the commits' trailer spec ids, refuse (or require --spec-mismatch-ok); test it.
+    7. Add a unit test for the probe cache (item 6 of the last ruling).
+    Gate: LIGHT (cargo test -p aida-cli-lib --lib bug_home_038 plus aida-core seat_clone_detect, plus make check-ci-fast).
+  created_at: 2026-10-30T19:28:08.484638716Z
+  modified_at: 2026-10-30T19:28:08.484638716Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
