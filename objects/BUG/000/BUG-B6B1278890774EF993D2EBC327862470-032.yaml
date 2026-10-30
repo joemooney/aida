@@ -10,12 +10,12 @@ description: |
   3. mailbox_migration.rs ~149 also uses parse_message_file.
   4. For canonical-store files with no timestamp, persist the fallback once (stamp on first read or sync) instead of using a git-checkout mtime that changes on every pull.
   Gate: LIGHT. Run `cargo test -p aida-core mailbox` plus `cargo test -p aida-cli-lib --lib bug_032` and make check-ci-fast.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:40:04.674460929Z
-modified_at: 2026-10-30T13:56:34.297263951Z
+modified_at: 2026-10-30T15:14:39.845292422Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -33,6 +33,30 @@ comments:
   created_at: 2026-10-30T13:41:08.894175980Z
   modified_at: 2026-10-30T13:41:08.894175980Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18d60-6b0b-79a2-9a8e-800c8e66bf83
+  author: joe
+  content: |-
+    Round-1 rework pushed (d9278bbb8ec), addressing all four ruling items:
+
+    1. **`mailbox_logical::read_source`** (default `aida mailbox inbox` / MCP `read_inbox`) now runs every message through the shared normalizer (`normalize_message_value`, with the file's mtime from the pinned fd). Before this, a message with no `timestamp` failed the whole source as `CorruptMessage`. Replicas of an unstamped message settle on one time before reconciliation: a recorded stamp (canonical first), otherwise the earliest mtime. A per-replica mtime is therefore never an audience conflict.
+    2. **Own-audience acceptance test** `bug_032_own_view_dates_unstamped_and_seconds_scale_mail`: messages with an absent, `null`, or seconds-scale timestamp spread across main, a sibling worktree and canonical, plus an unstamped local+canonical twin. Coverage is Complete, all four records show, they have real times, `seconds` == …232000, and nothing renders as 1970.
+    3. **`mailbox_migration`** reads envelopes through `parse_message_file`.
+    4. **Canonical persistence**: when the digest syncs to canonical, it stamps an unstamped or seconds-scale canonical file once. It uses the local copy's time when there is one, otherwise the fallback it was read with, and the stamps count toward the digest commit. Test `bug_032_sync_stamps_unstamped_canonical_mail_once` checks that a second sync stamps nothing.
+
+    Local gates: `cargo test -p aida-cli-lib --lib bug_032` 2/2 pass. `make check-ci-fast` passes.
+    `cargo test -p aida-core --lib mailbox`: 254 pass, 3 fail.
+    - `story1843_receipt_lookups_are_exact_per_id_at_scale` passes when run alone (deadline under host load ~34).
+    - `a_live_canonical_permit_keeps_retirement_waiting_then_refusing` and `a_writer_admitted_before_the_fence_finishes_and_is_captured` both fail with `LockTimeout` inside the test helper's `lock()`. That module is not in this diff. I could not show here whether they also fail on main.
+
+    `cargo test -p aida-cli-lib --lib mailbox`: 136 pass, 4 fail, all environmental:
+    - the hermetic HOME is on a read-only filesystem
+    - 3 D1 tests fail in `register_self_as_reviewer`'s session lookup, before any mail is read
+
+    CI is the gate for these.
+  created_at: 2026-10-30T15:14:28.747098003Z
+  modified_at: 2026-10-30T15:14:28.747098003Z
+  session_id: 01a18d191225
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18ae4-f873-7693-ab9e-54549ab5c472
   author: joe
@@ -91,6 +115,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18d60-972f-7bc3-a9a0-dfdea67bfb3e
+  author: joe
+  timestamp: 2026-10-30T15:14:40.047591996Z
+  session_id: 01a18d191225
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
