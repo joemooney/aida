@@ -5,12 +5,12 @@ description: |-
   FASTTRACK. In scripts/test-time-budget.toml [budget], add:
   "aida-cli-lib gate::dispatch_auth::story_1917_dispatch_flow_schedule_tests::story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its_release" = 25  # max 10.3s (PR-3140, PR-3135 runs 2026-10-30), x2 rounded up to 5 s
   Keep the file's key ordering convention (sorted by limit, descending, if that is the convention; otherwise append next to the other gate::dispatch_auth entries). Evidence: it failed 'Test time budget' on lib-1 for PR-3135 (run 41093014220, 10.2s) and PR-3140 (10.3s), and the reruns passed. Gate: make check-ci-fast only, no cargo. Trace in the commit trailer only (TOML comment optional).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T17:04:46.693992141Z
-modified_at: 2026-10-30T17:56:16.053275256Z
+modified_at: 2026-10-30T19:24:14.294961301Z
 req_type: Task
 relationships:
 - rel_type:
@@ -48,6 +48,20 @@ history:
   author: joe
   timestamp: 2026-10-30T17:56:17.948909899Z
   changes: []
+- id: 01a18e45-1451-78d2-8209-f28a080e8c13
+  author: aida-auto-bump
+  timestamp: 2026-10-30T19:24:14.289819147Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18e45-1456-7010-b977-82549756ed1d
+  timestamp: 2026-10-30T19:24:14.294957123Z
+  agent: aida
+  commit_sha: 8fd81b90a87f7104e4274fd16cd057657c25611b
+  summary: 'Base-only update from main (gh update-branch d79ab9d3e53c039944ea41027dfb302939b7ab68 -> 59ad5f8063458f0d3c1a2bfd9430d29550de1816); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
   branch: main
@@ -60,3 +74,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T17:45:33.495554621Z
   implemented_by: joe
+  completed_at: 2026-10-30T19:24:14.289815147Z
+  completion_sha: 8fd81b90a87f7104e4274fd16cd057657c25611b
