@@ -142,24 +142,75 @@ const ARMED_MAX_AGE_SECONDS: u64 = 3600;
 const ARMED_SNAPSHOT_MAX_AGE_SECONDS: u64 = 900;
 
 pub(crate) fn scan(project: &Path) -> Vec<DoctorFinding> {
-    let armed: Vec<(String, String)> = crate::agent_registry::load_active_entries(project)
+    let live: Vec<_> = crate::agent_registry::load_active_entries(project)
         .into_iter()
-        .filter(|(_, e)| e.mail_wake == Some(crate::agent_registry::MailWake::Armed))
-        .filter_map(|(_, e)| {
-            let thread = crate::mailbox_wake_run::row_thread(&e)?;
-            Some((e.name.unwrap_or(e.id), thread))
+        .map(|(_, e)| e)
+        .collect();
+    let armed: Vec<(String, String)> = live
+        .iter()
+        .filter(|e| e.mail_wake == Some(crate::agent_registry::MailWake::Armed))
+        .filter_map(|e| {
+            let thread = crate::mailbox_wake_run::row_thread(e)?;
+            Some((e.name.clone().unwrap_or_else(|| e.id.clone()), thread))
         })
         .collect();
     // The watcher keys its state by the canonical project path.
     let canonical = project
         .canonicalize()
         .unwrap_or_else(|_| project.to_path_buf());
-    scan_with(
+    let mut findings = scan_with(
         project,
         &crate::mailbox_wake_run::state_root(&canonical),
         &armed,
         chrono::Utc::now().timestamp() as f64,
-    )
+    );
+    findings.extend(unarmed_findings(project, &live, chrono::Utc::now()));
+    findings
+}
+
+/// A launch's wake left `pending` this long never got its thread armed.
+const PENDING_MAX_AGE_SECONDS: i64 = 600;
+
+/// Live Codex sessions whose launch asked for a mail wake that never armed:
+/// `failed`, or still `pending` long after start. The SessionStart hook's
+/// warning may never reach the operator, so the doctor names the exact
+/// manual commands.
+// trace:STORY-HOME-096 | trace:STORY-HOME-096.aca8bab2 | ai:claude
+fn unarmed_findings(
+    project: &Path,
+    entries: &[crate::agent_registry::AgentRegistryEntry],
+    now: chrono::DateTime<chrono::Utc>,
+) -> Vec<DoctorFinding> {
+    use crate::agent_registry::MailWake;
+    entries
+        .iter()
+        .filter(|e| e.ended_at.is_none())
+        .filter_map(|e| {
+            let why = match e.mail_wake? {
+                MailWake::Failed => "mail wake failed to arm".to_string(),
+                MailWake::Pending
+                    if (now - e.started_at).num_seconds() >= PENDING_MAX_AGE_SECONDS =>
+                {
+                    format!(
+                        "mail wake still pending {} min after start",
+                        (now - e.started_at).num_minutes()
+                    )
+                }
+                _ => return None,
+            };
+            let target = e.name.clone().unwrap_or_else(|| e.id.clone());
+            Some(DoctorFinding {
+                category: CATEGORY.into(),
+                id: format!("{CATEGORY}:{target}:unarmed"),
+                summary: format!("{target}: {why}; its mail arrives only on its next turn"),
+                action: format!(
+                    "To arm it by hand, run: {}",
+                    crate::mail_wake::manual_arm_commands(project, &target)
+                ),
+                safe_heal: false,
+            })
+        })
+        .collect()
 }
 
 /// The advisor-thread registration (when there is one, or when nothing is
@@ -298,6 +349,7 @@ mod tests {
     }
     // The doctor reads every armed session's own thread health; with no
     // advisor registration, armed rows alone decide the check.
+    // trace:STORY-HOME-096.ac316a6a | ai:claude
     #[test]
     fn story_home_096_doctor_iterates_armed_rows() {
         let dir = tempfile::tempdir().unwrap();
@@ -321,6 +373,48 @@ mod tests {
             .contains("recovery_required=true"));
         // Nothing armed and no registration: the advisor check still reports.
         assert_eq!(scan_with(&root, &state_root, &[], 10000.0).len(), 1);
+    }
+    // A launch whose wake failed, or stayed pending long after start, is
+    // reported with the exact manual commands the hook's stderr carried.
+    // trace:STORY-HOME-096.aca8bab2 | trace:STORY-HOME-096.ac316a6a | ai:claude
+    #[test]
+    fn story_home_096_doctor_reports_unarmed_launches_with_manual_commands() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let row = |pid: u32, name: Option<&str>, wake: &str, started: &str| {
+            let name = name
+                .map(|n| format!("name = \"{n}\"\n"))
+                .unwrap_or_default();
+            toml::from_str::<crate::agent_registry::AgentRegistryEntry>(&format!(
+                "id = \"codex-{pid}\"\nagent_type = \"codex\"\npid = {pid}\n{name}\
+                 started_at = \"{started}\"\nlast_active_at = \"{started}\"\n\
+                 worktree_path = \"/w\"\nsource = \"agent-launcher\"\nmail_wake = \"{wake}\"\n"
+            ))
+            .unwrap()
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-10-30T01:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let rows = [
+            row(1, Some("codex-agent-01"), "failed", "2026-10-30T00:59:00Z"),
+            row(2, None, "pending", "2026-10-30T00:30:00Z"),
+            row(3, Some("codex-agent-03"), "pending", "2026-10-30T00:58:00Z"),
+            row(4, Some("codex-agent-04"), "armed", "2026-10-30T00:00:00Z"),
+            row(5, Some("codex-agent-05"), "off", "2026-10-30T00:00:00Z"),
+        ];
+        let findings = unarmed_findings(root, &rows, now);
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        assert!(findings[0]
+            .summary
+            .starts_with("codex-agent-01: mail wake failed"));
+        assert!(findings[0]
+            .action
+            .contains("aida mailbox wake-service install"));
+        assert!(findings[0]
+            .action
+            .contains("aida agent wake arm codex-agent-01"));
+        assert!(findings[1].summary.contains("pending 30 min"));
+        assert!(findings[1].action.contains("aida agent wake arm codex-2"));
     }
     #[test]
     fn task_2347_health_missing_links_and_wrong_identity_fail_without_leaking() {

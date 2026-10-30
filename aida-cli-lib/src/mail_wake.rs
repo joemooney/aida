@@ -98,18 +98,52 @@ pub(crate) fn parse_version(text: &str) -> Option<(u64, u64, u64)> {
     })
 }
 
-/// `<codex> --version`, when it answers.
+/// How long `agent new` waits for `<codex> --version` before treating the
+/// version as unknown.
+const CODEX_VERSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// `<codex> --version`, when it answers in time; a wedged binary or wrapper
+/// reads as an unknown version instead of hanging the launch.
 pub(crate) fn codex_version(binary: &Path) -> Option<String> {
-    let output = std::process::Command::new(binary)
+    version_within(binary, CODEX_VERSION_TIMEOUT)
+}
+
+fn version_within(binary: &Path, timeout: std::time::Duration) -> Option<String> {
+    use std::io::Read;
+    let mut child = std::process::Command::new(binary)
         .arg("--version")
         .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .output()
+        .spawn()
         .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    // Read on a thread: a wrapper's grandchild can hold stdout open after
+    // the child exits.
+    let mut pipe = child.stdout.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut out = String::new();
+        let _ = tx.send(pipe.read_to_string(&mut out).map(|_| out));
+    });
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    let remaining = deadline
+        .saturating_duration_since(std::time::Instant::now())
+        .max(std::time::Duration::from_millis(500));
+    let stdout = rx.recv_timeout(remaining).ok()?.ok()?;
+    status.success().then(|| stdout.trim().to_string())
 }
 
 /// The exact commands that arm `handle` by hand.
@@ -160,15 +194,21 @@ pub(crate) fn arm_pending(
             },
         },
     };
-    if let Err(why) =
-        crate::agent_registry::set_mail_wake_on_row(project_root, entry, outcome.state)
-    {
-        return Some(Armed {
+    // Both the launcher and the hook may arm one launch: only the side that
+    // still finds the row pending records (and reports) its outcome.
+    match crate::agent_registry::transition_mail_wake_on_row(
+        project_root,
+        entry,
+        MailWake::Pending,
+        outcome.state,
+    ) {
+        Ok(row) if row.mail_wake == Some(outcome.state) => Some(outcome),
+        Ok(_) => None,
+        Err(why) => Some(Armed {
             state: MailWake::Failed,
             warning: Some(format!("mail wake not recorded: {why:#}")),
-        });
+        }),
     }
-    Some(outcome)
 }
 
 /// Retire a row's wake when its session ends. True when it changed.

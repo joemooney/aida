@@ -195,15 +195,54 @@ pub(crate) fn set_mail_wake(
     Ok(entry)
 }
 
-/// Set `entry`'s mail-wake state on its row as it is on disk now, so a hook
-/// write that landed since `entry` was read is kept; returns that row.
-/// Refuses a row that another process (a recycled pid) has taken over.
+/// Set `entry`'s mail-wake state on its row as it is on disk now; returns
+/// that row. The read and the write share one namespace-lock hold, so a
+/// hook write that landed since `entry` was read is kept and none can land
+/// in between. Refuses a row that another process (a recycled pid) has
+/// taken over. The launcher calls this for a child already running, so it
+/// waits out launch-time contention.
 // trace:STORY-HOME-096 | ai:claude
 pub(crate) fn set_mail_wake_on_row(
     project_root: &Path,
     entry: &AgentRegistryEntry,
     state: MailWake,
 ) -> Result<AgentRegistryEntry> {
+    update_mail_wake_on_row(
+        project_root,
+        entry,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+        |_| Some(state),
+    )
+}
+
+/// How long arming waits for the namespace lock: it runs in the launcher
+/// and in the SessionStart hook, which must not stall behind a wedged lock.
+const ARM_LOCK_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Move `entry`'s row from `from` to `to`, under the same lock hold as the
+/// read. A row whose state moved on since `entry` was read (retired, armed
+/// by the other side of the launch, opted out) is left as it is.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn transition_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    from: MailWake,
+    to: MailWake,
+) -> Result<AgentRegistryEntry> {
+    update_mail_wake_on_row(project_root, entry, ARM_LOCK_BUDGET, |now| {
+        (now == Some(from)).then_some(to)
+    })
+}
+
+/// Read-decide-write of one row's mail wake under the namespace lock;
+/// `decide` gets the row's current state and returns `None` to leave it.
+fn update_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    budget: std::time::Duration,
+    decide: impl FnOnce(Option<MailWake>) -> Option<MailWake>,
+) -> Result<AgentRegistryEntry> {
+    let _lock = crate::agent_handle::lock_namespace_within(project_root, budget)?;
     let path = registry_path(project_root, &entry.id);
     let body =
         std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
@@ -212,9 +251,47 @@ pub(crate) fn set_mail_wake_on_row(
     if row.pid != entry.pid || row.pid_start != entry.pid_start {
         anyhow::bail!("the registry row now belongs to another process");
     }
-    row.mail_wake = Some(state);
-    write_entry(project_root, &row)?;
+    if let Some(state) = decide(row.mail_wake) {
+        row.mail_wake = Some(state);
+        write_entry_locked(project_root, &row)?;
+    }
     Ok(row)
+}
+
+/// The SessionStart hook's row (`entry`) with a launcher write that landed
+/// between the hook's read (`read`) and its write folded in; `disk` is the
+/// row as it is now, read under the lock the hook's write holds. The
+/// launcher owns the mail wake and the launch identity; the hook keeps the
+/// session id, handle reservation and terminal it observed.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn carry_concurrent_launcher_write(
+    entry: &mut AgentRegistryEntry,
+    read: Option<&AgentRegistryEntry>,
+    disk: Option<&AgentRegistryEntry>,
+) {
+    let Some(disk) = disk
+        .filter(|d| d.pid == entry.pid && d.pid_start.is_some() && d.pid_start == entry.pid_start)
+    else {
+        return;
+    };
+    // Only the launcher stamps the wake and only arming moves it on; the
+    // hook's row never decides it.
+    entry.mail_wake = disk.mail_wake;
+    if read == Some(disk) || disk.source != "agent-launcher" {
+        return;
+    }
+    entry.source = disk.source.clone();
+    if disk.name.is_some() {
+        entry.name = disk.name.clone();
+    }
+    entry.role = disk.role.clone().or(entry.role.take());
+    entry.current_spec = disk.current_spec.clone().or(entry.current_spec.take());
+    entry.native_session_id = disk
+        .native_session_id
+        .clone()
+        .or(entry.native_session_id.take());
+    entry.description = disk.description.clone().or(entry.description.take());
+    entry.resumed_from = disk.resumed_from.clone().or(entry.resumed_from.take());
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -763,9 +840,11 @@ pub(crate) fn touch_session_start_agent(
         _ => env_nonempty(crate::agent_handle::HANDLE_ENV)
             .or_else(|| env_nonempty("AIDA_AGENT_NAME")),
     };
-    let mut entry = std::fs::read_to_string(&path)
+    let read_row = std::fs::read_to_string(&path)
         .ok()
-        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
+    let mut entry = read_row
+        .clone()
         // A recycled pid's entry belongs to another process: keep it only
         // while its recorded start identity is this process's. A live
         // process that starts a new session (`/clear`, a new conversation)
@@ -849,7 +928,15 @@ pub(crate) fn touch_session_start_agent(
     // it gave one. trace:STORY-1843 | ai:claude
     crate::agent_handle::assign_session_handle(project_root, &mut entry, session_id);
 
-    write_entry(project_root, &entry)?;
+    // The launcher may have registered or stamped this row since it was
+    // read: fold that in under the same lock hold as the write.
+    // trace:STORY-HOME-096 | ai:claude
+    let _lock = crate::agent_handle::lock_namespace(project_root)?;
+    let disk = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
+    carry_concurrent_launcher_write(&mut entry, read_row.as_ref(), disk.as_ref());
+    write_entry_locked(project_root, &entry)?;
     Ok(entry)
 }
 
@@ -941,15 +1028,26 @@ pub(crate) fn register_spawned_agent(
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
     let pid_start = crate::process_probe::process_start_identity(pid);
+    // The agent is already running; wait out launch-time contention rather
+    // than fail on the SessionStart budget.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    let _lock = crate::agent_handle::lock_namespace_within(
+        project_root,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+    )?;
     // The child's SessionStart hook can run before this write: keep the
-    // session id it recorded for this same process (the Codex thread).
-    // trace:STORY-HOME-096 | ai:claude
-    let hook_session_id =
+    // session id (the Codex thread) and the handle it recorded for this same
+    // process. Read under the lock this write holds, so no hook write lands
+    // in between. trace:STORY-HOME-096 | ai:claude
+    let hook_row =
         std::fs::read_to_string(registry_path(project_root, &agent_id(&agent_type, pid)))
             .ok()
             .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
-            .filter(|old| old.pid_start.is_some() && old.pid_start == pid_start)
-            .and_then(|old| old.claude_session_id);
+            .filter(|old| old.pid_start.is_some() && old.pid_start == pid_start);
+    let hook_session_id = hook_row
+        .as_ref()
+        .and_then(|old| old.claude_session_id.clone());
+    let name = name.or_else(|| hook_row.and_then(|old| old.name));
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
         agent_type,
@@ -979,14 +1077,7 @@ pub(crate) fn register_spawned_agent(
         mail_wake: None,
         resumed_from,
     };
-    // The agent is already running; wait out launch-time contention rather
-    // than fail on the SessionStart budget.
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
-    write_entry_within(
-        project_root,
-        &entry,
-        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
-    )?;
+    write_entry_locked(project_root, &entry)?;
     Ok(entry)
 }
 

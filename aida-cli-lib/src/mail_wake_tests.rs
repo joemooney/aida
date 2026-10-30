@@ -52,6 +52,7 @@ fn on_disk(project: &Path, id: &str) -> AgentRegistryEntry {
 
 // The flag, then the agents.toml default, then the Codex version decide a
 // launch; Antigravity warns once; Claude is untouched.
+// trace:STORY-HOME-096.ac9979a7 | ai:claude
 #[test]
 fn story_home_096_launch_decision_honours_flag_config_and_version() {
     let codex = |opt_out, default, version| launch_wake("codex", opt_out, default, version);
@@ -94,6 +95,7 @@ fn story_home_096_parses_codex_version_lines() {
 
 // The SessionStart hook arms a pending row once it records the thread; a
 // failed service install leaves it `failed` with the exact manual commands.
+// trace:STORY-HOME-096.aca8bab2 | ai:claude
 #[test]
 fn story_home_096_session_start_arms_pending_row_once_the_thread_is_known() {
     let dir = tempfile::tempdir().unwrap();
@@ -154,6 +156,7 @@ fn story_home_096_stamp_refuses_a_row_another_process_took_over() {
 
 // Ending the agent, or the GC finding its process gone, retires the wake;
 // a row that never armed keeps its state.
+// trace:STORY-HOME-096.acad6a24 | ai:claude
 #[test]
 fn story_home_096_end_and_gc_retire_the_wake() {
     let dir = tempfile::tempdir().unwrap();
@@ -199,7 +202,134 @@ fn story_home_096_row_thread_falls_back_to_the_hook_session_id() {
     assert_eq!(crate::mailbox_wake_run::row_thread(&entry), None);
 }
 
+// The launcher's stamp reads and writes its row under one lock hold: a hook
+// write that lands while the stamp waits is kept, not overwritten by a row
+// read before it.
+// trace:STORY-HOME-096.aca8bab2 | ai:claude
+#[test]
+fn story_home_096_stamp_keeps_a_hook_write_that_interleaves() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().to_path_buf();
+    let launcher_view = row(&project, "codex", 50, None, None);
+    let lock = crate::agent_handle::lock_namespace(&project).unwrap();
+    let stamp = {
+        let project = project.clone();
+        std::thread::spawn(move || {
+            agent_registry::set_mail_wake_on_row(&project, &launcher_view, MailWake::Pending)
+        })
+    };
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    // The hook's write lands while the stamp waits for the lock.
+    let mut hook = on_disk(&project, "codex-50");
+    hook.claude_session_id = Some(THREAD.into());
+    hook.name = Some("codex-agent-50".into());
+    std::fs::write(
+        agent_registry::registry_path(&project, "codex-50"),
+        toml::to_string(&hook).unwrap(),
+    )
+    .unwrap();
+    drop(lock);
+    let stamped = stamp.join().unwrap().unwrap();
+    assert_eq!(stamped.mail_wake, Some(MailWake::Pending));
+    let stored = on_disk(&project, "codex-50");
+    assert_eq!(stored.mail_wake, Some(MailWake::Pending));
+    assert_eq!(stored.claude_session_id.as_deref(), Some(THREAD));
+    assert_eq!(stored.name.as_deref(), Some("codex-agent-50"));
+}
+
+// The hook folds in a launcher register-and-stamp that landed between its
+// read and its write: the stamp survives, so the hook arms it.
+// trace:STORY-HOME-096.aca8bab2 | ai:claude
+#[test]
+fn story_home_096_hook_write_keeps_a_launcher_stamp_that_interleaves() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    let launcher = row(project, "codex", 51, Some("pending"), None);
+    let mut hook = launcher.clone();
+    hook.source = "session-start-hook".into();
+    hook.name = Some("codex-codex-07".into());
+    hook.mail_wake = None;
+    hook.claude_session_id = Some(THREAD.into());
+
+    // The hook read no row; the launcher registered and stamped since.
+    let mut merged = hook.clone();
+    agent_registry::carry_concurrent_launcher_write(&mut merged, None, Some(&launcher));
+    assert_eq!(merged.mail_wake, Some(MailWake::Pending));
+    assert_eq!(merged.source, "agent-launcher");
+    assert_eq!(merged.name.as_deref(), Some("codex-agent-03"));
+    assert_eq!(merged.claude_session_id.as_deref(), Some(THREAD));
+    let calls = Cell::new(0);
+    agent_registry::write_entry(project, &merged).unwrap();
+    let armed = arm_pending(project, &merged, |_| {
+        calls.set(calls.get() + 1);
+        Ok(())
+    });
+    assert_eq!(armed.map(|a| a.state), Some(MailWake::Armed));
+    assert_eq!(calls.get(), 1);
+
+    // The hook read the launcher row already: only the wake is carried.
+    let mut seen = hook.clone();
+    agent_registry::carry_concurrent_launcher_write(&mut seen, Some(&launcher), Some(&launcher));
+    assert_eq!(seen.mail_wake, Some(MailWake::Pending));
+    assert_eq!(seen.name.as_deref(), Some("codex-codex-07"));
+
+    // A row a recycled pid owns is never folded in.
+    let mut other = launcher.clone();
+    other.pid_start = Some("start-0".into());
+    let mut kept = hook.clone();
+    agent_registry::carry_concurrent_launcher_write(&mut kept, None, Some(&other));
+    assert_eq!(kept, hook);
+}
+
+// Arming only moves a row that is still pending: a stale view never
+// overwrites a row the other side of the launch armed, or one that retired.
+// trace:STORY-HOME-096.aca8bab2 | ai:claude
+#[test]
+fn story_home_096_arming_a_stale_view_leaves_a_row_that_moved_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    for (pid, now) in [(52, "armed"), (53, "retired")] {
+        let stale = row(project, "codex", pid, Some("pending"), Some(THREAD));
+        row(project, "codex", pid, Some(now), Some(THREAD));
+        assert_eq!(
+            arm_pending(project, &stale, |_| anyhow::bail!("no systemd")),
+            None
+        );
+        let stored = on_disk(project, &format!("codex-{pid}")).mail_wake;
+        assert_eq!(stored.map(MailWake::as_str), Some(now));
+    }
+}
+
+// A wedged `codex --version` reads as an unknown version instead of
+// hanging the launch.
+// trace:STORY-HOME-096.ac9979a7 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story_home_096_codex_version_is_bounded() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let script = |name: &str, body: &str| {
+        let path = dir.path().join(name);
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    };
+    let wedged = script("wedged", "exec sleep 30");
+    let started = std::time::Instant::now();
+    assert_eq!(
+        version_within(&wedged, std::time::Duration::from_millis(300)),
+        None
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    let answers = script("answers", "echo codex-cli 0.164.0");
+    assert_eq!(
+        version_within(&answers, std::time::Duration::from_secs(5)).as_deref(),
+        Some("codex-cli 0.164.0")
+    );
+}
+
 // The launcher's row keeps a thread the child's hook recorded first.
+// trace:STORY-HOME-096.aca8bab2 | ai:claude
 #[test]
 fn story_home_096_launcher_row_keeps_a_hook_session_id() {
     let dir = tempfile::tempdir().unwrap();
@@ -226,6 +356,7 @@ fn story_home_096_launcher_row_keeps_a_hook_session_id() {
     assert_eq!(launched.claude_session_id.as_deref(), Some(THREAD));
 }
 
+// trace:STORY-HOME-096.ac316a6a | ai:claude
 #[test]
 fn story_home_096_wake_column_names_every_state() {
     assert_eq!(wake_cell("codex", Some(MailWake::Armed)), "armed");
@@ -245,7 +376,8 @@ fn story_home_096_wake_column_names_every_state() {
     assert_eq!(wake_cell("codex", None), "-");
 }
 
-// `[agents.codex] mail_wake` is the launch default; a non-boolean refuses.
+// `[agents.codex] mail_wake` is the launch default; a non-boolean is an
+// error the launcher turns into a warning and the default.
 #[test]
 fn story_home_096_agents_toml_mail_wake_default() {
     let dir = tempfile::tempdir().unwrap();

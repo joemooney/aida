@@ -2923,10 +2923,20 @@ pub(crate) fn agent_new_with_config_wake(
 
     // Decide the session's mail wake before the child takes the terminal,
     // so its one warning stays visible. trace:STORY-HOME-096 | ai:claude
+    // A bad `mail_wake` value degrades to the default with a warning: wake
+    // problems never refuse the launch.
+    let wake_default = load_agents_tool_bool(&project_root, config.agent_type, "mail_wake")
+        .unwrap_or_else(|why| {
+            eprintln!(
+                "  {} {why:#}; this launch uses the default",
+                "warning:".yellow().bold()
+            );
+            None
+        });
     let launch_wake = crate::mail_wake::launch_wake(
         config.agent_type,
         no_mail_wake,
-        load_agents_tool_bool(&project_root, config.agent_type, "mail_wake")?,
+        wake_default,
         (crate::mail_wake::WakeAdapter::for_vendor(config.agent_type)
             == crate::mail_wake::WakeAdapter::Codex
             && !no_mail_wake)
