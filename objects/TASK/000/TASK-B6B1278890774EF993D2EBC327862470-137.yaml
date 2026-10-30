@@ -8,16 +8,25 @@ description: |-
   - scripts/test-time-budget.toml sets that key to 35, with the trailing comment updated to cite max 15.2s (CI runs on 2026-10-30, PR-3142/PR-3149).
   - No other entry changes; the test itself is not modified or weakened.
   - Gate: FASTTRACK (make check-ci-fast only, no cargo).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:08:25.227020523Z
-modified_at: 2026-10-30T23:08:25.227020523Z
+modified_at: 2026-10-30T23:11:48.490870223Z
 req_type: Task
 tags:
 - ci-flake
 - fasttrack
+history:
+- id: 01a18f15-6d0a-7e61-9822-3e51ca70a8f9
+  author: aida-session-start
+  timestamp: 2026-10-30T23:11:48.490867913Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
