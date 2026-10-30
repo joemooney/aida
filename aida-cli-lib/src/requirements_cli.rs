@@ -3105,10 +3105,32 @@ fn run_add(
                     // spec_ids. TASK-281 protects block refill commits, but the
                     // creation path also has to start from fresh store state.
                     // trace:BUG-2017 | ai:codex — refuse before network or counters.
+                    let configured_policy = read_id_format_policy(&project_dir);
                     let id_policy = aida_core::allocation_authority::effective_policy(
                         store_path,
-                        read_id_format_policy(&project_dir),
+                        configured_policy,
                     )?;
+                    // Blocks configured but unusable: say why, once per session.
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+                    if configured_policy.uses_blocks() && !id_policy.uses_blocks() {
+                        let type_prefix = match &req.prefix_override {
+                            Some(p) => p.clone(),
+                            None => req.req_type.default_prefix().to_string(),
+                        };
+                        if let Ok(Some(reason)) = aida_core::allocation_authority::downgrade_reason(
+                            store_path,
+                            &type_prefix,
+                        ) {
+                            if aida_core::allocation_authority::first_notice_this_session(
+                                store_path, &reason,
+                            ) {
+                                eprintln!(
+                                    "{} Issuing a node-local ID: {reason}.",
+                                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                                );
+                            }
+                        }
+                    }
                     if aida_core::allocation_authority::resolve(store_path)?.authoritative {
                         pull_store_before_id_allocation(store_path, &project_dir)?;
                     }
