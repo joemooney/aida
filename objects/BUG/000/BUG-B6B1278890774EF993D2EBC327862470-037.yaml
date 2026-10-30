@@ -7,12 +7,35 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T06:13:41.027123386Z
-modified_at: 2026-10-30T10:28:11.742919761Z
+modified_at: 2026-10-30T10:32:28.959506743Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T06:15:44.400662223Z
+comments:
+- id: 01a18c5e-3e1f-7d83-8145-62ffa53e27b5
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Root cause: the final re-probe in `assert_group_member_exits` (`process_identity_is_alive`) does `kill(pid,0)` and then reads `/proc/<pid>/stat`. If the reaper collects the SIGKILLed zombie between those two calls, the stat read fails. That makes `pid_is_zombie` false and the identity Unknown, so the probe reads ALIVE. The probe loop can exit on "dead" (zombie), and the very next assert can then read "alive". That is the line-1135 failure.
+
+    Fix at the race: decide the verdict from one monotone primitive, the pidfd. pidfd_open ESRCH means gone. Identity read after the open: a different identity means the PID was reused, so the descendant is gone. Otherwise poll the pidfd for exit readiness; a zombie and a reaped process both read exited. No window is widened (30s deadline unchanged).
+
+    ### Acceptance criteria as tests
+    - **Unit:** new `group_member_exit_check_accepts_zombie_and_reaped_child` pins the zombie and reaped states the old probe raced between.
+    - **Stress (manual):** 200 iterations of the original test under CPU load, zero failures.
+
+    ### Expected files
+    - `aida-cli-lib/src/regen/score.rs` (test helper only)
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-10-30T10:32:28.959506743Z
+  modified_at: 2026-10-30T10:32:28.959506743Z
+  session_id: 01a18c5a4d74
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18b73-67a9-76e3-94e9-c28ffb6fe20f
   author: joe
