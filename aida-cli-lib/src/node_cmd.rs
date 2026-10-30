@@ -67,6 +67,9 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                         "WORK node {} (node-local allocation; no global blocks).",
                         binding.node_id
                     );
+                    if matches!(cmd, NodeCommand::Show { .. }) {
+                        print_allocation_report(store_path)?;
+                    }
                     return Ok(());
                 }
             }
@@ -143,6 +146,13 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 }
             };
 
+            // This clone's own node still reports its delegation state when
+            // the shared roster has no row for it.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+            if id.is_none() && registry.get(&target_id).is_none() {
+                println!("Node {target_id} (not in the shared registry)");
+                return print_allocation_report(store_path);
+            }
             let entry = registry.get(&target_id).ok_or_else(|| {
                 anyhow::anyhow!("Node {} is not in the shared registry", target_id)
             })?;
@@ -173,6 +183,9 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 if local.node_id == entry.id {
                     println!("  Active on this clone: yes (.aida/node.toml matches)");
                 }
+            }
+            if id.is_none() {
+                print_allocation_report(store_path)?;
             }
         }
 
@@ -552,6 +565,10 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
         // trace:TASK-851 | ai:claude
         NodeCommand::Whoami => return session_misc_cmd::handle_whoami_command(),
         NodeCommand::Alias { cmd } => return handle_node_alias_command(cmd, store_path),
+        NodeCommand::EnrollRoot { dry_run } => return handle_enroll_root(store_path, *dry_run),
+        NodeCommand::Upstream { remote, clear } => {
+            return handle_upstream(store_path, remote.as_deref(), *clear)
+        }
     }
 
     Ok(())
@@ -636,6 +653,253 @@ fn handle_node_alias_command(cmd: &NodeAliasCommand, store_path: &std::path::Pat
     Ok(())
 }
 
+/// `aida node show`'s delegation section: this clone's role and upstream,
+/// the store's root, every pool with its derived free space, this node's
+/// blocks with whether each is spendable (and why not), and any lineage
+/// conflict.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+fn print_allocation_report(store_path: &std::path::Path) -> Result<()> {
+    use aida_core::allocation_lineage::{
+        check_invariants, free_ranges, AllocationRole, LineageView, PoolRegistry, RootRecord,
+    };
+    let mode = aida_core::allocation_authority::resolve(store_path)?;
+    let node = aida_core::allocation_authority::node(store_path).ok();
+    let pools = PoolRegistry::load(store_path)?;
+    let blocks =
+        aida_core::node::BlockRegistry::load(&store_path.join("registry").join("blocks.yaml"))?;
+    let root = RootRecord::load(store_path)?;
+    println!();
+    println!("Block delegation (this clone)");
+    println!(
+        "  Role:      {}",
+        match mode.role {
+            AllocationRole::Root => "root",
+            AllocationRole::Node => "node",
+        }
+    );
+    println!(
+        "  Upstream:  {}",
+        match (&mode.upstream, mode.role) {
+            (Some(remote), _) => remote.clone(),
+            (None, AllocationRole::Root) => "none (the root has no upstream)".into(),
+            (None, AllocationRole::Node) => {
+                "none declared (`aida node upstream <remote>`)".into()
+            }
+        }
+    );
+    println!(
+        "  Root:      {}",
+        match &root {
+            Some(r) => format!("node {} (epoch {})", r.holder_node, r.epoch),
+            None => "not enrolled (`aida node enroll-root` on the primary clone)".into(),
+        }
+    );
+    // The clone-local role is not authority on its own: the store's root
+    // record names the one root. Refusing on this mismatch is slice 2.
+    if let (AllocationRole::Root, Some(r)) = (mode.role, &root) {
+        if node.as_deref() != Some(r.holder_node.as_str()) {
+            println!(
+                "  {} Mismatch: this clone is marked root, but the store's root is node {}{}",
+                "!".yellow().bold(),
+                r.holder_node,
+                node.as_deref()
+                    .map(|n| format!(" (this clone is node {n})"))
+                    .unwrap_or_default(),
+            );
+        }
+    }
+    if pools.pools.is_empty() {
+        println!("  Pools:     none");
+    } else {
+        println!("  Pools:");
+        for p in &pools.pools {
+            let free: u64 = free_ranges(p, &pools.pools, &blocks.blocks)
+                .iter()
+                .map(|(start, end)| u64::from(end - start) + 1)
+                .sum();
+            println!(
+                "    {:<12} {} {}-{}  holder {}  home {}  parent {}  free {free}",
+                p.pool_id,
+                p.type_prefix,
+                p.range_start,
+                p.range_end,
+                p.holder_node,
+                p.home_ref,
+                p.parent_pool_id.as_deref().unwrap_or("-"),
+            );
+        }
+    }
+    match &node {
+        None => println!("  Blocks:    this clone has no node binding"),
+        Some(node) => {
+            let view = LineageView {
+                pools: &pools.pools,
+                blocks: &blocks.blocks,
+                root: root.as_ref(),
+                node,
+                role: mode.role,
+                upstream: mode.upstream.as_deref(),
+            };
+            let mine: Vec<_> = blocks
+                .blocks
+                .iter()
+                .filter(|b| &b.node_id == node)
+                .collect();
+            if mine.is_empty() {
+                println!("  Blocks:    none held by node {node}");
+            } else {
+                println!("  Blocks:");
+                for b in mine {
+                    // The root keeps dispensing its blocks recorded before lineage.
+                    let status = if mode.authoritative && b.pool_id.is_none() {
+                        if b.is_exhausted() {
+                            "exhausted".to_string()
+                        } else {
+                            "in use by the root (no lineage recorded yet)".to_string()
+                        }
+                    } else {
+                        match view.block_status(b) {
+                            Ok(()) => "spendable".to_string(),
+                            Err(why) => format!("not spendable: {why}"),
+                        }
+                    };
+                    println!(
+                        "    {} {}-{}  next {}  pool {}  {status}",
+                        b.type_prefix,
+                        b.range_start,
+                        b.range_end,
+                        b.next,
+                        b.pool_id.as_deref().unwrap_or("-"),
+                    );
+                }
+            }
+        }
+    }
+    let conflicts = check_invariants(&pools.pools, &blocks.blocks, root.as_ref());
+    if !conflicts.is_empty() {
+        println!("  Conflicts (none are resolved automatically):");
+        for c in conflicts {
+            println!("    {c}");
+        }
+    }
+    Ok(())
+}
+
+/// `aida node enroll-root`: record this clone's node as the store's one
+/// allocation root, then mark the clone itself.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+fn handle_enroll_root(store_path: &std::path::Path, dry_run: bool) -> Result<()> {
+    use aida_core::allocation_lineage::{self as lineage, AllocationRole, EnrollOutcome};
+    let node = aida_core::allocation_authority::node(store_path)?;
+    let mode = aida_core::allocation_authority::resolve(store_path)?;
+    if dry_run {
+        match lineage::enroll_preflight(store_path, &node)? {
+            EnrollOutcome::Enrolled => println!(
+                "Would record node {node} as the allocation root of this store and mark this clone as root."
+            ),
+            EnrollOutcome::AlreadyRoot => {
+                println!("Node {node} is already the allocation root; would mark this clone as root.")
+            }
+        }
+        if let Some(upstream) = &mode.upstream {
+            println!("Would drop this clone's upstream `{upstream}` (the root has none).");
+        }
+        println!("Nothing written (dry run).");
+        return Ok(());
+    }
+    let outcome = lineage::enroll_root(store_path, &node)?;
+    aida_core::allocation_authority::write_mode(store_path, AllocationRole::Root, None)?;
+    match outcome {
+        EnrollOutcome::Enrolled => println!(
+            "{} Node {node} is now the allocation root of this store.",
+            "".green().bold()
+        ),
+        EnrollOutcome::AlreadyRoot => {
+            println!("Node {node} is already the allocation root; this clone is marked as root.")
+        }
+    }
+    Ok(())
+}
+
+/// `aida node upstream`: show, set, or clear the one remote this clone
+/// takes ID blocks from.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+fn handle_upstream(store_path: &std::path::Path, remote: Option<&str>, clear: bool) -> Result<()> {
+    use aida_core::allocation_authority::{self as authority, AllocationRole};
+    let mode = authority::resolve(store_path)?;
+    let Some(remote) = remote else {
+        if clear {
+            anyhow::ensure!(
+                !mode.authoritative,
+                "this clone is the allocation root; the root has no upstream"
+            );
+            authority::write_mode(store_path, AllocationRole::Node, None)?;
+            println!("Cleared the upstream; this clone issues node-local IDs.");
+            return Ok(());
+        }
+        match (&mode.upstream, mode.authoritative) {
+            (Some(upstream), _) => println!("{upstream}"),
+            (None, true) => println!("none (this clone is the allocation root)"),
+            (None, false) => println!("none (this clone issues node-local IDs)"),
+        }
+        return Ok(());
+    };
+    anyhow::ensure!(
+        !mode.authoritative,
+        "this clone is the allocation root; the root has no upstream"
+    );
+    anyhow::ensure!(
+        authority::valid_remote_name(remote),
+        "`{remote}` is not a plain git remote name"
+    );
+    anyhow::ensure!(
+        aida_core::git_ops::has_remote(store_path, remote),
+        "`{remote}` is not a git remote of this clone (see `git remote -v`)"
+    );
+    let node = authority::node(store_path)?;
+    if aida_core::allocation_lineage::RootRecord::load(store_path)?
+        .is_some_and(|r| r.holder_node == node)
+    {
+        anyhow::bail!(
+            "node {node} is this store's allocation root; declaring an upstream for it would make a cycle"
+        );
+    }
+    refuse_mirror_upstream(store_path, remote)?;
+    authority::write_mode(store_path, AllocationRole::Node, Some(remote))?;
+    println!("Upstream set to `{remote}`. This clone takes ID blocks only from that remote; until it holds one, it issues node-local IDs.");
+    Ok(())
+}
+
+/// Refuse `remote` as an upstream when it is a store mirror. Fails closed:
+/// when the project root or its config cannot be read, the mirror list is
+/// unknown, so the remote is refused rather than accepted.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+fn refuse_mirror_upstream(store_path: &std::path::Path, remote: &str) -> Result<()> {
+    use anyhow::Context as _;
+    let project_root = find_project_root_from(store_path.parent().unwrap_or(store_path))
+        .with_context(|| {
+            format!(
+                "cannot find the project for store {}; refusing to set an upstream without checking [store.sync] mirror_remotes",
+                store_path.display()
+            )
+        })?;
+    let config = crate::config_init::config_path_for_project(&project_root);
+    match std::fs::read_to_string(&config) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => anyhow::bail!(
+            "cannot read {}: {e}; refusing to set an upstream without checking [store.sync] mirror_remotes",
+            config.display()
+        ),
+    }
+    let sync = crate::store_sync::read_store_sync_config(&project_root)?;
+    anyhow::ensure!(
+        !sync.mirror_remotes.iter().any(|m| m == remote),
+        "`{remote}` is a store mirror ([store.sync] mirror_remotes); a mirror copies records and never grants blocks"
+    );
+    Ok(())
+}
+
 /// Manage per-clone node identity (acquire/release node ids in the
 /// shared registry, list registered clones). Each clone of an AIDA
 /// project gets a unique node id; that id is the namespace for
@@ -707,3 +971,7 @@ pub(crate) static NODE: crate::command_registry::CommandReg = crate::command_reg
     },
     run: crate::command_registry::Handler::Store(run_node),
 };
+
+#[cfg(test)]
+#[path = "tests/story_095_upstream_tests.rs"]
+mod story_095_upstream_tests;

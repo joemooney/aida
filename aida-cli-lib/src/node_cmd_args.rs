@@ -149,6 +149,30 @@ pub enum NodeCommand {
         #[clap(subcommand)]
         cmd: NodeAliasCommand,
     },
+
+    /// Make this clone the allocation root: the one node per store that owns
+    /// the unallocated ID space and grants blocks down the tree. Records the
+    /// root in the shared store (refused when another node is already root)
+    /// and marks this clone in its Git directory. Run once, on the primary
+    /// clone.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    EnrollRoot {
+        /// Show what would be recorded without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
+    /// Show or declare this clone's upstream: the one git remote it claims ID
+    /// blocks from. A store mirror is never an upstream, and the root has none.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    Upstream {
+        /// Git remote name to claim blocks from (omit to show the current one).
+        #[clap(conflicts_with = "clear")]
+        remote: Option<String>,
+        /// Remove the declared upstream (this clone issues node-local IDs).
+        #[clap(long)]
+        clear: bool,
+    },
 }
 
 /// `aida node alias` subcommands. There is no delete: a label can be retired

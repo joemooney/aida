@@ -772,6 +772,11 @@ pub struct AgreedIdBlock {
     pub next: u32,
     /// When this block was claimed
     pub allocated_at: DateTime<Utc>,
+    /// Pool this block was carved from (its lineage back to the root). A
+    /// legacy block has none and is never spendable by lineage.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool_id: Option<String>,
 }
 
 impl AgreedIdBlock {
@@ -1016,6 +1021,7 @@ impl BlockRegistry {
             range_end,
             next: range_start,
             allocated_at: Utc::now(),
+            pool_id: None,
         };
         self.blocks.push(block.clone());
         block
@@ -2144,6 +2150,7 @@ registered = "2026-01-01T00:00:00Z"
             range_end: end,
             next,
             allocated_at: Utc::now(),
+            pool_id: None,
         }
     }
 
