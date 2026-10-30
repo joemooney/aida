@@ -8,12 +8,12 @@ description: |-
   1. Resolve the range from origin/<base>..origin/<head> (fetching the head ref, or using the PR head SHA from forge metadata) when the local branch is missing.
   2. A git_log failure is reported as an error naming the range, never as 'no trailers'.
   3. Test: PR head branch absent locally but present on origin, trailers found.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:18:17.188008505Z
-modified_at: 2026-10-30T09:03:46.185669205Z
+modified_at: 2026-10-30T09:35:57.691778416Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -74,6 +74,15 @@ history:
   timestamp: 2026-10-30T09:03:49.493681241Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c2a-7efb-77e1-a811-46168ce9d586
+  author: aida-orchestrator
+  timestamp: 2026-10-30T09:35:57.691802836Z
+  session_id: 01a18c118d9e
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -86,3 +95,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T09:00:02.533398743Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Fix logic is sound and the new git_log_messages tests pass locally, but CI lib-0/lib-1 are red at the PR head (only this PR's run; main at the parent is green), every acceptance criterion is untraced, and the auto-queue error path (AC2) has no test.
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-035 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T09:35:57.691778416Z

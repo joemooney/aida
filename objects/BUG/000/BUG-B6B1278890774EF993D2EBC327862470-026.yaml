@@ -7,12 +7,27 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-30T09:35:41.282096514Z
+modified_at: 2026-10-30T09:36:03.778896757Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T00:49:06.945835796Z
+comments:
+- id: 01a18c2a-96c2-7f51-9843-420421297045
+  author: ai:codex:joe
+  content: |
+    Worker clones returned from `node list` after printing only their own summary, hiding the rest of the store. Listing now combines node and label registries, current and retired labels, allocation blocks/pools, the recorded root, and stored filename/native/agreed spec-ID namespaces into one row per identity.
+
+    The table marks this clone from its opaque binding or legacy config and shows recorded hostname/clone paths. Local allocation configuration supplies `worker` or `root`; the shared designation is labeled `recorded root`, while other clones' private configuration remains unknown. These observations do not grant authority. Listing does not acquire, repair or enroll identity. Malformed evidence fails explicitly rather than producing an apparently complete view.
+
+    Validation passed: six regressions, including a child that invokes the real worker-list handler and checks all private fixture contents unchanged; actual help regeneration and 19 normal command-registry checks. A read-only run of the compiled handler against this repository returned 14 nodes, one current marker, HOME and ASTER in 0.737 seconds. Two fresh spawned author self-check rounds added missing root-record coverage; the final checker ran its own regressions/snapshot and a fresh fixture, confirming unchanged contents and modes. This is author validation; independent review remains required. All 35 required fast gates passed.
+
+    Closes BUG-B6B1278890774EF993D2EBC327862470-026.
+
+    Validated author head: `1c50dd5cd89872b7e95d691eb5c51086964776f0`, based on `6893558f16742586e86776b31f555700c9884b66`. Fresh publication inspection found main three commits ahead at `1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5`; merge-tree succeeds. The sole overlapping file changes unrelated ship-cleanup help text. Integration still requires its own current-head CI and independent review.
+  created_at: 2026-10-30T09:36:03.778896757Z
+  modified_at: 2026-10-30T09:36:03.778896757Z
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
   author: joe
