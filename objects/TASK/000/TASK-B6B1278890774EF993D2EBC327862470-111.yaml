@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:50.634186933Z
-modified_at: 2026-10-29T23:57:21.343133301Z
+modified_at: 2026-10-30T00:09:37.989553117Z
 req_type: Task
 tags:
 - advisor-review
@@ -74,6 +74,22 @@ comments:
     Stacked on PR #3100. TASK-B6B1278890774EF993D2EBC327862470-111.
   created_at: 2026-10-29T19:16:54.187403298Z
   modified_at: 2026-10-29T19:16:54.187403298Z
+- id: 01a18a24-01c5-7e12-b3f1-16bffc9b127e
+  author: joe
+  content: |
+    Advisor correction pass prepared for PR #3101. Replacement head: d84f608f683e8d17f6355416b456f99ad016c998 on codex/docs-restack-111.
+
+    A curated searchable library renders six explicitly selected product guides from tracked Markdown and publication.json. It provides audience filters, snippets, reset/empty states and source links; all selected links remain available without JavaScript. The source/output ownership instructions now identify the manifest and omit transient process notes. Broader publication remains an explicit advisor curation question; no hosted audience changes.
+
+    Rebuilt on current main (`1db74dba112`) after advisor feedback; only this slice's changes follow PR #3100. Pre-squash prerequisite commits were not replayed.
+
+    Validation: `make check-ci-fast` completed all 35 gates for this rebuilt head. Each slice's generated guide output reproduced. The final stack's guide/search/overview builds and audit reproduced in isolated author-check copies; desktop/mobile overview screenshots were inspected. No direct cargo, protected runtime changes, deployment or self-merge.
+
+    Author self-check: two fresh contexts; the first found stale human-exception wording in a linked guide, corrected in the final audit slice; the second found no remaining issues. These are author checks, not independent approval. Fresh independent review at each new head is required; the advisor integrates bottom-up.
+
+    The combined corrected stack is pushed at https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Existing PR heads are unchanged while explicit operator confirmation for the atomic force-with-lease update is pending (required by the operator Git workflow preference). Original preview preserved. No self-merge.
+  created_at: 2026-10-30T00:09:37.989553117Z
+  modified_at: 2026-10-30T00:09:37.989553117Z
 history:
 - id: 01a188da-b290-7ce2-8311-53cf834c1f5a
   author: joe
