@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integrations — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html"><span aria-hidden="true">✳</span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html">Setup</a><a href="capabilities.html">Capabilities</a><a href="integrations.html" aria-current="page">Integrations</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="connect-agents-and-project-tools">Connect agents and project tools</h1><figure><img class="guide-graphic" src="assets/integrations.svg" alt="Connect through explicit configured surfaces. Coding agents reach AIDA through CLI or MCP. Code Git and the aida-store branch retain separate histories. Configured GitHub, GitLab and Jira connections require their own credentials and permissions. No integration grants authority or creates a same-user security boundary."></figure>
+<p>AIDA provides a shared intent graph around the coding agents and repository tools a project configures. It is alpha software for Linux. Integration availability does not grant a role, authorize a write or make systems running under the same Unix user independent security principals.</p>
+<h2 id="choose-the-agent-surface">Choose the agent surface</h2>
+<p>Agents with shell access can use the AIDA CLI. MCP clients can launch <code>aida mcp-serve</code> as a stdio server and use its tools and resources. The <a href="../agents/aida-mcp-install-matrix.md">client setup matrix</a> records the setup surface for individual clients. Claude Code, Codex CLI and Antigravity have distinct launch, configuration and containment behavior; a working setup for one is not proof of parity for another.</p>
+<p><code>aida init</code> prepares the selected project footprint. MCP registration is opt-in with <code>--with-mcp</code>; it is not an automatic consequence of initialization. Inspect <code>aida init --help</code> and follow the <a href="setup.html">operator setup guide</a> before creating specs in a new clone. Configure permissions and project policy deliberately.</p>
+<h2 id="keep-code-and-intent-together">Keep code and intent together</h2>
+<p>Source history lives in the code repository. The Git-canonical requirement graph travels on the separate <code>aida-store</code> branch; a derived read cache supports queries. Code traces and commit trailers connect the two histories. Local leases, review evidence and authority context have separate scope and retention. The <a href="workflow.html">workflow guide</a> illustrates those responsibilities; the <a href="../cli/10-storage.md">storage reference</a> covers attachment and synchronization.</p>
+<h2 id="configure-external-systems-explicitly">Configure external systems explicitly</h2>
+<p>The CLI exposes GitHub, GitLab and Jira integration commands, alongside forge lifecycle operations. Issue synchronization and shipping a pull or merge request are different operations. Each needs its own supported configuration, credentials and applicable permissions. Inspect the installed command help and the <a href="../cli/09-integrations.md">integrations reference</a> before enabling a bridge; review its intended direction and scope before applying writes.</p>
+<p>AIDA does not promise every vendor feature, automatic credential provisioning or unattended deployment. A connector&#x27;s existence does not prove that it is configured or that a remote operation succeeded. Verify the resulting remote state and retain the evidence needed for the project.</p>
+<h2 id="start-with-the-smallest-connection">Start with the smallest connection</h2>
+<p>Begin with one coding agent and one repository using the <a href="getting-started.html">getting-started guide</a>. Inspect a bounded change through <a href="trust.html">trust and evidence</a> before adding another integration. The portable showcase files can be read locally; this documentation change does not publish the owner-private preview or alter its audience.</p>
+<h2 id="source-and-inspection">Source and inspection</h2>
+<p>The <a href="../../aida-cli-lib/src/mcp.rs">MCP implementation</a>, <a href="../cli/09-integrations.md">CLI integrations reference</a> and <a href="../forge-providers.md">forge providers guide</a> are starting points for checking the installed surface. Use <code>aida mcp-serve --help</code>, <code>aida github --help</code>, <code>aida gitlab --help</code> and <code>aida jira --help</code> for exact commands and flags.</p></main>
+<footer class="guide-footer"><p>Generated from <a href="../product-integrations.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>

@@ -10,6 +10,17 @@
 - [The memory lane](positioning/memory-lane.md)
 - [Using AIDA with Claude Code](using-aida-with-claude-code.md)
 
+# Product guides
+
+- [Capabilities](product-capabilities.md)
+- [Integrations](product-integrations.md)
+- [Configuration](configuration-guide.md)
+- [Workflow](product-workflow.md)
+- [Selectable autonomy](selectable-autonomy.md)
+- [Trust and evidence](trust-and-evidence.md)
+- [Metrics](metrics-guide.md)
+- [Operator setup](operator-setup.md)
+
 # Core concepts
 
 - [The spec lifecycle](lifecycle.md)

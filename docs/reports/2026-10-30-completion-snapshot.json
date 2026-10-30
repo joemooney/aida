@@ -1,0 +1,30 @@
+{
+  "reviewed_base": "79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa",
+  "date": "2026-10-30",
+  "tracked_documentation_files": 1024,
+  "classification_counts": {
+    "contextual-evidence": 21,
+    "current-reader-reference": 40,
+    "current-static-page": 12,
+    "decision-record": 8,
+    "derived-agent-mirror": 117,
+    "documentation-tool-or-asset": 74,
+    "historical-or-evidence": 358,
+    "reference-requires-context": 163,
+    "site-source-or-asset": 18,
+    "template-master": 213
+  },
+  "local_links_scanned": 2727,
+  "link_candidates": 220,
+  "self_derived_outputs_excluded_from_hash_cycle": [
+    "docs/plans/2026-10-30-docs-completion-gap-pass.md",
+    "docs/reports/2026-10-29-documentation-inventory.csv",
+    "docs/reports/2026-10-29-documentation-links.csv",
+    "docs/reports/2026-10-29-documentation-review.md",
+    "docs/reports/2026-10-29-documentation-snapshot.json",
+    "docs/reports/2026-10-30-completion-inventory.csv",
+    "docs/reports/2026-10-30-completion-links.csv",
+    "docs/reports/2026-10-30-completion-snapshot.json"
+  ],
+  "scope": "Completion-branch working-tree hashes; Git context is merged main 79ed6f56. Supersedes the 2026-10-29 snapshot for current hashes/counts. Self-derived completion outputs and gap table excluded; historical artifacts retained. Link scan is not semantic, external-URL or accessibility certification."
+}
