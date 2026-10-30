@@ -240,6 +240,8 @@ pub(crate) fn handle_doctor_command(
         cli::DoctorCommand::ShellSubstitutionHoles { exclude } => {
             doctor_shell_substitution_holes(exclude)
         }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+        cli::DoctorCommand::BareIdTwins => doctor_bare_id_twins(),
     }
 }
 
@@ -297,6 +299,91 @@ fn doctor_shell_substitution_holes(exclude: &[String]) -> Result<()> {
     }
     println!("{count} candidate(s); inspect before repairing (this check never writes)");
     Ok(())
+}
+
+fn doctor_bare_id_twins() -> Result<()> {
+    let project_root = find_project_root()?;
+    let objects_root = shell_substitution_objects_root(&project_root);
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+    let reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+    let lines = ambiguous_bare_id_lines(&reqs);
+    for line in &lines {
+        println!("{line}");
+    }
+    println!(
+        "{} ambiguous bare id(s); write the local spec in its alias form (this check never writes)",
+        lines.len()
+    );
+    Ok(())
+}
+
+/// One report line per bare id in a description or comment that has a
+/// node-local twin: `SPEC:field:line: BARE also names local ALIAS (...)`. The
+/// local ids are indexed once by `(TYPE, number)`, so the scan is linear in
+/// the prose. A twin is named by its agreed id when it has one, and a bare id
+/// that IS that twin's agreed id is not ambiguous. Ids are compared by their
+/// `(TYPE, number)` key, so `BUG-030` and a stored `BUG-30` are the same id.
+/// Pure over `reqs` so a fixture can drive it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub(crate) fn ambiguous_bare_id_lines(reqs: &[aida_core::Requirement]) -> Vec<String> {
+    use aida_core::node_alias::{
+        bare_id_tokens, display_spec_id, local_id_key, local_twin_label, split_bare_id,
+    };
+    // (TYPE, number) -> (label, agreed-id key) per local spec.
+    type Key = (String, u32);
+    let mut locals: std::collections::HashMap<Key, Vec<(String, Option<Key>)>> = Default::default();
+    let mut agreed: std::collections::HashSet<Key> = Default::default();
+    for req in reqs {
+        for id in req.spec_id.iter().chain(req.agreed_id.iter()) {
+            match local_id_key(id) {
+                Some(key) => locals.entry(key).or_default().push((
+                    local_twin_label(id, req.agreed_id.as_deref()),
+                    req.agreed_id.as_deref().and_then(split_bare_id),
+                )),
+                None => agreed.extend(split_bare_id(id)),
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for req in reqs {
+        let id = display_spec_id(req.spec_id.as_deref().unwrap_or("<unknown>"));
+        let fields = std::iter::once(("description", req.description.as_str())).chain(
+            req.comments
+                .iter()
+                .map(|comment| ("comment", comment.content.as_str())),
+        );
+        for (field, body) in fields {
+            for (line, token) in bare_id_tokens(body) {
+                let Some(key) = split_bare_id(&token) else {
+                    continue;
+                };
+                let Some(twins) = locals.get(&key) else {
+                    continue;
+                };
+                let twins: Vec<&str> = twins
+                    .iter()
+                    .filter(|(_, twin_agreed)| twin_agreed.as_ref() != Some(&key))
+                    .map(|(label, _)| label.as_str())
+                    .collect();
+                if twins.is_empty() {
+                    continue;
+                }
+                let resolves = if agreed.contains(&key) {
+                    format!("bare {token} opens the agreed spec")
+                } else {
+                    format!("bare {token} is not found")
+                };
+                out.push(format!(
+                    "{id}:{field}:{line}: {token} also names local {} ({resolves})",
+                    twins.join(", ")
+                ));
+            }
+        }
+    }
+    out
 }
 
 fn shell_substitution_objects_root(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -15394,3 +15481,8 @@ mod loose_objects_followup_tests {
             .contains("loose_objects"));
     }
 }
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_home_036_bare_id_tests.rs"]
+mod bug_home_036_bare_id_tests;
