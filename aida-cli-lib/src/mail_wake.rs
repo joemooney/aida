@@ -194,12 +194,18 @@ pub(crate) fn arm_pending(
             },
         },
     };
-    // Both the launcher and the hook may arm one launch: only the side that
-    // still finds the row pending records (and reports) its outcome.
+    // Both the launcher and the hook may arm one launch: the first outcome
+    // moves the row off pending, and a later success also replaces the other
+    // side's failure, since the unit is installed after all. A failure never
+    // overwrites an armed row. trace:STORY-HOME-096 | ai:claude
+    let from: &[MailWake] = match outcome.state {
+        MailWake::Armed => &[MailWake::Pending, MailWake::Failed],
+        _ => &[MailWake::Pending],
+    };
     match crate::agent_registry::transition_mail_wake_on_row(
         project_root,
         entry,
-        MailWake::Pending,
+        from,
         outcome.state,
     ) {
         Ok(row) if row.mail_wake == Some(outcome.state) => Some(outcome),

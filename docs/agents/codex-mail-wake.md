@@ -20,7 +20,9 @@ row `pending`. The Codex thread id first reaches AIDA through the agent's own
 SessionStart hook, so once that hook records the exact thread it arms the row
 and installs the project's service if it is missing (a bounded `systemctl
 --user` call). It never guesses the thread or uses `--last`. If arming fails,
-the agent still starts and AIDA prints the exact commands to run by hand. Ending
+the agent still starts and AIDA prints the exact commands to run by hand. When
+the launcher and the hook both try to arm one launch, a success wins: the row
+reads `armed` even if the other attempt failed first. Ending
 the agent, or `aida agent gc` finding its process gone, retires the row; the
 ledger is kept.
 

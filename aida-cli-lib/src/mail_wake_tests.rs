@@ -300,6 +300,25 @@ fn story_home_096_arming_a_stale_view_leaves_a_row_that_moved_on() {
     }
 }
 
+// One side of the launch failed to install the unit and the other then
+// installed it: the success wins, so the row does not read `failed` while
+// the wake is live.
+// trace:STORY-HOME-096.aca8bab2 | ai:claude
+#[test]
+fn story_home_096_a_later_successful_arm_replaces_the_other_sides_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    let stale = row(project, "codex", 54, Some("pending"), Some(THREAD));
+    let failed = arm_pending(project, &stale, |_| anyhow::bail!("no systemd")).unwrap();
+    assert_eq!(failed.state, MailWake::Failed);
+    let armed = arm_pending(project, &stale, |_| Ok(())).unwrap();
+    assert_eq!(armed.state, MailWake::Armed);
+    assert_eq!(
+        on_disk(project, "codex-54").mail_wake,
+        Some(MailWake::Armed)
+    );
+}
+
 // A wedged `codex --version` reads as an unknown version instead of
 // hanging the launch.
 // trace:STORY-HOME-096.ac9979a7 | ai:claude

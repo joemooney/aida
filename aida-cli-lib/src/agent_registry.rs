@@ -219,18 +219,18 @@ pub(crate) fn set_mail_wake_on_row(
 /// and in the SessionStart hook, which must not stall behind a wedged lock.
 const ARM_LOCK_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Move `entry`'s row from `from` to `to`, under the same lock hold as the
-/// read. A row whose state moved on since `entry` was read (retired, armed
-/// by the other side of the launch, opted out) is left as it is.
+/// Move `entry`'s row from any of `from` to `to`, under the same lock hold
+/// as the read. A row in another state (retired, armed by the other side of
+/// the launch, opted out) is left as it is.
 // trace:STORY-HOME-096 | ai:claude
 pub(crate) fn transition_mail_wake_on_row(
     project_root: &Path,
     entry: &AgentRegistryEntry,
-    from: MailWake,
+    from: &[MailWake],
     to: MailWake,
 ) -> Result<AgentRegistryEntry> {
     update_mail_wake_on_row(project_root, entry, ARM_LOCK_BUDGET, |now| {
-        (now == Some(from)).then_some(to)
+        now.is_some_and(|now| from.contains(&now)).then_some(to)
     })
 }
 
