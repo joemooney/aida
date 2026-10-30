@@ -2,12 +2,12 @@ id: 01a18a3f-6619-7d82-b796-e3a5190d207b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-118
 title: Retire mailbox sources for removed worktrees so the inbox view stops reporting partial
 description: '2026-10-29: every inbox read shows ''mail view partial: 3 source(s) not fully read (WorktreeMissing)'', and Codex could not acknowledge mail because of it. Acceptance: aida mailbox retention (or worktree remove) folds a removed worktree''s mail into the canonical store and drops the source; a missing source with nothing unread no longer marks the view partial.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:33.145162743Z
-modified_at: 2026-10-30T02:08:06.248929677Z
+modified_at: 2026-10-30T02:26:07.276733831Z
 req_type: Task
 tags:
 - docs:impacted
@@ -65,6 +65,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18aa0-f72c-7652-b7e1-f9318cdd2f3f
+  author: aida-orchestrator
+  timestamp: 2026-10-30T02:26:07.276755550Z
+  session_id: 01a18a9fa8fc
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -77,3 +86,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:08:06.248929677Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Prune command works and is well tested (CI green at head), but the new mutating verb is classified as a stakeholder Read, so guest/requester seats can drop git worktree registrations; acceptance criterion 2 is met via a documented deviation (explicit prune instead of relaxing the view rule), which needs advisor ratification.
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-118 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-30T02:26:07.276733831Z
