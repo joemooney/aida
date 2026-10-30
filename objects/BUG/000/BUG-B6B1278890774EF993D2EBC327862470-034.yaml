@@ -7,12 +7,12 @@ description: |
   ADVISOR RULING 2026-10-30 02:20 (PR-3127 round 1). ONE rework push on PR-3127.
   The root cause recorded in the 23:47 comment (a STALE index.lock left by a killed writer) is in scope. Fix it as follows: every store commit path (git add/commit in the store worktree) runs under the existing store write lock (flock). While holding that flock, an existing .git/worktrees/<store>/index.lock has no live aida owner. Remove it with a one-line warning ("removed stale store index.lock from <mtime>") and proceed. Non-aida git processes are not expected in the store worktree; if you want belt and braces, also require the lock to be older than 30s. Test: create index.lock, then a store write under the flock succeeds and warns. Keep the transient retry and the error-reporting fix as they are.
   Gate: LIGHT. Run `cargo test -p aida-core store_lock` (or the module you touch) plus make check-ci-fast.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:45:48.780708400Z
-modified_at: 2026-10-30T10:07:11.338449643Z
+modified_at: 2026-10-30T10:38:10.500254994Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -141,6 +141,20 @@ history:
   session_id: 01a18c465f85
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a18c63-743b-7782-b5fe-0239ee126cd6
+  author: aida-auto-bump
+  timestamp: 2026-10-30T10:38:10.491925730Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18c63-7444-7860-89ff-c486c449e073
+  timestamp: 2026-10-30T10:38:10.500249980Z
+  agent: implementer
+  commit_sha: d3d60856bea85bb7f934cc80862a2f108c07e2cb
+  summary: 'Round 2: all three round-1 findings fixed. commit/commit_paths now clear a stale index.lock (no live git holder) before the commit and before each lock retry (git_ops.rs:1384), with a real-git test (git_ops.rs:7681); contention classifier no longer retries Permission denied / Read-only (external_tool_output.rs:95, test commit_failure.rs bug034_permission_denied_lock_is_not_retried); hook note on stderr is dropped and fatal line kept (commit_failure.rs test). CI green at c73acaf (7 shards + Build). One non-blocking gap vs the advisor ruling: stale-lock removal is silent (no one-line warning), filed as a follow-up.'
+  review_verdict: approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -153,3 +167,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T08:27:05.663817270Z
   implemented_by: joe
+  completed_at: 2026-10-30T10:38:10.491920325Z
+  completion_sha: d3d60856bea85bb7f934cc80862a2f108c07e2cb
