@@ -1,3 +1,7 @@
 [[binding]]
 label = "HOME"
 node = "b6b1278890774ef993d2ebc327862470"
+
+[[binding]]
+label = "ASTER"
+node = "a65b4bf5902d469995f816efd3a27661"
