@@ -88952,5 +88952,13 @@ operations:
       - Name: `aida deputy`; keep `aida runloop` as a hidden alias.
       - Concurrency is a slice-1 requirement, not later hardening. Today the operator needed two terminal loops because each job blocks its loop. One `aida deputy` must run several jobs at once: `--workers K` (default 2), and each job is a child `bash` subprocess, so a long ship never blocks a quick lane launch. Named deputies (`aida deputy --name ship`) are also allowed, each with its own queue and ledger. `aida deputy submit --name` targets one; the default is any idle worker.
       - Job classes may pin to a single worker (`--serial <class>`, e.g. `ship`) so serial-ship stays one-at-a-time while other jobs run in parallel.
-clock: 6917
+- id: 01a18a57-bcf5-70b0-aec0-dd536f63e443
+  target_id: 01a18a3d-be2c-7952-8f76-9b72ff576e7b
+  author: aida
+  node_id: '1'
+  lamport: 6918
+  timestamp: 2026-10-30T01:06:08.245321710Z
+  kind: !SetStatus
+    status: Approved
+clock: 6918
 node_id: '1'
