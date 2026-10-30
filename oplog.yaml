@@ -92951,5 +92951,21 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 7200
+- id: 01a18d04-7c69-7972-a508-1864530da824
+  target_id: 01a18a40-aff2-77b0-af0e-8116e1e82e23
+  author: aida
+  node_id: '1'
+  lamport: 7201
+  timestamp: 2026-10-30T13:34:03.881584688Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a18d04-803a-79a0-ba04-de84e18b9b5a
+  target_id: 01a18a40-aff2-77b0-af0e-8116e1e82e23
+  author: aida
+  node_id: '1'
+  lamport: 7202
+  timestamp: 2026-10-30T13:34:04.858947888Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 7202
 node_id: '1'
