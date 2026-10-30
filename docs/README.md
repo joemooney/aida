@@ -2,7 +2,7 @@
 
 Start here. This index orders the docs by where you are in the journey — from
 *"what is this?"* to running it for a team to extending it. Not sure AIDA is for
-you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
+you at all? Jump to [Deciding whether to adopt](#3-deciding-whether-to-adopt).
 
 > New to AIDA? The three-doc on-ramp is **[Why AIDA?](WHY-AIDA.md)** →
 > **[Getting started](getting-started.md)** → **[First project](first-project.md)**.
@@ -18,7 +18,8 @@ you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
 | Doc | What it gives you |
 |-----|-------------------|
 | [WHY-AIDA.md](WHY-AIDA.md) | The problem statement — *why this exists* before *how it works*. |
-| [getting-started.md](getting-started.md) | Install (cargo / binary / Docker / source), `aida init`, your first requirement. |
+| [README installation](../README.md#install) | Install AIDA on a supported Linux system. |
+| [getting-started.md](getting-started.md) | Develop conversationally with an AIDA-aware agent, retain agreed intent, and separate one-time operator setup. |
 | [first-project.md](first-project.md) | The follow-along: a TODO CLI from a blank repo to a six-spec graph with two features driven to *Completed*. The best "see what it's *for*" doc. |
 | [using-aida-with-claude-code.md](using-aida-with-claude-code.md) | How AIDA and Claude Code fit together (skills, MCP, the daily loop). |
 

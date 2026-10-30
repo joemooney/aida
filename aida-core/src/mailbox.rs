@@ -1218,6 +1218,24 @@ pub fn write_local_message_with_deliveries(
     mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
     ensure_local_mailbox_dir(project_root)?;
     let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
+    // Every written message carries a real epoch-millis time: a writer that
+    // left it unset is stamped now, one that wrote seconds is scaled.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_millis()).ok());
+    let timestamp = normalize_timestamp(Some(msg.timestamp), now_ms);
+    let stamped;
+    let msg = if timestamp == msg.timestamp {
+        msg
+    } else {
+        stamped = Message {
+            timestamp,
+            ..msg.clone()
+        };
+        &stamped
+    };
     let json = serde_json::to_string_pretty(msg)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     // Admit before writing so a retiring source refuses the write instead of
@@ -1276,11 +1294,97 @@ pub fn read_local_messages(project_root: &Path) -> std::io::Result<Vec<Message>>
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
-        if let Ok(msg) = serde_json::from_slice::<Message>(&bytes) {
+        if let Ok(msg) = parse_message_file(&path, &bytes) {
             out.push(msg);
         }
     }
     Ok(out)
+}
+
+/// Lower and upper bounds of an epoch-SECONDS value that a writer put in the
+/// epoch-millis `timestamp` field: 2001-09-09 .. 5138 in seconds, which as
+/// millis would be 1970-01-12 .. 1973-03-03 — no real message is from then.
+/// Small values (tests use 1, 10, 42) stay as written.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+const SECONDS_SCALE: std::ops::Range<i64> = 1_000_000_000..100_000_000_000;
+
+/// Epoch millis for a message timestamp as written: a seconds-scale value is
+/// scaled to millis, a missing one (`None`, or not positive) takes
+/// `fallback_ms`, and with no fallback stays `0` — the "unknown time" that
+/// [`timestamp_is_known`] reports and renderers show as such, never the epoch.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn normalize_timestamp(ts: Option<i64>, fallback_ms: Option<i64>) -> i64 {
+    match ts {
+        Some(ts) if SECONDS_SCALE.contains(&ts) => ts * 1000,
+        Some(ts) if ts > 0 => ts,
+        _ => fallback_ms.filter(|ms| *ms > 0).unwrap_or(0),
+    }
+}
+
+/// Whether a (normalized) message timestamp names a real time. A message whose
+/// time could not be recovered carries `0` and renders as "unknown time".
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn timestamp_is_known(ts: i64) -> bool {
+    ts > 0
+}
+
+/// Parse one message file. A `timestamp` that is missing or `null` falls back
+/// to the file's mtime, and a seconds-scale one is read as seconds, so a
+/// message a writer failed to stamp neither drops out of the inbox nor sorts
+/// and renders as 1970.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn parse_message_file(path: &Path, bytes: &[u8]) -> serde_json::Result<Message> {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes)?;
+    normalize_message_value(&mut value, || {
+        std::fs::metadata(path).ok().and_then(|m| mtime_millis(&m))
+    });
+    serde_json::from_value(value)
+}
+
+/// A file's mtime in epoch millis.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn mtime_millis(meta: &std::fs::Metadata) -> Option<i64> {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
+}
+
+/// The `timestamp` a message file carries as written (`None` when absent,
+/// `null`, or not an integer).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn written_timestamp(value: &serde_json::Value) -> Option<i64> {
+    value.get("timestamp").and_then(serde_json::Value::as_i64)
+}
+
+/// Whether a written timestamp is already a real epoch-millis time, so the
+/// file needs no stamp: absent, non-positive, and seconds-scale values do.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn timestamp_is_stamped(written: Option<i64>) -> bool {
+    written.is_some_and(|ts| ts > 0 && !SECONDS_SCALE.contains(&ts))
+}
+
+/// Normalize the `timestamp` of a parsed message value in place (see
+/// [`normalize_timestamp`]); `fallback_ms` is consulted only when the
+/// message carries no time. The one normalizer every message reader uses.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+pub fn normalize_message_value(
+    value: &mut serde_json::Value,
+    fallback_ms: impl FnOnce() -> Option<i64>,
+) {
+    let written = written_timestamp(value);
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    let fallback = if written.is_some_and(|ts| ts > 0) {
+        None
+    } else {
+        fallback_ms()
+    };
+    obj.insert(
+        "timestamp".into(),
+        normalize_timestamp(written, fallback).into(),
+    );
 }
 
 /// Read one agent's LOCAL read-watermark (epoch millis of the newest message
@@ -2052,6 +2156,91 @@ mod tests {
             .collect();
         ids.sort();
         assert_eq!(ids, vec!["m1".to_string(), "m2".to_string()]);
+    }
+
+    /// A message with no timestamp (absent or `null`) is still read, dated by
+    /// its file mtime rather than the epoch; a seconds-scale one (the
+    /// review-watch writer's old unit) reads as that time, not 1970-01-21.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    #[test]
+    fn read_local_messages_dates_unstamped_and_seconds_scale_messages() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_local_message(
+            root,
+            &msg(
+                "anchor",
+                "t",
+                "codex",
+                Recipient::Agent("claude".into()),
+                10,
+            ),
+        )
+        .unwrap();
+        let mailbox_dir = local_mailbox_dir(root);
+        let mut json =
+            serde_json::to_value(msg("x", "t", "a", Recipient::Agent("b".into()), 1)).unwrap();
+        for (id, ts) in [
+            ("absent", None),
+            ("null", Some(serde_json::Value::Null)),
+            ("seconds", Some(1_793_050_232.into())),
+        ] {
+            let obj = json.as_object_mut().unwrap();
+            obj.insert("id".into(), id.into());
+            match ts {
+                Some(ts) => obj.insert("timestamp".into(), ts),
+                None => obj.remove("timestamp"),
+            };
+            std::fs::write(
+                mailbox_dir.join(format!("{id}.json")),
+                serde_json::to_vec(&json).unwrap(),
+            )
+            .unwrap();
+        }
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64
+            - 60_000;
+        let msgs = read_local_messages(root).unwrap();
+        let ts = |id: &str| msgs.iter().find(|m| m.id == id).unwrap().timestamp;
+        assert_eq!(msgs.len(), 4, "no unstamped message drops out");
+        assert!(
+            ts("absent") >= before,
+            "absent timestamp falls back to mtime"
+        );
+        assert!(ts("null") >= before, "null timestamp falls back to mtime");
+        assert_eq!(ts("seconds"), 1_793_050_232_000);
+        assert_eq!(ts("anchor"), 10, "small test stamps stay as written");
+    }
+
+    /// Writers always stamp: an unset timestamp is filled at write time and
+    /// a seconds-scale one is written as millis.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    #[test]
+    fn write_local_message_stamps_unset_and_seconds_timestamps() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let to = || Recipient::Agent("b".into());
+        write_local_message(root, &msg("unset", "t", "a", to(), 0)).unwrap();
+        write_local_message(root, &msg("seconds", "t", "a", to(), 1_793_050_232)).unwrap();
+        let raw = |id: &str| -> serde_json::Value {
+            let path = local_mailbox_dir(root).join(format!("{id}.json"));
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+        };
+        assert!(raw("unset")["timestamp"].as_i64().unwrap() > 1_700_000_000_000);
+        assert_eq!(raw("seconds")["timestamp"], 1_793_050_232_000_i64);
+    }
+
+    #[test]
+    fn normalize_timestamp_leaves_unknown_without_fallback() {
+        assert_eq!(normalize_timestamp(None, None), 0);
+        assert!(!timestamp_is_known(normalize_timestamp(Some(-5), None)));
+        assert_eq!(normalize_timestamp(None, Some(7)), 7);
+        assert_eq!(
+            normalize_timestamp(Some(1_793_050_232_000), Some(7)),
+            1_793_050_232_000
+        );
     }
 
     #[test]
