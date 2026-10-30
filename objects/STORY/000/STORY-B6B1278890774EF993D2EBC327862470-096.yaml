@@ -30,7 +30,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T01:10:56.936561015Z
+modified_at: 2026-10-30T01:22:30.256563046Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -84,6 +84,30 @@ comments:
   created_at: 2026-10-30T01:05:33.827493397Z
   modified_at: 2026-10-30T01:05:33.827493397Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+- id: 01a18a66-b8f0-71a0-bf96-d6ac85f6efda
+  author: joe
+  content: |-
+    ## Implementer approach — slice 1 (ai:claude)
+
+    ### Acceptance criteria as tests
+    - **Unit (aida-core):** `story_home_096_watched_row_reads_its_own_handle_and_role_only` proves an armed, live row yields exactly its handle + recorded role (no env user/role/vendor), and pending/retired/unset/recycled-pid/no-start/ended/renamed rows refuse.
+    - **Unit (cli):** `story_home_096_batches_once_dedupes_and_prunes_on_read`, `..._spawn_failure_backs_off_and_uncertainty_needs_recovery`, `..._partial_and_role_mail_wake_once_per_episode` port the advisor adapter's ledger semantics to Rust.
+    - **Unit (cli, TASK-HOME-119):** `story_home_096_notice_names_the_recipient_inbox` proves the notice names the woken handle's inbox.
+    - **Fixture (git mail repo):** `story_home_096_run_wakes_armed_rows_for_their_own_inbox_only` proves wake-run wakes an armed row for handle+role mail, never advisor mail, never an unarmed/retired row; `wake-snapshot --recipient <handle>` resolves the same verified audience; retire keeps the ledger.
+    - **Unit:** unit text quoting + marker. **No automated test:** systemctl enable/disable (needs a user systemd); covered by `--dry-run` and the unit-text test.
+
+    ### Expected files
+    - `aida-core/src/mailbox_identity.rs` (+tests): `MailIdentityFacts::watched`
+    - `aida-cli-lib/src/agent_registry.rs` (`mail_wake` field, `MailWake`), struct literals in tests
+    - `aida-cli-lib/src/mailbox_wake.rs`, `mailbox_wake_run.rs` (+tests), `mailbox_cmd.rs`, `mailbox_cmd_args.rs`
+    - `aida-cli-lib/src/agent_launch.rs`, `agent_launch_args.rs` (hidden `agent wake arm|retire`)
+
+    ### Ambiguities / conflicts as questions
+    - Health job: the scheduler job registration needs a tracked-config edit and the doctor check only reads the advisor registration today. Slice 1 writes per-thread `health.json` in the doctor's existing schema; the scheduled job + doctor iteration over armed rows ride with slice 2. Filed as a deviation finding.
+  created_at: 2026-10-30T01:22:30.256563046Z
+  modified_at: 2026-10-30T01:22:30.256563046Z
+  session_id: 01a18a5c20bb
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
   author: joe
