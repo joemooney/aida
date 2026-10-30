@@ -5,9 +5,23 @@
     {
       "at": "2026-10-30T11:56:43.080512689Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-30T12:28:09.981533710Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-30T11:18:52.627816373Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-125",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-30T11:19:05.940113678Z",
       "spec": "TASK-b6b1278890774ef993d2ebc327862470-125",
@@ -15,6 +29,45 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-30T12:16:31.534573746Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-125",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3134,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d8d0fd8d092f480717084628109454866e4ba47a"
+      }
+    },
+    {
+      "ts": "2026-10-30T12:27:19.396436934Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-125",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T12:27:36.153980151Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-125",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3134
+      }
+    },
+    {
+      "ts": "2026-10-30T12:28:09.765955013Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-125",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "94551ac3d29e492e7785e5966b3b69f70c86e879",
+        "pr": 3134,
+        "closed_by": "auto-bump"
       }
     }
   ]
