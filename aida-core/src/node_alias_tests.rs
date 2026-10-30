@@ -318,7 +318,7 @@ fn bare_id_tokens_skip_local_alias_and_legacy_node_forms() {
 fn store_repo(origin_url: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let git = |args: &[&str]| {
-        let ok = std::process::Command::new("git")
+        let ok = crate::test_git::git_command()
             .arg("-C")
             .arg(dir.path())
             .args(args)
@@ -363,7 +363,7 @@ fn node_alias_unreachable_origin_keeps_the_commit_and_reports_it() {
 #[test]
 fn node_alias_reachable_origin_reports_pushed() {
     let hub = tempfile::tempdir().unwrap();
-    let ok = std::process::Command::new("git")
+    let ok = crate::test_git::git_command()
         .args(["init", "-q", "--bare"])
         .arg(hub.path())
         .status()
