@@ -228,7 +228,7 @@ For the full mode comparison, when to use each, and migration guidance, see **[S
 
 ### Cache management (git-canonical mode)
 
-The SQLite cache lives at `.aida/cache.db` (gitignored, auto-rebuilt). It's a derived projection — never authoritative.
+The SQLite cache lives at `.aida/cache.db` (gitignored, derived; bounded reads may report stale/deferred/busy context). It's a derived projection — never authoritative.
 
 ```bash
 aida cache status      # Compare cache HEAD vs git HEAD; show counts; report FRESH/STALE

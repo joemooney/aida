@@ -15,7 +15,10 @@ function filterGuides() {
     card.hidden = !matches;
     if (matches) {
       count += 1;
-      const first = words.length ? Math.max(0, text.indexOf(words[0]) - 45) : 0;
+      const match = words.length
+        ? new RegExp(words[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu').exec(entry.text)
+        : null;
+      const first = match ? Math.max(0, match.index - 45) : 0;
       card.querySelector('.excerpt').textContent = (first ? '…' : '') + entry.text.slice(first, first + 180) + '…';
     }
   }

@@ -24,6 +24,8 @@ or `guide.css`, then rebuild; do not hand-edit `getting-started.html`.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
 only the Markdown used by these guides, with explicit page selection in `publication.json`.
 Generated files are committed and can be read directly from disk.
+Run `python3 docs/showcase/build.py --check` to report every drifted generated
+page and search artifact without writing files; the fast CI gate runs this check.
 
 ## Curated library and publication scope
 

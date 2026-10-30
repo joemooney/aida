@@ -24,9 +24,11 @@ If one shell resolves to `joe` and another to `joseph`, their personal queue key
 ```bash
 echo "USER=$USER  AIDA_USER=$AIDA_USER"
 aida queue list --local --all
+ls .aida-store/registry/queues/
+aida queue list --local --user <other-user-id>
 ```
 
-Use a deliberate `AIDA_USER` where the same person needs consistent attribution; use distinct identities for different people. Do not treat matching strings as a multi-human security boundary. Role grants and authorized routing remain separate from display identity. Queue filtering and `--user` are documented by command help.
+For the same person, pin a stable identity on each machine with `export AIDA_USER=<id>` in the shell startup configuration. Use `aida queue list --local --user <id>` for a one-off view. Use distinct identities for different people. Do not treat matching strings as a multi-human security boundary. Role grants and authorized routing remain separate from display identity. Queue filtering and `--user` are documented by command help.
 
 ## Publish the history the other machine needs
 
