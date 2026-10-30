@@ -92074,5 +92074,31 @@ operations:
   timestamp: 2026-10-30T10:13:44.766831962Z
   kind: !SetStatus
     status: Done
-clock: 7134
+- id: 01a18c4e-bf6b-7273-9051-b1ef41989a67
+  target_id: 01a18c4e-b7d5-7de1-9c6a-ca28fc6e3399
+  author: aida
+  node_id: '1'
+  lamport: 7135
+  timestamp: 2026-10-30T10:15:33.483608235Z
+  kind: !Create
+    title: 'Review PR-3132: [AI:claude] fix(session): finished reviewer and gone-worktree leases stop blocking reviews (BUG-B6B1278890774EF993D2EBC327862470-024)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-024`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3132>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-024` → `main`
+
+      ## Covers
+
+      - BUG-B6B1278890774EF993D2EBC327862470-024
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3132` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7135
 node_id: '1'
