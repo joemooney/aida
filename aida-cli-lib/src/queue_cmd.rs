@@ -12529,8 +12529,19 @@ pub(crate) fn handle_queue_work(
             // they suggest is unambiguous.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
             let conflict_id = conflict.id.as_str();
+            // A dead lease whose worktree is gone has nothing left to lose, so
+            // it is released without `--force-claim`; only a verdict of
+            // ReclaimableClean { worktree_missing: true } is released here.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+            let released_gone = crate::session_reap::release_gone_worktree_lease(
+                &project_root_for_conflict,
+                &conflict,
+                &recovery.verdict,
+            );
             match &recovery.verdict {
-                StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
+                StaleLeaseRecovery::ReclaimableClean { worktree_missing }
+                    if force_claim || released_gone =>
+                {
                     eprintln!(
                         "  {} released orphaned lease {} ({})",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -12541,7 +12552,9 @@ pub(crate) fn handle_queue_work(
                             "owning session gone, worktree clean".dimmed()
                         }
                     );
-                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    if !released_gone {
+                        let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    }
                     remaining -= 1;
                     if remaining == 0 {
                         anyhow::bail!(
@@ -13624,6 +13637,35 @@ pub(crate) fn release_refused_review_lease(
     true
 }
 
+/// A standalone reviewer has exited: once its verdict is on the ledger, its
+/// review (`scope` over this review's own `worktree`) is reaped — tree,
+/// lease, and review branch — so neither the lease nor the tree blocks the
+/// next review of the PR. With no verdict collected, the tree is what the
+/// recovery text points at, so the review is kept; a review the reap refuses
+/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
+/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn end_finished_review(
+    project_root: &std::path::Path,
+    scope: &str,
+    worktree: &std::path::Path,
+    verdict_collected: bool,
+) -> Vec<(String, std::result::Result<String, String>)> {
+    list_leases(project_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
+        .map(|l| {
+            let outcome = if verdict_collected {
+                crate::session_reap::reap_finished_review(project_root, &l)
+            } else {
+                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+            };
+            (l.id, outcome)
+        })
+        .collect()
+}
+
 /// Advisor comment 35: whether a failed pickup's lease is released — only a
 /// PR-scoped review pickup whose child grant was refused. An implementer's
 /// lease stays for the manual continuation.
@@ -13993,6 +14035,34 @@ pub(crate) fn run_standalone_reviewer(
                 "  {} could not arm PR-{pr}'s merge hold for the reviewer's refusal ({err}) — run `aida merge-hold add {pr}` before shipping",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             ),
+        }
+    }
+
+    // The reviewer has exited and its verdict is collected (or known to be
+    // missing): its finished review is reaped now, before any exit path
+    // below. A launcher still sitting in the tree steps out of it first; any
+    // other cwd is left alone (it is process-wide state).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+    if std::env::current_dir().is_ok_and(|cwd| {
+        cwd.starts_with(worktree)
+            || worktree
+                .canonicalize()
+                .is_ok_and(|tree| cwd.starts_with(tree))
+    }) {
+        let _ = std::env::set_current_dir(project_root);
+    }
+    for (id, outcome) in end_finished_review(project_root, scope, worktree, collected.is_ok()) {
+        let id = &id[..id.len().min(8)];
+        match outcome {
+            Ok(_) if !quiet => eprintln!(
+                "  {} ended reviewer session {id} for PR-{pr} and removed its review tree",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            Err(why) if !quiet => eprintln!(
+                "  {} kept reviewer session {id} for PR-{pr}: {why}",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            _ => {}
         }
     }
 
