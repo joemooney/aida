@@ -19,12 +19,12 @@ description: |
   2. Ordering test: prove the scope-conflict refusal happens before the bypass and resume prompts, on both the foreground and --bg paths.
   3. Role mail to the pool queues for the role when no live member has a mail id (mailbox_resolver.rs ~528), with no --queue-for-role needed. Test it.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib generic_implementers pool_role_mail same_scope_conflict` plus `make check-ci-fast`, then push.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:27:58.713113531Z
-modified_at: 2026-10-30T06:38:12.177315186Z
+modified_at: 2026-10-30T08:23:03.857402822Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -142,6 +142,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18be7-c1a6-7110-9595-a14791a041e6
+  author: aida-auto-bump
+  timestamp: 2026-10-30T08:23:03.846985561Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a18be7-c1b1-7383-9d03-db8897d7e512
+  timestamp: 2026-10-30T08:23:03.857398096Z
+  agent: implementer
+  commit_sha: ae70fc9bbfee62eafce8ae7a42216b8bc61cfc35
+  summary: 'Base-only update from main (gh update-branch d58592c67bc6eedaa5ffa428077bebc26b5399c3 -> 1380ebb218662e32d6cf89f52a7981b38a05b1ba); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 5e4ec0c39e38f1b62108e4ede81c9abd24dfe7fe
   branch: main
@@ -154,3 +168,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:55:03.231625980Z
   implemented_by: joe
+  completed_at: 2026-10-30T08:23:03.846980314Z
+  completion_sha: ae70fc9bbfee62eafce8ae7a42216b8bc61cfc35
