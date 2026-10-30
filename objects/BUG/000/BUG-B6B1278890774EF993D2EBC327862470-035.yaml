@@ -1,0 +1,25 @@
+id: 01a18b07-a7e4-7fd1-afab-65e787b05fcd
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-035
+title: auto-queue-review finds no trailers when the PR branch exists only in a seat clone (git log main..<bare branch> fails in the primary)
+description: |-
+  2026-10-29 21:18: `aida pr auto-queue-review --branch story-b6b1278890774ef993d2ebc327862470-096` from the primary reported 'PR #3110 carries no (REQ-ID) trailers', although every commit carries one. Cause: review_gates.rs (~1119) takes base/head from pr_base_head (lib_part5.rs:4461), which returns the forge's bare head_ref; git_log_messages(main..<head_ref>) fails because the branch exists only in the lane's seat clone, and unwrap_or_default() turns the error into 'no commits'. Creating a local tracking branch made it work. Every contained lane's PR hits this, so reviewers can't launch without a hand-filed story.
+
+  Acceptance:
+  1. Resolve the range from origin/<base>..origin/<head> (fetching the head ref, or using the PR head SHA from forge metadata) when the local branch is missing.
+  2. A git_log failure is reported as an error naming the range, never as 'no trailers'.
+  3. Test: PR head branch absent locally but present on origin, trailers found.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T04:18:17.188008505Z
+modified_at: 2026-10-30T04:18:17.188008505Z
+req_type: Bug
+filed_at:
+  code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9a86ae54ce5
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
