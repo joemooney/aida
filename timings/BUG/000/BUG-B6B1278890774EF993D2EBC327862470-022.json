@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+  "publishes": [
+    {
+      "at": "2026-10-30T14:56:07.452340327Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T01:06:15.233121247Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-022",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T12:39:25.545820380Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-022",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T14:38:30.683679987Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3136,
+        "verdict": "APPROVED",
+        "reviewed_sha": "05e2fd71877277fde8e16aed4b1f6af2f58d7ea0"
+      }
+    },
+    {
+      "ts": "2026-10-30T14:53:30.948353562Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T14:53:45.965865508Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3136
+      }
+    },
+    {
+      "ts": "2026-10-30T14:55:53.557830567Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "236b190e488d845eb4d5cab12fe2ceec4e403db6",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-30T14:55:59.109767791Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "236b190e488d845eb4d5cab12fe2ceec4e403db6",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-30T14:56:04.150735617Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-022",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "236b190e488d845eb4d5cab12fe2ceec4e403db6",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
