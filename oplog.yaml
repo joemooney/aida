@@ -93318,5 +93318,13 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 7224
+- id: 01a18d3a-4ea5-7c52-995a-ba45be52a5ba
+  target_id: 01a15809-6ff6-7bf1-ba74-f081edfccf54
+  author: aida
+  node_id: '1'
+  lamport: 7225
+  timestamp: 2026-10-30T14:32:51.109096115Z
+  kind: !RemoveTag
+    tag: operator-held
+clock: 7225
 node_id: '1'

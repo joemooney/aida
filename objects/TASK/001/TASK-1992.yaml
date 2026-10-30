@@ -11,11 +11,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T06:39:35.926490959Z
-modified_at: 2026-10-21T04:32:45.853716472Z
+modified_at: 2026-10-30T14:32:46.436265169Z
 req_type: Task
 tags:
 - from-review:PR-2768
-- operator-held
 - perf
 - severity:cosmetic
 history:
@@ -24,10 +23,11 @@ history:
   timestamp: 2026-10-21T04:32:46.339195218Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
-deferred: true
-deferred_at: 2026-10-21T04:32:45.853716472Z
-deferred_until: Cosmetic perf (carry-over proven 4x per ship). Revisit with TASK-2008 ship-time profiling.
-deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
+- id: 01a18d3a-4d54-7121-aa70-635d903f43d5
+  author: joe
+  timestamp: 2026-10-30T14:32:50.772507139Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 9a0efe103da498a1fb7a1dbbd77ae0647fa853e4
   branch: pr-2768
