@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-30T23:11:26.460449663Z
+modified_at: 2026-10-30T23:16:32.109924414Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -27,6 +27,36 @@ relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T03:41:48.176681623Z
+comments:
+- id: 01a18f19-c0ed-75b2-bbfa-5662372bad7f
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Design: a handshake module (`advisor_handshake.rs`) plus a hook-driven verb, `aida mailbox hello --hook`. The hello is ordinary mail typed by a reserved thread-id prefix (`aida-hello-<uuid>`), so the Message schema (about 65 literal sites, plus older binaries) is unchanged. The ack is a reply in that thread with a deterministic id (uuid v5 of the hello id). A per-handle record at `<mailbox home>/.aida/mailbox/.handshake/<handle>.json` stores hello id, role, spec, path, mailbox dir, home kind, sent_at and acked_at. This sits inside the mailbox dir that contained seats can already write (BUG-031).
+
+    ### Acceptance criteria as tests
+    - **AC1 (unit + command-level):** an `agent new` session (AIDA_AGENT_NAME set, role ≠ advisor) on SessionStart writes one hello to role `advisor` naming handle, role, spec and path. It is idempotent across resume, and advisor or role-less sessions send nothing. Tests: `eligible_*`, `send_hello_*`.
+    - **AC2 (unit):** the advisor's per-turn `mailbox hello --hook` lists unread hellos and names `aida mailbox inbox` as the one ack command. Reading the inbox auto-acks every displayed hello, and the ack lands in the sender handle's inbox. Tests: `ack_hellos_*`, `advisor_notice_lists_pending_hello`.
+    - **AC3 (unit):** pure `state()` gives Waiting before the window (default 10m, `[mailbox] handshake_timeout_mins`) and `advisor unreachable: <reason>` after it. The agent's per-turn notice and `aida agent ls` show it. A doctor category `advisor-handshake`, in the default scan, names the mailbox path (an unverified seat-clone local layer, or the primary inbox with no live advisor or no ack). Tests: `state_*`, `doctor_finding_names_mail_path`.
+    - **AC4 (unit):** no live advisor reader → the send is queued for the role (durable sidecar) and the output says `no live advisor; hello queued`. Test: `no_live_advisor_queues_hello`.
+    - **AC5 (fixture):** a seat-clone fixture (as in bug_031 tests) sends hello, the primary advisor view sees it, an inbox-read ack lands, and the agent's state flips to Acked. Test: `seat_clone_hello_round_trip`.
+
+    ### Expected files
+    - `aida-cli-lib/src/advisor_handshake.rs` (new), `aida-cli-lib/src/tests/story_b6b_100_handshake_tests.rs` (new), `lib.rs`
+    - `aida-cli-lib/src/mailbox_cmd_args.rs`, `mailbox_cmd.rs` (Hello verb + inbox auto-ack)
+    - `aida-cli-lib/src/agent_registry_root.rs` (agent ls note)
+    - `aida-cli-lib/src/doctor_cmd.rs`, `doctor_root.rs` (category)
+    - `aida-core/templates/hooks/aida-mail-notice.sh` (call the verb)
+    - help golden snapshot
+
+    ### Ambiguities / conflicts as questions
+    - Should the hello be a schema-level message kind? I'm choosing a thread-id prefix plus a sidecar record so the Message schema stays unchanged. A follow-up can promote it to a field if wanted.
+    - "acks it with one command (or automatically)": reading the inbox does it automatically, and `aida mailbox inbox` is the one command.
+  created_at: 2026-10-30T23:16:32.109924414Z
+  modified_at: 2026-10-30T23:16:32.109924414Z
+  session_id: 01a18f151004
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18ae6-1e13-7781-8ad3-aa7c7eaef9ba
   author: joe

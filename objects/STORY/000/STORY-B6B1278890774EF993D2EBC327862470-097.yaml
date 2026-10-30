@@ -15,8 +15,44 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-30T23:11:16.933016209Z
+modified_at: 2026-10-30T23:14:27.719672228Z
 req_type: Story
+comments:
+- id: 01a18f17-db07-7432-a7dc-61e462d50207
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Design: a machine-local, per-clone layer `~/.aida/store-local.toml` (same shape as the night-shift `shift-local.toml` precedent), keyed by the clone's primary checkout (git common dir) so every seat worktree of one clone resolves to the same entry:
+
+        [repo."/home/joe/ai/aida"]
+        bridge = true            # this clone is the hub bridge
+        bridge_every = "1h"      # optional cadence
+        push_hubs = ["gitlab"]   # remotes this clone may push the store to (absent = no restriction)
+
+    Written by `aida remote bridge --enable|--disable` and `aida remote push-hubs <names>|--all`. Nothing is tracked, so a project config can never turn a clone into a bridge.
+
+    ### Acceptance criteria as tests
+    1. **Unit (maintenance_schedule):** with `bridge = true` in the local layer, the merged registry has a `store-bridge-reconcile` substrate job (source local) running `remote reconcile --execute`; without it the job is absent. A tracked `[schedule]` job with `command = "remote reconcile --execute"` loads with an invalid-command problem and never runs. **Unit (store_local):** key resolution maps a worktree to its primary checkout.
+    2. **Unit:** the scheduled command's argv is exactly `remote reconcile --execute` (no `--yes`); a synthesized `store-bridge-reconcile-route` seat job (advisor, `on = CronJobFailed:store-bridge-reconcile`) carries the failure (identity stop or unmergeable conflict) to the advisor.
+    3. **Unit + fixture (git):** with `push_hubs = ["gitlab"]`, `db sync --push`, `aida push` store leg, per-write auto-push, `remote mirror-sync` and `remote reconcile --execute` never push to `origin`; the store goes to the declared hubs instead. Fixture uses bare origin + mirror repos and asserts origin's ref is unchanged.
+    4. **No code change:** hub-drift-guard and its route stay untouched; a unit test asserts the bridge job does not replace or disable it. Documented in the config scaffold and docs.
+    5. **Unit (pure crontab fn):** `aida remote bridge --enable` (and `aida schedule install` on a bridge clone) removes lines carrying the `# aida-store-reconcile` marker and leaves every other line intact.
+
+    ### Expected files
+    - new `aida-cli-lib/src/store_local.rs` (+ tests)
+    - `aida-cli-lib/src/maintenance_schedule.rs` (local-layer job injection, command table, project-source refusal, stopgap removal on install)
+    - `aida-cli-lib/src/remote_cmd.rs`, `remote_cmd_args.rs`, `remote_create.rs` (bridge / push-hubs commands, mirror-sync + reconcile filtering, bypass hint)
+    - `aida-cli-lib/src/db_cmd.rs`, `store_push_pull.rs`, `store_sync.rs` (push-hub routing at store push sites)
+    - `aida-cli-lib/src/config_init.rs`, `docs/cli/*`, help golden
+
+    ### Ambiguities / conflicts as questions
+    - Resolved from conventions, not punted: acceptance offers "schedule layer OR `bridge = true`"; I implement the `bridge = true` flag in a machine-local layer, because a tracked `[store.sync] bridge` would apply to every clone and break criterion 1.
+    - When `origin` is not a push hub, store pushes go to the declared hubs instead of skipping entirely. That reading follows "work: gitlab only".
+  created_at: 2026-10-30T23:14:27.719672228Z
+  modified_at: 2026-10-30T23:14:27.719672228Z
+  session_id: 01a18f14ebc5
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
   author: joe
