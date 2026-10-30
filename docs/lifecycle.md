@@ -3,7 +3,7 @@
 <!-- trace:TASK-273 | ai:claude -->
 
 Every spec in AIDA travels the same path from "filed an idea" to "users have
-it." The README has the [diagram and tables at a glance](../README.md#spec-lifecycle);
+it." The [product workflow](product-workflow.md) introduces the collaboration loop;
 this document is the full treatment — the prose behind each state, the precise
 verb for each transition, and the edge cases (cluster PRs, parallel
 pipelining, autonomous drains) that the README's map leaves out.
@@ -810,8 +810,7 @@ lives in [`autonomous-drain.md`](autonomous-drain.md).
 
 ## See also
 
-- [README — Spec lifecycle](../README.md#spec-lifecycle) — the diagram and
-  tables at a glance
+- [Product workflow](product-workflow.md) — the collaboration loop and record layers
 - [`docs/git-workflow.md`](git-workflow.md) — branch, PR, and divergent-branch
   recovery mechanics
 - [`docs/session-lifecycle.md`](session-lifecycle.md) — worktrees, leases,
