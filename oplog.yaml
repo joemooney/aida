@@ -93160,5 +93160,24 @@ operations:
   timestamp: 2026-10-30T14:11:07.807027840Z
   kind: !SetStatus
     status: Approved
-clock: 7215
+- id: 01a18d27-2aba-7fe3-a393-164cc5e29ad8
+  target_id: 01a18d27-18ba-7540-92d9-49f7ad7f463b
+  author: aida
+  node_id: '1'
+  lamport: 7216
+  timestamp: 2026-10-30T14:11:56.730863753Z
+  kind: !Create
+    title: 'Advisor never acted on 7 Codex handoffs: the per-turn notice says ''12 shared mail'' with no sender or subject, so role-addressed mail reads as noise'
+    description: |-
+      2026-10-29/30: codex-implementer-01 sent seven [handoff]/[request] mails to role advisor (21:36 docs round 2 heads; 22:59 PR-3122 needs review routing; 00:04, 01:06, 02:42 PRs ready; 02:44 spike; 07:05 lease refusal). All arrived. The advisor seat's per-turn notice only said 'Awaiting you: ... 12 shared mail', and the inbox was flooded with weeks-old 1970-dated review-watch notices (BUG-HOME-032), so the advisor never opened them. The operator relayed by hand all night, and Codex waited 9+ hours on routing it had asked for at 22:59. Operator: 'that is the big selling point about aida, inter-agent vendor communication.'
+      Acceptance:
+      1. Mail addressed to the session's ROLE (for example advisor) counts as direct mail in the per-turn notice, not 'shared'.
+      2. The notice names the newest unread items: sender, kind ([handoff]/[request]), age and subject, at least 3 lines, with [request] first.
+      3. Unread mail older than N days (default 7) from automated senders (review-watch) is auto-archived or summarized as one line, so it cannot bury new mail.
+      4. A [request] unread for more than 30 minutes escalates in `aida awaiting` as an item for the addressed seat.
+      5. Test: a role-addressed handoff from another vendor shows by sender and subject in the next per-turn notice.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 7216
 node_id: '1'
