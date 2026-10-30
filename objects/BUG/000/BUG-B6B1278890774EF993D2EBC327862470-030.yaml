@@ -22,12 +22,12 @@ description: |
 
   ADVISOR RULING 2026-10-29 22:50 (PR-3117 round 2 at c3cb9bb2): FASTTRACK, one line, push to PR-3117.
   Add #[cfg(unix)] to launcher_waits_for_child_when_registration_lock_stays_busy (aida-cli-lib/src/tests/bug_030_launch_registry_lock_tests.rs:92 spawns /bin/sh). Do not grow the portability allowlist. Run scripts/check-portability.sh plus make check-ci-fast; no cargo is needed. Nothing else changes; round-1 findings 1-4 are verified fixed.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T07:26:16.078983807Z
+modified_at: 2026-10-30T07:27:44.818229092Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -245,6 +245,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18bb5-1cb2-7ff0-bc90-b7e32ab7f815
+  author: aida-session-start
+  timestamp: 2026-10-30T07:27:44.818228121Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
