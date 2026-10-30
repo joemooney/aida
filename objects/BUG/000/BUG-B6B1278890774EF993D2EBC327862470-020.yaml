@@ -7,12 +7,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:26:07.472529964Z
-modified_at: 2026-10-30T07:00:20.901059444Z
+modified_at: 2026-10-30T07:02:25.915244314Z
 req_type: Bug
 tags:
 - aida:alias
 - docs
 - ux
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a18b9d-8ef1-7cb0-9e30-815bf535370a
+  created_at: 2026-10-30T07:02:25.915241371Z
+  created_by: joe
 comments:
 - id: 01a18b9c-0725-79c1-8eab-745839fbf21b
   author: ai:codex:joe
@@ -42,6 +48,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18b9d-f9fc-7d23-b5e5-1af1270319d3
+  author: joe
+  timestamp: 2026-10-30T07:02:28.604160271Z
+  changes: []
 filed_at:
   code_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
   branch: main
