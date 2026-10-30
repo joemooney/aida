@@ -1429,10 +1429,8 @@ fn load_human_holds(project_root: &Path, snapshot: &mut LaneLivenessSnapshot) {
     }
     for hold in holds {
         let Some(waiting_since) = placed_since.get(&hold.pr).copied().or_else(|| {
-            file_mtime_utc(&crate::gate::merge_hold_core::hold_path(
-                project_root,
-                hold.pr,
-            ))
+            crate::gate::merge_hold_core::hold_placed_at(project_root, hold.pr)
+                .map(chrono::DateTime::<chrono::Utc>::from)
         }) else {
             continue;
         };

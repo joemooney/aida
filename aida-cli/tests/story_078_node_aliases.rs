@@ -743,7 +743,10 @@ fn node_alias_review_record_keys_the_verdict_under_the_canonical_id() {
     );
     assert!(out.to_ascii_uppercase().contains(&canonical), "{out}");
 
-    let verdicts = f.root.join(".aida/review-verdicts");
+    // M1 slice 2: verdicts live on the gate ledger only; the spec's key is
+    // its `by-spec` index entry, which must name the canonical id.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let verdicts = f.root.join(".aida/gate-ledger/by-spec");
     let verdict_file = verdicts.join(format!("{canonical}.json"));
     assert!(
         verdict_file.is_file(),

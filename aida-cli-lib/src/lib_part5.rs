@@ -1979,7 +1979,7 @@ pub(crate) fn handle_review_stranded(json: bool, fix: bool, age: bool) -> Result
                 current.and_then(|v| v.recorded_by),
             ));
             hold.spec = Some(row.spec_id.to_ascii_uppercase());
-            crate::gate::merge_hold_core::write_typed_hold(&project_root, &hold)
+            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
                 .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
             let detail = row
                 .verdict_summary
@@ -3212,54 +3212,37 @@ pub(crate) fn handle_review_record_at(
                 "a refusing verdict must name `--pr <N>` so AIDA can protect the pull request"
             )
         })?;
-        let reason = format!(
-            "{} for {} at {}",
-            kind.label(),
-            spec.to_ascii_uppercase(),
-            resolved_sha
-                .as_deref()
-                .map(crate::gate::review_verdict::short_sha)
-                .unwrap_or("unknown")
-        );
-        // BUG-1536: this used to re-resolve a SEPARATE "protection root" here
-        // (preferring `AIDA_PROJECT_ROOT`, ambiently) rather than reusing the
-        // one root this whole call was given. That second ambient read is
-        // exactly what let a test's `AIDA_DRIVE_ROOT`-only tempdir pin leave
-        // the hold, verdict and forge label call resolving against a seat
-        // shell's real `AIDA_PROJECT_ROOT`. There is now exactly one root for
-        // the whole call — `project_root`, the parameter — so a hold and its
-        // label can never target a different tree than the verdict itself.
-        // STORY-1397: the hold is typed Rework so it is not mistaken for a
-        // recusal or supervision hold. trace:STORY-1397 | ai:codex
-        // BUG-1532 criterion 10 / BUG-1562: the hold REFERENCES this verdict
-        // record (key, PR, sha, recording seat) and states its release
-        // condition, so a later round of the same verdict is followed rather
-        // than a frozen quote of this one. trace:BUG-1532 trace:BUG-1562 | ai:claude
-        let spec_key = spec.trim().to_ascii_uppercase();
-        let mut hold = crate::gate::merge_hold_core::typed_hold(
+        // BUG-1536: exactly one root for the whole call — `project_root`, the
+        // parameter — so a hold and its label can never target a different
+        // tree than the verdict itself. STORY-1397 / BUG-1532 / BUG-1562: the
+        // hold is typed Rework, references this verdict record and states
+        // its release condition ([`refusal_hold`]).
+        // trace:BUG-1536 trace:STORY-1397 trace:BUG-1532 trace:BUG-1562 | ai:claude
+        //
+        // M1 slice 2: a contained reviewer cannot write the gate ledger; the
+        // launcher that started it arms this hold when it collects the
+        // verdict. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let hold = crate::gate::merge_hold_core::refusal_hold(
             n,
-            crate::gate::merge_hold_core::HoldReasonKind::Rework,
-            &reason,
-            resolved_sha.clone(),
-        );
-        hold.verdict_ref = Some(crate::gate::merge_hold_core::VerdictRef::new(
-            &spec_key,
-            Some(n),
+            spec,
+            kind.label(),
             resolved_sha.clone(),
             Some(recorded_by.clone()),
-        ));
-        hold.spec = Some(spec_key.clone());
-        // trace:STORY-1697 | ai:claude
-        hold.release_condition = Some(format!(
-            "a fresh APPROVED verdict for {spec_key} recorded at PR #{n}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)"
-        ));
-        crate::gate::merge_hold_core::write_typed_hold(&project_root, &hold)
-            .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
-        if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
+        );
+        if crate::session::process_contained() {
             eprintln!(
-                "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                "  {} PR-{n}'s merge hold is armed by the launcher when it collects this verdict",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             );
+        } else {
+            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
+                .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
+            if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
         }
     }
     // STORY-1417: build + classify + one verified write — the same boundary
@@ -3301,14 +3284,14 @@ pub(crate) fn handle_review_record_at(
         .or_else(|| resolved_sha.clone());
     crate::gate::review_verdict::write_verdict_object(&path, &verdict_obj)
         .with_context(|| "could not write the review verdict")?;
-    // PRIN-5 / BUG-1571: `record_verdict` already writes atomically and
-    // verifies the bytes landed, but never print a path this process has
-    // not itself just confirmed exists on disk.
-    // trace:BUG-1571 | ai:claude
-    if !path.is_file() {
+    // PRIN-5 / BUG-1571: never report a record this process has not itself
+    // just read back. M1 slice 2: read back from where the gates read it —
+    // the gate ledger (or a contained seat's hand-off file).
+    // trace:BUG-1571 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if crate::gate::review_verdict::current_verdict_at(&path).is_none() {
         anyhow::bail!(
-            "the review verdict at {} disappeared immediately after being written — not reporting it as recorded",
-            path.display()
+            "the review verdict for {} is not readable immediately after being recorded — not reporting it as recorded",
+            spec.to_ascii_uppercase()
         );
     }
     // STORY-1405: the verdict is on disk, so the review is no longer "in
@@ -3478,7 +3461,7 @@ pub(crate) fn handle_review_record_at(
                     err.kind(),
                     std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
                 );
-                let contained = refused && crate::session::aida_contained_env().unwrap_or(false);
+                let contained = refused && crate::session::process_contained();
                 let Some(fallback) =
                     contained_handshake_fallback(&project_root, &handshake, contained)
                 else {
@@ -3511,9 +3494,10 @@ pub(crate) fn handle_review_record_at(
         // point must still block the success line rather than merely being
         // ignored. PRIN-5: never print a path that wasn't written.
         // trace:BUG-1571 | ai:claude
-        if !handshake.is_file() {
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        if crate::gate::review_verdict::current_verdict_at(&handshake).is_none() {
             anyhow::bail!(
-                "the phase-3 handshake at {} disappeared immediately after being written — not reporting it as recorded",
+                "the phase-3 handshake at {} is not readable immediately after being recorded — not reporting it as recorded",
                 handshake.display()
             );
         }
@@ -3941,9 +3925,21 @@ mod bug_1452_refusal_aftermath_tests {
             root.path().display(),
             handshake.display()
         );
+        // M1 slice 2: the handshake is recorded on the PR's gate ledger in
+        // this test's own tempdir, not as a file.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let ledger = crate::gate::ledger::store::ledger_file(
+            root.path(),
+            crate::gate::ledger::ChangeKey::pr(1452),
+        );
         assert!(
-            handshake.is_file(),
+            ledger.starts_with(root.path()) && ledger.is_file(),
             "the phase-3 handshake must be on disk at {}",
+            ledger.display()
+        );
+        assert!(
+            crate::gate::review_verdict::current_verdict_at(&handshake).is_some(),
+            "the phase-3 handshake must be readable at {}",
             handshake.display()
         );
     }
