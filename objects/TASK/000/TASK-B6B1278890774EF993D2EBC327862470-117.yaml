@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T05:44:33.526753404Z
+modified_at: 2026-10-30T05:45:05.546671954Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -54,6 +54,32 @@ comments:
     Avoid Git HEAD/index changes while builds run: committing the final snapshot during the first affected-test build triggered an avoidable extra CLI-library rebuild via build_git_stamp.rs. Branch and index are now frozen through remaining checks; use GIT_OPTIONAL_LOCKS=0 for incidental read-only Git operations. No source or gate-policy change is needed for this workflow lesson.
   created_at: 2026-10-30T05:40:44.237620599Z
   modified_at: 2026-10-30T05:40:44.237620599Z
+- id: 01a18b57-210a-7ab2-a408-3d476f63dc22
+  author: ai:codex:joe
+  content: |
+    Implementation ready on task-b6b1278890774ef993d2ebc327862470-117-work at 31a9af98f696f28c8dad6a66763944252ed2c7a8. Current main was merged before final validation. PR creation follows the publication workflow; the URL will be recorded afterward.
+
+    ## Summary
+
+    Makes `aida agent list` the canonical agent-listing command and advertises `ls` as a visible alias. Existing `ls` scripts and `status` behavior retain the same listing flags; `list-roles` remains a separate command.
+
+    The pre-parser recognizes `list` without rewriting it into an agent launch. Current manual/help guidance and the orchestrator template use the canonical name, and the help snapshot was regenerated from the actual command definitions. Historical policy fixtures retain legacy invocations to verify compatibility.
+
+    ## Test plan
+
+    - [x] Compile every test target after merging current main (`make check-ci-compile`).
+    - [x] 19 command-registry and historical-policy tests, including the regenerated help snapshot.
+    - [x] Isolated built-CLI smoke: equal `list`/`ls`/`status` output under `--all`, `--stale` and `--ended`; visible alias help and distinct `list-roles`.
+    - [x] `make test-touched`: 1,062 CLI-library tests and 2,028 core tests passed; three core tests are ignored by default.
+    - [x] `make check-ci-fast`: all 35 gates passed at the final head.
+
+    Author self-check: two fresh contexts. The first found a remaining manual bullet that presented `ls` as canonical; it was corrected. The second found no remaining findings and independently ran parsing/help checks. These are author checks, not independent approval. No self-merge or hold clearance.
+
+    TASK-B6B1278890774EF993D2EBC327862470-117
+
+    Evidence logs: /tmp/task117-compile.log; /tmp/task117-touched-tests.log; /tmp/task117-final-fast.log; /tmp/task117-registry-tests.log; /tmp/task117-cli-smoke.log.
+  created_at: 2026-10-30T05:45:05.546671954Z
+  modified_at: 2026-10-30T05:45:05.546671954Z
 history:
 - id: 01a18a38-865a-73b1-baec-dc0e2fc248fb
   author: joe
