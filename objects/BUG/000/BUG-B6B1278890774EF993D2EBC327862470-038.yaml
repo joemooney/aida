@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T17:47:34.353980441Z
+modified_at: 2026-10-30T17:49:32.856761263Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -49,6 +49,20 @@ comments:
   modified_at: 2026-10-30T17:42:35.811322108Z
   session_id: 01a18d9d27ec
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18dee-6338-7923-9c74-4be946dca6af
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 10:52 (PR-3143 round 1, BUG-HOME-038). ONE rework push to bug-b6b1278890774ef993d2ebc327862470-038 (merge origin/main; no rebase, no force). Bundle all six findings.
+    1. (major) Ownership proof: allow the seat's own git only when BOTH hold: (a) containment is proven (the existing write probe), and (b) the clone root equals the clone path in THIS process's own session lease (resolve the lease from the process's session and compare canonical paths). Any other clone is refused. Add a test where a contained process with seat A's lease is refused in seat B's clone.
+    2. Run the STORY-469 commit-trailer check in --from-seat against the imported commit before the push.
+    3. --dry-run --from-seat performs no import: verify the bundle in a temp location only, print the plan, and leave no refs behind. Test it.
+    4. Handler tests: push target equals the lease branch on origin; --from-seat run from inside a clone is refused; the PR body contains 'published from seat'. Use a mock forge.
+    5. Delete refs/aida/seat-import/<branch> after a successful push.
+    6. Cache the containment probe result once per process (OnceLock) instead of probing on every git call.
+    Gate: LIGHT (cargo test -p aida-cli-lib --lib bug_home_038 plus make check-ci-fast). If the seat cannot open the PR, push and stop; the advisor handles it.
+  created_at: 2026-10-30T17:49:32.856761263Z
+  modified_at: 2026-10-30T17:49:32.856761263Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
   author: aida-session-start
