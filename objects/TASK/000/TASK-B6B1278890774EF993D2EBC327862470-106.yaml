@@ -25,12 +25,12 @@ description: |
   ADVISOR RULING 2026-10-30 00:15 (PR-3096 round 3, FINAL round: one push, then a scoped check of these items only)
   FIX: (1) first-project.md:78 points to an init-inventory that is gone; repoint or remove it. (2) first-project.md:9 and :522 mention removed install options and a quick reference; update both. (4) build.py docstring: claim only **bold** support. (5) operator block: show `aida init --help` before `aida init`. (6) aria-hide the ✳ in the page template's brand link, as index.html does. (7) README: link the .md source (or the published page URL), not a raw .html file.
   ACCEPTED, no action (3): docs-only acceptance needs no test; showcase pages are gated by build.py --check.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-30T14:44:04.258489646Z
+modified_at: 2026-10-30T16:32:58.001027876Z
 req_type: Task
 tags:
 - advisor-review
@@ -246,6 +246,22 @@ history:
   timestamp: 2026-10-30T07:08:11.149822149Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18da8-468a-75f3-9437-99c17714e285
+  author: aida-auto-bump
+  timestamp: 2026-10-30T16:32:57.994699227Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18da8-4691-7ae0-a03c-aeb6de796b12
+  timestamp: 2026-10-30T16:32:58.001024407Z
+  agent: aida
+  commit_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
+  summary: 'Base-only update from main (gh update-branch 1b3eeaa9956bce0c5d156b6f2045579a7c6b9016 -> 4a521243b37f3a9d35b56a80dbf6cc918d3bec3b); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  punted:
+  - 'punted: session end observed 2 commits ahead on branch `codex/docs-restack-106` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451
   branch: epic-b6b1278890774ef993d2ebc327862470-002-work
@@ -258,15 +274,9 @@ implementation_info:
   test_coverage_notes: 'make check-ci-fast: 35 fast-tier gates passed; source/help inspection and two-round author self-check'
   implemented_at: 2026-10-29T18:33:00.463522477Z
   implemented_by: joe
+  completed_at: 2026-10-30T16:32:57.994691787Z
+  completion_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
   reopened_at_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Docs slice mostly meets acceptance (AC1 verified: getting-started.md conversational journey + separately labeled ''One-time operator setup'', no mutation commands required; AC2 partial: guide/showcase page/README/OVERVIEW/what-is-aida agree, but rewriting getting-started left stale inbound references in first-project.md; AC3 verified manually only: python3 docs/showcase/build.py reproduces getting-started.html byte-identically, shared styles.css+guide.css layout, skip link/lang/aria-current nav, footer provenance, local assets — no automated freshness check; AC4 verified: capture-limits disclaimer present, --with-mcp opt-in/--agent/--footprint full/aida mcp-serve/aida dev status checked against init_cmd.rs and --help). CI green except expected merge-hold-gate. Request one rework round for the findings.'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-106 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T06:44:38.995001061Z
 interface_changes:
   other:
   - Conversational newcomer guide rendered in the static showcase
