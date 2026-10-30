@@ -32,12 +32,12 @@ description: |-
   5. Fix (bundled, partial): `aida node show` flags a mismatch when the local role says root but registry/root.yaml names another holder. ACCEPTED as deferred to slice 2 (per R8 slicing): effective_policy refusing on mismatch.
   6. Cosmetic (bundled): allocation_lineage.rs:207 cycle message reads "lineage of pool p reaches a cycle" for off-cycle pools; allocation_lineage.rs:497 block_lineage rustdoc + docs/cli/10-storage.md note that slice 1 validates only the immediate parent's home_ref.
   Validate: the targeted tests for 2–4 plus make check-ci-fast. LIGHT tier.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:47:20.232117001Z
-modified_at: 2026-10-30T00:24:13.093971631Z
+modified_at: 2026-10-30T01:07:38.020343151Z
 req_type: Story
 tags:
 - architecture
@@ -164,6 +164,23 @@ comments:
   created_at: 2026-10-30T00:23:20.547759599Z
   modified_at: 2026-10-30T00:23:20.547759599Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+- id: 01a18a59-0bfe-7c60-bb6b-2b965845b279
+  author: joe
+  content: |-
+    ## Rework round 1 pushed to PR-3108 (ef123de7fc8)
+
+    1. docs/cli/10-storage.md no longer cites `aida node claim`; verify-manual.py with the PR binary: OK.
+    2. enroll_root_commits_the_root_record_once: fixture sets a repo-local git identity (CI had none). Passes with GIT_CONFIG_GLOBAL=/dev/null and the CI feature set.
+    3. `aida node upstream` fails closed when the project root or config cannot be read (refuse_mirror_upstream). 3 unit tests in aida-cli-lib/src/tests/story_095_upstream_tests.rs.
+    4. first_notice_this_session keeps every reason seen in the session and resets on session change. Test: bug/task/bug/task, then a new session.
+    5. `aida node show` prints a Mismatch line when the clone is marked root but root.yaml names another holder (asserted in the integration test). Refusing on it is deferred to slice 2, as ruled.
+    6. Cycle conflict: on-cycle pools say "is its own ancestor"; off-cycle pools say "the lineage of pool X reaches a cycle at pool Y" (tested). block_lineage rustdoc and the docs state the immediate-parent-only check.
+
+    Validation: targeted aida-core lineage/authority tests (47 ok), aida-cli-lib story_095_upstream (3 ok), aida-cli story_095_block_delegation (3 ok), make check-ci-fast (35 gates ok).
+  created_at: 2026-10-30T01:07:34.014533626Z
+  modified_at: 2026-10-30T01:07:34.014533626Z
+  session_id: 01a18a315855
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a189da-dae2-7bd0-9ea0-812a156462e8
   author: joe
@@ -209,6 +226,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18a59-1c11-7de3-bb4c-55ceedd959f3
+  author: joe
+  timestamp: 2026-10-30T01:07:38.129077234Z
+  session_id: 01a18a315855
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -217,3 +243,7 @@ filed_at:
   aida_build_sha: 24b61036ae0
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T01:07:38.020343151Z
+  implemented_by: joe
