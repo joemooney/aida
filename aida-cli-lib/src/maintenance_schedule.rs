@@ -1781,13 +1781,21 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
 /// `due` / `done` with no config entry.
 // trace:STORY-1688 | ai:claude
 fn builtin_routed_seat_task(name: &str) -> Option<Task> {
-    let route = crate::lane_liveness::route_for_job(name)?;
+    // STORY-HOME-128: `mail-backlog-guard-route-<seat>` routes to whatever
+    // seat the overdue mail was addressed to. trace:STORY-HOME-128 | ai:claude
+    let (seat, prompt) = match crate::lane_liveness::route_for_job(name) {
+        Some(route) => (route.seat.to_string(), route.prompt.to_string()),
+        None => {
+            let seat = crate::mail_backlog::seat_for_job(name)?;
+            (seat.to_string(), crate::mail_backlog::route_prompt(seat))
+        }
+    };
     Some(Task {
         name: name.to_string(),
         kind: JobKind::Seat,
-        seats: vec![route.seat.to_string()],
+        seats: vec![seat],
         command: None,
-        prompt: Some(route.prompt.to_string()),
+        prompt: Some(prompt),
         interval: None,
         on: vec![EventTrigger {
             kind: "CronJobFired".to_string(),
@@ -1816,8 +1824,18 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
     let ledgers = schedule_ledger::load_all(&store_root(project_root));
     let mut tasks = config.map(|c| c.tasks).unwrap_or_default();
     // trace:STORY-1688 | ai:claude
-    for route in crate::lane_liveness::ROUTES {
-        let builtin_name = crate::lane_liveness::route_job_name(route.seat);
+    // trace:STORY-HOME-128 | ai:claude
+    let builtin_names = crate::lane_liveness::ROUTES
+        .iter()
+        .map(|route| crate::lane_liveness::route_job_name(route.seat))
+        .chain(
+            ledgers
+                .keys()
+                .filter(|name| crate::mail_backlog::seat_for_job(name).is_some())
+                .cloned(),
+        )
+        .collect::<Vec<_>>();
+    for builtin_name in builtin_names {
         if ledgers
             .get(&builtin_name)
             .and_then(|l| l.due_since)
@@ -3316,6 +3334,18 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             ScheduledCommand {
                 display: "doctor check lane-liveness",
                 args: &["doctor", "check", "lane-liveness", "--json"],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-HOME-128: the mail-backlog guard nudges each overdue
+        // recipient through its own wake path and records the nudge, so like
+        // lane-liveness it exits 0 rather than failing as a gate.
+        // trace:STORY-HOME-128 | ai:claude
+        (
+            &["doctor check mail-backlog", "mail-backlog"],
+            ScheduledCommand {
+                display: "doctor check mail-backlog",
+                args: &["doctor", "check", "mail-backlog", "--json"],
                 hook_allowed: false,
             },
         ),
