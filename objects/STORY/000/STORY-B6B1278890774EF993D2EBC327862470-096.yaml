@@ -50,12 +50,12 @@ description: |
 
 
   ADVISOR NOTE 2026-10-29 23:33: SUPERSEDES the 23:26 note. The advisor pushed the lane's commit 6bdf89bc8a7 to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096), so all seven fixes are on the PR now. REMAINING WORK ONLY: check out the PR-3110 branch, regenerate the help golden snapshot (command_registry::story_1728 help_surface_matches_golden_snapshot), run `cargo test -p aida-cli-lib --lib story_1728` plus make check-ci-fast, and push to that same branch. Do NOT open a new PR and do NOT redo the fixes.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T07:07:04.071302552Z
+modified_at: 2026-10-30T07:59:42.605579500Z
 req_type: Story
 relationships:
 - rel_type:
@@ -325,6 +325,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18bd2-6006-7311-aed7-a3786770313d
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:59:42.598771666Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18bd2-600d-7610-acec-65da35a347fd
+  timestamp: 2026-10-30T07:59:42.605575123Z
+  agent: aida
+  commit_sha: 6893558f16742586e86776b31f555700c9884b66
+  summary: 'Base-only update from main (gh update-branch b9617bcbe049818302db057bb59d9d25b9595521 -> df7add8fc50d44dc2cd80551b7444e944c45bc5e); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -337,4 +351,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:07:29.315511399Z
   implemented_by: joe
+  completed_at: 2026-10-30T07:59:42.598766404Z
+  completion_sha: 6893558f16742586e86776b31f555700c9884b66
   reopened_at_sha: 88dbfd8c194107f2e531182e532f07356c09e5bd
