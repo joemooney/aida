@@ -1720,3 +1720,54 @@ fn bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses() {
     assert!(!clone.exists());
     assert!(!crate::lease_path(&fx.main, id).exists());
 }
+
+/// BUG-B6B1278890774EF993D2EBC327862470-023: an orphaned clone lease whose
+/// tree holds only ignored seat state (its `.aida/seat-clone.toml` marker)
+/// reads clean to the lease classifiers. Host git never runs in a clone, so
+/// the host `git status` reader counts the refusal as one uncommitted change;
+/// the lease reader probes the clone in its sandbox instead, and still counts
+/// real work there: untracked files and commits origin does not have.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads_clean() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    aida_core::seat_clone_detect::note_host_main(&fx.main);
+    let clone = seat(&fx, "orphan", "c0ffee000023");
+    assert!(clone.join(MARKER_RELATIVE).exists());
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|lease| lease.id == "c0ffee000023")
+        .expect("clone lease");
+
+    // The host reader refuses the clone: the "1 uncommitted change(s)".
+    assert_eq!(
+        crate::status_sections::worktree_dirty_entries(&clone).len(),
+        1
+    );
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert!(entries.is_empty(), "{entries:?}");
+    let report = crate::leases::stale_lease_recovery_for_lease(&lease);
+    assert!(report.dirty.is_empty(), "{:?}", report.dirty);
+    assert!(
+        report.worktree_state_phrase().contains("CLEAN"),
+        "{}",
+        report.worktree_state_phrase()
+    );
+
+    std::fs::write(clone.join("untracked.txt"), "u\n").unwrap();
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert!(entries[0].contains("untracked.txt"), "{entries:?}");
+
+    std::fs::remove_file(clone.join("untracked.txt")).unwrap();
+    seat_commit(&clone, "a.txt");
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert_eq!(
+        entries,
+        vec!["1 commit(s) that origin does not have".to_string()]
+    );
+}

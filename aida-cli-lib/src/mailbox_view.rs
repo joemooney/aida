@@ -310,6 +310,10 @@ fn snapshot_view(
     query: &Query,
     limits: &ReadLimits,
 ) -> (Option<(MailboxContext, LogicalSnapshot)>, OwnMail) {
+    // A verified seat clone reads the primary's mailbox, where its sends and
+    // the replies to them land. trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+    let home = crate::mailbox_store::mailbox_home(project_root);
+    let project_root = home.root();
     let store = std::fs::symlink_metadata(store_root)
         .is_ok()
         .then_some(store_root);
