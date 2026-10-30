@@ -91078,5 +91078,21 @@ operations:
 
       ADVISOR RULING 2026-10-30 00:15 (PR-3102 round 3, FINAL round: one push, then a scoped check of these items only)
       FIX all six: (1) docs/cli/10-storage.md:19 and :54: merge-gate runs inside `aida pull` only on an enrolled HOME clone (store_push_pull.rs ~2442). (2) OVERVIEW.md:411: drop "auto-rebuilt when HEAD differs" to match the "Bounded cache reads" section. (3) docs/storage-modes.md:67-68 and :179-180: use current id forms and say agreed short ids need HOME, matching :29-30. (4) docs/admin-guide.md:7: remove or fix the link to the nonexistent DEVELOPER_GUIDE.md. (5) docs/cli/07-project-setup.md:185: the anchor is #aida-add---sanitized-sanitized-intake. (6) docs/cli/01-getting-started.md:29: restore the two init --force refusals (nested repos; re-initialize).
-clock: 7064
+- id: 01a18ba4-b698-7b61-be95-715aa8007166
+  target_id: 01a18968-65ca-7971-a97a-fbfccf17648d
+  author: aida
+  node_id: '1'
+  lamport: 7065
+  timestamp: 2026-10-30T07:09:50.104825838Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a18ba4-b958-7471-b368-f707f07d1873
+  target_id: 01a18968-65ca-7971-a97a-fbfccf17648d
+  author: aida
+  node_id: '1'
+  lamport: 7066
+  timestamp: 2026-10-30T07:09:50.808623354Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 7066
 node_id: '1'
