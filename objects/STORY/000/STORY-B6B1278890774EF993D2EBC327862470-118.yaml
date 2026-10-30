@@ -1,0 +1,33 @@
+id: 01a18c0f-2ead-7240-b5ab-c0db948821df
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-118
+title: 'Review PR-3129: [AI:claude] feat(agent): per-agent Codex mail wake, slice 2 - agent new arms it, end/gc retire it (STORY-B6B1278890774EF993D2EBC327862470-096)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-096`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3129>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-096` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-096
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3129` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T09:06:07.661898969Z
+modified_at: 2026-10-30T09:06:07.661898969Z
+req_type: Story
+filed_at:
+  code_sha: 142905fe98530ed6d96f5ba16d4a13240ec8342e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 142905fe985
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
