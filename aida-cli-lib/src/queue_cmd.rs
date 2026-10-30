@@ -12530,31 +12530,18 @@ pub(crate) fn handle_queue_work(
             // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
             let conflict_id = conflict.id.as_str();
             // A dead lease whose worktree is gone has nothing left to lose, so
-            // it is released without `--force-claim`.
+            // it is released without `--force-claim`; only a verdict of
+            // ReclaimableClean { worktree_missing: true } is released here.
             // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-            if crate::session_reap::release_gone_worktree_lease(
+            let released_gone = crate::session_reap::release_gone_worktree_lease(
                 &project_root_for_conflict,
                 &conflict,
                 &recovery.verdict,
-            ) {
-                eprintln!(
-                    "  {} released orphaned lease {} ({})",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    conflict_id.yellow(),
-                    "owning session gone, worktree already removed".dimmed()
-                );
-                remaining -= 1;
-                if remaining == 0 {
-                    anyhow::bail!(
-                        "lease-recovery sweep gave up after 16 iterations on scope `{}` — \
-                         the lease store may be corrupt; inspect `.aida/sessions/`",
-                        plan.scope
-                    );
-                }
-                continue;
-            }
+            );
             match &recovery.verdict {
-                StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
+                StaleLeaseRecovery::ReclaimableClean { worktree_missing }
+                    if force_claim || released_gone =>
+                {
                     eprintln!(
                         "  {} released orphaned lease {} ({})",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -12565,7 +12552,9 @@ pub(crate) fn handle_queue_work(
                             "owning session gone, worktree clean".dimmed()
                         }
                     );
-                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    if !released_gone {
+                        let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    }
                     remaining -= 1;
                     if remaining == 0 {
                         anyhow::bail!(
@@ -14051,9 +14040,17 @@ pub(crate) fn run_standalone_reviewer(
 
     // The reviewer has exited and its verdict is collected (or known to be
     // missing): its finished review is reaped now, before any exit path
-    // below. The launcher still sits in the tree, so it steps out first.
+    // below. A launcher still sitting in the tree steps out of it first; any
+    // other cwd is left alone (it is process-wide state).
     // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
-    let _ = std::env::set_current_dir(project_root);
+    if std::env::current_dir().is_ok_and(|cwd| {
+        cwd.starts_with(worktree)
+            || worktree
+                .canonicalize()
+                .is_ok_and(|tree| cwd.starts_with(tree))
+    }) {
+        let _ = std::env::set_current_dir(project_root);
+    }
     for (id, outcome) in end_finished_review(project_root, scope, worktree, collected.is_ok()) {
         let id = &id[..id.len().min(8)];
         match outcome {

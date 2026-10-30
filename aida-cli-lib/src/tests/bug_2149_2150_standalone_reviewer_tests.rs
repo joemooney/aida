@@ -86,8 +86,22 @@ fn run_mock_reviewer_mode(
     no_human: bool,
     setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
 ) -> (Result<()>, std::path::PathBuf) {
+    run_mock_reviewer_in(tmp, no_human, |_, _| {}, setup)
+}
+
+/// [`run_mock_reviewer_mode`], with `make_tree(project, worktree)` run first
+/// to lay out the project and review tree (the default is a bare directory).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[cfg(unix)]
+fn run_mock_reviewer_in(
+    tmp: &std::path::Path,
+    no_human: bool,
+    make_tree: impl FnOnce(&std::path::Path, &std::path::Path),
+    setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
+) -> (Result<()>, std::path::PathBuf) {
     let (home, project) = codex_only_project(tmp);
     let worktree = tmp.join("reviewer-worktree");
+    make_tree(&project, &worktree);
     std::fs::create_dir_all(worktree.join(".aida")).unwrap();
     let mock = tmp.join("mock-reviewer.sh");
     let bin = tmp.join("bin");
@@ -420,6 +434,125 @@ fn fifo_symlink_verdict_is_skipped_not_read() {
     drop(done);
     watchdog.join().unwrap();
     assert_refused(result, &project, "wrote no verdict file after it started");
+}
+
+/// Lay out `project` as a git checkout with `worktree` a clean linked review
+/// tree on `review/pr-59`, held by a dead reviewer's PR-59 lease that records
+/// the tree's HEAD as the PR head.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[cfg(unix)]
+fn finished_review_tree(project: &std::path::Path, worktree: &std::path::Path) {
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(project, &["init", "-q", "-b", "main"]);
+    // Like the real checkout: per-checkout `.aida/` state is not tracked.
+    std::fs::write(project.join(".git/info/exclude"), "/.aida/\n").unwrap();
+    std::fs::write(project.join("README.md"), "seed\n").unwrap();
+    git(project, &["add", "README.md"]);
+    git(
+        project,
+        &[
+            "-c",
+            "user.name=AIDA Test",
+            "-c",
+            "user.email=aida@example.test",
+            "commit",
+            "-qm",
+            "seed",
+        ],
+    );
+    let tree = worktree.to_str().unwrap();
+    git(
+        project,
+        &["worktree", "add", "-q", "-b", "review/pr-59", tree],
+    );
+    let mut lease = lease_with_role("01a18a759000", "PR-59", "reviewer");
+    lease.worktree_path = worktree.to_path_buf();
+    lease.branch = "review/pr-59".into();
+    lease.creator_pid = Some({
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    });
+    lease.pr_head_sha = Some(git(worktree, &["rev-parse", "HEAD"]));
+    std::fs::create_dir_all(crate::leases_dir(project)).unwrap();
+    std::fs::write(
+        crate::lease_path(project, &lease.id),
+        toml::to_string_pretty(&lease).unwrap(),
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+fn review_branch_exists(project: &std::path::Path) -> bool {
+    crate::test_git::git_command()
+        .arg("-C")
+        .arg(project)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            "refs/heads/review/pr-59",
+        ])
+        .status()
+        .unwrap()
+        .success()
+}
+
+/// BUG-HOME-024 through the real launch: once the reviewer exits with its
+/// verdict collected, its lease, review tree, and review branch are gone, so
+/// nothing blocks the next review of the PR.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[cfg(unix)]
+#[test]
+fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let worktree = tmp.path().join("reviewer-worktree");
+    let (result, project) =
+        run_mock_reviewer_in(tmp.path(), false, finished_review_tree, |l, _| {
+            records_approval(l.worktree, "$AIDA_SESSION_GRANT", HEAD, "")
+        });
+    result.expect("a verified review verdict must succeed");
+
+    assert!(crate::list_leases(&project).is_empty());
+    assert!(!worktree.exists());
+    assert!(!review_branch_exists(&project));
+}
+
+/// With no verdict collected the recovery text points at the review tree, so
+/// the lease, tree, and branch are all kept.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[cfg(unix)]
+#[test]
+fn standalone_reviewer_keeps_its_review_when_no_verdict_was_collected() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let worktree = tmp.path().join("reviewer-worktree");
+    let (result, project) =
+        run_mock_reviewer_in(tmp.path(), false, finished_review_tree, |_, _| {
+            "#!/bin/sh\nexit 0\n".into()
+        });
+    assert_refused(result, &project, "wrote no verdict file after it started");
+
+    let leases = crate::list_leases(&project);
+    assert_eq!(leases.len(), 1, "{leases:?}");
+    assert_eq!(leases[0].id, "01a18a759000");
+    assert!(worktree.exists());
+    assert!(review_branch_exists(&project));
 }
 
 /// A mock `gh` whose `pr view` names STORY-77 as the PR's delivered spec.

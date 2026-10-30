@@ -221,6 +221,38 @@ fn sweep_releases_only_dead_leases_whose_worktree_is_gone() {
     assert!(lease_path(repo.path(), &advisory.id).exists());
 }
 
+/// The automatic path: the quiet reap the drive tick runs releases a dead
+/// gone-tree lease and reports it, without touching a live one.
+#[test]
+fn quiet_reap_releases_and_reports_a_dead_gone_tree_lease() {
+    let repo = committed_repo();
+    let holder = tempfile::tempdir().unwrap();
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-6");
+    let dead = lease_at("01a189c70000", "PR-6", &gone, "pr-6", Some(reaped_pid()));
+    let live_tree = deleted_worktree(repo.path(), holder.path(), "pr-7");
+    let live = lease_at(
+        "01a189c80000",
+        "PR-7",
+        &live_tree,
+        "pr-7",
+        Some(std::process::id()),
+    );
+    for l in [&dead, &live] {
+        write_lease(repo.path(), l);
+    }
+
+    let reap = crate::session_reap::reap_quiet_outcomes(repo.path());
+    let reported: Vec<&str> = reap.leases.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(reported, vec![dead.id.as_str()], "{:?}", reap.leases);
+    assert!(
+        reap.leases[0].1.contains("worktree is gone"),
+        "{:?}",
+        reap.leases
+    );
+    assert!(!lease_path(repo.path(), &dead.id).exists());
+    assert!(lease_path(repo.path(), &live.id).exists());
+}
+
 /// A primary checkout plus a clean review worktree `aida-pr-<pr>` on
 /// `review/pr-<pr>`, held by a dead reviewer's lease that recorded the tree's
 /// HEAD as the PR head. Returns `(tempdir, root, review tree, lease)`.
@@ -317,6 +349,13 @@ fn finished_review_with_a_collected_verdict_is_reaped_at_exit() {
     assert!(!lease_path(&root, &lease.id).exists());
     assert!(!local_branch_exists(&root, "review/pr-3107"));
     assert!(lease_path(&root, &other.id).exists());
+    // The TASK-1955 reap has nothing left to do for this review, even with
+    // the PR merged.
+    let report = crate::session_reap::scan_reapable_with(&root, |_| Some(true));
+    assert!(
+        report.reapable.iter().all(|r| r.session != lease.id),
+        "{report:?}"
+    );
 }
 
 #[cfg(unix)]
