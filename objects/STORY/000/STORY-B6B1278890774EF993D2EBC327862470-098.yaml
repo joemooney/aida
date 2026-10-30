@@ -36,7 +36,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:10.785877389Z
-modified_at: 2026-10-30T17:59:56.463526568Z
+modified_at: 2026-10-30T18:02:32.750258634Z
 req_type: Story
 tags:
 - cli
@@ -93,6 +93,19 @@ comments:
   modified_at: 2026-10-30T14:16:33.215761382Z
   session_id: 01a18d217056
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18dfa-49ae-70a1-8455-913d1905cd99
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 11:08 (PR-3141 round 1, STORY-HOME-098 aida whoami). ONE rework push to the PR-3141 branch (merge origin/main; no rebase, no force). Bundle everything.
+    1. AC1: the test must prove that `aida whoami` resolves the same handle as BOTH `aida mailbox notice` (own_audience() + read_own_mail_binding) and `aida mailbox send`'s sender identity. Either call those real paths in the test, or refactor them onto one shared resolver and test that.
+    2. AC3 queue head: include the role-pool queues for the session's role, skip items whose spec is closed (completed, superseded, rejected), and show the age for a claim-derived spec too. Add tests for: the role-pool head, a finished item skipped, and lease vs claim age.
+    3. AC4: test how the goal line gathers the mandate and purpose (fixture mandate plus purpose).
+    4. AC6: add a test that picks the terminal vs piped output mode (inject is_terminal). For the 300 ms target, a unit-level timing assertion is NOT wanted; state the measured time in the PR description.
+    5. Minors: char-safe slicing at whoami_view.rs:239 (no byte slicing of HEAD); label an AIDA lease id as 'lease' and keep 'session' for the harness session id. The /aida-whoami skill wrapper stays out of scope (accepted: not in the ACs).
+    Gate: LIGHT (cargo test -p aida-cli-lib --lib whoami plus make check-ci-fast).
+  created_at: 2026-10-30T18:02:32.750258634Z
+  modified_at: 2026-10-30T18:02:32.750258634Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18a38-6c62-7cb1-b0db-eecb5124c34e
   author: joe
