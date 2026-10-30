@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+  "publishes": [
+    {
+      "at": "2026-10-30T18:35:09.393462320Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-29T18:24:27.007592283Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T18:34:10.353993929Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T19:35:57.456855946Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+        "branch": "task-b6b1278890774ef993d2ebc327862470-107-work",
+        "first_seen": "2026-10-29T19:35:57.456690141+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-29T23:53:14.114448728Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T23:53:30.070041383Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T00:33:02.793450755Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+        "branch": "codex/docs-restack-107",
+        "first_seen": "2026-10-30T00:33:02.791777838+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T00:40:32.212018562Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-b6b1278890774ef993d2ebc327862470-107"
+      }
+    },
+    {
+      "ts": "2026-10-30T01:28:02.413562356Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T01:28:39.180765961Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-107",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T03:26:03.476356129Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+        "branch": "pr-3097",
+        "first_seen": "2026-10-30T03:26:03.358177160+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T16:34:20.135518649Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3097,
+        "verdict": "APPROVED",
+        "reviewed_sha": "cc29685656d7cb39976c71da1b2f618eb797a2f0"
+      }
+    },
+    {
+      "ts": "2026-10-30T18:05:08.567158441Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3103,
+        "verdict": "APPROVED",
+        "reviewed_sha": "62d6078c93b8bd42de3a0a240a6b3886a90813a9"
+      }
+    },
+    {
+      "ts": "2026-10-30T18:32:40.693932387Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3103
+      }
+    },
+    {
+      "ts": "2026-10-30T18:35:09.256446731Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-107",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
