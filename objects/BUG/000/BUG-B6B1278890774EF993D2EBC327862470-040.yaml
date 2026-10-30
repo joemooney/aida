@@ -9,12 +9,12 @@ description: |-
   3. Unread mail older than N days (default 7) from automated senders (review-watch) is auto-archived or summarized as one line, so it cannot bury new mail.
   4. A [request] unread for more than 30 minutes escalates in `aida awaiting` as an item for the addressed seat.
   5. Test: a role-addressed handoff from another vendor shows by sender and subject in the next per-turn notice.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T23:12:34.064378872Z
+modified_at: 2026-10-30T23:28:48.124724817Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -167,6 +167,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18f24-fcad-72b2-9683-0d2c6e98e18d
+  author: joe
+  timestamp: 2026-10-30T23:28:48.301022133Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
   branch: main
