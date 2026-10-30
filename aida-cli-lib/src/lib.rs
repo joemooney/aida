@@ -545,8 +545,6 @@ mod reviewer_summary;
 mod review_classes;
 // trace:STORY-1889 | ai:claude — verdict rendering, outside the gate.
 mod review_verdict_display;
-// trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
-mod review_carryover;
 mod role_cmd;
 mod rules_cmd;
 mod rules_sync;

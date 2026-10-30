@@ -343,10 +343,10 @@ mod gate {
     //! The production approval gate, decided read-only, on real git
     //! fixtures (TASK-1960's carry-over repository).
     use super::*;
+    use crate::gate::review_carryover::tests::{commit, fixture, head, write};
+    use crate::gate::review_carryover::CarryOverSite;
     use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     use crate::gate::ship::ShipApprovalPolicy;
-    use crate::review_carryover::tests::{commit, fixture, head, write};
-    use crate::review_carryover::CarryOverSite;
 
     fn verdict(sha: &str) -> RecordedVerdict {
         RecordedVerdict {

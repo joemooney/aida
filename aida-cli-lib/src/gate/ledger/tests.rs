@@ -371,6 +371,123 @@ fn a_spec_only_verdict_binds_to_the_change_when_it_opens() {
     assert_eq!(project::newest_verdict(&root, "STORY-9"), Some(later));
 }
 
+/// STORY-080 AC2 (round-2 review finding 2): a pre-PR spec verdict binds to
+/// the first change opened for the spec only. A second change for the same
+/// spec does not inherit it: the spec reads the record once, and the second
+/// change answers with nothing until a verdict is recorded on it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_bound_spec_verdict_does_not_bind_again_to_a_second_change() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let a = attestation("reviewer");
+    let early = record("approved", "2026-10-29T09:00:00Z", Some(&a));
+    rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
+
+    super::bind_specs(&root, ChangeKey::pr(21), &["STORY-9".to_string()]);
+    super::bind_specs(&root, ChangeKey::pr(22), &["STORY-9".to_string()]);
+
+    assert_eq!(project::newest_verdict(&root, "PR-21"), Some(early.clone()));
+    assert_eq!(
+        project::newest_verdict(&root, "PR-22"),
+        None,
+        "PR-22 does not answer with a verdict that predates it and belongs to PR-21"
+    );
+    assert_eq!(
+        project::verdict_records(&root, "STORY-9"),
+        vec![early],
+        "the spec reads the record once, not once per change"
+    );
+
+    let later = record("request-changes", "2026-10-29T11:00:00Z", Some(&a));
+    rv::write_verdict_object_for_spec(&rv::verdict_path(&root, "PR-22"), &later, Some("STORY-9"))
+        .unwrap();
+    assert_eq!(project::newest_verdict(&root, "PR-22"), Some(later.clone()));
+    assert_eq!(project::verdict_records(&root, "STORY-9").len(), 2);
+}
+
+/// STORY-080 AC2 (round-2 review finding 3): every PR-open site goes through
+/// [`super::open_change_bound`], which binds the credited specs' pre-PR
+/// verdicts to the opened change. Driven with a stub forge.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn opening_a_change_through_the_hook_binds_the_credited_specs() {
+    let opens = |id| {
+        let mut forge = crate::forge::fake::RecordingForge::new();
+        forge.opens_as = Some(id);
+        forge
+    };
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let a = attestation("reviewer");
+    let early = record("approved", "2026-10-29T09:00:00Z", Some(&a));
+    rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
+    let req = crate::forge::OpenChange {
+        branch: "feat".into(),
+        base: "main".into(),
+        title: "t".into(),
+        body: String::new(),
+        draft: false,
+    };
+
+    let change =
+        super::open_change_bound(&opens(31), &root, req.clone(), &["STORY-9".to_string()]).unwrap();
+    assert_eq!(change.id, 31);
+    assert_eq!(project::newest_verdict(&root, "PR-31"), Some(early));
+
+    super::open_change_bound(&opens(0), &root, req, &["STORY-9".to_string()]).unwrap();
+    assert_eq!(
+        project::changes_for_spec(&root, "STORY-9"),
+        vec![ChangeKey::pr(31)],
+        "an open with no change number binds nothing"
+    );
+}
+
+/// STORY-080 AC2 ratchet: production code opens a change only through
+/// [`super::open_change_bound`], so no PR-open path (ship, the orchestrator,
+/// the drain cluster, the train, queue recover) skips the binding.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn every_pr_open_site_binds_through_the_hook() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut offenders = Vec::new();
+    let mut stack = vec![src.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n != "tests") {
+                    stack.push(path);
+                }
+                continue;
+            }
+            let rel = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            if path.extension().is_none_or(|e| e != "rs")
+                || rel.ends_with("tests.rs")
+                || rel == "gate/ledger/mod.rs"
+            {
+                continue;
+            }
+            let body = std::fs::read_to_string(&path).unwrap();
+            // Unit-test modules sit at the end of their file.
+            let live = body.split("#[cfg(test)]\nmod ").next().unwrap_or("");
+            if live.contains(".open_change(") {
+                offenders.push(rel);
+            }
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "these files open a change without `gate::ledger::open_change_bound`, so pre-PR \
+         spec verdicts never bind to it: {offenders:?}"
+    );
+}
+
 fn git(repo: &Path, args: &[&str]) {
     let out = crate::test_git::git_command()
         .arg("-C")

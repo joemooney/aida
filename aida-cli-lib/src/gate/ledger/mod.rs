@@ -281,6 +281,27 @@ pub(crate) fn bind_specs(start: &Path, change: ChangeKey, specs: &[String]) {
     }
 }
 
+/// AC2's open-change hook, the one way production code opens a change: open
+/// `req` through `forge`, then bind `specs`' pre-change verdicts to the
+/// opened change ([`bind_specs`], from `start`). A forge that opens no
+/// numbered change (`id == 0`) binds nothing. Ship, the orchestrator, the
+/// drain cluster, the train and queue recover all open through here, so a
+/// spec verdict recorded before the PR reads under the PR whichever path
+/// opened it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn open_change_bound(
+    forge: &dyn crate::forge::Forge,
+    start: &Path,
+    req: crate::forge::OpenChange,
+    specs: &[String],
+) -> anyhow::Result<crate::forge::ChangeRef> {
+    let change = forge.open_change(req)?;
+    if change.id != 0 {
+        bind_specs(start, ChangeKey::pr(change.id), specs);
+    }
+    Ok(change)
+}
+
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

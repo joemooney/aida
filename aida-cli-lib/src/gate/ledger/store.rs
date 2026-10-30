@@ -265,7 +265,9 @@ pub(crate) fn append_unbound(
 /// AC2: bind `spec`'s unbound records to `change` now that a change exists
 /// for it. Each unbound verdict newer than every verdict `change` already
 /// holds for the spec is appended to `change` (indexed by the spec), in its
-/// unbound order, so the change is the one key that answers for it. Older
+/// unbound order, so the change is the one key that answers for it. A record
+/// some other change of the spec already holds stays with that change: it
+/// answers for the change it was bound to, not for a later one. Older
 /// unbound records stay readable through the spec. The unbound ledger is
 /// left as written: binding copies, it never deletes evidence. Returns how
 /// many records were bound.
@@ -275,7 +277,20 @@ pub(crate) fn bind_unbound(root: &Path, spec: &str, change: ChangeKey) -> std::i
     if spec.is_empty() || ChangeKey::parse(&spec).is_some() {
         return Ok(0);
     }
-    let unbound = read_unbound(root, &spec);
+    let bound_elsewhere: Vec<GateEvent> = super::project::changes_for_spec(root, &spec)
+        .into_iter()
+        .filter(|other| *other != change)
+        .flat_map(|other| read_file(root, other))
+        .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
+        .collect();
+    let unbound: Vec<GateEvent> = read_unbound(root, &spec)
+        .into_iter()
+        .filter(|u| {
+            !bound_elsewhere
+                .iter()
+                .any(|b| b.verdict_record() == u.verdict_record())
+        })
+        .collect();
     if unbound.is_empty() {
         return Ok(0);
     }

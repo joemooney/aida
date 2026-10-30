@@ -1113,7 +1113,10 @@ pub(crate) fn corpus_merge_gate(
 pub(crate) type CorpusCarryOverProver<'a> = &'a dyn Fn(
     &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<
-    Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>,
+    Result<
+        crate::gate::review_carryover::CarryOver,
+        crate::gate::review_carryover::CarryOverRefusal,
+    >,
 >;
 
 /// [`corpus_merge_gate`], except that a head nothing approves may still
@@ -1241,7 +1244,12 @@ fn corpus_carry_over(
     live: &[&(String, String)],
     head: &str,
     prove: CorpusCarryOverProver<'_>,
-) -> Option<Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>> {
+) -> Option<
+    Result<
+        crate::gate::review_carryover::CarryOver,
+        crate::gate::review_carryover::CarryOverRefusal,
+    >,
+> {
     use crate::gate::review_verdict as rv;
     let mut approved: Vec<String> = Vec::new();
     for (_, body) in live {
@@ -1443,12 +1451,12 @@ pub(crate) fn corpus_gate_decision(
     let head = head();
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
     let site = if record_proof {
-        crate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch)
+        crate::gate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch)
     } else {
-        crate::review_carryover::CarryOverSite::read_only(main_root.as_path(), base_branch)
+        crate::gate::review_carryover::CarryOverSite::read_only(main_root.as_path(), base_branch)
     };
     let prove = |refusal: &crate::gate::ship::ApprovalHeadRefusal| {
-        crate::review_carryover::prove_for_refusal(&site, pr, refusal)
+        crate::gate::review_carryover::prove_for_refusal(&site, pr, refusal)
     };
     Ok(corpus_merge_gate_carrying(
         pr,

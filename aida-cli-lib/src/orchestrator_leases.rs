@@ -1400,15 +1400,21 @@ pub(crate) fn open_orchestrator_pr_for_implementer_worktree(
     }
     let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
-    let change = crate::forge::forge_for_kind(project_root, forge_kind)
-        .open_change(crate::forge::OpenChange {
+    // STORY-080 AC2: the spec's pre-PR verdicts bind to the opened change.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let change = crate::gate::ledger::open_change_bound(
+        &*crate::forge::forge_for_kind(project_root, forge_kind),
+        project_root,
+        crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
             title,
             body,
             draft: false,
-        })
-        .context("could not open orchestrator-created pull request")?;
+        },
+        &crate::zen_drive_root::extract_spec_ids_from_commit(&commit_msg),
+    )
+    .context("could not open orchestrator-created pull request")?;
     if change.id == 0 {
         anyhow::bail!(
             "the orchestrator-created pull request opened but no number was found in its output: {}",
@@ -1726,15 +1732,21 @@ pub(crate) fn open_orchestrator_pr_for_pushed_branch(
     }
     let commit_msg = head_commit_message(project_root, &branch_ref)?;
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
-    let change = crate::forge::forge_for_kind(project_root, forge_kind)
-        .open_change(crate::forge::OpenChange {
+    // STORY-080 AC2: the spec's pre-PR verdicts bind to the opened change.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let change = crate::gate::ledger::open_change_bound(
+        &*crate::forge::forge_for_kind(project_root, forge_kind),
+        project_root,
+        crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
             title,
             body,
             draft: false,
-        })
-        .context("could not open orchestrator-created pull request")?;
+        },
+        &crate::zen_drive_root::extract_spec_ids_from_commit(&commit_msg),
+    )
+    .context("could not open orchestrator-created pull request")?;
     if change.id == 0 {
         anyhow::bail!(
             "the orchestrator-created pull request opened but no number was found in its output: {}",

@@ -80,7 +80,7 @@ pub(crate) enum EventBody {
     /// event's `head`/`patch_id`/`base_ref`/`base_tip` name what it is
     /// authority for; computed once, read by every gate.
     CarryOverProof {
-        proof: crate::review_carryover::CarryOver,
+        proof: crate::gate::review_carryover::CarryOver,
         proof_version: u32,
     },
     /// AC4: the approval at `approved_sha` does NOT carry over to `new_head`,
@@ -90,7 +90,7 @@ pub(crate) enum EventBody {
     CarryOverRefused {
         approved_sha: String,
         new_head: String,
-        refusal: crate::review_carryover::CarryOverRefusal,
+        refusal: crate::gate::review_carryover::CarryOverRefusal,
         reason: String,
         proof_version: u32,
     },
@@ -160,7 +160,7 @@ pub(crate) fn patch_identity(
     repo: &Path,
     head: &str,
 ) -> (Option<String>, Option<String>, Option<String>) {
-    use crate::review_carryover as rc;
+    use crate::gate::review_carryover as rc;
     let Ok(base) = rc::protected_base(repo) else {
         return (None, None, None);
     };
