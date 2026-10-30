@@ -16659,6 +16659,10 @@ Options:
       --description <DESCRIPTION>
           Optional human-readable description of this agent session
 
+      --no-mail-wake
+          Do not wake this session's thread when its inbox has mail (default: `[agents.codex]
+          mail_wake` in agents.toml, else on)
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new antigravity
@@ -45081,6 +45085,11 @@ Working on aida itself
         "name": "no-exec",
         "takes_value": false,
         "help": "Print the complete resolved launch contract — argv, active role, prompt source, launch-context snapshot path, AIDA environment inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the child would consume — then exit without spawning a process, creating a worktree/lease, flipping spec status, or any network sync. See also `--show-prompt` (just the initial prompt) and `--show-context` (the full launch-context markdown body)"
+      },
+      {
+        "name": "no-mail-wake",
+        "takes_value": false,
+        "help": "Do not wake this session's thread when its inbox has mail (default: `[agents.codex] mail_wake` in agents.toml, else on)"
       },
       {
         "name": "no-prompt",

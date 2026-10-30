@@ -1927,6 +1927,7 @@ pub(crate) fn lease_agent_view(
         ended_at: None,
         resumed_from: None,
         liveness: agent_registry::LivenessBasis::Process,
+        mail_wake: None,
     }
 }
 

@@ -1335,6 +1335,12 @@ pub enum AgentNewCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
+
+        /// Do not wake this session's thread when its inbox has mail (default:
+        /// `[agents.codex] mail_wake` in agents.toml, else on).
+        // trace:STORY-HOME-096 | ai:claude
+        #[clap(long)]
+        no_mail_wake: bool,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.
