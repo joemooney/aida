@@ -46,12 +46,12 @@ description: |
   4. NodeAliasMap::expand normalizes the sequence to the allocator's {seq:03} padding, so BUG-HOME-36 resolves. Add a test.
   5. CRITERION ac6dd87b is REWRITTEN by this ruling to: "A bare id resolves to the agreed spec only; it never matches a node-local number (ruling A)." Anchor a resolver test to .ac6dd87b: bare TYPE-100 opens the agreed spec when TYPE-<node>-100 also exists.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 source_doc_comments catalog_descriptions story_1728`, then make check-ci-fast (it runs verify-manual.py).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T11:12:00.595759392Z
+modified_at: 2026-10-30T11:12:05.322460954Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -119,6 +119,12 @@ comments:
   modified_at: 2026-10-30T10:34:28.145441243Z
   session_id: 01a18c573799
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18c82-80ca-7973-8266-27adff169d09
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Logic meets the 21:50 ruling and the 03:21 bundle (goldens, docs, agreed-id labels, anchors). But CI is red at head 6b1fbb6: contracts fails the manual''s spec-id leak check, and lib-0 ''Run tests'' fails (it also failed at d6bc8de; main is green).. No triage reason was given.'
+  created_at: 2026-10-30T11:12:05.322459467Z
+  modified_at: 2026-10-30T11:12:05.322459467Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18b1f-e560-7f93-9902-8b36e5583aef
   author: joe
@@ -201,6 +207,14 @@ history:
   timestamp: 2026-10-30T11:12:01.464113919Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c82-80ca-7973-8266-279873c5c260
+  author: joe
+  timestamp: 2026-10-30T11:12:05.322444927Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -213,11 +227,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T10:03:23.340988584Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Logic meets the 21:50 ruling and the 03:21 bundle (goldens, docs, agreed-id labels, anchors). But CI is red at head 6b1fbb6: contracts fails the manual''s spec-id leak check, and lib-0 ''Run tests'' fails (it also failed at d6bc8de; main is green).'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-036 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T11:11:29.456407292Z

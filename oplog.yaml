@@ -92490,5 +92490,13 @@ operations:
       4. NodeAliasMap::expand normalizes the sequence to the allocator's {seq:03} padding, so BUG-HOME-36 resolves. Add a test.
       5. CRITERION ac6dd87b is REWRITTEN by this ruling to: "A bare id resolves to the agreed spec only; it never matches a node-local number (ruling A)." Anchor a resolver test to .ac6dd87b: bare TYPE-100 opens the agreed spec when TYPE-<node>-100 also exists.
       Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 source_doc_comments catalog_descriptions story_1728`, then make check-ci-fast (it runs verify-manual.py).
-clock: 7163
+- id: 01a18c82-844e-7f13-a0da-f93ca737d4cc
+  target_id: 01a18b1f-af35-7061-859d-b99015bea8ed
+  author: aida
+  node_id: '1'
+  lamport: 7164
+  timestamp: 2026-10-30T11:12:06.222307096Z
+  kind: !SetStatus
+    status: Approved
+clock: 7164
 node_id: '1'
