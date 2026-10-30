@@ -47,12 +47,15 @@ description: |
 
 
   ADVISOR NOTE 2026-10-29 23:26 (continuation): the 22:40 lane made all seven fixes in LOCAL commit 6bdf89bc8a7 on branch story-b6b1278890774ef993d2ebc327862470-096-2 in its seat clone, but timed out before pushing. RESUME that clone; do not redo the fixes. Then: (1) regenerate the help golden snapshot; (2) run ONE targeted test, `cargo test -p aida-cli-lib --lib story_home_096`, plus make check-ci-fast; (3) push to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096) and NOT as a new PR. If the targeted test is slow, push after check-ci-fast and let CI run it.
+
+
+  ADVISOR NOTE 2026-10-29 23:33: SUPERSEDES the 23:26 note. The advisor pushed the lane's commit 6bdf89bc8a7 to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096), so all seven fixes are on the PR now. REMAINING WORK ONLY: check out the PR-3110 branch, regenerate the help golden snapshot (command_registry::story_1728 help_surface_matches_golden_snapshot), run `cargo test -p aida-cli-lib --lib story_1728` plus make check-ci-fast, and push to that same branch. Do NOT open a new PR and do NOT redo the fixes.
 status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T06:28:49.136015588Z
+modified_at: 2026-10-30T06:30:41.777974588Z
 req_type: Story
 relationships:
 - rel_type:
@@ -293,6 +296,11 @@ history:
 - id: 01a18b7f-3122-72c0-a2bb-78b2cf34af75
   author: joe
   timestamp: 2026-10-30T06:28:51.106631477Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
+- id: 01a18b80-e4ce-74d3-ae3c-b177ddcf3d5d
+  author: joe
+  timestamp: 2026-10-30T06:30:42.638387045Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
