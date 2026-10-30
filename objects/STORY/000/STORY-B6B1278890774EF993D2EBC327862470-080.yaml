@@ -1,7 +1,7 @@
 id: 01a1874b-b26a-7d50-af2e-102a5512f699
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-080
 title: 'M1: one gate ledger keyed by change and head, with patch-identity carry-over'
-description: |
+description: |-
   ## Problem
   Review and merge-gate state lives in two key spaces and several places: ~2,700 files in `.aida/review-verdicts/` keyed by spec OR by `PR-N`, holds in `.aida/merge-holds/PR-N`, and verdict/hold files that reviewer lanes write into their own worktrees and that the launcher must "collect" back into the primary checkout. Consequences seen repeatedly (most recently PR-3089 on 2026-10-29, four review rounds): an approval under `PR-N` does not release a hold under the spec key (BUG-2221 class); releasing a hold deletes the marker the ship-held mandate needs as evidence; removing a reviewer worktree can lose state (BUG-2176); the carry-over proof is recomputed ~4 times per ship (TASK-1992). This is regroup move M1 (.aida/regroup-draft.md), the prerequisite for M2 (merge train by default).
 
@@ -85,12 +85,19 @@ description: |
   ACCEPTED (reason: one-time or cosmetic): label-sync events piling up on unchanged state; the hold-lock path change across old and new binaries during rollout.
   6. NEW, found by the advisor, a slice-1 regression on the shipped collect route: on 2026-10-29 both `aida queue work PR-N --role reviewer --no-human` launches (PR-3105, PR-3106), run from an UNCONTAINED operator shell with no AIDA_CONTAINED in its env, failed at collect with "a contained seat cannot collect a verdict onto the gate ledger" (gate/ledger/mod.rs:242 record_collected_verdict). So the launcher process acquires AIDA_CONTAINED itself before collecting (suspect: it sources .aida/session-env.sh or sets the child's env on its own process). Find the cause and fix it so the launcher's collect runs uncontained. Add a test that launcher collect succeeds when the parent env has no AIDA_CONTAINED. This is BLOCKING: without it, no reviewer verdict reaches the gate.
   Test tier LIGHT plus the cli tests named in item 1. Run tests with env -u AIDA_CONTAINED. Push, and stop early rather than run out of context.
+
+
+  ## Advisor ruling — slice 2 round 2 (PR-3106 @ ec65dd90, 2026-10-29 17:07)
+  Rework on the EXISTING PR-3106 branch; do not open a new PR. CI is red on two tests that main (1db74dba) passes, so this PR regressed them. Fix both, nothing else:
+  1. aida-cli/tests/story_078_node_aliases.rs:748 node_alias_review_record_keys_the_verdict_under_the_canonical_id (CI cli-0): a verdict recorded under a node alias must still be keyed under the canonical id after the ledger move. Restore canonical keying in record/collect; do not edit the test expectation.
+  2. aida-cli-lib/src/tests/queue_work_tests.rs:3684 status_sections::queue_work_tests::closed_refusal_does_not_count_as_outstanding (CI lib-1) panics at :3684:47: the hold/refusal projection now reads from the ledger and a closed refusal is missing or counted outstanding. Fix the projection, not the test.
+  Validate: cargo test --profile agent -p aida-cli --test story_078_node_aliases node_alias_review_record ; cargo test --profile agent -p aida-cli-lib --lib closed_refusal_does_not_count_as_outstanding ; make check-ci-fast. Push to the PR-3106 branch. LIGHT tier.
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T00:23:34.844215282Z
+modified_at: 2026-10-30T00:23:49.786256822Z
 req_type: Story
 tags:
 - architecture
@@ -1094,6 +1101,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a18a31-0484-7971-900e-d9762d089031
+  author: joe
+  timestamp: 2026-10-30T00:23:50.660279172Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
