@@ -171,8 +171,24 @@ impl OwnMail {
         if *conflicts > 0 {
             parts.push(format!("{conflicts} message(s) with conflicting copies"));
         }
+        // A deleted worktree stays a missing source until its registration
+        // is dropped; name the command that does it.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+        let remedy = if codes.iter().any(|c| {
+            matches!(
+                c,
+                SourceErrorCode::WorktreeMissing | SourceErrorCode::WorktreePrunable
+            )
+        }) {
+            format!(
+                " (if those worktrees were deleted, `{}` drops them)",
+                crate::mail_retention::PRUNE_COMMAND
+            )
+        } else {
+            String::new()
+        };
         Some(format!(
-            "mail view partial: {}; some mail may be missing",
+            "mail view partial: {}; some mail may be missing{remedy}",
             parts.join(", ")
         ))
     }

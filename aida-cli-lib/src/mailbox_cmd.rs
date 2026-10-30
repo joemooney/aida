@@ -253,6 +253,16 @@ pub(crate) fn handle_mailbox_command(
                 }
                 record_retention_activation(project_root, json)
             }
+            self::mailbox_cmd_args::RetentionCommand::Prune {
+                include_locked,
+                dry_run,
+                json,
+            } => print_retention_prune(
+                project_root,
+                *include_locked,
+                *dry_run,
+                *json || crate::output_format_is_json(),
+            ),
         },
         MailboxCommand::Latency { recipient, json } => {
             let (rows, note) = latency_rows(
@@ -1201,6 +1211,71 @@ fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Re
 #[cfg(not(unix))]
 fn record_retention_activation(_project_root: &std::path::Path, _json: bool) -> Result<()> {
     anyhow::bail!("mail retention is only available on Unix")
+}
+
+/// `aida mailbox retention prune`: drop the registrations of worktrees
+/// deleted from disk, so the mail view stops reporting them as missing.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+fn print_retention_prune(
+    project_root: &std::path::Path,
+    include_locked: bool,
+    dry_run: bool,
+    json: bool,
+) -> Result<()> {
+    use crate::mail_retention::PruneOutcome;
+    let rows = crate::mail_retention::prune_removed_sources(project_root, include_locked, dry_run)?;
+    if json {
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|(source, outcome)| {
+                serde_json::json!({
+                    "path": source.path,
+                    "locked": source.locked,
+                    "outcome": match outcome {
+                        PruneOutcome::Dropped if dry_run => "would-drop",
+                        PruneOutcome::Dropped => "dropped",
+                        PruneOutcome::KeptLocked => "kept-locked",
+                        PruneOutcome::Declined => "declined",
+                    },
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "dry_run": dry_run,
+                "removed_worktrees": rows,
+            }))?
+        );
+        return Ok(());
+    }
+    if rows.is_empty() {
+        println!("No deleted worktree is still registered; nothing to prune.");
+        return Ok(());
+    }
+    let mut kept_locked = 0;
+    for (source, outcome) in &rows {
+        let verdict = match outcome {
+            PruneOutcome::Dropped if dry_run => "would drop",
+            PruneOutcome::Dropped => "dropped",
+            PruneOutcome::KeptLocked => {
+                kept_locked += 1;
+                "kept (locked)"
+            }
+            PruneOutcome::Declined => "kept (could not be cleared safely)",
+        };
+        println!("  {verdict:<34} {}", source.path.display());
+    }
+    if kept_locked > 0 {
+        println!(
+            "{kept_locked} locked worktree(s) kept. If they were deleted on purpose, re-run \
+             with --include-locked."
+        );
+    }
+    if dry_run {
+        println!("Dry run; nothing was dropped.");
+    }
+    Ok(())
 }
 
 /// What `aida mailbox gc --phantoms` did: counts plus one line per message.

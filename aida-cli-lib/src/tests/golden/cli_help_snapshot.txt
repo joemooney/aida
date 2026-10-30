@@ -5091,6 +5091,9 @@ Commands:
             or reset until that is recorded. Recording runs only for a human operator at an
             interactive terminal, and only when the report shows every running mail writer taking a
             permit
+  prune     Drop worktrees that were deleted from disk but are still registered with Git. While
+            registered, each one keeps the mail view partial, which also blocks acknowledging mail.
+            A deleted worktree's mailbox went with it, so there is nothing left to retain
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -5121,6 +5124,40 @@ Usage: aida mailbox retention activate [OPTIONS]
 Options:
       --dry-run
           Report only; record nothing
+
+      --json
+          Print the report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox retention prune
+Drop worktrees that were deleted from disk but are still registered with Git. While registered, each
+one keeps the mail view partial, which also blocks acknowledging mail. A deleted worktree's mailbox
+went with it, so there is nothing left to retain
+
+Usage: aida mailbox retention prune [OPTIONS]
+
+Options:
+      --include-locked
+          Also drop worktrees Git has locked. A lock normally marks a worktree on removable media;
+          only a deleted worktree whose parent directory is still present is ever dropped
+
+      --dry-run
+          Report only; drop nothing
 
       --json
           Print the report as JSON
@@ -33331,6 +33368,48 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the report as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "retention",
+      "prune"
+    ],
+    "about": "Drop worktrees that were deleted from disk but are still registered with Git. While registered, each one keeps the mail view partial, which also blocks acknowledging mail. A deleted worktree's mailbox went with it, so there is nothing left to retain",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report only; drop nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "include-locked",
+        "takes_value": false,
+        "help": "Also drop worktrees Git has locked. A lock normally marks a worktree on removable media; only a deleted worktree whose parent directory is still present is ever dropped"
       },
       {
         "name": "json",
