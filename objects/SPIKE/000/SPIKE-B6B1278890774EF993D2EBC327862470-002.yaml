@@ -24,13 +24,32 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:03:41.502735184Z
-modified_at: 2026-10-30T09:39:25.646118770Z
+modified_at: 2026-10-30T09:44:04.812685761Z
 req_type: Spike
 tags:
 - agent-lifecycle
 - agy
 - from-operator
 - mailbox
+comments:
+- id: 01a18c31-edcc-7521-b666-4933e64cbe65
+  author: ai:codex:joe
+  content: |
+    Investigated 2026-10-30, 09:36–09:43 UTC (within the operator's one-hour cap). No product code changed. Recommendation (b): retain AGY SessionStart/PreInvocation next-turn mail warnings; do not implement a wake adapter by spawning a second owner of the conversation.
+
+    Candidate 1 is unsafe in the tested setup. Used only a new private /tmp workspace/project and two new throwaway conversations; no operator session was targeted. First interactive process reported 1.4.7 and its concurrent print process 1.4.11 (the installed executable changed between launches, with no update command issued by this investigation). Repeated in a fresh conversation with both processes reporting 1.4.11. In both cases, `agy --conversation <throwaway-id> --mode plan --print-timeout 60s --output-format json -p <marker-only prompt>` returned SUCCESS and the requested external marker, but the idle TUI showed no external turn. Asking the original TUI which marker appeared in its preceding user prompt returned its original READY marker, not the external marker. The 1.4.11 SQLite steps subsequently contained the original prompt/reply, the TUI follow-up/reply at indices 2/3, and the external reply at index 4 without its external user prompt. This is observed history inconsistency and stale live context, not a claim of SQLite structural corruption: both databases passed `PRAGMA integrity_check` after exit. Brain directories and generated transcripts remained present; no byte-for-byte preservation claim is possible for evolving history.
+
+    Also launched a second concurrent print request while the 1.4.11 TUI displayed Generating on its follow-up. It returned SUCCESS and a third marker after about 94 seconds, but the TUI never displayed that turn. Exact backend execution overlap is not established by the display timing; this cannot establish safe mid-turn delivery, ordering or serialization. The changelog itself warns about interleaved trajectory writes when the same conversation is open in another process (1.1.10) and records a concurrent-lock corruption fix (1.2.9). The observed failure is sufficient to reject this adapter candidate.
+
+    Candidate 2: read installed `agy --help`, `agy help remote-control`, start/status help, builtin customization docs and changelog. `remote-control start/status/stop` manages one machine daemon; no CLI enqueue verb or conversation-target send flag is exposed. The existing daemon status probe could not connect to a user systemd bus and reported no assigned instance name; no daemon was started, stopped or reconfigured. In the throwaway 1.4.11 TUI, `/remote-control on` succeeded and logged a V2 reverse-tunnel connection, with a link naming that session instance plus its conversation ID. `/remote-control off` succeeded; both owned TUIs exited cleanly. Local backend logs advertise random HTTP and HTTPS/gRPC ports, but these are internal endpoints, not an established supported AIDA enqueue contract; no guessed RPC, private credential reuse or browser automation was attempted.
+
+    The official Remote Control documentation distinguishes a per-process interactive tunnel from a machine daemon, describes Google-account sign-in and synchronized browser prompts, and provides session links. It does not document a local authenticated enqueue API for an existing conversation. Source: https://antigravity.google/docs/remote-control/ . Official CLI reference: https://antigravity.google/docs/cli/reference . Documentation was checked during the investigation, rather than treating an undocumented backend port as a supported integration.
+
+    Upstream unblock: a supported authenticated local IPC/CLI submit-to-live-session primitive, with an unambiguous live session/conversation binding, queue-acceptance receipt distinct from consumption, specified idle/mid-turn ordering, and single-writer history ownership (ideally deduplicated submissions). Alternatively a documented remote-control programmatic API providing those properties could be evaluated. Existing stream-json stdin supports a driver-owned headless process; it does not attach to an already-owned interactive TUI, so it does not solve this spike.
+
+    No adapter story filed because no safe path was established. Do not substitute model polling or enable a global daemon as a workaround. Local evidence: /tmp/spike002-{tui,current-tui,print,current-print,midturn-print}.log; /tmp/spike002-{print-result,current-print-result,midturn-result}.json; /tmp/spike002-{first-db-report,current-db-before-followup,current-db-final,final-integrity}.json. Throwaway conversation IDs: 4d5c61a9-cc9a-41a5-9ce8-f5ae32e21487 and a7a21b48-9f2c-4e99-89c9-e5d11ec3862c; project e3c8a331-c0b8-4c29-9044-5b6f30242cb3. Retained only as reproduction evidence; all experiment processes and the session tunnel are stopped. No formal independent review or upstream guarantee is claimed.
+  created_at: 2026-10-30T09:44:04.812685761Z
+  modified_at: 2026-10-30T09:44:04.812685761Z
 history:
 - id: 01a18a38-34a7-79d3-9a80-1ebb9a1ad645
   author: joe
