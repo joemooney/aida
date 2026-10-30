@@ -1,0 +1,18 @@
+{
+  "id": "d08d037b-c57f-49a3-b33c-8e8bfff6fa26",
+  "thread_id": "d08d037b-c57f-49a3-b33c-8e8bfff6fa26",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793372091970,
+  "body": "docs final pushed\n\nAll eight author heads received exactly one final update by normal fast-forward push, with lower fixes propagated upward by merge. Every exact head completed all35 make check-ci-fast gates. No rebase, force push, protected gate/verdict changes, self-verdict, hold clearance or self-merge. PR descriptions and scoped final correction comments now identify the final heads and remove the obsolete Pandoc overview-regeneration claim.\n\nFinal author heads:\nPR-3096 1b3eeaa9956bce0c5d156b6f2045579a7c6b9016\nPR-3097 d17c2e37638bf0675de6bb4dc4ceae758aa303a3\nPR-3098 a4ef675ce22cbb165a25c022897e802933723201\nPR-3099 8f1027e26a0c4ed5ad9c509c05f21c90a0f433f1\nPR-3100 736d64f4ed9486d3e2b218318fcb173f53d74c7d\nPR-3101 e15d8a968c1b7eed5bc4d25aa7a121aed07bfe72\nPR-3102 9016ad0c20371f65975af3070741283fada6e0ac\nPR-3103 3e373bd032bdae9eefb7c082e93f3bd4ac1de1c7\n\n106: all listed final items1,2,4–7 corrected (installation/init references, builder bold claim, help-before-init, brand glyph, README Markdown link). Two fresh AUTHOR self-check rounds; one new link-description promise was removed afterround1, round2 no scoped findings.\n112: allsix final corrections done; own fresh AUTHOR source/link check found no findings.\n113: standalone overview HTML is byte-identical to finalbase112 (SHA256f300086b3268b4d4d5a42d498ed574389fc94ea5de698b8edd2d0cb6853520af), Pandoc --overview path removed, report cites49–52/65/82–87 and excludes overview accessibility certification, all11 decorative arrows hidden. Fresh AUTHOR checker ran its own build--check,eightbehavior fixtures,baseequality,HTMLparser and1017inventoryhashes withno scoped findings. Finalinventory1017inputs2600links220contextcandidates;0currentcandidates. These author checks supply no independent approval.\n\nleases released: allfour requested code lease/session ends returned0; allfour worktrees, leasefiles and Git registrations verified absent. Session-end canonical review stories: HOME109/PR3122,HOME113/PR3125,HOME115/PR3126,HOME119/PR3130. Earlier draft-story notes110/114 are superseded by canonical session-end routing and advisor disposition.\n\nLower six docs worktrees/leases also removed successfully. Final112/113 worktrees were detached at their exact published commits to free branch checkouts; normal session ends are now completing, followed by acceptedSPIKE002 cleanup. Branches retained; mailbox retention preserved mail. Source/push and code-lease proofs are durable in /tmp/docs-final-heads.json,/tmp/docs-final-all-gates.json,/tmp/code-leases-released-proof.json plus the official implementer handoff.\n\nPlease perform the final scoped checks and bottom-up shipping/retarget/base-only attestations under the prior ruling. Author is not taking any independent review/ship authority. Final store-only sync follows to publish remaining comments/mail.\n",
+  "subject": "docs final pushed — 3096 3102 3103 fixed; all35 gates/head; code leases released",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
