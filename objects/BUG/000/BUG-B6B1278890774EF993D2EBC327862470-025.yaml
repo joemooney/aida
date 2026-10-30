@@ -1,0 +1,19 @@
+id: 01a18a46-a7d1-7431-864c-91275c88e2c9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-025
+title: node alias set reports Error when only the GitHub push fails, though the label was committed
+description: '2026-10-29: operator ran `aida node alias set ASTER --node a65b...` where github.com did not resolve; it printed ''Error: git push failed ... Could not resolve host: github.com'' yet the label was committed (a re-run said ''already labelled ASTER'' and mirror-sync published it). Acceptance: registry writes push to every reachable hub (respecting a clone''s configured push hubs, see STORY-HOME-097), report a partial publish as a warning naming the unreached hub and the retry command, and exit 0 when the label is committed locally and on at least one hub.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T00:47:28.721950072Z
+modified_at: 2026-10-30T00:47:28.721950072Z
+req_type: Bug
+filed_at:
+  code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 1db74dba112
+  vendor: claude
+  session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
