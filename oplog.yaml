@@ -89710,5 +89710,17 @@ operations:
   timestamp: 2026-10-30T03:45:30.455364264Z
   kind: !SetStatus
     status: In Progress
-clock: 6981
+- id: 01a18aea-01b3-7042-a8f6-e081633af34e
+  target_id: 01a18ae9-ecec-7812-9050-cb1e8c9dc56b
+  author: aida
+  node_id: '1'
+  lamport: 6982
+  timestamp: 2026-10-30T03:45:54.099726409Z
+  kind: !Create
+    title: 'Reviewer launch reports ''git commit failed: ✓ Commit message format valid'' (hook stdout shown, git''s real error dropped)'
+    description: '2026-10-29 20:24: `aida queue work PR-3115 --role reviewer --no-human --vendor claude --steal`, launched within 15s of two other reviewer launches, failed with: error: "git commit failed: \x1b[0;32m✓ Commit message format valid\x1b[0m" right after ''this contained seat gets a linked worktree''. The message shows the commit-msg hook''s success stdout and drops git''s stderr, so the cause is unknown (likely a concurrent store or index lock). Acceptance: on a commit failure, the launcher reports git''s stderr and exit code (with the hook output stripped of ANSI codes or omitted); a lock-contention failure retries with bounded backoff; test with a fake git that writes the hook line to stdout and the error to stderr.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 6982
 node_id: '1'
