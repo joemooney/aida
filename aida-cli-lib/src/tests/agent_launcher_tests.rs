@@ -3538,6 +3538,344 @@ fn no_duplicate_check_is_the_escape_hatch_for_the_role_singleton() {
     );
 }
 
+/// TASK-121: generic implementers form a pool — a second repo-scope implementer of
+/// another vendor launches beside a live one, the same spec stays exclusive, and the
+/// refusal of a singular role names the `--spec` fix.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+#[test]
+fn generic_implementers_pool_while_spec_and_singular_roles_stay_exclusive() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().to_path_buf();
+    let binary = agent_registry::AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+    for (vendor, role, spec, handle) in [
+        ("codex", "implementer", None, "codex-agent-02"),
+        (
+            "claude",
+            "implementer",
+            Some("TASK-7"),
+            "claude-implementer-7",
+        ),
+        // Rows are keyed by vendor + pid: a third vendor keeps all three live.
+        ("antigravity", "reviewer", None, "agy-reviewer-1"),
+    ] {
+        agent_registry::register_spawned_agent(
+            &project,
+            vendor,
+            std::process::id(),
+            Some(role.to_string()),
+            spec.map(str::to_string),
+            project.clone(),
+            Some(&binary),
+            Some(handle.to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    }
+
+    // AC1: another generic implementer (different vendor) launches.
+    enforce_agent_singleton_preflight(&project, Some("implementer"), None, &project)
+        .expect("a generic implementer joins the pool");
+    // AC2: two pool members never hold the same spec.
+    let err =
+        enforce_agent_singleton_preflight(&project, Some("implementer"), Some("TASK-7"), &project)
+            .expect_err("the same spec stays exclusive");
+    let rendered = format!("{err:#}");
+    assert!(rendered.contains("claude-implementer-7"), "{rendered}");
+    assert!(rendered.contains("different approved spec"), "{rendered}");
+    // AC5: a singular role keeps its rule, and the refusal names the fix.
+    let err = enforce_agent_singleton_preflight(&project, Some("reviewer"), None, &project)
+        .expect_err("a reviewer stays one per scope");
+    assert!(format!("{err:#}").contains("--spec <ID>"), "{err:#}");
+}
+
+/// Register a live (this process's pid) agent row on `project`. Rows are keyed
+/// by vendor + pid, so each row in one test needs its own vendor.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+fn register_live_agent(
+    project: &std::path::Path,
+    vendor: &str,
+    role: &str,
+    spec: Option<&str>,
+    handle: &str,
+) {
+    let binary = agent_registry::AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+    agent_registry::register_spawned_agent(
+        project,
+        vendor,
+        std::process::id(),
+        Some(role.to_string()),
+        spec.map(str::to_string),
+        project.to_path_buf(),
+        Some(&binary),
+        Some(handle.to_string()),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+}
+
+/// TASK-121 (original AC): at a terminal, a refused spec-scoped launch offers an
+/// approved unclaimed spec from the role's queue and launches on the pick; off a
+/// terminal, for a repo-scoped seat, with nothing to offer, or on cancel, it refuses.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+#[test]
+fn scope_refusal_offers_an_approved_unclaimed_spec_at_a_terminal() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().to_path_buf();
+    register_live_agent(&project, "codex", "reviewer", None, "codex-reviewer-1");
+    register_live_agent(
+        &project,
+        "claude",
+        "implementer",
+        Some("TASK-7"),
+        "claude-implementer-7",
+    );
+    register_live_agent(&project, "antigravity", "advisor", None, "agy-advisor-1");
+    let offer = |_: &str| {
+        vec![
+            ("TASK-7".to_string(), "held".to_string()),
+            ("TASK-9".to_string(), "free".to_string()),
+        ]
+    };
+
+    // A refused reviewer at a terminal takes TASK-9.
+    let mut offered = Vec::new();
+    let picked = singleton_preflight_or_pick_spec_with(
+        &project,
+        Some("reviewer"),
+        None,
+        &project,
+        true,
+        |role| {
+            assert_eq!(role, "reviewer");
+            offer(role)
+        },
+        |choices| {
+            offered = choices.to_vec();
+            Ok(Some("TASK-9".to_string()))
+        },
+    )
+    .unwrap();
+    assert_eq!(picked.as_deref(), Some("TASK-9"));
+    assert_eq!(offered.len(), 2);
+
+    // A same-spec implementer clash is not offered the spec it clashed on.
+    let picked = singleton_preflight_or_pick_spec_with(
+        &project,
+        Some("implementer"),
+        Some("TASK-7"),
+        &project,
+        true,
+        offer,
+        |choices| {
+            assert_eq!(choices, [("TASK-9".to_string(), "free".to_string())]);
+            Ok(Some("TASK-9".to_string()))
+        },
+    )
+    .unwrap();
+    assert_eq!(picked.as_deref(), Some("TASK-9"));
+
+    let never = |_: &[SpecChoice]| -> Result<Option<String>> { panic!("no picker expected") };
+    // Off a terminal (headless or piped): the plain refusal, no picker.
+    let err = singleton_preflight_or_pick_spec_with(
+        &project,
+        Some("reviewer"),
+        None,
+        &project,
+        false,
+        offer,
+        never,
+    )
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("--spec <ID>"), "{err:#}");
+    // A repo-scoped seat cannot take a spec.
+    let err = singleton_preflight_or_pick_spec_with(
+        &project,
+        Some("advisor"),
+        None,
+        &project,
+        true,
+        offer,
+        never,
+    )
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("agy-advisor-1"), "{err:#}");
+    // Nothing queued: the refusal stands.
+    assert!(singleton_preflight_or_pick_spec_with(
+        &project,
+        Some("reviewer"),
+        None,
+        &project,
+        true,
+        |_| Vec::new(),
+        never,
+    )
+    .is_err());
+    // Cancel keeps the refusal.
+    let err = singleton_preflight_or_pick_spec_with(
+        &project,
+        Some("reviewer"),
+        None,
+        &project,
+        true,
+        offer,
+        |_| Ok(None),
+    )
+    .unwrap_err();
+    assert!(
+        format!("{err:#}").contains("already active on this scope"),
+        "{err:#}"
+    );
+    // No conflict: no picker, launch as asked.
+    assert_eq!(
+        singleton_preflight_or_pick_spec_with(
+            &project,
+            Some("implementer"),
+            None,
+            &project,
+            true,
+            offer,
+            never,
+        )
+        .unwrap(),
+        None
+    );
+}
+
+/// Run `aida agent new codex --role reviewer [--bg]` against `project`. With
+/// `bypass`, the launch carries a bypass flag, which the consent gate refuses
+/// off a terminal.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+fn launch_reviewer(
+    project: &std::path::Path,
+    bg: bool,
+    bypass: bool,
+    resume: AgentResumeOptions,
+) -> anyhow::Error {
+    let launch = if bg {
+        agent_new_bg_dispatch
+    } else {
+        agent_new_with_config
+    };
+    let default_args = if bypass {
+        vec!["--dangerously-bypass-approvals-and-sandbox".to_string()]
+    } else {
+        Vec::new()
+    };
+    launch(
+        AgentLaunchConfig {
+            agent_type: "codex",
+            binary: "/usr/bin/true",
+            default_args,
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        },
+        Some("reviewer".into()),
+        None,
+        false,
+        Some(project),
+        AgentContextOptions::new(false, false),
+        false,
+        false,
+        false,
+        false,
+        AgentPromptOptions::new(Some("review".into()), false),
+        resume,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        Some("reviewer-two".into()),
+        None,
+        // Explicit: the foreground consent gate refuses off a terminal too.
+        true,
+    )
+    .expect_err("this launch must not proceed")
+}
+
+/// TASK-121 (review round 1, finding 3): the scope conflict is refused BEFORE the
+/// bypass consent gate on both the foreground and the `--bg` path. Off a terminal
+/// that gate refuses a bypass launch, so a launch that reached it fails with the
+/// consent error; one refused first fails with the scope error and never asks.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+#[test]
+fn scope_conflict_is_refused_before_the_bypass_consent_gate() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    // An advisor seat that may delegate `reviewer`; home is already hermetic.
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &project,
+        "advisor",
+        &["reviewer"],
+        &[("AIDA_HEADLESS", None), ("AIDA_CONTAINED", None)],
+    );
+    let consent = "bypass needs confirmation at a terminal";
+    let scope = "already active on this scope";
+
+    for bg in [false, true] {
+        // Control: with no live reviewer the launch reaches the consent gate.
+        let err = format!(
+            "{:#}",
+            launch_reviewer(
+                &project,
+                bg,
+                true,
+                AgentResumeOptions::new(false, None, false, true)
+            )
+        );
+        assert!(err.contains(consent), "bg={bg}: {err}");
+    }
+
+    register_live_agent(&project, "codex", "reviewer", None, "codex-reviewer-1");
+    for bg in [false, true] {
+        let err = format!(
+            "{:#}",
+            launch_reviewer(
+                &project,
+                bg,
+                true,
+                AgentResumeOptions::new(false, None, false, true)
+            )
+        );
+        assert!(err.contains(scope), "bg={bg}: {err}");
+        assert!(!err.contains(consent), "bg={bg}: {err}");
+    }
+}
+
+/// TASK-121 (review round 1, finding 2): `--resume <id|latest>` reopens an ended
+/// agent in its own scope, so a live same-role agent on the launch cwd does not
+/// refuse it before the resume — the resume target decides.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+#[test]
+fn direct_resume_skips_the_early_scope_preflight() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    // An advisor seat that may delegate `reviewer`; home is already hermetic.
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &project,
+        "advisor",
+        &["reviewer"],
+        &[("AIDA_HEADLESS", None), ("AIDA_CONTAINED", None)],
+    );
+    register_live_agent(&project, "codex", "reviewer", None, "codex-reviewer-1");
+    let resume = || AgentResumeOptions::new(false, Some("no-such-agent".into()), false, true);
+    assert!(!launch_runs_scope_preflight(&resume()));
+    assert!(launch_runs_scope_preflight(&AgentResumeOptions::new(
+        false, None, false, true
+    )));
+
+    // The launch reaches the resume lookup, which is what refuses here.
+    for bg in [false, true] {
+        let err = format!("{:#}", launch_reviewer(&project, bg, false, resume()));
+        assert!(
+            err.contains("no ended resumable agent found matching 'no-such-agent'"),
+            "bg={bg}: {err}"
+        );
+    }
+}
+
 /// BUG-1697 AC3: `--allow-duplicate` only suppresses the confirmation prompt, per its own help
 /// text — it must NOT turn the duplicate check off. Only `--no-duplicate-check` does that.
 // trace:BUG-1697 | ai:claude

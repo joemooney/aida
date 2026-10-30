@@ -401,6 +401,41 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
     })
 }
 
+/// One-line result of the post-ship GC. Names the worktrees it passed over for
+/// want of a local merge signal (a full `aida doctor` run may still reclaim
+/// them through the forge lookup) and, when the time budget ran out, how many
+/// were left unexamined or unremoved for `aida doctor` to finish.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+pub(crate) fn post_ship_gc_summary(
+    reclaimable: usize,
+    skipped: usize,
+    unexamined: usize,
+    unremoved: usize,
+) -> String {
+    let mut line = format!(
+        "  ✓ merged-agent-worktrees cleanup checked ({reclaimable} reclaimable, \
+         {skipped} without a local merge signal skipped)"
+    );
+    if unexamined + unremoved > 0 {
+        let mut left = Vec::new();
+        if unexamined > 0 {
+            left.push(format!("{unexamined} worktree(s) not examined"));
+        }
+        if unremoved > 0 {
+            left.push(format!("{unremoved} reclaimable worktree(s) not removed"));
+        }
+        line.push_str(&format!(
+            "; stopped at the {}s budget with {} — \
+             run `aida doctor --category merged-agent-worktrees` to finish",
+            POST_SHIP_GC_BUDGET.as_secs(),
+            left.join(" and ")
+        ));
+    } else {
+        line.push_str("; details: `aida doctor --category merged-agent-worktrees`");
+    }
+    line
+}
+
 // trace:BUG-1718 | ai:codex
 pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
     doctor_multi_agent(DoctorRunOptions {
@@ -542,6 +577,12 @@ fn is_zero_usize(n: &usize) -> bool {
 }
 
 fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
+    // The post-ship GC (the quiet run) shares one deadline between the scan
+    // and the heal that removes what the scan found.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+    let gc_deadline = opts
+        .quiet_output
+        .then(|| std::time::Instant::now() + POST_SHIP_GC_BUDGET);
     let project_root = main_worktree_root_from(&find_project_root()?);
     // A bad `--since` fails the run with an error naming the flag rather than
     // silently applying no cutoff. trace:BUG-1622 | ai:claude
@@ -555,6 +596,8 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
     // trace:BUG-1719 | ai:codex
     let mut merged_agent_worktrees_reclaimable = 0;
+    let mut merged_agent_worktrees_skipped = 0;
+    let mut merged_agent_worktrees_deferred = 0;
     let mut hidden_completed_without_commit = 0;
     let mut performance_audits = Vec::new();
 
@@ -630,8 +673,21 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // same `--category` filter. trace:TASK-878 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "merged-agent-worktrees")? {
         // trace:BUG-1719 | ai:codex
-        let scan = scan_merged_agent_worktrees_with_count(&project_root);
+        // The quiet run is the post-ship GC: it examines merged worktrees
+        // only, within a time budget, so it never holds up a serial ship.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+        let limits = if opts.quiet_output {
+            AgentWorktreeScanLimits {
+                merged_only: true,
+                deadline: gc_deadline,
+            }
+        } else {
+            AgentWorktreeScanLimits::default()
+        };
+        let scan = scan_merged_agent_worktrees_limited(&project_root, limits);
         merged_agent_worktrees_reclaimable = scan.reclaimable_count;
+        merged_agent_worktrees_skipped = scan.skipped_unmerged;
+        merged_agent_worktrees_deferred = scan.deferred;
         findings.extend(scan.findings);
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
@@ -944,7 +1000,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
     if opts.heal {
-        report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
+        report.healed = heal_doctor_findings(&project_root, &report.findings, &opts, gc_deadline)?;
     }
 
     // trace:BUG-1749 | ai:codex
@@ -970,7 +1026,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     };
 
     if opts.quiet_output {
-        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({merged_agent_worktrees_reclaimable} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
+        eprintln!(
+            "{}",
+            post_ship_gc_summary(
+                merged_agent_worktrees_reclaimable,
+                merged_agent_worktrees_skipped,
+                merged_agent_worktrees_deferred,
+                report
+                    .healed
+                    .iter()
+                    .filter(|r| r.status == HEAL_DEFERRED)
+                    .count(),
+            )
+        );
     } else {
         return emit_doctor_report(
             report,
@@ -1571,6 +1639,11 @@ mod task_1534_worktree_gc_batch_landed_tests;
 #[cfg(test)]
 #[path = "tests/bug_1719_doctor_prose_tests.rs"]
 mod bug_1719_doctor_prose_tests;
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_home_033_post_ship_gc_tests.rs"]
+mod bug_home_033_post_ship_gc_tests;
 
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
@@ -6435,10 +6508,42 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
 struct AgentWorktreeScan {
     findings: Vec<DoctorFinding>,
     reclaimable_count: usize,
+    /// Worktrees passed over without a `git status` because no cheap local
+    /// merge signal held (`merged_only` scans only). trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+    skipped_unmerged: usize,
+    /// Worktrees left unexamined because the scan's deadline passed.
+    deferred: usize,
 }
+
+/// How much work a merged-agent-worktree scan may do. The default is the full
+/// `aida doctor` scan; the post-ship GC narrows it so a ship never waits on a
+/// `git status` of every registered worktree.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct AgentWorktreeScanLimits {
+    /// Examine only worktrees whose branch shows a cheap local merge signal
+    /// (ancestor of the default branch, or its spec's landing trailer on it).
+    /// Every other worktree is skipped before any `git status` or forge call.
+    pub(crate) merged_only: bool,
+    /// Stop examining worktrees once this instant passes; the rest are
+    /// counted as deferred to a full `aida doctor` run.
+    pub(crate) deadline: Option<std::time::Instant>,
+}
+
+/// Time budget for the post-ship merged-worktree GC.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+pub(crate) const POST_SHIP_GC_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 
 // trace:BUG-1719 | ai:codex
 fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> AgentWorktreeScan {
+    scan_merged_agent_worktrees_limited(project_root, AgentWorktreeScanLimits::default())
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+fn scan_merged_agent_worktrees_limited(
+    project_root: &std::path::Path,
+    limits: AgentWorktreeScanLimits,
+) -> AgentWorktreeScan {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<u32> {
@@ -6463,6 +6568,8 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
         return AgentWorktreeScan {
             findings: Vec::new(),
             reclaimable_count: 0,
+            skipped_unmerged: 0,
+            deferred: 0,
         };
     };
 
@@ -6476,7 +6583,19 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
 
     let mut findings = Vec::new();
     let mut reclaimable_count = 0;
-    for wt in list_worktrees(project_root) {
+    let mut skipped_unmerged = 0;
+    let mut deferred = 0;
+    let worktrees = list_worktrees(project_root);
+    let total = worktrees.len();
+    for (index, wt) in worktrees.into_iter().enumerate() {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+        if limits
+            .deadline
+            .is_some_and(|deadline| std::time::Instant::now() >= deadline)
+        {
+            deferred = total - index;
+            break;
+        }
         // Missing registrations are stale bookkeeping, not actionable findings.
         // trace:BUG-1718 | ai:codex
         if !wt.path.exists() {
@@ -6507,7 +6626,6 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
             continue;
         };
 
-        let dirty = !worktree_dirty_entries(&wt.path).is_empty();
         let ancestor_of_main = git(&["rev-list", "--count", &format!("{default_ref}..{branch}")])
             .map(|n| n == 0)
             .unwrap_or(false);
@@ -6605,10 +6723,30 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
         // it runs before (and can spare) the forge lookup.
         // trace:TASK-1534 | ai:antigravity
         // trace:BUG-1718 | ai:codex
-        let landing_commit = if !ancestor_of_main && !dirty {
+        let find_landing = || {
             candidate_specs.iter().find_map(|spec| {
                 crate::session_reap::spec_landing_commit(project_root, &default_ref, branch, spec)
             })
+        };
+        // A merged-only scan (the post-ship GC) settles "is this merged?" from
+        // local refs first and never runs `git status` or the forge lookup on
+        // a worktree without a merge signal — the unmerged majority.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+        let early_landing = if limits.merged_only && !ancestor_of_main {
+            let landing = find_landing();
+            if landing.is_none() {
+                skipped_unmerged += 1;
+                continue;
+            }
+            landing
+        } else {
+            None
+        };
+        let dirty = !worktree_dirty_entries(&wt.path).is_empty();
+        let landing_commit = if early_landing.is_some() {
+            early_landing
+        } else if !ancestor_of_main && !dirty {
+            find_landing()
         } else {
             None
         };
@@ -6733,6 +6871,8 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
     AgentWorktreeScan {
         findings,
         reclaimable_count,
+        skipped_unmerged,
+        deferred,
     }
 }
 
@@ -7568,10 +7708,18 @@ fn doctor_heal_disposition(
     HealDisposition::Proceed
 }
 
+/// Heal status of a finding left alone because the run's deadline passed.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+pub(crate) const HEAL_DEFERRED: &str = "deferred";
+
+/// Heals `findings`. With a `deadline`, each finding reached after it passes
+/// is recorded as [`HEAL_DEFERRED`] instead of healed. The deadline is checked
+/// between findings, so a heal already running finishes.
 fn heal_doctor_findings(
     project_root: &std::path::Path,
     findings: &[DoctorFinding],
     opts: &DoctorRunOptions,
+    deadline: Option<std::time::Instant>,
 ) -> Result<Vec<DoctorHealResult>> {
     // STORY-666: detect the autonomous/unattended context ONCE for the whole
     // run — the destructive-heal gate keys off it. trace:STORY-666 | ai:claude
@@ -7637,7 +7785,20 @@ fn heal_doctor_findings(
             });
             continue;
         }
-        for finding in items {
+        for (index, finding) in items.iter().enumerate() {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
+            if deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
+                out.extend(items[index..].iter().map(|finding| DoctorHealResult {
+                    category: category.clone(),
+                    id: finding.id.clone(),
+                    action: finding.action.clone(),
+                    status: HEAL_DEFERRED.to_string(),
+                    detail: Some(format!(
+                        "time budget spent; run `aida doctor --category {category}`"
+                    )),
+                }));
+                break;
+            }
             // BUG-471: a single finding's heal failure must not abort the whole
             // run (the resilient-drain discipline). Record it as a `failed`
             // result and continue; the caller surfaces failures + exits non-zero.
@@ -10502,6 +10663,7 @@ hostname = "localhost"
                 fail_on_findings: false,
                 quiet_output: false,
             },
+            None,
         )
         .unwrap();
 
@@ -11961,6 +12123,7 @@ User content.
                 fail_on_findings: false,
                 quiet_output: false,
             },
+            None,
         )
         .unwrap();
 
@@ -12034,6 +12197,7 @@ User content.
                 fail_on_findings: false,
                 quiet_output: false,
             },
+            None,
         )
         .unwrap();
 

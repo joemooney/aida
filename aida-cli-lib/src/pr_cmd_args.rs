@@ -134,9 +134,13 @@ pub enum PrCommand {
         #[clap(long)]
         no_pull: bool,
 
-        /// Skip the `aida session end` worktree-cleanup step. Useful
-        /// when you want to inspect the post-merge state before the
-        /// worktree disappears.
+        /// Skip the post-merge worktree cleanup: the `aida session end`
+        /// step, the reap of exited sessions, and the merged agent
+        /// worktree pruning. The pruning stops at a 60s budget (checked
+        /// between worktrees) and leaves the rest to `aida doctor`; the
+        /// reap is not bounded. Useful when you want to inspect the
+        /// post-merge state before the worktree disappears, or when the
+        /// ship must not wait on cleanup.
         #[clap(long)]
         no_cleanup: bool,
 
