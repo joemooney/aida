@@ -102,12 +102,12 @@ description: |
   4. On completion, supersede TASK-1992, TASK-1316, STORY-1375, TASK-2008 (carry-over part) and STORY-1683 with `aida edit <ID> --status superseded --superseded-by <this spec>`.
   Tests: base-only update keeps approval; a content change drops it; the CI gate and ship agree on the same event; the proof is computed once (counted).
   Test tier STRICT: targeted `cargo test -p aida-cli-lib --lib gate::` plus the ship/mandate integration binaries you touch, plus make check-ci-fast. Never the workspace suite. Run with env -u AIDA_CONTAINED.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T04:23:45.848906162Z
+modified_at: 2026-10-30T05:27:13.914793182Z
 req_type: Story
 tags:
 - architecture
@@ -1200,6 +1200,15 @@ history:
   timestamp: 2026-10-30T03:43:51.649410241Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18b46-c7b8-7470-b5a9-be411a84aded
+  author: joe
+  timestamp: 2026-10-30T05:27:14.104123794Z
+  session_id: 01a18b09181f
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
