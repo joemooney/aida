@@ -91386,5 +91386,31 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 7088
+- id: 01a18bd6-9007-7901-8033-959f1161aec3
+  target_id: 01a18bd5-07ef-7a73-8a11-2c5f205924b6
+  author: aida
+  node_id: '1'
+  lamport: 7089
+  timestamp: 2026-10-30T08:04:17.031343463Z
+  kind: !Create
+    title: 'Review PR-3126: fix(scaffold): respect user-owned README seeds (BUG-A65B4BF5902D469995F816EFD3A27661-001)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-a65b4bf5902d469995f816efd3a27661-001-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3126>
+      - Branch: `bug-a65b4bf5902d469995f816efd3a27661-001-work` → `main`
+
+      ## Covers
+
+      - BUG-A65B4BF5902D469995F816EFD3A27661-001
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3126` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7089
 node_id: '1'
