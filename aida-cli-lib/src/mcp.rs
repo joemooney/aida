@@ -2846,6 +2846,15 @@ impl<'a> McpServer<'a> {
         }
     }
 
+    /// The project root whose local mailbox layer the mail tools use: the
+    /// primary checkout when this server runs in a verified seat clone, as on
+    /// the CLI. trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+    fn mailbox_root(&self) -> PathBuf {
+        crate::mailbox_store::mailbox_home(&self.project_root)
+            .root()
+            .to_path_buf()
+    }
+
     /// MCP parity for `aida mailbox send` (STORY-493): send an inter-agent
     /// peer message into the local layer. `to` a specific agent or
     /// `broadcast: true` to all; `from` defaults to this server's identity.
@@ -2871,7 +2880,7 @@ impl<'a> McpServer<'a> {
                 .and_then(|v| v.as_str())
                 .ok_or("specify `to` (an agent) or `broadcast: true`")?;
             let directory = crate::mailbox_resolver::RecipientDirectory::load_for_send(
-                &self.project_root,
+                &self.mailbox_root(),
                 &self.mailbox_store_root(),
             )
             .map_err(|e| e.to_string())?;
@@ -2911,9 +2920,9 @@ impl<'a> McpServer<'a> {
             t.to_string()
         } else if let Some(target) = in_reply_to.as_deref() {
             let book = crate::mailbox_view::addressable_for(
-                &self.project_root,
-                &self.project_root.join(".aida-store"),
-                &crate::mailbox_view::own_audience_in(&self.project_root),
+                &self.mailbox_root(),
+                &self.mailbox_root().join(".aida-store"),
+                &crate::mailbox_view::own_audience_in(&self.mailbox_root()),
             );
             aida_core::mailbox::reply_target_thread(target, book.messages())
                 .unwrap_or_else(|| id.clone())
@@ -2946,7 +2955,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         if !allow_second_person && !aida_core::mailbox::second_person_terms(body).is_empty() {
-            let local = crate::mailbox_store::read_local_messages(&self.project_root)
+            let local = crate::mailbox_store::read_local_messages(&self.mailbox_root())
                 .map_err(|e| e.to_string())?;
             let canonical =
                 crate::mailbox_store::read_canonical_messages(&self.mailbox_store_root())
@@ -2996,7 +3005,7 @@ impl<'a> McpServer<'a> {
             None => (None, Vec::new()),
         };
         crate::mailbox_store::write_message_with_deliveries(
-            &self.project_root,
+            &self.mailbox_root(),
             &msg,
             deliveries.as_ref(),
         )
@@ -3005,6 +3014,8 @@ impl<'a> McpServer<'a> {
         if let Some(note) = resolution.and_then(|r| r.reader_notice) {
             routing_warnings.push(note);
         }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+        routing_warnings.extend(crate::mailbox_store::mailbox_home(&self.project_root).send_note());
         let notice = if routing_warnings.is_empty() {
             String::new()
         } else {
@@ -3038,7 +3049,7 @@ impl<'a> McpServer<'a> {
         // narrows it to one of its own inboxes; naming any other inbox is a
         // read-only inspection of this checkout and the store.
         // trace:STORY-643 trace:STORY-1843 | ai:claude
-        let own = crate::mailbox_view::own_audience_in(&self.project_root);
+        let own = crate::mailbox_view::own_audience_in(&self.mailbox_root());
         let requested = args.get("agent").and_then(|v| v.as_str());
         let audience = match requested {
             None => own,
@@ -3051,10 +3062,10 @@ impl<'a> McpServer<'a> {
                 }
             },
         };
-        let store_root = self.project_root.join(".aida-store");
+        let store_root = self.mailbox_root().join(".aida-store");
         // An explicit read takes queued role mail. trace:STORY-1843 | ai:claude
         let view = crate::mailbox_view::read_own_mail_binding(
-            &self.project_root,
+            &self.mailbox_root(),
             &store_root,
             &audience,
             &crate::mailbox_view::explicit_limits(),
@@ -3107,7 +3118,7 @@ impl<'a> McpServer<'a> {
         Ok((
             text,
             plan.map(|plan| PendingAck {
-                project_root: self.project_root.clone(),
+                project_root: self.mailbox_root(),
                 plan,
             }),
         ))
@@ -3153,14 +3164,14 @@ impl<'a> McpServer<'a> {
                 "mark_seen applies only to this session's own inboxes; `{agent}` is not one of them"
             ));
         }
-        let local = crate::mailbox_store::read_local_messages(&self.project_root)
+        let local = crate::mailbox_store::read_local_messages(&self.mailbox_root())
             .map_err(|e| e.to_string())?;
-        let store_root = self.project_root.join(".aida-store");
+        let store_root = self.mailbox_root().join(".aida-store");
         let canonical =
             crate::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
         let all = aida_core::mailbox::merge_dedup(&local, &canonical);
         // trace:STORY-1843 | ai:claude — a receipt in any worktree is a read.
-        let evidence = crate::mailbox_store::ReadEvidence::load(&self.project_root)
+        let evidence = crate::mailbox_store::ReadEvidence::load(&self.mailbox_root())
             .map_err(|e| e.to_string())?;
         let messages: Vec<Value> = inbox_for(agent, &all)
             .into_iter()

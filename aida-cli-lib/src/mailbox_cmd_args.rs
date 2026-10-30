@@ -291,4 +291,22 @@ pub enum RetentionCommand {
         #[clap(long)]
         json: bool,
     },
+    /// Drop worktrees that were deleted from disk but are still registered
+    /// with Git. While registered, each one keeps the mail view partial,
+    /// which also blocks acknowledging mail. A deleted worktree's mailbox
+    /// went with it, so there is nothing left to retain.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+    Prune {
+        /// Also drop worktrees Git has locked. A lock normally marks a
+        /// worktree on removable media; only a deleted worktree whose parent
+        /// directory is still present is ever dropped.
+        #[clap(long)]
+        include_locked: bool,
+        /// Report only; drop nothing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Print the report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }

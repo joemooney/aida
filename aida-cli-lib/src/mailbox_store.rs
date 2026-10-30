@@ -22,6 +22,61 @@ pub(crate) fn mailbox_dir(project_root: &Path) -> PathBuf {
     aida_core::mailbox::local_mailbox_dir(project_root)
 }
 
+/// Where a checkout's mailbox operations read and write their local layer.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum MailboxHome {
+    /// An ordinary checkout (main or linked worktree): its own `.aida/mailbox`,
+    /// which the primary's logical view already reads.
+    Checkout(PathBuf),
+    /// A verified seat clone: the PRIMARY checkout's `.aida/mailbox`. A clone
+    /// is its own repository, so the primary's view (which enumerates `git
+    /// worktree list`) never reads the clone's directory; the contained
+    /// sandbox grants the seat exactly this shared mailbox instead.
+    SeatPrimary(PathBuf),
+    /// A seat clone that does not verify: mail stays in the clone, where no
+    /// other checkout's inbox sees it until it is synced.
+    UnverifiedClone(PathBuf),
+}
+
+impl MailboxHome {
+    /// The project root whose `.aida/mailbox` this home uses.
+    pub(crate) fn root(&self) -> &Path {
+        match self {
+            Self::Checkout(root) | Self::UnverifiedClone(root) => root,
+            Self::SeatPrimary(primary) => primary,
+        }
+    }
+
+    /// The truthful delivery note for a send, `None` when the message is in
+    /// a mailbox the primary checkout already reads.
+    pub(crate) fn send_note(&self) -> Option<String> {
+        match self {
+            Self::Checkout(_) => None,
+            Self::SeatPrimary(primary) => Some(format!(
+                "delivered to the primary checkout's mailbox ({})",
+                mailbox_dir(primary).display()
+            )),
+            Self::UnverifiedClone(clone) => Some(format!(
+                "warning: delivered only to this seat clone's local mailbox ({}); \
+                 no other checkout's inbox sees it yet. Run `aida mailbox sync` \
+                 to publish it to the canonical store.",
+                mailbox_dir(clone).display()
+            )),
+        }
+    }
+}
+
+/// Resolve the mailbox home for `project_root` (the store path's parent).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+pub(crate) fn mailbox_home(project_root: &Path) -> MailboxHome {
+    match crate::seat_clone::main_for(project_root) {
+        crate::seat_clone::MainFor::NotAClone => MailboxHome::Checkout(project_root.to_path_buf()),
+        crate::seat_clone::MainFor::Verified(primary) => MailboxHome::SeatPrimary(primary),
+        crate::seat_clone::MainFor::Unverified(clone) => MailboxHome::UnverifiedClone(clone),
+    }
+}
+
 /// The canonical mailbox directory in the orphan-store worktree:
 /// `<store_root>/mailbox/`. Durable, replayable, shareable across clones — the
 /// git-canonical half of the hybrid, digested from the local layer and

@@ -202,9 +202,15 @@ pub(crate) fn handle_mailbox_command(
     // <store_root>/mailbox); its parent is the project root (the local layer at
     // <project_root>/.aida/mailbox).
     let store_root = store_path;
-    let project_root = store_path
+    let checkout_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+    // A seat clone's `.aida-store` aliases the primary's store, so its parent
+    // is the clone; mail written there reaches no other inbox. Route a
+    // verified clone to the primary checkout's mailbox.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+    let home = mailbox_store::mailbox_home(checkout_root);
+    let project_root = home.root();
 
     match cmd {
         // trace:TASK-2347 | ai:codex
@@ -253,6 +259,16 @@ pub(crate) fn handle_mailbox_command(
                 }
                 record_retention_activation(project_root, json)
             }
+            self::mailbox_cmd_args::RetentionCommand::Prune {
+                include_locked,
+                dry_run,
+                json,
+            } => print_retention_prune(
+                project_root,
+                *include_locked,
+                *dry_run,
+                *json || crate::output_format_is_json(),
+            ),
         },
         MailboxCommand::Latency { recipient, json } => {
             let (rows, note) = latency_rows(
@@ -492,6 +508,10 @@ pub(crate) fn handle_mailbox_command(
                 thread_id.dimmed(),
                 flag
             );
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+            if let Some(note) = home.send_note() {
+                println!("  {}", note.dimmed());
+            }
             Ok(())
         }
         MailboxCommand::Inbox {
@@ -1201,6 +1221,71 @@ fn record_retention_activation(project_root: &std::path::Path, json: bool) -> Re
 #[cfg(not(unix))]
 fn record_retention_activation(_project_root: &std::path::Path, _json: bool) -> Result<()> {
     anyhow::bail!("mail retention is only available on Unix")
+}
+
+/// `aida mailbox retention prune`: drop the registrations of worktrees
+/// deleted from disk, so the mail view stops reporting them as missing.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+fn print_retention_prune(
+    project_root: &std::path::Path,
+    include_locked: bool,
+    dry_run: bool,
+    json: bool,
+) -> Result<()> {
+    use crate::mail_retention::PruneOutcome;
+    let rows = crate::mail_retention::prune_removed_sources(project_root, include_locked, dry_run)?;
+    if json {
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|(source, outcome)| {
+                serde_json::json!({
+                    "path": source.path,
+                    "locked": source.locked,
+                    "outcome": match outcome {
+                        PruneOutcome::Dropped if dry_run => "would-drop",
+                        PruneOutcome::Dropped => "dropped",
+                        PruneOutcome::KeptLocked => "kept-locked",
+                        PruneOutcome::Declined => "declined",
+                    },
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "dry_run": dry_run,
+                "removed_worktrees": rows,
+            }))?
+        );
+        return Ok(());
+    }
+    if rows.is_empty() {
+        println!("No deleted worktree is still registered; nothing to prune.");
+        return Ok(());
+    }
+    let mut kept_locked = 0;
+    for (source, outcome) in &rows {
+        let verdict = match outcome {
+            PruneOutcome::Dropped if dry_run => "would drop",
+            PruneOutcome::Dropped => "dropped",
+            PruneOutcome::KeptLocked => {
+                kept_locked += 1;
+                "kept (locked)"
+            }
+            PruneOutcome::Declined => "kept (could not be cleared safely)",
+        };
+        println!("  {verdict:<34} {}", source.path.display());
+    }
+    if kept_locked > 0 {
+        println!(
+            "{kept_locked} locked worktree(s) kept. If they were deleted on purpose, re-run \
+             with --include-locked."
+        );
+    }
+    if dry_run {
+        println!("Dry run; nothing was dropped.");
+    }
+    Ok(())
 }
 
 /// What `aida mailbox gc --phantoms` did: counts plus one line per message.
@@ -3019,7 +3104,11 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
+    use self::mailbox_cmd_args::RetentionCommand;
     crate::command_registry::CmdPolicy {
+        // A real prune removes Git worktree registrations, so only its dry
+        // run is a read.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
         stakeholder: if matches!(
             inner,
             Some(
@@ -3027,7 +3116,10 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
                     | MailboxCommand::WakeSnapshot { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
-                    | MailboxCommand::Retention { .. }
+                    | MailboxCommand::Retention {
+                        command: RetentionCommand::Activate { .. }
+                            | RetentionCommand::Prune { dry_run: true, .. }
+                    }
             )
         ) {
             SA::Read

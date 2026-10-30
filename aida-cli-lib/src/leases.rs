@@ -4229,7 +4229,8 @@ pub(crate) fn auto_release_decision_for_lease(
 
     let worktree_exists = lease.worktree_path.exists();
     let worktree_dirty_count = if worktree_exists {
-        worktree_dirty_entries(&lease.worktree_path).len()
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+        lease_tree_dirty_entries(lease).len()
     } else {
         0
     };
@@ -4302,6 +4303,39 @@ impl StaleLeaseRecoveryReport {
             shown.join("; ")
         }
     }
+}
+
+/// What removing a lease's tree would lose, one entry per item.
+/// A worktree is read with host `git status --porcelain` (ignored files never
+/// count). Host git never runs in a seat clone, so [`worktree_dirty_entries`]
+/// reads every clone as one "refusing to run git" entry, and a dormant clone
+/// lease looked dirty with "1 uncommitted change(s)" however clean it was. A
+/// host-recorded clone is read through the sandboxed probe instead, the same
+/// reading `aida session end` uses: its changed and untracked files plus a line
+/// for commits origin does not have (they live only in the clone). A clone
+/// the host does not vouch for, or whose probe has no answer, stays one dirty
+/// entry, so every caller keeps it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+pub(crate) fn lease_tree_dirty_entries(lease: &SessionLease) -> Vec<String> {
+    if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        if let Some(clone) = crate::seat_clone::host_recorded_clone(&lease.worktree_path) {
+            return match crate::seat_clone::probe(&clone.main, &clone.root) {
+                crate::seat_clone::Probe::Known(facts) => {
+                    let mut entries = facts.dirty;
+                    if facts.unpushed > 0 {
+                        entries.push(format!(
+                            "{} commit(s) that origin does not have",
+                            facts.unpushed
+                        ));
+                    }
+                    entries
+                }
+                crate::seat_clone::Probe::Unknown(why)
+                | crate::seat_clone::Probe::HasSubmodules(why) => vec![format!("?? ({why})")],
+            };
+        }
+    }
+    worktree_dirty_entries(&lease.worktree_path)
 }
 
 /// BUG-777: gather the recovery picture for a blocking lease.
@@ -4390,7 +4424,8 @@ fn stale_lease_recovery_with_owner(
     let worktree_exists =
         !lease.worktree_path.as_os_str().is_empty() && lease.worktree_path.exists();
     let dirty = if worktree_exists {
-        worktree_dirty_entries(&lease.worktree_path)
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+        lease_tree_dirty_entries(lease)
     } else {
         Vec::new()
     };
