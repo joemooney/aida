@@ -2,12 +2,12 @@ id: 01a18a3e-0f00-7e50-8791-e2d3db07bfde
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-022
 title: Rework lanes open a new PR instead of pushing to the spec's open PR
 description: '2026-10-29: the TASK-HOME-116 rework lane opened PR-3109 (branch ...-116-2) while PR-3107 was open with the change-request hold, forcing a close-as-superseded. Acceptance: when a spec has an open PR with a rework hold, queue work --fresh checks out that PR''s branch and pushes to it; a new branch needs an explicit flag.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:38:05.312516291Z
-modified_at: 2026-10-30T13:52:48.294632055Z
+modified_at: 2026-10-30T14:55:17.213684998Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -54,6 +54,20 @@ history:
   timestamp: 2026-10-30T13:52:51.703071571Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18d4e-d8c3-74a3-99a0-24e71d153fff
+  author: aida-auto-bump
+  timestamp: 2026-10-30T14:55:17.187710194Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18d4e-d8d8-7e02-9f8c-3ccdeab61afb
+  timestamp: 2026-10-30T14:55:17.213675965Z
+  agent: aida
+  commit_sha: 236b190e488d845eb4d5cab12fe2ceec4e403db6
+  summary: 'Base-only update from main (gh update-branch f9edff3e5a8b4fff6c823efc59a0e37a22d26def -> 05e2fd71877277fde8e16aed4b1f6af2f58d7ea0); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -66,3 +80,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T13:50:10.188801299Z
   implemented_by: joe
+  completed_at: 2026-10-30T14:55:17.187703690Z
+  completion_sha: 236b190e488d845eb4d5cab12fe2ceec4e403db6
