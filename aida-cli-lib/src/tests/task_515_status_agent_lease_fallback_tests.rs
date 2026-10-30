@@ -101,6 +101,7 @@ fn status_agents_registry_entry_wins_over_matching_lease() {
         ended_at: None,
         resumed_from: None,
         liveness: agent_registry::LivenessBasis::Process,
+        mail_wake: None,
     };
     let ctx = agent_registry::AgentClassifyContext::new(lease.started_at, 30, vec![]);
 

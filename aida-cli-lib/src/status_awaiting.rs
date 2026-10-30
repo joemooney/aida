@@ -1199,12 +1199,25 @@ pub(crate) fn notice_hook_session(
                 env!("CARGO_PKG_VERSION").to_string(),
                 env!("AIDA_BUILD_GIT_SHA").to_string(),
             );
-            let _ = agent_registry::touch_session_start_agent(
+            let entry = agent_registry::touch_session_start_agent(
                 &project_root,
                 &worktree_root,
                 session_id.as_deref(),
                 &binary,
             );
+            // The session's thread is now on its row: arm the mail wake its
+            // launch asked for. Never blocks or fails the session.
+            // trace:STORY-HOME-096 | ai:claude
+            if let Ok(entry) = entry {
+                let armed = crate::mail_wake::arm_pending(
+                    &project_root,
+                    &entry,
+                    crate::mailbox_wake_run::ensure_service,
+                );
+                if let Some(warning) = armed.and_then(|a| a.warning) {
+                    eprintln!("warning: {warning}");
+                }
+            }
             // Hooks run outside the command sandbox, so this is where dead
             // rows get ended before a sandboxed sender counts them as
             // unverified mail readers. trace:STORY-1843 | ai:claude

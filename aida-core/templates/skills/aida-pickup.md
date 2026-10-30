@@ -486,6 +486,12 @@ Test locally by the spec's tier; the full workspace suite runs only in CI
 - **STRICT or heft >= 7**: LIGHT plus the area's integration test binaries
   (`cargo test --profile agent -p <crate> --test <name>`).
 
+**Added or changed a CLI command or flag?** In every tier, regenerate the help
+golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot` and commit
+`aida-cli-lib/src/tests/golden/cli_help_snapshot.txt` with the change. `make check-ci-fast`
+fails when an `*_args.rs` or `command_registry.rs` edit ships without it.
+trace:TASK-B6B1278890774EF993D2EBC327862470-125 | ai:claude
+
 `make check-ci-fast` runs before every push. trace:TASK-1780 | ai:claude
 
 ### Step 5: Mark done atomically

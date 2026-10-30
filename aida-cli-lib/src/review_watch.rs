@@ -1512,7 +1512,7 @@ fn stale_message_for(
         Sha256::digest(format!("{repository}\0{key}\0{}\0stale", change.head))
     );
     Message { id: id.clone(), thread_id: id, from: "review-watch".into(), to: Recipient::Agent(to.to_string()),
-        timestamp: chrono::Utc::now().timestamp(), in_reply_to: None,
+        timestamp: chrono::Utc::now().timestamp_millis(), in_reply_to: None, // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
         body: format!("{key} at {} {behind} with overlapping paths. {merge} into the branch and push before review. The watcher did not update the branch.", change.head),
         subject: Some(subject), urgent: false, intent: Intent::Request,
         retracted: false, deleted: false, archived: false, from_source: SenderSource::Explicit,

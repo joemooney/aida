@@ -28,6 +28,7 @@ fn agent_view(id: &str, status: agent_registry::AgentStatus) -> agent_registry::
         ended_at: None,
         resumed_from: None,
         liveness: agent_registry::LivenessBasis::Process,
+        mail_wake: None,
     }
 }
 

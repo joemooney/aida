@@ -25,7 +25,10 @@
 //! [`crate::mailbox`]; this global view grants no write scope.
 // trace:STORY-1843 | ai:claude
 
-use crate::mailbox::{message_state_rank, Message, Recipient};
+use crate::mailbox::{
+    message_state_rank, mtime_millis, normalize_message_value, timestamp_is_known,
+    written_timestamp, Message, Recipient,
+};
 use crate::mailbox_delivery::{
     binding_dir_components, binding_file_name, parse_handover, DeliveryBinding, DeliveryRecord,
     DeliverySidecar, RecipientUuid, DELIVERIES_DIR, DELIVERY_FILE_CAP, HANDOVER_DIR,
@@ -865,6 +868,7 @@ pub fn logical_snapshot(
         });
         observed.push(obs);
     }
+    settle_unstamped_timestamps(&mut observed, local_count);
 
     let in_query = |id: &str, thread: &str| match query {
         Query::Inbox | Query::Addressable => true,
@@ -1575,6 +1579,16 @@ impl PinnedDir {
     /// Read regular file `name` (owned, single link, at most `limit` bytes).
     /// `Ok(None)` when it does not exist.
     fn read_file(&self, name: &OsStr, limit: u64) -> Result<Option<Vec<u8>>, SourceErrorCode> {
+        Ok(self.read_file_meta(name, limit)?.map(|(bytes, _)| bytes))
+    }
+
+    /// [`Self::read_file`] with the metadata of the file that was read.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+    fn read_file_meta(
+        &self,
+        name: &OsStr,
+        limit: u64,
+    ) -> Result<Option<(Vec<u8>, std::fs::Metadata)>, SourceErrorCode> {
         let fd = match openat(Some(&self.fd), name, libc::O_RDONLY) {
             Ok(fd) => fd,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1599,7 +1613,7 @@ impl PinnedDir {
         if bytes.len() as u64 > limit {
             return Err(SourceErrorCode::OverBudget);
         }
-        Ok(Some(bytes))
+        Ok(Some((bytes, meta)))
     }
 
     /// Entry names of this directory, drawn from the snapshot-wide entry
@@ -1646,6 +1660,9 @@ struct ObservedMessage {
     message: Message,
     fingerprint: String,
     recorded: Recorded,
+    /// The file carried its own time; `false` when the timestamp is a
+    /// fallback (the file's mtime) that replicas need not agree on.
+    stamped: bool,
 }
 
 struct ObservedSource {
@@ -1731,14 +1748,22 @@ fn read_source(
         if budget.expired() {
             return Err(SourceErrorCode::OverBudget);
         }
-        let Some(bytes) = dir.read_file(OsStr::from_bytes(&name), budget.max_message_bytes)? else {
+        let Some((bytes, meta)) =
+            dir.read_file_meta(OsStr::from_bytes(&name), budget.max_message_bytes)?
+        else {
             // Listed but gone: the source changed under the read.
             return Err(SourceErrorCode::SourceChanged);
         };
         budget.take(bytes.len())?;
-        let value: serde_json::Value =
+        let mut value: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|_| SourceErrorCode::CorruptMessage)?;
         let recorded = Recorded::of(&value);
+        // An unstamped or seconds-scale time is normalized like every other
+        // reader's, the unstamped one dated by this replica's mtime until
+        // reconciliation settles it across replicas.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+        let stamped = written_timestamp(&value).is_some_and(|ts| ts > 0);
+        normalize_message_value(&mut value, || mtime_millis(&meta));
         let message: Message =
             serde_json::from_value(value).map_err(|_| SourceErrorCode::CorruptMessage)?;
         if !safe_id(&message.id) {
@@ -1748,6 +1773,7 @@ fn read_source(
             fingerprint: fingerprint(&bytes),
             message,
             recorded,
+            stamped,
         });
     }
     let mut handovers = Vec::new();
@@ -2254,6 +2280,52 @@ fn merge_metadata(
             &other.relayed_from,
             o[5],
         )
+}
+
+/// Give every replica of a message whose file carried no time one shared
+/// timestamp, so the mtime fallback (which differs per replica, and in a git
+/// checkout changes on every pull) is never an audience disagreement: the
+/// time a stamped replica recorded, the canonical one first, else the
+/// earliest fallback. A sync persists that stamp into the canonical copy.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+fn settle_unstamped_timestamps(observed: &mut [Option<ObservedSource>], local_count: usize) {
+    let mut settled: HashMap<String, (bool, i64)> = HashMap::new();
+    let mut unstamped = false;
+    for (index, source) in observed.iter().enumerate() {
+        for m in source.iter().flat_map(|s| &s.messages) {
+            unstamped |= !m.stamped;
+            // Rank: a canonical stamp, then any stamp, then the earliest
+            // fallback.
+            let candidate = (m.stamped, m.message.timestamp);
+            let better = |held: &(bool, i64)| match (candidate.0, held.0) {
+                (true, false) => true,
+                (true, true) => index >= local_count,
+                (false, false) => {
+                    timestamp_is_known(candidate.1)
+                        && (!timestamp_is_known(held.1) || candidate.1 < held.1)
+                }
+                (false, true) => false,
+            };
+            settled
+                .entry(m.message.id.clone())
+                .and_modify(|held| {
+                    if better(held) {
+                        *held = candidate;
+                    }
+                })
+                .or_insert(candidate);
+        }
+    }
+    if !unstamped {
+        return;
+    }
+    for source in observed.iter_mut().flatten() {
+        for m in source.messages.iter_mut().filter(|m| !m.stamped) {
+            if let Some((_, ts)) = settled.get(&m.message.id) {
+                m.message.timestamp = *ts;
+            }
+        }
+    }
 }
 
 /// IDs of conflicting records, each with the thread IDs its replicas claim
