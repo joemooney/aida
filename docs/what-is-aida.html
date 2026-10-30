@@ -428,7 +428,7 @@ td code { font-size: 0.84em; }
 <p><strong>Software factory</strong> describes the repeatable path from a specification to an implemented, tested, reviewed and merged change. <strong>Governed</strong> means that path has assigned responsibilities, recorded decisions, acceptance criteria and enforced authority limits. <strong>Selectable autonomy</strong> means the team chooses where human participation is required for each spec, rather than choosing one automation level for an entire project.</p>
 <h3 id="four-execution-modes-plus-a-decision-stop">Four execution modes, plus a decision stop</h3>
 <p>These descriptive names explain the existing modes to a management audience; the CLI values in the second column remain the actual mode names. They are operating choices, not industry certification levels.</p>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Descriptive name</th>
@@ -468,7 +468,7 @@ td code { font-size: 0.84em; }
 <td>A bounded fix with clear acceptance criteria and no unresolved design decision.</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <p><strong>Decision pending</strong> (<code>decide</code>) sits outside this ladder. It blocks execution until the pending decision is resolved; no implementation harness runs. It is how AIDA represents work that is not ready to delegate, rather than asking an agent to invent an answer.</p>
 <p>The execution mode is recorded on the spec. The advisor classifies the work, and <code>aida do &lt;SPEC&gt;</code> uses that classification to select the execution path. Moving toward more human involvement is permitted; reducing involvement requires an explicit <code>--force</code> override or a durable reclassification. A <code>decide</code> block cannot be bypassed with a mode override. See <a href="cli/03-work-autonomy.md">Work &amp; autonomy</a> for operational commands.</p>
 <h3 id="where-a-dark-factory-fits">Where a dark factory fits</h3>
@@ -482,7 +482,7 @@ td code { font-size: 0.84em; }
 </section>
 <section class="major"><h2 id="how-big-is-it-and-why">How big is it, and why</h2>
 <p>Historical snapshot: counts are for tracked files at commit <code>28bbe9d540b</code>, dated 28 October 2026 (then <code>origin/main</code>). These are not live product metrics.</p>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>What</th>
@@ -519,7 +519,7 @@ td code { font-size: 0.84em; }
 <td><code>queue_cmd.rs</code> 17,170 lines (about 786 KB), <code>doctor_cmd.rs</code> 15,230, <code>mcp.rs</code> 14,997, <code>auto_complete.rs</code> 14,774</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <p>Why it is large:</p>
 <ul>
 <li><strong>The scope is wide.</strong> A requirements store, git-backed sync, a merge train, a review gate, mandates and grants, sessions, mail, a scheduler, and four interfaces (command line, MCP, terminal UI and web server).</li>
@@ -547,7 +547,7 @@ td code { font-size: 0.84em; }
 </ul>
 <h3 id="proposed-extensions-not-built">Proposed extensions (not built)</h3>
 <p>The following extensions are proposals. Existing open/plan/ship/review effort capture and load calibration are already implemented and are covered above.</p>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Need</th>
@@ -570,7 +570,7 @@ td code { font-size: 0.84em; }
 <td>PROPOSED</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <p>Caveats for the token and cost proposal:</p>
 <ul>
 <li>Prices change, so cost must use the rate in force on each message's date.</li>
@@ -584,7 +584,7 @@ td code { font-size: 0.84em; }
 <section class="major"><h2 id="capabilities-and-when-to-use-each">Capabilities, and when to use each</h2>
 <p>Each row names the situation that should make you reach for the capability. The commands below exist in <code>aida</code> 0.16.0; run <code>aida &lt;command&gt; --help</code> for the details.</p>
 <h3 id="requirements-and-traceability">Requirements and traceability</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Capability</th>
@@ -614,9 +614,9 @@ td code { font-size: 0.84em; }
 <td><code>aida history</code> (<code>events</code>, <code>opened</code>, <code>completed</code>, ...), <code>aida digest</code></td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <h3 id="doing-work-safely-in-parallel">Doing work safely in parallel</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Capability</th>
@@ -646,9 +646,9 @@ td code { font-size: 0.84em; }
 <td><code>aida agent new claude|codex|antigravity</code>, <code>aida init --agent ...</code></td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <h3 id="review-and-merging">Review and merging</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Capability</th>
@@ -678,9 +678,9 @@ td code { font-size: 0.84em; }
 <td><code>aida pr train &lt;N...&gt;</code>, <code>aida pr train --all-ready</code>, <code>--dry-run</code></td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <h3 id="autonomy-under-human-control">Autonomy under human control</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Capability</th>
@@ -710,9 +710,9 @@ td code { font-size: 0.84em; }
 <td><code>aida shift status|tick --dry-run|enable</code></td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <h3 id="communication-and-continuity">Communication and continuity</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Capability</th>
@@ -737,9 +737,9 @@ td code { font-size: 0.84em; }
 <td><code>aida session handoff --write</code>, <code>--show</code>, <code>--standing-orders add|list</code>, <code>--check</code></td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <h3 id="watching-the-fleet-and-the-infrastructure">Watching the fleet and the infrastructure</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Capability</th>
@@ -774,7 +774,7 @@ td code { font-size: 0.84em; }
 <td><code>aida mcp-serve</code>, <code>aida init --with-mcp</code></td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <hr />
 </section>
 <section class="major"><h2 id="what-aida-adds-to-github-ci-and-jira-when-the-developers-are-ai-agents">What AIDA adds to GitHub, CI and Jira when the developers are AI agents</h2>
@@ -804,7 +804,7 @@ td code { font-size: 0.84em; }
 <p><strong>What standard tooling already does.</strong> CI flags flaky tests. Monitoring catches full disks and slow services. Git hosts mirror code. For most of this example, standard tooling is the equivalent, and AIDA's guards mainly keep AIDA's own machinery healthy. For instance, the inode-reuse collision found in a merge-train run on 28 October was a bug in AIDA's own mailbox code (fixed in #3043).</p>
 <p><strong>What AIDA adds because the developers are agents.</strong> One part is specific to agents. Dozens of agent worktrees each build their own cache, and deciding what is safe to delete depends on agent state. <code>aida worktree reclaim</code> skips anything held by a live session or job, any worktree with an open PR, and recently touched caches. On 28 October <code>--apply</code> freed 532.9 GiB across 151 directories (disk use went from 94% to 55%).</p>
 <h3 id="the-common-thread">The common thread</h3>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Need</th>
@@ -849,7 +849,7 @@ td code { font-size: 0.84em; }
 <td>A design rule in AIDA's gate code: refuse and say why when evidence can't be read. It is checked in review, not guaranteed: on 27–28 October reviewers still found and sent back fail-open edge cases</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <hr />
 </section>
 <section class="major"><h2 id="why-not-just-codex-skills-plus-a-wrapper">Why not just Codex skills plus a wrapper?</h2>
@@ -881,7 +881,7 @@ td code { font-size: 0.84em; }
 </ul>
 <p>These protections aren't free to build. Concurrency control, crash-safe retries and identity that survives reused PIDs and inodes are where real bugs were found and fixed on 27–28 October: the inode-reuse identity collision (#3043), the dispatch occupancy scan misreading lease companion files (#3052), and writer build identity being compared by executable path instead of build (#3037).</p>
 <p><strong>To be fair to the other side.</strong> AIDA is large partly because it grew fast, and some of its approval logic has had overlapping paths (see "How big is it" above). Skills are still the right tool for guidance: how to plan, review or write a commit. AIDA ships its own skills for exactly that. So the real comparison is "skills plus an enforcement layer" against "skills alone".</p>
-<table>
+<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0"><table>
 <thead>
 <tr class="header">
 <th>Concern</th>
@@ -936,7 +936,7 @@ td code { font-size: 0.84em; }
 <td>Large; takes time to learn</td>
 </tr>
 </tbody>
-</table>
+</table></div>
 <hr />
 <h1 id="appendices">Appendices</h1>
 </section>

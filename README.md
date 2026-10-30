@@ -83,7 +83,8 @@ presents the same source in a reader-friendly layout. Autonomous delivery is opt
 ### Cloning an existing AIDA project
 
 The store travels on the `aida-store` branch, so a normal clone is enough to
-read it. The first read attaches the store and rebuilds the local cache:
+read it. Reads can attach the store and report stale or deferred cache context;
+use `aida cache status` or `aida cache rebuild` when cache maintenance is needed:
 
 ```bash
 git clone <repo-url> && cd <repo>

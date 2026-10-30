@@ -160,6 +160,7 @@ def build_overview():
         body = body.replace(f'href="#{old_id}"', f'href="#{slug}"')
     for source, output, _ in PAGES:
         body = body.replace(f'href="{source}"', f'href="showcase/{output}"')
+    body = re.sub(r'<table>.*?</table>', lambda m: '<div class="table-wrap" role="region" aria-label="Scrollable data table" tabindex="0">' + m[0] + '</div>', body, flags=re.S)
     parts = re.split(r'(?=<h2 id=)', body)
     body = '<section class="intro" aria-label="Introduction">' + parts[0] + '</section>\n'
     body += '\n'.join('<section class="major">' + part + '</section>' for part in parts[1:])

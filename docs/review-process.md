@@ -2,15 +2,16 @@
 
 <!-- trace:STORY-553 trace:STORY-587 trace:STORY-522 trace:STORY-569 | ai:claude -->
 
-Every code change in AIDA is reviewed by **a different entity than the one that
-wrote it**. That invariant never changes. What *does* change — by execution
+The default review path requires **a different entity than the one that
+wrote the change**. Implementing agents cannot approve their own work; a verified
+human may explicitly opt into the audited solo-human exception described below. What *does* change — by execution
 mode — is *who* that reviewer is, how deliberate the review is, and how much of
 it a human sees. This doc maps the review topology across the three modes you'll
 actually use, and when to pick each.
 
-The one rule that holds everywhere:
+The rule for implementing agents:
 
-> **The implementer never reviews its own work.** Self-review is worthless — an
+> **An implementing agent never approves its own work.** Self-review is worthless — an
 > agent that just wrote the code is the worst-placed entity to find its flaws.
 > This is why agents open PRs but never self-merge.
 
@@ -132,7 +133,7 @@ the interactive path ("punt out of the lane if it turns out non-trivial").
 **The honest gap.** The *only* thing distinguishing "safe to fasttrack" from
 "needs review" today is the **tag a human/advisor put on the spec at filing**.
 There is no automatic triviality classifier. A mis-tagged spec still cannot
-merge on CI alone: every merge path (`aida pr ship`, the drain,
+merge on CI alone: under the default independent-review policy every merge path (`aida pr ship`, the drain,
 `aida release --after-pr`, burndown) requires an attested approval by a
 session that did not author the work, and no tag opts out of it.
 Keep `lifecycle:no-review` a *deliberate* tag on genuinely-cosmetic work, never a
@@ -144,8 +145,10 @@ that holds an authoring lease on the work, or is recorded against it in the
 authorship ledger, is an author of that work. That includes an operator who runs
 `aida worktree enter` on a worker's lease to finish, fix, or inspect it. From
 then on, an approval recorded from that session is refused as the author's own,
-even when a human records it at a terminal: there is no human-at-a-terminal
-exception. Earlier, an operator could step into a worker's
+even when a human records it at a terminal. Terminal presence alone is not
+an exception. The explicit [solo-human self-approval mode](#solo-projects--audited-self-approval)
+below is a separate, audited opt-in for verified humans; it never authorizes an
+implementing agent to self-approve. Earlier, an operator could step into a worker's
 worktree and then approve the same PR, which made the author and the approver
 the same identity, and that is the self-approval the gate exists to stop. To
 approve work you have entered, record the verdict from a separate session that
