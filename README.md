@@ -77,8 +77,8 @@ linked in AIDA. You develop and review the system; the agent handles the trackin
 commands as part of the work.
 
 The [getting-started guide](docs/getting-started.md) explains this journey and
-labels the one-time operator setup separately. The [product showcase guide](docs/showcase/getting-started.html)
-presents the same source in a reader-friendly layout. Autonomous delivery is optional.
+labels the one-time operator setup separately. The product showcase renders [that same guide source](docs/getting-started.md)
+in a reader-friendly layout. Autonomous delivery is optional.
 
 ### Cloning an existing AIDA project
 
