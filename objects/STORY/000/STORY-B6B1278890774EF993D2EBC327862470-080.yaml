@@ -116,7 +116,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T07:27:57.175170013Z
+modified_at: 2026-10-30T08:05:19.417492823Z
 req_type: Story
 tags:
 - architecture
@@ -830,6 +830,13 @@ comments:
   created_at: 2026-10-30T05:53:08.280342922Z
   modified_at: 2026-10-30T05:53:08.280342922Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18bd7-83b9-79b3-b222-a71b753c9898
+  author: joe
+  content: 'PR-3120 round 2 (3ec90ec9871). F1: review_carryover.rs and its tests moved into gate/. F2: bind_unbound now skips records another change of the spec already holds (two-change test). F3: gate::ledger::open_change_bound is now the only way to open a change, used by ship, queue recover, both orchestrator opens, the drain cluster and the train; a stub-forge test and a ratchet against bare .open_change( cover it. AC7 line counts from 5fbe1e39c0d^ to now: review_verdict 2809->3202, merge_hold_core 2157->2227, rework_hold_release 953->988, review_marker 377->377, approval 507->507, review_carryover 769->872 (now in gate/), gate/ledger +1524 (non-test). AC7''s collapse is NOT met when measured in lines. Only the legacy writers are gone (verdict, hold and carry-over files, plus the collect step). If the advisor reads AC7 as requiring the modules to shrink, PR-3120 should land with Refs and the collapse should become its own slice.'
+  created_at: 2026-10-30T08:05:19.417492823Z
+  modified_at: 2026-10-30T08:05:19.417492823Z
+  session_id: 01a18bb54881
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
