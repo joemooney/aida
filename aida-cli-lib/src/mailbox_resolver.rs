@@ -522,7 +522,15 @@ impl RecipientDirectory {
                 // Every live reader is UUID-less: an explicit queue request
                 // queues for the first reader with a UUID (advisor ruling,
                 // PR-3042 round 1). trace:STORY-1843 | ai:claude
-                cohort.queued = queue_for_role && cohort.readers.is_empty();
+                // A pool role (several generic implementers) never fans out:
+                // its mail queues so exactly one member takes it — also when
+                // every live member is UUID-less (the first with a UUID takes it).
+                // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+                cohort.queued = if agent_registry::is_pool_role(role) {
+                    !cohort.readers.is_empty() || !cohort.uuidless.is_empty() || queue_for_role
+                } else {
+                    queue_for_role && cohort.readers.is_empty()
+                };
                 cohort
             });
             let live_count = readers.values().filter(|live| **live).count();
@@ -1457,6 +1465,53 @@ mod tests {
         let messages = crate::mailbox_store::read_local_messages(tmp.path()).unwrap();
         assert_eq!(messages.len(), 1, "the sidecar is not read as a message");
         assert_eq!(written[0].message_id, messages[0].id);
+    }
+
+    // TASK-121: mail to a pool role is taken by exactly one member — it
+    // queues instead of fanning out to every live implementer; a handle send
+    // still reaches only that member.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    #[test]
+    fn pool_role_mail_queues_for_one_taker_instead_of_fanning_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        let a = "00000000-0000-4000-8000-00000000000a";
+        let b = "00000000-0000-4000-8000-00000000000b";
+        registry(tmp.path(), "row-a", "impl-a", "implementer", false);
+        registry(tmp.path(), "row-b", "impl-b", "implementer", false);
+        reserve(tmp.path(), "impl-a", "row-a", a);
+        reserve(tmp.path(), "impl-b", "row-b", b);
+
+        let d = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let resolved = d.resolve("implementer").unwrap();
+        assert!(resolved.cohort.as_ref().unwrap().queued);
+        let (sidecar, _) = delivery_sidecar(&resolved, "m1", 7, true).unwrap();
+        let sidecar = sidecar.unwrap();
+        assert_eq!(sidecar.deliveries.len(), 1, "one delivery, one taker");
+        assert!(sidecar.deliveries[0].queued_for_role);
+        assert!(sidecar.deliveries[0].recipient_uuid.is_none());
+
+        // A handle send is not a role send: it reaches only that member.
+        assert!(d.resolve("impl-a").unwrap().cohort.is_none());
+
+        // Every live member UUID-less, no --queue-for-role: still queued for
+        // one taker, never refused like a non-pool role.
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        registry(tmp.path(), "row-old", "impl-old", "implementer", false);
+        let d = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let resolved = d.resolve("implementer").unwrap();
+        let cohort = resolved.cohort.as_ref().unwrap();
+        assert!(cohort.readers.is_empty() && !cohort.uuidless.is_empty());
+        assert!(cohort.queued);
+        let (sidecar, warnings) = delivery_sidecar(&resolved, "m2", 7, true).unwrap();
+        let sidecar = sidecar.unwrap();
+        assert_eq!(sidecar.deliveries.len(), 1);
+        assert!(sidecar.deliveries[0].queued_for_role);
+        assert!(
+            warnings.iter().any(|w| w.contains("impl-old")),
+            "{warnings:?}"
+        );
     }
 
     // trace:STORY-1843 | ai:claude

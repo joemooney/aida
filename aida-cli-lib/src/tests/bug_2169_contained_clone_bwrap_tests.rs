@@ -515,7 +515,11 @@ mod linux {
         assert!(deny.contains(&fx.main.join(".aida/sessions")), "{settings}");
         let tool_deny = settings["permissions"]["deny"].to_string();
         assert!(
-            tool_deny.contains(&format!("Write(/{}/.aida/sessions/**)", clone.display())),
+            tool_deny.contains(&format!("Edit(/{}/.aida/sessions/**)", clone.display())),
+            "{settings}"
+        );
+        assert!(
+            !tool_deny.contains("Write(") && !tool_deny.contains("MultiEdit("),
             "{settings}"
         );
         assert!(allow.contains(&target), "{settings}");

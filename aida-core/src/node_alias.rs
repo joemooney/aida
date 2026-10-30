@@ -270,11 +270,17 @@ impl NodeAliasMap {
     /// Expand `TYPE-<LABEL>-NNN` (any case) to the canonical
     /// `TYPE-<NODE>-NNN` (upper-case, matching stored filenames). `None` when
     /// `id` is not alias-shaped or names an unknown label — the caller then
-    /// looks up `id` as given, so an unknown label stays a not-found.
+    /// looks up `id` as given, so an unknown label stays a not-found. The
+    /// sequence is re-padded the way the node-local allocator writes it
+    /// (`{seq:03}`), so `BUG-HOME-36` finds `BUG-<node>-036`.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
     pub fn expand(&self, id: &str) -> Option<String> {
         let (prefix, middle, seq) = split_three(id)?;
         let node = self.node_for_label(middle)?;
+        let seq = seq
+            .parse::<u64>()
+            .map_or_else(|_| seq.to_string(), |n| format!("{n:03}"));
         Some(format!("{prefix}-{node}-{seq}").to_ascii_uppercase())
     }
 
@@ -501,6 +507,128 @@ pub fn display_spec_id(id: &str) -> String {
     installed().display(id, canonical_ids())
 }
 
+// ---------------------------------------------------------------------------
+// Bare ids vs node-local numbers (BUG-b6b1…-036).
+//
+// A bare id (`STORY-100`) is the globally agreed name; a node-local id is
+// always `TYPE-<node>-NNN` on disk, so a bare lookup never resolves to one.
+// The two number spaces overlap, though: `STORY-100` (agreed, legacy) and
+// `STORY-HOME-100` (local) are different specs. These helpers find the local
+// "twin" of a bare id so surfaces can point at it instead of staying silent.
+// ---------------------------------------------------------------------------
+
+/// `TYPE-NNN` split into its upper-cased type prefix and number. `None` for
+/// anything else, including node-local and alias forms (three segments).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn split_bare_id(id: &str) -> Option<(String, u32)> {
+    let (prefix, seq) = id.trim().split_once('-')?;
+    let prefix_ok = prefix
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic())
+        && prefix.chars().all(|c| c.is_ascii_alphabetic());
+    let seq_ok = !seq.is_empty() && seq.chars().all(|c| c.is_ascii_digit());
+    if !(prefix_ok && seq_ok) {
+        return None;
+    }
+    Some((prefix.to_ascii_uppercase(), seq.parse().ok()?))
+}
+
+/// Whether `candidate` is a node-local id (`TYPE-<32-hex node>-NNN`) with the
+/// same type prefix and number as the bare id `bare`. Leading zeros do not
+/// matter: `BUG-30` and `BUG-030` both have the local twin `BUG-<node>-030`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn is_local_twin(bare: &str, candidate: &str) -> bool {
+    let Some((prefix, n)) = split_bare_id(bare) else {
+        return false;
+    };
+    let Some((c_prefix, middle, seq)) = split_three(candidate) else {
+        return false;
+    };
+    c_prefix.eq_ignore_ascii_case(&prefix)
+        && middle.len() == 32
+        && normalize_node(middle).is_ok()
+        && seq.parse::<u32>().ok() == Some(n)
+}
+
+/// The `(TYPE, number)` key of a node-local id (`TYPE-<32-hex node>-NNN`),
+/// equal to [`split_bare_id`] of each bare id it is a local twin of. Lets a
+/// caller index the store's local ids once instead of testing every pair.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn local_id_key(id: &str) -> Option<(String, u32)> {
+    let (prefix, middle, seq) = split_three(id)?;
+    let bare = format!("{prefix}-{seq}");
+    (middle.len() == 32 && normalize_node(middle).is_ok() && is_local_twin(&bare, id))
+        .then(|| split_bare_id(&bare))
+        .flatten()
+}
+
+/// Every id in `known` that is a local twin of the bare id `bare` (see
+/// [`is_local_twin`]), upper-cased, sorted and deduplicated.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn local_twins<'a>(bare: &str, known: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut out: Vec<String> = known
+        .into_iter()
+        .filter(|k| is_local_twin(bare, k))
+        .map(|k| k.trim().to_ascii_uppercase())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// How a surface names a local twin: its agreed id when it has one, else its
+/// alias form (`STORY-HOME-100`). Never the bare number alone.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn local_twin_label(local_id: &str, agreed_id: Option<&str>) -> String {
+    match agreed_id.map(str::trim).filter(|agreed| !agreed.is_empty()) {
+        Some(agreed) => agreed.to_ascii_uppercase(),
+        None => display_spec_id(local_id),
+    }
+}
+
+impl NodeAliasMap {
+    /// The canonical local-twin ids a bare id could have on the nodes this map
+    /// labels (current or retired labels name the same node), formatted the
+    /// way the node-local allocator writes them (`{seq:03}`). For a cheap
+    /// existence probe that does not scan the store.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+    pub fn local_twin_candidates(&self, bare: &str) -> Vec<String> {
+        let Some((prefix, n)) = split_bare_id(bare) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = self
+            .bindings
+            .iter()
+            .map(|b| format!("{prefix}-{}-{n:03}", b.node.to_ascii_uppercase()))
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+}
+
+/// Bare `TYPE-NNN` tokens in free text, with their 1-based line numbers. A
+/// token is bounded by characters that cannot continue an id (so the `1-096`
+/// inside `TASK-1-096` and the `HOME-030` inside `BUG-HOME-030` are not
+/// tokens), and its prefix must be at least two letters.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn bare_id_tokens(text: &str) -> Vec<(usize, String)> {
+    fn id_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '-' || c == '_'
+    }
+    let mut out = Vec::new();
+    for (line_no, line) in text.lines().enumerate() {
+        for token in line.split(|c: char| !id_char(c)) {
+            let token = token.trim_end_matches('-');
+            if split_bare_id(token).is_some_and(|(prefix, _)| prefix.len() >= 2) {
+                out.push((line_no + 1, token.to_ascii_uppercase()));
+            }
+        }
+    }
+    out
+}
+
 /// Whether `id` is `TYPE-<label>-NNN` (any case) for `label`.
 fn id_uses_label(id: &str, label: &str) -> bool {
     split_three(id).is_some_and(|(_, middle, _)| middle.eq_ignore_ascii_case(label))
@@ -582,17 +710,53 @@ pub fn refuse_node_id_colliding_with_label(store_root: &Path, node_id: &str) -> 
     Ok(())
 }
 
+/// What [`mutate_cas`] did with a node-alias write.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MutateCasOutcome {
+    /// The map already said this; nothing was committed.
+    Unchanged,
+    /// The write is committed locally as `sha` on `branch`.
+    Committed {
+        sha: String,
+        branch: String,
+        origin: OriginPublish,
+    },
+}
+
+impl MutateCasOutcome {
+    pub fn changed(&self) -> bool {
+        matches!(self, Self::Committed { .. })
+    }
+}
+
+/// How a committed node-alias write fared against `origin`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OriginPublish {
+    Pushed,
+    /// No `origin` remote: a solo clone, the commit stays local.
+    NoOrigin,
+    /// The push failed for a reason other than a moved ref (offline, no
+    /// access, a declining hook). The local commit is kept, since the CAS
+    /// already won locally; carries git's stderr.
+    Unreached(String),
+}
+
 /// Commit-and-push a mutation of the node-alias map with the registry CAS
 /// push-wins loop (mirrors [`crate::alias::link_cas`]): pull, strict-load,
 /// mutate, save, commit, push; a rejected push resets and retries. Solo (no
-/// `origin`) commits locally. Returns whether the map changed.
+/// `origin`) commits locally. An `origin` that cannot be reached keeps the
+/// local commit and reports [`OriginPublish::Unreached`] so the caller can
+/// publish to the other hubs and warn, instead of failing a write that landed.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
 #[cfg(feature = "native")]
 pub fn mutate_cas(
     store_root: &Path,
     describe: &str,
     mutate: impl Fn(&mut NodeAliasMap) -> Result<bool, String>,
-) -> anyhow::Result<bool> {
-    use crate::git_ops;
+) -> anyhow::Result<MutateCasOutcome> {
+    use crate::git_ops::{self, PushFailure, PushOutcome};
 
     const MAX_RETRIES: u32 = 10;
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
@@ -615,12 +779,28 @@ pub fn mutate_cas(
             Ok(Some(git_ops::head_sha(store_root)?))
         })?;
         let Some(sha) = committed else {
-            return Ok(false);
+            return Ok(MutateCasOutcome::Unchanged);
         };
-        if local_only || git_ops::push_exact(store_root, "origin", &sha, &branch)? {
-            return Ok(true);
-        }
-        let _ = git_ops::rollback_commit_if_head_matches(store_root, &sha);
+        let origin = if local_only {
+            OriginPublish::NoOrigin
+        } else {
+            match git_ops::push_exact_outcome(store_root, "origin", &sha, &branch)? {
+                PushOutcome::Pushed => OriginPublish::Pushed,
+                PushOutcome::Failed {
+                    kind: PushFailure::NonFastForward,
+                    ..
+                } => {
+                    let _ = git_ops::rollback_commit_if_head_matches(store_root, &sha);
+                    continue;
+                }
+                PushOutcome::Failed { stderr, .. } => OriginPublish::Unreached(stderr),
+            }
+        };
+        return Ok(MutateCasOutcome::Committed {
+            sha,
+            branch,
+            origin,
+        });
     }
     anyhow::bail!(
         "could not write the node label after {MAX_RETRIES} attempts (store push kept being rejected) — run `aida db sync --pull` and retry"

@@ -128,7 +128,7 @@ fn build_stacks_one_car_per_member_with_the_ship_subject_and_a_patch_id_proof() 
     // Each car's patch-id is the member's own approved diff.
     for (car, head) in built.cars.iter().zip([&a, &b]) {
         let fork = git(r, &["merge-base", "main", head]);
-        let want = crate::review_carryover::patch_id(r, &fork, head).unwrap();
+        let want = crate::gate::review_carryover::patch_id(r, &fork, head).unwrap();
         assert_eq!(car.patch_id, want);
     }
     // Main itself never moved.

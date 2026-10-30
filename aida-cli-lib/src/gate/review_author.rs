@@ -15,7 +15,8 @@ pub(crate) fn review_stale_lease_refusal(spec_id: &str, conflict: &SessionLease)
         &conflict.id[..conflict.id.len().min(8)],
         conflict.owner,
         conflict.started_at.format("%Y-%m-%d %H:%M UTC"),
-        &conflict.id[..conflict.id.len().min(8)],
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+        conflict.id,
     )
 }
 

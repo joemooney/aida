@@ -114,7 +114,8 @@ fn the_rework_prompt_carries_surviving_findings_and_says_what_to_do() {
         )
         .unwrap();
     }
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-6")).unwrap();
+    // M1 slice 2: the record lives on the gate ledger, not a legacy file.
+    let body = current_verdict_body(tmp.path(), "PR-6", None).expect("a recorded verdict");
     let verdict = parse_recorded_verdict(&body).expect("verdict parses");
 
     // criterion 2: parse carries the signal, so every existing caller gets it
@@ -164,7 +165,7 @@ fn a_first_round_rework_prompt_carries_no_survival_signal() {
         "reviewer",
     )
     .unwrap();
-    let body = std::fs::read_to_string(verdict_path(tmp.path(), "PR-7")).unwrap();
+    let body = current_verdict_body(tmp.path(), "PR-7", None).expect("a recorded verdict");
     let verdict = parse_recorded_verdict(&body).expect("verdict parses");
     assert!(verdict.surviving_findings.is_empty());
     let prompt = rework_findings_comment("STORY-9", "PR #7", &verdict).expect("blocking verdict");

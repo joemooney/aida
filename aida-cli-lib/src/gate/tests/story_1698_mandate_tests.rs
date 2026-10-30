@@ -457,12 +457,11 @@ fn a_mandate_release_is_recorded_in_the_hold_ledger_and_events() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None)
+    crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
         .unwrap();
-    let clearance: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(crate::gate::merge_hold_core::clearance_path(tmp.path(), 42)).unwrap(),
-    )
-    .unwrap();
+    let clearance = serde_json::Value::Object(
+        crate::gate::merge_hold_core::recorded_clearance(tmp.path(), 42).unwrap(),
+    );
     assert_eq!(clearance["cleared_by"], "advisor:joe");
     assert_eq!(clearance["released_under_mandate"], "M-1");
     assert_eq!(release_note("M-1"), "released under mandate M-1 by advisor");
@@ -579,7 +578,7 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
         .split("pub(crate) fn release_hold_under_mandate(")
         .nth(1)
         .expect("release_hold_under_mandate");
-    assert!(shared.contains("record_mandate_clearance("));
+    assert!(shared.contains("merge_hold_core::release_hold_under_mandate("));
     let train = include_str!("../../pr_train.rs");
     assert!(
         train.contains("release_hold_under_mandate("),
@@ -1033,8 +1032,9 @@ fn a_mandate_released_hold_is_re_armed_after_a_merge_failure() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(tmp.path(), &hold).unwrap();
-    crate::gate::merge_hold_core::clear_hold(tmp.path(), 44).unwrap();
+    crate::gate::merge_hold_core::place_hold(tmp.path(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
+        .unwrap();
     assert!(crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).is_none());
     crate::gate::mandate_ship::rearm_mandate_hold_with(tmp.path(), &hold, || Ok(())).unwrap();
     let back = crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).expect("re-armed");
@@ -1055,7 +1055,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let src = include_str!("../../pr_cmd.rs");
     let handler = src.split("pub(crate) fn pr_ship_handler(").nth(1).unwrap();
     let release = handler
-        .find("crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number)")
+        .find("crate::gate::merge_hold_core::release_hold(")
         .unwrap();
     let after = &handler[release..];
     let merged = after.find("merged_this_run = true;").unwrap();
@@ -1297,9 +1297,8 @@ fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(tmp.path(), &hold).unwrap();
-    crate::gate::merge_hold_core::clear_hold(tmp.path(), 44).unwrap();
-    crate::gate::merge_hold_core::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None)
+    crate::gate::merge_hold_core::place_hold(tmp.path(), &hold).unwrap();
+    crate::gate::merge_hold_core::release_hold_under_mandate(tmp.path(), &hold, "joe", "M-1", None)
         .unwrap();
     // Same release event emitted by pr_ship_handler after clearance.
     crate::events::emit(
@@ -1346,7 +1345,10 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
         "operator review",
         None,
     );
-    let path = crate::gate::merge_hold_core::hold_path(tmp.path(), 45);
+    // M1 slice 2: the re-arm is a `hold` event; a directory in place of the
+    // PR's gate ledger file makes that write fail.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let path = crate::gate::merge_hold_core::hold_ledger_file(tmp.path(), 45);
     std::fs::create_dir_all(&path).unwrap();
     let before = crate::events::read_all(tmp.path()).len();
     let mut label_tried = false;
@@ -1356,7 +1358,10 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
     })
     .unwrap_err();
     assert!(label_tried);
-    assert!(err.contains("marker could not be rewritten") && err.contains("label unavailable"));
+    assert!(
+        err.contains("could not be re-armed on the gate ledger")
+            && err.contains("label unavailable")
+    );
     assert_eq!(crate::events::read_all(tmp.path()).len(), before);
 }
 
@@ -1862,7 +1867,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
 
     // Run mandate_ship_cover and verify that:
     // 1. Dangling FR-0042 does not cause HistoryUnreadable or SpecsUnresolved.
@@ -2048,7 +2053,7 @@ fn ship_tracing_deleted_agreed_id_spec(
         "operator review",
         None,
     );
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
 
     let result = crate::with_review_pr_subject(
         crate::ReviewPrSubject {
@@ -2103,7 +2108,8 @@ fn task_1800_deleted_agreed_id_spec_at_a_non_canonical_path_refuses() {
 // trace:TASK-1960 | ai:claude
 #[test]
 fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
-    use crate::review_carryover::tests as fx;
+    use crate::gate::review_carryover::tests as fx;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
     let (tmp, approved) = fx::fixture();
     let repo = tmp.path();
@@ -2154,8 +2160,10 @@ fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
         }
         other => panic!("an evil merge must stay a stale approval: {other:?}"),
     }
-    // The mandate path only proves; the pinning gate records.
-    assert!(crate::review_carryover::read_record(repo, 42, clean).is_none());
+    // The mandate path's proof is on the gate ledger for the pinning gate
+    // to read (STORY-080 AC4); the evil head has only its refusal.
+    assert!(crate::gate::review_carryover::tests::proof_event(repo, clean).is_some());
+    assert!(crate::gate::review_carryover::tests::proof_event(repo, evil).is_none());
 }
 
 // ── BUG-2179: one bounded store-history read for every traced spec ─────────

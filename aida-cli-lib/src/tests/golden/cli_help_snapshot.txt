@@ -420,7 +420,7 @@ Commands:
                 Bare `aida` / `aida help` show the curated Getting-started view instead
   commands      List every command and subcommand as grep-able one-line rows
   skill         Stock and local skill tooling
-  alias         Discoverable registry of AIDA's built-in shortcuts
+  alias         Discover built-in shortcuts and manage user-defined aliases
   adoption      Adopt AIDA without product-branch files: shared settings and guidance live in
                 `adoption/` on the aida-store branch and are projected into this worktree's
                 git-ignored `.aida/`
@@ -4975,6 +4975,9 @@ Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
   wake-snapshot  Read bounded unread message IDs without bodies or acknowledgement
+  wake-run       Watch every session armed for mail wake and wake its Codex thread when its own
+                 inbox has new mail (the service `wake-service` installs)
+  wake-service   Install, remove or inspect this project's mail-wake user service
   migrate        Preview legacy mailbox reconciliation before recipient migration
   retention      Mail retention: check whether worktree mail can be retired safely
   latency        Show mailbox read latency for the active identity (or an explicit recipient)
@@ -5052,6 +5055,90 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida mailbox wake-run
+Watch every session armed for mail wake and wake its Codex thread when its own inbox has new mail
+(the service `wake-service` installs)
+
+Usage: aida mailbox wake-run [OPTIONS]
+
+Options:
+      --project <PROJECT>
+          Project whose armed sessions are watched (defaults to this one)
+
+      --codex <CODEX>
+          The `codex` binary that queues the wake (defaults to PATH)
+
+      --interval <INTERVAL>
+          Seconds between passes (1..3600)
+          
+          [default: 30]
+
+      --batch-seconds <BATCH_SECONDS>
+          Seconds new mail waits so one wake can carry a burst (0..300)
+          
+          [default: 5]
+
+      --once
+          Run one pass and print each armed session's result
+
+      --recover <THREAD>
+          Resolve an uncertain wake on this Codex thread, after inspecting it. Exactly one of
+          --accepted or --retry is required with it
+
+      --accepted
+          With --recover: the thread received the wake
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --retry
+          With --recover: the thread did not receive it; offer it again
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox wake-service
+Install, remove or inspect this project's mail-wake user service
+
+Usage: aida mailbox wake-service [OPTIONS] <ACTION>
+
+Arguments:
+  <ACTION>
+          [possible values: install, uninstall, status]
+
+Options:
+      --codex <CODEX>
+          The `codex` binary the service uses (defaults to PATH at install)
+
+      --dry-run
+          Print what would change without touching systemd
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida mailbox migrate
 Preview legacy mailbox reconciliation before recipient migration
 
@@ -5091,6 +5178,9 @@ Commands:
             or reset until that is recorded. Recording runs only for a human operator at an
             interactive terminal, and only when the report shows every running mail writer taking a
             permit
+  prune     Drop worktrees that were deleted from disk but are still registered with Git. While
+            registered, each one keeps the mail view partial, which also blocks acknowledging mail.
+            A deleted worktree's mailbox went with it, so there is nothing left to retain
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -5121,6 +5211,40 @@ Usage: aida mailbox retention activate [OPTIONS]
 Options:
       --dry-run
           Report only; record nothing
+
+      --json
+          Print the report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox retention prune
+Drop worktrees that were deleted from disk but are still registered with Git. While registered, each
+one keeps the mail view partial, which also blocks acknowledging mail. A deleted worktree's mailbox
+went with it, so there is nothing left to retain
+
+Usage: aida mailbox retention prune [OPTIONS]
+
+Options:
+      --include-locked
+          Also drop worktrees Git has locked. A lock normally marks a worktree on removable media;
+          only a deleted worktree whose parent directory is still present is ever dropped
+
+      --dry-run
+          Report only; drop nothing
 
       --json
           Print the report as JSON
@@ -5567,34 +5691,40 @@ node-aware spec ids (e.g. `FR-<node>-<NNN>`) until the merge gate promotes them 
 Usage: aida node [OPTIONS] <COMMAND>
 
 Commands:
-  list       List all nodes registered in the shared registry. The current node (the one whose
-             `.aida/node.toml` matches an entry) is marked with `*`
-  show       Show details for a single node. With no id, defaults to the current node (read from
-             `.aida/node.toml`)
-  acquire    Acquire a node id for this clone. Performs a CAS push loop on the shared registry to
-             claim the next sequential id, then writes the per-clone identity file at
-             `.aida-store/.aida/node.toml`. Defaults pull `git config user.email` for the email
-             stamp and the system hostname for the hostname stamp
-  set-owner  Backfill the owner ($USER string) on an existing node entry in the shared registry,
-             then push (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is updated
-             too. Errors clearly if the id is absent. For legacy nodes that predate the owner/name
-             identity fields
-  set-name   Backfill the friendly name on an existing node entry in the shared registry, then push
-             (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is updated too.
-             Errors clearly if the id is absent
-  release    Remove a node entry from the shared registry. Does not invalidate any IDs already
-             issued by that node. The node id is not reused
-  team       List the team: every registered node/clone sharing this store, with each member's role.
-             Identity introspection under the `node` namespace. Equivalent to the top-level `aida
-             team` (kept visible because the multi-clone harness invokes it); with a subcommand,
-             manage per-user roles (`set-role`, `my-role`)
-  whoami     Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id,
-             headless flag, ai-tool, and active session/scope. Read-only. Identity introspection
-             under the `node` namespace; equivalent to the hidden top-level `aida whoami`
-  alias      Friendly labels for node-local spec IDs: bind `HOME` to a node so `TASK-<node>-095` can
-             be typed and shown as `TASK-HOME-095`. Labels are display and input only; stored data
-             keeps the canonical ID
-  help       Print this message or the help of the given subcommand(s)
+  list         List all nodes registered in the shared registry. The current node (the one whose
+               `.aida/node.toml` matches an entry) is marked with `*`
+  show         Show details for a single node. With no id, defaults to the current node (read from
+               `.aida/node.toml`)
+  acquire      Acquire a node id for this clone. Performs a CAS push loop on the shared registry to
+               claim the next sequential id, then writes the per-clone identity file at
+               `.aida-store/.aida/node.toml`. Defaults pull `git config user.email` for the email
+               stamp and the system hostname for the hostname stamp
+  set-owner    Backfill the owner ($USER string) on an existing node entry in the shared registry,
+               then push (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is
+               updated too. Errors clearly if the id is absent. For legacy nodes that predate the
+               owner/name identity fields
+  set-name     Backfill the friendly name on an existing node entry in the shared registry, then
+               push (CAS). If the id is the CURRENT node, the local `.aida/node.toml` is updated
+               too. Errors clearly if the id is absent
+  release      Remove a node entry from the shared registry. Does not invalidate any IDs already
+               issued by that node. The node id is not reused
+  team         List the team: every registered node/clone sharing this store, with each member's
+               role. Identity introspection under the `node` namespace. Equivalent to the top-level
+               `aida team` (kept visible because the multi-clone harness invokes it); with a
+               subcommand, manage per-user roles (`set-role`, `my-role`)
+  whoami       Print the caller identity AIDA resolved — role, agent-type, agent-name, user-id,
+               headless flag, ai-tool, and active session/scope. Read-only. Identity introspection
+               under the `node` namespace; equivalent to the hidden top-level `aida whoami`
+  alias        Friendly labels for node-local spec IDs: bind `HOME` to a node so `TASK-<node>-095`
+               can be typed and shown as `TASK-HOME-095`. Labels are display and input only; stored
+               data keeps the canonical ID
+  enroll-root  Make this clone the allocation root: the one node per store that owns the unallocated
+               ID space and grants blocks down the tree. Records the root in the shared store
+               (refused when another node is already root) and marks this clone in its Git
+               directory. Run once, on the primary clone
+  upstream     Show or declare this clone's upstream: the one git remote it claims ID blocks from. A
+               store mirror is never an upstream, and the root has none
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -6158,6 +6288,63 @@ Arguments:
 Options:
       --json
           Machine-readable JSON output
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node enroll-root
+Make this clone the allocation root: the one node per store that owns the unallocated ID space and
+grants blocks down the tree. Records the root in the shared store (refused when another node is
+already root) and marks this clone in its Git directory. Run once, on the primary clone
+
+Usage: aida node enroll-root [OPTIONS]
+
+Options:
+      --dry-run
+          Show what would be recorded without writing anything
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node upstream
+Show or declare this clone's upstream: the one git remote it claims ID blocks from. A store mirror
+is never an upstream, and the root has none
+
+Usage: aida node upstream [OPTIONS] [REMOTE]
+
+Arguments:
+  [REMOTE]
+          Git remote name to claim blocks from (omit to show the current one)
+
+Options:
+      --clear
+          Remove the declared upstream (this clone issues node-local IDs)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -11435,6 +11622,10 @@ Commands:
   rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
+  bare-id-twins             Find bare spec ids (TYPE-100) in descriptions and comments that also
+                            name this node's local spec with the same number (TYPE-HOME-100). A bare
+                            id resolves to the agreed spec, so prose meaning the local one should
+                            use the alias form. Reports only
   check                     Focused multi-agent drift diagnostic for one category
   heal                      Focused multi-agent drift heal for one category
   migrate-counter-scope     Migrate this project from per-type counters (each type counts
@@ -11566,6 +11757,30 @@ Options:
       --exclude <SPEC-ID>
           Omit a spec whose own documentation quotes detector examples
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor bare-id-twins
+Find bare spec ids (TYPE-100) in descriptions and comments that also name this node's local spec
+with the same number (TYPE-HOME-100). A bare id resolves to the agreed spec, so prose meaning the
+local one should use the alias form. Reports only
+
+Usage: aida doctor bare-id-twins [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -14890,8 +15105,11 @@ Options:
           separately
 
       --no-cleanup
-          Skip the `aida session end` worktree-cleanup step. Useful when you want to inspect the
-          post-merge state before the worktree disappears
+          Skip the post-merge worktree cleanup: the `aida session end` step, the reap of exited
+          sessions, and the merged agent worktree pruning. The pruning stops at a 60s budget
+          (checked between worktrees) and leaves the rest to `aida doctor`; the reap is not bounded.
+          Useful when you want to inspect the post-merge state before the worktree disappears, or
+          when the ship must not wait on cleanup
 
       --dry-run
           Print the resolved sequence without executing any of it
@@ -16441,6 +16659,10 @@ Options:
       --description <DESCRIPTION>
           Optional human-readable description of this agent session
 
+      --no-mail-wake
+          Do not wake this session's thread when its inbox has mail (default: `[agents.codex]
+          mail_wake` in agents.toml, else on)
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new antigravity
@@ -16808,6 +17030,85 @@ Usage: aida agent stop [OPTIONS] <NAME>
 Arguments:
   <NAME>
           Name of the agent to stop
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent wake
+Arm or retire a session's mail wake (internal; `agent new` arms it)
+
+Usage: aida agent wake [OPTIONS] <COMMAND>
+
+Commands:
+  arm     Wake this live Codex session's thread when its own inbox has mail
+  retire  Stop waking this session; its ledger is kept
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent wake arm
+Wake this live Codex session's thread when its own inbox has mail
+
+Usage: aida agent wake arm [OPTIONS] <AGENT>
+
+Arguments:
+  <AGENT>
+          Agent name, `<type>#<pid>`, or `<type>-<pid>` id
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent wake retire
+Stop waking this session; its ledger is kept
+
+Usage: aida agent wake retire [OPTIONS] <AGENT>
+
+Arguments:
+  <AGENT>
+          Agent name, `<type>#<pid>`, or `<type>-<pid>` id
 
 Options:
       --format <FORMAT>
@@ -23626,6 +23927,10 @@ Options:
           Capture a comment on the spec at rework time (added via the same path as `aida comment
           add`). Useful for the audit trail of why a Done or Completed spec is being re-opened
 
+      --ruling <TEXT>
+          Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling,
+          so a relaunched lane works from it rather than from the description alone
+
       --resume
           Chain `aida queue work --resume` to resume a prior claude session for this spec instead of
           cold-launching. Implies `--work`
@@ -23644,13 +23949,13 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          When chaining `--work`, end any session holding the target scope first (passes through to
-          `aida queue work --steal`)
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          When chaining `--work`, end any session holding the target scope first (passes through to
+          `aida queue work --steal`)
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`; passed to `aida queue work --permission-mode`)
@@ -24326,6 +24631,9 @@ Options:
       --reason <REASON>
           Capture a comment on the spec at rework time
 
+      --ruling <TEXT>
+          Record an advisor ruling the next pickup prompt leads with
+
       --resume
           Chain `aida queue work --resume`
 
@@ -24342,12 +24650,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --steal
-          Pass `--steal` through to chained `aida queue work`
-
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --steal
+          Pass `--steal` through to chained `aida queue work`
 
       --permission-mode <MODE>
           Permission mode (only used with `--work`)
@@ -27483,13 +27791,15 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida alias
-Discoverable registry of AIDA's built-in shortcuts.
+Discover built-in shortcuts and manage user-defined aliases.
 
 One place that enumerates every accreted shortcut — the `aida list` status lenses (open/closed) +
 status-token shortcuts, the `aida list <lens>` argv rewrites
 (queue/why/human/inflight/me/user:<name>), and the command aliases (intake, advisor assess, bare
 `aida agent`) — grouped by surface, each with its canonical expansion + a one-line meaning. Bare
-`aida alias` behaves like `aida alias list`. Built-in shortcuts only.
+`aida alias` behaves like `aida alias list`, showing built-in shortcuts alongside personal
+(`~/.aida/aliases.toml`) and project (`.aida/aliases.toml`) aliases. Use `add` and `remove` to
+manage user aliases.
 
 Usage: aida alias [OPTIONS] [COMMAND]
 
@@ -33245,6 +33555,108 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "wake-run"
+    ],
+    "about": "Watch every session armed for mail wake and wake its Codex thread when its own inbox has new mail (the service `wake-service` installs)",
+    "flags": [
+      {
+        "name": "accepted",
+        "takes_value": false,
+        "help": "With --recover: the thread received the wake"
+      },
+      {
+        "name": "batch-seconds",
+        "takes_value": true,
+        "help": "Seconds new mail waits so one wake can carry a burst (0..300)"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "codex",
+        "takes_value": true,
+        "help": "The `codex` binary that queues the wake (defaults to PATH)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "interval",
+        "takes_value": true,
+        "help": "Seconds between passes (1..3600)"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Run one pass and print each armed session's result"
+      },
+      {
+        "name": "project",
+        "takes_value": true,
+        "help": "Project whose armed sessions are watched (defaults to this one)"
+      },
+      {
+        "name": "recover",
+        "takes_value": true,
+        "help": "Resolve an uncertain wake on this Codex thread, after inspecting it. Exactly one of --accepted or --retry is required with it"
+      },
+      {
+        "name": "retry",
+        "takes_value": false,
+        "help": "With --recover: the thread did not receive it; offer it again"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "wake-service"
+    ],
+    "about": "Install, remove or inspect this project's mail-wake user service",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "codex",
+        "takes_value": true,
+        "help": "The `codex` binary the service uses (defaults to PATH at install)"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Print what would change without touching systemd"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "migrate"
     ],
     "about": "Preview legacy mailbox reconciliation before recipient migration",
@@ -33331,6 +33743,48 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the report as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "retention",
+      "prune"
+    ],
+    "about": "Drop worktrees that were deleted from disk but are still registered with Git. While registered, each one keeps the mail view partial, which also blocks acknowledging mail. A deleted worktree's mailbox went with it, so there is nothing left to retain",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report only; drop nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "include-locked",
+        "takes_value": false,
+        "help": "Also drop worktrees Git has locked. A lock normally marks a worktree on removable media; only a deleted worktree whose parent directory is still present is ever dropped"
       },
       {
         "name": "json",
@@ -34375,6 +34829,68 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Machine-readable JSON output"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "enroll-root"
+    ],
+    "about": "Make this clone the allocation root: the one node per store that owns the unallocated ID space and grants blocks down the tree. Records the root in the shared store (refused when another node is already root) and marks this clone in its Git directory. Run once, on the primary clone",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Show what would be recorded without writing anything"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "upstream"
+    ],
+    "about": "Show or declare this clone's upstream: the one git remote it claims ID blocks from. A store mirror is never an upstream, and the root has none",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "clear",
+        "takes_value": false,
+        "help": "Remove the declared upstream (this clone issues node-local IDs)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -39757,6 +40273,32 @@ Working on aida itself
     "path": [
       "aida",
       "doctor",
+      "bare-id-twins"
+    ],
+    "about": "Find bare spec ids (TYPE-100) in descriptions and comments that also name this node's local spec with the same number (TYPE-HOME-100). A bare id resolves to the agreed spec, so prose meaning the local one should use the alias form. Reports only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
       "check"
     ],
     "about": "Focused multi-agent drift diagnostic for one category",
@@ -43092,7 +43634,7 @@ Working on aida itself
       {
         "name": "no-cleanup",
         "takes_value": false,
-        "help": "Skip the `aida session end` worktree-cleanup step. Useful when you want to inspect the post-merge state before the worktree disappears"
+        "help": "Skip the post-merge worktree cleanup: the `aida session end` step, the reap of exited sessions, and the merged agent worktree pruning. The pruning stops at a 60s budget (checked between worktrees) and leaves the rest to `aida doctor`; the reap is not bounded. Useful when you want to inspect the post-merge state before the worktree disappears, or when the ship must not wait on cleanup"
       },
       {
         "name": "no-complete",
@@ -44547,6 +45089,11 @@ Working on aida itself
         "help": "Print the complete resolved launch contract — argv, active role, prompt source, launch-context snapshot path, AIDA environment inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the child would consume — then exit without spawning a process, creating a worktree/lease, flipping spec status, or any network sync. See also `--show-prompt` (just the initial prompt) and `--show-context` (the full launch-context markdown body)"
       },
       {
+        "name": "no-mail-wake",
+        "takes_value": false,
+        "help": "Do not wake this session's thread when its inbox has mail (default: `[agents.codex] mail_wake` in agents.toml, else on)"
+      },
+      {
         "name": "no-prompt",
         "takes_value": false,
         "help": "Do not send the automatic role-aware initial message"
@@ -45054,6 +45601,86 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "wake"
+    ],
+    "about": "Arm or retire a session's mail wake (internal; `agent new` arms it)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "wake",
+      "arm"
+    ],
+    "about": "Wake this live Codex session's thread when its own inbox has mail",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "wake",
+      "retire"
+    ],
+    "about": "Stop waking this session; its ledger is kept",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [
@@ -52038,6 +52665,11 @@ Working on aida itself
         "help": "Chain `aida queue work --resume` to resume a prior claude session for this spec instead of cold-launching. Implies `--work`"
       },
       {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling on the spec. The next pickup prompt leads with the latest ruling, so a relaunched lane works from it rather than from the description alone"
+      },
+      {
         "name": "status",
         "takes_value": true,
         "help": "Override the smart target status. Pass any status string (`in-progress`, `approved`, `planned`, …); the smart table above is bypassed"
@@ -52748,6 +53380,11 @@ Working on aida itself
         "name": "resume",
         "takes_value": false,
         "help": "Chain `aida queue work --resume`"
+      },
+      {
+        "name": "ruling",
+        "takes_value": true,
+        "help": "Record an advisor ruling the next pickup prompt leads with"
       },
       {
         "name": "status",
@@ -55792,7 +56429,7 @@ Working on aida itself
       "aida",
       "alias"
     ],
-    "about": "Discoverable registry of AIDA's built-in shortcuts",
+    "about": "Discover built-in shortcuts and manage user-defined aliases",
     "flags": [
       {
         "name": "canonical-ids",

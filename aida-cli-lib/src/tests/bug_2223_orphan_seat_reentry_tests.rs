@@ -511,6 +511,39 @@ fn a_seat_clone_hint_names_the_contained_resume() {
     );
 }
 
+/// BUG-B6B1278890774EF993D2EBC327862470-023: every scope-conflict hint names
+/// the FULL lease id. An 8-hex prefix is a timestamp that two sessions often
+/// share, so `aida session end <prefix>` it suggested was ambiguous.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+#[test]
+fn scope_conflict_hints_name_the_full_lease_id() {
+    let id = "01a18a18c31c";
+    for hint in [
+        crate::queue_cmd::scope_conflict_resume_hint("TASK-1", id, None, None, false),
+        crate::queue_cmd::scope_conflict_resume_hint("TASK-1", id, Some("why"), None, false),
+        crate::queue_cmd::scope_conflict_resume_hint(
+            "TASK-1",
+            id,
+            None,
+            Some("01a18a18aaaa"),
+            false,
+        ),
+    ] {
+        assert!(
+            hint.contains(&format!("aida session end {id} --force")),
+            "{hint}"
+        );
+    }
+    let adopted = crate::queue_cmd::scope_conflict_resume_hint(
+        "TASK-1",
+        id,
+        None,
+        Some("01a18a18aaaa"),
+        false,
+    );
+    assert!(adopted.contains("(01a18a18aaaa)"), "{adopted}");
+}
+
 /// `aida queue work <scope>` as the CLI runs it, with `--no-launch`.
 fn queue_work(
     storage: &crate::Storage,
@@ -678,6 +711,43 @@ fn queue_work_resume_adopts_the_orphan_end_to_end() {
         std::fs::read_to_string(tree.join("wip.txt")).unwrap(),
         "untracked work\n"
     );
+}
+
+/// The PR-3106 incident through `handle_queue_work`: a dead reviewer's lease
+/// on the scope whose tree was deleted by hand is released by the conflict
+/// sweep without `--force-claim`, and the pickup takes the scope.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[test]
+fn queue_work_releases_a_dead_gone_tree_lease_without_force_claim() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &["implementer"],
+        &[],
+    );
+    let scope = "TASK-922710";
+    let (storage, set_status) = queued_scope(&fx.main, scope);
+    let mut dead = orphaned_worktree(&fx.main, scope);
+    // A review lease holds a PR scope, which has no spec status to gate on.
+    set_status(aida_core::RequirementStatus::Approved);
+    dead.role = Some("reviewer".into());
+    write_lease(&fx.main, &dead);
+    std::fs::remove_dir_all(&dead.worktree_path).unwrap();
+    assert_eq!(
+        crate::leases::stale_lease_recovery_for_lease(&dead).verdict,
+        crate::StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: true
+        }
+    );
+
+    // `--branch` steps past the separate leftover-branch guard; the sweep is
+    // what is under test.
+    queue_work(&storage, scope, Some("task-922710-next"), None, None).unwrap();
+    assert!(!crate::lease_path(&fx.main, &dead.id).exists());
+    let lease = lease_for(&fx.main, scope);
+    assert_ne!(lease.id, dead.id);
+    assert!(lease.worktree_path.exists());
 }
 
 /// The pre-setup branch gate refuses a branch a seat clone holds, except for

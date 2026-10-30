@@ -155,6 +155,9 @@ Rules:
   baselines) or more than 10 files.
   STRICT or heft >= 7: LIGHT plus the area's integration test binaries
   (`cargo test --profile agent -p <crate> --test <name>`).
+  Added or changed a CLI command or flag (any tier): regenerate the help
+  golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot`
+  and commit `aida-cli-lib/src/tests/golden/cli_help_snapshot.txt`.
   Always `make check-ci-fast` before pushing. Never order the full suite,
   `cargo test --workspace` or `AIDA_CARGO_NO_SLOT`.
 - Open a PR. Do NOT merge.

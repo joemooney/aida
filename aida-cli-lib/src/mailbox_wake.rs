@@ -67,6 +67,32 @@ pub(crate) fn audience_for(own: &ResolvedAudience, recipient: &str) -> Result<Re
     }
 }
 
+/// The audience a wake snapshot for `recipient` reads. It narrows, never
+/// widens: `own` (this process's verified audience) narrowed to
+/// `recipient` comes first, so an agent asking for its own handle reads its
+/// own inbox whether or not anything armed it. Only the project's running
+/// watcher, proven by the `watch.lock` it holds, may then read an armed
+/// row's own inbox (its handle plus its recorded role, verified from the
+/// row). Every other caller is refused.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn audience_for_recipient(
+    own: &ResolvedAudience,
+    recipient: &str,
+    watcher: Option<(&crate::mailbox_wake_run::WatchLock, &Path)>,
+) -> Result<ResolvedAudience> {
+    let refused = match audience_for(own, recipient) {
+        Ok(audience) => return Ok(audience),
+        Err(refused) => refused,
+    };
+    match watcher {
+        Some((lock, row)) => lock.armed_audience(row, recipient),
+        None => Err(refused.context(
+            "only the project's mail-wake watcher (`aida mailbox wake-run`) reads another \
+             session's inbox",
+        )),
+    }
+}
+
 /// Read `audience`'s logical view from `root` and project it to IDs.
 /// Never binds: see the module docs.
 pub(crate) fn snapshot(
@@ -77,6 +103,19 @@ pub(crate) fn snapshot(
 ) -> Result<Snapshot> {
     let view = read_own_mail(root, store, audience, limits);
     envelope(&view)
+}
+
+impl Snapshot {
+    /// The watcher's view of this envelope.
+    // trace:STORY-HOME-096 | ai:claude
+    pub(crate) fn scan(self) -> crate::mailbox_wake_run::Scan {
+        crate::mailbox_wake_run::Scan {
+            unread: self.messages.into_iter().map(|m| m.id).collect(),
+            acknowledged: self.acknowledged_ids.into_iter().collect(),
+            partial: self.partial,
+            role_pending: self.pending,
+        }
+    }
 }
 
 fn envelope(view: &OwnMail) -> Result<Snapshot> {

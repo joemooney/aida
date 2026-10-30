@@ -107,6 +107,18 @@ pub(crate) fn write_allow_rules(roots: &[PathBuf]) -> Vec<String> {
     rules
 }
 
+/// The `permissions.deny` rules protecting `path`: `Edit(//<path>)` and
+/// `Edit(//<path>/**)`. Claude Code applies an `Edit` path rule to every
+/// file-writing tool and warns at launch that a `Write`/`MultiEdit`/
+/// `NotebookEdit` path deny never matches, so the deny side emits `Edit` only.
+/// Empty when [`root_rule_path`] cannot express `path`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+pub(crate) fn path_deny_rules(path: &Path) -> Vec<String> {
+    root_rule_path(path)
+        .map(|abs| vec![format!("Edit(/{abs})"), format!("Edit(/{abs}/**)")])
+        .unwrap_or_default()
+}
+
 /// BUG-1929: the main checkout's AIDA store and cache, which a contained
 /// session's `aida` binary (run through sandboxed Bash) must write to claim a
 /// spec, comment, or finish a queue item. Per the operator ruling the set is

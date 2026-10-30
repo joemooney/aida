@@ -26,13 +26,66 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-/// BUG-2176: move a marker a contained reviewer left in its review `worktree`
-/// into the primary checkout, composing with any marker already there (so a
-/// stricter hold stays primary). Only a marker written at or after `since`
-/// (the reviewer's start) is adopted, so a stale copy from an earlier round
-/// cannot re-arm a hold a human has since cleared. Returns whether a marker
-/// was adopted; the worktree copy is removed only after the primary write.
+/// M1 slice 2 (replaces BUG-2176's marker adoption): arm the Rework hold a
+/// contained reviewer's refusal calls for, primary-side, once the launcher
+/// has collected that verdict onto the PR's gate ledger. A contained seat
+/// cannot write hold state, so the launcher — the only route from a contained
+/// seat to the ledger — places the hold from the collected record itself.
+/// Returns whether a hold was placed.
 // trace:BUG-2176 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn arm_collected_refusal(
+    project_root: &Path,
+    pr: u64,
+    collected: &crate::gate::review_verdict::CollectedVerdict,
+) -> std::io::Result<bool> {
+    if !place_collected_refusal(project_root, pr, collected)? {
+        return Ok(false);
+    }
+    if let Err(err) = sync_label(project_root, pr, true) {
+        eprintln!("  warning: merge-hold label not applied on PR-{pr}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`");
+    }
+    Ok(true)
+}
+
+/// The ledger half of [`arm_collected_refusal`]: place the Rework hold for a
+/// blocking collected verdict. Returns whether a hold was placed.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn place_collected_refusal(
+    project_root: &Path,
+    pr: u64,
+    collected: &crate::gate::review_verdict::CollectedVerdict,
+) -> std::io::Result<bool> {
+    let kind = collected.verdict.kind;
+    if !kind.blocks_done() {
+        return Ok(false);
+    }
+    let key = collected
+        .spec_records
+        .first()
+        .cloned()
+        .unwrap_or_else(|| format!("PR-{pr}"));
+    let hold = refusal_hold(
+        pr,
+        &key,
+        kind.label(),
+        collected.verdict.reviewed_sha.clone(),
+        collected.verdict.recorded_by.clone(),
+    );
+    place_hold(project_root, &hold)?;
+    Ok(true)
+}
+
+/// BUG-2176, transitional: a legacy marker a contained reviewer from before
+/// M1 slice 2 left in its review `worktree` is collected onto the PR's gate
+/// ledger (composing with any open hold, so a stricter one stays primary)
+/// and the worktree copy removed, so no hold state persists in the tree
+/// after collection. Only a marker written at or after `since` (the
+/// reviewer's start) is collected, so a stale copy from an earlier round
+/// cannot re-arm a hold a human has since cleared. Current reviewers write
+/// no marker: their refusal's hold is armed by [`arm_collected_refusal`].
+// trace:BUG-2176 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn adopt_worktree_hold(
     project_root: &Path,
     worktree: &Path,
@@ -40,8 +93,9 @@ pub(crate) fn adopt_worktree_hold(
     since: std::time::SystemTime,
 ) -> std::io::Result<bool> {
     let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    let local = local_hold_path(worktree, pr);
-    if canon(&local) == canon(&hold_path(project_root, pr)) {
+    let local = crate::gate::ledger::legacy::hold_marker_path(worktree, pr);
+    let primary = crate::gate::ledger::legacy::hold_marker_path(&hold_store_root(project_root), pr);
+    if canon(&local) == canon(&primary) {
         return Ok(false);
     }
     let fresh = std::fs::symlink_metadata(&local)
@@ -53,20 +107,7 @@ pub(crate) fn adopt_worktree_hold(
     let Some(record) = parse_hold_marker(std::fs::read_to_string(&local), pr) else {
         return Ok(false);
     };
-    // TASK-2153: carry the worktree's placement event with the marker, so
-    // the primary's tamper check and hold age see the original placement.
-    // trace:TASK-1951 trace:TASK-2153 | ai:claude
-    let placement = crate::events::read_all(worktree)
-        .into_iter()
-        .rev()
-        .find(|e| {
-            matches!(
-                e.kind,
-                crate::events::EventKind::MergeHoldChanged { pr: p, placed: true, .. }
-                    if u64::from(p) == pr
-            )
-        });
-    write_typed_hold_context(project_root, &record, false, placement.as_ref())?;
+    collect_legacy_hold(project_root, &record)?;
     std::fs::remove_file(&local)?;
     Ok(true)
 }
@@ -88,7 +129,7 @@ pub(crate) fn stray_worktree_markers(main_root: &Path) -> Vec<(u64, PathBuf)> {
         return Vec::new();
     }
     let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    let primary = canon(&local_holds_dir(main_root));
+    let primary = canon(&crate::gate::ledger::legacy::marker_dir(main_root));
     let mut found = Vec::new();
     // TASK-2053: seat clones too; removing one destroys its markers just the
     // same. A clone is seat-written, so its holds dir is read only when it is
@@ -102,7 +143,7 @@ pub(crate) fn stray_worktree_markers(main_root: &Path) -> Vec<(u64, PathBuf)> {
         .map(|tree| (tree, false))
         .chain(clones.map(|tree| (tree, true)));
     for (tree, clone) in trees {
-        let dir = local_holds_dir(&tree);
+        let dir = crate::gate::ledger::legacy::marker_dir(&tree);
         if canon(&dir) == primary {
             continue;
         }
@@ -159,7 +200,7 @@ pub(crate) fn stray_marker_warning(
     main_root: &Path,
     label_only: bool,
 ) -> String {
-    let primary = local_hold_path(main_root, pr);
+    let primary = crate::gate::ledger::legacy::hold_marker_path(main_root, pr);
     let lead = if label_only {
         format!(
             "PR #{pr}: held by the label alone here, but a marker for it sits in a linked worktree"

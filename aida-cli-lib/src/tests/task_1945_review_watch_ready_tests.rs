@@ -343,10 +343,10 @@ mod gate {
     //! The production approval gate, decided read-only, on real git
     //! fixtures (TASK-1960's carry-over repository).
     use super::*;
+    use crate::gate::review_carryover::tests::{commit, fixture, head, write};
+    use crate::gate::review_carryover::CarryOverSite;
     use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     use crate::gate::ship::ShipApprovalPolicy;
-    use crate::review_carryover::tests::{commit, fixture, head, write};
-    use crate::review_carryover::CarryOverSite;
 
     fn verdict(sha: &str) -> RecordedVerdict {
         RecordedVerdict {
@@ -404,6 +404,7 @@ mod gate {
             ".aida/advisor-activity.jsonl",
             ".aida/events.jsonl",
             ".aida/review-carryover",
+            ".aida/gate-ledger",
         ] {
             assert!(!root.join(side_effect).exists(), "{side_effect} written");
         }
@@ -415,7 +416,7 @@ mod gate {
         let (repo, approved) = fixture();
         merge_main(repo.path());
         let merged = head(repo.path());
-        let site = CarryOverSite::quiet(repo.path(), Some("main"));
+        let site = CarryOverSite::read_only(repo.path(), Some("main"));
         let candidates = [verdict(&approved)];
         let approval = ready::approval_at(42, &candidates, &merged, &policy(&candidates), &site)
             .expect("a clean main merge carries the approval");
@@ -452,7 +453,7 @@ mod gate {
         merge_main(repo.path());
         write(repo.path(), "c.txt", "an unreviewed change\n");
         let moved = commit(repo.path(), "pr: unreviewed");
-        let site = CarryOverSite::quiet(repo.path(), Some("main"));
+        let site = CarryOverSite::read_only(repo.path(), Some("main"));
         let candidates = [verdict(&approved)];
         let refusal = ready::approval_at(42, &candidates, &moved, &policy(&candidates), &site)
             .expect_err("an own-diff change needs a new review");
@@ -464,7 +465,7 @@ mod gate {
     #[test]
     fn self_or_unauthorized_approval_is_not_ready() {
         let temp = tempfile::tempdir().unwrap();
-        let site = CarryOverSite::quiet(temp.path(), Some("main"));
+        let site = CarryOverSite::read_only(temp.path(), Some("main"));
         let sha = format!("{HEAD:040x}");
         let candidates = [verdict(&sha)];
         // No re-validated authority: unattested.
@@ -496,7 +497,7 @@ mod gate {
         let (repo, approved) = fixture();
         merge_main(repo.path());
         let merged = head(repo.path());
-        let site = CarryOverSite::quiet(repo.path(), Some("main"));
+        let site = CarryOverSite::read_only(repo.path(), Some("main"));
         let candidates = [verdict(&approved)];
         for (candidates, policy) in [
             (&candidates[..], policy(&candidates)),
@@ -998,7 +999,7 @@ fn live_hold_reads_the_marker_then_the_label() {
         "findings outstanding",
         Some(c.head.clone()),
     );
-    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
     let held = ready::live_hold(root, &c).unwrap().expect("marker hold");
     assert!(held.contains("rework hold"), "{held}");
 }

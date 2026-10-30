@@ -140,12 +140,19 @@ fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
     let anchor_dir = base.path().join("relay/.aida/review-verdicts");
     std::fs::create_dir_all(&anchor_dir).unwrap();
     std::fs::set_permissions(&anchor_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // M1 slice 2: an uncontained record lands on the anchor's gate ledger,
+    // so the anchor's shared state is read-only there too.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let ledger_dir = base.path().join("relay/.aida/gate-ledger");
+    std::fs::create_dir_all(&ledger_dir).unwrap();
+    std::fs::set_permissions(&ledger_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
     let restore = |dir: &std::path::Path| {
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap()
     };
     if std::fs::write(anchor_dir.join("probe"), b"").is_ok() {
         // Running as root: a mode bit cannot make the directory read-only.
         restore(&anchor_dir);
+        restore(&ledger_dir);
         return;
     }
     // BUG-b6b1278890774ef993d2ebc327862470-013: the recorded `--sha` must resolve in the worktree.
@@ -164,6 +171,7 @@ fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
     record_with_anchor(&worktree, &anchor, Some("1"))
         .expect("contained record falls back instead of failing");
     restore(&anchor_dir);
+    restore(&ledger_dir);
     assert!(!anchor.exists(), "the read-only anchor is untouched");
     let body: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&fallback).unwrap()).unwrap();

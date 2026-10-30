@@ -4229,7 +4229,8 @@ pub(crate) fn auto_release_decision_for_lease(
 
     let worktree_exists = lease.worktree_path.exists();
     let worktree_dirty_count = if worktree_exists {
-        worktree_dirty_entries(&lease.worktree_path).len()
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+        lease_tree_dirty_entries(lease).len()
     } else {
         0
     };
@@ -4304,6 +4305,39 @@ impl StaleLeaseRecoveryReport {
     }
 }
 
+/// What removing a lease's tree would lose, one entry per item.
+/// A worktree is read with host `git status --porcelain` (ignored files never
+/// count). Host git never runs in a seat clone, so [`worktree_dirty_entries`]
+/// reads every clone as one "refusing to run git" entry, and a dormant clone
+/// lease looked dirty with "1 uncommitted change(s)" however clean it was. A
+/// host-recorded clone is read through the sandboxed probe instead, the same
+/// reading `aida session end` uses: its changed and untracked files plus a line
+/// for commits origin does not have (they live only in the clone). A clone
+/// the host does not vouch for, or whose probe has no answer, stays one dirty
+/// entry, so every caller keeps it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+pub(crate) fn lease_tree_dirty_entries(lease: &SessionLease) -> Vec<String> {
+    if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        if let Some(clone) = crate::seat_clone::host_recorded_clone(&lease.worktree_path) {
+            return match crate::seat_clone::probe(&clone.main, &clone.root) {
+                crate::seat_clone::Probe::Known(facts) => {
+                    let mut entries = facts.dirty;
+                    if facts.unpushed > 0 {
+                        entries.push(format!(
+                            "{} commit(s) that origin does not have",
+                            facts.unpushed
+                        ));
+                    }
+                    entries
+                }
+                crate::seat_clone::Probe::Unknown(why)
+                | crate::seat_clone::Probe::HasSubmodules(why) => vec![format!("?? ({why})")],
+            };
+        }
+    }
+    worktree_dirty_entries(&lease.worktree_path)
+}
+
 /// BUG-777: gather the recovery picture for a blocking lease.
 ///
 /// Liveness comes from [`lease_state_for`] — the SAME classifier `aida ps` and
@@ -4313,6 +4347,16 @@ impl StaleLeaseRecoveryReport {
 /// `git status --porcelain` probe the BUG-307 auto-release gate uses.
 // trace:BUG-777 | ai:claude
 pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLeaseRecoveryReport {
+    stale_lease_recovery_for_lease_with(lease, &process_probe::probe_live_claude_sessions())
+}
+
+/// [`stale_lease_recovery_for_lease`] over a process-table scan the caller
+/// already took, so a sweep over many leases scans once.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn stale_lease_recovery_for_lease_with(
+    lease: &SessionLease,
+    live: &[process_probe::LiveSession],
+) -> StaleLeaseRecoveryReport {
     // BUG-1111: `lease_owner_process_gone` treats an `active_pid` vendor child
     // as authoritative over the creator/orchestrator pid.
     // trace:BUG-1111 | ai:codex
@@ -4323,7 +4367,7 @@ pub(crate) fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLease
         lease.creator_pid_start_time.as_deref(),
         process_probe::process_identity_is_alive,
     );
-    stale_lease_recovery_with_owner(lease, owner_gone)
+    stale_lease_recovery_with_live(lease, owner_gone, live)
 }
 
 /// BUG-1930: was this lease minted by a phase child of `orchestrator_pid`
@@ -4382,15 +4426,27 @@ fn stale_lease_recovery_with_owner(
     lease: &SessionLease,
     owner_gone: Option<bool>,
 ) -> StaleLeaseRecoveryReport {
-    let live = process_probe::probe_live_claude_sessions();
-    let lease_state = lease_state_for(lease, &live, chrono::Utc::now());
+    stale_lease_recovery_with_live(
+        lease,
+        owner_gone,
+        &process_probe::probe_live_claude_sessions(),
+    )
+}
+
+fn stale_lease_recovery_with_live(
+    lease: &SessionLease,
+    owner_gone: Option<bool>,
+    live: &[process_probe::LiveSession],
+) -> StaleLeaseRecoveryReport {
+    let lease_state = lease_state_for(lease, live, chrono::Utc::now());
     // A worktree-less advisory lease (review / claim verb, or the TASK-474
     // empty-path MCP claim) has no tree to inspect — treat it as "missing",
     // which is exactly right: there is no uncommitted work to strand.
     let worktree_exists =
         !lease.worktree_path.as_os_str().is_empty() && lease.worktree_path.exists();
     let dirty = if worktree_exists {
-        worktree_dirty_entries(&lease.worktree_path)
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+        lease_tree_dirty_entries(lease)
     } else {
         Vec::new()
     };
