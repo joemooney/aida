@@ -88899,5 +88899,58 @@ operations:
   timestamp: 2026-10-30T01:05:40.416605281Z
   kind: !SetStatus
     status: Approved
-clock: 6915
+- id: 01a18a57-88ab-7d33-a065-1cf41e46850a
+  target_id: 01a18a52-7f13-7cf0-ae1c-97a99515aa05
+  author: aida
+  node_id: '1'
+  lamport: 6916
+  timestamp: 2026-10-30T01:05:54.859486074Z
+  kind: !SetTitle
+    title: 'aida deputy: a hardened operator stand-in that runs submitted jobs concurrently under the operator''s grant'
+- id: 01a18a57-898b-7961-a7ce-4941b584bb11
+  target_id: 01a18a52-7f13-7cf0-ae1c-97a99515aa05
+  author: aida
+  node_id: '1'
+  lamport: 6917
+  timestamp: 2026-10-30T01:05:55.083862267Z
+  kind: !SetDescription
+    description: |-
+      ## Problem
+      While away, the operator runs two shell loops in their own (human-TTY, granted) terminal that source /tmp/aida_runme{,_2}.sh, log to /tmp/aida_runme*.log, then delete the script. The advisor writes scripts there to borrow the operator's authority (role grants, lane launches, ships, dev promote). It works and the operator wants it built in as `aida deputy`, a proxy that can be hardened over time. Gaps seen 2026-10-29:
+      - /tmp is shared: any local process can plant a script that runs with the operator's grant.
+      - There's no record of which session submitted a job.
+      - Results come back only by grepping a shared log. Overwriting a running script silently lost two jobs.
+      - One job per loop at a time, so a second loop was needed for concurrency.
+      - Sourcing means a stray `exit` kills the loop; serial-ship had to be run via `bash`.
+
+      ## Proposal
+      - `aida deputy [--name N]` (operator, interactive TTY): long-running worker in the operator's shell. It refuses to start without a human TTY, prints its name and grant, and keeps the shell's role grant.
+      - `aida deputy submit [--name N] [--wait] [--timeout D] -- <script|-f file>` (any seated session): enqueue a job; prints a job id.
+      - `aida deputy status|log|cancel <id>`; `aida deputy list`.
+      - Queue under `~/.aida/deputy/<name>/` (0700, owner-checked), not /tmp. Each job is an atomic file `<id>.job` (0600, owner must match) recording the requester session/handle/spec, created time and script. The worker claims it by rename (`.job` to `.running`), so there are no lost or overwritten jobs.
+      - Each job runs in a `bash` subprocess, not sourced. It inherits the loop shell's env (grant), has a per-job timeout, and its output goes to `<id>.out` plus rc in `<id>.done`. `submit --wait` streams or returns them. Completion mails the requester.
+      - Audit: an append-only `deputy.ledger` (who, what, when, rc, sha256 of the script). `aida awaiting` shows jobs pending, running and failed.
+      - Concurrency: `--workers K` per loop, or several named loops.
+      - Kill switch: `aida deputy pause|resume`. The loop exits on mandate expiry unless `--keep-after-mandate`.
+
+      ## Acceptance
+      1. The operator starts `aida deputy` once per terminal; agents submit with `aida deputy submit`, and no agent ever writes into the loop's directory directly.
+      2. A job file not owned by the operator, or world/group-writable, is refused and logged.
+      3. Two submits never clobber each other; a job whose script runs `exit` doesn't stop the loop.
+      4. The requester gets rc and output via `submit --wait` or `runloop log <id>` without grepping a shared log.
+      5. The ledger records the requester session for every job; `aida awaiting` surfaces failed jobs to the requester.
+      6. Later hardening, not in slice 1: a per-loop command policy (allowlist, deny `force` flags, no merge-hold clears), and a requirement that the submitting session hold a delegated grant from this operator.
+
+      Architecture/security-sensitive (it borrows human authority), so it needs a sketch and advisor signoff. Slice 1 covers the queue, worker, submit/status/log and ledger; slice 2 covers awaiting, mail, pause and the mandate tie-in; slice 3 covers policy.
+
+      ## Operator constraint 2026-10-29 18:02
+      - The worker MUST keep aida's existing interactive-terminal (human TTY) check: `aida deputy` refuses to start without one, exactly as `aida role enter` does today. Never weaken that check to make the loop scriptable.
+      - The worker likely has to run through the operator's `aida` shell function (as `role enter` does) so the grant it establishes lives in that interactive shell and is inherited by every job. Design the start path as a shell-function verb (`aida deputy` in the function, which then execs the worker with the shell's env), and document that a bare binary invocation without the function refuses.
+      - `aida deputy submit` is the non-TTY side and never needs or gets the human-TTY attestation itself; jobs borrow the worker's.
+
+      ## Operator ruling 2026-10-29 18:06 — name and concurrency
+      - Name: `aida deputy`; keep `aida runloop` as a hidden alias.
+      - Concurrency is a slice-1 requirement, not later hardening. Today the operator needed two terminal loops because each job blocks its loop. One `aida deputy` must run several jobs at once: `--workers K` (default 2), and each job is a child `bash` subprocess, so a long ship never blocks a quick lane launch. Named deputies (`aida deputy --name ship`) are also allowed, each with its own queue and ledger. `aida deputy submit --name` targets one; the default is any idle worker.
+      - Job classes may pin to a single worker (`--serial <class>`, e.g. `ship`) so serial-ship stays one-at-a-time while other jobs run in parallel.
+clock: 6917
 node_id: '1'
