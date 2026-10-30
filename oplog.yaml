@@ -92390,5 +92390,13 @@ operations:
       - Unit test group_member_exit_check_accepts_zombie_and_reaped_child (a killed-but-unreaped child and a reaped one).
       - ALSO fix the follow-up the lane found: under load the timeout can fire before the script writes descendant.pid, and the test panics on unwrap(). Wait for the pid file (bounded) or treat its absence as a clear test failure message.
       Then open the PR. Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
-clock: 7156
+- id: 01a18c6f-ec19-7542-b9da-9f197cbe9c54
+  target_id: 01a18b71-4e23-78b1-92ef-f10f26cf87ca
+  author: aida
+  node_id: '1'
+  lamport: 7157
+  timestamp: 2026-10-30T10:51:47.609475285Z
+  kind: !SetStatus
+    status: In Progress
+clock: 7157
 node_id: '1'
