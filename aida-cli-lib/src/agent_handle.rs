@@ -249,6 +249,24 @@ pub(crate) fn namespace_lock_held() -> bool {
 /// The common-root allocation lock. Held across read-decide-write so a
 /// reservation is atomic with respect to every other allocator.
 pub(crate) fn lock_namespace(project_root: &Path) -> Result<NamespaceLock> {
+    // SessionStart is advisory: never wait behind a wedged allocator.
+    // trace:STORY-1843 | ai:codex
+    lock_namespace_within(project_root, std::time::Duration::from_millis(250))
+}
+
+/// How long the foreground launcher waits for the namespace lock to record
+/// the agent it just spawned. The child is already running, so waiting longer
+/// than the SessionStart budget costs nothing; the child's own SessionStart
+/// hook and other agents' heartbeats contend for this lock at launch.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) const LAUNCHER_LOCK_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// [`lock_namespace`] with an explicit wait budget.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn lock_namespace_within(
+    project_root: &Path,
+    budget: std::time::Duration,
+) -> Result<NamespaceLock> {
     let dir = handles_dir(project_root);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating handle directory {}", dir.display()))?;
@@ -266,9 +284,7 @@ pub(crate) fn lock_namespace(project_root: &Path) -> Result<NamespaceLock> {
     if !file.metadata()?.is_file() {
         bail!("invalid handle allocation lock");
     }
-    // SessionStart is advisory: never wait behind a wedged allocator.
-    // trace:STORY-1843 | ai:codex
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(250);
+    let deadline = std::time::Instant::now() + budget;
     loop {
         match file.try_lock_exclusive() {
             Ok(()) => break,

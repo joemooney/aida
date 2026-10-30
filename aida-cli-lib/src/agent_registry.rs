@@ -888,7 +888,14 @@ pub(crate) fn register_spawned_agent(
         spec_status_at_end: None,
         resumed_from,
     };
-    write_entry(project_root, &entry)?;
+    // The agent is already running; wait out launch-time contention rather
+    // than fail on the SessionStart budget.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    write_entry_within(
+        project_root,
+        &entry,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+    )?;
     Ok(entry)
 }
 
@@ -1828,6 +1835,21 @@ pub(crate) fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Re
     // bounded common-root lock. Readers still see atomic record replacement.
     // trace:STORY-1843 | ai:codex
     let _lock = crate::agent_handle::lock_namespace(project_root)?;
+    write_entry_locked(project_root, entry)
+}
+
+/// [`write_entry`] with an explicit namespace-lock wait budget.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn write_entry_within(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    budget: std::time::Duration,
+) -> Result<()> {
+    let _lock = crate::agent_handle::lock_namespace_within(project_root, budget)?;
+    write_entry_locked(project_root, entry)
+}
+
+fn write_entry_locked(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
     let path = registry_path(project_root, &entry.id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

@@ -5810,36 +5810,58 @@ fn run_tracked_agent_after_spawn(
         ),
         (RoleInstanceKind::Driver, text) => text,
     };
-    let registry_entry = agent_registry::register_spawned_agent(
-        &plan.project_root,
-        config.agent_type,
-        child_pid,
-        plan.role.clone(),
-        plan.current_spec.clone(),
-        plan.launch_cwd.clone(),
-        Some(&binary),
-        Some(plan.name.clone()),
-        plan.native_session_id.clone(),
-        plan.resumed_from.clone(),
-        description,
-    )?;
+    // From here the child owns the terminal. A failed bookkeeping step must
+    // not return early: the launcher would exit, the shell would take the
+    // terminal back, and the agent would die mid-startup with the error
+    // painted over by its UI. Collect warnings and print them after the
+    // child exits, where they stay on screen.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    let mut deferred_warnings = Vec::new();
+    let signal_forwarder = post_spawn_step(
+        install_child_signal_forwarder(child_pid),
+        "could not forward Ctrl+C/SIGTERM to the agent",
+        &mut deferred_warnings,
+    );
+    let registry_entry = post_spawn_step(
+        agent_registry::register_spawned_agent(
+            &plan.project_root,
+            config.agent_type,
+            child_pid,
+            plan.role.clone(),
+            plan.current_spec.clone(),
+            plan.launch_cwd.clone(),
+            Some(&binary),
+            Some(plan.name.clone()),
+            plan.native_session_id.clone(),
+            plan.resumed_from.clone(),
+            description,
+        ),
+        "could not record this agent in the registry, so `aida agent ls` will not list it",
+        &mut deferred_warnings,
+    );
     // TASK-1498: `--verbose` process-registration diagnostics — confirms the
     // spawned pid and the registry entry id it was recorded under, right
     // after the write that makes it visible to `aida agent ls`.
     // trace:TASK-1498 | ai:claude
     if verbose {
-        eprintln!(
-            "  {}: spawned pid {} registered as {}",
-            "diagnostics".bold(),
-            child_pid,
-            registry_entry.id
-        );
+        if let Some(entry) = &registry_entry {
+            eprintln!(
+                "  {}: spawned pid {} registered as {}",
+                "diagnostics".bold(),
+                child_pid,
+                entry.id
+            );
+        }
     }
-    let signal_forwarder = install_child_signal_forwarder(child_pid)?;
     let status = child
         .wait()
         .with_context(|| format!("failed to wait for {}", config.agent_type))?;
-    signal_forwarder.stop();
+    if let Some(forwarder) = signal_forwarder {
+        forwarder.stop();
+    }
+    for warning in &deferred_warnings {
+        eprintln!("{} {warning}", "warning:".yellow().bold());
+    }
     // TASK-1498: `--verbose` child exit/result diagnostics — reported clearly
     // without changing launch semantics (the exit-code propagation below is
     // unchanged). trace:TASK-1498 | ai:claude
@@ -5885,10 +5907,32 @@ fn run_tracked_agent_after_spawn(
     Ok(())
 }
 
+/// Keep a post-spawn step's value, or record why it failed for printing
+/// after the child exits.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn post_spawn_step<T>(
+    result: Result<T>,
+    what: &str,
+    deferred_warnings: &mut Vec<String>,
+) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(err) => {
+            deferred_warnings.push(format!("{what}: {err:#}"));
+            None
+        }
+    }
+}
+
 // trace:BUG-2002 | ai:codex
 #[cfg(test)]
 #[path = "tests/bug_2002_launch_lease_tests.rs"]
 mod bug_2002_launch_lease_tests;
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_030_launch_registry_lock_tests.rs"]
+mod bug_030_launch_registry_lock_tests;
 
 /// Inspect or resume past Claude Code sessions in this project,
 /// enriched with the AIDA role + most-recent spec for each session
