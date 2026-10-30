@@ -93334,5 +93334,13 @@ operations:
   timestamp: 2026-10-30T14:34:17.429420540Z
   kind: !SetStatus
     status: Superseded
-clock: 7226
+- id: 01a18d3f-6f1f-7711-8c5c-28eacd2a5bd7
+  target_id: 01a159bf-9294-7303-8baf-af447935c9ce
+  author: aida
+  node_id: '1'
+  lamport: 7227
+  timestamp: 2026-10-30T14:38:27.103040067Z
+  kind: !RemoveTag
+    tag: operator-held
+clock: 7227
 node_id: '1'
