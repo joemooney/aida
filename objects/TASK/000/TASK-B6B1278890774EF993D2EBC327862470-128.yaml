@@ -12,6 +12,15 @@ req_type: Task
 tags:
 - docs
 - epic-home-002
+relationships:
+- rel_type: Child
+  target_id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
+  created_at: 2026-10-30T16:45:25.082676213Z
+history:
+- id: 01a18db3-b707-74d1-9f73-ae5311a96cc9
+  author: ai:codex:joe
+  timestamp: 2026-10-30T16:45:27.687379426Z
+  changes: []
 filed_at:
   code_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
   branch: main
