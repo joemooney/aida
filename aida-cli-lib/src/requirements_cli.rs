@@ -6100,6 +6100,38 @@ pub(crate) struct ShowArgs {
     pub raw: bool,
 }
 
+/// The stderr note `aida show <bare id>` prints when the bare id resolved to
+/// an agreed spec and a node-local spec with the same type and number also
+/// exists (`STORY-100` vs `STORY-HOME-100`). Probes only the twin filenames
+/// the installed node labels name, so it never scans the store.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub(crate) fn local_twin_note(
+    objects_root: &std::path::Path,
+    requested: &str,
+    shown: &aida_core::Requirement,
+) -> Option<String> {
+    let twins: Vec<String> = aida_core::node_alias::installed()
+        .local_twin_candidates(requested)
+        .into_iter()
+        .filter(|c| {
+            shown
+                .spec_id
+                .as_deref()
+                .is_none_or(|s| !s.eq_ignore_ascii_case(c))
+        })
+        .filter(|c| aida_core::object_store::object_exists(objects_root, c).unwrap_or(false))
+        .map(|c| aida_core::node_alias::display_spec_id(&c))
+        .collect();
+    if twins.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "note: {} is the agreed id shown here; this node's local spec with the same number is {} (write it in that form)",
+        requested.trim().to_ascii_uppercase(),
+        twins.join(" and ")
+    ))
+}
+
 fn run_show(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
@@ -6249,6 +6281,14 @@ fn run_show(
                             let activity_phase = crate::usage::phase("activity");
                             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                             drop(activity_phase);
+                            // A bare id opens the agreed spec; say so when this
+                            // node also has a local spec with the same number.
+                            // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+                            if let Some(note) =
+                                local_twin_note(&store_path.join("objects"), id, &req)
+                            {
+                                eprintln!("{}", note.dimmed());
+                            }
                             // STORY-632: deterministic local graph-centrality, read from
                             // the cache (recomputed on rebuild from the relationship
                             // graph; never stored in YAML). trace:STORY-632 | ai:claude

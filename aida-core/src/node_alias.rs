@@ -501,6 +501,118 @@ pub fn display_spec_id(id: &str) -> String {
     installed().display(id, canonical_ids())
 }
 
+// ---------------------------------------------------------------------------
+// Bare ids vs node-local numbers (BUG-b6b1…-036).
+//
+// A bare id (`STORY-100`) is the globally agreed name; a node-local id is
+// always `TYPE-<node>-NNN` on disk, so a bare lookup never resolves to one.
+// The two number spaces overlap, though: `STORY-100` (agreed, legacy) and
+// `STORY-HOME-100` (local) are different specs. These helpers find the local
+// "twin" of a bare id so surfaces can point at it instead of staying silent.
+// ---------------------------------------------------------------------------
+
+/// `TYPE-NNN` split into its upper-cased type prefix and number. `None` for
+/// anything else, including node-local and alias forms (three segments).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn split_bare_id(id: &str) -> Option<(String, u32)> {
+    let (prefix, seq) = id.trim().split_once('-')?;
+    let prefix_ok = prefix
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic())
+        && prefix.chars().all(|c| c.is_ascii_alphabetic());
+    let seq_ok = !seq.is_empty() && seq.chars().all(|c| c.is_ascii_digit());
+    if !(prefix_ok && seq_ok) {
+        return None;
+    }
+    Some((prefix.to_ascii_uppercase(), seq.parse().ok()?))
+}
+
+/// Whether `candidate` is a node-local id (`TYPE-<32-hex node>-NNN`) with the
+/// same type prefix and number as the bare id `bare`. Leading zeros do not
+/// matter: `BUG-30` and `BUG-030` both have the local twin `BUG-<node>-030`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn is_local_twin(bare: &str, candidate: &str) -> bool {
+    let Some((prefix, n)) = split_bare_id(bare) else {
+        return false;
+    };
+    let Some((c_prefix, middle, seq)) = split_three(candidate) else {
+        return false;
+    };
+    c_prefix.eq_ignore_ascii_case(&prefix)
+        && middle.len() == 32
+        && normalize_node(middle).is_ok()
+        && seq.parse::<u32>().ok() == Some(n)
+}
+
+/// The `(TYPE, number)` key of a node-local id (`TYPE-<32-hex node>-NNN`),
+/// equal to [`split_bare_id`] of each bare id it is a local twin of. Lets a
+/// caller index the store's local ids once instead of testing every pair.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn local_id_key(id: &str) -> Option<(String, u32)> {
+    let (prefix, middle, seq) = split_three(id)?;
+    let bare = format!("{prefix}-{seq}");
+    (middle.len() == 32 && normalize_node(middle).is_ok() && is_local_twin(&bare, id))
+        .then(|| split_bare_id(&bare))
+        .flatten()
+}
+
+/// Every id in `known` that is a local twin of the bare id `bare` (see
+/// [`is_local_twin`]), upper-cased, sorted and deduplicated.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn local_twins<'a>(bare: &str, known: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut out: Vec<String> = known
+        .into_iter()
+        .filter(|k| is_local_twin(bare, k))
+        .map(|k| k.trim().to_ascii_uppercase())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+impl NodeAliasMap {
+    /// The canonical local-twin ids a bare id could have on the nodes this map
+    /// labels (current or retired labels name the same node), formatted the
+    /// way the node-local allocator writes them (`{seq:03}`). For a cheap
+    /// existence probe that does not scan the store.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+    pub fn local_twin_candidates(&self, bare: &str) -> Vec<String> {
+        let Some((prefix, n)) = split_bare_id(bare) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = self
+            .bindings
+            .iter()
+            .map(|b| format!("{prefix}-{}-{n:03}", b.node.to_ascii_uppercase()))
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+}
+
+/// Bare `TYPE-NNN` tokens in free text, with their 1-based line numbers. A
+/// token is bounded by characters that cannot continue an id (so the `1-096`
+/// inside `TASK-1-096` and the `HOME-030` inside `BUG-HOME-030` are not
+/// tokens), and its prefix must be at least two letters.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub fn bare_id_tokens(text: &str) -> Vec<(usize, String)> {
+    fn id_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '-' || c == '_'
+    }
+    let mut out = Vec::new();
+    for (line_no, line) in text.lines().enumerate() {
+        for token in line.split(|c: char| !id_char(c)) {
+            let token = token.trim_end_matches('-');
+            if split_bare_id(token).is_some_and(|(prefix, _)| prefix.len() >= 2) {
+                out.push((line_no + 1, token.to_ascii_uppercase()));
+            }
+        }
+    }
+    out
+}
+
 /// Whether `id` is `TYPE-<label>-NNN` (any case) for `label`.
 fn id_uses_label(id: &str, label: &str) -> bool {
     split_three(id).is_some_and(|(_, middle, _)| middle.eq_ignore_ascii_case(label))

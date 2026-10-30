@@ -882,8 +882,26 @@ pub(crate) fn did_you_mean_for_not_found(msg: &str) -> Option<String> {
     let requested = not_found_requested_id(msg)?;
     let project_root = find_main_worktree_root().ok()?;
     let known = known_spec_ids_for_suggestion(&project_root);
-    let suggestion = nearest_spec_id(&requested, &known)?;
+    let suggestion = not_found_suggestion(&requested, &known)?;
     Some(format!("did you mean {suggestion}?"))
+}
+
+/// The did-you-mean target for a not-found id. A bare id whose number is a
+/// node-local spec's (`BUG-030` vs `BUG-<node>-030`) suggests that spec in its
+/// alias form (`BUG-HOME-030`) ahead of any spelling near-miss: the operator
+/// almost always meant this node's spec, not `BUG-1030`. Otherwise the
+/// TASK-1082 nearest-id lens.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub(crate) fn not_found_suggestion(requested: &str, known_ids: &[String]) -> Option<String> {
+    let twins = aida_core::node_alias::local_twins(requested, known_ids.iter().map(String::as_str));
+    if !twins.is_empty() {
+        let shown: Vec<String> = twins
+            .iter()
+            .map(|id| aida_core::node_alias::display_spec_id(id))
+            .collect();
+        return Some(shown.join(" or "));
+    }
+    nearest_spec_id(requested, known_ids)
 }
 
 // TASK-679: fully-isolated unit tests for the canonical parent/child edge

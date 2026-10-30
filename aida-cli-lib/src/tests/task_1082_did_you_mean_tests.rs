@@ -1,4 +1,6 @@
-use super::{known_spec_ids_for_suggestion, nearest_spec_id, not_found_requested_id};
+use super::{
+    known_spec_ids_for_suggestion, nearest_spec_id, not_found_requested_id, not_found_suggestion,
+};
 
 fn ids(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
@@ -109,5 +111,33 @@ fn suggestion_lookup_never_scaffolds_an_unattached_store() {
     assert!(
         !tmp.path().join(".aida-store").exists(),
         "the did-you-mean lookup created a store"
+    );
+}
+
+// A bare id whose number belongs to this node's local spec suggests that
+// spec in its alias form, ahead of the spelling near-miss: `BUG-030` was
+// `did you mean BUG-1030?` and never named BUG-HOME-030.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+#[test]
+fn bare_id_not_found_suggests_the_node_local_alias() {
+    let mut map = aida_core::node_alias::NodeAliasMap::default();
+    map.set("HOME", "b6b1278890774ef993d2ebc327862470").unwrap();
+    let _guard = aida_core::node_alias::install_for_thread(map);
+    let known = ids(&[
+        "BUG-1030",
+        "BUG-B6B1278890774EF993D2EBC327862470-030",
+        "STORY-100",
+    ]);
+    for requested in ["BUG-030", "BUG-30", "bug-030"] {
+        assert_eq!(
+            not_found_suggestion(requested, &known).as_deref(),
+            Some("BUG-HOME-030"),
+            "{requested}"
+        );
+    }
+    // No local twin: the TASK-1082 near-miss lens still answers.
+    assert_eq!(
+        not_found_suggestion("BUG-1031", &known).as_deref(),
+        Some("BUG-1030")
     );
 }

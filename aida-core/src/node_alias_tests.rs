@@ -219,3 +219,73 @@ fn node_alias_stored_spec_ids_cover_spec_id_and_agreed_id() {
         "{ids:?}"
     );
 }
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+#[test]
+fn bare_id_local_twins_ignore_leading_zeros_and_agreed_ids() {
+    let local = format!("BUG-{}-030", NODE_A.to_ascii_uppercase());
+    for bare in ["BUG-030", "BUG-30", "bug-030"] {
+        assert!(is_local_twin(bare, &local), "{bare}");
+    }
+    // The agreed id itself, another type, another number and an alias form
+    // are never twins.
+    for other in [
+        "BUG-30",
+        "TASK-B6B1278890774EF993D2EBC327862470-030",
+        "BUG-HOME-030",
+    ] {
+        assert!(!is_local_twin("BUG-30", other), "{other}");
+    }
+    assert!(!is_local_twin("BUG-31", &local));
+    assert!(!is_local_twin("BUG-HOME-030", &local), "not a bare id");
+    let known = [
+        "STORY-100",
+        "STORY-B6B1278890774EF993D2EBC327862470-100",
+        "TASK-123",
+    ];
+    assert_eq!(
+        local_twins("STORY-100", known),
+        vec!["STORY-B6B1278890774EF993D2EBC327862470-100".to_string()]
+    );
+    assert!(local_twins("TASK-123", known).is_empty());
+    assert_eq!(local_id_key(&local), split_bare_id("BUG-30"));
+    for not_local in ["BUG-30", "BUG-HOME-030", "TASK-1-096", "$TASK-1-1"] {
+        assert_eq!(local_id_key(not_local), None, "{not_local}");
+    }
+}
+
+#[test]
+fn bare_id_local_twin_candidates_use_the_allocator_padding() {
+    let map = home();
+    assert_eq!(
+        map.local_twin_candidates("TASK-123"),
+        vec!["TASK-B6B1278890774EF993D2EBC327862470-123".to_string()]
+    );
+    assert_eq!(
+        map.local_twin_candidates("bug-30"),
+        vec!["BUG-B6B1278890774EF993D2EBC327862470-030".to_string()]
+    );
+    // Display of a twin is the alias form, never the bare number.
+    assert_eq!(
+        map.display(&map.local_twin_candidates("STORY-100")[0], false),
+        "STORY-HOME-100"
+    );
+    assert!(map.local_twin_candidates("STORY-HOME-100").is_empty());
+    assert!(NodeAliasMap::default()
+        .local_twin_candidates("TASK-1")
+        .is_empty());
+}
+
+#[test]
+fn bare_id_tokens_skip_local_alias_and_legacy_node_forms() {
+    let text = "See STORY-100, BUG-030.\nnot TASK-1-096 or BUG-HOME-030 or \
+                TASK-B6B1278890774EF993D2EBC327862470-123 or X-1; (task-123)";
+    assert_eq!(
+        bare_id_tokens(text),
+        vec![
+            (1, "STORY-100".to_string()),
+            (1, "BUG-030".to_string()),
+            (2, "TASK-123".to_string()),
+        ]
+    );
+}
