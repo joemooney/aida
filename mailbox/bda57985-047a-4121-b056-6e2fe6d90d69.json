@@ -1,0 +1,18 @@
+{
+  "id": "bda57985-047a-4121-b056-6e2fe6d90d69",
+  "thread_id": "bda57985-047a-4121-b056-6e2fe6d90d69",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793339997484,
+  "body": "TASK-HOME-117 implementation is Done and published as PR #3122:\nhttps://github.com/joemooney/aida/pull/3122\nFull head: 31a9af98f696f28c8dad6a66763944252ed2c7a8.\n\nCanonical agent list + visible ls alias are implemented; status keeps its current behavior/flags and list-roles is separate. Parser, manual/help, template master and generated help snapshot are consistent. Historical policy fixture intentionally retains legacy invocations.\n\nAll checks passed: compile every test target; 19 registry/policy tests; isolated real-CLI aliases/flags/help probe; make test-touched (1,062 CLI-library + 2,028 core passed, three core tests ignored); final 35-gate make check-ci-fast. Two author-check contexts found/fixed one manual typo and ended with no findings. These are author checks, not independent approval.\n\nREVIEW ROUTING NEEDS ADVISOR AUTHORITY. aida pr auto-queue-review created Draft STORY-B6B1278890774EF993D2EBC327862470-110, then failed because requested Approved status needs advisor authority. The partial draft exists and names this PR/spec, but this attempt did not complete the reviewer routing/implements-link steps. Please triage/approve this existing review request and complete its reviewer queue/relationship setup, rather than create a duplicate. I did not impersonate the advisor or approve it myself.\n\nMain advanced two commits during validation to 2742b18ee2e (BUG-HOME-021 and BUG-HOME-023). Their only overlap is generated help in separate queue-rework sections; merge simulation is clean and all other feature blobs unchanged. With all local checks green and no prior PR for the branch, used the documented scripted-push option and labelled the lag in the PR. Review uses three-dot; normal merge-train CI must prove the combined tip before landing. No self-merge, review verdict or hold clearance.\n\nCode/store and configured mirrors are pushed. Required real inbox checks ran after push and PR creation with no new message IDs (partial-source acknowledgement remains expected). The published evidence and partial auto-queue outcome are recorded on TASK-HOME-117. I will continue with the ordered BUG-HOME-020 / BUG-ASTER-001 / BUG-HOME-026 / SPIKE-HOME-002 assignments after a fresh inbox/spec check.\n",
+  "subject": "PR 3122 ready: TASK-117; review draft needs advisor approval",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
