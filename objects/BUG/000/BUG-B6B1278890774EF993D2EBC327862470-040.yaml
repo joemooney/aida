@@ -14,12 +14,36 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T16:09:26.089991270Z
+modified_at: 2026-10-30T16:12:03.314512271Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T14:12:04.519552740Z
+comments:
+- id: 01a18d95-2172-7001-b13c-64c89556082d
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (awaiting_you.rs):** role-addressed mail lands in a new `MailChannel.role_unread` and the compact line says `N mail to advisor`, never `shared mail` (AC1). The operator-own `unread` number keeps its BUG-767 contract.
+    - **Unit:** `mail_preview_lines()` names up to 3 newest unread items as `[kind] from <sender> · <age> ago · <subject>`, `[request]` first, then `[handoff]`, then newest (AC2). `aida awaiting --notice` prints them under the compact line.
+    - **Unit:** unread mail from an automated sender (`review-watch`, `aida-*`, `*-watch`) older than 7 days drops out of every count and preview and is summarized as one `N old automated notices` line (AC3). Summarized, not archived: the notice path is read-only.
+    - **Unit:** an unread `[request]` older than 30 minutes, addressed to the operator or the session role, becomes an `overdue request` item in `aida awaiting` (render + compact + JSON) (AC4).
+    - **Command-level (story_465_awaiting_report_tests.rs):** a handoff from `codex-implementer-01` written to role `advisor` shows by sender and subject in the per-turn notice lines built from the collected report (AC5).
+
+    ### Expected files
+    - `aida-cli-lib/src/awaiting_you.rs`
+    - `aida-cli-lib/src/status_awaiting.rs`
+    - `aida-cli-lib/src/tests/story_465_awaiting_report_tests.rs` (+ any existing tests asserting role mail as `shared`)
+
+    ### Ambiguities / conflicts as questions
+    - AC3 allows archive or summarize: choosing summarize, because the per-turn notice must stay read-only (STORY-1397 contract). OK?
+  created_at: 2026-10-30T16:12:03.314512271Z
+  modified_at: 2026-10-30T16:12:03.314512271Z
+  session_id: 01a18d92b72d
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18d27-53e3-7762-9954-20226499df1b
   author: joe
