@@ -23,12 +23,12 @@ description: |
   5. Regression tests: both flag forms × {danger-full-access, workspace-write, read-only}, and the user-vs-project override case above.
 
   Note: `aida doctor --category permission-posture` did not finish within 60 s in this session; not investigated here.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:12:03.755273489Z
-modified_at: 2026-10-30T05:52:08.912434337Z
+modified_at: 2026-10-30T06:25:57.309395335Z
 req_type: Bug
 tags:
 - codex
@@ -75,6 +75,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18b7c-8aa2-76a2-b624-7ee8bfe00938
+  author: joe
+  timestamp: 2026-10-30T06:25:57.410420671Z
+  session_id: 01a18b5c2030
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -83,3 +92,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T06:25:57.309395335Z
+  implemented_by: joe
