@@ -1,0 +1,21 @@
+id: 01a18d2c-98e4-7f93-ad5f-b37538a0f606
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-127
+title: 'docs-only: add OpenCode to docs/competitive-analysis/marketplace-roster.md section D (platforms AIDA coordinates) plus a watch note on OpenCode orchestration plugins'
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T14:17:52.612236413Z
+modified_at: 2026-10-30T14:17:52.612236413Z
+req_type: Task
+tags:
+- lifecycle:no-review
+filed_at:
+  code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ee1fa1789a
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4

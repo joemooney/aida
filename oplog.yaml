@@ -93218,5 +93218,17 @@ operations:
   timestamp: 2026-10-30T14:15:56.741708033Z
   kind: !SetStatus
     status: Done
-clock: 7218
+- id: 01a18d2c-a64e-77d3-9bd3-030e91532b0d
+  target_id: 01a18d2c-98e4-7f93-ad5f-b37538a0f606
+  author: aida
+  node_id: '1'
+  lamport: 7219
+  timestamp: 2026-10-30T14:17:56.047818533Z
+  kind: !Create
+    title: 'docs-only: add OpenCode to docs/competitive-analysis/marketplace-roster.md section D (platforms AIDA coordinates) plus a watch note on OpenCode orchestration plugins'
+    description: ''
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 7219
 node_id: '1'
