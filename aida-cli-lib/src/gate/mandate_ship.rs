@@ -607,8 +607,8 @@ pub(crate) fn mandate_carry_over(
     base_branch: Option<&str>,
 ) -> Option<std::result::Result<String, String>> {
     let refusal = crate::gate::ship::approval_head_refusal(candidates, head)?;
-    let site = crate::review_carryover::CarryOverSite::quiet(repo, base_branch);
-    crate::review_carryover::prove_for_refusal(&site, pr, &refusal)
+    let site = crate::gate::review_carryover::CarryOverSite::quiet(repo, base_branch);
+    crate::gate::review_carryover::prove_for_refusal(&site, pr, &refusal)
         .map(|proved| proved.map(|p| p.new_head).map_err(|why| why.reason()))
 }
 
