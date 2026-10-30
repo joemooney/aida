@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capabilities — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html"><span aria-hidden="true">✳</span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html">Setup</a><a href="capabilities.html" aria-current="page">Capabilities</a><a href="integrations.html">Integrations</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="follow-intent-through-a-change">Follow intent through a change</h1><figure><img class="guide-graphic" src="assets/capabilities.svg" alt="Intent connects work and evidence. Requirements and decisions connect implementation, validation, review and history. A later change returns to the recorded intent. The diagram is explanatory and is not a live status display or an assurance of complete evidence."></figure>
+<p>AIDA connects the intent for a software change to the work and evidence around it. It is alpha software for Linux. Begin with one bounded change and inspect the record it produces before delegating more work.</p>
+<h2 id="keep-intent-available">Keep intent available</h2>
+<p>Agents can record requirements, acceptance criteria, decisions and comments in the spec graph. Typed relationships connect related work. Stable IDs and code traces help a later contributor find the intent behind a behavior. Capture depends on the configured agent using the tools; unrecorded conversations are not recovered automatically.</p>
+<h2 id="coordinate-delivery">Coordinate delivery</h2>
+<p>Roles, queues, scoped worktrees and leases help separate responsibilities and concurrent changes. The <a href="workflow.html">workflow guide</a> follows discussion, capture, implementation, independent review and integration. These coordination records do not create a security boundary between processes running as the same Unix user.</p>
+<p>The <a href="autonomy.html">autonomy guide</a> explains operator, guided, drive and drain execution. Choose how people participate per spec. Dispatch still depends on the applicable authority, review, CI and hold gates; a mode selection is not a permission grant.</p>
+<h2 id="inspect-evidence-and-return-later">Inspect evidence and return later</h2>
+<p>Trace comments connect source to intent. History records how specs change; review verdicts identify the commit they assessed. Reporting helps find work waiting on a person or another agent. The <a href="metrics.html">Metrics guide</a> explains what recorded usage can and cannot establish. AIDA does not infer customer outcomes, financial return or complete attribution from missing evidence.</p>
+<p>A colleague or future agent can start with the requirement, inspect its decisions and linked implementation, and update the acceptance criteria as the product evolves. The store, source history, derived cache and local operational evidence have different retention and recovery properties; the <a href="trust.html">trust guide</a> explains those limits.</p>
+<h2 id="evaluate-a-capability-in-your-project">Evaluate a capability in your project</h2>
+<p>Use the <a href="getting-started.html">getting-started guide</a> to connect the agent and project. Ask it to capture a change, show the acceptance criteria, implement in a scoped worktree and explain the resulting evidence. Read the <a href="integrations.html">integration guide</a> before configuring additional clients or external systems.</p>
+<h2 id="source-and-inspection">Source and inspection</h2>
+<p>The <a href="overview.html">overview</a> describes the product surface. The <a href="https://github.com/joemooney/aida/blob/main/docs/cli/02-specs.md">spec reference</a>, <a href="https://github.com/joemooney/aida/blob/main/docs/cli/03-work-autonomy.md">work reference</a> and <a href="https://github.com/joemooney/aida/blob/main/docs/cli/08-reporting.md">reporting reference</a> explain the corresponding CLI behavior. Inspect <code>aida show --help</code>, <code>aida queue --help</code> and <code>aida history --help</code> for the installed version. This guide makes no production-readiness or security guarantee.</p></main>
+<footer class="guide-footer"><p>Generated from <a href="https://github.com/joemooney/aida/blob/main/docs/product-capabilities.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>
