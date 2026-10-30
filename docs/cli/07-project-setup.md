@@ -20,7 +20,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ### `aida scaffold`
 
-**One line** — manage the Claude Code furniture `init` wrote (skills, commands, hooks, MCP config, templates) after the fact.
+**One line** — manage the Claude Code furniture `init` wrote (skills, commands, hooks, templates, and MCP config when explicitly requested) after the fact.
 
 **Mental model.** `init` scaffolds once; the *binary* keeps evolving. `scaffold` is the family that reconciles the on-disk scaffolding against the binary's *current* embedded templates: `status` reports drift, `diff` shows it, `upgrade` heals it **category-aware**, `apply` (re)writes it, `extract` pulls templates out for hand-customization. The key insight is the category model — AIDA-owned template files (skills/commands/hooks) are safe to overwrite; user-owned seed files (CLAUDE.md, AGENTS.md) are not — which is exactly why `upgrade` exists instead of a blunt `apply --force`.
 
