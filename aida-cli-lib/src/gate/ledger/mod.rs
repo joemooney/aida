@@ -196,6 +196,9 @@ pub(crate) fn record_verdict_at(
     }
     let store = store_root(&root)?;
     if let Some(change) = ChangeKey::parse(&key) {
+        if let Some(spec) = spec {
+            store::bind_unbound(&store, spec, change)?;
+        }
         return store::append_one(&store, event::verdict_event(&store, change, record, spec));
     }
     let spec_key = key.trim().to_ascii_uppercase();
@@ -242,6 +245,9 @@ pub(crate) fn record_collected_verdict(
         ));
     }
     let root = store_root(launcher_root)?;
+    for (spec, _) in spec_records {
+        store::bind_unbound(&root, spec, change)?;
+    }
     let mut events = vec![event::verdict_event(&root, change, record, None)];
     for (spec, body) in spec_records {
         events.push(event::verdict_event(&root, change, body, Some(spec)));
@@ -251,6 +257,61 @@ pub(crate) fn record_collected_verdict(
         .iter()
         .filter(|e| e.verdict_record().is_some())
         .count())
+}
+
+/// AC2: a change was opened for `specs`: bind each spec's unbound
+/// (pre-change) verdicts to it ([`store::bind_unbound`]), so the change is
+/// the one key that answers for them. Best effort, from `start` (any
+/// checkout sharing the ledger); a contained seat binds nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn bind_specs(start: &Path, change: ChangeKey, specs: &[String]) {
+    if crate::session::process_contained() {
+        return;
+    }
+    let Ok(root) = store_root(start) else {
+        return;
+    };
+    for spec in specs {
+        if let Err(e) = store::bind_unbound(&root, spec, change) {
+            eprintln!(
+                "warning: could not bind {spec}'s recorded verdicts to {}: {e}",
+                change.as_key()
+            );
+        }
+    }
+}
+
+/// AC2's open-change hook, the one way production code opens a change: open
+/// `req` through `forge`, then bind `specs`' pre-change verdicts to the
+/// opened change ([`bind_specs`], from `start`). A forge that opens no
+/// numbered change (`id == 0`) binds nothing. Ship, the orchestrator, the
+/// drain cluster, the train and queue recover all open through here, so a
+/// spec verdict recorded before the PR reads under the PR whichever path
+/// opened it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn open_change_bound(
+    forge: &dyn crate::forge::Forge,
+    start: &Path,
+    req: crate::forge::OpenChange,
+    specs: &[String],
+) -> anyhow::Result<crate::forge::ChangeRef> {
+    let change = forge.open_change(req)?;
+    if change.id != 0 {
+        bind_specs(start, ChangeKey::pr(change.id), specs);
+    }
+    Ok(change)
+}
+
+/// AC2's adopt hook: a change opened outside aida (`gh pr create`, or a
+/// raced drive) and adopted by number binds `specs`' pre-change verdicts
+/// exactly as [`open_change_bound`] would have. Binding is idempotent, so
+/// adopting a change aida already bound adds nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn adopt_change_bound(start: &Path, id: u64, specs: &[String]) -> u64 {
+    if id != 0 {
+        bind_specs(start, ChangeKey::pr(id), specs);
+    }
+    id
 }
 
 #[cfg(test)]

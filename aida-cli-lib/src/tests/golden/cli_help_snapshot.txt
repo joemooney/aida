@@ -420,7 +420,7 @@ Commands:
                 Bare `aida` / `aida help` show the curated Getting-started view instead
   commands      List every command and subcommand as grep-able one-line rows
   skill         Stock and local skill tooling
-  alias         Discoverable registry of AIDA's built-in shortcuts
+  alias         Discover built-in shortcuts and manage user-defined aliases
   adoption      Adopt AIDA without product-branch files: shared settings and guidance live in
                 `adoption/` on the aida-store branch and are projected into this worktree's
                 git-ignored `.aida/`
@@ -27791,13 +27791,15 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida alias
-Discoverable registry of AIDA's built-in shortcuts.
+Discover built-in shortcuts and manage user-defined aliases.
 
 One place that enumerates every accreted shortcut — the `aida list` status lenses (open/closed) +
 status-token shortcuts, the `aida list <lens>` argv rewrites
 (queue/why/human/inflight/me/user:<name>), and the command aliases (intake, advisor assess, bare
 `aida agent`) — grouped by surface, each with its canonical expansion + a one-line meaning. Bare
-`aida alias` behaves like `aida alias list`. Built-in shortcuts only.
+`aida alias` behaves like `aida alias list`, showing built-in shortcuts alongside personal
+(`~/.aida/aliases.toml`) and project (`.aida/aliases.toml`) aliases. Use `add` and `remove` to
+manage user aliases.
 
 Usage: aida alias [OPTIONS] [COMMAND]
 
@@ -56427,7 +56429,7 @@ Working on aida itself
       "aida",
       "alias"
     ],
-    "about": "Discoverable registry of AIDA's built-in shortcuts",
+    "about": "Discover built-in shortcuts and manage user-defined aliases",
     "flags": [
       {
         "name": "canonical-ids",

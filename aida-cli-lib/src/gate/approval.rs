@@ -66,8 +66,8 @@ pub(crate) enum HeadDecision {
     /// with the PR's own diff unchanged, so the attested approval carries
     /// over to `proof.new_head`. The outcome is `None` for a quiet site.
     CarriedOver(
-        crate::review_carryover::CarryOver,
-        Option<crate::review_carryover::RecordOutcome>,
+        crate::gate::review_carryover::CarryOver,
+        Option<crate::gate::review_carryover::RecordOutcome>,
     ),
     /// No approval covers the head; `message` says why, including a refused
     /// carry-over. Only `--override-stale-approval` can pass it.
@@ -89,7 +89,7 @@ pub(crate) fn approval_decision(
     candidates: &[crate::gate::review_verdict::RecordedVerdict],
     head_sha: Option<&str>,
     policy: &crate::gate::ship::ShipApprovalPolicy,
-    carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
+    carry_over: Option<&crate::gate::review_carryover::CarryOverSite<'_>>,
 ) -> std::result::Result<HeadDecision, String> {
     // BUG-1918: the approval must come from an authorized, non-author seat.
     // Checked first: `--override-stale-approval` excuses a head that moved
@@ -110,9 +110,9 @@ pub(crate) fn approval_decision(
     // with the PR's own diff unchanged, keeps the attested approval. The
     // merge is pinned to the proven head, so a later push still refuses.
     // trace:TASK-1960 | ai:claude
-    match carry_over
-        .and_then(|site| crate::review_carryover::carry_over_for_refusal(site, pr_number, &refusal))
-    {
+    match carry_over.and_then(|site| {
+        crate::gate::review_carryover::carry_over_for_refusal(site, pr_number, &refusal)
+    }) {
         Some(Ok((proof, outcome))) => return Ok(HeadDecision::CarriedOver(proof, outcome)),
         Some(Err(why)) => {
             message = format!(
@@ -143,7 +143,7 @@ pub(crate) fn pr_ship_approval_gate(
     policy: &crate::gate::ship::ShipApprovalPolicy,
     override_stale_approval: bool,
     delete_branch: bool,
-    carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
+    carry_over: Option<&crate::gate::review_carryover::CarryOverSite<'_>>,
 ) -> Result<Option<String>> {
     let decision = match approval_decision(pr_number, candidates, head_sha, policy, carry_over) {
         Ok(decision) => decision,
@@ -179,11 +179,11 @@ pub(crate) fn pr_ship_approval_gate(
                 println!(
                     "  {} {}",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    crate::review_carryover::carry_over_line(&proof, &outcome)
+                    crate::gate::review_carryover::carry_over_line(&proof, &outcome)
                 );
                 append_ship_activity_line(
                     main_worktree,
-                    &crate::review_carryover::carry_over_event(
+                    &crate::gate::review_carryover::carry_over_event(
                         &chrono::Utc::now().to_rfc3339(),
                         "aida pr ship",
                         &proof,
@@ -317,7 +317,7 @@ pub(crate) fn merge_path_approval_gate(
     );
     // TASK-1960: the base is read from the forge (prove time and again right
     // before the caller merges). trace:TASK-1960 | ai:claude
-    let site = crate::review_carryover::CarryOverSite::new(&main_worktree, None);
+    let site = crate::gate::review_carryover::CarryOverSite::new(&main_worktree, None);
     merge_path_approval_decision(
         &main_worktree,
         pr,
@@ -345,7 +345,7 @@ pub(crate) fn merge_path_approval_decision(
     candidates: &[crate::gate::review_verdict::RecordedVerdict],
     policy: &crate::gate::ship::ShipApprovalPolicy,
     head_sha: Option<&str>,
-    site: &crate::review_carryover::CarryOverSite<'_>,
+    site: &crate::gate::review_carryover::CarryOverSite<'_>,
     base_now: &dyn Fn() -> Option<String>,
 ) -> std::result::Result<Option<String>, String> {
     if let Some(refusal) = crate::gate::ship::approval_authority_refusal(candidates, policy) {
@@ -368,12 +368,12 @@ pub(crate) fn merge_path_approval_decision(
         let mut message = crate::gate::ship::approval_head_refusal_message(pr, &refusal);
         // TASK-1960: the same carry-over `aida pr ship` applies.
         // trace:TASK-1960 | ai:claude
-        match crate::review_carryover::carry_over_for_refusal(site, pr, &refusal) {
+        match crate::gate::review_carryover::carry_over_for_refusal(site, pr, &refusal) {
             Some(Ok((proof, outcome))) => {
                 // Every caller merges right after this gate returns, so the
                 // PR's base is re-read here: a base retargeted since the
                 // proof refuses. trace:TASK-1960 | ai:claude
-                if let Some(why) = crate::review_carryover::proven_base_refusal(
+                if let Some(why) = crate::gate::review_carryover::proven_base_refusal(
                     pr,
                     &proof.base_branch(),
                     base_now().as_deref(),
@@ -390,12 +390,12 @@ pub(crate) fn merge_path_approval_decision(
                 if let Some(outcome) = &outcome {
                     eprintln!(
                         "  {}",
-                        crate::review_carryover::carry_over_line(&proof, outcome)
+                        crate::gate::review_carryover::carry_over_line(&proof, outcome)
                     );
                 }
                 append_ship_activity_line(
                     main_worktree,
-                    &crate::review_carryover::carry_over_event(
+                    &crate::gate::review_carryover::carry_over_event(
                         &chrono::Utc::now().to_rfc3339(),
                         "merge",
                         &proof,
