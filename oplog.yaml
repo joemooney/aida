@@ -91899,5 +91899,18 @@ operations:
   timestamp: 2026-10-30T09:15:44.479957516Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7119
+- id: 01a18c1a-7993-7441-b1c8-d1e740f83e3f
+  target_id: 01a18ae9-ecec-7812-9050-cb1e8c9dc56b
+  author: aida
+  node_id: '1'
+  lamport: 7120
+  timestamp: 2026-10-30T09:18:27.731717400Z
+  kind: !SetDescription
+    description: |
+      2026-10-29 20:24: `aida queue work PR-3115 --role reviewer --no-human --vendor claude --steal`, launched within 15s of two other reviewer launches, failed with: error: "git commit failed: \x1b[0;32m✓ Commit message format valid\x1b[0m" right after 'this contained seat gets a linked worktree'. The message shows the commit-msg hook's success stdout and drops git's stderr, so the cause is unknown (likely a concurrent store or index lock). Acceptance: on a commit failure, the launcher reports git's stderr and exit code (with the hook output stripped of ANSI codes or omitted); a lock-contention failure retries with bounded backoff; test with a fake git that writes the hook line to stdout and the error to stderr.
+
+      ADVISOR RULING 2026-10-30 02:20 (PR-3127 round 1). ONE rework push on PR-3127.
+      The root cause recorded in the 23:47 comment (a STALE index.lock left by a killed writer) is in scope. Fix it as follows: every store commit path (git add/commit in the store worktree) runs under the existing store write lock (flock). While holding that flock, an existing .git/worktrees/<store>/index.lock has no live aida owner. Remove it with a one-line warning ("removed stale store index.lock from <mtime>") and proceed. Non-aida git processes are not expected in the store worktree; if you want belt and braces, also require the lock to be older than 30s. Test: create index.lock, then a store write under the flock succeeds and warns. Keep the transient retry and the error-reporting fix as they are.
+      Gate: LIGHT. Run `cargo test -p aida-core store_lock` (or the module you touch) plus make check-ci-fast.
+clock: 7120
 node_id: '1'
