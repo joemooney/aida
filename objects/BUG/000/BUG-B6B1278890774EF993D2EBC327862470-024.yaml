@@ -2,12 +2,12 @@ id: 01a18a3e-f42a-7a10-8ec0-e11746b63e44
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-024
 title: Finished reviewer sessions linger and block the next review of the same PR
 description: '2026-10-29: reviewer lease 01a189c1 (worktree GONE) blocked aida queue work PR-3106 --role reviewer; dormant reviewer sessions for merged PR-3105 and ruled PR-3107 stayed in aida ps. Acceptance: a reviewer session ends its lease when its verdict is written or the reviewer process exits; a lease whose worktree is gone is reaped automatically.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T06:42:03.927095829Z
+modified_at: 2026-10-30T09:08:26.737687297Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -35,6 +35,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18c11-4df1-79f0-8b04-305f84eabc02
+  author: aida-session-start
+  timestamp: 2026-10-30T09:08:26.737683750Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
