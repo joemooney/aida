@@ -25,12 +25,12 @@ description: |-
   - Slice 1 (this lane): verified `wake-snapshot --recipient <handle>` + `mailbox wake-run` over armed rows (rows armed manually via a hidden `aida agent wake arm <handle>` for now) + the unit/health-job install + tests. Closes TASK-HOME-119's acceptance.
   - Slice 2: the `agent new` pending stamp, SessionStart hook arming, retire on end/GC, the `agent list` wake column and the doctor iteration.
   LIGHT tier: targeted tests + make check-ci-fast. trace:STORY-HOME-096.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T01:22:30.256563046Z
+modified_at: 2026-10-30T02:07:29.315511399Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -108,6 +108,18 @@ comments:
   modified_at: 2026-10-30T01:22:30.256563046Z
   session_id: 01a18a5c20bb
   harness_version: 2.1.312 (Claude Code)
+- id: 01a18a8e-dbc4-7011-ab3b-0999574ef0c7
+  author: joe
+  content: |-
+    ## Implementer finding (kind:deviation, severity:minor) — slice 1, commit 4131fc92be6
+
+    Slice 1 ships the user unit (`aida mailbox wake-service install`) and writes each armed thread's `health.json` in the schema `codex_mail_health.rs` validates, but registers **no scheduler health job**. The job would run `doctor check codex-mail-wake`, which today reads only the advisor registration, so it would check nothing about armed rows; registering it also needs the tracked `.aida/config.toml` edit and its ownership checks. Slice 2 should make the doctor iterate armed rows' health.json, then register one project health job at `wake-service install`.
+
+    (Could not file as a draft TASK: `aida add` refused in this sandbox with "requirement ID allocation failed: Read-only file system".)
+  created_at: 2026-10-30T02:06:20.612689837Z
+  modified_at: 2026-10-30T02:06:20.612689837Z
+  session_id: 01a18a5c20bb
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
   author: joe
@@ -161,6 +173,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18a8f-e898-76b2-b2d7-0107587f8cfe
+  author: joe
+  timestamp: 2026-10-30T02:07:29.432699558Z
+  session_id: 01a18a5c20bb
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -169,3 +190,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T02:07:29.315511399Z
+  implemented_by: joe

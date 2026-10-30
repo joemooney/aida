@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:33.145162743Z
-modified_at: 2026-10-30T01:28:45.961496135Z
+modified_at: 2026-10-30T02:06:26.201514513Z
 req_type: Task
 tags:
 - docs:impacted
@@ -15,6 +15,14 @@ relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T00:39:43.514225363Z
+comments:
+- id: 01a18a8e-f199-70e2-851b-0ef9c7520126
+  author: joe
+  content: 'Implementer note (kind:deviation, severity:minor; draft TASK could not be filed: ID allocation hit a read-only file system in the sandbox). The view rule was NOT changed to treat a missing source as complete. A worktree deleted outside AIDA takes its mailbox with it, so whether it held unread mail cannot be known; the F5 test story1843_awaiting_mail_channel_shares_the_view pins that this must stay partial. Shipped instead: aida mailbox retention prune [--include-locked] [--dry-run] [--json], which drops registrations of deleted worktrees (path gone, parent present). After a prune the view is complete and ACKs work, and the partial note names the command. Folding into the canonical store is moot for a deleted tree. Retained copies of AIDA-retired trees are still not folded. On this machine the three stale sources are locked Claude agent worktrees under .claude/worktrees/ whose lock-owner pid 499913 is dead. After merge, run: aida mailbox retention prune --include-locked'
+  created_at: 2026-10-30T02:06:26.201514513Z
+  modified_at: 2026-10-30T02:06:26.201514513Z
+  session_id: 01a18a5a368f
+  harness_version: 2.1.312 (Claude Code)
 history:
 - id: 01a18a3f-bb77-70d3-a8da-4bf67fdaecd0
   author: joe

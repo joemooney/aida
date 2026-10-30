@@ -2,12 +2,12 @@ id: 01a18a51-620b-7772-a957-23d490e5310d
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-027
 title: Headless lane wrapper holds an implementer slot after the agent's final result (claude -p lingers with its aida mcp-serve child)
 description: '2026-10-29 17:58: the STORY-080 round-2 lane logged ''✓ result 765914ms'' and its PR was approved, yet 31 minutes later `aida queue work` (pid 1276045, in do_wait) still waited on `claude -p` (1279725), whose child `aida mcp-serve` (1279800) kept it alive. The lane still counted toward standalone_implementer_cap=3, so the STORY-096 launch was refused. Killing the three processes freed the slot. Acceptance: after the vendor emits its final result event, the wrapper gives the process a bounded grace period (e.g. 30 s), then terminates the vendor process group including MCP children, records exited_at in .aida/lanes/*.json, and releases the cap slot. The cap count ignores lanes whose final result was logged.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:59:11.755260345Z
-modified_at: 2026-10-30T01:14:05.259520387Z
+modified_at: 2026-10-30T02:07:48.795272767Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -34,6 +34,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18a90-34ab-77f1-b4e5-e3c5e35ab826
+  author: joe
+  timestamp: 2026-10-30T02:07:48.907254351Z
+  session_id: 01a18a5eff5a
+  harness_version: 2.1.312 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -42,3 +51,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T02:07:48.795272767Z
+  implemented_by: joe
