@@ -78,7 +78,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T12:17:53.797707528Z
+modified_at: 2026-10-30T12:48:16.790032086Z
 req_type: Story
 relationships:
 - rel_type:
@@ -308,6 +308,13 @@ comments:
   created_at: 2026-10-30T12:05:40.600598086Z
   modified_at: 2026-10-30T12:05:40.600598086Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18cda-9196-7340-a144-8c1e5588c710
+  author: joe
+  content: 'Round 3 (e48bc65): finding 2 fixed — a successful arm now moves the row from pending OR failed, so a hook-side failure followed by a launcher-side success (or the reverse) reads armed; a failure still never overwrites armed (test story_home_096_a_later_successful_arm_replaces_the_other_sides_failure). Finding 1 (lib-1 Test time budget): could not name the test from this seat — the job log and test-timings-lib-1 artifact hosts are sandbox-denied, and the cargo slot queue stalled. Local nextest of every new/changed mail-wake, registry, lock and BUG-030 test: all under 3s on a loaded host (mail_wake tests 0.02-0.64s), so no test this PR adds or touches is near 10s; the overrun is likely an existing lib-1 test. Pushed to re-run CI; whoever can read the ''Test time budget'' step summary on the new run should name the test.'
+  created_at: 2026-10-30T12:48:16.790032086Z
+  modified_at: 2026-10-30T12:48:16.790032086Z
+  session_id: 01a18cbebc3d
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
   author: joe
