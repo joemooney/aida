@@ -2,7 +2,7 @@
 
 Start here. This index orders the docs by where you are in the journey — from
 *"what is this?"* to running it for a team to extending it. Not sure AIDA is for
-you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
+you at all? Jump to [Deciding whether to adopt](#3-deciding-whether-to-adopt).
 
 > New to AIDA? The three-doc on-ramp is **[Why AIDA?](WHY-AIDA.md)** →
 > **[Getting started](getting-started.md)** → **[First project](first-project.md)**.
