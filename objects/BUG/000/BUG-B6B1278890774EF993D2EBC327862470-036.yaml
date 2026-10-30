@@ -33,12 +33,40 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T09:09:31.269050694Z
+modified_at: 2026-10-30T09:11:54.812021919Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T04:44:43.186011617Z
+comments:
+- id: 01a18c14-7abc-7c12-91d0-91777992872b
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Working to the 21:50 ruling (A/B/C replace 1 and 3; 2, 4 and 5 stand). A bare id already resolves only to agreed and legacy ids: node-local objects are stored as TYPE-<node>-NNN, so a bare lookup never matches them. A is therefore already true. This change adds the missing signposting and the lint.
+
+    ### Acceptance criteria as tests
+    - **A (unit, aida-core node_alias_tests):** `is_local_twin("STORY-100", "STORY-<node>-100")` holds, and the agreed id itself is never treated as a twin. The resolver is not changed, so a bare id still opens the agreed spec. Existing resolver tests keep A pinned.
+    - **B + 2 (unit, task_1082 did-you-mean tests):** `nearest_spec_id`'s new local-twin pass maps `BUG-030`, `BUG-30` and `bug-030` to `BUG-<node>-030`, shown as `BUG-HOME-030` through the installed alias map. The twin wins over the Levenshtein `BUG-1030` near-miss.
+    - **Found-path signpost (unit):** `aida show STORY-100` keeps opening the agreed STORY-100. When a local twin exists, it prints a stderr note naming STORY-HOME-100, so the overlap is no longer silent.
+    - **C (unit, existing display tests):** rendering already goes through `display_spec_id`, which shows a labelled node-local id as TYPE-HOME-NNN and never as a bare number. Covered by the existing node_alias display tests. No renderer change.
+    - **4 (unit + fixture):** a new `aida doctor ambiguous-ids` lint scans spec descriptions and comments for bare TYPE-NNN tokens that also name a node-local spec. It reports `ID:field:line: BARE also names local ALIAS`. A pure tokenizer test plus a fixture over an objects dir.
+    - **5:** the cases STORY-100, TASK-123 and BUG-030 all appear in the tests above.
+
+    ### Expected files
+    - `aida-core/src/node_alias.rs`, `aida-core/src/node_alias_tests.rs`
+    - `aida-cli-lib/src/rel_cards.rs`, `aida-cli-lib/src/tests/task_1082_did_you_mean_tests.rs`
+    - `aida-cli-lib/src/requirements_cli.rs` (show note)
+    - `aida-cli-lib/src/doctor_cmd_args.rs`, `aida-cli-lib/src/doctor_cmd.rs` (lint)
+
+    ### Ambiguities / conflicts as questions
+    - Agreed-id backfill and blocks are STORY-HOME-104 and out of scope here. Rewriting old prose (the allowed surgery) is left for after the lint reports what it finds.
+  created_at: 2026-10-30T09:11:54.812021919Z
+  modified_at: 2026-10-30T09:11:54.812021919Z
+  session_id: 01a18c12452d
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18b1f-e560-7f93-9902-8b36e5583aef
   author: joe
