@@ -93049,5 +93049,31 @@ operations:
   timestamp: 2026-10-30T13:58:22.479076855Z
   kind: !SetStatus
     status: Done
-clock: 7209
+- id: 01a18d1c-3737-7b13-9e4f-c4f0c4136a50
+  target_id: 01a18d1c-2da4-7190-b650-1848b5bb5682
+  author: aida
+  node_id: '1'
+  lamport: 7210
+  timestamp: 2026-10-30T13:59:59.031054025Z
+  kind: !Create
+    title: 'Review PR-3137: [AI:claude] fix(node): alias writes publish to every reachable hub and warn on a partial publish (BUG-B6B1278890774EF993D2EBC327862470-025)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-025`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3137>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-025` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-025
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3137` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7210
 node_id: '1'
