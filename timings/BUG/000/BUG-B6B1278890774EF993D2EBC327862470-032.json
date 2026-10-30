@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-032",
+  "publishes": [
+    {
+      "at": "2026-10-30T17:34:04.236469093Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T12:02:08.041470651Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-032",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T13:41:31.534833118Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-032",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T13:56:39.083437928Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-032",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T16:47:51.948804223Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-032",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3135,
+        "verdict": "APPROVED",
+        "reviewed_sha": "4a167f261f5875978384df9e0d2a4590565612b3"
+      }
+    },
+    {
+      "ts": "2026-10-30T17:33:23.430904311Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-032",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T17:33:37.768582504Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-032",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3135
+      }
+    },
+    {
+      "ts": "2026-10-30T17:34:04.061768008Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-032",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "18019938e1be04afe1c0a42971e83d48d91b8f5a",
+        "pr": 3135,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
