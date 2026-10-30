@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:27.557602584Z
-modified_at: 2026-10-30T04:01:33.697352016Z
+modified_at: 2026-10-30T04:35:44.462069842Z
 req_type: Task
 tags:
 - advisor-review
@@ -122,6 +122,16 @@ comments:
     Published advisor correction pass: PR #3103 at d22578011b444eb4225ef53ae5e3146df55ac129; base task-b6b1278890774ef993d2ebc327862470-112-work. All eight heads updated in one user-approved atomic force-with-lease push. Remote heads, bases and preserved previews verified. All 35 FASTTRACK gates passed for this rebuilt head. Advisor notified with all eight full SHAs for fresh independent review and bottom-up integration. No self-merge.
   created_at: 2026-10-30T00:40:24.533697801Z
   modified_at: 2026-10-30T00:40:24.533697801Z
+- id: 01a18b17-a2ce-7560-a762-d598f3ad7ad8
+  author: ai:codex:joe
+  content: |
+    Round-2 bundle published: PR #3103 at fcd2f35975ce9d366e4704e4dc895d09229f153c, after merging corrected TASK-112 upward. Report reproduction pins 1db74dba1129632c01b5bae9ee5681dd76069db1 and a three-dot diff; onboarding/allocation/MCP misstatements outrank the broken admin link. The builder uses module imports and shared argparse/in-memory output handling for --overview and --check. The page template places the source heading before graphics; SVG title/description supply alt text; the configuration arrow is decorative; the README lists all generated artifacts; protocol list/seed precedes show guidance.
+
+    Rebuilt guides/search/overview and refreshed the audit: 1,017 tracked inputs, 2,591 local links, zero focused current-reader/showcase candidates, and 220 contextual candidates retained. Every inventory hash matches the final source set. Report records the correction scope and remaining external/historical verification limits. Standard CSV output remains reproducible with the csv module's CRLF convention.
+
+    Validation: all 35 make check-ci-fast gates passed at this head (completed exit 0, /tmp/docs-round2-113-fast.log), including nine behavioral fixtures and the generated-output drift check. Both ordinary and --overview --check modes passed locally; Pandoc remains optional for ordinary CI. Fresh spawned author checker independently ran all nine fixtures, both modes, hash/count/link/navigation/help checks and every bundle requirement; no findings. This is author self-check, not independent approval. Plain push and required post-push inbox check completed. Advisor owns fresh independent review and bottom-up integration. No author verdict, self-merge, protected runtime edit or hosting change.
+  created_at: 2026-10-30T04:35:44.462069842Z
+  modified_at: 2026-10-30T04:35:44.462069842Z
 history:
 - id: 01a188db-422f-7a63-aa54-4ee293059e7c
   author: joe
