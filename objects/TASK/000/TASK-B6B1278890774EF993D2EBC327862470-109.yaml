@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:08:59.000484888Z
-modified_at: 2026-10-29T23:55:06.744536328Z
+modified_at: 2026-10-30T00:09:32.586642067Z
 req_type: Task
 tags:
 - advisor-review
@@ -73,6 +73,22 @@ comments:
     Stacked on PR #3098. TASK-B6B1278890774EF993D2EBC327862470-109.
   created_at: 2026-10-29T18:51:17.426305321Z
   modified_at: 2026-10-29T18:51:17.426305321Z
+- id: 01a18a23-ecaa-7381-a181-3f26a7c61891
+  author: joe
+  content: |
+    Advisor correction pass prepared for PR #3099. Replacement head: a742a2c261a49209fe7c2030b4e5429cf801597f on codex/docs-restack-109.
+
+    Dedicated autonomy and trust guides cover operator/guided/drive/drain, the separate decide stop, override limits, current-head review evidence, CI/holds and authority boundaries. The autonomy page reuses the landing selector. Corrected links reach the review process and locate the selector on the autonomy page. Claims were checked against current main including merged PR #3090.
+
+    Rebuilt on current main (`1db74dba112`) after advisor feedback; only this slice's changes follow PR #3098. Pre-squash prerequisite commits were not replayed.
+
+    Validation: `make check-ci-fast` completed all 35 gates for this rebuilt head. Each slice's generated guide output reproduced. The final stack's guide/search/overview builds and audit reproduced in isolated author-check copies; desktop/mobile overview screenshots were inspected. No direct cargo, protected runtime changes, deployment or self-merge.
+
+    Author self-check: two fresh contexts; the first found stale human-exception wording in a linked guide, corrected in the final audit slice; the second found no remaining issues. These are author checks, not independent approval. Fresh independent review at each new head is required; the advisor integrates bottom-up.
+
+    The combined corrected stack is pushed at https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Existing PR heads are unchanged while explicit operator confirmation for the atomic force-with-lease update is pending (required by the operator Git workflow preference). Original preview preserved. No self-merge.
+  created_at: 2026-10-30T00:09:32.586642067Z
+  modified_at: 2026-10-30T00:09:32.586642067Z
 history:
 - id: 01a188d9-e7e3-7b30-acb6-b8ed8552107c
   author: joe
