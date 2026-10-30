@@ -16,12 +16,31 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:27:58.713113531Z
-modified_at: 2026-10-30T02:20:55.921047673Z
+modified_at: 2026-10-30T02:54:01.248596178Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T01:28:14.346624820Z
+comments:
+- id: 01a18aba-8220-7683-8a33-a2cf0240e412
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` failed with "requirement ID allocation failed: Read-only file system" in this sandboxed seat)
+
+    1. **kind:deviation, minor.** The TTY offer to pick an approved unclaimed spec on a scope refusal was not built. Under the 18:30 operator ruling, generic implementers are a pool, so that refusal no longer fires for them. The remaining refusals (singular roles, same-spec clashes) name the fix in text but offer no picker.
+    2. **kind:design-choice, minor.** Role mail to the pool (`agent_registry::POOL_ROLES = [implementer]`) now queues one bind-once delivery (STORY-1843 D1 path) instead of fanning out to every live member. The pool is hard-coded; a configurable `[agent_registry] pool_roles` would need a config-trust classification.
+    3. **kind:bug-spotted, minor.** 9 `aida-cli-lib` agent_registry/agent_launcher unit tests fail inside a contained seat for environmental reasons:
+       - the hermetic HOME is read-only;
+       - the `AIDA_CONTAINED` passthrough guard refuses the launch;
+       - the seat's own identity leaks into the registry tests.
+       None touch this change; the new and related tests (9) pass.
+
+    Branch: task-b6b1278890774ef993d2ebc327862470-121 · Commit: cd9ebe60464
+  created_at: 2026-10-30T02:54:01.248596178Z
+  modified_at: 2026-10-30T02:54:01.248596178Z
+  session_id: 01a18a9beff3
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a6c-19ef-7950-8ae1-36aca31c78d3
   author: joe

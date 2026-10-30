@@ -2,12 +2,12 @@ id: 01a18a3e-7f9d-7ca0-b00e-2622a713c8fc
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-023
 title: Orphaned seat lease blocks relaunch even with --steal when only ignored files differ
 description: '2026-10-29: relaunching TASK-116 and STORY-080 refused with ''looks orphaned ... 1 uncommitted change(s)'' though git status --porcelain was clean (only ignored state like .aida/seat-clone.toml); --steal was refused too; aida session end <8-hex> was ambiguous (01a18a18 matched TASK-116 and a Codex TASK-111 session). Acceptance: the uncommitted-change count ignores gitignored seat state; --steal ends a dormant orphan whose tree has no tracked changes; the refusal hint prints the FULL unambiguous lease id.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:38:34.141136557Z
-modified_at: 2026-10-30T02:24:51.088473123Z
+modified_at: 2026-10-30T02:54:17.157464859Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -34,6 +34,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18aba-c0a3-76b3-b142-bee5056338bb
+  author: joe
+  timestamp: 2026-10-30T02:54:17.251908923Z
+  session_id: 01a18a9fc31c
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -42,3 +51,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T02:54:17.157464859Z
+  implemented_by: joe
