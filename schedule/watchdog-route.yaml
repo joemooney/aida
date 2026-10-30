@@ -4,3 +4,9 @@ last_by:
   seat: advisor
   vendor: codex
 result: done
+due_since: 2026-10-30T01:53:37.525402103Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-10-30T01:39:54.924736999Z
+  job: watchdog
+  error: 'exit 124: timed out: doctor check runaway-seats --fail-on-findings did not complete within 120s (killed)'
