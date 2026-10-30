@@ -4319,6 +4319,14 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
             change.url
         );
     }
+    // STORY-080 AC2: verdicts recorded for the credited specs before this
+    // PR existed bind to it, so the change answers for them.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    crate::gate::ledger::bind_specs(
+        project_root,
+        crate::gate::ledger::ChangeKey::pr(change.id),
+        &extract_spec_ids_from_commit(&commit_msg),
+    );
     // STORY-1480: a PR opened interactively records the same PhaseDonePr the
     // drain's implementer phase records, so the timeline's work-done boundary
     // exists for interactively-shipped specs too. Specs credited from the

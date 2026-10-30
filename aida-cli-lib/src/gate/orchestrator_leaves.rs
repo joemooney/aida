@@ -115,6 +115,7 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::review_carryover::CarryOver",
             "crate::review_carryover::CarryOverRefusal",
             "crate::review_carryover::CarryOverSite::quiet",
+            "crate::review_carryover::CarryOverSite::read_only",
             "crate::review_carryover::prove_for_refusal",
             "crate::seat_clone::MainFor::NotAClone",
             "crate::seat_clone::MainFor::Unverified",
