@@ -8,12 +8,12 @@ description: |-
   1. A message sent from a seat clone is visible in the recipient's inbox in the primary checkout within one inbox read (pushed to the canonical store on send, or the primary's inbox reads registered seat-clone mailboxes).
   2. The send output tells the truth: if the message is only local, say so and name the sync command.
   3. Regression test: send from a seat clone to role advisor, then read the inbox from the primary and see it.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:39:10.999893193Z
-modified_at: 2026-10-30T05:48:02.967373136Z
+modified_at: 2026-10-30T07:07:35.886120157Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -100,6 +100,20 @@ history:
   timestamp: 2026-10-30T05:48:04.640601326Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18ba2-a2e7-7881-8a30-a72d09a8d1d2
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:07:33.991576192Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18ba2-aa4e-7721-b57d-81b51ea1daf7
+  timestamp: 2026-10-30T07:07:35.886108669Z
+  agent: aida
+  commit_sha: 0d4b26a5bd0c2073904582f2fd350760fbbcac30
+  summary: 'Base-only update from main (gh update-branch bd4c759e4e954ba3e9730ad551f72aab92a631fa -> 1a039d2ab26e9d90fea547660c9033389b533842); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -112,3 +126,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T05:43:52.513937257Z
   implemented_by: joe
+  completed_at: 2026-10-30T07:07:33.991565920Z
+  completion_sha: 0d4b26a5bd0c2073904582f2fd350760fbbcac30
