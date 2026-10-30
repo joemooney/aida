@@ -2,12 +2,12 @@ id: 01a189c5-3df0-7ea1-83a3-ed90136ced18
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-020
 title: aida alias --help still says 'Built-in shortcuts only.' though user aliases shipped
 description: 'The long help for `aida alias` ends with ''Built-in shortcuts only.'' That was true for STORY-667, but TASK-877 (PR #1096) added `aida alias add/remove` for personal (~/.aida/aliases.toml) and project (.aida/aliases.toml) aliases, and `aida alias list` now shows them. Acceptance: the `aida alias --help` text describes built-in shortcuts AND user aliases; no sentence says built-ins only.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:26:07.472529964Z
-modified_at: 2026-10-30T07:05:09.668104553Z
+modified_at: 2026-10-30T16:07:38.223758717Z
 req_type: Bug
 tags:
 - aida:alias
@@ -58,6 +58,20 @@ history:
   author: joe
   timestamp: 2026-10-30T07:02:28.604160271Z
   changes: []
+- id: 01a18d91-15ea-7192-80bf-ad0740daf1b6
+  author: aida-auto-bump
+  timestamp: 2026-10-30T16:07:38.218194820Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18d91-15ef-7dd3-9619-55e9fd37d0b9
+  timestamp: 2026-10-30T16:07:38.223754480Z
+  agent: aida
+  commit_sha: 1835276539d702a20de9b843f2cc86a81e90f895
+  summary: 'Base-only update from main (gh update-branch 9ee23643f4322944a6b451f3a1900349dd851ea6 -> a43e9093d03d16113cb2421c0bf6cdf32ad4cfab); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
   branch: main
@@ -66,3 +80,7 @@ filed_at:
   aida_build_sha: 24b61036ae0
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-30T16:07:38.218189462Z
+  completion_sha: 1835276539d702a20de9b843f2cc86a81e90f895
