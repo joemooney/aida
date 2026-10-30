@@ -208,7 +208,7 @@ fn enforce_refuses_and_arms_the_marker_from_the_gates_own_predicate() {
     assert_eq!(verdict_ref.reviewed_sha.as_deref(), Some(HEAD));
 }
 
-// AC6 — the programmatic Rework arm composes with `write_typed_hold`'s
+// AC6 — the programmatic Rework arm composes with `place_hold`'s
 // BUG-1691 precedence: it must NOT displace a standing Recusal hold.
 #[test]
 fn the_arm_does_not_displace_a_recusal_hold() {
@@ -223,7 +223,7 @@ fn the_arm_does_not_displace_a_recusal_hold() {
     recusal
         .recused_principals
         .push(crate::gate::merge_hold_core::PrincipalIdentity::registered_agent("reviewer-a"));
-    crate::gate::merge_hold_core::write_typed_hold(root, &recusal).unwrap();
+    crate::gate::merge_hold_core::place_hold(root, &recusal).unwrap();
     write_artifact(root, "PR-7", &body("request-changes", HEAD, None));
     crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
         root,

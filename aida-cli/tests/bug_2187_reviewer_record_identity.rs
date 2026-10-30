@@ -196,12 +196,18 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
         ],
         Some(&grant),
     ));
-    let path = fixture.repo.join(".aida/review-verdicts/PR-59.json");
-    let record: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(&path)
-            .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&output.stderr))),
-    )
-    .unwrap();
+    // M1 slice 2: the verdict lives on the PR's gate ledger, not a
+    // `review-verdicts/PR-59.json` file. trace:STORY-b6b1278890774ef993d2ebc327862470-080
+    let path = fixture.repo.join(".aida/gate-ledger/PR-59.jsonl");
+    let ledger = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&output.stderr)));
+    let record: serde_json::Value = ledger
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|event| event["kind"] == "verdict")
+        .last()
+        .map(|event| event["record"].clone())
+        .unwrap_or_else(|| panic!("no verdict on the ledger: {ledger}"));
     assert_eq!(record["reviewed_sha"], head);
     assert_eq!(record["recorder_attestation"]["seat"], "reviewer");
     assert!(record["recorded_by"]

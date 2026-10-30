@@ -1516,6 +1516,7 @@ mod task_1930_tests {
             range_end: 100,
             next: 10,
             allocated_at: chrono::Utc::now(),
+            pool_id: None,
         });
         reg.blocks.push(aida_core::AgreedIdBlock {
             node_id: "n_stale".into(),
@@ -1526,6 +1527,7 @@ mod task_1930_tests {
             range_end: 200,
             next: 105,
             allocated_at: chrono::Utc::now(),
+            pool_id: None,
         });
         reg.save(&blocks_path).unwrap();
 

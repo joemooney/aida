@@ -405,6 +405,7 @@ mod glyph_config;
 mod glyphs;
 mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
+mod headless_linger;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;

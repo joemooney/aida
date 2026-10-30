@@ -143,7 +143,7 @@ impl Case {
     /// outcome, the audit comments posted, and whether the hold survived.
     fn run(&self) -> (Result<Outcome>, Vec<String>, bool) {
         let root = tempfile::tempdir().unwrap();
-        mh::write_typed_hold(root.path(), &self.hold).unwrap();
+        mh::place_hold(root.path(), &self.hold).unwrap();
         let verdict_path = rv::verdict_path(root.path(), "TASK-37");
         std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
         std::fs::write(&verdict_path, serde_json::to_vec(&self.body).unwrap()).unwrap();
@@ -236,7 +236,9 @@ impl Case {
                 },
             },
         );
-        let held = mh::hold_path(root.path(), PR).exists();
+        // M1 slice 2: the hold and its clearance are gate-ledger state.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let held = mh::hold_is_open(root.path(), PR);
         // TASK-1915 F3: a failed mandate-covered release writes a refused
         // row. trace:TASK-1915 | ai:claude
         if self.fail_labels {
@@ -251,10 +253,9 @@ impl Case {
             assert_eq!(refused, 1);
         }
         if result.is_ok() {
-            let audit: Value = serde_json::from_slice(
-                &std::fs::read(mh::clearance_path(root.path(), PR)).unwrap(),
-            )
-            .unwrap();
+            let audit = Value::Object(
+                mh::recorded_clearance(root.path(), PR).expect("the release is on the ledger"),
+            );
             assert_eq!(audit["cleared_by"], PRINCIPAL);
             assert_eq!(audit["target_head_sha"], HEAD);
             let under = released_mandate(&result);
