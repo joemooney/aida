@@ -90237,5 +90237,13 @@ operations:
       7. agent wake arm/retire: gate it the same way agent end/stop are gated (the owner or the operator only).
       ACCEPTED, no action: no separate TASK for the health-job/doctor deviation. Slice 2 of THIS story carries it. The story is back to in-progress until slice 2 ships.
       Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096 resolve_aida_exe no_direct_home` plus `make check-ci-fast` (which runs scripts/check-portability.sh), then push.
-clock: 7013
+- id: 01a18b30-672a-7240-9b7f-cf4f2dedfad1
+  target_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+  author: aida
+  node_id: '1'
+  lamport: 7014
+  timestamp: 2026-10-30T05:02:47.594547889Z
+  kind: !SetStatus
+    status: Approved
+clock: 7014
 node_id: '1'
