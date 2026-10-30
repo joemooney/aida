@@ -2,12 +2,12 @@ id: 01a18ae4-acc2-74b1-ba40-65b7059a5a92
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-032
 title: Mailbox messages with no created_at render as 1970-01-21 and sort as oldest
 description: '2026-10-29: `aida mailbox inbox --unread` shows 39 messages dated 1970-01-21 (review-watch notices, and a seat-clone message whose JSON has created_at null). Acceptance: a missing timestamp is filled at send (writers always stamp created_at); readers fall back to the file mtime or show ''unknown time'' rather than the epoch; a test covers a message without created_at.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:40:04.674460929Z
-modified_at: 2026-10-30T12:02:03.973994392Z
+modified_at: 2026-10-30T13:28:10.655110423Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -27,6 +27,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18cff-1953-7c13-a99e-c0513c8fcc44
+  author: joe
+  timestamp: 2026-10-30T13:28:10.835251177Z
+  session_id: 01a18cb03d30
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -35,3 +44,7 @@ filed_at:
   aida_build_sha: 9a86ae54ce5
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T13:28:10.655110423Z
+  implemented_by: joe
