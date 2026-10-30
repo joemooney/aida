@@ -9,12 +9,12 @@ description: |-
   2. Bounded total time (for example 60s), then defer the rest to `aida doctor --category merged-agent-worktrees`, saying so.
   3. The ship's merge result prints before cleanup starts, and cleanup can run detached or be skipped with a flag.
   4. Test with many worktrees showing that unmerged trees are not status-scanned.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T03:42:18.442441896Z
+modified_at: 2026-10-30T05:45:04.768159095Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -26,6 +26,14 @@ history:
   timestamp: 2026-10-30T03:42:32.058149111Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18b57-1e00-7f31-9d13-01a11c3e1f3a
+  author: aida-session-start
+  timestamp: 2026-10-30T05:45:04.768081831Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
