@@ -1,0 +1,28 @@
+id: 01a18f12-530b-79c2-ba0c-07624f7eb9c5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-137
+title: Raise the CI time budget for aida-core bug_1677_concurrent_queue_writers from 15s to 35s
+description: |-
+  The CI 'Test time budget' gate failed twice on 2026-10-30 (PR-3142 at 15.1s, PR-3149 at 15.2s) on aida-core db::git_backend::tests::bug_1677_concurrent_queue_writers_lose_nothing_and_readers_see_no_torn_file. Its entry in scripts/test-time-budget.toml (line ~215) is 15 (max 5.4s at calibration). The file's rule is slowest measured x2, rounded up to 5s: 15.2 x 2 -> 35.
+
+  Acceptance:
+  - scripts/test-time-budget.toml sets that key to 35, with the trailing comment updated to cite max 15.2s (CI runs on 2026-10-30, PR-3142/PR-3149).
+  - No other entry changes; the test itself is not modified or weakened.
+  - Gate: FASTTRACK (make check-ci-fast only, no cargo).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T23:08:25.227020523Z
+modified_at: 2026-10-30T23:08:25.227020523Z
+req_type: Task
+tags:
+- ci-flake
+- fasttrack
+filed_at:
+  code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cdbecda7678
+  vendor: claude
+  session: 510d8c08-7912-4189-943d-65d110c7abc2
