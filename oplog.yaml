@@ -91703,5 +91703,31 @@ operations:
   timestamp: 2026-10-30T09:00:42.091438615Z
   kind: !SetStatus
     status: Done
-clock: 7106
+- id: 01a18c0c-abb9-76e2-b63e-24139a9b0520
+  target_id: 01a18c0c-99ae-7ca2-b5c5-83fba23f9b56
+  author: aida
+  node_id: '1'
+  lamport: 7107
+  timestamp: 2026-10-30T09:03:23.065576420Z
+  kind: !Create
+    title: 'Review PR-3128: [AI:claude] fix(review): resolve seat-clone PR head via origin and surface git log failures (BUG-b6b1278890774ef993d2ebc327862470-035)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-035`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3128>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-035` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-035
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3128` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7107
 node_id: '1'
