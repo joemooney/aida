@@ -78,7 +78,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T12:05:35.082460698Z
+modified_at: 2026-10-30T12:05:40.775606800Z
 req_type: Story
 relationships:
 - rel_type:
@@ -293,6 +293,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 rework fixes all five round-1 findings in code and all four criteria are now test-traced, but PR CI is red: CI (lib-1) fails its ''Test time budget'' step at 87fe1b9 and at bca7ff2. It was green at 89e5af3 and is green on main, so the rework commit added a test that runs over the 10 s per-test budget.. No triage reason was given.'
   created_at: 2026-10-30T12:05:35.082459207Z
   modified_at: 2026-10-30T12:05:35.082459207Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18cb3-9078-7cf2-9cfe-f4a3d57a04a3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-b6b1278890774ef993d2ebc327862470-096):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 87fe1b9b4d79
+    Recorded: 2026-10-30T12:04:59.436786598+00:00
+    Findings:
+    1. BLOCKING (CI): CI (lib-1) step 18 'Test time budget' (scripts/test-timings.py --budget scripts/test-time-budget.toml, default_limit = 10 s) fails at the PR head 87fe1b9 (run 41051106968) and at bca7ff2 (run 41049929873). It passed at 89e5af3 (run 41040590115), and main's last four CI runs pass it, so commit bca7ff2 brought a lib test over 10 s with no budget entry. The reviewer sandbox could not read the job log or the test-timings-lib-1 artifact (blob host denied) and could not run cargo (slot queue stalled). Read the 'Test time budget' summary on run 41051106968 to name the test. Likely candidates are new or changed lock-path code. (a) story_home_096_stamp_keeps_a_hook_write_that_interleaves and story_home_096_codex_version_is_bounded in mail_wake_tests.rs. (b) Any existing test whose path now holds the namespace lock longer or twice: register_spawned_agent now holds lock_namespace_within(LAUNCHER_LOCK_BUDGET = 10 s) across current_terminal_identity() and the read, and touch_session_start_agent takes a second lock after assign_session_handle. A concurrent or contended test can now wait out the 10 s launcher budget. Fix the slow path (preferred) or add a budget entry with a reason, then get lib-1 green.
+    2. MINOR (AC1 robustness): mail_wake::arm_pending (mail_wake.rs ~L170-210). The launcher (stamp_launch_mail_wake) and the SessionStart hook can both call ensure_service for one launch. The first transition out of Pending wins, so a hook whose ensure_service failed records Failed even when the launcher's ensure_service succeeded a moment later (or the reverse). The row reads 'failed' while the unit is installed, and the doctor then reports a false unarmed finding. Consider letting a successful arm also move Failed to Armed for the same launch, or serialising the ensure inside the transition. Non-blocking.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T12:05:40.600598086Z
+  modified_at: 2026-10-30T12:05:40.600598086Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
