@@ -193,6 +193,104 @@ pub(crate) fn late_refusal_lines(refusal: &RetentionRefusal, retry: &str) -> Vec
     lines
 }
 
+/// The command that drops removed worktrees from the mail view.
+pub(crate) const PRUNE_COMMAND: &str = "aida mailbox retention prune";
+
+/// A linked worktree Git still registers whose directory was deleted in
+/// place: its path is gone but its parent directory is there, so it is not
+/// on unmounted media. The logical mail view reports it as a missing source
+/// (partial) for as long as the registration stays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RemovedSource {
+    pub(crate) path: std::path::PathBuf,
+    /// Git's lock keeps it from `git worktree prune`; only `--include-locked`
+    /// drops it.
+    pub(crate) locked: bool,
+}
+
+/// What [`prune_removed_sources`] did with one [`RemovedSource`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PruneOutcome {
+    /// The registration was dropped (or would be, on a dry run).
+    Dropped,
+    /// Kept: Git's lock protects it and `--include-locked` was not given.
+    KeptLocked,
+    /// Kept: the registration could not be cleared safely (the path
+    /// reappeared, or the repository state was unreadable).
+    Declined,
+}
+
+/// Every [`RemovedSource`] registered in the repository at `project_root`.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+pub(crate) fn removed_sources(project_root: &Path) -> anyhow::Result<Vec<RemovedSource>> {
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args(["worktree", "list", "--porcelain", "-z"])
+        .output()?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git worktree list failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(
+        crate::worktree_gc::parse_worktree_lock_states_z(&String::from_utf8_lossy(&out.stdout))
+            .into_iter()
+            .filter(|(path, _)| deleted_in_place(path))
+            .map(|(path, locked)| RemovedSource { path, locked })
+            .collect(),
+    )
+}
+
+/// `path` is absolute and absent while its parent directory is present.
+fn deleted_in_place(path: &Path) -> bool {
+    path.is_absolute()
+        && matches!(
+            std::fs::symlink_metadata(path),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound
+        )
+        && path.parent().is_some_and(Path::is_dir)
+}
+
+/// Drop the registration of every removed worktree. A deleted tree took its
+/// mailbox with it, so there is no mail left to retain: retiring it is a
+/// no-op, and dropping the registration is what stops the mail view from
+/// reporting it as a missing source. A locked registration is kept unless
+/// `include_locked`. Only the one admin entry is cleared, never a repo-wide
+/// prune.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+pub(crate) fn prune_removed_sources(
+    project_root: &Path,
+    include_locked: bool,
+    dry_run: bool,
+) -> anyhow::Result<Vec<(RemovedSource, PruneOutcome)>> {
+    Ok(removed_sources(project_root)?
+        .into_iter()
+        .map(|source| {
+            let outcome = if source.locked && !include_locked {
+                PruneOutcome::KeptLocked
+            } else if dry_run {
+                PruneOutcome::Dropped
+            } else {
+                match crate::session_reap::clear_missing_worktree_registration(
+                    project_root,
+                    &source.path,
+                    || {},
+                    || {},
+                ) {
+                    crate::session_reap::RegistrationClearOutcome::Cleared
+                    | crate::session_reap::RegistrationClearOutcome::NoRegistration => {
+                        PruneOutcome::Dropped
+                    }
+                    crate::session_reap::RegistrationClearOutcome::Declined => {
+                        PruneOutcome::Declined
+                    }
+                }
+            };
+            (source, outcome)
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

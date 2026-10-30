@@ -4637,13 +4637,71 @@ pub(crate) fn stale_base_note(
     }
 }
 
+/// True when `rev` names a commit in the repo at `project_root`.
+fn git_rev_resolves(project_root: &std::path::Path, rev: &str) -> bool {
+    aida_core::git_ops::host_git_command(project_root)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{rev}^{{commit}}"))
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Refresh `refs/remotes/origin/<branch>` from origin. Best effort: a missing
+/// branch or an unreachable origin leaves the ref as it was.
+fn fetch_origin_branch(project_root: &std::path::Path, branch: &str) {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let _ = aida_core::git_ops::host_git_command(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args(["fetch", "--quiet", "--no-tags", "origin"])
+        .arg(format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"))
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
+        .output();
+}
+
+/// Resolve a forge's bare `base`/`head` branch names into a range this
+/// checkout can actually log. A contained lane pushes its branch from a seat
+/// clone, so the primary may have no local `<head>` at all, and whatever
+/// `origin/<head>` it has may predate the lane's latest push. In that case
+/// both ends are re-fetched from origin (a stale `origin/<base>` would pull
+/// already-merged trailers into the range) and the range is
+/// `origin/<base>..origin/<head>`. Leaves the names untouched when `head`
+/// resolves locally or nothing on origin does, so the caller's `git log`
+/// error names the range.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
+pub(crate) fn resolve_log_range(
+    project_root: &std::path::Path,
+    base: &str,
+    head: &str,
+) -> (String, String) {
+    if git_rev_resolves(project_root, head) {
+        return (base.to_string(), head.to_string());
+    }
+    fetch_origin_branch(project_root, head);
+    let remote_head = format!("origin/{head}");
+    if !git_rev_resolves(project_root, &remote_head) {
+        return (base.to_string(), head.to_string());
+    }
+    fetch_origin_branch(project_root, base);
+    let remote_base = format!("origin/{base}");
+    let base = if git_rev_resolves(project_root, &remote_base) {
+        remote_base
+    } else {
+        base.to_string()
+    };
+    (base, remote_head)
+}
+
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
-/// each commit message as a separate string. trace:STORY-67 | ai:claude
+/// each commit message as a separate string. A head branch that exists only
+/// on origin is resolved via [`resolve_log_range`]. trace:STORY-67 | ai:claude
 pub(crate) fn git_log_messages(
     project_root: &std::path::Path,
     base: &str,
     head: &str,
 ) -> Result<Vec<String>> {
+    let (base, head) = resolve_log_range(project_root, base, head);
     let range = format!("{}..{}", base, head);
     let out = std::process::Command::new("git")
         .arg("-C")

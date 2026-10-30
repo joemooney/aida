@@ -455,7 +455,9 @@ mod mailbox_store;
 // trace:STORY-1843 | ai:claude
 mod mailbox_view;
 // trace:TASK-2347 | ai:codex
+mod mail_wake;
 mod mailbox_wake;
+mod mailbox_wake_run;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
 mod maintenance_schedule;

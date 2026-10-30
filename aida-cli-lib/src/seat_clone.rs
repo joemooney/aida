@@ -2148,3 +2148,8 @@ mod orphan_reentry_tests;
 #[cfg(test)]
 #[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
 mod retention_tests;
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-031 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_031_seat_clone_mailbox_tests.rs"]
+mod seat_clone_mailbox_tests;

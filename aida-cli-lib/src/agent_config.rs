@@ -136,6 +136,44 @@ pub(crate) fn agents_toml_type_name(value: &toml::Value) -> &'static str {
     }
 }
 
+/// `[agents.<tool>] <key>` as a boolean: user base (`~/.aida/agents.toml`)
+/// overridable by the project (`.aida/agents.toml`); `None` when unset in
+/// both. A present non-boolean value is an error.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn load_agents_tool_bool(
+    project_root: &std::path::Path,
+    tool: &str,
+    key: &str,
+) -> Result<Option<bool>> {
+    let mut found = None;
+    let home = aida_home_dir().map(|home| home.join(".aida/agents.toml"));
+    for path in home
+        .into_iter()
+        .chain([project_root.join(".aida/agents.toml")])
+    {
+        let Some(value) = parse_agents_toml(&path)? else {
+            continue;
+        };
+        let Some(raw) = value
+            .get("agents")
+            .and_then(|agents| agents.get(tool))
+            .and_then(|table| table.get(key))
+        else {
+            continue;
+        };
+        match raw.as_bool() {
+            Some(b) => found = Some(b),
+            None => anyhow::bail!(
+                "`[agents.{tool}] {key}` in {} must be a boolean (true or false), but is {} — \
+                 fix the value (or remove the key to take the default) and retry",
+                path.display(),
+                agents_toml_type_name(raw)
+            ),
+        }
+    }
+    Ok(found)
+}
+
 // trace:STORY-567 | ai:codex
 pub(crate) fn load_agents_contained(project_root: &std::path::Path) -> Result<bool> {
     let mut contained = false;
