@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T07:18:05.198419528Z
+modified_at: 2026-10-30T07:19:03.180468726Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -52,6 +52,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core fix is sound (local merge signal before git status, 60s scan deadline, --no-cleanup skips pruning) and the 5 targeted tests pass locally, but PR CI is red (lib-0), AC3 has no test, no test carries criterion anchors, and the 60s budget covers only the scan loop. No triage reason was given.'
   created_at: 2026-10-30T07:18:05.198417187Z
   modified_at: 2026-10-30T07:18:05.198417187Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18bad-262f-7bf2-9cce-9d7684afcdbf
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-033):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c47c9a4e239b
+    Recorded: 2026-10-30T07:14:27.824700783+00:00
+    Findings:
+    1. CI red at head c47c9a4: CI (lib-0) step 'Run tests' failed (run 41013550092, job 123924606373), so 'Build / Require every CI lane' failed. The parent commit 1870c20 is green on main. The reviewer sandbox cannot reach the log host. The new and touched tests (bug_home_033 x3, bug_1719 x2) pass locally, and 652 doctor/pr/reap module tests pass (the 17 local failures are all sandbox-only: read-only HOME, pid namespace). Read the log with 'gh run view 41013550092 --log-failed'; fix the failure, or show it is a flake and rerun to green.
+    2. AC acac633f untested: no test proves that --no-cleanup skips the step-6 session reap and merged-worktree pruning (pr_cmd.rs ~4020-4026), or that the step-3 'merged PR-N' line prints before step 6. The changed dry-run plan line (pr_ship.rs:1247, 'aida session end and merged-worktree pruning skipped') is not asserted; pr_ship_tests.rs:1087 only checks for '--no-cleanup'. Add a test for the skip, and assert the new plan text.
+    3. Criterion anchors missing: bug_home_033_post_ship_gc_tests.rs traces only at spec level, so 'aida criteria' reports all 4 criteria untraced. Add per-test anchors in the repo format (for example '// trace:BUG-1686.ac4341ac | ai:claude'): .acbe47d8 and .ac7e8240 on merged_only_scan_never_status_scans_unmerged_worktrees, .ac152090 on spent_budget_defers_every_worktree_to_doctor and summary_names_the_doctor_follow_up_when_deferred, and .acac633f on the new --no-cleanup / ordering test.
+    4. AC ac152090 'bounded total time' bounds only the start of each scan-loop iteration in scan_merged_agent_worktrees_limited. (a) The heal pass that follows the scan in doctor_multi_agent has no deadline: per reclaimable finding, heal_doctor_merged_agent_worktree runs list_worktrees, git status, salvage, worktree remove and branch delete, and with a backlog of merged trees this can far exceed 60s. (b) The deadline is checked only between worktrees, so one slow iteration (git status or branch_content_fully_landed on a large merged tree) overshoots it. (c) The TASK-1177 run_session_reap call that runs before step 6 (pr_cmd.rs ~4030) is outside the budget. Bound the heal pass by the same deadline, counting removals left undone as deferred to 'aida doctor', and add a test; or state the scope in the summary line and the help text.
+    5. Minor wording: post_ship_gc_summary (doctor_cmd.rs ~409) reports '{skipped} unmerged skipped', but merged_only also skips merged trees that have no local merge signal (for example a squash merge findable only by the forge lookup, with no spec ID in the branch, commits or lease). Say 'without a local merge signal' so the operator knows 'aida doctor' may still reclaim them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T07:19:02.959826320Z
+  modified_at: 2026-10-30T07:19:02.959826320Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18ae6-ec7a-7aa0-90e3-7bedb734e6d4
