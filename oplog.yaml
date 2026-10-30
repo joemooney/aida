@@ -90065,5 +90065,39 @@ operations:
       5. Tests cover all three observed cases.
 
       ADVISOR RULING 2026-10-29 21:46 (operator: "only me as the user of aida, and we can do whatever surgery we want"): prefer the breaking fix over ambiguity prompts. A bare ID (STORY-100, BUG-030, BUG-30) resolves to THIS node's spec. Legacy flat or node-1 specs need an explicit form (the existing TASK-1-123 style, or a LEGACY- alias; pick one and document it). No compatibility shim or deprecation window. Acceptance 1 becomes: a bare ID resolves to the current node; the legacy form still opens the old spec; the error for a missing current-node ID suggests the legacy form when one exists. Acceptance 2-5 stand. One-time surgery on existing data (rewriting bare IDs in old descriptions, comments and commit-trailer indexes) is allowed if it simplifies the resolver.
-clock: 7007
+- id: 01a18b22-4b88-76f1-ae67-02a2465ce4f0
+  target_id: 01a18b1f-af35-7061-859d-b99015bea8ed
+  author: aida
+  node_id: '1'
+  lamport: 7008
+  timestamp: 2026-10-30T04:47:23.016687202Z
+  kind: !SetDescription
+    description: |
+      Operator report 2026-10-29 21:43. Since the node prefix changed from the legacy flat or node-1 scheme to node b6b1278890774ef993d2ebc327862470 (alias HOME), numbers overlap. Observed:
+      - `aida show STORY-100` opens an old 'Review PR-10: EPIC-20 batch 10' story, not STORY-HOME-100 (filed tonight).
+      - `aida show TASK-123` opens an old AGY spec, not TASK-HOME-123.
+      - `aida show BUG-030` says 'not found (did you mean BUG-1030?)' and never suggests BUG-HOME-030.
+      Agents and the advisor routinely write bare IDs in rulings, mail and descriptions (the handoff did too), so lanes read the wrong spec without any warning.
+
+      Acceptance:
+      1. When a bare ID matches a legacy spec AND a node-scoped spec with the same type and number exists, `aida show`, `edit`, `comment` and `queue work` refuse as ambiguous and list both (alias form plus title). Never silently pick one.
+      2. Leading-zero forms (BUG-030) are tried as node-local numbers, and the 'did you mean' suggestion includes the HOME- alias.
+      3. Rendering: every human-facing ID this node allocates is shown in its alias form (BUG-HOME-030), never the bare number.
+      4. `aida doctor` (or a lint over spec descriptions and comments) flags bare IDs that are ambiguous.
+      5. Tests cover all three observed cases.
+
+      ADVISOR RULING 2026-10-29 21:46 (operator: "only me as the user of aida, and we can do whatever surgery we want"): prefer the breaking fix over ambiguity prompts. A bare ID (STORY-100, BUG-030, BUG-30) resolves to THIS node's spec. Legacy flat or node-1 specs need an explicit form (the existing TASK-1-123 style, or a LEGACY- alias; pick one and document it). No compatibility shim or deprecation window. Acceptance 1 becomes: a bare ID resolves to the current node; the legacy form still opens the old spec; the error for a missing current-node ID suggests the legacy form when one exists. Acceptance 2-5 stand. One-time surgery on existing data (rewriting bare IDs in old descriptions, comments and commit-trailer indexes) is allowed if it simplifies the resolver.
+
+
+      ADVISOR RULING 2026-10-29 21:50: SUPERSEDES the 21:46 ruling above (operator: "normal use of aida will be with the bare short ids which are the globally agreed ids based on reservations, but every spec should also have a local id").
+      Model:
+      - A bare ID (BUG-2261) is the GLOBALLY AGREED id, dispensed from a reserved block. It is the everyday name.
+      - Every spec ALSO has a node-local id (BUG-HOME-030, canonical BUG-B6B1278890774EF993D2EBC327862470-030), which is never shown bare.
+      Root cause of the overlap: this node is 'node-local allocation; no global blocks' and the primary clone is not enrolled as root, so since the node change every new spec has only a local id. Bare lookups then match legacy agreed specs with the same number.
+      Acceptance (replaces 1 and 3):
+      A. Bare-ID lookup matches agreed ids only, never local numbers. A local id is always written with its node alias.
+      B. The 'not found' error for a bare ID that matches a local number suggests the alias form (BUG-030 → 'did you mean BUG-HOME-030?').
+      C. Rendering: show the agreed id when the spec has one and the alias-local id otherwise; never a bare local number.
+      Agreed-id assignment (blocks, root, backfill) belongs to STORY-HOME-104. This bug is the resolver and rendering half. Surgery is allowed.
+clock: 7008
 node_id: '1'
