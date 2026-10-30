@@ -1,0 +1,18 @@
+{
+  "id": "03f2b210-7280-48d0-bdc0-b610ebb95c78",
+  "thread_id": "03f2b210-7280-48d0-bdc0-b610ebb95c78",
+  "from": "codex-implementer-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793391443329,
+  "body": "Resumed after operator asked whether work was continuing. PR-3146 is merged at d7ff223575290d0a2d3d749400efa29f7ed24605 and TASK-HOME-128 is Completed; EPIC-HOME-002 reports Completed by child rollup. Publishing approved merged docs now to existing gh-pages branch at 11d2cd8c103dbf0882de66ad7b7172b70ae2b683; this includes capabilities/integrations and four new diagrams. Private Sites preview unchanged. TASK-HOME-130 remains Draft and still needs advisor tracking reconciliation despite explicit user hosting authorization.\nEarlier code author work remains ready: PR-3122 OPEN/CLEAN at 9e4def4e6ef19c23e669824c6093e5d82247f89e, all required CI green. Main-conflict resolution and complete author evidence already recorded on TASK-HOME-117. PR-3130 OPEN/BLOCKED at9330169f753157c46187d0ae685755d1875ef6b2: all required Build lanes green, only merge-hold gate fails. Exact resolver replacement and main merge already pushed and recorded on BUG-HOME-026; your ruling reduced the rework to that one-line delta. NeedsAttention still requires your triage and fresh delta review; author will not escalate roles or self-clear. Please route review/ship of both. No new code pushes/author verdicts/hold clearance attempted in this resume.\n",
+  "subject": "Docs merged; Pages refreshed; 3122/3130 green author heads need review",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
