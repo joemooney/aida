@@ -89816,5 +89816,32 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 6992
+- id: 01a18b08-d726-7403-9639-7b54788a803c
+  target_id: 01a18b08-cda8-7bc3-ade9-a62a2c7860c2
+  author: aida
+  node_id: '1'
+  lamport: 6993
+  timestamp: 2026-10-30T04:19:34.822629929Z
+  kind: !Create
+    title: 'Review PR-3110: [AI:claude] feat(mailbox): per-agent Codex mail wake, slice 1 - verified recipient + wake-run watcher (STORY-B6B1278890774EF993D2EBC327862470-096) (TASK-B6B1278890774EF993D2EBC32786247'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-096`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3110>
+      - Branch: `story-b6b1278890774ef993d2ebc327862470-096` → `main`
+
+      ## Covers
+
+      - STORY-B6B1278890774EF993D2EBC327862470-096
+      - TASK-B6B1278890774EF993D2EBC327862470-119
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3110` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 6993
 node_id: '1'
