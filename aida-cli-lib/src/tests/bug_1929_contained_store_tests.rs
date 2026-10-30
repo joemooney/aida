@@ -361,8 +361,9 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     );
     assert_eq!(
         json.matches(".aida-store").count(),
-        // BUG-2201: plus the store's two baseline `Read` rules.
-        2 + 2 * WRITE_TOOLS.len() + 2,
+        // BUG-2201: plus the store's two baseline `Read` rules. The pointer
+        // deny is `Edit` only (BUG-029).
+        2 + 2 + 2,
         "only this main's store, its reads, and the sandbox/tool denies for its .git pointer: {json}"
     );
 }
@@ -1529,22 +1530,22 @@ fn bug_1929_primary_root_never_grants_host_hook_writes() {
         "explicit host authority deny is required: {settings}"
     );
     let denies = settings["permissions"]["deny"].as_array().unwrap();
-    for tool in WRITE_TOOLS {
-        assert!(
-            denies.contains(&serde_json::json!(format!(
-                "{tool}(/{}/**)",
-                main.join(".git").display()
-            ))),
-            "{settings}"
-        );
-        assert!(
-            denies.contains(&serde_json::json!(format!(
-                "{tool}(/{})",
-                main.join(".aida-store/.git").display()
-            ))),
-            "pointer must be protected: {settings}"
-        );
-    }
+    // `Edit` path rules cover every file-writing tool (BUG-029).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+    assert!(
+        denies.contains(&serde_json::json!(format!(
+            "Edit(/{}/**)",
+            main.join(".git").display()
+        ))),
+        "{settings}"
+    );
+    assert!(
+        denies.contains(&serde_json::json!(format!(
+            "Edit(/{})",
+            main.join(".aida-store/.git").display()
+        ))),
+        "pointer must be protected: {settings}"
+    );
     assert_eq!(
         allow_write(&settings),
         sandbox_allow_write_entries(&contained_store_write_paths(&main))
@@ -1969,4 +1970,49 @@ fn bug_2218_launch_command_primes_mailbox_after_settings_preview() {
     crate::session::build_run_claude_session_command(None, None, None, None, true, None).unwrap();
     assert!(main.join(".aida/mailbox").is_dir());
     std::env::set_current_dir(original).unwrap();
+}
+
+// BUG-029: path denies are `Edit(<path>)` + `Edit(<path>/**)` per protected
+// path and nothing else: Claude Code warns at launch that a
+// `Write`/`MultiEdit`/`NotebookEdit` path deny never matches, and its `Edit`
+// rule already covers every file-writing tool.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-029 | ai:claude
+#[test]
+fn bug_029_path_denies_are_edit_rules_only() {
+    let (_tmp, main) = main_fixture();
+    let worktree = main.join("wt");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let settings = settings_with_store(&worktree, &main);
+    let path_denies: Vec<String> = settings["permissions"]["deny"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .filter(|r| !r.starts_with("Bash("))
+        .collect();
+    let mut expected = Vec::new();
+    for path in [main.join(".aida-store/.git"), main.join(".git")] {
+        expected.extend(crate::contained_boundary::path_deny_rules(&path));
+    }
+    assert_eq!(
+        expected,
+        vec![
+            format!("Edit(/{})", main.join(".aida-store/.git").display()),
+            format!("Edit(/{}/**)", main.join(".aida-store/.git").display()),
+            format!("Edit(/{})", main.join(".git").display()),
+            format!("Edit(/{}/**)", main.join(".git").display()),
+        ]
+    );
+    for rule in &expected {
+        assert!(path_denies.contains(rule), "{rule} missing: {settings}");
+    }
+    assert!(
+        path_denies.iter().all(|r| r.starts_with("Edit(//")),
+        "only absolute Edit path denies: {path_denies:?}"
+    );
+    let mut unique = path_denies.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(unique.len(), path_denies.len(), "{path_denies:?}");
+    assert!(crate::contained_boundary::path_deny_rules(Path::new("rel")).is_empty());
 }

@@ -1913,3 +1913,100 @@ fn requeue_gate_reads_mcp_claims_like_pickup() {
         RequirementStatus::Approved
     );
 }
+
+/// BUG-021: advisor rulings left as spec comments lead the pickup prompt; a
+/// relaunched lane that read only the description repeated the overruled
+/// change.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+#[test]
+fn ruling_comments_are_recognised_by_their_first_line() {
+    use crate::queue_cmd::is_ruling_comment;
+    assert!(is_ruling_comment(
+        "Advisor ruling 2026-10-29 16:53: reviewer finding accepted"
+    ));
+    assert!(is_ruling_comment("ADVISOR RULING: widen scope"));
+    assert!(is_ruling_comment("\n**Ruling:** keep the config change"));
+    assert!(is_ruling_comment("[ruling] round 2"));
+    assert!(!is_ruling_comment(
+        "Returned from NeedsAttention via rework"
+    ));
+    assert!(!is_ruling_comment("see the advisor ruling above"));
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+#[test]
+fn latest_ruling_supersedes_earlier_ones_and_leads_the_prompt() {
+    use crate::queue_cmd::{latest_ruling_comment, prepend_ruling, ruling_comment_text};
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_GATE_NAME", None)]);
+    let at = |mins: i64, content: &str| {
+        let mut c = aida_core::Comment::new("advisor".to_string(), content.to_string());
+        c.created_at = chrono::Utc::now() - chrono::Duration::minutes(mins);
+        c
+    };
+    let mut parent = at(30, "Reviewer finding: tests missing");
+    parent
+        .replies
+        .push(at(5, "Advisor ruling: round 2 widens to the test"));
+    let comments = vec![
+        at(60, "Advisor ruling: config-only change"),
+        parent,
+        at(1, "Returned from NeedsAttention via rework"),
+    ];
+    let latest = latest_ruling_comment(&comments).expect("a ruling");
+    assert!(latest.content.contains("round 2 widens to the test"));
+
+    let prompt = prepend_ruling("/aida-pickup BUG-1".to_string(), Some(latest));
+    assert!(prompt.starts_with("ADVISOR RULING ("));
+    assert!(prompt.contains("round 2 widens to the test"));
+    assert!(!prompt.contains("config-only change"));
+    assert!(
+        prompt.ends_with("/aida-pickup BUG-1"),
+        "pickup line stays last"
+    );
+
+    assert_eq!(prepend_ruling("p".to_string(), None), "p");
+    assert!(latest_ruling_comment(&comments[2..]).is_none());
+    assert_eq!(ruling_comment_text("keep it"), "Advisor ruling: keep it");
+    assert_eq!(ruling_comment_text("Ruling: keep it"), "Ruling: keep it");
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+#[test]
+fn rework_ruling_flag_parses_and_is_spec_scoped() {
+    use clap::Parser;
+    let args =
+        crate::queue_cmd::ReworkArgs::try_parse_from(["rework", "BUG-1", "--ruling", "widen"])
+            .unwrap();
+    assert_eq!(args.ruling.as_deref(), Some("widen"));
+    let flags = crate::queue_cmd::ReworkFlags {
+        ruling: Some("widen"),
+        ..Default::default()
+    };
+    assert_eq!(flags.spec_scoped(), vec!["--ruling"]);
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+#[test]
+fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+    let mut req = aida_core::Requirement::new("ruling".to_string(), String::new());
+    req.spec_id = Some("BUG-021".to_string());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "widen to the test").unwrap();
+
+    let updated = storage.load().unwrap();
+    let req = updated.get_requirement_by_spec_id("BUG-021").unwrap();
+    let ruling = crate::queue_cmd::latest_ruling_comment(&req.comments).expect("recorded");
+    assert_eq!(ruling.content, "Advisor ruling: widen to the test");
+    assert!(crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "  ").is_err());
+}
