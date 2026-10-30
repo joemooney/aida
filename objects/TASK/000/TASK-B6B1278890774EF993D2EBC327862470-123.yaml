@@ -2,12 +2,12 @@ id: 01a18b1d-9aef-70e0-bf2c-13c0560ee242
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-123
 title: Refresh GitHub Spec Kit and AWS Kiro entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T04:42:15.663405710Z
-modified_at: 2026-10-30T05:11:53.386819614Z
+modified_at: 2026-10-30T07:40:37.450302556Z
 req_type: Task
 tags:
 - lifecycle:no-review
@@ -31,6 +31,20 @@ history:
   timestamp: 2026-10-30T05:11:55.929482951Z
   session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
   changes: []
+- id: 01a18bc0-e6bd-7240-bf60-597b29f02054
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:40:37.437059590Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a18bc0-e6ca-7f31-8b30-cb27ba39b817
+  timestamp: 2026-10-30T07:40:37.450297413Z
+  agent: aida
+  commit_sha: 170f657817b5ccdc6ba82a8e26de62e57ae00f85
+  summary: 'Base-only update from main (gh update-branch a6100c18a2dddd1f5f9e6439d7d2ee857539aa90 -> d3664a3b181a63e5cd74832ca3b4bba7667112ca); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -39,3 +53,7 @@ filed_at:
   aida_build_sha: f0dfbd03d09
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-30T07:40:37.437055178Z
+  completion_sha: 170f657817b5ccdc6ba82a8e26de62e57ae00f85
