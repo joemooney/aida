@@ -58,12 +58,21 @@ description: |
 
 
   ADVISOR NOTE 2026-10-30 02:09 (PR-3129, slice 2): the branch CONFLICTS with main (3 commits behind, 5 overlapping files; the 3116/3117/3123 merges touched agent_launch and the registry). Merge origin/main into the slice-2 branch (merge, no rebase), resolve the conflicts keeping both sides' behaviour, regenerate the help golden if help changed, run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast, and push to the SAME PR-3129 branch.
+
+
+  ADVISOR RULING 2026-10-30 03:35 (PR-3129 slice 2, round 1). ONE rework push on PR-3129; BUNDLE all:
+  1. (blocking) set_mail_wake_on_row (agent_registry.rs) does an unlocked read-modify-write that races the SessionStart hook's row write. Take the registry namespace lock (the same lock write_entry uses, with the launcher budget from BUG-HOME-030) around the read-modify-write, or fold the stamp into the hook's own locked write. Test the interleaving (two writers; neither field lost).
+  2. Criterion-level trace tags on the four criteria tests.
+  3. When arming fails, doctor surfaces the manual install command too: iterate pending-but-unarmed rows, not only armed ones.
+  4. Run `codex --version` with a short timeout (for example 5s); a timeout degrades to the "old Codex" warning.
+  5. An invalid `[agents.codex] mail_wake` value warns and falls back to the default instead of aborting the launch.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast. Regenerate the help golden if help changes.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T10:32:13.799609425Z
+modified_at: 2026-10-30T10:33:58.967101332Z
 req_type: Story
 relationships:
 - rel_type:
@@ -476,6 +485,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18c5f-a1f4-7a70-9058-af4c67e277ab
+  author: joe
+  timestamp: 2026-10-30T10:34:00.052200252Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z

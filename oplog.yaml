@@ -92238,5 +92238,78 @@ operations:
   timestamp: 2026-10-30T10:32:14.987714008Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7147
+- id: 01a18c5f-a284-7802-969c-2bfa73da20fc
+  target_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+  author: aida
+  node_id: '1'
+  lamport: 7148
+  timestamp: 2026-10-30T10:34:00.196344625Z
+  kind: !SetDescription
+    description: |
+      Operator ask 2026-10-29: every Codex agent started with `aida agent new codex` should watch AIDA mail without a hand install. Today scripts/codex-mail-wake.py (TASK-2347) needs an exact thread UUID and a manual install; agents started without it never see mail (the codex docs stack 3096-3103 stalled on unread rulings for 3h).
+
+      Acceptance:
+      1. `aida agent new codex` installs the mail-wake watcher bound to the new session's exact thread UUID once that thread exists (discover it from the spawned process / Codex session store, never --last or a guess); on failure it warns with the exact manual install command and the agent still starts.
+      2. Ending or reaping the agent (agent end, registry reap of a dead pid) uninstalls that watcher through the adapter's ownership-checked uninstall; ledgers kept.
+      3. Opt-out flag (--no-mail-wake) and a config default; Codex below the native `codex queue` version degrades to a warning.
+      4. `aida agent list` / doctor show per-agent wake state.
+
+      Needs a sketch + advisor signoff (touches agent lifecycle + user systemd units). Open questions for the sketch: thread-UUID discovery race; one unit per thread vs one multiplexed service.
+
+      ## Advisor sketch signoff 2026-10-29 18:08 (implementer sketch comment 01a18a55 — APPROVED with these rulings)
+      - Q1 → A1. `agent new codex` stamps `mail_wake = pending` on the launch row (honour `--no-mail-wake`, an agents.toml `[codex] mail_wake` default, and a codex < 0.164.0 version downgrade to a warning). The Codex SessionStart hook arms it on first thread binding, with a bounded timeout. On failure it prints the exact manual command and never blocks the session.
+      - Q2 → B2. One multiplexed user unit per project (installed once, from the main checkout) iterates the armed registry rows. Each row keeps its own per-thread ledger with today's dedupe and recovery semantics. No per-agent systemd units, and no per-agent edits to tracked config.
+      - Q3 → each agent's OWN inbox (its handle plus its routed role). Add a verified `aida mailbox wake-snapshot --recipient <handle>` whose audience is checked against the registry row, never env-asserted. The advisor-thread install keeps today's advisor-only path unchanged and explicit. The notification names the inbox it read. This also delivers TASK-HOME-119.
+      - Q4 → Rust. The multiplexed watcher is an `aida mailbox wake-run --project <root>` subcommand (registered in its own module, clap types in *_args.rs, not the legacy Command enum), and the unit execs it. scripts/codex-mail-wake.py stays as the advisor-thread path. Do not extend it.
+      - Retire: `agent end` and the dead-agent GC flip the row to `retired`. Ledgers are kept.
+      - Visibility: `aida agent list` gets a `wake` column (armed / pending-thread / failed / off / unsupported), and the doctor check iterates armed rows.
+      - Antigravity: the adapter returns Unsupported, plus one launch warning (operator ruling 17:03).
+
+      ### Slices (each its own PR)
+      - Slice 1 (this lane): verified `wake-snapshot --recipient <handle>` + `mailbox wake-run` over armed rows (rows armed manually via a hidden `aida agent wake arm <handle>` for now) + the unit/health-job install + tests. Closes TASK-HOME-119's acceptance.
+      - Slice 2: the `agent new` pending stamp, SessionStart hook arming, retire on end/GC, the `agent list` wake column and the doctor iteration.
+      LIGHT tier: targeted tests + make check-ci-fast. trace:STORY-HOME-096.
+
+      ADVISOR REWORK BRIEF 2026-10-29 20:30 (PR-3110, slice 1, same PR, no new PR):
+      1. Merge origin/main into branch story-b6b1278890774ef993d2ebc327862470-096 (merge, no rebase).
+      2. CI lib-0/lib-1 fail command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot: regenerate the golden help snapshot after the merge (the test's failure message names the update command).
+      3. CI gates fail: "docs/architecture/external-tool-output-classifiers.md does not match the markers in the tree". Regenerate or update that doc to match.
+      4. Every new commit message must end with "(Refs STORY-B6B1278890774EF993D2EBC327862470-096)". The PR's commit range has no REQ-ID trailer, so no review story could be filed.
+      5. Gate: LIGHT. Run `cargo test -p aida-cli-lib story_1728` plus `make check-ci-fast`, then push. Do not run the full suite.
+
+
+      ADVISOR RULING 2026-10-29 22:05 (PR-3110 slice 1, round 1 review at ae5f330c). ONE rework push on PR-3110, no new PR. BUNDLE all of these:
+      1. CI lib-0/lib-1: two ratchets fail. orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:65): your new code calls current_exe directly, so route it through the aida-exe resolver. test_home::tests::no_direct_home_resolution_in_crate (test_home.rs:528): your new code resolves HOME directly, so use the crate's home helper.
+      2. CI gates (portability ratchet): mailbox_wake_run_tests.rs:195 builds TOML with format!("worktree_path = \"{}\""). Build it with toml serialization instead.
+      3. Authority: `wake-snapshot --recipient <handle>` must narrow, never widen. Try audience_for(&own_audience(), recipient) first; use the armed-row path only when the caller is that row's registered watcher. Any other caller is refused. Test it.
+      4. Regression: an agent asking for its OWN handle with no armed row falls back to its own audience (as before), not an error. Test it.
+      5. `wake-run --recover` requires exactly one of --accepted or --retry (a required ArgGroup). Test that the bare form is rejected.
+      6. recover_thread takes watch.lock (or the inflight path writes only health.json) so a running service cannot overwrite a recover. Test the interleaving if practical; otherwise add a comment explaining the lock order.
+      7. agent wake arm/retire: gate it the same way agent end/stop are gated (the owner or the operator only).
+      ACCEPTED, no action: no separate TASK for the health-job/doctor deviation. Slice 2 of THIS story carries it. The story is back to in-progress until slice 2 ships.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096 resolve_aida_exe no_direct_home` plus `make check-ci-fast` (which runs scripts/check-portability.sh), then push.
+
+
+      ADVISOR NOTE 2026-10-29 23:26 (continuation): the 22:40 lane made all seven fixes in LOCAL commit 6bdf89bc8a7 on branch story-b6b1278890774ef993d2ebc327862470-096-2 in its seat clone, but timed out before pushing. RESUME that clone; do not redo the fixes. Then: (1) regenerate the help golden snapshot; (2) run ONE targeted test, `cargo test -p aida-cli-lib --lib story_home_096`, plus make check-ci-fast; (3) push to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096) and NOT as a new PR. If the targeted test is slow, push after check-ci-fast and let CI run it.
+
+
+      ADVISOR NOTE 2026-10-29 23:33: SUPERSEDES the 23:26 note. The advisor pushed the lane's commit 6bdf89bc8a7 to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096), so all seven fixes are on the PR now. REMAINING WORK ONLY: check out the PR-3110 branch, regenerate the help golden snapshot (command_registry::story_1728 help_surface_matches_golden_snapshot), run `cargo test -p aida-cli-lib --lib story_1728` plus make check-ci-fast, and push to that same branch. Do NOT open a new PR and do NOT redo the fixes.
+
+
+      ## SLICE 2 brief (advisor, 2026-10-30 01:01): slice 1 SHIPPED as PR-3110 (df7add8). Implement slice 2 as a NEW PR with the PLAIN trailer `(STORY-B6B1278890774EF993D2EBC327862470-096)`.
+      Scope (from the slice plan above): the `agent new` pending stamp; SessionStart hook arming; retire on end/GC; the `agent list` wake column; the doctor iteration and the health-job deviation recorded in comment 5. Keep slice 1's narrow-only and owner/operator gates. When you add CLI flags or columns, regenerate the help golden (story_1728).
+      Gate: LIGHT. One targeted run, `cargo test -p aida-cli-lib --lib story_home_096`, plus make check-ci-fast.
+
+
+      ADVISOR NOTE 2026-10-30 02:09 (PR-3129, slice 2): the branch CONFLICTS with main (3 commits behind, 5 overlapping files; the 3116/3117/3123 merges touched agent_launch and the registry). Merge origin/main into the slice-2 branch (merge, no rebase), resolve the conflicts keeping both sides' behaviour, regenerate the help golden if help changed, run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast, and push to the SAME PR-3129 branch.
+
+
+      ADVISOR RULING 2026-10-30 03:35 (PR-3129 slice 2, round 1). ONE rework push on PR-3129; BUNDLE all:
+      1. (blocking) set_mail_wake_on_row (agent_registry.rs) does an unlocked read-modify-write that races the SessionStart hook's row write. Take the registry namespace lock (the same lock write_entry uses, with the launcher budget from BUG-HOME-030) around the read-modify-write, or fold the stamp into the hook's own locked write. Test the interleaving (two writers; neither field lost).
+      2. Criterion-level trace tags on the four criteria tests.
+      3. When arming fails, doctor surfaces the manual install command too: iterate pending-but-unarmed rows, not only armed ones.
+      4. Run `codex --version` with a short timeout (for example 5s); a timeout degrades to the "old Codex" warning.
+      5. An invalid `[agents.codex] mail_wake` value warns and falls back to the default instead of aborting the launch.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast. Regenerate the help golden if help changes.
+clock: 7148
 node_id: '1'
