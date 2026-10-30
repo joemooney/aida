@@ -120,6 +120,19 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-HOME-128: the mail-backlog guard reads the mailbox and the
+            // agent registry only. trace:STORY-HOME-128 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::mail_backlog::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::mail_backlog::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // STORY-1688: lane liveness substrate check reads `.aida/` state
             // without loading the spec store.
             // trace:STORY-1688 | ai:antigravity
@@ -676,6 +689,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     if let Some(raw) = opts.since.as_deref() {
         resolve_completed_since_cutoff(&project_root, raw)?;
     }
+    // The stale-lock healer must not need the store or cache it heals, and
+    // must not hang on a saturated disk. trace:BUG-HOME-041 | ai:claude
+    if !opts.all
+        && !opts.quiet_output
+        && opts
+            .category
+            .as_deref()
+            .and_then(|c| normalize_doctor_category(c).ok())
+            .as_deref()
+            == Some("stale-locks")
+    {
+        return doctor_stale_locks_bounded(&project_root, &opts);
+    }
     let store_path = project_root.join(".aida-store");
     let store = Storage::new(&store_path)
         .load()
@@ -983,6 +1009,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         crate::gate::seat_authority::DOCTOR_CATEGORY,
     )? {
         findings.extend(crate::gate::seat_authority::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    // STORY-HOME-128: mail backlog (opt-in append path: only when --category
+    // is explicitly passed, like lane-liveness). trace:STORY-HOME-128 | ai:claude
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::mail_backlog::CATEGORY)?
+    {
+        findings.extend(crate::mail_backlog::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -1395,6 +1430,142 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
     })
 }
 
+/// Default bound on `aida doctor [heal] stale-locks`; overridable with
+/// `AIDA_STALE_LOCKS_DEADLINE_SECS`.
+// trace:BUG-HOME-041 | ai:claude
+const STALE_LOCKS_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// The stale-locks bound: `AIDA_STALE_LOCKS_DEADLINE_SECS` when it parses,
+/// else [`STALE_LOCKS_DEADLINE`].
+// trace:BUG-HOME-041 | ai:claude
+fn stale_locks_budget(raw: Option<&str>) -> std::time::Duration {
+    raw.and_then(|v| v.trim().parse::<u64>().ok())
+        .map(std::time::Duration::from_secs)
+        .unwrap_or(STALE_LOCKS_DEADLINE)
+}
+
+/// Run `work` on a worker thread and wait for it until `deadline` (measured
+/// from `now`). `None` when the deadline passes first: the worker is left to
+/// finish or park on its own, and the caller returns. Filesystem reads and
+/// removals parked on a saturated disk cannot be interrupted, only abandoned.
+// trace:BUG-HOME-041 | ai:claude
+fn within_deadline<T: Send + 'static>(
+    deadline: std::time::Instant,
+    now: std::time::Instant,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Option<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(work());
+    });
+    rx.recv_timeout(deadline.saturating_duration_since(now))
+        .ok()
+}
+
+/// The error for a stale-locks step that outlived its deadline.
+// trace:BUG-HOME-041 | ai:claude
+fn stale_locks_timed_out(
+    project_root: &std::path::Path,
+    step: &str,
+    budget: std::time::Duration,
+) -> anyhow::Error {
+    let cause = aida_core::io_pressure::observe_disk_saturation(None)
+        .map(|disk| disk.describe())
+        .unwrap_or_else(|| "the filesystem did not answer".to_string());
+    anyhow::anyhow!(
+        "timed out after {}s {step} the cache lock-info under {}: {cause}. \
+         Re-run when the disk is responsive.",
+        budget.as_secs(),
+        project_root.join(".aida").display()
+    )
+}
+
+/// The stale-locks scan and (with `--heal`) its heal, each run on a worker
+/// thread bounded by `deadline`, so a read or a removal parked on a
+/// saturated disk cannot hang the command. An interactive confirmation runs
+/// on this thread between them, so the bound never cuts off a human.
+// trace:BUG-HOME-041 | ai:claude
+fn doctor_stale_locks_report(
+    project_root: &std::path::Path,
+    opts: &DoctorRunOptions,
+    budget: std::time::Duration,
+    deadline: std::time::Instant,
+) -> Result<DoctorReport> {
+    let root = project_root.to_path_buf();
+    let findings = within_deadline(deadline, std::time::Instant::now(), move || {
+        stale_lock_findings(&root, chrono::Utc::now())
+    })
+    .ok_or_else(|| stale_locks_timed_out(project_root, "reading", budget))??;
+    let mut report = DoctorReport::from_findings(findings);
+    if !opts.heal || report.findings.is_empty() {
+        return Ok(report);
+    }
+    let safe = report.findings.iter().all(|f| f.safe_heal);
+    if safe && !opts.yes && !confirm_doctor_category("stale-locks", report.findings.len())? {
+        report.healed = vec![DoctorHealResult {
+            category: "stale-locks".to_string(),
+            id: "stale-locks".to_string(),
+            action: "operator declined".to_string(),
+            status: "skipped".to_string(),
+            detail: None,
+        }];
+        return Ok(report);
+    }
+    let root = project_root.to_path_buf();
+    let findings = report.findings.clone();
+    let heal_opts = DoctorRunOptions {
+        yes: opts.yes || safe,
+        ..opts.clone()
+    };
+    report.healed = within_deadline(deadline, std::time::Instant::now(), move || {
+        heal_doctor_findings(&root, &findings, &heal_opts, Some(deadline))
+    })
+    .ok_or_else(|| stale_locks_timed_out(project_root, "healing", budget))??;
+    Ok(report)
+}
+
+/// `aida doctor [heal] --category stale-locks`: scan only the lock-info files
+/// (no store load, no cache open) and heal them, failing with the holder
+/// diagnosis when either step outlives the deadline (a saturated disk can
+/// park even a two-file read).
+// trace:BUG-HOME-041 | ai:claude
+fn doctor_stale_locks_bounded(
+    project_root: &std::path::Path,
+    opts: &DoctorRunOptions,
+) -> Result<()> {
+    let budget = stale_locks_budget(
+        std::env::var("AIDA_STALE_LOCKS_DEADLINE_SECS")
+            .ok()
+            .as_deref(),
+    );
+    let report = doctor_stale_locks_report(
+        project_root,
+        opts,
+        budget,
+        std::time::Instant::now() + budget,
+    )?;
+    let failed = report
+        .healed
+        .iter()
+        .filter(|r| r.status == "failed")
+        .count();
+    let reason = if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
+        Some(format!(
+            "{} finding(s) in stale-locks — failing because --fail-on-findings was requested",
+            report.findings.len()
+        ))
+    } else {
+        (failed > 0).then(|| format!("{failed} finding(s) failed to heal — see the report above"))
+    };
+    emit_doctor_report(
+        report,
+        reason,
+        doctor_render_mode(opts.json),
+        opts.heal,
+        |_| {},
+    )
+}
+
 // trace:TASK-1544 | ai:codex
 fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
@@ -1426,6 +1597,12 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:BUG-1934 | ai:claude
         crate::gate::seat_authority::DOCTOR_CATEGORY => {
             DoctorReport::from_findings(crate::gate::seat_authority::doctor_scan(&project_root))
+        }
+        // Routes like lane-liveness: only the scheduled tick nudges, and a
+        // nudged backlog is not a job failure. trace:STORY-HOME-128 | ai:claude
+        crate::mail_backlog::CATEGORY => {
+            let route = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+            DoctorReport::from_findings(crate::mail_backlog::scan_and_route(&project_root, route))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };
@@ -8973,6 +9150,14 @@ fn heal_doctor_stale_lock(finding: &DoctorFinding) -> Result<DoctorHealResult> {
             "skipped",
             Some("lock-info file was already gone".to_string()),
         ),
+        // trace:BUG-HOME-041 | ai:claude
+        aida_core::LockInfoReclaim::HolderOnDisk { pid } => (
+            "skipped",
+            Some(format!(
+                "pid {pid} is waiting on disk (state D), not stuck; left in place. \
+                 Retry when IO pressure drops"
+            )),
+        ),
         aida_core::LockInfoReclaim::Kept(Some(owner)) if owner.presumed_alive() => (
             "skipped",
             Some("lock owner is still alive (or cannot be verified); left in place".to_string()),
@@ -12386,6 +12571,74 @@ User content.
         .unwrap();
         assert_eq!(result.status, "healed");
         assert!(!lock_info_path.exists());
+    }
+
+    // BUG-HOME-041: `aida doctor --heal --category stale-locks` against the
+    // incident's sidecar (a holder in another PID namespace, heartbeat silent
+    // for hours) finds and removes it with no store and no cache.
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_bounded_heal_removes_a_foreign_ns_stale_heartbeat_holder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
+        let path = aida_core::cache_lock_info_path(&cache);
+        let seen = (chrono::Utc::now() - chrono::Duration::hours(10)).to_rfc3339();
+        let info = aida_core::CacheLockInfo {
+            pid: 19,
+            pid_ns: Some("not-a-local-ns".into()),
+            command: "aida cache refresh --worker".into(),
+            started_at: seen.clone(),
+            heartbeat_at: Some(seen),
+            expected_duration_secs: Some(120),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_string(&info).unwrap()).unwrap();
+        let opts = DoctorRunOptions {
+            heal: true,
+            yes: true,
+            category: Some("stale-locks".to_string()),
+            ..Default::default()
+        };
+        let budget = std::time::Duration::from_secs(20);
+        let report =
+            doctor_stale_locks_report(root, &opts, budget, std::time::Instant::now() + budget)
+                .unwrap();
+        assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
+        assert!(report.findings[0].summary.contains("another PID namespace"));
+        assert_eq!(report.healed.len(), 1, "{:?}", report.healed);
+        assert_eq!(report.healed[0].status, "healed", "{:?}", report.healed);
+        assert!(!path.exists());
+        assert!(stale_locks_timed_out(root, "healing", budget)
+            .to_string()
+            .contains("timed out after 20s healing the cache lock-info"));
+    }
+
+    // BUG-HOME-041: the deadline helper abandons a parked worker and the
+    // budget reads AIDA_STALE_LOCKS_DEADLINE_SECS. No real waiting: the
+    // parked worker's deadline is already now.
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_stale_locks_deadline_abandons_a_parked_step() {
+        let now = std::time::Instant::now();
+        let (_never, parked) = std::sync::mpsc::channel::<()>();
+        assert_eq!(
+            within_deadline(now, now, move || parked.recv().ok()),
+            None,
+            "a step parked past the deadline is abandoned"
+        );
+        assert_eq!(
+            within_deadline(now + std::time::Duration::from_secs(5), now, || 42),
+            Some(42)
+        );
+        assert_eq!(stale_locks_budget(None), STALE_LOCKS_DEADLINE);
+        assert_eq!(
+            stale_locks_budget(Some("3")),
+            std::time::Duration::from_secs(3)
+        );
+        assert_eq!(stale_locks_budget(Some("soon")), STALE_LOCKS_DEADLINE);
     }
 
     /// A PID that cannot name a live process: above every platform's pid_max
