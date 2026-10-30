@@ -1,0 +1,32 @@
+id: 01a18def-6827-7902-9a31-a8ddc697f0a9
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-134
+title: 'Review PR-3141: [AI:claude] feat(whoami): one view of this session''s mail handle, node, unread mail, spec and goal (STORY-B6B1278890774EF993D2EBC327862470-098)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a18d21`) for branch `story-b6b1278890774ef993d2ebc327862470-098`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3141>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-098` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-098
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3141` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T17:50:39.655105902Z
+modified_at: 2026-10-30T17:50:39.655105902Z
+req_type: Story
+filed_at:
+  code_sha: 18019938e1be04afe1c0a42971e83d48d91b8f5a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1da6f81bbf1
+  vendor: claude
