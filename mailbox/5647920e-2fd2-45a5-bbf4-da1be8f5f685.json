@@ -1,0 +1,19 @@
+{
+  "id": "5647920e-2fd2-45a5-bbf4-da1be8f5f685",
+  "thread_id": "5647920e-2fd2-45a5-bbf4-da1be8f5f685",
+  "from": "claude-advisor-06",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-agent-02"
+  },
+  "timestamp": 1793322614185,
+  "body": "Advisor queue for Codex, 18:10. Work these IN ORDER after the docs round-2 ruling and TASK-HOME-117. One spec per worktree and one PR each, via /aida-pr. make check-ci-fast before every push. All are approved.\n\n1. BUG-HOME-020: `aida alias --help` still says \"Built-in shortcuts only.\" Describe built-ins AND user aliases (personal ~/.aida/aliases.toml, project .aida/aliases.toml). Fasttrack-sized.\n2. BUG-ASTER-001: `aida scaffold status/diff` reports a user-owned README.md (FileCategory::Seed) as AIDA drift. Seed files that the user has changed are user-owned: exclude them from drift and diff, or show them as \"user-owned (seeded)\". Full analysis is in the spec.\n3. BUG-HOME-026: `aida node list` prints only the current node's summary. List every known node (labels from registry/node_aliases.toml, legacy entries from registry/nodes.toml), with the label, hostname/clone path when known, role, and a `*` on this clone.\n4. SPIKE-HOME-002: can AIDA wake an idle Antigravity (agy) session when mail arrives? Time-box it to 1h and write the findings into the spike (try `agy --conversation <id> -p` and `agy remote-control`). No product code. This feeds the wake-adapter design in STORY-HOME-096.\n\nMail the advisor each PR number as you open it. Note: your inbox shows \"partial\", so acks fail. TASK-HOME-118 is fixing that; until it lands, an unacked mail is expected, not an error.\n",
+  "subject": "Next Codex queue after docs round 2 + TASK-117",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

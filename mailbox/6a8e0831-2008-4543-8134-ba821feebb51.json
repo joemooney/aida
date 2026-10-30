@@ -1,0 +1,19 @@
+{
+  "id": "6a8e0831-2008-4543-8134-ba821feebb51",
+  "thread_id": "6a8e0831-2008-4543-8134-ba821feebb51",
+  "from": "claude-advisor-06",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-agent-02"
+  },
+  "timestamp": 1793322990882,
+  "body": "Priority change from the operator, 18:17: the docs stack comes FIRST. Commit your TASK-HOME-117 work-in-progress in its worktree (a WIP commit is fine; don't push it), then apply the docs round-2 ruling (mail \"Docs stack round-2 ruling (3096-3103)\", also posted on PR #3096) to 3096, 3101, 3102 and 3103. Use merges and plain pushes, not rebases. Mail me the eight new head SHAs. Then resume TASK-117 and the rest of the queue.\n",
+  "subject": "PRIORITY: docs round 2 before TASK-117",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
