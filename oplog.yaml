@@ -88117,5 +88117,25 @@ operations:
     req_type: Spike
     status: Draft
     priority: Medium
-clock: 6860
+- id: 01a18a29-70b1-7e72-bebf-567f6171e9e9
+  target_id: 01a18a29-6886-7b50-a99b-a5e2c4e1a699
+  author: aida
+  node_id: '1'
+  lamport: 6861
+  timestamp: 2026-10-30T00:15:34.065887501Z
+  kind: !Create
+    title: 'Machine-scoped store reconcile: a hub-bridging clone union-merges gitlab-only pushes onto every hub on a schedule'
+    description: |-
+      Operator topology 2026-10-29: the work clone pushes aida-store to gitlab only and must never push to GitHub; the home clone can reach both. Today hub-mirror-sync only fast-forwards, so every work push leaves the hubs DIVERGED and the 6h hub-drift-guard routes it to the advisor by hand. Stopgap installed: a home-only crontab entry (# aida-store-reconcile) running `aida remote reconcile --execute` hourly under flock, logging to ~/.aida/store-reconcile.log.
+
+      Acceptance:
+      1. A per-clone (untracked, machine-local) schedule layer or a `bridge = true` store.sync setting marks a clone as the hub bridge; only that clone runs a reconcile job. A tracked project job must never make a gitlab-only clone push to origin.
+      2. The bridge job runs `remote reconcile --execute` without `--yes`: identity-bearing content stops it and routes to the advisor instead of publishing.
+      3. A clone can declare its push hubs (work: gitlab only) so `db sync --push` / mirror-sync never attempt origin from it.
+      4. hub-drift-guard stays the escalation for drift the bridge could not union.
+      5. The stopgap cron line is removed by the install path.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6861
 node_id: '1'
