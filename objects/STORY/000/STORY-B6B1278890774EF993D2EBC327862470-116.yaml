@@ -1,0 +1,33 @@
+id: 01a18c08-8a7d-74c0-866c-d3d9d3609d56
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-116
+title: 'Review PR-3127: [AI:claude] fix(git): commit failures report git''s exit code and stderr, retry lock contention (BUG-b6b1278890774ef993d2ebc327862470-034)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-034`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3127>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-034` → `main`
+
+  ## Covers
+
+  - BUG-b6b1278890774ef993d2ebc327862470-034
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3127` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T08:58:52.413198628Z
+modified_at: 2026-10-30T08:58:52.413198628Z
+req_type: Story
+filed_at:
+  code_sha: 142905fe98530ed6d96f5ba16d4a13240ec8342e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ae70fc9bbfe
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
