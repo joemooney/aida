@@ -530,12 +530,14 @@ pub(crate) fn project_key(project: &Path) -> String {
     digest.iter().take(8).map(|b| format!("{b:02x}")).collect()
 }
 
-/// The thread a row's watcher would wake, when the row records one.
+/// The thread a row's watcher would wake, when the row records one: the
+/// launch's native id, else the id the session's own SessionStart hook
+/// recorded (how a launched Codex reports its thread).
 pub(crate) fn row_thread(entry: &AgentRegistryEntry) -> Option<String> {
-    entry
-        .native_session_id
-        .as_deref()
-        .and_then(|sid| uuid::Uuid::parse_str(sid.trim()).ok())
+    [&entry.native_session_id, &entry.claude_session_id]
+        .into_iter()
+        .flatten()
+        .find_map(|sid| uuid::Uuid::parse_str(sid.trim()).ok())
         .map(|u| u.to_string())
 }
 
@@ -778,17 +780,75 @@ fn unit_path(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// How long one `systemctl --user` call may run: a session's SessionStart
+/// hook installs the unit, and it must never hang the session.
+const SYSTEMCTL_TIMEOUT: Duration = Duration::from_secs(15);
+
 fn systemctl(args: &[&str]) -> Result<()> {
-    let status = std::process::Command::new("systemctl")
+    let mut child = std::process::Command::new("systemctl")
         .arg("--user")
         .args(args)
         .stdin(std::process::Stdio::null())
-        .status()
+        .stdout(std::process::Stdio::null())
+        .spawn()
         .context("running systemctl --user")?;
+    let deadline = std::time::Instant::now() + SYSTEMCTL_TIMEOUT;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("systemctl --user {} timed out", args.join(" "));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
     if !status.success() {
         bail!("systemctl --user {} failed", args.join(" "));
     }
     Ok(())
+}
+
+/// Make sure `project`'s watcher unit is installed: a no-op when AIDA's
+/// unit is already there, else the same install `wake-service install`
+/// does. Called when a launched session arms.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn ensure_service(project: &Path) -> Result<()> {
+    let path = unit_path(&unit_name(project));
+    match std::fs::read_to_string(&path) {
+        Ok(text) if text.starts_with(&format!("# {UNIT_MARKER}\n")) => Ok(()),
+        Ok(_) => bail!("{} exists and is not managed by AIDA", path.display()),
+        Err(_) => {
+            if crate::main_worktree_root_from(project) != project {
+                bail!("the mail-wake service installs from the main checkout");
+            }
+            let codex = which("codex").context("codex is not on PATH")?;
+            let text = unit_text(project, &crate::resolve_aida_exe(), &codex);
+            install_unit(&path, &unit_name(project), &text)
+        }
+    }
+}
+
+fn install_unit(path: &Path, name: &str, text: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    aida_core::write_atomic(path, text.as_bytes())
+        .with_context(|| format!("writing {}", path.display()))?;
+    systemctl(&["daemon-reload"])?;
+    systemctl(&["enable", "--now", name])
+}
+
+/// The scheduler jobs that check armed sessions' health; the operator adds
+/// them to `.aida/config.toml` (AIDA does not edit tracked config here).
+pub(crate) fn health_job_block(project: &Path) -> String {
+    let name = format!("aida-mail-wake-{}-health", project_key(project));
+    format!(
+        "[[schedule.jobs]]\nname = \"{name}\"\n\
+         command = \"doctor check codex-mail-wake --fail-on-findings\"\n\
+         every = \"15m\"\nenabled = true\n"
+    )
 }
 
 /// Find `name` on PATH as an absolute path.
@@ -857,14 +917,13 @@ pub(crate) fn service(
                 println!("{}\n{text}", path.display());
                 return Ok(());
             }
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            aida_core::write_atomic(&path, text.as_bytes())
-                .with_context(|| format!("writing {}", path.display()))?;
-            systemctl(&["daemon-reload"])?;
-            systemctl(&["enable", "--now", &name])?;
+            install_unit(&path, &name, &text)?;
             println!("installed {name}; it wakes every armed Codex session in this project");
+            // trace:STORY-HOME-096 | ai:claude
+            println!(
+                "To have the scheduler check armed sessions' health, add to .aida/config.toml:\n{}",
+                health_job_block(project)
+            );
             Ok(())
         }
         A::Uninstall => {

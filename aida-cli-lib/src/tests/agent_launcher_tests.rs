@@ -2133,6 +2133,7 @@ fn launcher_view(
         ended_at: ended.then_some(now),
         resumed_from: None,
         liveness: agent_registry::LivenessBasis::Process,
+        mail_wake: None,
     }
 }
 

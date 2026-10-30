@@ -85,13 +85,32 @@ fn assess(project: &Path, now: f64) -> Result<Option<String>> {
     }
     let state = directory(&registration.state_dir, true)?;
     let snapshot: Snapshot = read(&state, "health.json")?;
+    judge(
+        &snapshot,
+        &project,
+        &registration.thread,
+        registration.max_age_seconds,
+        registration.snapshot_max_age_seconds,
+        now,
+    )
+}
+
+/// Whether one thread's snapshot is failing, and its bounded summary.
+fn judge(
+    snapshot: &Snapshot,
+    project: &Path,
+    thread: &str,
+    max_age_seconds: u64,
+    snapshot_max_age_seconds: u64,
+    now: f64,
+) -> Result<Option<String>> {
     let known = snapshot
         .accepted_unacknowledged_count
         .checked_sub(snapshot.accepted_unknown_age_count)
         .context("inconsistent health counts")?;
     if snapshot.version != 1
         || snapshot.project != project
-        || snapshot.thread != registration.thread
+        || snapshot.thread != thread
         || snapshot.accepted_unacknowledged_count > 100_000
         || !snapshot.observed_at.is_finite()
         || snapshot.observed_at < 0.0
@@ -109,17 +128,97 @@ fn assess(project: &Path, now: f64) -> Result<Option<String>> {
         .map(|t| (now - t).max(0.0) as u64);
     let failing = snapshot.recovery_required
         || snapshot.accepted_unknown_age_count > 0
-        || oldest.is_some_and(|age| age >= registration.max_age_seconds)
-        || snapshot_age > registration.snapshot_max_age_seconds;
+        || oldest.is_some_and(|age| age >= max_age_seconds)
+        || snapshot_age > snapshot_max_age_seconds;
     Ok(failing.then(|| format!(
         "accepted_unacknowledged_count={} accepted_unknown_age_count={} oldest_known_notification_age_seconds={} recovery_required={} snapshot_age_seconds={}",
         snapshot.accepted_unacknowledged_count, snapshot.accepted_unknown_age_count,
         oldest.map(|n| n.to_string()).unwrap_or_else(|| "unknown".into()),
         snapshot.recovery_required, snapshot_age)))
 }
+/// Accepted mail an armed session has not read for this long fails.
+const ARMED_MAX_AGE_SECONDS: u64 = 3600;
+/// An armed session's snapshot older than this means its watcher stopped.
+const ARMED_SNAPSHOT_MAX_AGE_SECONDS: u64 = 900;
+
 pub(crate) fn scan(project: &Path) -> Vec<DoctorFinding> {
-    scan_at(project, chrono::Utc::now().timestamp() as f64)
+    let armed: Vec<(String, String)> = crate::agent_registry::load_active_entries(project)
+        .into_iter()
+        .filter(|(_, e)| e.mail_wake == Some(crate::agent_registry::MailWake::Armed))
+        .filter_map(|(_, e)| {
+            let thread = crate::mailbox_wake_run::row_thread(&e)?;
+            Some((e.name.unwrap_or(e.id), thread))
+        })
+        .collect();
+    // The watcher keys its state by the canonical project path.
+    let canonical = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
+    scan_with(
+        project,
+        &crate::mailbox_wake_run::state_root(&canonical),
+        &armed,
+        chrono::Utc::now().timestamp() as f64,
+    )
 }
+
+/// The advisor-thread registration (when there is one, or when nothing is
+/// armed) plus every armed session's own thread health.
+// trace:STORY-HOME-096 | ai:claude
+fn scan_with(
+    project: &Path,
+    state_root: &Path,
+    armed: &[(String, String)],
+    now: f64,
+) -> Vec<DoctorFinding> {
+    let registered =
+        std::fs::symlink_metadata(project.join(".aida/codex-mail-health.json")).is_ok();
+    let mut findings = if registered || armed.is_empty() {
+        scan_at(project, now)
+    } else {
+        Vec::new()
+    };
+    for (handle, thread) in armed {
+        let summary = match assess_armed(project, state_root, thread, now) {
+            Ok(None) => continue,
+            Ok(Some(summary)) => summary,
+            Err(_) => "health snapshot missing, invalid or unavailable (is the project's \
+                       mail-wake service running?)"
+                .into(),
+        };
+        findings.push(DoctorFinding {
+            category: CATEGORY.into(),
+            id: format!("{CATEGORY}:{handle}"),
+            summary: format!("{handle}: {summary}"),
+            action: "Check `aida mailbox wake-service status`; recover uncertainty with \
+                     `aida mailbox wake-run --recover <thread> --accepted|--retry`. Never \
+                     automatically requeue accepted mail."
+                .into(),
+            safe_heal: false,
+        });
+    }
+    findings
+}
+
+fn assess_armed(
+    project: &Path,
+    state_root: &Path,
+    thread: &str,
+    now: f64,
+) -> Result<Option<String>> {
+    let project = project.canonicalize()?;
+    let state = directory(&state_root.join(thread), true)?;
+    let snapshot: Snapshot = read(&state, "health.json")?;
+    judge(
+        &snapshot,
+        &project,
+        thread,
+        ARMED_MAX_AGE_SECONDS,
+        ARMED_SNAPSHOT_MAX_AGE_SECONDS,
+        now,
+    )
+}
+
 fn scan_at(project: &Path, now: f64) -> Vec<DoctorFinding> {
     let summary = match assess(project, now) {
         Ok(None) => return Vec::new(),
@@ -180,6 +279,48 @@ mod tests {
         snapshot(&root, None, 0, false);
         assert!(scan_at(&root, 10000.0).is_empty());
         assert!(!scan_at(&root, 11000.0).is_empty());
+    }
+    // trace:STORY-HOME-096 | ai:claude
+    const ARMED: &str = "01a185ba-0000-7000-8000-000000000004";
+    fn armed_snapshot(root: &Path, state_root: &Path, observed_at: f64, recovery: bool) {
+        let dir = state_root.join(ARMED);
+        std::fs::create_dir_all(&dir).unwrap();
+        for d in [state_root, dir.as_path()] {
+            std::fs::set_permissions(d, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        write(
+            &dir.join("health.json"),
+            serde_json::json!({"version":1,"project":root,"thread":ARMED,
+            "observed_at":observed_at,"accepted_unacknowledged_count":0,
+            "accepted_unknown_age_count":0,"oldest_known_notification_at":null,
+            "recovery_required":recovery}),
+        );
+    }
+    // The doctor reads every armed session's own thread health; with no
+    // advisor registration, armed rows alone decide the check.
+    #[test]
+    fn story_home_096_doctor_iterates_armed_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let state_root = root.join("wake-state");
+        let armed = vec![("codex-agent-04".to_string(), ARMED.to_string())];
+        let missing = scan_with(&root, &state_root, &armed, 10000.0);
+        assert_eq!(missing.len(), 1, "no advisor finding, one missing snapshot");
+        assert!(missing[0].summary.starts_with("codex-agent-04: "));
+        assert_eq!(missing[0].id, "codex-mail-wake:codex-agent-04");
+        armed_snapshot(&root, &state_root, 9990.0, false);
+        assert!(scan_with(&root, &state_root, &armed, 10000.0).is_empty());
+        assert_eq!(
+            scan_with(&root, &state_root, &armed, 11000.0).len(),
+            1,
+            "stale"
+        );
+        armed_snapshot(&root, &state_root, 9990.0, true);
+        assert!(scan_with(&root, &state_root, &armed, 10000.0)[0]
+            .summary
+            .contains("recovery_required=true"));
+        // Nothing armed and no registration: the advisor check still reports.
+        assert_eq!(scan_with(&root, &state_root, &[], 10000.0).len(), 1);
     }
     #[test]
     fn task_2347_health_missing_links_and_wrong_identity_fail_without_leaking() {

@@ -30,6 +30,7 @@ fn view(liveness: agent_registry::LivenessBasis) -> agent_registry::AgentRegistr
         ended_at: None,
         resumed_from: None,
         liveness,
+        mail_wake: None,
     }
 }
 

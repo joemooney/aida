@@ -971,6 +971,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             extra_flags: Vec::new(),
             name: None,
             description: None,
+            no_mail_wake: false,
         }),
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
@@ -1136,7 +1137,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             extra_flags,
             name,
             description,
-        } => agent_new_codex(
+            no_mail_wake,
+        } => agent_new_codex_wake(
             role.clone(),
             spec.clone(),
             *force,
@@ -1160,6 +1162,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone()),
             name.clone(),
             description.clone(),
+            *no_mail_wake,
         ),
         AgentNewCommand::Antigravity {
             role,
@@ -2438,6 +2441,48 @@ pub(crate) fn agent_new_codex(
     name: Option<String>,
     description: Option<String>,
 ) -> Result<()> {
+    agent_new_codex_wake(
+        role,
+        spec,
+        force,
+        cwd,
+        bypass_sandbox,
+        context,
+        title,
+        noexec,
+        show_prompt,
+        verbose,
+        prompt,
+        resume,
+        flag_options,
+        name,
+        description,
+        false,
+    )
+}
+
+/// [`agent_new_codex`] with the launch's `--no-mail-wake` choice.
+// trace:STORY-HOME-096 | ai:claude
+// why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn agent_new_codex_wake(
+    role: Option<String>,
+    spec: Option<String>,
+    force: bool,
+    cwd: Option<&std::path::Path>,
+    bypass_sandbox: bool,
+    context: AgentContextOptions,
+    title: bool,
+    noexec: bool,
+    show_prompt: bool,
+    verbose: bool,
+    prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
+    flag_options: AgentDefaultFlagOptions,
+    name: Option<String>,
+    description: Option<String>,
+    no_mail_wake: bool,
+) -> Result<()> {
     // TASK-1781: a contained parent refuses codex before the role picker.
     // trace:TASK-1952 | trace:TASK-1781 | ai:claude
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
@@ -2476,7 +2521,7 @@ pub(crate) fn agent_new_codex(
     };
     // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
     // uniform knob is free to inject the bypass flag.
-    agent_new_with_config(
+    agent_new_with_config_wake(
         config,
         role,
         spec,
@@ -2493,6 +2538,7 @@ pub(crate) fn agent_new_codex(
         name,
         description,
         bypass_sandbox,
+        no_mail_wake,
     )
 }
 
@@ -2549,7 +2595,7 @@ pub(crate) fn agent_new_antigravity(
     };
     // STORY-495: `--bypass-sandbox` is an explicit posture; without it the
     // uniform knob is free to inject the bypass flag.
-    agent_new_with_config(
+    agent_new_with_config_wake(
         config,
         role,
         spec,
@@ -2566,12 +2612,56 @@ pub(crate) fn agent_new_antigravity(
         name,
         description,
         bypass_sandbox,
+        false,
     )
 }
 
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn agent_new_with_config(
+    config: AgentLaunchConfig,
+    role: Option<String>,
+    spec: Option<String>,
+    force: bool,
+    cwd: Option<&std::path::Path>,
+    context: AgentContextOptions,
+    title: bool,
+    noexec: bool,
+    show_prompt: bool,
+    verbose: bool,
+    prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
+    flag_options: AgentDefaultFlagOptions,
+    name: Option<String>,
+    description: Option<String>,
+    explicit_permission: bool,
+) -> Result<()> {
+    agent_new_with_config_wake(
+        config,
+        role,
+        spec,
+        force,
+        cwd,
+        context,
+        title,
+        noexec,
+        show_prompt,
+        verbose,
+        prompt,
+        resume,
+        flag_options,
+        name,
+        description,
+        explicit_permission,
+        false,
+    )
+}
+
+/// [`agent_new_with_config`] with the launch's `--no-mail-wake` choice.
+// trace:STORY-HOME-096 | ai:claude
+// why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn agent_new_with_config_wake(
     mut config: AgentLaunchConfig,
     role: Option<String>,
     spec: Option<String>,
@@ -2588,6 +2678,7 @@ pub(crate) fn agent_new_with_config(
     name: Option<String>,
     description: Option<String>,
     explicit_permission: bool,
+    no_mail_wake: bool,
 ) -> Result<()> {
     let base = cwd
         .map(std::path::PathBuf::from)
@@ -2829,6 +2920,22 @@ pub(crate) fn agent_new_with_config(
         );
     }
 
+    // Decide the session's mail wake before the child takes the terminal,
+    // so its one warning stays visible. trace:STORY-HOME-096 | ai:claude
+    let launch_wake = crate::mail_wake::launch_wake(
+        config.agent_type,
+        no_mail_wake,
+        load_agents_tool_bool(&project_root, config.agent_type, "mail_wake")?,
+        (crate::mail_wake::WakeAdapter::for_vendor(config.agent_type)
+            == crate::mail_wake::WakeAdapter::Codex
+            && !no_mail_wake)
+            .then(|| crate::mail_wake::codex_version(&binary))
+            .flatten()
+            .as_deref(),
+    );
+    if let Some(warning) = &launch_wake.warning {
+        eprintln!("  {} {warning}", "warning:".yellow().bold());
+    }
     run_tracked_agent_after_spawn(
         &binary,
         &config,
@@ -2838,6 +2945,7 @@ pub(crate) fn agent_new_with_config(
         description,
         title,
         verbose,
+        launch_wake.state,
         || {
             handle_guard.disarm();
             if let Some(receipt) = setup_receipt.as_mut() {
@@ -5713,6 +5821,34 @@ pub(crate) fn resolved_agent_permission_summary(agent_type: &str, args: &[String
     }
 }
 
+/// Record a launch's mail-wake state on its row, arming at once when the
+/// row already carries the session's thread. Warns, never fails the launch.
+// trace:STORY-HOME-096 | ai:claude
+fn stamp_launch_mail_wake(
+    project_root: &std::path::Path,
+    entry: &agent_registry::AgentRegistryEntry,
+    state: agent_registry::MailWake,
+) {
+    let stamped = match agent_registry::set_mail_wake_on_row(project_root, entry, state) {
+        Ok(row) => row,
+        Err(why) => {
+            eprintln!(
+                "  {} mail wake not recorded: {why:#}",
+                "warning:".yellow().bold()
+            );
+            return;
+        }
+    };
+    let armed = crate::mail_wake::arm_pending(
+        project_root,
+        &stamped,
+        crate::mailbox_wake_run::ensure_service,
+    );
+    if let Some(warning) = armed.and_then(|a| a.warning) {
+        eprintln!("  {} {warning}", "warning:".yellow().bold());
+    }
+}
+
 pub(crate) fn run_tracked_agent(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
@@ -5732,6 +5868,7 @@ pub(crate) fn run_tracked_agent(
         description,
         title,
         verbose,
+        None,
         || {},
     )
 }
@@ -5748,6 +5885,7 @@ fn run_tracked_agent_after_spawn(
     description: Option<String>,
     title: bool,
     verbose: bool,
+    mail_wake: Option<agent_registry::MailWake>,
     on_spawn: impl FnOnce(),
 ) -> Result<()> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
@@ -5905,6 +6043,12 @@ fn run_tracked_agent_after_spawn(
             child_pid,
             registry_entry.id
         );
+    }
+    // Stamp the launch's mail wake; a thread the child's SessionStart hook
+    // already recorded arms it now, else that hook arms it.
+    // trace:STORY-HOME-096 | ai:claude
+    if let Some(state) = mail_wake {
+        stamp_launch_mail_wake(&plan.project_root, &registry_entry, state);
     }
     let signal_forwarder = install_child_signal_forwarder(child_pid)?;
     let status = child

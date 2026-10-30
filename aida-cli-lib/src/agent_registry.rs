@@ -163,6 +163,9 @@ pub(crate) enum MailWake {
     Off,
     /// The session ended; the watcher stopped waking it.
     Retired,
+    /// The vendor (or this Codex version) has no live wake primitive; mail
+    /// arrives on its next turn.
+    Unsupported,
 }
 
 impl MailWake {
@@ -173,6 +176,7 @@ impl MailWake {
             Self::Failed => "failed",
             Self::Off => "off",
             Self::Retired => "retired",
+            Self::Unsupported => "unsupported",
         }
     }
 }
@@ -189,6 +193,28 @@ pub(crate) fn set_mail_wake(
     entry.mail_wake = Some(state);
     write_entry(project_root, &entry)?;
     Ok(entry)
+}
+
+/// Set `entry`'s mail-wake state on its row as it is on disk now, so a hook
+/// write that landed since `entry` was read is kept; returns that row.
+/// Refuses a row that another process (a recycled pid) has taken over.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn set_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    state: MailWake,
+) -> Result<AgentRegistryEntry> {
+    let path = registry_path(project_root, &entry.id);
+    let body =
+        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let mut row: AgentRegistryEntry =
+        toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+    if row.pid != entry.pid || row.pid_start != entry.pid_start {
+        anyhow::bail!("the registry row now belongs to another process");
+    }
+    row.mail_wake = Some(state);
+    write_entry(project_root, &row)?;
+    Ok(row)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -244,6 +270,9 @@ pub(crate) struct AgentRegistryView {
     // trace:BUG-2212 | ai:claude
     #[serde(default, skip_serializing_if = "LivenessBasis::is_process")]
     pub(crate) liveness: LivenessBasis,
+    // trace:STORY-HOME-096 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mail_wake: Option<MailWake>,
 }
 
 // trace:STORY-994 | ai:codex
@@ -911,11 +940,21 @@ pub(crate) fn register_spawned_agent(
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
+    let pid_start = crate::process_probe::process_start_identity(pid);
+    // The child's SessionStart hook can run before this write: keep the
+    // session id it recorded for this same process (the Codex thread).
+    // trace:STORY-HOME-096 | ai:claude
+    let hook_session_id =
+        std::fs::read_to_string(registry_path(project_root, &agent_id(&agent_type, pid)))
+            .ok()
+            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+            .filter(|old| old.pid_start.is_some() && old.pid_start == pid_start)
+            .and_then(|old| old.claude_session_id);
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
-        pid_start: crate::process_probe::process_start_identity(pid),
+        pid_start,
         pid_namespace: current_pid_namespace(),
         name,
         description,
@@ -934,7 +973,7 @@ pub(crate) fn register_spawned_agent(
         paused_reason: None,
         expected_back: None,
         native_session_id,
-        claude_session_id: None,
+        claude_session_id: hook_session_id,
         ended_at: None,
         spec_status_at_end: None,
         mail_wake: None,
@@ -1303,6 +1342,8 @@ pub(crate) fn gc_dead_agents(
             if entry.ended_at.is_none() {
                 if !dry_run {
                     entry.ended_at = Some(entry.last_active_at);
+                    // trace:STORY-HOME-096 | ai:claude
+                    crate::mail_wake::retire(&mut entry);
                     write_entry(project_root, &entry)?;
                 }
                 report.marked_ended += 1;
@@ -1365,6 +1406,9 @@ pub(crate) fn mark_agent_ended(
     entry.paused_since = None;
     entry.paused_reason = None;
     entry.expected_back = None;
+    // The session ended: the watcher stops waking it; its ledger stays.
+    // trace:STORY-HOME-096 | ai:claude
+    crate::mail_wake::retire(&mut entry);
     write_entry(project_root, &entry)?;
     Ok(Some(entry))
 }
@@ -1939,6 +1983,7 @@ fn view_for(
         ended_at: entry.ended_at,
         resumed_from: entry.resumed_from,
         liveness,
+        mail_wake: entry.mail_wake,
     }
 }
 
@@ -4368,6 +4413,7 @@ mod tests {
             ended_at: None,
             resumed_from: None,
             liveness: LivenessBasis::Process,
+            mail_wake: None,
         };
 
         let lines = format_agent_status_lines(&[view]);
@@ -4418,6 +4464,7 @@ mod tests {
             ended_at: None,
             resumed_from: None,
             liveness: LivenessBasis::Process,
+            mail_wake: None,
         };
 
         let lines = mcp_authority_status_lines(&[view]);
@@ -4637,6 +4684,7 @@ source = "mcp"
             ended_at: None,
             resumed_from: None,
             liveness: LivenessBasis::Process,
+            mail_wake: None,
         };
 
         let avail_line = &format_agent_status_lines(&[mk(Availability::Available, None)])[0];
