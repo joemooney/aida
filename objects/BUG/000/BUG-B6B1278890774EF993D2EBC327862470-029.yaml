@@ -2,12 +2,12 @@ id: 01a18a72-7f42-7602-b3e3-543edfbf1322
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-029
 title: Contained-seat deny rules emit Write/MultiEdit/NotebookEdit path patterns that Claude Code warns never match
 description: '2026-10-29 18:33: every `aida agent new claude` contained launch prints ~30 warnings: ''Deny rule MultiEdit(//…/.git) matches no tool'' and ''Deny rule Write(//…) never matches · use Edit(//…)'', for .git, .aida-store/.git and .aida/sessions in the primary checkout and the seat clone. Current Claude Code applies path deny rules through Edit(...) (which covers all file-writing tools); MultiEdit no longer exists. Acceptance: the generated settings emit one Edit(<path>) and Edit(<path>/**) deny per protected path (plus Read where intended), no Write/MultiEdit/NotebookEdit duplicates; a launch prints zero deny-rule warnings; a test pins the emitted rule set.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:35:21.922185685Z
-modified_at: 2026-10-30T02:51:28.955537333Z
+modified_at: 2026-10-30T06:00:46.130078960Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -43,6 +43,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18b65-7b28-7572-b7f0-06b95a2d214f
+  author: aida-auto-bump
+  timestamp: 2026-10-30T06:00:46.120019370Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18b65-7b32-7c93-afa4-e81d727f104d
+  timestamp: 2026-10-30T06:00:46.130073885Z
+  agent: aida
+  commit_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
+  summary: 'Base-only update from main (gh update-branch 659f3484db53686c3228be8da2e7fa7e499a0f5e -> 56759f5fed19a4d3e51d162f51421318c871cfb8); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 5e4ec0c39e38f1b62108e4ede81c9abd24dfe7fe
   branch: main
@@ -55,3 +69,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T02:51:28.955537333Z
   implemented_by: joe
+  completed_at: 2026-10-30T06:00:46.120014009Z
+  completion_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
