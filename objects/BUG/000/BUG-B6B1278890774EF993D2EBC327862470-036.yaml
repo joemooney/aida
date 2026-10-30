@@ -28,12 +28,12 @@ description: |
   B. The 'not found' error for a bare ID that matches a local number suggests the alias form (BUG-030 → 'did you mean BUG-HOME-030?').
   C. Rendering: show the agreed id when the spec has one and the alias-local id otherwise; never a bare local number.
   Agreed-id assignment (blocks, root, backfill) belongs to STORY-HOME-104. This bug is the resolver and rendering half. Surgery is allowed.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T04:47:21.728115291Z
+modified_at: 2026-10-30T09:09:31.269050694Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -55,6 +55,14 @@ history:
   timestamp: 2026-10-30T04:47:22.873605809Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18c12-4a05-79e2-9c75-0d2ab2d22131
+  author: aida-session-start
+  timestamp: 2026-10-30T09:09:31.269047351Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
