@@ -88198,5 +88198,13 @@ operations:
       5. Fix (bundled, partial): `aida node show` flags a mismatch when the local role says root but registry/root.yaml names another holder. ACCEPTED as deferred to slice 2 (per R8 slicing): effective_policy refusing on mismatch.
       6. Cosmetic (bundled): allocation_lineage.rs:207 cycle message reads "lineage of pool p reaches a cycle" for off-cycle pools; allocation_lineage.rs:497 block_lineage rustdoc + docs/cli/10-storage.md note that slice 1 validates only the immediate parent's home_ref.
       Validate: the targeted tests for 2–4 plus make check-ci-fast. LIGHT tier.
-clock: 6864
+- id: 01a18a30-926f-74e0-b897-ef7364fef3de
+  target_id: 01a189d8-a9a8-75d1-aae7-bbdd1a230a49
+  author: aida
+  node_id: '1'
+  lamport: 6865
+  timestamp: 2026-10-30T00:23:21.455101218Z
+  kind: !SetStatus
+    status: Approved
+clock: 6865
 node_id: '1'
