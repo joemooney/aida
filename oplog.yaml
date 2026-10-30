@@ -89951,5 +89951,17 @@ operations:
   timestamp: 2026-10-30T04:41:36.222308599Z
   kind: !SetStatus
     status: Approved
-clock: 7000
+- id: 01a18b1d-a630-7b41-a2d8-b69b1c8db718
+  target_id: 01a18b1d-9aef-70e0-bf2c-13c0560ee242
+  author: aida
+  node_id: '1'
+  lamport: 7001
+  timestamp: 2026-10-30T04:42:18.544728949Z
+  kind: !Create
+    title: Refresh GitHub Spec Kit and AWS Kiro entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research
+    description: ''
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 7001
 node_id: '1'

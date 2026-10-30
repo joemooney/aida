@@ -1,0 +1,21 @@
+id: 01a18b1d-9aef-70e0-bf2c-13c0560ee242
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-123
+title: Refresh GitHub Spec Kit and AWS Kiro entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T04:42:15.663405710Z
+modified_at: 2026-10-30T04:42:15.663405710Z
+req_type: Task
+tags:
+- lifecycle:no-review
+filed_at:
+  code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0dfbd03d09
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
