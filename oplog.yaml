@@ -90253,5 +90253,31 @@ operations:
   timestamp: 2026-10-30T05:05:33.713569733Z
   kind: !SetStatus
     status: Completed
-clock: 7015
+- id: 01a18b38-0e21-71c1-a08c-153bd7a7f624
+  target_id: 01a18b37-ff79-73b1-88a6-650c36ab073b
+  author: aida
+  node_id: '1'
+  lamport: 7016
+  timestamp: 2026-10-30T05:11:09.089048565Z
+  kind: !Create
+    title: 'Review PR-3119: [AI:claude] docs(competitive): refresh Spec Kit and Kiro roster rows from 2026-10-29 research (TASK-B6B1278890774EF993D2EBC327862470-123)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/task-home-123-speckit-kiro-refresh`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3119>
+      - Branch: `docs/task-home-123-speckit-kiro-refresh` → `main`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-123
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3119` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 7016
 node_id: '1'
