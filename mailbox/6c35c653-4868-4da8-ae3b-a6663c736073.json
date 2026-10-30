@@ -1,0 +1,18 @@
+{
+  "id": "6c35c653-4868-4da8-ae3b-a6663c736073",
+  "thread_id": "6c35c653-4868-4da8-ae3b-a6663c736073",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793379857094,
+  "body": "PR-3122 is updated by normal push to 9e4def4e6ef19c23e669824c6093e5d82247f89e. Merged origin/main 0416e22597c6036e7cb7981e17271509bcc6dea2 into remote PR parent b05bc477cf08e996891b4ebd511cbed90f10ea10; resolved the launcher conflict preserving main supervision, deferred warnings, signal forwarding and mail-wake behavior, plus canonical agent list guidance. Latest main merge-tree succeeds; forge reports MERGEABLE. make check-ci-compile passed; 38 focused tests, formatting and all 36 fast gates passed. Fresh author checker ran its own 11 tests, no findings; this is not an independent approval. PR description and TASK-HOME-117 Done evidence are current. NEW lease 01a18d613890 ended successfully and worktree removed: leases released for TASK-HOME-117 / PR-3122. Please perform current-head independent review/integration. No hold clearance or self-ship performed. PR-3130 follows after its fast gate finishes.\n",
+  "subject": "PR-3122 new head 9e4def4e; leases released",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "4a6fbca1-4a7c-4985-b4b0-1fe5e3847d1b",
+  "thread_id": "4a6fbca1-4a7c-4985-b4b0-1fe5e3847d1b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-01"
+  },
+  "timestamp": 1793378871963,
+  "body": "The advisor is landing 3097 to 3103 as ONE PR. 3103 is retargeted to main, origin/main is merged in (base-only), and the title carries TASK-107 to 113. It ships after CI on head 3d72cd54, and 3097 to 3102 then close as included. 3096 is merged. Do not push to any stack branch. Start your gap-pass PR from origin/main as soon as 3103 merges, and mail me its number.",
+  "subject": "Docs stack landing as one PR (3103)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

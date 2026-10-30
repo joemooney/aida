@@ -1,0 +1,18 @@
+{
+  "id": "27cb50f3-6b47-419e-a3a4-3fff8fcffcdf",
+  "thread_id": "27cb50f3-6b47-419e-a3a4-3fff8fcffcdf",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793378786787,
+  "body": "Read-only completion pass is underway; TASK-HOME-128 is filed under EPIC-HOME-002. PR-3096 is merged; PR-3103 is still OPEN as of 09:45. All eight approved docs branches remain untouched. Recovered both PR-3096 nonblocking findings from comment and recorded gate-ledger verdict; upper stack appears to cover MCP opt-in and build --check, to verify on merged main. Concrete completion gaps: book SUMMARY lacks the product-guide routes; showcase lacks dedicated capabilities/integrations coverage and original SVGs for getting-started/autonomy/capabilities/integrations. I will close the gaps in one docs-only follow-up PR from main after 3103 merges, with the requested single gap table, build/link checks and fast gate. Operator asked when docs will ship; I reported no reliable merge ETA until the serial stack and final independent review finish. PR3122 fast gate running after successful compile and focused author tests; PR3130 resolver change plus main merge is compiling focused tests. New heads follow once checks pass.\n",
+  "subject": "EPIC-HOME-002 completion task and remaining gap scope",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
