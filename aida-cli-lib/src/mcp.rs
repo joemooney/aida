@@ -10959,7 +10959,10 @@ mod tests {
             let error = server
                 .tool_send_message(&json!({"to":target,"body":"routing probe"}))
                 .unwrap_err();
-            assert!(!error.contains("aida agent ls"), "{error}");
+            // trace:TASK-B6B1278890774EF993D2EBC327862470-117 | ai:codex
+            for hint in ["aida agent list", "aida agent ls"] {
+                assert!(!error.contains(hint), "{error}");
+            }
         }
         assert!(crate::mailbox_store::read_local_messages(dir.path())
             .unwrap()
@@ -11003,7 +11006,9 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("no live agent"), "{error}");
         assert!(error.contains("broken.toml"), "{error}");
-        assert!(!error.contains("aida agent ls"), "{error}");
+        for hint in ["aida agent list", "aida agent ls"] {
+            assert!(!error.contains(hint), "{error}");
+        }
         assert_eq!(
             crate::mailbox_store::read_local_messages(dir.path())
                 .unwrap()
