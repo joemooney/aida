@@ -1,7 +1,7 @@
 id: 01a1874b-b26a-7d50-af2e-102a5512f699
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-080
 title: 'M1: one gate ledger keyed by change and head, with patch-identity carry-over'
-description: |-
+description: |
   ## Problem
   Review and merge-gate state lives in two key spaces and several places: ~2,700 files in `.aida/review-verdicts/` keyed by spec OR by `PR-N`, holds in `.aida/merge-holds/PR-N`, and verdict/hold files that reviewer lanes write into their own worktrees and that the launcher must "collect" back into the primary checkout. Consequences seen repeatedly (most recently PR-3089 on 2026-10-29, four review rounds): an approval under `PR-N` does not release a hold under the spec key (BUG-2221 class); releasing a hold deletes the marker the ship-held mandate needs as evidence; removing a reviewer worktree can lose state (BUG-2176); the carry-over proof is recomputed ~4 times per ship (TASK-1992). This is regroup move M1 (.aida/regroup-draft.md), the prerequisite for M2 (merge train by default).
 
@@ -92,12 +92,22 @@ description: |-
   1. aida-cli/tests/story_078_node_aliases.rs:748 node_alias_review_record_keys_the_verdict_under_the_canonical_id (CI cli-0): a verdict recorded under a node alias must still be keyed under the canonical id after the ledger move. Restore canonical keying in record/collect; do not edit the test expectation.
   2. aida-cli-lib/src/tests/queue_work_tests.rs:3684 status_sections::queue_work_tests::closed_refusal_does_not_count_as_outstanding (CI lib-1) panics at :3684:47: the hold/refusal projection now reads from the ledger and a closed refusal is missing or counted outstanding. Fix the projection, not the test.
   Validate: cargo test --profile agent -p aida-cli --test story_078_node_aliases node_alias_review_record ; cargo test --profile agent -p aida-cli-lib --lib closed_refusal_does_not_count_as_outstanding ; make check-ci-fast. Push to the PR-3106 branch. LIGHT tier.
+
+
+  ## SLICE 3 brief (advisor, 2026-10-29 20:45): slice 2 SHIPPED as PR-3106 (52e235e). FINAL slice, new PR, PLAIN trailer `(STORY-B6B1278890774EF993D2EBC327862470-080)`.
+  Slice 1-2 rulings above are history; do not reopen them. Scope:
+  1. AC4 carry-over: after a base-only update whose patch identity (diff of the change's own commits against its merge base) is unchanged, the prior approval applies at the new head. Compute the proof ONCE and append it as a `carry-over-proof` event naming old head, new head, and patch id. Ship, the ship-held mandate, and the merge-hold-gate CI check read the event through gate::ledger::project and never recompute it. Changed patch identity: no carry-over, and the projection says why.
+  2. This replaces the manual "Base-only re-record" step in ~/.local/share/aida/ops/serial-ship.sh. After merge, `aida pr ship` on an updated branch must accept the carried approval with no `aida review record` call.
+  3. AC2 binding: spec-only verdicts recorded before a change exists bind to the change when the PR opens (ruling (a) above).
+  4. On completion, supersede TASK-1992, TASK-1316, STORY-1375, TASK-2008 (carry-over part) and STORY-1683 with `aida edit <ID> --status superseded --superseded-by <this spec>`.
+  Tests: base-only update keeps approval; a content change drops it; the CI gate and ship agree on the same event; the proof is computed once (counted).
+  Test tier STRICT: targeted `cargo test -p aida-cli-lib --lib gate::` plus the ship/mandate integration binaries you touch, plus make check-ci-fast. Never the workspace suite. Run with env -u AIDA_CONTAINED.
 status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T00:54:08.969805342Z
+modified_at: 2026-10-30T03:43:50.165800994Z
 req_type: Story
 tags:
 - architecture
@@ -1159,6 +1169,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18ae8-2361-7183-af2b-d86fd8c9d568
+  author: joe
+  timestamp: 2026-10-30T03:43:51.649410241Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
