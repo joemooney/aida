@@ -55,12 +55,12 @@ description: |
   ## SLICE 2 brief (advisor, 2026-10-30 01:01): slice 1 SHIPPED as PR-3110 (df7add8). Implement slice 2 as a NEW PR with the PLAIN trailer `(STORY-B6B1278890774EF993D2EBC327862470-096)`.
   Scope (from the slice plan above): the `agent new` pending stamp; SessionStart hook arming; retire on end/GC; the `agent list` wake column; the doctor iteration and the health-job deviation recorded in comment 5. Keep slice 1's narrow-only and owner/operator gates. When you add CLI flags or columns, regenerate the help golden (story_1728).
   Gate: LIGHT. One targeted run, `cargo test -p aida-cli-lib --lib story_home_096`, plus make check-ci-fast.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T08:10:19.558589166Z
+modified_at: 2026-10-30T08:19:47.813700808Z
 req_type: Story
 relationships:
 - rel_type:
@@ -350,6 +350,14 @@ history:
   - field_name: status
     old_value: Completed
     new_value: Approved
+- id: 01a18be4-c3e5-7501-a0db-bb10c529447b
+  author: aida-session-start
+  timestamp: 2026-10-30T08:19:47.813695943Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
