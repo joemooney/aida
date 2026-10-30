@@ -621,7 +621,10 @@ pub(crate) fn stale_lock_findings(
                     safe_heal: true,
                 });
             }
-            aida_core::LockOwnerState::Dead { .. } if on_disk => {}
+            // Only a pid whose start identity still matches the record is the
+            // holder; a reused pid's disk wait never hides a stale record.
+            // trace:BUG-HOME-041 | ai:claude
+            aida_core::LockOwnerState::Dead { pid_reused: false } if on_disk => {}
             aida_core::LockOwnerState::Dead { pid_reused } if age_secs >= stale_secs => {
                 out.push(DoctorFinding {
                     category: "stale-locks".to_string(),

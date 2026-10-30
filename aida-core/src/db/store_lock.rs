@@ -137,6 +137,14 @@ fn ensure_lock_excluded(root: &Path) {
 /// Acquire the store write lock for the git store rooted at `root`.
 // trace:BUG-1612 | ai:claude
 pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
+    acquire_until(root, crate::io_pressure::fail_fast_lock_deadline())
+}
+
+/// [`acquire`] with the fail-fast deadline as a parameter: past `deadline`,
+/// a wait whose holder is blocked (saturated disk, or a cache holder in
+/// another PID namespace) gives up with the IO-pressure message instead of
+/// running the full timeout. trace:BUG-HOME-041 | ai:claude
+fn acquire_until(root: &Path, deadline: Option<std::time::SystemTime>) -> Result<StoreWriteGuard> {
     let key = lock_key(root);
     let reentrant = HELD.with(|held| {
         let mut held = held.borrow_mut();
@@ -188,6 +196,7 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
     let limit = timeout();
     let mut recorded_contention = false;
     let mut notice = crate::io_pressure::LockWaitNotice::new();
+    let mut waits = 0u32;
     loop {
         use fs2::FileExt;
         match file.try_lock_exclusive() {
@@ -232,6 +241,29 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
                 }
                 // trace:BUG-HOME-041 | ai:claude
                 notice.tick("store write lock", || None);
+                // Evidence is probed about once a second, starting at once.
+                if waits % 50 == 0 {
+                    if let Some(blocked) = crate::io_pressure::give_up_lock_wait(
+                        deadline,
+                        std::time::SystemTime::now(),
+                        || {
+                            super::cache_lock::blocked_lock_holder(
+                                &super::cache_lock::cache_lock_info_path(
+                                    &crate::CachedGitBackend::default_cache_path(root),
+                                ),
+                            )
+                        },
+                    ) {
+                        anyhow::bail!(
+                            "Gave up waiting for the store write lock {} at the {}s fail-fast \
+                             deadline: {}. Retry when IO pressure drops.",
+                            path.display(),
+                            crate::io_pressure::FAIL_FAST_LOCK_BUDGET.as_secs(),
+                            blocked.describe()
+                        );
+                    }
+                }
+                waits += 1;
                 std::thread::sleep(Duration::from_millis(20));
             }
             Err(e) => {
@@ -409,6 +441,45 @@ mod tests {
             !exclude.lines().any(|l| l.trim().contains("tmp")),
             "no staging-file pattern may reach the shared exclude: {exclude}"
         );
+    }
+
+    // BUG-HOME-041: a store-lock wait past its fail-fast deadline, with the
+    // cache held by a writer in another PID namespace, gives up at once with
+    // the IO-pressure message instead of waiting out the 120 s timeout.
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_store_lock_wait_gives_up_at_the_fail_fast_deadline() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        let root = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&root).unwrap();
+        let lock_info = super::super::cache_lock::cache_lock_info_path(
+            &crate::CachedGitBackend::default_cache_path(&root),
+        );
+        let seen = (chrono::Utc::now() - chrono::Duration::hours(10)).to_rfc3339();
+        let info = super::super::cache_lock::CacheLockInfo {
+            pid: 19,
+            pid_ns: Some("not-a-local-ns".into()),
+            command: "aida cache refresh --worker".into(),
+            started_at: seen.clone(),
+            heartbeat_at: Some(seen),
+            ..Default::default()
+        };
+        std::fs::write(&lock_info, serde_json::to_string(&info).unwrap()).unwrap();
+
+        let _held = acquire_until(&root, None).unwrap();
+        let r2 = root.clone();
+        let started = Instant::now();
+        let err =
+            std::thread::spawn(move || acquire_until(&r2, Some(std::time::UNIX_EPOCH)).map(|_| ()))
+                .join()
+                .unwrap()
+                .expect_err("a blocked holder past the deadline gives up");
+        assert!(started.elapsed() < Duration::from_secs(1));
+        let text = err.to_string();
+        assert!(text.contains("fail-fast deadline"), "{text}");
+        assert!(text.contains("another PID namespace"), "{text}");
+        assert!(text.contains("Retry when IO pressure drops"), "{text}");
     }
 
     #[test]

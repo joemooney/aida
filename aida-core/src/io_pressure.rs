@@ -12,7 +12,7 @@
 //!
 //! trace:BUG-HOME-041 | ai:claude
 
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// `some avg10` at or above this percentage means the disk is saturated.
 pub const SATURATED_SOME_AVG10_PCT: f64 = 50.0;
@@ -157,9 +157,180 @@ impl LockWaitNotice {
     }
 }
 
+/// Overall bound on a fail-fast lock wait (`aida rel add`, `aida pr
+/// auto-queue-review`): once spent, a wait whose holder is in another PID
+/// namespace or blocked on a saturated disk gives up instead of running its
+/// full timeout.
+pub const FAIL_FAST_LOCK_BUDGET: Duration = Duration::from_secs(30);
+
+/// Carries an armed fail-fast deadline (unix milliseconds) to child `aida`
+/// processes, so a command's subcommands share one budget instead of each
+/// restarting it.
+pub const FAIL_FAST_DEADLINE_ENV: &str = "AIDA_LOCK_FAIL_FAST_DEADLINE_MS";
+
+static FAIL_FAST_DEADLINE: std::sync::Mutex<Option<SystemTime>> = std::sync::Mutex::new(None);
+
+/// Arm this process's fail-fast lock deadline: `budget` from now, or an
+/// earlier deadline inherited from a parent through [`FAIL_FAST_DEADLINE_ENV`].
+pub fn arm_fail_fast_lock_deadline(budget: Duration) -> SystemTime {
+    let inherited = std::env::var(FAIL_FAST_DEADLINE_ENV).ok();
+    let deadline = fail_fast_deadline_from(SystemTime::now(), budget, inherited.as_deref());
+    *FAIL_FAST_DEADLINE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(deadline);
+    deadline
+}
+
+/// [`arm_fail_fast_lock_deadline`]'s arithmetic with the clock injected.
+pub fn fail_fast_deadline_from(
+    now: SystemTime,
+    budget: Duration,
+    inherited_ms: Option<&str>,
+) -> SystemTime {
+    let own = now + budget;
+    inherited_ms
+        .and_then(|ms| ms.trim().parse::<u64>().ok())
+        .map(|ms| UNIX_EPOCH + Duration::from_millis(ms))
+        .map_or(own, |inherited| inherited.min(own))
+}
+
+/// The armed fail-fast deadline, if this command armed one.
+pub fn fail_fast_lock_deadline() -> Option<SystemTime> {
+    *FAIL_FAST_DEADLINE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// The `(name, value)` env pair that hands the armed deadline to a child.
+pub fn fail_fast_deadline_env() -> Option<(&'static str, String)> {
+    let deadline = fail_fast_lock_deadline()?;
+    let ms = deadline.duration_since(UNIX_EPOCH).ok()?.as_millis();
+    Some((FAIL_FAST_DEADLINE_ENV, ms.to_string()))
+}
+
+/// Why a lock holder cannot be expected to let go soon.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BlockedHolder {
+    /// The disk is saturated; the holder is waiting on the device.
+    Disk(DiskSaturation),
+    /// The holder runs in another PID namespace, so nothing here can probe
+    /// it; only its heartbeat (silent this long) speaks for it.
+    ForeignNamespace {
+        pid: u32,
+        command: String,
+        silent: Option<Duration>,
+    },
+}
+
+impl BlockedHolder {
+    pub fn describe(&self) -> String {
+        match self {
+            BlockedHolder::Disk(disk) => disk.describe(),
+            BlockedHolder::ForeignNamespace {
+                pid,
+                command,
+                silent,
+            } => {
+                let heartbeat = silent
+                    .map(|s| format!("; its last heartbeat was {}s ago", s.as_secs()))
+                    .unwrap_or_default();
+                format!(
+                    "the holder (pid {pid}, {command}) runs in another PID namespace, so it \
+                     cannot be probed from here{heartbeat}. On a busy disk such a holder can \
+                     sit for minutes"
+                )
+            }
+        }
+    }
+}
+
+/// The fail-fast decision for one lock-wait iteration: once `now` reaches
+/// `deadline`, give up when `evidence` names a blocked holder. Before the
+/// deadline, or with no evidence, keep waiting (the wait's own timeout still
+/// applies). `evidence` is only called past the deadline.
+pub fn give_up_lock_wait(
+    deadline: Option<SystemTime>,
+    now: SystemTime,
+    evidence: impl FnOnce() -> Option<BlockedHolder>,
+) -> Option<BlockedHolder> {
+    if now < deadline? {
+        return None;
+    }
+    evidence()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fail_fast_deadline_gives_up_only_past_the_deadline_with_evidence() {
+        let t0 = UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let deadline = fail_fast_deadline_from(t0, FAIL_FAST_LOCK_BUDGET, None);
+        assert_eq!(deadline, t0 + Duration::from_secs(30));
+        let foreign = || {
+            Some(BlockedHolder::ForeignNamespace {
+                pid: 19,
+                command: "aida cache refresh --worker".into(),
+                silent: Some(Duration::from_secs(36_000)),
+            })
+        };
+        // Unarmed: never gives up early.
+        assert_eq!(
+            give_up_lock_wait(None, t0 + Duration::from_secs(999), foreign),
+            None
+        );
+        // Armed, before the deadline: keeps waiting, and never probes.
+        assert_eq!(
+            give_up_lock_wait(Some(deadline), t0 + Duration::from_secs(29), || {
+                panic!("evidence probed before the deadline")
+            }),
+            None
+        );
+        // Past the deadline with a foreign-namespace holder: gives up.
+        let blocked = give_up_lock_wait(Some(deadline), t0 + Duration::from_secs(30), foreign)
+            .expect("a foreign holder past the deadline gives up");
+        let text = blocked.describe();
+        assert!(
+            text.contains("pid 19") && text.contains("another PID namespace"),
+            "{text}"
+        );
+        // Past the deadline with a saturated disk: gives up with the IO-pressure text.
+        let disk = disk_saturation_with(Some(90.0), None, |_| None).map(BlockedHolder::Disk);
+        let blocked = give_up_lock_wait(Some(deadline), t0 + Duration::from_secs(31), || disk)
+            .expect("a saturated disk past the deadline gives up");
+        assert!(blocked.describe().contains("IO pressure 90%"));
+        // Past the deadline but nothing blocked: keep waiting.
+        assert_eq!(
+            give_up_lock_wait(Some(deadline), t0 + Duration::from_secs(60), || None),
+            None
+        );
+    }
+
+    #[test]
+    fn fail_fast_deadline_inherits_an_earlier_parent_deadline() {
+        let t0 = UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let earlier = (t0 + Duration::from_secs(5))
+            .duration_since(UNIX_EPOCH)
+            .unwrap();
+        assert_eq!(
+            fail_fast_deadline_from(
+                t0,
+                FAIL_FAST_LOCK_BUDGET,
+                Some(&earlier.as_millis().to_string())
+            ),
+            t0 + Duration::from_secs(5)
+        );
+        // A later or garbled inherited deadline never extends the budget.
+        assert_eq!(
+            fail_fast_deadline_from(t0, FAIL_FAST_LOCK_BUDGET, Some("99999999999999")),
+            t0 + Duration::from_secs(30)
+        );
+        assert_eq!(
+            fail_fast_deadline_from(t0, FAIL_FAST_LOCK_BUDGET, Some("soon")),
+            t0 + Duration::from_secs(30)
+        );
+    }
 
     const PSI: &str = "some avg10=85.12 avg60=80.01 avg300=79.50 total=123456\n\
                        full avg10=40.00 avg60=38.20 avg300=37.90 total=654321\n";

@@ -1197,6 +1197,30 @@ fn with_cache_retry_observed<T, F>(
     lock_info_path: &Path,
     action: &str,
     owns_sidecar: bool,
+    f: F,
+) -> Result<T>
+where
+    F: FnMut() -> Result<T>,
+{
+    with_cache_retry_until(
+        lock_info_path,
+        action,
+        owns_sidecar,
+        crate::io_pressure::fail_fast_lock_deadline(),
+        f,
+    )
+}
+
+/// [`with_cache_retry_observed`] with the fail-fast deadline as a parameter:
+/// past `deadline`, a contended attempt whose holder is blocked (saturated
+/// disk, or a holder in another PID namespace) ends the ladder with the
+/// IO-pressure message instead of sleeping on.
+// trace:BUG-HOME-041 | ai:claude
+fn with_cache_retry_until<T, F>(
+    lock_info_path: &Path,
+    action: &str,
+    owns_sidecar: bool,
+    deadline: Option<std::time::SystemTime>,
     mut f: F,
 ) -> Result<T>
 where
@@ -1214,6 +1238,16 @@ where
         match f() {
             Ok(value) => return Ok(value),
             Err(err) if is_sqlite_lock_error(&err) => {
+                // trace:BUG-HOME-041 | ai:claude
+                if let Some(blocked) = crate::io_pressure::give_up_lock_wait(
+                    deadline,
+                    std::time::SystemTime::now(),
+                    || super::cache_lock::blocked_lock_holder(lock_info_path),
+                ) {
+                    return Err(super::cache_lock::fail_fast_cache_lock_error(
+                        action, &blocked, err,
+                    ));
+                }
                 // trace:BUG-1956 | ai:claude
                 let Some(delay) = ladder_delay(&delays, attempts) else {
                     let observation = observe_lock_info_file(lock_info_path).ok().flatten();
@@ -6167,6 +6201,46 @@ mod tests {
         // Restore the thread-local so a reused test thread is unaffected.
         set_fast_fail_cache(prior);
         assert!(!fast_fail_cache_enabled());
+    }
+
+    // BUG-HOME-041: past the fail-fast deadline, a contended attempt whose
+    // recorded holder runs in another PID namespace ends the ladder at once
+    // with the IO-pressure message; before the deadline it would retry.
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn bug_home_041_fail_fast_deadline_ends_the_ladder_on_a_foreign_holder() {
+        let dir = tempdir().unwrap();
+        let lock_info = cache_lock_info_path(&dir.path().join("cache.db"));
+        let seen = (chrono::Utc::now() - chrono::Duration::hours(10)).to_rfc3339();
+        let info = CacheLockInfo {
+            pid: 19,
+            pid_ns: Some("not-a-local-ns".into()),
+            command: "aida cache refresh --worker".into(),
+            started_at: seen.clone(),
+            heartbeat_at: Some(seen),
+            ..Default::default()
+        };
+        std::fs::write(&lock_info, serde_json::to_string(&info).unwrap()).unwrap();
+        let mut attempts = 0;
+        let err = with_cache_retry_until(
+            &lock_info,
+            "rebuild cache",
+            false,
+            Some(std::time::UNIX_EPOCH),
+            || -> Result<()> {
+                attempts += 1;
+                Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+                    Some("database is locked".to_string()),
+                )))
+            },
+        )
+        .expect_err("a blocked holder past the deadline fails");
+        assert_eq!(attempts, 1, "no retry sleeps past the deadline");
+        assert!(is_cache_lock_error(&err));
+        let text = err.to_string();
+        assert!(text.contains("fail-fast deadline"), "{text}");
+        assert!(text.contains("another PID namespace"), "{text}");
     }
 
     // BUG-681: end-to-end — with fast-fail armed, a lock-contended cache
