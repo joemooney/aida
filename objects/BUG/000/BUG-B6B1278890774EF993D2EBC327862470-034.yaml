@@ -3,11 +3,11 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-034
 title: 'Reviewer launch reports ''git commit failed: ✓ Commit message format valid'' (hook stdout shown, git''s real error dropped)'
 description: '2026-10-29 20:24: `aida queue work PR-3115 --role reviewer --no-human --vendor claude --steal`, launched within 15s of two other reviewer launches, failed with: error: "git commit failed: \x1b[0;32m✓ Commit message format valid\x1b[0m" right after ''this contained seat gets a linked worktree''. The message shows the commit-msg hook''s success stdout and drops git''s stderr, so the cause is unknown (likely a concurrent store or index lock). Acceptance: on a commit failure, the launcher reports git''s stderr and exit code (with the hook output stripped of ANSI codes or omitted); a lock-contention failure retries with bounded backoff; test with a fake git that writes the hook line to stdout and the error to stderr.'
 status: Approved
-priority: Low
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T03:45:48.780708400Z
-modified_at: 2026-10-30T05:44:15.518907730Z
+modified_at: 2026-10-30T06:40:23.068702233Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -21,10 +21,22 @@ comments:
   created_at: 2026-10-30T05:44:15.518907730Z
   modified_at: 2026-10-30T05:44:15.518907730Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18b89-c01c-7242-9380-09c1a567f28e
+  author: joe
+  content: |
+    2026-10-29 23:40: third hit tonight. `aida session end` failed with 'git add -A . failed: fatal: Unable to create .git/worktrees/-aida-store/index.lock: File exists' while about 8 reviewers and lanes ran. All store writers (session end, reviewer launch, review record) need one serialized writer or a bounded lock retry. Priority raised to high.
+  created_at: 2026-10-30T06:40:23.068702233Z
+  modified_at: 2026-10-30T06:40:23.068702233Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18aea-4634-7890-b81b-b37aba622a8e
   author: joe
   timestamp: 2026-10-30T03:46:11.636479270Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
+- id: 01a18b89-6229-7e12-9c25-9df7efbb0842
+  author: joe
+  timestamp: 2026-10-30T06:39:59.017777876Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:

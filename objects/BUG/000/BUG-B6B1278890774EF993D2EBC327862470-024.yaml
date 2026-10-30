@@ -7,12 +7,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T01:06:21.319744510Z
+modified_at: 2026-10-30T06:42:03.927095829Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T00:39:15.595751992Z
+comments:
+- id: 01a18b8b-4a17-71e1-bff6-2b91e20ae551
+  author: joe
+  content: |
+    2026-10-29 23:40 evidence: reviewer launches for PR-3096, 3101, 3102 and 3103 each failed with 'could not end dead lease <id> holding <branch>'. The implementer worktrees (/home/joe/ai/aida-docs-round2-106, -111, -112, -113) had been deleted by hand, but their leases stayed. The launcher's auto-end then hit store index.lock contention (BUG-HOME-034) and aborted the whole review instead of retrying. Also: `aida session end <id>` with the truncated 9-char id that `aida session leases` prints is treated as a BRANCH name ('No lease found for branch 01a18a648'). Acceptance additions: (a) a lease whose worktree no longer exists is ended automatically, with no lock dependency on a dirty-tree check; (b) `session leases` prints ids that `session end` accepts.
+  created_at: 2026-10-30T06:42:03.927095829Z
+  modified_at: 2026-10-30T06:42:03.927095829Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a3f-2a1f-7903-9467-6c6bd617b8c3
   author: joe
