@@ -164,10 +164,11 @@ pub enum ScaffoldCommand {
         #[clap(long)]
         dry_run: bool,
 
-        /// Override the category strategy and overwrite every drifted
-        /// file regardless of category. Equivalent to today's
-        /// `apply --force` but with the cleaner per-category output.
-        /// Use sparingly — overwrites your CLAUDE.md / AGENTS.md.
+        /// Override the category strategy: overwrite drifted files regardless
+        /// of category and replace an existing README.md seed even when it
+        /// reports no managed drift. Use sparingly — replaces your README.md
+        /// and can overwrite your CLAUDE.md / AGENTS.md.
+        // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
         #[clap(long)]
         force: bool,
 
@@ -197,7 +198,10 @@ pub enum ScaffoldCommand {
     /// CLAUDE.md is presence-only (drift = `@.claude/AIDA.md` import line
     /// missing); AGENTS.md compares just the content between
     /// `<!-- AIDA-AUTOGEN-BEGIN -->` / `<!-- AIDA-AUTOGEN-END -->` markers.
-    /// Everything else gets a full-content diff.
+    /// Existing README.md is a user-owned seed and is never compared, even
+    /// with an explicit path (exit 0). A missing README.md is reported as drift
+    /// (exit 1); upgrade creates the starter. Other files get a full-content diff.
+    // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
     // trace:FR-1-027 | ai:claude
     Diff {
         /// Specific path (relative to project root) to diff. When omitted,
