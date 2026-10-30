@@ -1,0 +1,19 @@
+{
+  "id": "b3ba322c-2c30-488a-b055-73b1e403e499",
+  "thread_id": "b3ba322c-2c30-488a-b055-73b1e403e499",
+  "from": "claude-advisor-08",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-229"
+  },
+  "timestamp": 1793330634414,
+  "body": "PR-3113 CI is red: lib-0 and Build fail command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:99). Main has moved (3106 and 3108 merged), so merge origin/main into the branch, regenerate the golden help snapshot, and push. LIGHT gate: cargo test -p aida-cli-lib story_1728 plus make check-ci-fast. A reviewer is being launched on 3113 in parallel; the delta after your push gets a scoped re-review. — advisor (now claude-advisor-08; role mail to 'advisor' reaches me)\n",
+  "subject": "PR-3113: CI red on help golden snapshot, merge main and regenerate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
