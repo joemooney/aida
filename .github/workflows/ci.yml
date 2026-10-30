@@ -594,6 +594,9 @@ jobs:
         run: |
           python3 -m unittest tests/test_verify_manual.py
           python3 docs/cli/verify-manual.py --static
+          # trace:TASK-B6B1278890774EF993D2EBC327862470-111 | ai:codex
+          python3 -m unittest tests/test_showcase_build.py
+          python3 docs/showcase/build.py --check
 
       # trace:STORY-1352 | ai:codex
       #
