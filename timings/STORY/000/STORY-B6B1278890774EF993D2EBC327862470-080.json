@@ -5,9 +5,412 @@
     {
       "at": "2026-10-29T23:55:25.746811544Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-30T14:28:29.637834397Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-29T10:54:21.414067578Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T10:55:21.949948740Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T10:58:27.444626017Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T10:58:27.474265170Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T11:00:25.227584966Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T11:56:26.738291295Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T11:56:26.758374598Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T13:23:25.819016474Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T13:23:25.840255408Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T14:31:14.469213894Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T14:31:14.490688841Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T15:04:43.266857129Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T15:04:43.286643029Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T15:40:25.114694734Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T15:40:25.139949191Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T15:41:03.504635273Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T16:43:24.228008452Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T16:43:24.244310396Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T17:35:06.545441984Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T17:35:06.567275200Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T18:13:09.736867871Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T18:13:09.753590699Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T18:31:23.492800705Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-29T19:24:28.084879686Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3090,
+        "verdict": "APPROVED",
+        "reviewed_sha": "eb306b090cd8b71bf1d9c0c0658c7befa10d7eab"
+      }
+    },
+    {
+      "ts": "2026-10-29T19:35:57.457650344Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+        "branch": "story-b6b1278890774ef993d2ebc327862470-080",
+        "first_seen": "2026-10-29T19:35:57.457538114+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-29T19:39:48.516855712Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-29T19:59:58.658352133Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T20:01:56.339268905Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T20:36:29.677232329Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T20:40:32.569340883Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T20:41:19.870892208Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T21:21:49.338763575Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T21:22:27.297849951Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T21:23:16.472089797Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-29T22:35:40.104554029Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T22:35:40.137285444Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T22:36:23.296112515Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-29T22:36:54.335491614Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-29T22:37:37.145854972Z",
       "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
@@ -16,6 +419,133 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-30T00:28:50.475992378Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T01:20:54.560193086Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3106,
+        "verdict": "APPROVED",
+        "reviewed_sha": "beddb33e42d7abe1276132ff6a9281c8071c1644"
+      }
+    },
+    {
+      "ts": "2026-10-30T02:01:36.129833584Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3106,
+        "verdict": "APPROVED",
+        "reviewed_sha": "461de777518bd9918ec10f56aa6c5a1aa2e21507"
+      }
+    },
+    {
+      "ts": "2026-10-30T02:27:20.195138762Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+        "branch": "origin/story-b6b1278890774ef993d2ebc327862470-080",
+        "first_seen": "2026-10-30T02:27:20.195063114+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T05:53:07.991499697Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T07:28:02.371092697Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T08:48:29.043267064Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T09:06:56.493973576Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-080",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T10:18:21.163928808Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+        "branch": "story-b6b1278890774ef993d2ebc327862470-080-2",
+        "first_seen": "2026-10-30T10:18:21.163906853+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T14:06:01.440933479Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3120,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2fba1543238383d8e902467d82f7ce93cd394288"
+      }
+    },
+    {
+      "ts": "2026-10-30T14:27:38.349907072Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3120
+      }
+    },
+    {
+      "ts": "2026-10-30T14:28:29.377115888Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-080",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bd35c50292a984ef4f0c29737f46c97b4305a030",
+        "pr": 3120,
+        "closed_by": "auto-bump"
       }
     }
   ]
