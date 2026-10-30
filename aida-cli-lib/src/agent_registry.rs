@@ -140,6 +140,158 @@ pub(crate) struct AgentRegistryEntry {
     // trace:STORY-790 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) spec_status_at_end: Option<String>,
+    /// Whether the project's mail-wake watcher wakes this session's native
+    /// thread for its own mail. `None` on rows nothing has armed.
+    // trace:STORY-HOME-096 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mail_wake: Option<MailWake>,
+}
+
+/// A registry row's mail-wake state. Only `armed` rows are watched; a
+/// retired row keeps its ledger on disk.
+// trace:STORY-HOME-096 | ai:claude
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum MailWake {
+    /// Requested at launch; the session has no thread to bind yet.
+    Pending,
+    /// The watcher wakes this session's thread for its own mail.
+    Armed,
+    /// Arming was attempted and failed.
+    Failed,
+    /// The operator opted out.
+    Off,
+    /// The session ended; the watcher stopped waking it.
+    Retired,
+    /// The vendor (or this Codex version) has no live wake primitive; mail
+    /// arrives on its next turn.
+    Unsupported,
+}
+
+impl MailWake {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Armed => "armed",
+            Self::Failed => "failed",
+            Self::Off => "off",
+            Self::Retired => "retired",
+            Self::Unsupported => "unsupported",
+        }
+    }
+}
+
+/// Set the mail-wake state of the live session `target` (name or
+/// `<type>#<pid>`). Returns the updated row.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn set_mail_wake(
+    project_root: &Path,
+    target: &str,
+    state: MailWake,
+) -> Result<AgentRegistryEntry> {
+    let (_, mut entry) = resolve_target_entry(project_root, target)?;
+    entry.mail_wake = Some(state);
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+/// Set `entry`'s mail-wake state on its row as it is on disk now; returns
+/// that row. The read and the write share one namespace-lock hold, so a
+/// hook write that landed since `entry` was read is kept and none can land
+/// in between. Refuses a row that another process (a recycled pid) has
+/// taken over. The launcher calls this for a child already running, so it
+/// waits out launch-time contention.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn set_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    state: MailWake,
+) -> Result<AgentRegistryEntry> {
+    update_mail_wake_on_row(
+        project_root,
+        entry,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+        |_| Some(state),
+    )
+}
+
+/// How long arming waits for the namespace lock: it runs in the launcher
+/// and in the SessionStart hook, which must not stall behind a wedged lock.
+const ARM_LOCK_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Move `entry`'s row from any of `from` to `to`, under the same lock hold
+/// as the read. A row in another state (retired, armed by the other side of
+/// the launch, opted out) is left as it is.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn transition_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    from: &[MailWake],
+    to: MailWake,
+) -> Result<AgentRegistryEntry> {
+    update_mail_wake_on_row(project_root, entry, ARM_LOCK_BUDGET, |now| {
+        now.is_some_and(|now| from.contains(&now)).then_some(to)
+    })
+}
+
+/// Read-decide-write of one row's mail wake under the namespace lock;
+/// `decide` gets the row's current state and returns `None` to leave it.
+fn update_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    budget: std::time::Duration,
+    decide: impl FnOnce(Option<MailWake>) -> Option<MailWake>,
+) -> Result<AgentRegistryEntry> {
+    let _lock = crate::agent_handle::lock_namespace_within(project_root, budget)?;
+    let path = registry_path(project_root, &entry.id);
+    let body =
+        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let mut row: AgentRegistryEntry =
+        toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+    if row.pid != entry.pid || row.pid_start != entry.pid_start {
+        anyhow::bail!("the registry row now belongs to another process");
+    }
+    if let Some(state) = decide(row.mail_wake) {
+        row.mail_wake = Some(state);
+        write_entry_locked(project_root, &row)?;
+    }
+    Ok(row)
+}
+
+/// The SessionStart hook's row (`entry`) with a launcher write that landed
+/// between the hook's read (`read`) and its write folded in; `disk` is the
+/// row as it is now, read under the lock the hook's write holds. The
+/// launcher owns the mail wake and the launch identity; the hook keeps the
+/// session id, handle reservation and terminal it observed.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn carry_concurrent_launcher_write(
+    entry: &mut AgentRegistryEntry,
+    read: Option<&AgentRegistryEntry>,
+    disk: Option<&AgentRegistryEntry>,
+) {
+    let Some(disk) = disk
+        .filter(|d| d.pid == entry.pid && d.pid_start.is_some() && d.pid_start == entry.pid_start)
+    else {
+        return;
+    };
+    // Only the launcher stamps the wake and only arming moves it on; the
+    // hook's row never decides it.
+    entry.mail_wake = disk.mail_wake;
+    if read == Some(disk) || disk.source != "agent-launcher" {
+        return;
+    }
+    entry.source = disk.source.clone();
+    if disk.name.is_some() {
+        entry.name = disk.name.clone();
+    }
+    entry.role = disk.role.clone().or(entry.role.take());
+    entry.current_spec = disk.current_spec.clone().or(entry.current_spec.take());
+    entry.native_session_id = disk
+        .native_session_id
+        .clone()
+        .or(entry.native_session_id.take());
+    entry.description = disk.description.clone().or(entry.description.take());
+    entry.resumed_from = disk.resumed_from.clone().or(entry.resumed_from.take());
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -195,6 +347,9 @@ pub(crate) struct AgentRegistryView {
     // trace:BUG-2212 | ai:claude
     #[serde(default, skip_serializing_if = "LivenessBasis::is_process")]
     pub(crate) liveness: LivenessBasis,
+    // trace:STORY-HOME-096 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mail_wake: Option<MailWake>,
 }
 
 // trace:STORY-994 | ai:codex
@@ -582,6 +737,7 @@ pub(crate) fn touch_mcp_agent(
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         });
 
@@ -684,9 +840,11 @@ pub(crate) fn touch_session_start_agent(
         _ => env_nonempty(crate::agent_handle::HANDLE_ENV)
             .or_else(|| env_nonempty("AIDA_AGENT_NAME")),
     };
-    let mut entry = std::fs::read_to_string(&path)
+    let read_row = std::fs::read_to_string(&path)
         .ok()
-        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
+    let mut entry = read_row
+        .clone()
         // A recycled pid's entry belongs to another process: keep it only
         // while its recorded start identity is this process's. A live
         // process that starts a new session (`/clear`, a new conversation)
@@ -727,6 +885,7 @@ pub(crate) fn touch_session_start_agent(
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         });
 
@@ -769,7 +928,15 @@ pub(crate) fn touch_session_start_agent(
     // it gave one. trace:STORY-1843 | ai:claude
     crate::agent_handle::assign_session_handle(project_root, &mut entry, session_id);
 
-    write_entry(project_root, &entry)?;
+    // The launcher may have registered or stamped this row since it was
+    // read: fold that in under the same lock hold as the write.
+    // trace:STORY-HOME-096 | ai:claude
+    let _lock = crate::agent_handle::lock_namespace(project_root)?;
+    let disk = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
+    carry_concurrent_launcher_write(&mut entry, read_row.as_ref(), disk.as_ref());
+    write_entry_locked(project_root, &entry)?;
     Ok(entry)
 }
 
@@ -860,11 +1027,32 @@ pub(crate) fn register_spawned_agent(
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
+    let pid_start = crate::process_probe::process_start_identity(pid);
+    // The agent is already running; wait out launch-time contention rather
+    // than fail on the SessionStart budget.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    let _lock = crate::agent_handle::lock_namespace_within(
+        project_root,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+    )?;
+    // The child's SessionStart hook can run before this write: keep the
+    // session id (the Codex thread) and the handle it recorded for this same
+    // process. Read under the lock this write holds, so no hook write lands
+    // in between. trace:STORY-HOME-096 | ai:claude
+    let hook_row =
+        std::fs::read_to_string(registry_path(project_root, &agent_id(&agent_type, pid)))
+            .ok()
+            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+            .filter(|old| old.pid_start.is_some() && old.pid_start == pid_start);
+    let hook_session_id = hook_row
+        .as_ref()
+        .and_then(|old| old.claude_session_id.clone());
+    let name = name.or_else(|| hook_row.and_then(|old| old.name));
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
-        pid_start: crate::process_probe::process_start_identity(pid),
+        pid_start,
         pid_namespace: current_pid_namespace(),
         name,
         description,
@@ -883,12 +1071,13 @@ pub(crate) fn register_spawned_agent(
         paused_reason: None,
         expected_back: None,
         native_session_id,
-        claude_session_id: None,
+        claude_session_id: hook_session_id,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from,
     };
-    write_entry(project_root, &entry)?;
+    write_entry_locked(project_root, &entry)?;
     Ok(entry)
 }
 
@@ -933,6 +1122,7 @@ pub(crate) fn register_role_enter_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1101,6 +1291,7 @@ pub(crate) fn register_existing_agent(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1124,10 +1315,35 @@ pub(crate) fn agent_scope(
     if let Some(spec) = current_spec.filter(|s| !s.trim().is_empty()) {
         return format!("spec:{}", spec.to_ascii_uppercase());
     }
-    match role.unwrap_or("").to_ascii_lowercase().as_str() {
-        "advisor" | "product" | "integrator" => "repo".to_string(),
-        _ => format!("worktree:{}", worktree_path.display()),
+    if role.is_some_and(is_repo_scoped_role) {
+        return "repo".to_string();
     }
+    format!("worktree:{}", worktree_path.display())
+}
+
+/// Roles whose singleton scope is the whole repo rather than a spec/worktree.
+pub(crate) fn is_repo_scoped_role(role: &str) -> bool {
+    matches!(
+        role.to_ascii_lowercase().as_str(),
+        "advisor" | "product" | "integrator"
+    )
+}
+
+/// Roles whose generic (no `--spec`) members form a pool: any number may run
+/// per repo, each under its own handle, and exclusivity applies only at the
+/// spec claim/lease. Advisor, product, integrator and reviewer stay singular.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) const POOL_ROLES: &[&str] = &["implementer"];
+
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn is_pool_role(role: &str) -> bool {
+    POOL_ROLES.iter().any(|r| r.eq_ignore_ascii_case(role))
+}
+
+/// A pool-role member launched without a spec: it holds no exclusive scope.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+pub(crate) fn is_pool_launch(role: Option<&str>, current_spec: Option<&str>) -> bool {
+    role.is_some_and(is_pool_role) && current_spec.is_none_or(|s| s.trim().is_empty())
 }
 
 pub(crate) fn same_scope_conflict(
@@ -1139,6 +1355,12 @@ pub(crate) fn same_scope_conflict(
 ) -> Option<AgentScopeConflict> {
     let role = role?;
     if !cfg.role_is_singleton(role) {
+        return None;
+    }
+    // A generic pool member never conflicts; two members still cannot share
+    // a spec, because the spec scope below (and the lease) is exclusive.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    if is_pool_launch(Some(role), current_spec) {
         return None;
     }
     let scope = agent_scope(Some(role), current_spec, worktree_path);
@@ -1249,6 +1471,8 @@ pub(crate) fn gc_dead_agents(
             if entry.ended_at.is_none() {
                 if !dry_run {
                     entry.ended_at = Some(entry.last_active_at);
+                    // trace:STORY-HOME-096 | ai:claude
+                    crate::mail_wake::retire(&mut entry);
                     write_entry(project_root, &entry)?;
                 }
                 report.marked_ended += 1;
@@ -1311,7 +1535,18 @@ pub(crate) fn mark_agent_ended(
     entry.paused_since = None;
     entry.paused_reason = None;
     entry.expected_back = None;
-    write_entry(project_root, &entry)?;
+    // The session ended: the watcher stops waking it; its ledger stays.
+    // trace:STORY-HOME-096 | ai:claude
+    crate::mail_wake::retire(&mut entry);
+    // The launcher marks its child ended under the same launch-time
+    // contention it registered through; the SessionStart budget would leave
+    // a dead pid listed as running.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    write_entry_within(
+        project_root,
+        &entry,
+        crate::agent_handle::LAUNCHER_LOCK_BUDGET,
+    )?;
     Ok(Some(entry))
 }
 
@@ -1566,6 +1801,12 @@ fn resolve_target_entry(
             )
         }
     }
+}
+
+/// The single live registry entry `target` names.
+// trace:STORY-HOME-096 | ai:claude
+pub(crate) fn resolve_live_target(project_root: &Path, target: &str) -> Result<AgentRegistryEntry> {
+    resolve_target_entry(project_root, target).map(|(_, entry)| entry)
 }
 
 /// Mark a live agent `Paused`. Returns the updated entry so the caller can
@@ -1828,6 +2069,21 @@ pub(crate) fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Re
     // bounded common-root lock. Readers still see atomic record replacement.
     // trace:STORY-1843 | ai:codex
     let _lock = crate::agent_handle::lock_namespace(project_root)?;
+    write_entry_locked(project_root, entry)
+}
+
+/// [`write_entry`] with an explicit namespace-lock wait budget.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+pub(crate) fn write_entry_within(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    budget: std::time::Duration,
+) -> Result<()> {
+    let _lock = crate::agent_handle::lock_namespace_within(project_root, budget)?;
+    write_entry_locked(project_root, entry)
+}
+
+fn write_entry_locked(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
     let path = registry_path(project_root, &entry.id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -1879,6 +2135,7 @@ fn view_for(
         ended_at: entry.ended_at,
         resumed_from: entry.resumed_from,
         liveness,
+        mail_wake: entry.mail_wake,
     }
 }
 
@@ -2922,6 +3179,7 @@ mod tests {
             claude_session_id: None,
             ended_at: None,
             spec_status_at_end: None,
+            mail_wake: None,
             resumed_from: None,
         }
     }
@@ -3913,6 +4171,49 @@ mod tests {
         .is_none());
     }
 
+    // TASK-121: generic implementers form a pool — several repo-scope members
+    // (any vendor) coexist, while a spec stays exclusive and singular roles
+    // keep their one-per-scope rule.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    #[test]
+    fn same_scope_conflict_allows_a_pool_of_generic_implementers() {
+        let tmp = TempDir::new().unwrap();
+        let binary = AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        for (vendor, role) in [("codex", "implementer"), ("claude", "reviewer")] {
+            register_spawned_agent(
+                tmp.path(),
+                vendor,
+                std::process::id(),
+                Some(role.to_string()),
+                None,
+                tmp.path().to_path_buf(),
+                Some(&binary),
+                Some(format!("{vendor}-{role}-1")),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        }
+        let cfg = Config::default();
+
+        // Another generic implementer (any vendor) launches beside the live one.
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("implementer"), None, tmp.path()).is_none()
+        );
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("Implementer"), Some(" "), tmp.path())
+                .is_none()
+        );
+        // A singular role on the same scope is still refused.
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("reviewer"), None, tmp.path()).is_some()
+        );
+        assert!(is_pool_launch(Some("implementer"), None));
+        assert!(!is_pool_launch(Some("implementer"), Some("TASK-1")));
+        assert!(!is_pool_launch(Some("advisor"), None));
+    }
+
     // TASK-1184: dead rows without a resumable native session are pruned.
     #[test]
     fn gc_dead_agents_removes_dead_non_resumable_entries() {
@@ -4307,6 +4608,7 @@ mod tests {
             ended_at: None,
             resumed_from: None,
             liveness: LivenessBasis::Process,
+            mail_wake: None,
         };
 
         let lines = format_agent_status_lines(&[view]);
@@ -4357,6 +4659,7 @@ mod tests {
             ended_at: None,
             resumed_from: None,
             liveness: LivenessBasis::Process,
+            mail_wake: None,
         };
 
         let lines = mcp_authority_status_lines(&[view]);
@@ -4576,6 +4879,7 @@ source = "mcp"
             ended_at: None,
             resumed_from: None,
             liveness: LivenessBasis::Process,
+            mail_wake: None,
         };
 
         let avail_line = &format_agent_status_lines(&[mk(Availability::Available, None)])[0];

@@ -219,3 +219,167 @@ fn node_alias_stored_spec_ids_cover_spec_id_and_agreed_id() {
         "{ids:?}"
     );
 }
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.acc7fcab | ai:claude
+#[test]
+fn bare_id_local_twins_ignore_leading_zeros_and_agreed_ids() {
+    let local = format!("BUG-{}-030", NODE_A.to_ascii_uppercase());
+    for bare in ["BUG-030", "BUG-30", "bug-030"] {
+        assert!(is_local_twin(bare, &local), "{bare}");
+    }
+    // The agreed id itself, another type, another number and an alias form
+    // are never twins.
+    for other in [
+        "BUG-30",
+        "TASK-B6B1278890774EF993D2EBC327862470-030",
+        "BUG-HOME-030",
+    ] {
+        assert!(!is_local_twin("BUG-30", other), "{other}");
+    }
+    assert!(!is_local_twin("BUG-31", &local));
+    assert!(!is_local_twin("BUG-HOME-030", &local), "not a bare id");
+    let known = [
+        "STORY-100",
+        "STORY-B6B1278890774EF993D2EBC327862470-100",
+        "TASK-123",
+    ];
+    assert_eq!(
+        local_twins("STORY-100", known),
+        vec!["STORY-B6B1278890774EF993D2EBC327862470-100".to_string()]
+    );
+    assert!(local_twins("TASK-123", known).is_empty());
+    assert_eq!(local_id_key(&local), split_bare_id("BUG-30"));
+    for not_local in ["BUG-30", "BUG-HOME-030", "TASK-1-096", "$TASK-1-1"] {
+        assert_eq!(local_id_key(not_local), None, "{not_local}");
+    }
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036.Rendering | ai:claude
+#[test]
+fn bare_id_local_twin_candidates_use_the_allocator_padding() {
+    let map = home();
+    assert_eq!(
+        map.local_twin_candidates("TASK-123"),
+        vec!["TASK-B6B1278890774EF993D2EBC327862470-123".to_string()]
+    );
+    assert_eq!(
+        map.local_twin_candidates("bug-30"),
+        vec!["BUG-B6B1278890774EF993D2EBC327862470-030".to_string()]
+    );
+    // Display of a twin is the alias form, never the bare number.
+    assert_eq!(
+        map.display(&map.local_twin_candidates("STORY-100")[0], false),
+        "STORY-HOME-100"
+    );
+    assert!(map.local_twin_candidates("STORY-HOME-100").is_empty());
+    assert!(NodeAliasMap::default()
+        .local_twin_candidates("TASK-1")
+        .is_empty());
+    // A twin is named by its agreed id when it has one, else its alias form.
+    let twin = map.local_twin_candidates("STORY-100").remove(0);
+    let _guard = install_for_thread(map);
+    assert_eq!(local_twin_label(&twin, None), "STORY-HOME-100");
+    assert_eq!(local_twin_label(&twin, Some(" ")), "STORY-HOME-100");
+    assert_eq!(local_twin_label(&twin, Some("story-4120")), "STORY-4120");
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+#[test]
+fn alias_expansion_pads_the_sequence_like_the_allocator() {
+    let map = home();
+    for alias in ["BUG-HOME-36", "bug-home-036", "BUG-HOME-0036"] {
+        assert_eq!(
+            map.expand(alias).as_deref(),
+            Some("BUG-B6B1278890774EF993D2EBC327862470-036"),
+            "{alias}"
+        );
+    }
+    assert_eq!(
+        map.expand("TASK-HOME-1234").as_deref(),
+        Some("TASK-B6B1278890774EF993D2EBC327862470-1234")
+    );
+}
+
+#[test]
+fn bare_id_tokens_skip_local_alias_and_legacy_node_forms() {
+    let text = "See STORY-100, BUG-030.\nnot TASK-1-096 or BUG-HOME-030 or \
+                TASK-B6B1278890774EF993D2EBC327862470-123 or X-1; (task-123)";
+    assert_eq!(
+        bare_id_tokens(text),
+        vec![
+            (1, "STORY-100".to_string()),
+            (1, "BUG-030".to_string()),
+            (2, "TASK-123".to_string()),
+        ]
+    );
+}
+
+#[cfg(feature = "native")]
+fn store_repo(origin_url: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| {
+        let ok = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?} failed");
+    };
+    git(&["init", "-q", "-b", "aida-store"]);
+    git(&["config", "user.email", "t@t.t"]);
+    git(&["config", "user.name", "t"]);
+    std::fs::write(dir.path().join("README.md"), "seed").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "seed"]);
+    git(&["remote", "add", "origin", origin_url]);
+    dir
+}
+
+/// An origin that cannot be reached keeps the committed label and reports
+/// it, instead of failing a write that already landed locally.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[cfg(feature = "native")]
+#[test]
+fn node_alias_unreachable_origin_keeps_the_commit_and_reports_it() {
+    let missing = tempfile::tempdir().unwrap();
+    let origin = missing.path().join("no-such-hub.git");
+    let dir = store_repo(origin.to_str().unwrap());
+    let outcome = mutate_cas(dir.path(), "label node test", |map| map.set("HOME", NODE_A)).unwrap();
+    let MutateCasOutcome::Committed { origin, branch, .. } = &outcome else {
+        panic!("expected a commit, got {outcome:?}");
+    };
+    assert_eq!(branch, "aida-store");
+    assert!(matches!(origin, OriginPublish::Unreached(_)), "{origin:?}");
+    assert_eq!(NodeAliasMap::load(dir.path()), home());
+    // A re-run sees the committed label rather than writing it again.
+    let again = mutate_cas(dir.path(), "label node test", |map| map.set("HOME", NODE_A)).unwrap();
+    assert_eq!(again, MutateCasOutcome::Unchanged);
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-025 | ai:claude
+#[cfg(feature = "native")]
+#[test]
+fn node_alias_reachable_origin_reports_pushed() {
+    let hub = tempfile::tempdir().unwrap();
+    let ok = crate::test_git::git_command()
+        .args(["init", "-q", "--bare"])
+        .arg(hub.path())
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok);
+    let dir = store_repo(hub.path().to_str().unwrap());
+    let outcome = mutate_cas(dir.path(), "label node test", |map| map.set("HOME", NODE_A)).unwrap();
+    assert!(
+        matches!(
+            outcome,
+            MutateCasOutcome::Committed {
+                origin: OriginPublish::Pushed,
+                ..
+            }
+        ),
+        "{outcome:?}"
+    );
+}

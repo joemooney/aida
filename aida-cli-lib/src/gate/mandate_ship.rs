@@ -534,13 +534,10 @@ pub(crate) fn release_hold_under_mandate(
 ) {
     use colored::Colorize;
     let pr = hold_record.pr;
-    eprintln!(
-        "  {} PR-{pr}: merge-hold {}",
-        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        crate::gate::mandate::release_note(&cover.id)
-    );
-    let _ = crate::gate::merge_hold_core::clear_hold(hold_root, pr);
-    if let Err(err) = crate::gate::merge_hold_core::record_mandate_clearance(
+    // A release the ledger did not record leaves the hold open: nothing may
+    // announce it as released (no note, comment, event or label removal).
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if let Err(err) = crate::gate::merge_hold_core::release_hold_under_mandate(
         hold_root,
         hold_record,
         &cover.principal,
@@ -548,10 +545,16 @@ pub(crate) fn release_hold_under_mandate(
         released_by_verdict,
     ) {
         eprintln!(
-            "  {} could not record the mandate release on PR-{pr}: {err}",
+            "  {} could not record the mandate release on PR-{pr}, so its merge hold stays armed: {err}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
+        return;
     }
+    eprintln!(
+        "  {} PR-{pr}: merge-hold {}",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        crate::gate::mandate::release_note(&cover.id)
+    );
     let _ = crate::forge::forge_for(hold_root).comment(
         change,
         &format!(
@@ -604,8 +607,8 @@ pub(crate) fn mandate_carry_over(
     base_branch: Option<&str>,
 ) -> Option<std::result::Result<String, String>> {
     let refusal = crate::gate::ship::approval_head_refusal(candidates, head)?;
-    let site = crate::review_carryover::CarryOverSite::quiet(repo, base_branch);
-    crate::review_carryover::prove_for_refusal(&site, pr, &refusal)
+    let site = crate::gate::review_carryover::CarryOverSite::quiet(repo, base_branch);
+    crate::gate::review_carryover::prove_for_refusal(&site, pr, &refusal)
         .map(|proved| proved.map(|p| p.new_head).map_err(|why| why.reason()))
 }
 
@@ -619,8 +622,10 @@ pub(crate) fn rearm_mandate_hold_with(
     sync_label: impl FnOnce() -> std::result::Result<(), String>,
 ) -> std::result::Result<(), String> {
     let mut failed = Vec::new();
-    if let Err(e) = crate::gate::merge_hold_core::rearm_typed_hold(hold_root, record) {
-        failed.push(format!("the hold marker could not be rewritten ({e})"));
+    if let Err(e) = crate::gate::merge_hold_core::rearm_hold(hold_root, record) {
+        failed.push(format!(
+            "the hold could not be re-armed on the gate ledger ({e})"
+        ));
     }
     if let Err(e) = sync_label() {
         failed.push(format!("the merge-hold label could not be restored ({e})"));

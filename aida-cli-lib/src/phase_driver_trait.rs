@@ -2261,7 +2261,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // metadata as spec-keyed verdicts. Best-effort, matching `aida review`:
         // metadata persistence must not change the review gate's decision.
         // trace:TASK-168 | ai:codex
-        if verdict_path.is_file() {
+        // M1 slice 2: the reviewer's record may be on the gate ledger only.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        if crate::gate::review_verdict::current_verdict_at(&verdict_path).is_some() {
             let _ = stamp_pr_review_verdict(
                 &self.project_root,
                 pr,
@@ -2677,7 +2679,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn record_merge_supervision_hold(&mut self, reason: &str) {
         if let Some(pr) = self.pr_number {
             let pr = u64::from(pr);
-            let _ = crate::gate::merge_hold_core::write_typed_hold(
+            let _ = crate::gate::merge_hold_core::place_hold(
                 &self.project_root,
                 &crate::gate::merge_hold_core::typed_hold(
                     pr,

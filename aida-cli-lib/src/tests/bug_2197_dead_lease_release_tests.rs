@@ -750,7 +750,7 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
         Some("1111111aaaa".into()),
     );
     hold.spec = Some("BUG-9".into());
-    let marker = crate::gate::merge_hold_core::local_hold_path(&review, 7);
+    let marker = crate::gate::ledger::legacy::hold_marker_path(&review, 7);
     std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
     std::fs::write(&marker, serde_json::to_vec_pretty(&hold).unwrap()).unwrap();
 

@@ -75,6 +75,7 @@ fn agent_entry(
         claude_session_id: None,
         ended_at: None,
         spec_status_at_end: None,
+        mail_wake: None,
         resumed_from: None,
     }
 }

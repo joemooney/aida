@@ -9,7 +9,6 @@
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
-use uuid::Uuid;
 
 use crate::gate::dispatch_io::{read_bounded_regular_file, MAX_BRIEF_BYTES};
 
@@ -47,10 +46,10 @@ pub(crate) fn remove_reviewer_worktree_preserving_hold(
     Ok(())
 }
 
-/// Preserve any merge-hold marker `<rev_wt>/.aida/merge-holds/PR-<pr>` into
-/// `<main_worktree>/.aida/merge-holds/PR-<pr>` using atomic no-clobber
-/// publication and post-transfer verification (F4). Any read, write, symlink,
-/// or verification error aborts worktree cleanup so a hold is never lost.
+/// Preserve any merge-hold marker `<rev_wt>/.aida/merge-holds/PR-<pr>` onto
+/// the PR's gate ledger in `main_worktree`'s shared state (M1 slice 2), with
+/// post-collection verification (F4). Any read, symlink, parse, write or
+/// verification error aborts worktree cleanup so a hold is never lost.
 // trace:STORY-1917 | ai:agy
 // trace:STORY-1889 | ai:claude
 pub(in crate::gate) fn preserve_reviewer_worktree_hold(
@@ -80,7 +79,7 @@ pub(in crate::gate) fn preserve_reviewer_worktree_hold(
         }
     }
 
-    let wt_hold_dir = wt_aida.join("merge-holds");
+    let wt_hold_dir = crate::gate::hold_collect::marker_dir(rev_wt);
     match std::fs::symlink_metadata(&wt_hold_dir) {
         Ok(m) if m.file_type().is_symlink() || !m.is_dir() => {
             bail!(
@@ -116,89 +115,36 @@ pub(in crate::gate) fn preserve_reviewer_worktree_hold(
         );
     }
 
-    let main_hold_dir = main_worktree.join(".aida").join("merge-holds");
-    std::fs::create_dir_all(&main_hold_dir)
-        .with_context(|| format!("cannot create {}", main_hold_dir.display()))?;
-    let main_dir_meta = std::fs::symlink_metadata(&main_hold_dir)
-        .with_context(|| format!("cannot stat {}", main_hold_dir.display()))?;
-    if main_dir_meta.file_type().is_symlink() || !main_dir_meta.is_dir() {
+    // M1 slice 2: the marker is collected onto the PR's gate ledger in the
+    // main worktree's shared state, not copied as a file. A marker that does
+    // not name a PR, or a ledger that does not answer with an open hold
+    // afterwards, aborts the cleanup so a hold is never lost.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let pr = pr_scope
+        .trim()
+        .to_ascii_uppercase()
+        .strip_prefix("PR-")
+        .and_then(|n| n.parse::<u64>().ok())
+        .with_context(|| format!("reviewer merge-hold scope {pr_scope} names no PR"))?;
+    let collected = crate::gate::hold_collect::collect_marker(
+        main_worktree,
+        pr,
+        &String::from_utf8_lossy(&wt_bytes),
+    )
+    .with_context(|| {
+        format!(
+            "cannot collect reviewer merge-hold {} onto the PR-{pr} gate ledger",
+            wt_hold.display()
+        )
+    })?;
+    if !collected {
+        bail!("reviewer merge-hold {} did not parse", wt_hold.display());
+    }
+    if !crate::gate::hold_collect::hold_is_open(main_worktree, pr) {
         bail!(
-            "refusing reviewer worktree cleanup: {} is a symlink or not a directory",
-            main_hold_dir.display()
+            "the PR-{pr} gate ledger does not hold the collected merge-hold {}; refusing reviewer worktree cleanup",
+            wt_hold.display()
         );
     }
-
-    let main_hold = main_hold_dir.join(pr_scope);
-    let tmp_hold = main_hold_dir.join(format!(".{pr_scope}.tmp-{}", Uuid::new_v4()));
-    {
-        use std::io::Write;
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-        }
-        let mut f = opts.open(&tmp_hold).with_context(|| {
-            format!(
-                "cannot stage merge-hold transfer in {}",
-                main_hold_dir.display()
-            )
-        })?;
-        if let Err(e) = f.write_all(&wt_bytes).and_then(|()| f.sync_all()) {
-            drop(f);
-            let _ = std::fs::remove_file(&tmp_hold);
-            return Err(e).with_context(|| {
-                format!("failed writing staged merge-hold {}", tmp_hold.display())
-            });
-        }
-    }
-
-    match crate::gate::review_verdict::publish_verdict_no_replace(&tmp_hold, &main_hold) {
-        Ok(()) => {
-            let landed = read_bounded_regular_file(&main_hold, MAX_BRIEF_BYTES, false)
-                .with_context(|| {
-                    format!(
-                        "cannot verify transferred merge-hold at {}",
-                        main_hold.display()
-                    )
-                })?;
-            if landed != wt_bytes {
-                bail!(
-                    "transferred merge-hold {} content did not match source {}",
-                    main_hold.display(),
-                    wt_hold.display()
-                );
-            }
-            Ok(true)
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = std::fs::remove_file(&tmp_hold);
-            // Destination hold already exists (pre-existing or concurrently placed);
-            // verify it is a valid non-empty regular file before allowing cleanup.
-            let existing = read_bounded_regular_file(&main_hold, MAX_BRIEF_BYTES, false)
-                .with_context(|| {
-                    format!(
-                        "existing destination merge-hold {} is invalid or unreadable",
-                        main_hold.display()
-                    )
-                })?;
-            if existing.is_empty() {
-                bail!(
-                    "existing destination merge-hold {} is empty; refusing reviewer worktree cleanup",
-                    main_hold.display()
-                );
-            }
-            Ok(true)
-        }
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp_hold);
-            Err(e).with_context(|| {
-                format!(
-                    "failed atomic no-clobber transfer of merge-hold to {}",
-                    main_hold.display()
-                )
-            })
-        }
-    }
+    Ok(true)
 }

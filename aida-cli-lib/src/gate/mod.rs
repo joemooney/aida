@@ -18,6 +18,7 @@ pub(crate) mod dispatch_lock;
 pub(crate) mod dispatch_reviewer_hold;
 pub(crate) mod dispatch_types;
 pub(crate) mod fleet_lanes;
+pub(crate) mod hold_collect;
 pub(crate) mod kernel_deps;
 pub(crate) mod ledger;
 pub(crate) mod mandate;
@@ -32,6 +33,8 @@ pub(crate) mod pr_ship_batch;
 pub(crate) mod relay_launch;
 pub(crate) mod review_author;
 pub(crate) mod review_authority;
+// trace:TASK-1960 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude — attested-approval carry-over across clean base merges.
+pub(crate) mod review_carryover;
 pub(crate) mod review_marker;
 pub(crate) mod review_verdict;
 pub(crate) mod rework_hold_release;

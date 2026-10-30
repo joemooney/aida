@@ -1179,9 +1179,10 @@ fn reap_one_with_clear_hooks(
                     .unwrap_or_default()
             );
         }
-        // BUG-2176: a reviewer's merge-hold marker lives in its review
-        // worktree; move it to the primary before the tree goes, or keep the
-        // tree. trace:TASK-1955 | ai:claude (BUG-2206)
+        // BUG-2176: a legacy marker a pre-ledger reviewer left in its review
+        // worktree is collected onto the gate ledger before the tree goes, or
+        // the tree is kept. trace:TASK-1955 | ai:claude (BUG-2206)
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
         if let Some(pr) = crate::gate::review_authority::review_lease_pr(lease) {
             if let Err(e) = crate::merge_hold::adopt_worktree_hold(
                 project_root,
@@ -1553,6 +1554,126 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     let manifest = session_manifest::manifest_path(project_root, lease_id);
     if manifest.exists() {
         let _ = std::fs::remove_file(&manifest);
+    }
+}
+
+/// May a lease whose tree is gone be released with no further checks? Only
+/// when it records an absolute tree path that no longer exists and its own
+/// recorded owner process is provably dead: there is no tree left to be dirty
+/// and nobody left to be working in it. An advisory lease (no tree) or an
+/// owner that is alive or unrecorded keeps its lease.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+fn gone_worktree_lease_releasable(lease: &SessionLease, recovery: &StaleLeaseRecovery) -> bool {
+    let path = &lease.worktree_path;
+    !path.as_os_str().is_empty()
+        && path.is_absolute()
+        && !path.exists()
+        && *recovery
+            == StaleLeaseRecovery::ReclaimableClean {
+                worktree_missing: true,
+            }
+}
+
+/// End a dead lease whose tree was deleted out from under it: clear git's
+/// stale registration for the missing path (so its branch can be checked out
+/// again) and delete the lease files. Unlike `aida session end`, this needs
+/// no dirty-tree check and writes nothing to the store, so it cannot fail on
+/// store lock contention. `recovery` is the caller's stale-lease verdict for
+/// `lease`. Returns `false`, changing nothing, when the lease is not provably
+/// dead with its tree gone, or the registration could not be cleared safely.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn release_gone_worktree_lease(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    recovery: &StaleLeaseRecovery,
+) -> bool {
+    if !gone_worktree_lease_releasable(lease, recovery) {
+        return false;
+    }
+    if clear_missing_worktree_registration(project_root, &lease.worktree_path, || {}, || {})
+        == RegistrationClearOutcome::Declined
+    {
+        return false;
+    }
+    release_lease_files(project_root, &lease.id);
+    true
+}
+
+/// Release each of `leases` that is dead with its tree gone, judging them all
+/// from ONE process-table scan (taken only when some tree is gone). Returns
+/// `(released, kept)`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn release_gone_worktree_leases_among(
+    project_root: &std::path::Path,
+    leases: Vec<SessionLease>,
+) -> (Vec<SessionLease>, Vec<SessionLease>) {
+    let tree_gone =
+        |l: &SessionLease| !l.worktree_path.as_os_str().is_empty() && !l.worktree_path.exists();
+    if !leases.iter().any(tree_gone) {
+        return (Vec::new(), leases);
+    }
+    let live = process_probe::probe_live_claude_sessions();
+    leases.into_iter().partition(|l| {
+        tree_gone(l)
+            && release_gone_worktree_lease(
+                project_root,
+                l,
+                &crate::leases::stale_lease_recovery_for_lease_with(l, &live).verdict,
+            )
+    })
+}
+
+/// Release every dead lease in `project_root` whose tree is gone, returning
+/// `(lease id, scope)` for each one released.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn release_gone_worktree_leases(
+    project_root: &std::path::Path,
+) -> Vec<(String, String)> {
+    release_gone_worktree_leases_among(project_root, list_leases(project_root))
+        .0
+        .into_iter()
+        .map(|l| (l.id, l.scope))
+        .collect()
+}
+
+/// Reap a standalone review the moment its reviewer exits with its verdict
+/// collected: the review tree, its lease, and its local review branch go
+/// together, through the same [`reap_one`] the post-merge reap uses. A tree
+/// that is dirty, unreadable, in use, or whose branch holds a commit neither
+/// the PR head nor `origin` has is kept WITH its lease, so the dead-reviewer
+/// reap still finds it once the PR is merged or closed. Returns the reap
+/// outcome when the review was reaped, `Err(why kept)` otherwise.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn reap_finished_review(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> std::result::Result<String, String> {
+    let lease = &reap_view(lease, project_root);
+    if crate::gate::review_authority::review_lease_pr(lease).is_none() {
+        return Err("not a PR review session".to_string());
+    }
+    if lease.worktree_path.as_os_str().is_empty() || !lease.worktree_path.exists() {
+        return Err("its review tree is not on disk".to_string());
+    }
+    if worktree_status_dirty(&lease.worktree_path) {
+        return Err("its review tree has uncommitted changes".to_string());
+    }
+    let branch = reap_branch(lease, resolve_default_branch_ref(project_root).as_deref());
+    let Some(tip) = resolve_local_branch_tip(project_root, branch) else {
+        return Err(format!(
+            "its review branch `{branch}` could not be resolved"
+        ));
+    };
+    if !review_branch_within_pr_head(project_root, Some(&tip), lease) {
+        return Err(format!(
+            "its review branch `{branch}` holds commits the PR does not"
+        ));
+    }
+    let outcome = reap_one(project_root, lease, Some(&tip));
+    if outcome.starts_with("reaped") {
+        Ok(outcome)
+    } else {
+        Err(outcome)
     }
 }
 
@@ -2342,25 +2463,41 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
     let agent_gc = agent_registry::gc_dead_agents(project_root, false, None)
         .map(|r| r.removed_count())
         .map_err(|e| format!("{e:#}"));
+    // A dead lease whose tree was deleted by hand has nothing left to check;
+    // release it before the scan so a clone pin it held reads as orphaned.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+    let gone: Vec<(String, String)> = release_gone_worktree_leases(project_root)
+        .into_iter()
+        .map(|(id, _)| {
+            (
+                id,
+                "reaped — its worktree is gone, owner exited".to_string(),
+            )
+        })
+        .collect();
     let report = scan_reapable(project_root);
     release_orphan_pins(project_root, &report.orphan_pins); // trace:TASK-2053 | ai:claude
     if report.reapable.is_empty() {
         return QuietReap {
             agent_gc,
-            leases: Vec::new(),
+            leases: gone,
         };
     }
     let leases = list_leases(project_root);
-    let leases = report
-        .reapable
-        .iter()
-        .filter_map(|row| {
-            leases
+    let leases = gone
+        .into_iter()
+        .chain(
+            report
+                .reapable
                 .iter()
-                .find(|l| l.id == row.session)
-                .map(|lease| (lease, row.branch_tip.as_deref()))
-        })
-        .map(|(lease, tip)| (lease.id.clone(), reap_one(project_root, lease, tip)))
+                .filter_map(|row| {
+                    leases
+                        .iter()
+                        .find(|l| l.id == row.session)
+                        .map(|lease| (lease, row.branch_tip.as_deref()))
+                })
+                .map(|(lease, tip)| (lease.id.clone(), reap_one(project_root, lease, tip))),
+        )
         .collect();
     QuietReap { agent_gc, leases }
 }
@@ -2406,3 +2543,9 @@ mod bug_1694_registration_clear_claim_tests;
 #[cfg(test)]
 #[path = "tests/bug_2197_dead_lease_release_tests.rs"]
 mod bug_2197_dead_lease_release_tests;
+
+// Finished sessions' leases: gone-worktree release, reviewer-exit release,
+// and session-id round trip. trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_home_024_finished_lease_tests.rs"]
+mod bug_home_024_finished_lease_tests;

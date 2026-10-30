@@ -405,6 +405,7 @@ mod glyph_config;
 mod glyphs;
 mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
+mod headless_linger;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;
@@ -454,7 +455,9 @@ mod mailbox_store;
 // trace:STORY-1843 | ai:claude
 mod mailbox_view;
 // trace:TASK-2347 | ai:codex
+mod mail_wake;
 mod mailbox_wake;
+mod mailbox_wake_run;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
 mod maintenance_schedule;
@@ -544,8 +547,6 @@ mod reviewer_summary;
 mod review_classes;
 // trace:STORY-1889 | ai:claude — verdict rendering, outside the gate.
 mod review_verdict_display;
-// trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
-mod review_carryover;
 mod role_cmd;
 mod rules_cmd;
 mod rules_sync;

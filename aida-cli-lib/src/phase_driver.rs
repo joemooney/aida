@@ -593,7 +593,7 @@ impl RealPhaseDriver {
         self.pr_number = Some(pr);
         if let Some(reason) = auto_complete::PhaseDriver::merge_supervision_hold(self) {
             let pr = u64::from(pr);
-            let _ = crate::gate::merge_hold_core::write_typed_hold(
+            let _ = crate::gate::merge_hold_core::place_hold(
                 &self.project_root,
                 &crate::gate::merge_hold_core::typed_hold(
                     pr,
@@ -867,7 +867,7 @@ impl RealPhaseDriver {
             None,
         )
         .with_spec(&self.spec);
-        match crate::gate::merge_hold_core::write_typed_hold(&self.project_root, &hold) {
+        match crate::gate::merge_hold_core::place_hold(&self.project_root, &hold) {
             Ok(()) => {
                 if !self.json {
                     eprintln!(
@@ -1043,8 +1043,7 @@ impl RealPhaseDriver {
             None,
         )
         .with_spec(&self.spec);
-        let marker_result =
-            crate::gate::merge_hold_core::write_typed_hold(&self.project_root, &hold);
+        let marker_result = crate::gate::merge_hold_core::place_hold(&self.project_root, &hold);
         let label_result = crate::merge_hold::sync_label(&self.project_root, number, true);
         match &marker_result {
             Ok(()) => {

@@ -477,26 +477,40 @@ fn primary_checkout_from_files(root: &Path) -> PathBuf {
     }
 }
 
-pub(crate) fn holds_dir(project_root: &Path) -> PathBuf {
-    local_holds_dir(&hold_store_root(project_root))
-}
-
-/// `<root>/.aida/merge-holds`, taken literally — no primary-checkout resolution.
-// trace:BUG-2176 | ai:claude
-pub(crate) fn local_holds_dir(root: &Path) -> PathBuf {
-    root.join(".aida").join("merge-holds")
-}
-
-/// The marker path for one PR. Public so callers can log it.
+/// Tests: the legacy marker path a pre-ledger binary wrote, for fixtures
+/// that hand-write the legacy shapes the read-through must keep honouring.
+#[cfg(test)]
 pub(crate) fn hold_path(project_root: &Path, pr: u64) -> PathBuf {
-    holds_dir(project_root).join(format!("PR-{pr}"))
+    crate::gate::ledger::legacy::hold_marker_path(&hold_store_root(project_root), pr)
 }
 
-/// The marker path for one PR inside `root` itself — where a contained caller
-/// that cannot write the primary checkout leaves its marker.
-// trace:BUG-2176 | ai:claude
-pub(crate) fn local_hold_path(root: &Path, pr: u64) -> PathBuf {
-    local_holds_dir(root).join(format!("PR-{pr}"))
+/// Whether PR `pr` is under an open hold, read from `project_root`.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn hold_is_open(project_root: &Path, pr: u64) -> bool {
+    read_hold_record(project_root, pr).is_some()
+}
+
+/// When PR `pr`'s open hold was placed: its first ledger placement since the
+/// last release, or a legacy marker's mtime.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn hold_placed_at(project_root: &Path, pr: u64) -> Option<std::time::SystemTime> {
+    crate::gate::ledger::hold::state(project_root, pr).placed_at
+}
+
+/// When PR `pr`'s open hold record was last written (a legacy marker's
+/// mtime, or its newest ledger placement).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn hold_written_at(project_root: &Path, pr: u64) -> Option<std::time::SystemTime> {
+    crate::gate::ledger::hold::state(project_root, pr).written_at
+}
+
+/// Where PR `pr`'s hold state is stored, for messages: its gate ledger file.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn hold_ledger_file(project_root: &Path, pr: u64) -> PathBuf {
+    crate::gate::ledger::store::ledger_file(
+        &crate::gate::ledger::hold::read_root(project_root),
+        crate::gate::ledger::ChangeKey::pr(pr),
+    )
 }
 
 /// Compose an incoming hold with the marker already present on the PR.
@@ -597,8 +611,12 @@ fn merge_absorbed(into: &mut Vec<AbsorbedHold>, extra: &[AbsorbedHold]) {
 /// Parse typed and legacy markers. A malformed marker remains a typed Unknown
 /// hold, preserving the merge chokepoint while exposing the diagnostic.
 // trace:STORY-1397 | ai:codex
+///
+/// M1 slice 2: the open hold on PR `pr`'s gate ledger, with legacy markers
+/// read through ([`crate::gate::ledger::hold::state`]).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHoldRecord> {
-    parse_hold_marker(std::fs::read_to_string(hold_path(project_root, pr)), pr)
+    crate::gate::ledger::hold::state(project_root, pr).open
 }
 
 /// The record a marker read yields — `None` only for a missing marker.
@@ -750,32 +768,21 @@ pub(crate) struct HoldClearance {
     pub released_under_mandate: Option<String>,
 }
 
+/// Tests: the legacy clearance path a pre-ledger binary wrote.
+#[cfg(test)]
 pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
-    // trace:BUG-2176 | ai:claude
-    local_clearance_path(&hold_store_root(project_root), pr)
+    crate::gate::ledger::legacy::clearance_file_path(&hold_store_root(project_root), pr)
 }
 
-/// TASK-1757: where a withdrawn auto-release clearance is kept. Not
-/// `clearance_path`, so no reader treats it as a release.
-// trace:TASK-1951 trace:TASK-1757 | ai:claude
-pub(crate) fn superseded_clearance_path(
+/// The clearance of the release that closed PR `pr`'s latest hold, while no
+/// hold is open: the `hold-release` event on its ledger, or a legacy
+/// clearance file the ledger has not superseded.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn recorded_clearance(
     project_root: &Path,
     pr: u64,
-    at: chrono::DateTime<chrono::Utc>,
-) -> PathBuf {
-    hold_store_root(project_root)
-        .join(".aida")
-        .join("merge-hold-clearances")
-        .join(format!(
-            "PR-{pr}.superseded-{}.json",
-            at.format("%Y%m%dT%H%M%S%.3fZ")
-        ))
-}
-
-pub(crate) fn local_clearance_path(root: &Path, pr: u64) -> PathBuf {
-    root.join(".aida")
-        .join("merge-hold-clearances")
-        .join(format!("PR-{pr}.json"))
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+    crate::gate::ledger::hold::state(project_root, pr).release
 }
 
 /// Local audit signal for a hold placed through AIDA whose marker disappeared
@@ -794,10 +801,9 @@ pub(crate) fn unrecorded_marker_removals(project_root: &Path) -> Vec<u64> {
         .into_iter()
         .filter_map(|(pr, placed)| {
             let pr = u64::from(pr);
-            (placed
-                && !hold_path(project_root, pr).exists()
-                && !clearance_path(project_root, pr).exists())
-            .then_some(pr)
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            let state = crate::gate::ledger::hold::state(project_root, pr);
+            (placed && state.open.is_none() && state.release.is_none()).then_some(pr)
         })
         .collect()
 }
@@ -825,22 +831,12 @@ pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
 // Consumed by the follow-up `aida merge-hold list` surface; kept here so the
 // primitive lands with the safety core.
 #[allow(dead_code)]
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
-    let dir = holds_dir(project_root);
-    let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if let Some(n) = name.strip_prefix("PR-").and_then(|s| s.parse::<u64>().ok()) {
-                if let Some(reason) = read_hold(project_root, n) {
-                    out.push((n, reason));
-                }
-            }
-        }
-    }
-    out.sort_by_key(|(n, _)| *n);
-    out
+    crate::gate::ledger::hold::candidate_prs(project_root)
+        .into_iter()
+        .filter_map(|n| read_hold_record(project_root, n).map(|r| (n, r.detail)))
+        .collect()
 }
 
 /// The reason shown for a hold that exists only as the forge label.
@@ -1117,7 +1113,10 @@ pub(crate) fn corpus_merge_gate(
 pub(crate) type CorpusCarryOverProver<'a> = &'a dyn Fn(
     &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<
-    Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>,
+    Result<
+        crate::gate::review_carryover::CarryOver,
+        crate::gate::review_carryover::CarryOverRefusal,
+    >,
 >;
 
 /// [`corpus_merge_gate`], except that a head nothing approves may still
@@ -1245,7 +1244,12 @@ fn corpus_carry_over(
     live: &[&(String, String)],
     head: &str,
     prove: CorpusCarryOverProver<'_>,
-) -> Option<Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>> {
+) -> Option<
+    Result<
+        crate::gate::review_carryover::CarryOver,
+        crate::gate::review_carryover::CarryOverRefusal,
+    >,
+> {
     use crate::gate::review_verdict as rv;
     let mut approved: Vec<String> = Vec::new();
     for (_, body) in live {
@@ -1403,7 +1407,7 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
 ) -> anyhow::Result<()> {
-    match corpus_gate_decision(project_root, pr, spec_hints, base_branch, head)? {
+    match corpus_gate_decision(project_root, pr, spec_hints, base_branch, head, true)? {
         CorpusMergeGate::Clear => Ok(()),
         CorpusMergeGate::Refuse { message, arm } => {
             if let Some(arm) = arm.filter(|_| pr > 0) {
@@ -1414,16 +1418,20 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     }
 }
 
-/// [`enforce_corpus_gate_before_merge`]'s decision, with no side effects:
-/// the mirrors a refusal arms are the caller's to write. `Err` when a
-/// verdict artifact exists but cannot be read.
+/// [`enforce_corpus_gate_before_merge`]'s decision: the mirrors a refusal
+/// arms are the caller's to write. `Err` when a verdict artifact exists but
+/// cannot be read. With `record_proof`, a carry-over proven here goes on the
+/// change's gate ledger for every later gate (STORY-080 AC4); without it
+/// (a read-only report) the decision leaves no state behind.
 // trace:TASK-1945 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn corpus_gate_decision(
     project_root: &Path,
     pr: u64,
     spec_hints: &[String],
     base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
+    record_proof: bool,
 ) -> anyhow::Result<CorpusMergeGate> {
     let main_root = crate::main_worktree_root_from(project_root);
     let mut roots: Vec<&Path> = vec![project_root];
@@ -1442,9 +1450,13 @@ pub(crate) fn corpus_gate_decision(
     }
     let head = head();
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
-    let site = crate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch);
+    let site = if record_proof {
+        crate::gate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch)
+    } else {
+        crate::gate::review_carryover::CarryOverSite::read_only(main_root.as_path(), base_branch)
+    };
     let prove = |refusal: &crate::gate::ship::ApprovalHeadRefusal| {
-        crate::review_carryover::prove_for_refusal(&site, pr, refusal)
+        crate::gate::review_carryover::prove_for_refusal(&site, pr, refusal)
     };
     Ok(corpus_merge_gate_carrying(
         pr,
@@ -1456,7 +1468,7 @@ pub(crate) fn corpus_gate_decision(
 
 /// Refresh the marker + label mirrors from the gate's definite at-head
 /// refusal. Best-effort: a mirror failure is reported, never escalated — the
-/// chokepoint refusal already stands. `write_typed_hold` composes with any
+/// chokepoint refusal already stands. `place_hold` composes with any
 /// existing marker, so this programmatic Rework write cannot displace a
 /// stricter hold (a Recusal stays primary — BUG-1691).
 // trace:BUG-1774 | ai:claude
@@ -1482,7 +1494,7 @@ fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
         "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)",
         arm.key
     ));
-    if let Err(err) = write_typed_hold(project_root, &hold) {
+    if let Err(err) = place_hold(project_root, &hold) {
         eprintln!(
             "  warning: could not mirror the corpus refusal into PR-{pr}'s merge-hold marker \
              ({err}) — the chokepoint refusal stands on the verdict corpus alone"
@@ -1500,96 +1512,85 @@ fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
 /// Record a supervised merge-hold for `pr` with a human-readable reason.
 /// Idempotent — re-recording refreshes the reason.
 ///
-/// STORY-1397: production writers all emit typed v2 markers via
-/// [`write_typed_hold`]; this legacy plaintext writer survives only so tests
-/// can build the legacy marker shape the reader must keep honouring.
+/// STORY-1397: production writers all emit typed v2 holds via
+/// [`place_hold`]; this legacy plaintext marker writer survives only so tests
+/// can build the legacy marker shape the read-through must keep honouring.
 // trace:STORY-1397 | ai:claude
 #[cfg(test)]
 pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io::Result<()> {
-    let dir = holds_dir(project_root);
-    std::fs::create_dir_all(&dir)?;
+    let path = hold_path(project_root, pr);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     let reason = reason.trim();
     let body = if reason.is_empty() {
         format!("PR-{pr} is under a supervised merge-hold\n")
     } else {
         format!("{reason}\n")
     };
-    std::fs::write(hold_path(project_root, pr), body)
+    std::fs::write(path, body)
 }
 
-/// Write a v2 typed marker, preserving stricter existing gates.
+/// Place a v2 typed hold on the PR's gate ledger, preserving stricter
+/// existing gates.
 // trace:STORY-1397 trace:BUG-1691 | ai:codex
-pub(crate) fn write_typed_hold(
-    project_root: &Path,
-    record: &MergeHoldRecord,
-) -> std::io::Result<()> {
-    write_typed_hold_context(project_root, record, false, None)
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn place_hold(project_root: &Path, record: &MergeHoldRecord) -> std::io::Result<()> {
+    place_hold_context(project_root, record, false)
 }
 
-/// The same composition and marker write, with explicit re-arm audit context.
+/// The same composition and placement, with explicit re-arm audit context.
 // trace:TASK-1790 | ai:codex
-pub(crate) fn rearm_typed_hold(
-    project_root: &Path,
-    record: &MergeHoldRecord,
-) -> std::io::Result<()> {
-    write_typed_hold_context(project_root, record, true, None)
+pub(crate) fn rearm_hold(project_root: &Path, record: &MergeHoldRecord) -> std::io::Result<()> {
+    place_hold_context(project_root, record, true)
 }
 
-pub(crate) fn write_typed_hold_context(
+fn place_hold_context(
     project_root: &Path,
     record: &MergeHoldRecord,
     rearmed: bool,
-    adopted: Option<&crate::events::Event>,
 ) -> std::io::Result<()> {
     // trace:TASK-1951 trace:TASK-1757 | ai:claude
     with_hold_lock(project_root, record.pr, || {
         match compose_with_existing(project_root, record) {
-            Composed::Placed(r) => write_marker(project_root, &r, true, rearmed, adopted),
-            Composed::Preserved(r) => write_marker(project_root, &r, false, rearmed, adopted),
+            Composed::Placed(r) => append_hold(project_root, &r, true, rearmed),
+            Composed::Preserved(r) => append_hold(project_root, &r, false, rearmed),
         }
     })?
 }
 
-/// Replace the marker; reserved for the explicit operator escape hatch.
+/// Replace the open hold; reserved for the explicit operator escape hatch.
 // trace:STORY-1397 trace:BUG-1691 | ai:codex
-fn write_typed_hold_replacing(
-    project_root: &Path,
-    record: &MergeHoldRecord,
-) -> std::io::Result<()> {
+fn place_hold_replacing(project_root: &Path, record: &MergeHoldRecord) -> std::io::Result<()> {
     // trace:TASK-1951 trace:TASK-1757 | ai:claude
     with_hold_lock(project_root, record.pr, || {
-        write_marker(project_root, record, true, false, None)
+        append_hold(project_root, record, true, false)
     })?
 }
 
 // trace:BUG-1691 | ai:codex
-/// `adopted` is the placement event a contained writer recorded in its own
-/// worktree; adoption re-records it beside the marker at its original time
-/// and seat instead of minting a new placement (TASK-2153).
-pub(crate) fn write_marker(
+pub(crate) fn append_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
     reconcile_route: bool,
     rearmed: bool,
-    adopted: Option<&crate::events::Event>,
 ) -> std::io::Result<()> {
-    write_marker_with_route(
-        project_root,
-        record,
-        reconcile_route,
-        rearmed,
-        adopted,
-        |proposal| reconcile_recusal_route(project_root, proposal),
-    )
+    append_hold_with_route(project_root, record, reconcile_route, rearmed, |proposal| {
+        reconcile_recusal_route(project_root, proposal)
+    })
 }
 
+/// Validate, normalize and route `record`, then append it to the PR's gate
+/// ledger as a `hold` event (M1 slice 2). There is no worktree-local marker:
+/// a contained caller is refused, and the launcher that started a contained
+/// reviewer arms the hold for the refusal it collects.
 // trace:STORY-1889 | ai:agy
-pub(crate) fn write_marker_with_route(
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn append_hold_with_route(
     project_root: &Path,
     record: &MergeHoldRecord,
     reconcile_route: bool,
     rearmed: bool,
-    adopted: Option<&crate::events::Event>,
     route_fn: impl FnOnce(&mut MergeHoldRecord) -> std::io::Result<()>,
 ) -> std::io::Result<()> {
     if record.pr == 0
@@ -1611,48 +1612,92 @@ pub(crate) fn write_marker_with_route(
     if reconcile_route && normalized.reason_kind == HoldReasonKind::Recusal {
         apply_recusal_route_proposal(&mut normalized, route_fn)?;
     }
-    let body = serde_json::to_vec_pretty(&normalized)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    // BUG-2176: the marker lands in the primary checkout. A contained caller
-    // (a reviewer sandboxed to its worktree) cannot write there; it keeps the
-    // marker locally and the launcher adopts it once the reviewer exits
-    // ([`adopt_worktree_hold`]). Any other failure stays an error.
-    // trace:BUG-2176 | ai:claude
-    let store = hold_store_root(project_root);
-    // TASK-1406: the placement event goes to the events log beside the
-    // marker, so the primary's tampering check sees holds placed from a
+    append_hold_record(project_root, &normalized, rearmed)
+}
+
+/// Collect a hold read from a legacy marker file a reviewer worktree still
+/// carries onto the PR's gate ledger, composed with any open hold. Once on
+/// the ledger it is no longer a legacy marker: an untyped one (a reviewer's
+/// refusal, which the ship gate read as one) is recorded as the typed Rework
+/// hold it stood for, so it releases like any other refusal. The caller
+/// removes the worktree copy afterwards.
+// trace:BUG-2176 trace:STORY-1917 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn collect_legacy_hold(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    if record.pr == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a merge hold needs a PR number",
+        ));
+    }
+    let record = &collected_hold(record);
+    with_hold_lock(project_root, record.pr, || {
+        let composed = match compose_with_existing(project_root, record) {
+            Composed::Placed(r) | Composed::Preserved(r) => r,
+        };
+        append_hold_record(project_root, &composed, false)
+    })?
+}
+
+/// The ledger form of a collected worktree marker: an untyped (`legacy`)
+/// marker becomes a typed Rework hold carrying its text; a typed or
+/// unreadable one is kept as read (an unreadable one stays Unknown and holds
+/// for safety).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn collected_hold(record: &MergeHoldRecord) -> MergeHoldRecord {
+    if !record.legacy {
+        return record.clone();
+    }
+    let mut typed = typed_hold(
+        record.pr,
+        HoldReasonKind::Rework,
+        record.detail.clone(),
+        record.target_head_sha.clone(),
+    );
+    typed.label_state = record.label_state.clone();
+    typed.spec = record.spec.clone();
+    typed.release_condition = Some(format!(
+        "a fresh APPROVED verdict recorded at PR #{}'s current head by an independent reviewer releases it",
+        record.pr
+    ));
+    typed
+}
+
+/// Append `record` as a `hold` event and record its placement in the
+/// events log of the store root.
+fn append_hold_record(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    rearmed: bool,
+) -> std::io::Result<()> {
+    // A real placement supersedes a pending auto-release authorization
+    // before the new hold lands, so no release can act on it (TASK-1757).
+    // trace:TASK-1757 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if crate::gate::ledger::hold::state(project_root, record.pr)
+        .authorized
+        .is_some()
+    {
+        crate::gate::ledger::hold::append(
+            project_root,
+            record.pr,
+            crate::gate::ledger::EventBody::ReleaseWithdrawn {
+                reason: "superseded by a new hold placement".to_string(),
+            },
+            None,
+            None,
+        )?;
+    }
+    crate::gate::ledger::hold::place(project_root, record, rearmed)?;
+    // TASK-1406: the placement event goes to the events log of the store
+    // root, so the primary's tampering check sees holds placed from a
     // linked worktree. trace:TASK-1951 trace:TASK-1406 | ai:claude
     //
     // TASK-2138: the readers that decide anything from hold events read
     // that log: `unrecorded_marker_removals` and lane-liveness's
-    // `load_human_holds`. Three readers stay on the log they were pointed
-    // at, by design: `aida watch` tails one live feed; the history timeline
-    // filters by spec, and hold events carry none, so the root does not
-    // change what it shows; the `aida events` gate tally counts one window
-    // of one log, and `merge-hold clear` writes its floor refusal and its
-    // release to the primary alike. Placements written to a worktree log
-    // before TASK-1406 are not migrated: their markers fall back to the
-    // marker mtime for age, and a hand-deletion of one is not detected.
-    // trace:TASK-1951 trace:TASK-2138 | ai:claude
-    let mut event_root = store.clone();
-    if let Err(error) = write_marker_files(&store, record.pr, &body) {
-        // Compare canonical spellings: a primary reached through a symlink
-        // must not "fall back" to the very directory that just refused.
-        let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        if canon(&store) == canon(project_root) {
-            return Err(error);
-        }
-        write_marker_files(project_root, record.pr, &body)?;
-        event_root = project_root.to_path_buf();
-        eprintln!(
-            "  warning: could not write PR-{pr}'s merge-hold marker in the primary checkout \
-             ({error}); it was written to {local} instead — the review launcher adopts it, \
-             otherwise copy it to {primary} before removing this worktree",
-            pr = record.pr,
-            local = local_hold_path(project_root, record.pr).display(),
-            primary = local_hold_path(&store, record.pr).display(),
-        );
-    }
+    // `load_human_holds`. trace:TASK-1951 trace:TASK-2138 | ai:claude
     // trace:BUG-1693 | ai:codex
     let mut event = crate::events::Event::new(
         None,
@@ -1674,58 +1719,46 @@ pub(crate) fn write_marker_with_route(
         },
     );
     event.seat = crate::events::active_seat();
-    // trace:TASK-1951 trace:TASK-2153 | ai:claude
-    if let Some(original) = adopted {
-        event.ts = original.ts;
-        event.seat = original.seat.clone();
-    }
-    crate::events::emit(&event_root, &event);
+    crate::events::emit(&hold_store_root(project_root), &event);
     Ok(())
 }
 
-/// Retire `root`'s clearance record for `pr` and write its marker, both taken
-/// literally under `root`.
-// trace:BUG-2176 | ai:claude
-fn write_marker_files(root: &Path, pr: u64, body: &[u8]) -> std::io::Result<()> {
-    std::fs::create_dir_all(local_holds_dir(root))?;
-    match std::fs::remove_file(local_clearance_path(root, pr)) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
-    }
-    aida_core::fs_atomic::write_atomic(&local_hold_path(root, pr), body)
-}
-
 /// BUG-1562: place a hold by hand (`aida merge-hold add`) WITHOUT silently
-/// replacing an existing marker's body. A marker already present — typed,
-/// legacy, hand-written, even unreadable — refuses unless `replace`, and the
-/// refusal quotes what would have been lost. The label half is the caller's.
+/// replacing an open one. An open hold — typed, legacy, hand-written, even an
+/// unreadable legacy marker — refuses unless `replace`, and the refusal
+/// quotes what would have been lost. The label half is the caller's.
 // trace:BUG-1562 | ai:claude
-pub(crate) fn place_hand_hold(
+pub(crate) fn place_hold_by_hand(
     project_root: &Path,
     record: &MergeHoldRecord,
     replace: bool,
 ) -> Result<(), String> {
-    let path = hold_path(project_root, record.pr);
-    if !replace && std::fs::symlink_metadata(&path).is_ok() {
-        let existing = read_hold_record(project_root, record.pr)
-            .map(|r| r.detail)
-            .unwrap_or_default();
-        let first = existing.lines().next().unwrap_or("").trim();
-        return Err(format!(
-            "PR #{pr} already has a merge-hold marker ({shown}); `aida merge-hold add` will not \
-             overwrite its body. Keep it and re-apply a missing label with \
-             `aida merge-hold list --fix`, or replace it deliberately with \
-             `aida merge-hold add {pr} --replace ...`.",
-            pr = record.pr,
-            shown = if first.is_empty() {
-                path.display().to_string()
-            } else {
-                format!("\"{first}\"")
-            }
-        ));
+    if !replace {
+        if let Some(existing) = read_hold_record(project_root, record.pr) {
+            let first = existing
+                .detail
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            return Err(format!(
+                "PR #{pr} already has a merge hold ({shown}); `aida merge-hold add` will not \
+                 overwrite it. Keep it and re-apply a missing label with \
+                 `aida merge-hold list --fix`, or replace it deliberately with \
+                 `aida merge-hold add {pr} --replace ...`.",
+                pr = record.pr,
+                shown = if first.is_empty() {
+                    hold_ledger_file(project_root, record.pr)
+                        .display()
+                        .to_string()
+                } else {
+                    format!("\"{first}\"")
+                }
+            ));
+        }
     }
-    write_typed_hold_replacing(project_root, record).map_err(|e| e.to_string())
+    place_hold_replacing(project_root, record).map_err(|e| e.to_string())
 }
 
 /// Read-only view of a hold against the PR's live head. A recusal routed at an
@@ -1773,7 +1806,7 @@ pub(crate) fn apply_recusal_route_proposal(
 ///
 /// This WRITES (marker rewrite, brief creation/retirement) and probes process
 /// liveness, so it is called only from explicit merge-hold commands
-/// (`aida merge-hold list --fix`, and `add` via [`write_typed_hold`]) — never
+/// (`aida merge-hold list --fix`, and `add` via [`place_hold`]) — never
 /// from a read surface. `aida awaiting` and its per-turn notice stay read-only
 /// and use [`project_live_head`] instead.
 // trace:STORY-1397 | ai:codex
@@ -1805,14 +1838,42 @@ pub(crate) fn reconcile_recusal_hold_with(
     if refreshed == durable {
         return Some(refreshed);
     }
-    let body = match serde_json::to_vec_pretty(&refreshed) {
-        Ok(body) => body,
-        Err(_) => return Some(durable),
-    };
-    if aida_core::fs_atomic::write_atomic(&hold_path(project_root, pr), &body).is_err() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    if crate::gate::ledger::hold::place(project_root, &refreshed, false).is_err() {
         return Some(durable);
     }
     Some(refreshed)
+}
+
+/// The Rework hold a refusing verdict arms (BUG-1452 / STORY-1397): typed
+/// Rework, referencing the verdict record (key, PR, sha, recording seat)
+/// rather than quoting it, with its release condition (BUG-1532 / BUG-1562).
+/// One builder for `aida review record` and the launcher that collects a
+/// contained reviewer's refusal (M1 slice 2).
+// trace:BUG-1532 trace:BUG-1562 trace:STORY-1697 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn refusal_hold(
+    pr: u64,
+    key: &str,
+    kind_label: &str,
+    reviewed_sha: Option<String>,
+    recorded_by: Option<String>,
+) -> MergeHoldRecord {
+    let key = key.trim().to_ascii_uppercase();
+    let reason = format!(
+        "{kind_label} for {key} at {}",
+        reviewed_sha
+            .as_deref()
+            .map(crate::gate::review_verdict::short_sha)
+            .unwrap_or("unknown")
+    );
+    let mut hold = typed_hold(pr, HoldReasonKind::Rework, reason, reviewed_sha.clone());
+    hold.verdict_ref = Some(VerdictRef::new(&key, Some(pr), reviewed_sha, recorded_by));
+    hold.spec = Some(key.clone());
+    hold.release_condition = Some(format!(
+        "a fresh APPROVED verdict for {key} recorded at PR #{pr}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)"
+    ));
+    hold
 }
 
 pub(crate) fn typed_hold(
@@ -1861,67 +1922,62 @@ pub(crate) fn placing_seat() -> String {
     }
 }
 
-pub(crate) fn record_clearance(
-    project_root: &Path,
-    record: &MergeHoldRecord,
-    actor: &PrincipalIdentity,
-) -> std::io::Result<()> {
-    record_clearance_with_verdict(project_root, record, actor, None)
-}
-
-/// [`record_clearance`], naming the fresh verdict that met a refusal hold's
-/// release condition.
-// trace:BUG-1532 | ai:claude
-pub(crate) fn record_clearance_with_verdict(
+/// Release `record`'s hold as `actor`: append a `hold-release` event whose
+/// clearance names who released it. Nothing is deleted; the `hold` stays on
+/// the ledger as evidence (AC3).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn release_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
     actor: &PrincipalIdentity,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
-    record_clearance_by(project_root, record, &actor.key(), released_by_verdict)
+    release_hold_by(project_root, record, &actor.key(), released_by_verdict)
 }
 
 // trace:STORY-1687 | ai:codex
-pub(crate) fn record_clearance_by(
+pub(crate) fn release_hold_by(
     project_root: &Path,
     record: &MergeHoldRecord,
     principal: &str,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
-    record_clearance_full(project_root, record, principal, released_by_verdict, None)
+    let clearance = clearance_for(record, principal, released_by_verdict, None)?;
+    with_hold_lock(project_root, record.pr, || {
+        crate::gate::ledger::hold::release(project_root, record.pr, clearance)
+    })?
 }
 
-/// STORY-1698: the ledger entry for a hold the advisor released under a
+/// STORY-1698: the release of a hold the advisor performed under a
 /// fire-fighting mandate — `cleared_by` names the advisor seat's principal,
 /// `released_under_mandate` the mandate.
 // trace:STORY-1698 | ai:claude
-pub(crate) fn record_mandate_clearance(
+pub(crate) fn release_hold_under_mandate(
     project_root: &Path,
     record: &MergeHoldRecord,
     advisor_principal: &str,
     mandate_id: &str,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
-    record_clearance_full(
-        project_root,
+    let clearance = clearance_for(
         record,
         &format!("advisor:{}", advisor_principal.trim()),
         released_by_verdict,
         Some(mandate_id.to_string()),
-    )
+    )?;
+    with_hold_lock(project_root, record.pr, || {
+        crate::gate::ledger::hold::release(project_root, record.pr, clearance)
+    })?
 }
 
-fn record_clearance_full(
-    project_root: &Path,
+/// The clearance audit record for releasing `record`.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn clearance_for(
     record: &MergeHoldRecord,
     principal: &str,
     released_by_verdict: Option<VerdictRef>,
     released_under_mandate: Option<String>,
-) -> std::io::Result<()> {
-    let path = clearance_path(project_root, record.pr);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
     let clearance = HoldClearance {
         pr: record.pr,
         reason_kind: record.reason_kind,
@@ -1932,19 +1988,23 @@ fn record_clearance_full(
         released_by_verdict,
         released_under_mandate,
     };
-    let body = serde_json::to_vec_pretty(&clearance)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    aida_core::fs_atomic::write_atomic(&path, &body)
+    match serde_json::to_value(&clearance)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+    {
+        serde_json::Value::Object(map) => Ok(map),
+        _ => Err(std::io::Error::other("a clearance is a JSON object")),
+    }
 }
 
 /// BUG-2214 corroboration 1 of 3: `pr`'s recorded clearance, only when it
 /// names a human or operator principal and no mandate — a release a human
 /// decided, not one an advisor's mandate performed. Unreadable or unqualified
-/// records answer `None` (fail closed).
+/// records answer `None` (fail closed). Read from the ledger's latest
+/// release ([`recorded_clearance`]), so the evidence survives the release.
 // trace:BUG-2214 | ai:claude
 pub(crate) fn human_recorded_clearance(project_root: &Path, pr: u64) -> Option<HoldClearance> {
-    let body = std::fs::read(clearance_path(project_root, pr)).ok()?;
-    let clearance: HoldClearance = serde_json::from_slice(&body).ok()?;
+    let body = recorded_clearance(project_root, pr)?;
+    let clearance: HoldClearance = serde_json::from_value(serde_json::Value::Object(body)).ok()?;
     // A clearance copied from another PR's file does not qualify.
     if clearance.pr != pr || clearance.released_under_mandate.is_some() {
         return None;
@@ -2009,19 +2069,19 @@ fn hold_lock_wait() -> std::time::Duration {
     HOLD_LOCK_WAIT
 }
 
+/// The per-PR hold lock, beside the change's gate ledger file.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn hold_lock_path(project_root: &Path, pr: u64) -> PathBuf {
-    hold_store_root(project_root)
-        .join(".aida")
-        .join("merge-hold-locks")
-        .join(format!("PR-{pr}.lock"))
+    crate::gate::ledger::ledger_dir(&crate::gate::ledger::hold::read_root(project_root))
+        .join(format!("PR-{pr}.hold.lock"))
 }
 
 /// TASK-1757: run `f` holding PR `pr`'s hold lock, so a placement (or
 /// re-arm) cannot interleave with a release's second validation pass and its
 /// marker removal. Every hold write and every release takes it here. After
 /// [`HOLD_LOCK_WAIT`] it refuses with a named reason; it never proceeds
-/// unlocked. A contained writer that cannot create the lock in the primary
-/// locks beside its own fallback marker instead, as [`write_marker`] does.
+/// unlocked. A caller that cannot create the lock (a contained seat) is
+/// refused: there is no worktree-local fallback (M1 slice 2).
 // trace:TASK-1951 trace:TASK-1757 | ai:claude
 pub(crate) fn with_hold_lock<T>(
     project_root: &Path,
@@ -2039,17 +2099,8 @@ pub(crate) fn with_hold_lock<T>(
             .write(true)
             .open(path)
     };
-    let mut path = hold_lock_path(project_root, pr);
-    let file = match open(&path) {
-        Ok(file) => file,
-        Err(_) => {
-            path = project_root
-                .join(".aida")
-                .join("merge-hold-locks")
-                .join(format!("PR-{pr}.lock"));
-            open(&path)?
-        }
-    };
+    let path = hold_lock_path(project_root, pr);
+    let file = open(&path)?;
     // Re-entrant per thread: a hold write nested inside a release on the
     // same thread is not a race, and a second flock on a fresh descriptor
     // would wait on itself.
@@ -2096,16 +2147,6 @@ pub(crate) fn with_hold_lock<T>(
     Ok(f())
 }
 
-/// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
-/// PR with no hold is a no-op success.
-pub(crate) fn clear_hold(project_root: &Path, pr: u64) -> std::io::Result<()> {
-    match std::fs::remove_file(hold_path(project_root, pr)) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e),
-    }
-}
-
 /// `aida merge-hold clear`: clearing a supervised hold is a non-grantable
 /// human integrity floor, independent of dispatch/disposition roles. The
 /// refusal when `floor_authority` (a human at an interactive terminal) is
@@ -2132,68 +2173,45 @@ pub(crate) enum LabelState {
     Unknown,
 }
 
-/// Record the label sync state on an existing marker (no-op without one).
+/// Record the label sync state on the open hold (no-op without one), as a
+/// `label-sync` event on the PR's gate ledger.
 // trace:BUG-1236 | ai:claude
 // trace:STORY-1889 | ai:agy
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn record_label_state(
     project_root: &Path,
     pr: u64,
     state: &LabelState,
 ) -> std::io::Result<()> {
-    let path = hold_path(project_root, pr);
-    let body = match std::fs::read_to_string(&path) {
-        Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e),
-    };
-    if body.trim_start().starts_with('{') {
-        let Some(mut record) = read_hold_record(project_root, pr) else {
-            return Ok(());
-        };
-        record.label_state = Some(match state {
-            LabelState::Synced => "synced".to_string(),
-            LabelState::Unsynced(err) => format!("unsynced: {}", err.lines().next().unwrap_or("")),
-            LabelState::Unknown => "unknown".to_string(),
-        });
-        return write_typed_hold(project_root, &record);
+    if read_hold_record(project_root, pr).is_none() {
+        return Ok(());
     }
-    let reason = body.lines().next().unwrap_or("").trim();
-    let line = match state {
-        LabelState::Synced => "label: synced".to_string(),
-        LabelState::Unsynced(err) => {
-            format!("label: unsynced: {}", err.lines().next().unwrap_or(""))
-        }
-        LabelState::Unknown => String::new(),
+    let label_state = match state {
+        LabelState::Synced => "synced".to_string(),
+        LabelState::Unsynced(err) => format!("unsynced: {}", err.lines().next().unwrap_or("")),
+        LabelState::Unknown => "unknown".to_string(),
     };
-    let out = if line.is_empty() {
-        format!("{reason}\n")
-    } else {
-        format!("{reason}\n{line}\n")
-    };
-    std::fs::write(path, out)
+    with_hold_lock(project_root, pr, || {
+        crate::gate::ledger::hold::append(
+            project_root,
+            pr,
+            crate::gate::ledger::EventBody::LabelSync { label_state },
+            None,
+            None,
+        )
+        .map(|_| ())
+    })?
 }
 
-/// The recorded label state for `pr` (Unknown when the marker predates
-/// BUG-1236 or carries no state line).
+/// The recorded label state for `pr` (Unknown when the hold predates
+/// BUG-1236 or carries no state).
 // trace:BUG-1236 | ai:claude
 // trace:STORY-1889 | ai:agy
 pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
-    let Ok(body) = std::fs::read_to_string(hold_path(project_root, pr)) else {
-        return LabelState::Unknown;
-    };
-    if body.trim_start().starts_with('{') {
-        return match read_hold_record(project_root, pr).and_then(|r| r.label_state) {
-            Some(s) if s == "synced" => LabelState::Synced,
-            Some(s) if s.starts_with("unsynced:") => {
-                LabelState::Unsynced(s.trim_start_matches("unsynced:").trim().to_string())
-            }
-            _ => LabelState::Unknown,
-        };
-    }
-    match body.lines().nth(1).map(str::trim) {
-        Some("label: synced") => LabelState::Synced,
-        Some(l) if l.starts_with("label: unsynced:") => {
-            LabelState::Unsynced(l["label: unsynced:".len()..].trim().to_string())
+    match read_hold_record(project_root, pr).and_then(|r| r.label_state) {
+        Some(s) if s == "synced" => LabelState::Synced,
+        Some(s) if s.starts_with("unsynced:") => {
+            LabelState::Unsynced(s.trim_start_matches("unsynced:").trim().to_string())
         }
         _ => LabelState::Unknown,
     }
