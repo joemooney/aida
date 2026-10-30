@@ -302,6 +302,18 @@ pub(crate) fn open_change_bound(
     Ok(change)
 }
 
+/// AC2's adopt hook: a change opened outside aida (`gh pr create`, or a
+/// raced drive) and adopted by number binds `specs`' pre-change verdicts
+/// exactly as [`open_change_bound`] would have. Binding is idempotent, so
+/// adopting a change aida already bound adds nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn adopt_change_bound(start: &Path, id: u64, specs: &[String]) -> u64 {
+    if id != 0 {
+        bind_specs(start, ChangeKey::pr(id), specs);
+    }
+    id
+}
+
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

@@ -39,6 +39,7 @@
 //! authority for exactly what it names; this supersedes TASK-1960's
 //! "evidence, never authority" for ledger-stored proofs only (advisor
 //! signoff Q3). A changed [`PROOF_VERSION`] or base tip proves afresh.
+// mandate-gate
 // trace:TASK-1960 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 
