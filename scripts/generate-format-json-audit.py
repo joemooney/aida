@@ -35,6 +35,8 @@ VERIFIED = {
     "aida verify constraints": "verify constraints",
     # trace:STORY-1700 | ai:claude
     "aida fleet drive": "fleet drive (preview; changes nothing without --tick)",
+    # trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+    "aida whoami": "whoami",
 }
 
 # Documented top-level fields of JSON leaves the hermetic audit cannot run.
