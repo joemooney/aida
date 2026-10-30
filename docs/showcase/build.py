@@ -30,6 +30,7 @@ def inline(text):
         if not target.startswith(('https:', 'http:', '#', 'mailto:')):
             path, marker, anchor = target.partition('#')
             mapped = {source: output for source, output, _ in PAGES}
+            mapped["what-is-aida.md"] = "../what-is-aida.html"
             target = mapped.get(path, '../' + path) + (marker + anchor if marker else '')
         return f'<a href="{target}">{label}</a>'
     text = re.sub(r'\[([^\]]+)\]\(([^\s)]+)\)', link, text)
