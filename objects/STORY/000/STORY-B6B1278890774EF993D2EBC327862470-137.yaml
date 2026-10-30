@@ -1,0 +1,32 @@
+id: 01a18e28-fa4f-77e2-b98e-40a4070047f8
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-137
+title: 'Review PR-3147: [AI:claude] feat(schedule): mail-backlog guard nudges live agents with unread requests/handoffs past 30 minutes (STORY-B6B1278890774EF993D2EBC327862470-128)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a18dee`) for branch `story-b6b1278890774ef993d2ebc327862470-128`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3147>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-128` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-128
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3147` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T18:53:32.623538582Z
+modified_at: 2026-10-30T18:53:32.623538582Z
+req_type: Story
+filed_at:
+  code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 18019938e1b
+  vendor: claude
