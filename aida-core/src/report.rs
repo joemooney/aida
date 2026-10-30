@@ -915,6 +915,14 @@ pub fn check_scaffold_status(
             continue;
         }
 
+        // No managed bytes exist to decode in an authored README, including
+        // one written in a different encoding. Missing seeds still report below.
+        // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+        if crate::scaffolding::is_user_owned_seed(&artifact.path) && full_path.is_file() {
+            status.matching.push(artifact.path.clone());
+            continue;
+        }
+
         if full_path.exists() {
             if let Ok(actual_content) = fs::read_to_string(&full_path) {
                 let matches =
@@ -963,6 +971,7 @@ pub fn check_scaffold_status(
 ///
 /// - **Template** — whole-content equality (AIDA owns the file)
 /// - **Seed** (CLAUDE.md) — presence-only (user owns the file)
+/// - **Seed** (README.md) — existing content is fully user-owned
 /// - **Seed** (AGENTS.md) — block-content equality if AIDA-AUTOGEN markers
 ///   are present; presence-only otherwise
 /// - **ManagedMerge** — slot-equality: every AIDA-owned JSON Pointer slot
@@ -1021,6 +1030,10 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
 }
 
 fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
+    // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+    if crate::scaffolding::is_user_owned_seed(path) {
+        return true;
+    }
     use crate::scaffolding::{
         claude_md_has_import, extract_aida_block, extract_memory_reflex_block,
     };
@@ -1144,6 +1157,101 @@ mod tests {
             actual,
             expected,
         ));
+    }
+
+    // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+    #[test]
+    fn readme_seed_ownership_keeps_managed_checks() {
+        let authored =
+            "# Example product\n\n## Usage\n\nAn authored guide with [links](docs/usage.md).\n";
+        assert!(file_matches_for_status(
+            Path::new("README.md"),
+            authored,
+            "starter"
+        ));
+        assert!(matches!(
+            crate::scaffolding::aida_managed_diff_slice(
+                Path::new("README.md"),
+                "starter",
+                authored,
+            ),
+            crate::DiffSlice::Match
+        ));
+        assert!(!file_matches_for_status(
+            Path::new("docs/README.md"),
+            authored,
+            "managed"
+        ));
+        assert!(!file_matches_for_status(
+            Path::new("CLAUDE.md"),
+            authored,
+            "@.claude/AIDA.md"
+        ));
+        let expected = "<!-- AIDA-AUTOGEN-BEGIN -->\ncurrent\n<!-- AIDA-AUTOGEN-END -->";
+        let actual = expected.replace("current", "stale");
+        assert!(!file_matches_for_status(
+            Path::new("AGENTS.md"),
+            &actual,
+            expected
+        ));
+    }
+
+    // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+    #[test]
+    fn readme_seed_status_distinguishes_authored_missing_and_managed_drift() {
+        let root = tempfile::tempdir().unwrap();
+        let store = RequirementsStore::default();
+        let config = ScaffoldConfig {
+            generate_skills: false,
+            generate_commands: false,
+            generate_codex_skills: false,
+            generate_antigravity_skills: false,
+            generate_git_hooks: false,
+            generate_claude_code_hooks: false,
+            ..ScaffoldConfig::default()
+        };
+        let db = root.path().join(".aida/cache.db");
+        let mut scaffolder =
+            Scaffolder::with_database(root.path().to_path_buf(), config.clone(), db.clone());
+        let preview = scaffolder.preview(&store);
+        for artifact in &preview.artifacts {
+            assert!(artifact.path.is_relative());
+            let dest = root.path().join(&artifact.path);
+            fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            fs::write(dest, &artifact.content).unwrap();
+        }
+        let authored = format!(
+            "# Example product\n\n{}",
+            "## Feature\n\nProduct-specific examples and decisions.\n\n".repeat(40)
+        );
+        fs::write(root.path().join("README.md"), &authored).unwrap();
+        let status = check_scaffold_status(&store, root.path(), &config, &db);
+        assert!(status.is_current, "{status:?}");
+        assert!(status.matching.contains(&PathBuf::from("README.md")));
+
+        fs::write(root.path().join("README.md"), [b'#', b' ', 0xe9, 0xff]).unwrap();
+        let status = check_scaffold_status(&store, root.path(), &config, &db);
+        assert!(status.is_current, "non-UTF-8 seed: {status:?}");
+
+        fs::remove_file(root.path().join("README.md")).unwrap();
+        let status = check_scaffold_status(&store, root.path(), &config, &db);
+        assert!(!status.is_current);
+        assert_eq!(status.missing, vec![PathBuf::from("README.md")]);
+
+        fs::write(root.path().join("README.md"), &authored).unwrap();
+        fs::write(
+            root.path().join(".claude/AIDA.md"),
+            "stale managed guidance",
+        )
+        .unwrap();
+        let status = check_scaffold_status(&store, root.path(), &config, &db);
+        assert!(!status.is_current);
+        assert_eq!(status.modified.len(), 1);
+        assert_eq!(status.modified[0].0, PathBuf::from(".claude/AIDA.md"));
+        assert_eq!(
+            fs::read_to_string(root.path().join("README.md")).unwrap(),
+            authored
+        );
     }
 
     // trace:TASK-1528 | ai:codex

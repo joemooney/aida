@@ -795,13 +795,16 @@ fn rewrite_aida_block(actual: &str, expected: &str) -> String {
     actual.replacen(actual_block, expected_block, 1)
 }
 
-/// Mirror of `report.rs::file_matches_for_status`. Seeds (CLAUDE.md,
-/// AGENTS.md) use marker-presence semantics — CLAUDE.md is matching if
-/// the file exists at all; AGENTS.md only needs block-content comparison
-/// when AIDA-AUTOGEN markers are present (user can opt out by removing
-/// them). Templates and managed-merge use whole-content equality.
+/// Compare AIDA-owned content, mirroring `report.rs::file_matches_for_status`.
+/// README.md is user-owned; CLAUDE.md checks its import and AGENTS.md checks
+/// the managed block when present. Templates compare whole content and
+/// managed-merge files compare AIDA-owned slots.
 // trace:FR-1-028 | ai:claude
 fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -> bool {
+    // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+    if aida_core::scaffolding::is_user_owned_seed(path) {
+        return true;
+    }
     use aida_core::FileCategory;
     match FileCategory::from_path(path) {
         FileCategory::Seed => {
@@ -1095,7 +1098,13 @@ pub(crate) fn run_scaffold_upgrade(
         // equality; matching that behavior here. The underlying bug is
         // tracked separately so file_status can be made trustworthy.
         // trace:FR-1-028 | ai:claude
-        let drifted = if exists {
+        // User-owned seeds have no bytes to compare or decode.
+        // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+        let drifted = if aida_core::scaffolding::is_user_owned_seed(&artifact.path)
+            && on_disk_path.is_file()
+        {
+            false
+        } else if exists {
             match std::fs::read_to_string(&on_disk_path) {
                 Ok(actual) => !file_matches_artifact(&artifact.path, &actual, &artifact.content),
                 Err(_) => true,
@@ -1118,6 +1127,11 @@ pub(crate) fn run_scaffold_upgrade(
             && crate::requirements_cli::hook_artifact_needs_mode(&artifact.path, &on_disk_path);
         let action = if !exists {
             UpgradeAction::Create
+        } else if force && aida_core::scaffolding::is_user_owned_seed(&artifact.path) {
+            // Explicit replacement remains available even though authored seed
+            // content is not managed drift. Ordinary upgrades preserve it.
+            // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+            UpgradeAction::Overwrite
         } else if !drifted && needs_mode {
             UpgradeAction::Overwrite
         } else if !drifted {
@@ -1452,6 +1466,20 @@ fn print_scaffold_diffs(
     let mut printed_count = 0;
     for artifact in artifacts {
         let full_path = aida_core::scaffolding::resolve_artifact_path(project_root, &artifact.path);
+        // Check ownership before decoding. A README may use another encoding
+        // or be a user-owned link; neither has managed content to compare.
+        // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+        if aida_core::scaffolding::is_user_owned_seed(&artifact.path)
+            && (full_path.is_file()
+                || aida_core::scaffolding::symlink_blocking_write(
+                    project_root,
+                    &artifact.path,
+                    &full_path,
+                )
+                .is_some())
+        {
+            continue;
+        }
         let actual_result = std::fs::read_to_string(&full_path);
 
         // Resolve drift state via the slice helper so CLAUDE.md (presence-
@@ -1464,11 +1492,14 @@ fn print_scaffold_diffs(
             }
             Err(_) => {
                 // Single-file mode: explicit user asked for this path → surface.
-                // Bulk mode: only surface for known-required files (Template
-                // category — AIDA owns those).
+                // Bulk mode also reports a missing README seed: status marks
+                // it missing and upgrade creates it, without replacing any
+                // existing authored README.
+                // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
                 let category = artifact.category();
-                let surface =
-                    artifacts.len() == 1 || matches!(category, aida_core::FileCategory::Template);
+                let surface = artifacts.len() == 1
+                    || matches!(category, aida_core::FileCategory::Template)
+                    || aida_core::scaffolding::is_user_owned_seed(&artifact.path);
                 if !surface {
                     continue;
                 }
@@ -1553,7 +1584,7 @@ fn print_scaffold_diffs(
     }
 
     if !any_drift && !list_only {
-        eprintln!("{}", "No drift — scaffold matches on-disk files.".dimmed());
+        eprintln!("{}", "No managed scaffold drift.".dimmed());
     }
     Ok(any_drift)
 }
@@ -2037,6 +2068,10 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
 }
+
+#[cfg(test)]
+#[path = "tests/bug_aster001_scaffold_seed_tests.rs"]
+mod bug_aster001_scaffold_seed_tests;
 
 #[cfg(test)]
 mod bug2009_tests {
