@@ -88495,5 +88495,17 @@ operations:
   timestamp: 2026-10-30T00:38:07.301024382Z
   kind: !SetStatus
     status: Done
-clock: 6884
+- id: 01a18a3e-32d5-74f0-bbd4-e058f097bd49
+  target_id: 01a18a3e-0f00-7e50-8791-e2d3db07bfde
+  author: aida
+  node_id: '1'
+  lamport: 6885
+  timestamp: 2026-10-30T00:38:14.485939856Z
+  kind: !Create
+    title: Rework lanes open a new PR instead of pushing to the spec's open PR
+    description: '2026-10-29: the TASK-HOME-116 rework lane opened PR-3109 (branch ...-116-2) while PR-3107 was open with the change-request hold, forcing a close-as-superseded. Acceptance: when a spec has an open PR with a rework hold, queue work --fresh checks out that PR''s branch and pushes to it; a new branch needs an explicit flag.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6885
 node_id: '1'
