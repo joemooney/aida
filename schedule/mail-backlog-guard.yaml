@@ -1,9 +1,9 @@
 job: mail-backlog-guard
-last_run: 2026-10-30T21:57:13.575753272Z
+last_run: 2026-10-30T22:35:23.532814823Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:127
+result: ok
 failure_trips:
 - trip_id: mail-backlog-guard@2026-10-30T21:19:20.285239001Z
   at: 2026-10-30T21:19:20.285239001Z
