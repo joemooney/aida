@@ -60,7 +60,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T08:19:47.813700808Z
+modified_at: 2026-10-30T08:23:11.594685791Z
 req_type: Story
 relationships:
 - rel_type:
@@ -184,6 +184,36 @@ comments:
   created_at: 2026-10-30T07:05:27.931088704Z
   modified_at: 2026-10-30T07:05:27.931088704Z
   session_id: 01a18b84fae1
+  harness_version: 2.1.314 (Claude Code)
+- id: 01a18be7-dfea-7d10-b821-c01f5c8cce79
+  author: joe
+  content: |-
+    ## Implementer approach — slice 2 (ai:claude)
+
+    ### Acceptance criteria as tests
+    - **Unit (launch decision):** `story_home_096_launch_decision_*` proves codex+default → pending; `--no-mail-wake` or `[agents.codex] mail_wake = false` → off; codex < 0.164.0 → unsupported plus a warning; antigravity → unsupported plus one warning; claude → not requested.
+    - **Unit (arming):** `story_home_096_session_start_arms_pending_row_*` proves a pending codex row that has a thread is flipped to armed and the service-ensure callback runs once. A failing ensure flips it to failed and returns the exact manual commands. Rows that are not pending are untouched.
+    - **Unit (registry):** `story_home_096_end_and_gc_retire_*` proves mark_agent_ended and gc of a dead armed/pending row both flip it to retired, and the ledger dir is untouched.
+    - **Unit:** `row_thread` falls back to the hook-recorded `claude_session_id`, which is how a launched Codex reports its thread. Slice 1 read only native_session_id, so a launched row could never arm.
+    - **Unit (list):** the wake cell maps to armed / pending-thread / failed / off / unsupported / retired / -.
+    - **Unit (doctor):** codex_mail_health iterates armed rows' health.json: fresh is clean, while stale, recovery-required or missing produces a finding. With no advisor registration and armed rows present, the advisor check is skipped.
+    - **No automated test:** the real systemctl enable from the hook (needs a user systemd). The ensure step is injected and stubbed in tests.
+
+    ### Expected files
+    - new `aida-cli-lib/src/mail_wake.rs` (vendor adapter: launch decision, arm/retire, cell) + tests
+    - `agent_launch.rs` / `agent_launch_args.rs` (`--no-mail-wake`, thread the decision to the spawn path)
+    - `agent_registry.rs` (retire on end/gc, carry hook session id on register, `MailWake::Unsupported`, view field)
+    - `agent_registry_root.rs` (WAKE column), `status_awaiting.rs` (hook arms)
+    - `mailbox_wake_run.rs` (row_thread fallback, ensure-installed helper, health-job hint), `codex_mail_health.rs` (armed-row iteration)
+    - `agent_config.rs` (`[agents.codex] mail_wake`), help golden
+
+    ### Ambiguities / conflicts as questions
+    - Health job: registering one in tracked `.aida/config.toml` needs the Python adapter's ownership machinery. Slice 2 makes `doctor check codex-mail-wake` cover armed rows, and `wake-service install` prints the exact `[[schedule.jobs]]` block. It does not edit tracked config. Is that acceptable, or should the edit itself ship?
+    - Config key: the ruling says `[codex] mail_wake`. agents.toml nests per-tool tables under `[agents.<tool>]`, so I am using `[agents.codex] mail_wake`.
+    - `agent resume` of a codex session is not armed in this slice (it uses run_tracked_agent without a decision).
+  created_at: 2026-10-30T08:23:11.594685791Z
+  modified_at: 2026-10-30T08:23:11.594685791Z
+  session_id: 01a18be4bff1
   harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
