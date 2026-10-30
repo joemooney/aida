@@ -89541,5 +89541,24 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 6976
+- id: 01a18ae6-cd4c-7c01-bafe-5447122e9673
+  target_id: 01a18ae6-b74a-78b0-83d8-c68c904be664
+  author: aida
+  node_id: '1'
+  lamport: 6977
+  timestamp: 2026-10-30T03:42:24.076695024Z
+  kind: !Create
+    title: aida pr ship post-merge worktree cleanup runs git status on every worktree serially (26 min for 240 worktrees, 0 reclaimed)
+    description: |-
+      2026-10-29: `aida pr ship 3108` merged at 03:06Z but the process ran about 26 more minutes in the merged-agent-worktrees cleanup, calling `git status --porcelain` on each of 240 registered worktrees (114G under ../aida-worktrees), and reported '0 reclaimable'. That blocks serial-ship, so every other approved PR waits behind it.
+
+      Acceptance:
+      1. Cleanup only examines worktrees whose branch is merged (cheap ref check first); it never runs git status on unmerged ones.
+      2. Bounded total time (for example 60s), then defer the rest to `aida doctor --category merged-agent-worktrees`, saying so.
+      3. The ship's merge result prints before cleanup starts, and cleanup can run detached or be skipped with a flag.
+      4. Test with many worktrees showing that unmerged trees are not status-scanned.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 6977
 node_id: '1'
