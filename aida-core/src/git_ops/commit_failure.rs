@@ -17,11 +17,14 @@ use std::time::Duration;
 pub(super) const LOCK_BACKOFF_MS: [u64; 5] = [100, 200, 400, 800, 1600];
 
 /// Run `run` (one `git commit`) and rerun it after each [`LOCK_BACKOFF_MS`]
-/// delay while it fails on lock contention. A failed commit writes nothing,
-/// so rerunning it is safe. Any other failure returns at once.
+/// delay while it fails on lock contention, calling `clear_stale_lock` before
+/// each rerun so a lock no live process holds is removed rather than waited
+/// out. A failed commit writes nothing, so rerunning it is safe. Any other
+/// failure returns at once.
 pub(super) fn with_lock_backoff(
     mut run: impl FnMut() -> Result<GitResult>,
     mut sleep: impl FnMut(Duration),
+    mut clear_stale_lock: impl FnMut() -> Result<()>,
 ) -> Result<GitResult> {
     let mut result = run()?;
     for delay_ms in LOCK_BACKOFF_MS {
@@ -29,6 +32,7 @@ pub(super) fn with_lock_backoff(
             break;
         }
         sleep(Duration::from_millis(delay_ms));
+        clear_stale_lock()?;
         result = run()?;
     }
     Ok(result)
@@ -161,12 +165,22 @@ mod tests {
             2,
         );
         let mut slept = Vec::new();
-        let result = with_lock_backoff(|| run(&git), |d| slept.push(d)).unwrap();
+        let mut clears = 0;
+        let result = with_lock_backoff(
+            || run(&git),
+            |d| slept.push(d),
+            || {
+                clears += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
         assert!(result.success);
         assert_eq!(
             slept,
             vec![Duration::from_millis(100), Duration::from_millis(200)]
         );
+        assert_eq!(clears, 2, "a stale lock is cleared before every retry");
     }
 
     #[test]
@@ -179,7 +193,7 @@ mod tests {
             u32::MAX,
         );
         let mut slept = Vec::new();
-        let result = with_lock_backoff(|| run(&git), |d| slept.push(d)).unwrap();
+        let result = with_lock_backoff(|| run(&git), |d| slept.push(d), || Ok(())).unwrap();
         assert!(!result.success);
         assert_eq!(slept.len(), LOCK_BACKOFF_MS.len());
         let runs = std::fs::read_to_string(dir.path().join("runs")).unwrap();
@@ -191,10 +205,44 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let git = fake_git(dir.path(), "error: hook refused the commit", 1, u32::MAX);
         let mut slept = Vec::new();
-        let result = with_lock_backoff(|| run(&git), |d| slept.push(d)).unwrap();
+        let result = with_lock_backoff(|| run(&git), |d| slept.push(d), || Ok(())).unwrap();
         assert!(!result.success);
         assert!(slept.is_empty());
         assert!(format!("{:#}", error(&result)).contains("exit 1"));
+    }
+
+    #[test]
+    fn bug034_permission_denied_lock_is_not_retried() {
+        for line in [
+            "fatal: Unable to create '/r/.git/index.lock': Permission denied",
+            "fatal: Unable to create '/r/.git/index.lock': Read-only file system",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let git = fake_git(dir.path(), line, 128, u32::MAX);
+            let mut slept = Vec::new();
+            let result = with_lock_backoff(|| run(&git), |d| slept.push(d), || Ok(())).unwrap();
+            assert!(!result.success);
+            assert!(slept.is_empty(), "{line} is permanent, not contention");
+        }
+    }
+
+    /// Real git sends a commit-msg hook's stdout to stderr, so the hook's
+    /// coloured success note arrives on the same stream as git's refusal.
+    #[test]
+    fn bug034_hook_note_on_stderr_is_dropped_and_fatal_line_kept() {
+        let result = GitResult {
+            success: false,
+            stdout: String::new(),
+            stderr: "\u{1b}[0;32m✓ Commit message format valid\u{1b}[0m\n\
+                     fatal: Unable to create '/r/.git/index.lock': File exists."
+                .into(),
+            code: Some(128),
+        };
+        assert_eq!(
+            format!("{:#}", error(&result)),
+            "git commit failed (exit 128): stderr: \
+             fatal: Unable to create '/r/.git/index.lock': File exists."
+        );
     }
 
     #[test]
