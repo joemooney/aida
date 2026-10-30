@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:03.978249769Z
-modified_at: 2026-10-30T11:22:21.998284998Z
+modified_at: 2026-10-30T11:22:27.413345168Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -54,6 +54,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Behavior is correct and the ruling''s item 1 (finished review reaped at exit, kept review keeps its lease) and item 3 land, but ruling item 2''s wiring tests are 1 of 3: no test drives handle_queue_work''s gone-worktree release or run_standalone_reviewer''s exit reap. CI at head still in progress at record time.. No triage reason was given.'
   created_at: 2026-10-30T11:22:21.998281668Z
   modified_at: 2026-10-30T11:22:21.998281668Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c8b-fdf7-76f2-903e-b4228adcc479
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-024):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a7c67e1ed2c4
+    Recorded: 2026-10-30T10:26:17.106792392+00:00
+    Findings:
+    1. major: queue_cmd.rs:14038 release_exited_reviewer_lease deletes the reviewer lease at exit, but that lease is the only handle the TASK-1955 dead-reviewer reap (session_reap.rs scan_reapable_with -> review_pr_terminal_gate ~l.1018 -> reap_one -> teardown_worktree_path ~l.1194, run by aida pr ship step 6) uses to tear down the aida-pr-N review worktree once the PR is merged/closed. doctor's merged-agent GC only matches .claude/worktrees/agent-* (worktree_gc.rs is_agent_managed_worktree), so after this PR every reviewed PR leaves its aida-pr-N tree (and target/) behind permanently. Fix: either tear down the clean review worktree at exit once the verdict is collected (keeping it only when dirty or a refusal needs it), or keep the lease but mark it finished so the PR-branch/scope conflict checks skip it while scan_reapable still reaps it, or teach scan_reapable to reap lease-less aida-pr-N trees for terminal PRs. Add a test proving a finished review's tree is still reclaimed after merge.
+    2. minor: the new wiring has no tests; only the helpers do. Nothing tests that handle_queue_work (queue_cmd.rs:12524) releases a dead gone-worktree conflict without --force-claim, that session_start.rs:2447 filters it out before the AutoEnd/session-end path (the exact BUG-HOME-034 lock-contention failure from the spec comment), or that run_standalone_reviewer calls release_exited_reviewer_lease after collecting the verdict. Add at least one integration-level test for the session_start reviewer-pickup path.
+    3. cosmetic: release_gone_worktree_lease (session_reap.rs:1594) recomputes stale_lease_recovery_for_lease, which runs probe_live_claude_sessions (a process-table scan), even though handle_queue_work already holds recovery.verdict. That is a second scan per conflict and one scan per gone lease in reap_quiet_outcomes. Consider passing the verdict in.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T11:22:27.191370466Z
+  modified_at: 2026-10-30T11:22:27.191370466Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a3f-2a1f-7903-9467-6c6bd617b8c3
