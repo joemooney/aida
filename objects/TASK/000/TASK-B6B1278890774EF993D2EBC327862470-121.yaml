@@ -24,7 +24,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:27:58.713113531Z
-modified_at: 2026-10-30T05:14:09.697251982Z
+modified_at: 2026-10-30T05:14:19.370183579Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -54,6 +54,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Pool ruling (AC1-AC5) implemented and CI green at head, but the original acceptance''s TTY spec-picker on refusal is unbuilt and unwaived, moving the singleton preflight above the resume handler newly blocks direct --resume, and the prompt-ordering fix has no test.. No triage reason was given.'
   created_at: 2026-10-30T05:14:09.697250617Z
   modified_at: 2026-10-30T05:14:09.697250617Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18b3a-f4a4-7f32-8033-581e5eb73cd1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-b6b1278890774ef993d2ebc327862470-121):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cd9ebe60464d
+    Recorded: 2026-10-30T03:28:02.146631535+00:00
+    Findings:
+    1. Unmet acceptance (original AC): 'at a TTY, offers to pick an approved unclaimed spec from the queue for this role' is not built. The 18:30 ruling widened the acceptance and did not remove this clause, and the refusal still fires at a TTY for a same-spec implementer clash and for singular spec-scoped roles (reviewer). Either build the picker in enforce_agent_singleton_preflight's refusal path (agent_launch.rs:~4024), guarded by stdin/stderr TTY and not AIDA_HEADLESS, or get the advisor to amend the spec acceptance to drop it. The implementer's self-declared deviation comment is not a waiver.
+    2. Regression: agent_launch.rs:2618-2635 (foreground) and :2913-2923 (--bg) now run enforce_agent_singleton_preflight BEFORE maybe_handle_agent_resume_or_duplicate. That function handles resume.direct_target (agent_launch.rs:1988) and returns before any singleton check, so 'aida agent new <vendor> --role reviewer --resume <id|latest>' used to bypass the preflight. It is now refused whenever a live same-role agent shares the launch cwd scope, and that check uses the launch cwd/role/spec, not the resumed entry's own scope. Skip the early preflight when resume.direct_target is set, or move the direct-resume branch ahead of it, and add a test.
+    3. Untested refusal ordering: the core original acceptance (scope conflict refused before the bypass consent and resume prompts) is shown only by code order. No test proves enforce_agent_singleton_preflight fires before gate_agent_bypass / the resume picker on either the foreground or --bg path. Add a regression test, e.g. a conflicting live reviewer row plus a launch that would otherwise reach gate_agent_bypass, asserting the scope refusal error and no consent interaction (an injectable consent seam or a headless env that would make the bypass gate fail differently).
+    4. Minor (mailbox_resolver.rs:528-532): a pool-role send where every live implementer is UUID-less (cohort.readers empty, cohort.uuidless non-empty) without --queue-for-role leaves cohort.queued=false and still refuses or fans out like a non-pool role. Under the pool semantics (one taker), role mail to a pool with any live reader should queue. Use '!cohort.readers.is_empty() || !cohort.uuidless.is_empty() || queue_for_role' or document why not, and cover it in pool_role_mail_queues_for_one_taker_instead_of_fanning_out.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T05:14:19.172367015Z
+  modified_at: 2026-10-30T05:14:19.172367015Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a6c-19ef-7950-8ae1-36aca31c78d3
