@@ -92591,5 +92591,38 @@ operations:
   timestamp: 2026-10-30T11:18:50.478600889Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 7171
+- id: 01a18c8b-4850-7033-9ab0-a69bae6ea4d1
+  target_id: 01a18a3e-f42a-7a10-8ec0-e11746b63e44
+  author: aida
+  node_id: '1'
+  lamport: 7172
+  timestamp: 2026-10-30T11:21:40.688622542Z
+  kind: !SetStatus
+    status: Needs Attention
+- id: 01a18c8b-cff9-7371-a5db-4b743bb2e845
+  target_id: 01a18a3e-f42a-7a10-8ec0-e11746b63e44
+  author: aida
+  node_id: '1'
+  lamport: 7173
+  timestamp: 2026-10-30T11:22:15.417754199Z
+  kind: !SetDescription
+    description: |
+      2026-10-29: reviewer lease 01a189c1 (worktree GONE) blocked aida queue work PR-3106 --role reviewer; dormant reviewer sessions for merged PR-3105 and ruled PR-3107 stayed in aida ps. Acceptance: a reviewer session ends its lease when its verdict is written or the reviewer process exits; a lease whose worktree is gone is reaped automatically.
+
+      ADVISOR RULING 2026-10-30 03:28 (PR-3132 round 1). ONE rework push on PR-3132; BUNDLE:
+      1. (major) When release_exited_reviewer_lease (queue_cmd.rs ~14038) ends the reviewer lease at exit, ALSO tear down the aida-pr-N review worktree in the same step, after the verdict has been collected onto the ledger. Nothing in a finished review worktree is needed. If collection failed, keep both the lease and the worktree, and say so. Test: after a reviewer exits, both the lease and the aida-pr-N worktree are gone, and the TASK-1955 reap has nothing left to do.
+      2. (minor) Wiring tests: handle_queue_work releases a dead gone-worktree conflict without --force-claim; session_start (~2447) filters it before AutoEnd; run_standalone_reviewer calls the release.
+      3. (cosmetic) Pass the existing recovery verdict into release_gone_worktree_lease instead of rescanning the process table.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_024 session_reap` plus make check-ci-fast.
+
+
+      ADVISOR RULING 2026-10-30 04:23 (PR-3132 round 2, FINAL round: one push, then a scoped check). Behaviour is verified correct. Bundle the remaining tests and hygiene:
+      1. Wiring test: handle_queue_work (queue_cmd.rs ~12535) releases a dead gone-worktree conflicting lease WITHOUT --force-claim.
+      2. Wiring test: run_standalone_reviewer (bug_2149_2150 harness with a mock vendor) leaves no lease, review tree or review branch after a collected verdict.
+      3. finished_review_with_a_collected_verdict_is_reaped_at_exit also asserts scan_reapable_with has no row for that lease.
+      4. Wiring test: reap_quiet_outcomes releases and reports a dead gone-tree lease.
+      5. run_standalone_reviewer restores the previous cwd (or avoids set_current_dir and passes the root explicitly).
+      6. Fold the duplicated 'released orphaned lease' message and bail into one release path.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_024 bug_2149 session_reap` plus make check-ci-fast.
+clock: 7173
 node_id: '1'
