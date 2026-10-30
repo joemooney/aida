@@ -1,6 +1,6 @@
 # Marketplace roster — substrate & agent-orchestration projects AIDA tracks
 
-**Living document** · Last updated: 2026-07-07 (Devin/Cognition rows: 2026-10-29) · Refresh cadence: with each ecosystem scan (see `README.md` · `signals-to-watch.md`)
+**Living document** · Last updated: 2026-07-07 (Devin/Cognition, Spec Kit, Kiro rows: 2026-10-29; OpenCode: 2026-10-30) · Refresh cadence: with each ecosystem scan (see `README.md` · `signals-to-watch.md`)
 
 > **Why this file exists.** AIDA is built in a fast-moving field. We actively survey the agent-tooling marketplace so we **build on / interoperate with prior art rather than reinvent it** — and so anyone reviewing AIDA can see the landscape we measure ourselves against. This is the *roster* (who's in the field, by category); the dated files in this directory are the point-in-time *analyses*. Inclusion here is not an endorsement, and absence is not a judgment — it's a working list, kept honest by refresh.
 >
@@ -92,10 +92,13 @@ These are the agent *products* a multi-vendor fleet mixes; AIDA's posture is to 
 | **Factory.ai (Droids)** | Factory AI | ✅ | Strongest startup BYO-model + real orchestration ("Missions"); long-horizon reliability unsolved (per CEO). |
 | **OpenHands** (← OpenDevin) | All Hands AI | ✅ | Most benchmark-transparent open agent (~68% SWE-bench w/ Opus); single-agent loop, tiny commercial scale. |
 | **Amp** | Amp Inc. (← Sourcegraph) | routing | Distinctive multi-model routing + subagents; "profitable" unaudited. |
+| **OpenCode** | Anomaly Innovations (← SST) | ✅ | The most-starred open-source terminal agent (~223k★, MIT, v1.19.5 on 2026-10-28); any-model harness with a JS/TS plugin system (`session.idle`, `tool.execute.before/after`, `permission.asked`; throwing in `tool.execute.before` blocks a call). Revenue from model access: pay-as-you-go Console (the docs page formerly titled Zen) and the OpenCode Go subscription. A harness, not a substrate. **AIDA has no adapter yet** (SPIKE-B6B1278890774EF993D2EBC327862470-003 asks what one would take). Revenue and user counts circulating in 2026 come from low-quality secondary sources and are not repeated here. |
 | **Cline** / **Kilo Code** / **Aider** / **Zed** / **Goose** | OSS | ✅ | The model-agnostic OSS layer (Cline ~63k★ leader; Kilo $8M seed; Aider mature git-native; Zed native-speed; Goose local-first). |
 | **Replit Agent** / **Tabnine** / **Qodo** | — | mixed | App-builder ($9B, reliability caveats) / air-gapped enterprise / code-integrity (15+ review agents). |
 
 **Recent reversals to know cold:** Windsurf → **Devin Desktop** (Cognition, Jun 2 2026); **Roo Code → ZooCode** (archived May 2026); **Continue.dev** OSS → commercial pivot; **Vibe Kanban** shut down (Apr 2026); **ACP merged into A2A**; **Amp** spun out of Sourcegraph (Dec 2025); **Graphite** acquired by Cursor (Dec 2025).
+
+**OpenCode (added 2026-10-30).** Repo facts checked with the GitHub API on 2026-10-30 (`anomalyco/opencode`, moved from `sst/opencode`); plugin events from [opencode.ai/docs/plugins](https://opencode.ai/docs/plugins/); billing from [opencode.ai/docs/zen](https://opencode.ai/docs/zen/), which now describes "OpenCode Console" and links to OpenCode Go. Already an integration target elsewhere: Spec Kit lists it among its supported agents, and Devin Desktop can drive it over ACP. **Watch:** its community plugins (oh-my-opencode multi-model orchestration, OpenCode Swarm architect/specialist/QA roles, spec-driven multi-agent kits, a coordination daemon with a shared message bus) are single-harness versions of AIDA's coordination layer. None has a project-wide graph, traces or a cross-vendor fleet. **Tripwire:** OpenCode itself shipping durable cross-session work items or a multi-harness coordinator.
 
 **Devin/Cognition refresh (2026-10-29).** Checked against Cognition's blog and docs on 2026-10-29; docs pages carry no dates. What changed since the July snapshot:
 - Windsurf became Devin Desktop on 2026-06-02 (Agent Command Center; Devin Local replaced Cascade; ACP for third-party agents). [cognition.com/blog/introducing-devin-desktop](https://cognition.com/blog/introducing-devin-desktop), [docs.devin.ai/desktop/acp](https://docs.devin.ai/desktop/acp)
