@@ -92785,5 +92785,13 @@ operations:
       1. (blocking) CI lib-1 'Test time budget' fails since bca7ff2: a test added in the rework (likely the registry-lock interleaving test) runs over 10s. Make it fast (shorter waits or barriers instead of sleeps). If it genuinely needs more time, add a justified entry to scripts/test-time-budget.toml. Find it with scripts/test-timings.py.
       2. (minor) mail_wake::arm_pending: when the launcher and the SessionStart hook race, success wins. Armed overrides an earlier Failed; Failed never overrides Armed. Add a test.
       Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast.
-clock: 7182
+- id: 01a18cb3-7f59-73b0-8e56-5c05327ebc27
+  target_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+  author: aida
+  node_id: '1'
+  lamport: 7183
+  timestamp: 2026-10-30T12:05:36.217521833Z
+  kind: !SetStatus
+    status: Approved
+clock: 7183
 node_id: '1'

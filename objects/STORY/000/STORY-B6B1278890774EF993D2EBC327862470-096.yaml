@@ -73,12 +73,12 @@ description: |
   1. (blocking) CI lib-1 'Test time budget' fails since bca7ff2: a test added in the rework (likely the registry-lock interleaving test) runs over 10s. Make it fast (shorter waits or barriers instead of sleeps). If it genuinely needs more time, add a justified entry to scripts/test-time-budget.toml. Find it with scripts/test-timings.py.
   2. (minor) mail_wake::arm_pending: when the launcher and the SessionStart hook race, success wins. Armed overrides an earlier Failed; Failed never overrides Armed. Add a test.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T12:05:28.640897573Z
+modified_at: 2026-10-30T12:05:35.082460698Z
 req_type: Story
 relationships:
 - rel_type:
@@ -287,6 +287,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-30T10:34:09.908080660Z
   modified_at: 2026-10-30T10:34:09.908080660Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18cb3-7aea-7e93-a962-4147fda8fa1a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 rework fixes all five round-1 findings in code and all four criteria are now test-traced, but PR CI is red: CI (lib-1) fails its ''Test time budget'' step at 87fe1b9 and at bca7ff2. It was green at 89e5af3 and is green on main, so the rework commit added a test that runs over the 10 s per-test budget.. No triage reason was given.'
+  created_at: 2026-10-30T12:05:35.082459207Z
+  modified_at: 2026-10-30T12:05:35.082459207Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
@@ -549,6 +555,14 @@ history:
   timestamp: 2026-10-30T12:05:29.669544010Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18cb3-7aea-7e93-a962-41346617d205
+  author: joe
+  timestamp: 2026-10-30T12:05:35.082445718Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z
@@ -570,11 +584,3 @@ implementation_info:
   implemented_by: joe
   completion_sha: 6893558f16742586e86776b31f555700c9884b66
   reopened_at_sha: 1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-2 rework fixes all five round-1 findings in code and all four criteria are now test-traced, but PR CI is red: CI (lib-1) fails its ''Test time budget'' step at 87fe1b9 and at bca7ff2. It was green at 89e5af3 and is green on main, so the rework commit added a test that runs over the 10 s per-test budget.'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-096 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-30T12:04:59.531383813Z
