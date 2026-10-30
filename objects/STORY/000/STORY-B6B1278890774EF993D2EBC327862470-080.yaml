@@ -97,7 +97,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T00:41:16.078872575Z
+modified_at: 2026-10-30T00:54:08.969805342Z
 req_type: Story
 tags:
 - architecture
@@ -734,6 +734,13 @@ comments:
     **Validation limits in this seat.** This sandbox mounts the cargo build-slot lock directory (`/run/user/1000/cargo-slots-1000`) read-only, so every cargo command waits forever for a build slot. Neither targeted run could execute here, and the cargo-backed gate in `make check-ci-fast` (no-default-features check) failed on the same cause. Because that runner stops at the first failure, no other fast gate ran either. Locally verified: `rustfmt --check` on both files. CI is the gate for both tests.
   created_at: 2026-10-30T00:41:16.078872575Z
   modified_at: 2026-10-30T00:41:16.078872575Z
+  session_id: 01a18a35885c
+  harness_version: 2.1.312 (Claude Code)
+- id: 01a18a4c-c349-7110-aa5a-98d84f883143
+  author: joe
+  content: 'Round-2 update: closed_refusal_does_not_count_as_outstanding passes locally (1 passed) at 5fb1323. story_078 node_alias test: CI only.'
+  created_at: 2026-10-30T00:54:08.969805342Z
+  modified_at: 2026-10-30T00:54:08.969805342Z
   session_id: 01a18a35885c
   harness_version: 2.1.312 (Claude Code)
 history:
