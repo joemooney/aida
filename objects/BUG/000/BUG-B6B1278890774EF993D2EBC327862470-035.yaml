@@ -8,12 +8,12 @@ description: |-
   1. Resolve the range from origin/<base>..origin/<head> (fetching the head ref, or using the PR head SHA from forge metadata) when the local branch is missing.
   2. A git_log failure is reported as an error naming the range, never as 'no trailers'.
   3. Test: PR head branch absent locally but present on origin, trailers found.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:18:17.188008505Z
-modified_at: 2026-10-30T04:18:17.188008505Z
+modified_at: 2026-10-30T08:25:38.363172453Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-30T04:18:29.067477925Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18bea-1d3b-7c02-8d2e-db16ef8e33bf
+  author: aida-session-start
+  timestamp: 2026-10-30T08:25:38.363170502Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
