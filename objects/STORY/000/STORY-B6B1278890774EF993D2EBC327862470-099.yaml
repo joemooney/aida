@@ -1,7 +1,7 @@
 id: 01a18a52-7f13-7cf0-ae1c-97a99515aa05
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-099
 title: 'aida deputy: a hardened operator stand-in that runs submitted jobs concurrently under the operator''s grant'
-description: |-
+description: |
   ## Problem
   While away, the operator runs two shell loops in their own (human-TTY, granted) terminal that source /tmp/aida_runme{,_2}.sh, log to /tmp/aida_runme*.log, then delete the script. The advisor writes scripts there to borrow the operator's authority (role grants, lane launches, ships, dev promote). It works and the operator wants it built in as `aida deputy`, a proxy that can be hardened over time. Gaps seen 2026-10-29:
   - /tmp is shared: any local process can plant a script that runs with the operator's grant.
@@ -39,12 +39,20 @@ description: |-
   - Name: `aida deputy`; keep `aida runloop` as a hidden alias.
   - Concurrency is a slice-1 requirement, not later hardening. Today the operator needed two terminal loops because each job blocks its loop. One `aida deputy` must run several jobs at once: `--workers K` (default 2), and each job is a child `bash` subprocess, so a long ship never blocks a quick lane launch. Named deputies (`aida deputy --name ship`) are also allowed, each with its own queue and ledger. `aida deputy submit --name` targets one; the default is any idle worker.
   - Job classes may pin to a single worker (`--serial <class>`, e.g. `ship`) so serial-ship stays one-at-a-time while other jobs run in parallel.
+
+  ADVISOR NOTE 2026-10-30 07:07 (operator question: "with aida deputy, will it be able to run that command?"): YES, in scope and required.
+  Evidence: the operator's runner loop cleared merge holds 3101 and 3120 (rc=0) only when the job script did NOT redirect output (`>> log 2>&1` made the TTY check refuse; `aida pr ship 3120` from the same loop had been refused at 03:20 for that reason).
+  Acceptance additions:
+  - The deputy runs submitted jobs on the operator's real TTY (or a pty it owns), so human-TTY-gated acts work: `aida merge-hold clear N` and a supervised `aida pr ship N`.
+  - Every privileged act is logged with the job id, the submitting seat and the outcome, and the job's output is still captured (via tee or a pty transcript), not redirected away from the TTY.
+  - The submitter gets each job's result back (exit code plus a log path), replacing the /tmp/aida_runme*.sh plus log-tail convention.
+  - Jobs that wait on a prompt time out with a clear "needs the operator" notice instead of hanging the queue.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-30T01:05:53.864059600Z
+modified_at: 2026-10-30T14:06:09.059368652Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -73,6 +81,11 @@ history:
   author: joe
   timestamp: 2026-10-30T01:05:54.737763085Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes: []
+- id: 01a18d21-e1d6-7bc3-a7d7-cb5c627aa488
+  author: joe
+  timestamp: 2026-10-30T14:06:10.390346515Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
