@@ -1,0 +1,30 @@
+id: 01a18b22-974c-7f91-b2c0-2293b1395170
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-105
+title: Every new spec gets a globally agreed ID from a reserved block, plus its local ID; backfill the local-only specs
+description: |-
+  Follow-up to STORY-HOME-095 (block delegation slice 1, Done at 9a86ae5), whose slice-2 work (root enrollment checks, dispensing from blocks) has no owner. Operator model 2026-10-29: everyday use is the bare, globally agreed ID based on reservations; every spec also keeps a local ID.
+
+  Today: `aida node show` on the home primary says 'node-local allocation; no global blocks', Root: not enrolled, Pools: none. So every spec filed since the node change (BUG-HOME-0xx, STORY-HOME-0xx, TASK-HOME-1xx) has only a local ID.
+
+  Acceptance:
+  1. The home primary is root (`aida node enroll-root`, or a documented equivalent) and holds or grants agreed-ID blocks per type. `aida add` assigns the next agreed ID from this node's block AND a local ID in one write.
+  2. A clone without a usable block assigns a local ID only and marks the spec 'agreed id pending'. The next sync that reaches a block-holder assigns the agreed ID (the existing merge-gate promotion path; see TASK-446).
+  3. Backfill (one-time surgery, allowed): assign agreed IDs to every local-only spec, recorded as an alias, so existing local IDs, trailers and trace comments still resolve.
+  4. `aida show` and `aida list` display the agreed ID first and the local ID beside it.
+  5. Finish STORY-HOME-095 slice 2: effective_policy refuses when the local role says root but registry/root.yaml names another holder, plus dispensing from delegated blocks.
+  Process: architecture-adjacent. A short sketch comment (allocation flow, backfill plan, interaction with BUG-HOME-036's resolver) and advisor signoff come before code.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T04:47:42.412744068Z
+modified_at: 2026-10-30T04:47:42.412744068Z
+req_type: Story
+filed_at:
+  code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0dfbd03d09
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
