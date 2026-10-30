@@ -4242,8 +4242,10 @@ mod story_1422_performance_gate_tests {
     /// date); nothing stopped a later config edit from quietly dropping the
     /// table form back to a plain integer and losing the second limb without
     /// any test failing. Reads the real file via `CARGO_MANIFEST_DIR` so this
-    /// fails the moment the dogfood surface regresses.
-    // trace:STORY-1423 trace:ADR-53 | ai:claude
+    /// fails the moment the dogfood surface regresses. The 2000 ms `budget_ms`
+    /// is the operator's deliberate 2026-10-29 decision for this build-loaded
+    /// host (TASK-HOME-116); the ceiling still catches a hung call.
+    // trace:STORY-1423 trace:ADR-53 trace:TASK-b6b1278890774ef993d2ebc327862470-116 | ai:claude
     #[test]
     fn this_repo_configures_a_ceiling_for_the_show_budget() {
         let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -4260,8 +4262,8 @@ mod story_1422_performance_gate_tests {
             .find(|b| b.cmd == "show")
             .expect("this repo must declare a [performance.budgets] entry for `show`");
         assert_eq!(
-            show.budget_ms, 1000,
-            "budget_ms must stay the measured value"
+            show.budget_ms, 2000,
+            "budget_ms must stay the operator's 2026-10-29 build-loaded-host value (TASK-HOME-116)"
         );
         assert!(
             show.ceiling_ms.is_some(),
