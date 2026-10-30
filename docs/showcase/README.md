@@ -16,11 +16,26 @@ The initial version was published as an owner-private preview through Sites. The
 
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-101 | ai:codex -->
 
+## Public GitHub Pages site
+
+Open **[joemooney.github.io/aida](https://joemooney.github.io/aida/)** for the live website.
+The operator requested public Pages hosting on 30 October 2026. The initial
+publication is a snapshot of reviewed merged main `79ed6f56`; it does not
+publish unmerged follow-up changes. Pages deploys from the separate `gh-pages`
+branch at `/`, with `.nojekyll`. It does not automatically follow `main`.
+Refresh that deployment from an approved merged revision when the guides change.
+Only static showcase pages/assets and the standalone overview are published;
+source and technical-reference links resolve to the public GitHub repository.
+The existing owner-private Sites preview retains its separate audience.
+
+<!-- trace:TASK-HOME-130 | ai:codex -->
+
 ## Source guide build
 
 `python3 docs/showcase/build.py` renders every manifest-selected guide into the
 shared `page-template.html` layout: `getting-started.html`, `configuration.html`,
-`workflow.html`, `autonomy.html`, `trust.html`, `metrics.html` and `setup.html`,
+`workflow.html`, `autonomy.html`, `trust.html`, `metrics.html`, `setup.html`,
+`capabilities.html` and `integrations.html`,
 plus `library.html` and `search-data.js`. Edit the corresponding Markdown,
 templates or `guide.css`, then rebuild; do not hand-edit derived outputs.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
@@ -32,7 +47,7 @@ page and search artifact without writing files; the fast CI gate runs this check
 ## Curated library and publication scope
 
 `publication.json` is the explicit source allowlist and audience classification.
-It currently selects seven tracked product guides, classified as human or operator
+It currently selects nine tracked product guides, classified as human or operator
 reading. Technical references remain links; historical, internal, archived,
 plan/spike/security/agent material and runtime data are not republished or indexed.
 The manifest keeps publication scope explicit; adding a source requires checking its audience, currentness and references.
@@ -56,4 +71,4 @@ handbook pages.
 
 ## Standalone overview
 
-`docs/what-is-aida.html` is outside this publication builder. This slice preserves the existing HTML from its base branch, including its table semantics, section labels, anchors and nested navigation. The guide/library build and `--check` do not regenerate or certify that page.
+`docs/what-is-aida.html` is outside this publication builder. Maintain that standalone file separately, preserving its table semantics, section labels, anchors and nested navigation when updating its content. The guide/library build and `--check` do not regenerate or certify that page.
