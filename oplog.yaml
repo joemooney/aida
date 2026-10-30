@@ -92656,5 +92656,31 @@ operations:
   timestamp: 2026-10-30T11:56:41.829914171Z
   kind: !SetStatus
     status: Done
-clock: 7177
+- id: 01a18cad-2642-7060-be14-666c5b7607a2
+  target_id: 01a18cad-1c87-7b82-987b-6ae1cc56920d
+  author: aida
+  node_id: '1'
+  lamport: 7178
+  timestamp: 2026-10-30T11:58:40.194861336Z
+  kind: !Create
+    title: 'Review PR-3134: [AI:claude] fix(ci): catch a stale help golden snapshot before push (TASK-B6B1278890774EF993D2EBC327862470-125)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-125`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3134>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-125` → `main`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-125
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3134` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7178
 node_id: '1'
