@@ -111,12 +111,20 @@ description: |
   2. AC2 dedupe: store::bind_unbound (gate/ledger/store.rs ~273) must skip unbound records already bound to ANY change in the spec's index, or project::verdict_events must dedupe by record identity. Test: two changes for one spec, and verdict_records(SPEC) returns each record once.
   3. AC2 wiring: bind from ONE shared open-change hook that every PR-open path calls: pr_ship_create_pr, orchestrator_leases open_orchestrator_pr_for_implementer_worktree and open_orchestrator_pr_for_pushed_branch, drain_batch open_cluster_pr, and pr_train. Add a wiring test for at least pr_ship_create_pr and one orchestrator path.
   Test tier: STRICT as before (gate:: plus the ship/mandate integration binaries you touch, plus make check-ci-fast). Run with env -u AIDA_CONTAINED.
+
+
+  ## SLICE 3 (PR-3120) ROUND 2 ruling (advisor, 2026-10-30 01:50): ONE rework push on PR-3120, plain trailer stays
+  Reviewers: AC7 IS AMENDED. See "SLICE 3 (PR-3120) ROUND 1 ruling" above (22:55). The line-count collapse is waived, so finding 2 is resolved by that ruling and the plain trailer is correct.
+  BUNDLE:
+  1. CI lib-1 (story_1888_gate_paths_tests), from the review_carryover move into gate/: add the `// mandate-gate` marker line; register the file as a gate module wherever the boundary registry lists them; remove the review_carryover paths from gate/orchestrator_leaves.rs. Do not edit test expectations.
+  2. AC2: the orchestrator adopt paths (orchestrator_leases.rs ~1387 and ~1730) return before the binding hook. Bind there too, with a test that adopting an already-open PR binds earlier spec verdicts.
+  Run `cargo test -p aida-cli-lib --lib story_1888 gate::` plus make check-ci-fast (with env -u AIDA_CONTAINED). A scoped re-review checks only these two items plus CI.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T08:46:46.670743796Z
+modified_at: 2026-10-30T08:48:02.511232255Z
 req_type: Story
 tags:
 - architecture
@@ -1323,6 +1331,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18bfe-a804-7251-b4bb-8540c16e9237
+  author: joe
+  timestamp: 2026-10-30T08:48:04.612442711Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main
