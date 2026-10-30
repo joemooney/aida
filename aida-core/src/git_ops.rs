@@ -27,6 +27,8 @@ pub struct GitResult {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
+    /// Exit code; `None` when git was killed by a signal. trace:BUG-034 | ai:claude
+    pub code: Option<i32>,
 }
 
 /// Run a git command in the given working directory.
@@ -109,6 +111,7 @@ fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Res
         success: output.status.success(),
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        code: output.status.code(),
     })
 }
 
@@ -1336,7 +1339,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-m", message]);
-    let result = git(repo, &argv)?;
+    let result = commit_with_lock_recovery(repo, &argv)?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -1348,7 +1351,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     ) {
         Ok(false) // nothing to commit — not an error
     } else {
-        anyhow::bail!("git commit failed: {}", result.stderr);
+        Err(commit_failure::error(&result)) // trace:BUG-034 | ai:claude
     }
 }
 
@@ -1365,11 +1368,24 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-q", "-m", message, "--"]);
     argv.extend_from_slice(paths);
-    let result = git(repo, &argv)?;
+    let result = commit_with_lock_recovery(repo, &argv)?;
     if !result.success {
-        anyhow::bail!("git commit failed: {}", result.stderr);
+        return Err(commit_failure::error(&result)); // trace:BUG-034 | ai:claude
     }
     Ok(())
+}
+
+/// Run one `git commit` argv, first clearing a stale `index.lock` (one no live
+/// git process holds) and clearing it again before each lock-contention
+/// retry, so an abandoned lock cannot fail every later store commit.
+// trace:BUG-034 | ai:claude
+fn commit_with_lock_recovery(repo: &Path, argv: &[&str]) -> Result<GitResult> {
+    ensure_index_lock_clear_for_write(repo, 10, 100)?;
+    commit_failure::with_lock_backoff(
+        || git(repo, argv),
+        std::thread::sleep,
+        || ensure_index_lock_clear_for_write(repo, 1, 0).map(drop),
+    )
 }
 
 /// Push to the remote. Returns true on success, false if rejected (non-fast-forward).
@@ -1583,6 +1599,8 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
     Ok(sha)
 }
 
+// trace:BUG-034 | ai:claude
+mod commit_failure;
 // trace:BUG-2211 | ai:claude
 mod config_lock;
 mod evidence;
@@ -7652,6 +7670,31 @@ mod tests {
         assert!(lock.exists());
 
         assert!(ensure_index_lock_clear_for_write(&repo, 1, 1).unwrap());
+        assert!(!lock.exists(), "stale lock should be cleared");
+    }
+
+    // BUG-034: an abandoned `index.lock` (no live holder) left between staging
+    // and committing must not fail the commit — `commit` and `commit_paths`
+    // recover it the way `add` does.
+    // trace:BUG-034 | ai:claude
+    #[test]
+    fn bug034_commit_recovers_a_stale_index_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        home_fixture_init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        let lock = index_lock_path(&repo).expect("lock path");
+
+        std::fs::write(repo.join("f.txt"), "initial").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        std::fs::write(&lock, "").unwrap();
+        assert!(commit(&repo, "initial").unwrap());
+        assert!(!lock.exists(), "stale lock should be cleared");
+
+        std::fs::write(repo.join("f.txt"), "changed").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        std::fs::write(&lock, "").unwrap();
+        commit_paths(&repo, "change f", &["f.txt"]).unwrap();
         assert!(!lock.exists(), "stale lock should be cleared");
     }
 
