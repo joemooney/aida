@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T19:28:08.484638716Z
+modified_at: 2026-10-30T21:13:53.883126442Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -169,6 +169,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18ea9-7ddd-7b03-a21a-0b8b0dad8ae6
+  author: joe
+  timestamp: 2026-10-30T21:13:54.909268665Z
+  session_id: 01a18e93346a
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3bd7aa16acf3a54b66bc3527d40d93494092a7f0
   branch: main
@@ -181,7 +187,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'The round-1 rework items are met and tested, but the containment proof can be forged: main comes from the seat-writable marker and alternates, and EACCES on a chmod-0555 .git can be faked, so a host process can pass contained_in_clone and run seat config.'
+  detail: 'All spec acceptance criteria and round 0-2 ruling items are met in code and covered by tests (14/14 bug_home_038 pass locally), but required PR CI is red at this head: CI (lib-0) and CI (lib-1) fail in ''Run tests'' (run 41124379639), as they did at the previous head 190d51a; main and sibling PRs on the same base are green.'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-038 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-30T19:26:42.009500111Z
+  shelved_at: 2026-10-30T21:13:53.883126442Z
