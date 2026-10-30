@@ -1085,6 +1085,13 @@ fn dry_run_plan_notes_skipped_flags() {
     let plan = format_dry_run_plan(&opts, &[], crate::forge::ForgeKind::GitHub);
     assert!(plan.contains("--no-pull"), "{plan}");
     assert!(plan.contains("--no-cleanup"), "{plan}");
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-033.acac633f | ai:claude
+    assert!(
+        plan.contains(
+            "--no-cleanup: aida session end, session reap and merged-worktree pruning skipped"
+        ),
+        "{plan}"
+    );
 }
 
 #[test]

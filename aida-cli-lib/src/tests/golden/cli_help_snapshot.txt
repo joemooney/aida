@@ -15077,8 +15077,11 @@ Options:
           separately
 
       --no-cleanup
-          Skip the `aida session end` worktree-cleanup step. Useful when you want to inspect the
-          post-merge state before the worktree disappears
+          Skip the post-merge worktree cleanup: the `aida session end` step, the reap of exited
+          sessions, and the merged agent worktree pruning. The pruning stops at a 60s budget
+          (checked between worktrees) and leaves the rest to `aida doctor`; the reap is not bounded.
+          Useful when you want to inspect the post-merge state before the worktree disappears, or
+          when the ship must not wait on cleanup
 
       --dry-run
           Print the resolved sequence without executing any of it
@@ -43571,7 +43574,7 @@ Working on aida itself
       {
         "name": "no-cleanup",
         "takes_value": false,
-        "help": "Skip the `aida session end` worktree-cleanup step. Useful when you want to inspect the post-merge state before the worktree disappears"
+        "help": "Skip the post-merge worktree cleanup: the `aida session end` step, the reap of exited sessions, and the merged agent worktree pruning. The pruning stops at a 60s budget (checked between worktrees) and leaves the rest to `aida doctor`; the reap is not bounded. Useful when you want to inspect the post-merge state before the worktree disappears, or when the ship must not wait on cleanup"
       },
       {
         "name": "no-complete",
