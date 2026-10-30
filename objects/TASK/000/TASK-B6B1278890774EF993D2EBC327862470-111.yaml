@@ -26,7 +26,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:09:50.634186933Z
-modified_at: 2026-10-30T00:53:09.320203376Z
+modified_at: 2026-10-30T04:17:38.814265526Z
 req_type: Task
 tags:
 - advisor-review
@@ -96,6 +96,14 @@ comments:
     Published advisor correction pass: PR #3101 at d84f608f683e8d17f6355416b456f99ad016c998; base task-b6b1278890774ef993d2ebc327862470-110-work. All eight heads updated in one user-approved atomic force-with-lease push. Remote heads, bases and preserved previews verified. All 35 FASTTRACK gates passed for this rebuilt head. Advisor notified with all eight full SHAs for fresh independent review and bottom-up integration. No self-merge.
   created_at: 2026-10-30T00:39:34.449313448Z
   modified_at: 2026-10-30T00:39:34.449313448Z
+- id: 01a18b07-11fe-7883-a424-d271bde77854
+  author: ai:codex:joe
+  content: |
+    Round-2 corrections published: PR #3101 at e0a7f9435ad4d4050fd2982b75d0132df015ec08, with corrected TASK-110 merged upward. The builder now renders every manifest page, library and search payload in memory. --check verifies tracked outputs, names every drifted artifact and performs no writes. CI's static manual step runs seven behavioral fixtures plus this check. The search index preserves punctuation and replaces Markdown links with labels; duplicate/reserved outputs refuse before writes; dead table CSS is removed; footer provenance uses a placeholder; Unicode excerpts use original-string match offsets.
+
+    Validation: all 35 make check-ci-fast gates passed (completed exit 0, /tmp/docs-round2-111-fast.log); seven targeted fixtures passed, including Node Unicode/literal query checks. A fresh spawned author checker independently tested all eight artifacts under drift without changing bytes/mtimes and found no findings. Author self-check only. Plain push and required post-push inbox check completed; no new message IDs. Partial inbox acknowledgement remains expected. Fresh independent review and advisor integration remain required; no author verdict or self-merge. Publication remains limited to the existing curated manifest; no hosted audience change.
+  created_at: 2026-10-30T04:17:38.814265526Z
+  modified_at: 2026-10-30T04:17:38.814265526Z
 history:
 - id: 01a188da-b290-7ce2-8311-53cf834c1f5a
   author: joe
