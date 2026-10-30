@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+  "publishes": [
+    {
+      "at": "2026-10-30T19:23:09.508037094Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T00:31:33.361917740Z",
+      "spec": "BUG-a65b4bf5902d469995f816efd3a27661-001",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T07:09:54.771573807Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T10:18:21.163808239Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+        "branch": "bug-a65b4bf5902d469995f816efd3a27661-001-work",
+        "first_seen": "2026-10-30T10:18:21.163749339+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T16:02:02.142350820Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3126,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ebe67d6e271cc7891a01af3765fcf947cfd66280"
+      }
+    },
+    {
+      "ts": "2026-10-30T18:48:55.160115457Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3126,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a3147ad8d794ecb8ce7013eb63efcd52816c3378"
+      }
+    },
+    {
+      "ts": "2026-10-30T19:04:21.685748105Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T19:04:35.989030987Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3126
+      }
+    },
+    {
+      "ts": "2026-10-30T19:23:09.374267768Z",
+      "spec": "BUG-A65B4BF5902D469995F816EFD3A27661-001",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "63dc027ac8810c53a38c2a75b9a0aa9d8e31142d",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
