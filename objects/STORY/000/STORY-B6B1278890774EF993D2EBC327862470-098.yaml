@@ -36,7 +36,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:10.785877389Z
-modified_at: 2026-10-30T18:02:32.750258634Z
+modified_at: 2026-10-30T21:11:44.070624335Z
 req_type: Story
 tags:
 - cli
@@ -106,6 +106,13 @@ comments:
   created_at: 2026-10-30T18:02:32.750258634Z
   modified_at: 2026-10-30T18:02:32.750258634Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18ea7-7ec6-79e1-a056-6b58ac46c062
+  author: joe
+  content: 'Round-2 rework pushed to PR-3141 as f06bf6532d6 (on top of a merge of origin/main; no rebase, no force push). All five findings addressed. AC1: the per-vendor test now goes through the real send path (RecipientDirectory::resolve_send + the Send command), the notice path (ResolvedAudience::from_facts + read_own_mail_binding(Notice) + notice_text) and the send sender identity (resolve_mail_sender_identity_with). AC3: the queue head now uses the same source as queue next (own queue, then the role pool), skips completed/rejected/superseded specs, and shows the claim age. Collect-level tests cover the session-id lease, the cwd-lease fallback, the registry claim and the role-pool head. AC4: goal_line is tested with an active mandate + purpose. AC6: a render(agent) test runs through resolve_agent_mode. Minors: char-safe HEAD slicing; the lease vs session label. AC6 TIMING (agent-profile build of f06bf6532d6, this repo, piped, load ~17.5 on 6 cores): 0.291 / 0.295 / 0.296 / 0.301 / 0.293 / 0.462 s, median ~0.296 s. The mail read used its full 180 ms cap and showed ''partial view''. Gates: cargo test whoami 22/22; make check-ci-fast pass. NOTE: this headless seat could not edit the PR description (permission denied), so the timing is recorded here instead of in the PR body.'
+  created_at: 2026-10-30T21:11:44.070624335Z
+  modified_at: 2026-10-30T21:11:44.070624335Z
+  session_id: 01a18e52b358
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a38-6c62-7cb1-b0db-eecb5124c34e
   author: joe
