@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:45:48.780708400Z
-modified_at: 2026-10-30T09:18:48.089826591Z
+modified_at: 2026-10-30T09:18:55.080129593Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -50,6 +50,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The error report and transient-lock retry meet the written acceptance (fake-git tests pass; CI green except the gates job, still pending). The cause the operator confirmed on the spec, a stale index.lock left by a killed writer, is still not recovered on the commit path.. No triage reason was given.'
   created_at: 2026-10-30T09:18:48.089824670Z
   modified_at: 2026-10-30T09:18:48.089824670Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c1a-e3ad-7783-bd87-4cbd4b5d4152
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-034):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3c1ea2391b01
+    Recorded: 2026-10-30T09:15:43.391020852+00:00
+    Findings:
+    1. major: git_ops::commit and commit_paths (aida-core/src/git_ops.rs:1342,1371) retry a lock failure 5 times over about 3.1s and then fail, but never remove a stale index.lock. The spec's 2026-10-30 07:03 comment names a stale lock (no live holder, left for 7+ min) as the root cause and says writers must detect and recover it. add/add_all already do this through ensure_index_lock_clear_for_write (git_ops.rs:1270,1283,1298); the commit path does not. With a stale lock every store commit still fails, now with a clearer message. Fix: call ensure_index_lock_clear_for_write before the commit and between lock retries when stderr names index.lock, and add a test that leaves a stale index.lock with no holder and shows the commit succeeds.
+    2. minor: GIT_LOCK_CONTENTION (aida-core/src/external_tool_output.rs:93) counts '.lock' plus 'unable to create' as contention. So non-transient failures such as "Unable to create '.../index.lock': Permission denied" or 'Read-only file system' are retried for about 3.1s before failing. Require 'file exists' / 'another git process seems to be running' (or 'cannot lock ref' together with 'file exists') rather than 'unable to create' alone, and add a no-retry test for a permission-denied lock.
+    3. minor (test coverage): real git sends a commit-msg hook's stdout to stderr, so in production the coloured '✓ Commit message format valid' line arrives on stderr next to the fatal line. Every test puts the hook line on stdout (fake_git in commit_failure.rs, bug034_empty_output_still_names_the_exit_code), so removing hook notes and ANSI from stderr is never exercised. Add a case where stderr = ANSI '✓ …' line + 'fatal: Unable to create .../index.lock: File exists.' and assert that the message keeps the fatal line and drops the hook line.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T09:18:54.893445201Z
+  modified_at: 2026-10-30T09:18:54.893445201Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18aea-4634-7890-b81b-b37aba622a8e
