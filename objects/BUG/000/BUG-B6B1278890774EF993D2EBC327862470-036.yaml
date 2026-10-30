@@ -37,12 +37,21 @@ description: |
   4. Ruling C: not_found_suggestion and ambiguous_bare_id_lines show the twin's agreed_id when it has one, else the alias-local form.
   ACCEPTED, no action: the local-twin signpost stays on `aida show` only (bare = agreed under ruling A).
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 story_1728` plus make check-ci-fast.
+
+
+  ADVISOR RULING 2026-10-30 04:14 (PR-3131 round 2). ONE rework push on PR-3131; BUNDLE:
+  1. CI: three spec-id leak checks fail (lib-0 cli::tests::source_doc_comments_carry_no_spec_id_provenance and help_catalog::help_catalog_tests::catalog_descriptions_carry_no_spec_ids; contracts docs/cli/verify-manual.py). Replace every concrete example id in help text, doc comments, the help catalog and docs/cli (for example STORY-100, BUG-030) with placeholders such as TYPE-100 and TYPE-HOME-100. Do not add allowlist entries.
+  2. Rename the new doctor subcommand from `ambiguous-ids` to `bare-id-twins` (it clashed with the existing id-collisions alias). Update docs and goldens.
+  3. ambiguous_bare_id_lines: compare tokens and agreed ids via split_bare_id keys (zero-padding-insensitive) on both sides.
+  4. NodeAliasMap::expand normalizes the sequence to the allocator's {seq:03} padding, so BUG-HOME-36 resolves. Add a test.
+  5. CRITERION ac6dd87b is REWRITTEN by this ruling to: "A bare id resolves to the agreed spec only; it never matches a node-local number (ruling A)." Anchor a resolver test to .ac6dd87b: bare TYPE-100 opens the agreed spec when TYPE-<node>-100 also exists.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 source_doc_comments catalog_descriptions story_1728`, then make check-ci-fast (it runs verify-manual.py).
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T11:11:29.456407292Z
+modified_at: 2026-10-30T11:12:00.595759392Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -187,6 +196,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a18c82-71b8-7d02-9f01-7837a8568052
+  author: joe
+  timestamp: 2026-10-30T11:12:01.464113919Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main

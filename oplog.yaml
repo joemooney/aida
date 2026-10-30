@@ -92438,5 +92438,57 @@ operations:
   timestamp: 2026-10-30T11:11:39.606090346Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7162
+- id: 01a18c82-7234-7412-b350-a3621eee17d6
+  target_id: 01a18b1f-af35-7061-859d-b99015bea8ed
+  author: aida
+  node_id: '1'
+  lamport: 7163
+  timestamp: 2026-10-30T11:12:01.588048537Z
+  kind: !SetDescription
+    description: |
+      Operator report 2026-10-29 21:43. Since the node prefix changed from the legacy flat or node-1 scheme to node b6b1278890774ef993d2ebc327862470 (alias HOME), numbers overlap. Observed:
+      - `aida show STORY-100` opens an old 'Review PR-10: EPIC-20 batch 10' story, not STORY-HOME-100 (filed tonight).
+      - `aida show TASK-123` opens an old AGY spec, not TASK-HOME-123.
+      - `aida show BUG-030` says 'not found (did you mean BUG-1030?)' and never suggests BUG-HOME-030.
+      Agents and the advisor routinely write bare IDs in rulings, mail and descriptions (the handoff did too), so lanes read the wrong spec without any warning.
+
+      Acceptance:
+      1. When a bare ID matches a legacy spec AND a node-scoped spec with the same type and number exists, `aida show`, `edit`, `comment` and `queue work` refuse as ambiguous and list both (alias form plus title). Never silently pick one.
+      2. Leading-zero forms (BUG-030) are tried as node-local numbers, and the 'did you mean' suggestion includes the HOME- alias.
+      3. Rendering: every human-facing ID this node allocates is shown in its alias form (BUG-HOME-030), never the bare number.
+      4. `aida doctor` (or a lint over spec descriptions and comments) flags bare IDs that are ambiguous.
+      5. Tests cover all three observed cases.
+
+      ADVISOR RULING 2026-10-29 21:46 (operator: "only me as the user of aida, and we can do whatever surgery we want"): prefer the breaking fix over ambiguity prompts. A bare ID (STORY-100, BUG-030, BUG-30) resolves to THIS node's spec. Legacy flat or node-1 specs need an explicit form (the existing TASK-1-123 style, or a LEGACY- alias; pick one and document it). No compatibility shim or deprecation window. Acceptance 1 becomes: a bare ID resolves to the current node; the legacy form still opens the old spec; the error for a missing current-node ID suggests the legacy form when one exists. Acceptance 2-5 stand. One-time surgery on existing data (rewriting bare IDs in old descriptions, comments and commit-trailer indexes) is allowed if it simplifies the resolver.
+
+
+      ADVISOR RULING 2026-10-29 21:50: SUPERSEDES the 21:46 ruling above (operator: "normal use of aida will be with the bare short ids which are the globally agreed ids based on reservations, but every spec should also have a local id").
+      Model:
+      - A bare ID (BUG-2261) is the GLOBALLY AGREED id, dispensed from a reserved block. It is the everyday name.
+      - Every spec ALSO has a node-local id (BUG-HOME-030, canonical BUG-B6B1278890774EF993D2EBC327862470-030), which is never shown bare.
+      Root cause of the overlap: this node is 'node-local allocation; no global blocks' and the primary clone is not enrolled as root, so since the node change every new spec has only a local id. Bare lookups then match legacy agreed specs with the same number.
+      Acceptance (replaces 1 and 3):
+      A. Bare-ID lookup matches agreed ids only, never local numbers. A local id is always written with its node alias.
+      B. The 'not found' error for a bare ID that matches a local number suggests the alias form (BUG-030 → 'did you mean BUG-HOME-030?').
+      C. Rendering: show the agreed id when the spec has one and the alias-local id otherwise; never a bare local number.
+      Agreed-id assignment (blocks, root, backfill) belongs to STORY-HOME-104. This bug is the resolver and rendering half. Surgery is allowed.
+
+
+      ADVISOR RULING 2026-10-30 03:21 (PR-3131 round 1). ONE rework push on PR-3131; BUNDLE:
+      1. CI lib-0/cli-0: the new `aida doctor ambiguous-ids` subcommand needs every checked-in command-surface artifact regenerated (help golden cli_help_snapshot.txt via story_1728, plus any cli-0 audit or golden the failure names).
+      2. docs/cli/07-project-setup.md ~332: add `ambiguous-ids` with a one-line description (report-only; flags bare TYPE-NNN tokens that also name a node-local spec).
+      3. Criterion trace anchors on the matching tests (ac6dd87b, acc7fcab, rendering, ac12b260, ac4dbc90).
+      4. Ruling C: not_found_suggestion and ambiguous_bare_id_lines show the twin's agreed_id when it has one, else the alias-local form.
+      ACCEPTED, no action: the local-twin signpost stays on `aida show` only (bare = agreed under ruling A).
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 story_1728` plus make check-ci-fast.
+
+
+      ADVISOR RULING 2026-10-30 04:14 (PR-3131 round 2). ONE rework push on PR-3131; BUNDLE:
+      1. CI: three spec-id leak checks fail (lib-0 cli::tests::source_doc_comments_carry_no_spec_id_provenance and help_catalog::help_catalog_tests::catalog_descriptions_carry_no_spec_ids; contracts docs/cli/verify-manual.py). Replace every concrete example id in help text, doc comments, the help catalog and docs/cli (for example STORY-100, BUG-030) with placeholders such as TYPE-100 and TYPE-HOME-100. Do not add allowlist entries.
+      2. Rename the new doctor subcommand from `ambiguous-ids` to `bare-id-twins` (it clashed with the existing id-collisions alias). Update docs and goldens.
+      3. ambiguous_bare_id_lines: compare tokens and agreed ids via split_bare_id keys (zero-padding-insensitive) on both sides.
+      4. NodeAliasMap::expand normalizes the sequence to the allocator's {seq:03} padding, so BUG-HOME-36 resolves. Add a test.
+      5. CRITERION ac6dd87b is REWRITTEN by this ruling to: "A bare id resolves to the agreed spec only; it never matches a node-local number (ruling A)." Anchor a resolver test to .ac6dd87b: bare TYPE-100 opens the agreed spec when TYPE-<node>-100 also exists.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_036 source_doc_comments catalog_descriptions story_1728`, then make check-ci-fast (it runs verify-manual.py).
+clock: 7163
 node_id: '1'
