@@ -1045,7 +1045,7 @@ For project conventions (commit format, scaffold/template architecture, CLI refe
 |---|---|
 | [README.md](README.md) | Quick start and project structure |
 | [CLAUDE.md](CLAUDE.md) | Conventions, build commands, scaffold/template architecture, CLI reference |
-| [docs/getting-started.md](docs/getting-started.md) | First-time setup walkthrough |
+| [docs/getting-started.md](docs/getting-started.md) | Conversational development with durable intent and separate operator setup; installation is in [README](README.md#install) |
 | [docs/cli/](docs/cli/README.md) | The CLI reference manual — when and why to use every command (12 chapters) |
 | [docs/admin-guide.md](docs/admin-guide.md) | Storage administration, multi-user configuration |
 | [docs/storage-modes.md](docs/storage-modes.md) | Deeper dive on storage modes and migration paths |

@@ -30,10 +30,18 @@
 //! history cannot be shown to contain nothing but base merges, and patch-id
 //! alone ignores where in a file a hunk lands. Re-review the rebased head.
 //!
-//! The proof is recorded under `.aida/review-carryover/PR-<N>/<head>.json`.
-//! The record is evidence, never authority: every gate re-computes the proof,
-//! and a stored record that disagrees with the fresh proof is replaced.
+//! The proof is computed ONCE per (change, approved commit, head, base tip)
+//! and appended to the change's gate ledger as a `carry-over-proof` event
+//! (a deterministic refusal as `carry-over-refused`). Every gate — ship, the
+//! ship-held mandate, the corpus merge-hold gate, the review watcher — reads
+//! that event before proving and never recomputes it (STORY-080 AC4). Only
+//! uncontained primary-side code writes the ledger, so the stored event is
+//! authority for exactly what it names; this supersedes TASK-1960's
+//! "evidence, never authority" for ledger-stored proofs only (advisor
+//! signoff Q3). A changed [`PROOF_VERSION`] or base tip proves afresh.
+// mandate-gate
 // trace:TASK-1960 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 
 use std::path::{Path, PathBuf};
 
@@ -61,27 +69,16 @@ pub(crate) struct CarryOver {
     pub recorded_at: String,
 }
 
-impl CarryOver {
-    /// The parts of the proof that must not change between two runs for the
-    /// same approved commit and head. The base tip and timestamp may.
-    // trace:TASK-1960 | ai:claude
-    fn same_proof(&self, other: &CarryOver) -> bool {
-        self.pr == other.pr
-            && self.approved_sha == other.approved_sha
-            && self.new_head == other.new_head
-            && self.base_ref == other.base_ref
-            && self.approved_range == other.approved_range
-            && self.head_range == other.head_range
-            && self.approved_patch_id == other.approved_patch_id
-            && self.head_patch_id == other.head_patch_id
-            && self.merge_commits == other.merge_commits
-    }
-}
+/// The version of the proof's rules (diff flags, protected-base policy). A
+/// ledger event from another version is not reused: the head proves afresh.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) const PROOF_VERSION: u32 = 1;
 
 /// Why an approval does NOT carry over. Each variant names the reason the
 /// refusal prints.
 // trace:TASK-1960 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "refusal", rename_all = "kebab-case")]
 pub(crate) enum CarryOverRefusal {
     /// A commit or ref could not be resolved locally.
     Unresolvable { what: String },
@@ -163,59 +160,28 @@ impl CarryOverRefusal {
     }
 }
 
-/// Whether [`record_carry_over`] wrote a new record or found the same proof
-/// already on disk.
+impl CarryOverRefusal {
+    /// Whether the refusal follows from the commits alone, so the same
+    /// (approved, head, base tip) always refuses the same way and the ledger
+    /// may keep it. An unresolvable ref, a git failure or an unprotected PR
+    /// base can change without the commits changing; those are never stored.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    pub(crate) fn is_deterministic(&self) -> bool {
+        !matches!(
+            self,
+            Self::Unresolvable { .. } | Self::Git { .. } | Self::BaseNotProtected { .. }
+        )
+    }
+}
+
+/// Whether the gate ledger already held the proof a carry-over applied.
 // trace:TASK-1960 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RecordOutcome {
+    /// Proven now and appended to the ledger.
     Written,
-    /// The same proof was already recorded, at this time.
-    AlreadyRecorded {
-        recorded_at: String,
-    },
-    /// A record existed but did not match the fresh proof; it was replaced.
-    Replaced,
-}
-
-/// Where the carry-over record for `pr` at `new_head` lives, beside
-/// `.aida/review-verdicts/` (a sibling, so nothing that walks the verdict
-/// directory mistakes it for a verdict).
-// trace:TASK-1960 | ai:claude
-pub(crate) fn record_path(root: &Path, pr: u64, new_head: &str) -> PathBuf {
-    root.join(".aida")
-        .join("review-carryover")
-        .join(format!("PR-{pr}"))
-        .join(format!("{}.json", new_head.trim().to_ascii_lowercase()))
-}
-
-/// The stored record for `pr` at `new_head`, if one is present and readable.
-// trace:TASK-1960 | ai:claude
-pub(crate) fn read_record(root: &Path, pr: u64, new_head: &str) -> Option<CarryOver> {
-    let body = std::fs::read_to_string(record_path(root, pr, new_head)).ok()?;
-    serde_json::from_str(&body).ok()
-}
-
-/// Record `proof` under `root`. A stored record with the same proof is kept
-/// (its original timestamp stands); a stored record that disagrees, or does
-/// not parse, is replaced.
-// trace:TASK-1960 | ai:claude
-pub(crate) fn record_carry_over(root: &Path, proof: &CarryOver) -> std::io::Result<RecordOutcome> {
-    let path = record_path(root, proof.pr, &proof.new_head);
-    let existed = path.exists();
-    if let Some(stored) = read_record(root, proof.pr, &proof.new_head) {
-        if stored.same_proof(proof) {
-            return Ok(RecordOutcome::AlreadyRecorded {
-                recorded_at: stored.recorded_at,
-            });
-        }
-    }
-    let body = serde_json::to_string_pretty(proof).map_err(std::io::Error::other)?;
-    crate::gate::review_verdict::write_verdict_atomic(&path, &format!("{body}\n"))?;
-    Ok(if existed {
-        RecordOutcome::Replaced
-    } else {
-        RecordOutcome::Written
-    })
+    /// Read from the ledger's `carry-over-proof` event, appended at this time.
+    AlreadyRecorded { recorded_at: String },
 }
 
 /// The one line a gate prints when an approval carries over.
@@ -225,7 +191,6 @@ pub(crate) fn carry_over_line(proof: &CarryOver, outcome: &RecordOutcome) -> Str
     let noted = match outcome {
         RecordOutcome::Written => String::new(),
         RecordOutcome::AlreadyRecorded { recorded_at } => format!("; recorded {recorded_at}"),
-        RecordOutcome::Replaced => "; a stale record was replaced".to_string(),
     };
     format!(
         "approval carried over: PR-{} approved at {} covers head {} — {} clean merge(s) of {} and \
@@ -249,10 +214,16 @@ pub(crate) fn carry_over_line(proof: &CarryOver, outcome: &RecordOutcome) -> Str
 pub(crate) struct CarryOverSite<'a> {
     pub repo: &'a Path,
     pub base_branch: Option<&'a str>,
-    /// Prove only: write no record and let the caller print nothing. For a
-    /// preflight pass ahead of the gate that pins the merge, so one ship
-    /// records, prints and logs one carry-over.
+    /// Let the caller print nothing, and do not refuse when the proof cannot
+    /// be appended to the ledger (best effort). For a preflight pass ahead of
+    /// the gate that pins the merge, so one ship prints and logs one
+    /// carry-over; the proof itself is appended by whichever gate computes it
+    /// first and read by every later one.
     pub quiet: bool,
+    /// Append a fresh answer to the gate ledger. Off only for a read-only
+    /// report (the review watcher), which reads a stored proof but leaves
+    /// no state behind.
+    pub append: bool,
     /// The proof the last successful carry-over through this site applied,
     /// so the caller can re-check the PR's base right before it merges.
     pub proven: std::cell::RefCell<Option<CarryOver>>,
@@ -265,6 +236,7 @@ impl<'a> CarryOverSite<'a> {
             repo,
             base_branch,
             quiet: false,
+            append: true,
             proven: std::cell::RefCell::new(None),
         }
     }
@@ -274,6 +246,16 @@ impl<'a> CarryOverSite<'a> {
         Self {
             quiet: true,
             ..Self::new(repo, base_branch)
+        }
+    }
+
+    /// A quiet site that appends nothing: reads a stored answer, else
+    /// proves without leaving any state behind.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    pub(crate) fn read_only(repo: &'a Path, base_branch: Option<&'a str>) -> Self {
+        Self {
+            append: false,
+            ..Self::quiet(repo, base_branch)
         }
     }
 
@@ -318,16 +300,43 @@ pub(crate) fn protected_base(repo: &Path) -> Result<String, CarryOverRefusal> {
         .ok_or_else(unresolvable)
 }
 
-/// Prove the carry-over `refusal` may get, with no side effects: `None` when
-/// the refusal is not a moved head (no other refusal can carry over). The
-/// PR's base must be the remote's default branch, and the proof runs
-/// against that branch.
+/// The carry-over `refusal` may get: `None` when the refusal is not a moved
+/// head (no other refusal can carry over). The PR's base must be the
+/// remote's default branch, and the proof runs against that branch.
+///
+/// The change's gate ledger is read first: a `carry-over-proof` (or
+/// deterministic `carry-over-refused`) event for this approved commit, head,
+/// base branch and [`PROOF_VERSION`], taken at the base tip the clone has
+/// now, is the answer and nothing is recomputed. Otherwise the proof runs
+/// once and its result is appended for every later gate (best effort; see
+/// [`carry_over_for_refusal`] for the gate that requires it on the ledger).
 // trace:TASK-1960 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn prove_for_refusal(
     site: &CarryOverSite<'_>,
     pr: u64,
     refusal: &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<Result<CarryOver, CarryOverRefusal>> {
+    proved_for_refusal(site, pr, refusal).map(|r| r.map(|(proof, _)| proof))
+}
+
+/// A carry-over answer and, for a proof, where it came from.
+type Proved = Result<(CarryOver, Stored), CarryOverRefusal>;
+
+/// Where a carry-over answer came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Stored {
+    /// Read from the ledger event appended at this time.
+    Read(String),
+    /// Proven now; whether the ledger took the event.
+    Proven { appended: bool },
+}
+
+fn proved_for_refusal(
+    site: &CarryOverSite<'_>,
+    pr: u64,
+    refusal: &crate::gate::ship::ApprovalHeadRefusal,
+) -> Option<Proved> {
     let crate::gate::ship::ApprovalHeadRefusal::Moved {
         reviewed_sha,
         head_sha,
@@ -341,40 +350,129 @@ pub(crate) fn prove_for_refusal(
         .filter(|b| !b.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| crate::pr_cmd::pr_ship_target_branch(pr));
-    Some(protected_base(site.repo).and_then(|protected| {
+    if let Some(stored) = stored_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha) {
+        return Some(stored);
+    }
+    let proved = protected_base(site.repo).and_then(|protected| {
         if pr_base != protected {
             return Err(CarryOverRefusal::BaseNotProtected {
-                base: pr_base,
+                base: pr_base.clone(),
                 protected,
             });
         }
         prove_carry_over(site.repo, pr, &protected, reviewed_sha, head_sha)
-    }))
+    });
+    let appended =
+        site.append && append_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha, &proved);
+    Some(proved.map(|proof| (proof, Stored::Proven { appended })))
 }
 
-/// [`prove_for_refusal`], then — unless the site is quiet — record the
-/// proof. `RecordOutcome` is `None` for a quiet site. A proof that cannot be
-/// recorded refuses: a carry-over is never applied without its evidence on
-/// disk. A success is remembered on the site ([`CarryOverSite::proven`]).
+/// The ledger's answer for `approved` → `head` on `pr`, when one was taken
+/// against `base` at the tip of `origin/<base>` this clone has now (read
+/// without a fetch), under the current [`PROOF_VERSION`].
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn stored_answer(repo: &Path, pr: u64, base: &str, approved: &str, head: &str) -> Option<Proved> {
+    use crate::gate::ledger::{project, ChangeKey, EventBody};
+    let event = project::carry_over_at(repo, ChangeKey::pr(pr), approved, head)?;
+    let tip = resolve_commit(repo, &format!("refs/remotes/origin/{base}"))?;
+    if event.base_ref.as_deref() != Some(base) || event.base_tip.as_deref() != Some(tip.as_str()) {
+        return None;
+    }
+    match event.body {
+        EventBody::CarryOverProof {
+            proof,
+            proof_version,
+        } if proof_version == PROOF_VERSION && proof.base_branch() == base => {
+            Some(Ok((proof, Stored::Read(event.at))))
+        }
+        EventBody::CarryOverRefused {
+            refusal,
+            proof_version,
+            ..
+        } if proof_version == PROOF_VERSION && refusal.is_deterministic() => Some(Err(refusal)),
+        _ => None,
+    }
+}
+
+/// Append a fresh answer to `pr`'s ledger: a proof, or a deterministic
+/// refusal (with the base tip it was taken at). Returns whether the ledger
+/// took it; a contained seat or an unresolvable store appends nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn append_answer(
+    repo: &Path,
+    pr: u64,
+    base: &str,
+    approved: &str,
+    head: &str,
+    proved: &Result<CarryOver, CarryOverRefusal>,
+) -> bool {
+    use crate::gate::ledger::{record_event, ChangeKey, EventBody, GateEvent};
+    let (body, new_head, patch_id, base_tip) = match proved {
+        Ok(proof) => (
+            EventBody::CarryOverProof {
+                proof: proof.clone(),
+                proof_version: PROOF_VERSION,
+            },
+            proof.new_head.clone(),
+            Some(proof.head_patch_id.clone()),
+            Some(proof.base_tip.clone()),
+        ),
+        Err(refusal) if refusal.is_deterministic() => {
+            let patch_id = match refusal {
+                CarryOverRefusal::PatchChanged { head_patch_id, .. } => Some(head_patch_id.clone()),
+                _ => None,
+            };
+            (
+                EventBody::CarryOverRefused {
+                    approved_sha: approved.trim().to_string(),
+                    new_head: head.trim().to_string(),
+                    reason: refusal.reason(),
+                    refusal: refusal.clone(),
+                    proof_version: PROOF_VERSION,
+                },
+                head.trim().to_string(),
+                patch_id,
+                resolve_commit(repo, &format!("refs/remotes/origin/{base}")),
+            )
+        }
+        Err(_) => return false,
+    };
+    let Some(base_tip) = base_tip else {
+        return false;
+    };
+    let mut event = GateEvent::new(ChangeKey::pr(pr), body);
+    event.head = Some(new_head);
+    event.patch_id = patch_id;
+    event.base_ref = Some(base.to_string());
+    event.base_tip = Some(base_tip);
+    record_event(repo, event).is_ok()
+}
+
+/// [`prove_for_refusal`] for the gate that pins the merge. A proof that is
+/// not on the ledger refuses unless the site is quiet: a carry-over is never
+/// applied without its event. `RecordOutcome` is `None` for a quiet site. A
+/// success is remembered on the site ([`CarryOverSite::proven`]).
 // trace:TASK-1960 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn carry_over_for_refusal(
     site: &CarryOverSite<'_>,
     pr: u64,
     refusal: &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<Result<(CarryOver, Option<RecordOutcome>), CarryOverRefusal>> {
-    let proved = prove_for_refusal(site, pr, refusal)?;
-    Some(proved.and_then(|proof| {
-        let outcome = if site.quiet {
-            None
-        } else {
-            Some(
-                record_carry_over(site.repo, &proof).map_err(|e| CarryOverRefusal::Git {
-                    detail: format!("the carry-over could not be recorded: {e}"),
-                })?,
-            )
+    let proved = proved_for_refusal(site, pr, refusal)?;
+    Some(proved.and_then(|(proof, stored)| {
+        let outcome = match stored {
+            Stored::Read(recorded_at) => RecordOutcome::AlreadyRecorded { recorded_at },
+            Stored::Proven { appended: true } => RecordOutcome::Written,
+            Stored::Proven { appended: false } if site.quiet => RecordOutcome::Written,
+            Stored::Proven { appended: false } => {
+                return Err(CarryOverRefusal::Git {
+                    detail: "the carry-over could not be recorded on the gate ledger".to_string(),
+                })
+            }
         };
         *site.proven.borrow_mut() = Some(proof.clone());
-        Ok((proof, outcome))
+        Ok((proof, (!site.quiet).then_some(outcome)))
     }))
 }
 
@@ -433,6 +531,8 @@ pub(crate) fn prove_carry_over(
     approved: &str,
     head: &str,
 ) -> Result<CarryOver, CarryOverRefusal> {
+    #[cfg(test)]
+    tests::PROOFS.with(|n| n.set(n.get() + 1));
     let base_branch = base_branch.trim();
     if base_branch.is_empty()
         || base_branch.starts_with('-')

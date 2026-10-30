@@ -670,14 +670,17 @@ mod tests {
     }
 }
 
-/// Discoverable registry of AIDA's built-in shortcuts.
+/// Discover built-in shortcuts and manage user-defined aliases.
 ///
 /// One place that enumerates every accreted shortcut — the `aida list`
 /// status lenses (open/closed) + status-token shortcuts, the `aida list
 /// <lens>` argv rewrites (queue/why/human/inflight/me/user:<name>), and the
 /// command aliases (intake, advisor assess, bare `aida agent`) — grouped by
 /// surface, each with its canonical expansion + a one-line meaning. Bare
-/// `aida alias` behaves like `aida alias list`. Built-in shortcuts only.
+/// `aida alias` behaves like `aida alias list`, showing built-in shortcuts
+/// alongside personal (`~/.aida/aliases.toml`) and project
+/// (`.aida/aliases.toml`) aliases. Use `add` and `remove` to manage user aliases.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-020 | ai:codex
 // trace:STORY-667 | ai:claude
 #[derive(clap::Parser, Debug)]
 #[clap(name = "alias")]
