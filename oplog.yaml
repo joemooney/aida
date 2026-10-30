@@ -91867,5 +91867,13 @@ operations:
 
 
       ADVISOR NOTE 2026-10-30 02:09 (PR-3129, slice 2): the branch CONFLICTS with main (3 commits behind, 5 overlapping files; the 3116/3117/3123 merges touched agent_launch and the registry). Merge origin/main into the slice-2 branch (merge, no rebase), resolve the conflicts keeping both sides' behaviour, regenerate the help golden if help changed, run `cargo test -p aida-cli-lib --lib story_home_096` plus make check-ci-fast, and push to the SAME PR-3129 branch.
-clock: 7115
+- id: 01a18c12-2b1b-77e1-a406-4da117b4d593
+  target_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+  author: aida
+  node_id: '1'
+  lamport: 7116
+  timestamp: 2026-10-30T09:09:23.355329613Z
+  kind: !SetStatus
+    status: Approved
+clock: 7116
 node_id: '1'
