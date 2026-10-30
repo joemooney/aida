@@ -1,0 +1,31 @@
+id: 01a18b1f-af35-7061-859d-b99015bea8ed
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-036
+title: Bare short IDs (STORY-100, TASK-123) silently resolve to legacy flat specs, not this node's newer spec with the same number
+description: |-
+  Operator report 2026-10-29 21:43. Since the node prefix changed from the legacy flat or node-1 scheme to node b6b1278890774ef993d2ebc327862470 (alias HOME), numbers overlap. Observed:
+  - `aida show STORY-100` opens an old 'Review PR-10: EPIC-20 batch 10' story, not STORY-HOME-100 (filed tonight).
+  - `aida show TASK-123` opens an old AGY spec, not TASK-HOME-123.
+  - `aida show BUG-030` says 'not found (did you mean BUG-1030?)' and never suggests BUG-HOME-030.
+  Agents and the advisor routinely write bare IDs in rulings, mail and descriptions (the handoff did too), so lanes read the wrong spec without any warning.
+
+  Acceptance:
+  1. When a bare ID matches a legacy spec AND a node-scoped spec with the same type and number exists, `aida show`, `edit`, `comment` and `queue work` refuse as ambiguous and list both (alias form plus title). Never silently pick one.
+  2. Leading-zero forms (BUG-030) are tried as node-local numbers, and the 'did you mean' suggestion includes the HOME- alias.
+  3. Rendering: every human-facing ID this node allocates is shown in its alias form (BUG-HOME-030), never the bare number.
+  4. `aida doctor` (or a lint over spec descriptions and comments) flags bare IDs that are ambiguous.
+  5. Tests cover all three observed cases.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T04:44:31.925242148Z
+modified_at: 2026-10-30T04:44:31.925242148Z
+req_type: Bug
+filed_at:
+  code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f0dfbd03d09
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
