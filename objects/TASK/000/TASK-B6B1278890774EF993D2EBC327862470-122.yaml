@@ -2,12 +2,12 @@ id: 01a18afe-5265-7ca3-872d-c0c6563ac05c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-122
 title: Refresh Devin/Cognition entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research (Devin Desktop/ACP, Managed Devins, single-writer stance, Security Profiles/Outposts, memory
 description: ''
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T04:08:05.477710071Z
-modified_at: 2026-10-30T04:39:41.924785705Z
+modified_at: 2026-10-30T05:33:22.707549493Z
 req_type: Task
 tags:
 - lifecycle:no-review
@@ -23,6 +23,14 @@ history:
   timestamp: 2026-10-30T04:39:51.443589663Z
   session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
   changes: []
+- id: 01a18b4c-6793-7f90-8c92-e252a177c1d0
+  author: joe
+  timestamp: 2026-10-30T05:33:22.707546480Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
