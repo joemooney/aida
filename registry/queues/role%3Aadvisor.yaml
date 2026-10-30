@@ -1,4 +1,10 @@
 - user_id: role:advisor
+  requirement_id: 01a18b1f-af35-7061-859d-b99015bea8ed
+  position: -17000
+  added_by: role:advisor
+  added_at: 2026-10-30T11:12:11.469983057Z
+  for_role: advisor
+- user_id: role:advisor
   requirement_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
   position: -16000
   added_by: role:advisor
@@ -9,12 +15,6 @@
   position: -15000
   added_by: role:advisor
   added_at: 2026-10-30T10:27:14.939416601Z
-  for_role: advisor
-- user_id: role:advisor
-  requirement_id: 01a18b1f-af35-7061-859d-b99015bea8ed
-  position: -14000
-  added_by: role:advisor
-  added_at: 2026-10-30T10:22:14.524186629Z
   for_role: advisor
 - user_id: role:advisor
   requirement_id: 01a18b07-a7e4-7fd1-afab-65e787b05fcd
