@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T04:41:34.564616294Z
+modified_at: 2026-10-30T04:41:44.179006286Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -76,6 +76,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Root cause and fix are sound and CI is green, but no test traces any acceptance criterion, the launcher-waits behaviour has no integration test, and the post-exit registry write still uses the 250 ms budget. (Supersedes an accidental ''probe'' round recorded at the same SHA.). No triage reason was given.'
   created_at: 2026-10-30T04:41:34.564613555Z
   modified_at: 2026-10-30T04:41:34.564613555Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18b1d-1eaf-78f0-8a4b-944f7516910c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-030):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 439a0a45c7fe
+    Recorded: 2026-10-30T04:40:33.935526339+00:00
+    Findings:
+    1. Criterion tracing: aida criteria reports all 4 ACs untraced. The new tests in aida-cli-lib/src/tests/bug_030_launch_registry_lock_tests.rs carry only a file-level spec trace. Add per-test anchors like // trace:BUG-b6b1278890774ef993d2ebc327862470-030.ac1d0e79 (and .ac181de7, .ac3e8354, .Reproduce) on the tests that prove each criterion.
+    2. AC2/AC3 (launcher waits, not a crashed child): no test drives run_tracked_agent_after_spawn (agent_launch.rs:5671). post_spawn_failure_is_deferred_not_returned tests only the post_spawn_step helper, so restoring the old register_spawned_agent(...)? early return would still pass every test. Add a regression test that runs the post-spawn path with a short-lived child (for example sh -c 'sleep 0.3') while the namespace lock is held past the budget. Assert that the launcher waits for the child and that the warning appears after the child exits. Extracting the post-spawn sequence into a testable function is fine.
+    3. AC4 (preflight/launcher error stays visible): there is no test or recorded evidence for pre-spawn error visibility. Also, deferred warnings are dropped when child.wait() fails: the ? at agent_launch.rs:5858 returns before the deferred_warnings print loop. Print the deferred warnings on that error path too (or fold them into the error), and cover it with a test.
+    4. mark_agent_ended (agent_registry.rs:1321) still calls write_entry with the 250 ms SessionStart budget. When registration succeeded on the 10 s launcher budget and the same launch-time contention is present at exit, the row is never marked ended, and aida agent ls shows a dead pid as running until doctor reaps it. Use LAUNCHER_LOCK_BUDGET (write_entry_within) for the launcher's post-exit mark too.
+    5. AC1 (Reproduce from primary checkout and a worktree, stderr captured to a file): no captured stderr artifact. The reproduction is inferred from an orphaned context file and a missing registry row. Either attach the captured stderr from a real launch (primary + worktree) to the spec, or record on the spec that launcher_registration_waits_out_lock_held_past_sessionstart_budget is the deterministic reproduction of the 'handle allocation lock busy' message, and trace it to the .Reproduce criterion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T04:41:43.855643764Z
+  modified_at: 2026-10-30T04:41:43.855643764Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18ad9-05f9-7f40-95b8-771fc2e06f7b
