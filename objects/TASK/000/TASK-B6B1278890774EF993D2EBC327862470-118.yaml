@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:39:33.145162743Z
-modified_at: 2026-10-30T03:24:20.951023053Z
+modified_at: 2026-10-30T03:24:30.142564115Z
 req_type: Task
 tags:
 - docs:impacted
@@ -34,6 +34,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prune command works and is well tested (CI green at head), but the new mutating verb is classified as a stakeholder Read, so guest/requester seats can drop git worktree registrations; acceptance criterion 2 is met via a documented deviation (explicit prune instead of relaxing the view rule), which needs advisor ratification.. No triage reason was given.'
   created_at: 2026-10-30T03:24:20.951020971Z
   modified_at: 2026-10-30T03:24:20.951020971Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18ad6-69c0-7410-80b7-f64e2fc17e00
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-b6b1278890774ef993d2ebc327862470-118):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 95a3896d7c7e
+    Recorded: 2026-10-30T02:26:07.111245150+00:00
+    Findings:
+    1. Authority widening: aida-cli-lib/src/mailbox_cmd.rs:3105 mailbox_cli_policy classifies every MailboxCommand::Retention {..} as StakeholderAction::Read, so the new mutating 'aida mailbox retention prune [--include-locked]' (removes .git/worktrees/<admin> entries, including locked ones) is allowed for the read-only 'guest' and 'requester' stakeholder roles (stakeholder_role.rs:56-61). Classify Retention::Prune (at least when not --dry-run) as a write-class action (e.g. StakeholderAction::Write or Session), keep --dry-run as Read, and add a test proving a guest seat is refused for prune while the dry run is still allowed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T03:24:30.016630446Z
+  modified_at: 2026-10-30T03:24:30.016630446Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18a3f-bb77-70d3-a8da-4bf67fdaecd0
