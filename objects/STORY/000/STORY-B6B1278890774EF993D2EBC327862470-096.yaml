@@ -25,12 +25,12 @@ description: |-
   - Slice 1 (this lane): verified `wake-snapshot --recipient <handle>` + `mailbox wake-run` over armed rows (rows armed manually via a hidden `aida agent wake arm <handle>` for now) + the unit/health-job install + tests. Closes TASK-HOME-119's acceptance.
   - Slice 2: the `agent new` pending stamp, SessionStart hook arming, retire on end/GC, the `agent list` wake column and the doctor iteration.
   LIGHT tier: targeted tests + make check-ci-fast. trace:STORY-HOME-096.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T01:05:39.254887052Z
+modified_at: 2026-10-30T01:10:56.936561015Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -130,6 +130,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a18a5c-24a8-7893-87bd-97f82d092d84
+  author: aida-session-start
+  timestamp: 2026-10-30T01:10:56.936558024Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
