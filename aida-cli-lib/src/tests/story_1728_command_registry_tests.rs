@@ -419,6 +419,38 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
     assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
 }
 
+// A real `mailbox retention prune` removes Git worktree registrations, so a
+// read-only seat is refused it; its dry run stays a read.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-118 | ai:claude
+#[test]
+fn task118_retention_prune_is_a_write_and_its_dry_run_a_read() {
+    use crate::stakeholder_role::stakeholder_action_allowed;
+    let action = |argv: &[&str]| {
+        let cli = try_parse_from(argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        crate::stakeholder_cli_action(&cli.command)
+    };
+    for argv in [
+        &["aida", "mailbox", "retention", "prune"][..],
+        &["aida", "mailbox", "retention", "prune", "--include-locked"][..],
+    ] {
+        let want = action(argv);
+        assert_eq!(want, StakeholderAction::Write, "{argv:?}");
+        for role in ["guest", "requester"] {
+            assert!(!stakeholder_action_allowed(role, want), "{role} {argv:?}");
+        }
+    }
+    let dry = action(&[
+        "aida",
+        "mailbox",
+        "retention",
+        "prune",
+        "--include-locked",
+        "--dry-run",
+    ]);
+    assert_eq!(dry, StakeholderAction::Read);
+    assert!(stakeholder_action_allowed("guest", dry));
+}
+
 thread_local! {
     /// What each synthetic handler saw: `(handler, had_store)`.
     static SEEN: std::cell::RefCell<Vec<(&'static str, bool)>> =
