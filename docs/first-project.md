@@ -7,7 +7,7 @@ merged, traceable feature graph — six specs filed, two driven all the way to
 *Completed*, in a single sitting.
 
 > **Time:** ~15 min to read · ~1–2 hours to follow along on your own machine.
-> **You'll need:** the `aida` binary on your PATH ([install](getting-started.md)),
+> **You'll need:** the `aida` binary on your PATH ([install](../README.md#install)),
 > `git`, and [Claude Code](https://claude.com/claude-code).
 >
 > No Claude Code? You can still run every `aida` command in this doc — just
@@ -74,8 +74,8 @@ AIDA initialized — distributed git-canonical mode.
 
 One command set up a git-canonical requirements store (one YAML file per spec
 on the orphan `aida-store` branch), a SQLite read cache, the MCP server config,
-and the Claude Code skills. The full inventory of what `aida init` writes is in
-[`getting-started.md`](getting-started.md#one-time-operator-setup).
+and the Claude Code skills. The [initialization reference](cli/01-getting-started.md#aida-init) explains the
+command-oriented setup workflow. Inspect `aida init --help` for current options.
 
 ---
 
@@ -519,8 +519,8 @@ message format** section of [`CLAUDE.md`](../CLAUDE.md).
 
 - **[Spec lifecycle](lifecycle.md)** — the full Draft → Released state machine,
   the verb vocabulary, and the edge cases (cluster PRs, parallel pipelining).
-- **[Getting started](getting-started.md)** — install options and the command
-  quick-reference.
+- **[Getting started](getting-started.md)** — the conversational journey and
+  one-time operator setup.
 - **[How AIDA compares](../README.md#how-aida-compares)** — the
   *"why AIDA instead of X?"* question, one neighbor tool at a time.
 - **[Why AIDA?](WHY-AIDA.md)** — the problem statement behind all of it.

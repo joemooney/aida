@@ -37,8 +37,8 @@ Read the [AIDA overview](what-is-aida.md) for selectable autonomy and current li
 An operator installs AIDA and connects it to the coding agent. Follow the [installation instructions](../README.md#install) on a supported Linux machine, then run these commands inside the intended Git repository:
 
 ```bash
-aida init
 aida init --help
+aida init
 ```
 
 The full footprint scaffolds project guidance and agent skills for selected profiles; `--agent` chooses profiles explicitly. The CLI is the default tool surface for agents with shell access. MCP registration is opt-in with `--with-mcp`; `aida mcp-serve` provides the stdio server for MCP clients. Check the [client setup matrix](agents/aida-mcp-install-matrix.md) for your harness. Agent permissions, project policy and review authority still need deliberate configuration.

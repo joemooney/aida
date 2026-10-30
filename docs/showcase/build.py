@@ -2,7 +2,7 @@
 """Render the explicitly selected product guides; Python stdlib only.
 
 This deliberately supports headings, paragraphs, quotes, lists, fenced code,
-links, emphasis and inline code. Source Markdown remains authoritative.
+links, bold and inline code. Source Markdown remains authoritative.
 """
 # trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex
 import argparse
