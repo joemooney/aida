@@ -31,12 +31,12 @@ description: |
 
   - Redesigning scaffold template storage or the adoption plane.
   - Changing consuming-project documentation.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:42.826469822Z
-modified_at: 2026-10-30T08:08:09.582640645Z
+modified_at: 2026-10-30T19:23:05.372600335Z
 req_type: Bug
 tags:
 - aida:scaffold
@@ -94,6 +94,20 @@ history:
   timestamp: 2026-10-30T08:07:52.802136400Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18e44-0717-70c3-b910-b6e8ab4283a3
+  author: aida-auto-bump
+  timestamp: 2026-10-30T19:23:05.367650762Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18e44-071c-7652-a42e-4b41d49086fe
+  timestamp: 2026-10-30T19:23:05.372598145Z
+  agent: aida
+  commit_sha: 63dc027ac8810c53a38c2a75b9a0aa9d8e31142d
+  summary: 'Base-only update from main (gh update-branch 4ce88ef83d1eaa62a39524551b1cb84c130969e2 -> a3147ad8d794ecb8ce7013eb63efcd52816c3378); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main
@@ -101,3 +115,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 5fbe1e39c0
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-30T19:23:05.367646474Z
+  completion_sha: 63dc027ac8810c53a38c2a75b9a0aa9d8e31142d
