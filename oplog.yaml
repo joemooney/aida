@@ -90043,5 +90043,27 @@ operations:
       7. Interacts with STORY-HOME-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
 
       Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-HOME-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
-clock: 7006
+- id: 01a18b21-1311-7310-8986-70f16af5687b
+  target_id: 01a18b1f-af35-7061-859d-b99015bea8ed
+  author: aida
+  node_id: '1'
+  lamport: 7007
+  timestamp: 2026-10-30T04:46:03.025780559Z
+  kind: !SetDescription
+    description: |
+      Operator report 2026-10-29 21:43. Since the node prefix changed from the legacy flat or node-1 scheme to node b6b1278890774ef993d2ebc327862470 (alias HOME), numbers overlap. Observed:
+      - `aida show STORY-100` opens an old 'Review PR-10: EPIC-20 batch 10' story, not STORY-HOME-100 (filed tonight).
+      - `aida show TASK-123` opens an old AGY spec, not TASK-HOME-123.
+      - `aida show BUG-030` says 'not found (did you mean BUG-1030?)' and never suggests BUG-HOME-030.
+      Agents and the advisor routinely write bare IDs in rulings, mail and descriptions (the handoff did too), so lanes read the wrong spec without any warning.
+
+      Acceptance:
+      1. When a bare ID matches a legacy spec AND a node-scoped spec with the same type and number exists, `aida show`, `edit`, `comment` and `queue work` refuse as ambiguous and list both (alias form plus title). Never silently pick one.
+      2. Leading-zero forms (BUG-030) are tried as node-local numbers, and the 'did you mean' suggestion includes the HOME- alias.
+      3. Rendering: every human-facing ID this node allocates is shown in its alias form (BUG-HOME-030), never the bare number.
+      4. `aida doctor` (or a lint over spec descriptions and comments) flags bare IDs that are ambiguous.
+      5. Tests cover all three observed cases.
+
+      ADVISOR RULING 2026-10-29 21:46 (operator: "only me as the user of aida, and we can do whatever surgery we want"): prefer the breaking fix over ambiguity prompts. A bare ID (STORY-100, BUG-030, BUG-30) resolves to THIS node's spec. Legacy flat or node-1 specs need an explicit form (the existing TASK-1-123 style, or a LEGACY- alias; pick one and document it). No compatibility shim or deprecation window. Acceptance 1 becomes: a bare ID resolves to the current node; the legacy form still opens the old spec; the error for a missing current-node ID suggests the legacy form when one exists. Acceptance 2-5 stand. One-time surgery on existing data (rewriting bare IDs in old descriptions, comments and commit-trailer indexes) is allowed if it simplifies the resolver.
+clock: 7007
 node_id: '1'
