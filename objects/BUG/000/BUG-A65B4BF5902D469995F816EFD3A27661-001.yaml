@@ -36,11 +36,17 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:42.826469822Z
-modified_at: 2026-10-30T07:58:59.503263105Z
+modified_at: 2026-10-30T08:07:51.040393547Z
 req_type: Bug
 tags:
 - aida:scaffold
 - papercut
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a18bd5-07ef-7a73-8a11-2c5f205924b6
+  created_at: 2026-10-30T08:07:51.040387852Z
+  created_by: joe
 comments:
 - id: 01a18bd1-b7af-7923-a575-224a4daf25bf
   author: ai:codex:joe
@@ -75,6 +81,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18bd9-dae2-7072-b335-719a6a7c3608
+  author: joe
+  timestamp: 2026-10-30T08:07:52.802136400Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main
