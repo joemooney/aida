@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:18:17.188008505Z
-modified_at: 2026-10-30T09:37:21.616341987Z
+modified_at: 2026-10-30T09:39:32.423582092Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -59,6 +59,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fix logic is sound and the new git_log_messages tests pass locally, but CI lib-0/lib-1 are red at the PR head (only this PR''s run; main at the parent is green), every acceptance criterion is untraced, and the auto-queue error path (AC2) has no test.. No triage reason was given.'
   created_at: 2026-10-30T09:37:21.616339482Z
   modified_at: 2026-10-30T09:37:21.616339482Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c2c-4cba-7ea1-aec1-1f9972b9b03d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-035):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: da9e07ce7233
+    Recorded: 2026-10-30T09:35:57.563864329+00:00
+    Findings:
+    1. CI red at da9e07c: run 41030413827 jobs 'CI (lib-0)' and 'CI (lib-1)' FAILED in 'Run tests'. Every other recent CI run (main 142905f = this PR's parent, and PRs -030/-033/-034) has green lib shards, so this PR caused it. The reviewer could not read the failing test names because the job logs are blocked by the sandbox. Run 'gh run view 41030413827 --log-failed' and fix. Likely suspects: existing lib tests whose head ref does not resolve locally and that previously got the silent 'no trailers' skip. They now (a) hit a network 'git fetch origin +refs/heads/<head>' inside git_log_messages (lib_part5.rs resolve_log_range) and (b) get SkippedNeedsAttention from review_gates.rs:1124-1132 instead of the old outcome. Also callers of review prompt / criteria cite with fixture origins.
+    2. Acceptance traceability: 'aida criteria BUG-b6b1278890774ef993d2ebc327862470-035' reports all three criteria untraced (.acab779a, .acbcb0eb, .Test). Add criterion-level trace comments (repo convention: '// trace:<SPEC>.<criterion-id> | ai:claude', e.g. aida-cli/tests/bug_2187_reviewer_record_identity.rs:81) to the tests in aida-cli-lib/src/tests/bug_035_seat_clone_log_range_tests.rs: head_branch_only_on_origin_is_fetched_and_trailers_found -> .acab779a + .Test; head_branch_present_as_remote_tracking_ref_resolves_without_local_branch -> .acab779a; unresolvable_head_is_an_error_naming_the_range -> .acbcb0eb.
+    3. AC2 (.acbcb0eb) is untested at the layer the bug report names. No test drives try_auto_queue_pr_review_unbumped (review_gates.rs:1121-1132) with an unreadable range and asserts AutoQueueStatus::SkippedNeedsAttention with a summary that names '<base>..<head>' and does not say 'no (REQ-ID) trailers'. The helper-level test only proves git_log_messages returns Err. Add an auto-queue-level test, e.g. modelled on bug_2208_refs_only_review_tests.rs:249 with a stub gh whose headRefName exists nowhere.
+    4. (minor) resolve_log_range (lib_part5.rs) only fetches when origin/<head> is missing. A stale remote-tracking ref (the lane pushed more commits since the primary's last fetch) is used as-is, so trailers on newer commits are missed. origin/<base> is never refreshed either, so a stale origin/main widens the range to commits already merged and pulls in their trailers. AC1 allows using the forge PR head SHA. Prefer that, or always fetch the head ref when the local branch is missing.
+    5. (minor) queue_cmd.rs:10386 (round-1 untraced-criteria cite) still drops a git_log_messages failure with 'let Ok(..) else { return }', so the reviewer prompt silently loses the criteria list. Either surface the error naming the range (consistent with AC2) or document why the silent skip is acceptable there.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T09:37:55.898749324Z
+  modified_at: 2026-10-30T09:37:55.898749324Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18b07-d64b-7dd0-904d-2f1c3715f87c
