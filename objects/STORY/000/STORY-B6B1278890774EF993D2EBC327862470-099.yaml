@@ -1,0 +1,46 @@
+id: 01a18a52-7f13-7cf0-ae1c-97a99515aa05
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-099
+title: 'aida runloop: a hardened operator proxy loop that runs submitted jobs under the operator''s grant'
+description: |-
+  ## Problem
+  While away, the operator runs two shell loops in their own (human-TTY, granted) terminal that source /tmp/aida_runme{,_2}.sh, log to /tmp/aida_runme*.log, then delete the script. The advisor writes scripts there to borrow the operator's authority (role grants, lane launches, ships, dev promote). It works and the operator wants it built in as `aida runloop`, a proxy that can be hardened over time. Gaps seen 2026-10-29:
+  - /tmp is shared: any local process can plant a script that runs with the operator's grant.
+  - There's no record of which session submitted a job.
+  - Results come back only by grepping a shared log. Overwriting a running script silently lost two jobs.
+  - One job per loop at a time, so a second loop was needed for concurrency.
+  - Sourcing means a stray `exit` kills the loop; serial-ship had to be run via `bash`.
+
+  ## Proposal
+  - `aida runloop [--name N]` (operator, interactive TTY): long-running worker in the operator's shell. It refuses to start without a human TTY, prints its name and grant, and keeps the shell's role grant.
+  - `aida runloop submit [--name N] [--wait] [--timeout D] -- <script|-f file>` (any seated session): enqueue a job; prints a job id.
+  - `aida runloop status|log|cancel <id>`; `aida runloop list`.
+  - Queue under `~/.aida/runloop/<name>/` (0700, owner-checked), not /tmp. Each job is an atomic file `<id>.job` (0600, owner must match) recording the requester session/handle/spec, created time and script. The worker claims it by rename (`.job` to `.running`), so there are no lost or overwritten jobs.
+  - Each job runs in a `bash` subprocess, not sourced. It inherits the loop shell's env (grant), has a per-job timeout, and its output goes to `<id>.out` plus rc in `<id>.done`. `submit --wait` streams or returns them. Completion mails the requester.
+  - Audit: an append-only `runloop.ledger` (who, what, when, rc, sha256 of the script). `aida awaiting` shows jobs pending, running and failed.
+  - Concurrency: `--workers K` per loop, or several named loops.
+  - Kill switch: `aida runloop pause|resume`. The loop exits on mandate expiry unless `--keep-after-mandate`.
+
+  ## Acceptance
+  1. The operator starts `aida runloop` once per terminal; agents submit with `aida runloop submit`, and no agent ever writes into the loop's directory directly.
+  2. A job file not owned by the operator, or world/group-writable, is refused and logged.
+  3. Two submits never clobber each other; a job whose script runs `exit` doesn't stop the loop.
+  4. The requester gets rc and output via `submit --wait` or `runloop log <id>` without grepping a shared log.
+  5. The ledger records the requester session for every job; `aida awaiting` surfaces failed jobs to the requester.
+  6. Later hardening, not in slice 1: a per-loop command policy (allowlist, deny `force` flags, no merge-hold clears), and a requirement that the submitting session hold a delegated grant from this operator.
+
+  Architecture/security-sensitive (it borrows human authority), so it needs a sketch and advisor signoff. Slice 1 covers the queue, worker, submit/status/log and ledger; slice 2 covers awaiting, mail, pause and the mandate tie-in; slice 3 covers policy.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T01:00:24.723376064Z
+modified_at: 2026-10-30T01:00:24.723376064Z
+req_type: Story
+filed_at:
+  code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 1db74dba112
+  vendor: claude
+  session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
