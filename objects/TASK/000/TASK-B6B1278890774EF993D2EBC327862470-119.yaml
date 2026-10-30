@@ -7,12 +7,12 @@ description: |-
   ## Evidence 2026-10-29 18:02 (root cause)
   scripts/codex-mail-wake.py is built for a Codex ADVISOR: watcher.py sets AIDA_SESSION_ROLE=advisor and runs `aida mailbox wake-snapshot --recipient advisor`. Installed against Codex implementer thread 01a185ba… at 17:32, it delivered the six advisor-addressed historical receipts at 17:33, but never woke Codex for the advisor's 17:52 message sent `--to codex-agent-02`; the operator had to prompt Codex by hand. Uninstalled 18:03 to stop advisor-mail wakes.
   Acceptance (replaces the above): `install --recipient <handle|role>` (default: the agent handle registered for the thread, e.g. codex-agent-02, plus its role); the notification text names the recipient inbox; the advisor-only behaviour stays available as `--recipient advisor`. STORY-HOME-096 calls install with the spawned agent's handle.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T00:40:29.876190271Z
-modified_at: 2026-10-30T01:03:17.857208587Z
+modified_at: 2026-10-30T01:06:45.456484873Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -29,6 +29,14 @@ history:
   timestamp: 2026-10-30T01:03:18.763309643Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
   changes: []
+- id: 01a18a58-4e50-7011-9a50-35da03ce98b6
+  author: joe
+  timestamp: 2026-10-30T01:06:45.456481990Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
