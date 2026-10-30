@@ -9287,6 +9287,7 @@ mod tests {
             range_end: end,
             next: start,
             allocated_at: Utc::now(),
+            pool_id: None,
         };
         let mk_node = |id: &str, host: &str| NodeRegistryEntry {
             id: id.to_string(),
@@ -9460,6 +9461,7 @@ mod tests {
             range_end: end,
             next: start,
             allocated_at: Utc::now(),
+            pool_id: None,
         };
         let write_blocks = |blocks: Vec<AgreedIdBlock>| {
             std::fs::create_dir_all(repo.join("registry")).unwrap();

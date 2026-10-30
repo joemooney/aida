@@ -45,6 +45,7 @@ fn block() -> AgreedIdBlock {
         range_end: 100,
         next: 1,
         allocated_at: at(),
+        pool_id: None,
     }
 }
 
@@ -202,6 +203,75 @@ fn bug_2017_agreed_counter_keys_are_scanned() {
         .artifact(
             "registry/agreed_counters.toml",
             counters_toml(&TOKEN.to_uppercase(), 1).as_bytes()
+        )
+        .is_err());
+}
+
+// Lineage records ride the same scanner: only opaque ids and ranges pass.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+#[test]
+fn lineage_records_are_scanned_field_by_field() {
+    use crate::allocation_lineage::{PoolRecord, PoolRegistry, RootRecord};
+    let p = policy();
+    let pool = PoolRecord {
+        pool_id: "p-0123456789abcdef".into(),
+        type_prefix: "BUG".into(),
+        range_start: 1,
+        range_end: 1000,
+        parent_pool_id: None,
+        holder_node: "0123456789abcdef0123456789abcdef".into(),
+        home_ref: "origin/aida-store".into(),
+    };
+    let pools_yaml =
+        |row: PoolRecord| serde_yaml::to_string(&PoolRegistry { pools: vec![row] }).unwrap();
+    p.artifact("registry/pools.yaml", pools_yaml(pool.clone()).as_bytes())
+        .unwrap();
+    let root = RootRecord {
+        holder_node: "0123456789abcdef0123456789abcdef".into(),
+        epoch: 1,
+    };
+    p.artifact(
+        "registry/root.yaml",
+        serde_yaml::to_string(&root).unwrap().as_bytes(),
+    )
+    .unwrap();
+    for row in [
+        PoolRecord {
+            pool_id: TOKEN.into(),
+            ..pool.clone()
+        },
+        PoolRecord {
+            holder_node: TOKEN.into(),
+            ..pool.clone()
+        },
+        PoolRecord {
+            home_ref: format!("{TOKEN}/aida-store"),
+            ..pool.clone()
+        },
+        PoolRecord {
+            parent_pool_id: Some(TOKEN.into()),
+            ..pool.clone()
+        },
+    ] {
+        assert!(p
+            .artifact("registry/pools.yaml", pools_yaml(row).as_bytes())
+            .is_err());
+    }
+    let tagged = AgreedIdBlock {
+        pool_id: Some(TOKEN.into()),
+        ..block()
+    };
+    assert!(p
+        .artifact("registry/blocks.yaml", blocks_yaml(tagged).as_bytes())
+        .is_err());
+    let root = RootRecord {
+        holder_node: TOKEN.into(),
+        epoch: 1,
+    };
+    assert!(p
+        .artifact(
+            "registry/root.yaml",
+            serde_yaml::to_string(&root).unwrap().as_bytes()
         )
         .is_err());
 }
