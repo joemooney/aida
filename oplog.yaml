@@ -88660,5 +88660,13 @@ operations:
       ## Operator additions 2026-10-29 17:45
       - whoami must show this clone's node: canonical node id plus its current label, e.g. `node: HOME (b6b1278890774ef993d2ebc327862470) · work node, node-local allocation`. Today `aida node whoami` shows no node at all; the operator had to find it via `aida node show`.
       - `aida node show` prints "WORK node <id>" where WORK is the node ROLE (worker vs root/hub), not a label. That collides with an operator label named WORK. Reword the role to lower-case prose ("work node" / "role: worker") and print the label separately.
-clock: 6898
+- id: 01a18a45-5786-73b0-be2b-f6fe54924964
+  target_id: 01a188d8-d1c2-77d3-a30b-220a95022694
+  author: aida
+  node_id: '1'
+  lamport: 6899
+  timestamp: 2026-10-30T00:46:02.630613602Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 6899
 node_id: '1'
