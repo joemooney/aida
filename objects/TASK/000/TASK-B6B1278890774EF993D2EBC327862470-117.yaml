@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T05:58:50.511464233Z
+modified_at: 2026-10-30T06:14:54.931205981Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -98,6 +98,12 @@ comments:
     Reviewer routing is pending advisor authority: aida pr auto-queue-review created Draft STORY-B6B1278890774EF993D2EBC327862470-110, then returned nonzero because requested Approved status requires advisor authority. This attempt did not complete reviewer routing. Please approve the existing review draft and finish routing it to the reviewer queue rather than create a duplicate. Advisor is being notified with the PR/full SHA and this exact partial outcome.
   created_at: 2026-10-30T05:58:50.511464233Z
   modified_at: 2026-10-30T05:58:50.511464233Z
+- id: 01a18b72-6ed3-7390-9b4c-fdf9e235cdf5
+  author: ai:codex:joe
+  content: |
+    Recovery verification observed PR #3122 still OPEN but externally advanced after handoff: current remote head b05bc477cf08e996891b4ebd511cbed90f10ea10, a merge with parents tested author head 31a9af98f696f28c8dad6a66763944252ed2c7a8 and main 1870c20ca28c33b2e4abb50e913e395f67eb135a. The local author worktree remains untouched at 31a9af98. Completed author validation applies to 31a9af98; it is not a green claim for the newer integration head. PR description now pins this distinction. Fresh CI/review at the new head remains with the integration owner. No new advisor mail was present. Review-request STORY-HOME-110 remains Draft and needs advisor triage/routing. No verdict recorded or hold cleared by the author.
+  created_at: 2026-10-30T06:14:54.931205981Z
+  modified_at: 2026-10-30T06:14:54.931205981Z
 history:
 - id: 01a18a38-865a-73b1-baec-dc0e2fc248fb
   author: joe
