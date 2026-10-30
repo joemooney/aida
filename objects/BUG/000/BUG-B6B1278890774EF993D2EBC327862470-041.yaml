@@ -30,11 +30,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T14:39:51.669916145Z
+modified_at: 2026-10-30T14:42:41.382713677Z
 req_type: Bug
 tags:
 - area:cache
 - area:locks
+comments:
+- id: 01a18d43-5066-7052-8702-bef3408e79f5
+  author: joe
+  content: 'Follow-up 07:45 local: no ''cache refresh'' process exists on the host (ps across all namespaces from an unsandboxed shell), so the lock-info holder (pid 19, pid_ns 4026535667) is dead. The sidecar is stale; commands appear to wait on a holder whose liveness they cannot check from another PID namespace. Other seats kept writing the store in the meantime, so the SQLite lock itself may be free. Remedy candidates: verify via pid_start_identity plus /proc across namespaces, or treat a never-advanced heartbeat past N x expected as dead.'
+  created_at: 2026-10-30T14:42:41.382713677Z
+  modified_at: 2026-10-30T14:42:41.382713677Z
+  session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
 filed_at:
   code_sha: bd35c50292a984ef4f0c29737f46c97b4305a030
   branch: main
