@@ -88336,5 +88336,41 @@ operations:
   timestamp: 2026-10-30T00:28:48.506495914Z
   kind: !SetStatus
     status: In Progress
-clock: 6870
+- id: 01a18a36-da39-7380-a377-ecda1f00b366
+  target_id: 01a18a36-d161-7e70-97ea-fa9eee537e7b
+  author: aida
+  node_id: '1'
+  lamport: 6871
+  timestamp: 2026-10-30T00:30:13.049471497Z
+  kind: !Create
+    title: 'aida whoami: one view of this session''s mail handle, unread mail, current spec and goal'
+    description: |
+      ## Problem
+      A session cannot answer "who am I, do I have mail, what am I on?" in one place. Observed 2026-10-29 in a product seat:
+      - `aida agent ls` shows this session's handle as `claude-product-01`, but `aida node whoami` reports `agent-name: (none)` and `session-id: (none)`. The identity command cannot see the session's own mail address.
+      - Mail counts are in `aida awaiting` (`mail_unread`, `mail_shared_unread`, `mail_partial`), the current spec is the SPEC column of `aida agent ls`, and the mandate/purpose appear only in the SessionStart hook or `whoami`'s `purpose:` line.
+
+      ## Proposal
+      A top-level `aida whoami` (keep `aida node whoami` as an alias) printing one compact block, e.g.:
+
+          claude-product-01 · product · claude · session 1b444f41
+          mail:     0 unread · 1 shared · 0 urgent        → aida mailbox inbox
+          working:  STORY-HOME-095 (lease 2m)  | idle
+          goal:     MANDATE ship-held 5h50m · purpose: product intake…
+          worktree: /home/joe/ai/aida (main)
+
+      A `/aida-whoami` skill is a thin wrapper over the command; Codex and agy sessions use the CLI directly.
+
+      ## Acceptance
+      1. Handle resolution: `whoami` resolves the session's handle and session id through the same resolver mailbox delivery uses. A test asserts that for a registered session, the handle `whoami` prints is the one `aida mailbox send <handle>` delivers to and that `aida mailbox notice` reads from (Claude, Codex, agy fixtures).
+      2. Mail line: unread direct, shared unread and urgent counts, a partial-view marker when the view is partial, and the command to read it. Never marks mail seen.
+      3. Working line: the spec this session holds a lease/claim on (with age), else `idle`; the next queued item when idle.
+      4. Goal line: active mandate with time left and gates, and the seat purpose; omitted when absent.
+      5. Worktree line: path and branch.
+      6. Local state only, no network; returns under 300 ms on this repo. Human output at a TTY, toon when piped, `--json` supported.
+      7. Existing `aida node whoami` fields stay available under `--verbose` so scripts relying on them keep working.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6871
 node_id: '1'
