@@ -1,7 +1,7 @@
 id: 01a18a6b-bbf9-7c20-9076-711d5474f058
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-121
 title: Allow a pool of generic implementers per repo; exclusivity only at spec claim
-description: |-
+description: |
   2026-10-29 18:26: operator ran `aida agent new antigravity --role implementer --bypass-sandbox` while a Codex implementer (codex-agent-02) held the repo scope; after the bypass confirmation and resume prompt it failed: 'agent role implementer is already active on this scope'. The working path is `--spec <SPEC>` (own worktree + lease). Acceptance: check the scope conflict BEFORE the bypass/resume prompts; the refusal names the fix (`--spec <ID>`) and, at a TTY, offers to pick an approved unclaimed spec from the queue for this role; docs state that several agents may share a role when each holds its own spec scope.
 
   ## Operator ruling 2026-10-29 18:30 (widens the acceptance)
@@ -11,12 +11,20 @@ description: |-
   3. Role-addressed mail (`--to implementer`) is taken by exactly one reader; handle-addressed mail reaches only that agent.
   4. `aida agent ls` shows the pool (role, handle, current spec or idle).
   5. Roles that must stay singular (advisor, reviewer-at-a-PR, operator seats) keep their one-per-scope rule.
+
+  ADVISOR RULING 2026-10-29 22:20 (PR-3116 round 1 at cd9ebe60). ONE rework push on PR-3116, no new PR.
+  WAIVED, acceptance amended: the TTY spec picker on refusal. The refusal already names the fix (`--spec <ID>`), and with a generic pool the clash is rare. The picker adds UI for little gain. It is removed from this spec's acceptance, not deferred.
+  BUNDLE:
+  1. Regression: the singleton preflight now runs before the --resume handler (agent_launch.rs ~1988), so `aida agent new ... --role reviewer --resume <id|latest>` is refused when a same-role agent shares the launch dir. Restore it: resume returns before the preflight, or the preflight judges the resumed agent's own scope. Test both.
+  2. Ordering test: prove the scope-conflict refusal happens before the bypass and resume prompts, on both the foreground and --bg paths.
+  3. Role mail to the pool queues for the role when no live member has a mail id (mailbox_resolver.rs ~528), with no --queue-for-role needed. Test it.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib generic_implementers pool_role_mail same_scope_conflict` plus `make check-ci-fast`, then push.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:27:58.713113531Z
-modified_at: 2026-10-30T03:28:29.776478105Z
+modified_at: 2026-10-30T05:13:54.919610992Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -91,6 +99,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a18b3a-9a12-7f81-9c98-f28bd517e7f3
+  author: joe
+  timestamp: 2026-10-30T05:13:55.986420446Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 5e4ec0c39e38f1b62108e4ede81c9abd24dfe7fe
   branch: main

@@ -90279,5 +90279,30 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 7016
+- id: 01a18b3a-9aa2-7810-a758-9be0470fb73c
+  target_id: 01a18a6b-bbf9-7c20-9076-711d5474f058
+  author: aida
+  node_id: '1'
+  lamport: 7017
+  timestamp: 2026-10-30T05:13:56.130076526Z
+  kind: !SetDescription
+    description: |
+      2026-10-29 18:26: operator ran `aida agent new antigravity --role implementer --bypass-sandbox` while a Codex implementer (codex-agent-02) held the repo scope; after the bypass confirmation and resume prompt it failed: 'agent role implementer is already active on this scope'. The working path is `--spec <SPEC>` (own worktree + lease). Acceptance: check the scope conflict BEFORE the bypass/resume prompts; the refusal names the fix (`--spec <ID>`) and, at a TTY, offers to pick an approved unclaimed spec from the queue for this role; docs state that several agents may share a role when each holds its own spec scope.
+
+      ## Operator ruling 2026-10-29 18:30 (widens the acceptance)
+      Several GENERIC implementers per repo must be allowed: `aida agent new <vendor> --role implementer` with no --spec launches another pool member with its own unique handle, even when other implementers (any vendor) are live. Exclusivity is enforced only where it matters: the spec claim/lease when a pool member picks up work. Acceptance:
+      1. N concurrent repo-scope implementers (mixed vendors) can launch; each gets a distinct handle and mail inbox.
+      2. Two pool members can never hold the same spec: the existing claim/lease refusal applies at pickup.
+      3. Role-addressed mail (`--to implementer`) is taken by exactly one reader; handle-addressed mail reaches only that agent.
+      4. `aida agent ls` shows the pool (role, handle, current spec or idle).
+      5. Roles that must stay singular (advisor, reviewer-at-a-PR, operator seats) keep their one-per-scope rule.
+
+      ADVISOR RULING 2026-10-29 22:20 (PR-3116 round 1 at cd9ebe60). ONE rework push on PR-3116, no new PR.
+      WAIVED, acceptance amended: the TTY spec picker on refusal. The refusal already names the fix (`--spec <ID>`), and with a generic pool the clash is rare. The picker adds UI for little gain. It is removed from this spec's acceptance, not deferred.
+      BUNDLE:
+      1. Regression: the singleton preflight now runs before the --resume handler (agent_launch.rs ~1988), so `aida agent new ... --role reviewer --resume <id|latest>` is refused when a same-role agent shares the launch dir. Restore it: resume returns before the preflight, or the preflight judges the resumed agent's own scope. Test both.
+      2. Ordering test: prove the scope-conflict refusal happens before the bypass and resume prompts, on both the foreground and --bg paths.
+      3. Role mail to the pool queues for the role when no live member has a mail id (mailbox_resolver.rs ~528), with no --queue-for-role needed. Test it.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib generic_implementers pool_role_mail same_scope_conflict` plus `make check-ci-fast`, then push.
+clock: 7017
 node_id: '1'
