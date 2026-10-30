@@ -91512,5 +91512,13 @@ operations:
 
 
       ADVISOR RULING 2026-10-30 01:30 (PR-3123 round 2): AMENDS item 4 of the 00:20 ruling. The post-merge session reap (TASK-1177 run_session_reap) may stay outside the 60s deadline, since it is documented as such. Reason: the 26-minute stall was the worktree scan and heal pass, which are now bounded; the reap's cost is linear in session count, and the operator ship path already cuts cleanup 60s after merge. Items 1-3 and 5 are verified. A re-review checks only CI green at head plus this amendment; there is no new work.
-clock: 7099
+- id: 01a18bfc-f6d6-7860-ab9e-05f79f40eec5
+  target_id: 01a18ad3-2880-73f2-ad71-cb6746f463b4
+  author: aida
+  node_id: '1'
+  lamport: 7100
+  timestamp: 2026-10-30T08:46:13.718924269Z
+  kind: !SetStatus
+    status: Completed
+clock: 7100
 node_id: '1'
