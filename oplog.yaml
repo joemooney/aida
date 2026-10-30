@@ -93230,5 +93230,31 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 7219
+- id: 01a18d31-b8b1-7523-b816-2436e3e46fb5
+  target_id: 01a18d31-ab0d-7e51-a4a1-dc545464153f
+  author: aida
+  node_id: '1'
+  lamport: 7220
+  timestamp: 2026-10-30T14:23:28.434331702Z
+  kind: !Create
+    title: 'Review PR-3138: [AI:claude] feat(remote): remote status names the hub pushes bypass the mirror and suggests a scheduled reconcile (TASK-B6B1278890774EF993D2EBC327862470-120)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-120`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3138>
+      - Branch: `task-b6b1278890774ef993d2ebc327862470-120` → `main`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-120
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3138` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7220
 node_id: '1'
