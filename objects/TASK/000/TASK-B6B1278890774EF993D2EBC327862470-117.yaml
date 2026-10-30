@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T05:55:46.194749422Z
+modified_at: 2026-10-30T05:58:50.511464233Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -86,6 +86,18 @@ comments:
     Evidence logs: /tmp/task117-compile.log; /tmp/task117-touched-tests.log; /tmp/task117-final-fast.log; /tmp/task117-registry-tests.log; /tmp/task117-cli-smoke.log.
   created_at: 2026-10-30T05:45:05.546671954Z
   modified_at: 2026-10-30T05:45:05.546671954Z
+- id: 01a18b63-b78f-7080-9b83-cb2a56488a9d
+  author: ai:codex:joe
+  content: |
+    Published implementation PR: https://github.com/joemooney/aida/pull/3122 at 31a9af98f696f28c8dad6a66763944252ed2c7a8. GitHub confirms OPEN, base main. Code, store and configured mirrors pushed successfully; real inbox checks ran after push and PR creation, with no new message IDs.
+
+    All verification completed: compile every test target; 19 registry/policy tests; actual help snapshot regeneration/comparison; isolated CLI list/ls/status smoke; make test-touched (1,062 CLI-library tests + 2,028 core tests passed, three core tests ignored by default); final make check-ci-fast (35 gates passed). Two author-check rounds found/fixed one manual canonical-name typo; final pass found no remaining findings. Author checks only.
+
+    Publication context: two unrelated main commits landed during validation (main 2742b18ee2e). Their only overlap is the generated help snapshot in separate queue-rework sections; a merge simulation was clean and all other feature-file blobs unchanged. The documented scripted-push option was used after manually verifying the freshness warning and absence of any prior PR for the branch. PR body labels the two-commit lag; normal independent review and merge-train validation remain the integration path. No self-merge or hold clearance.
+
+    Reviewer routing is pending advisor authority: aida pr auto-queue-review created Draft STORY-B6B1278890774EF993D2EBC327862470-110, then returned nonzero because requested Approved status requires advisor authority. This attempt did not complete reviewer routing. Please approve the existing review draft and finish routing it to the reviewer queue rather than create a duplicate. Advisor is being notified with the PR/full SHA and this exact partial outcome.
+  created_at: 2026-10-30T05:58:50.511464233Z
+  modified_at: 2026-10-30T05:58:50.511464233Z
 history:
 - id: 01a18a38-865a-73b1-baec-dc0e2fc248fb
   author: joe
