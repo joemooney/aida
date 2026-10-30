@@ -12,7 +12,9 @@
 
 | You want… | Read |
 |-----------|------|
-| Install + `aida init` + your first requirement | [getting-started.md](getting-started.md) |
+| Install AIDA | [README installation](../README.md#install) |
+| Start conversational development and capture durable intent | [getting-started.md](getting-started.md) |
+| Initialize a project as an operator | [CLI initialization reference](cli/01-getting-started.md#aida-init) |
 | A follow-along first project (blank repo → graph → Completed) | [first-project.md](first-project.md) |
 | **The full CLI reference** — when and why to use every command | [cli/](cli/README.md) (12 chapters; the deepest day-to-day reference) |
 | What each requirement type is for | [requirement-types.md](requirement-types.md) |
