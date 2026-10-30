@@ -2,12 +2,12 @@ id: 01a18dde-084e-7213-82c6-b0ad3ca25c65
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-042
 title: Shipping a stacked PR leaves its dependents targeting the merged branch; serial ship would merge them into a dead branch, and retargeting does not trigger CI
 description: '2026-10-30 docs stack 3096-3103. After 3096 squash-merged, 3097 still had base task-...-106-work (the branch was not deleted, so GitHub did not auto-retarget). serial-ship then updated 3097 from that dead base and would have merged it there, not into main; the advisor stopped it. Retargeting 3103 to main with gh pr edit --base main also did not trigger ci.yml (pull_request on branches [main] only fires on synchronize/opened/reopened with base main at event time; even close/reopen did not fire). It needed an empty commit. Fix: (1) when aida pr ship merges a PR, retarget every open PR whose base is that PR''s head branch to the merged-into branch, then delete the merged branch; (2) aida pr ship / serial ship refuses to merge a PR whose base is not the default branch unless --allow-stacked-base; (3) after a retarget, re-trigger CI (an empty commit or an explicit run) and say so. Tests with a mock forge.'
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T17:31:41.006633126Z
-modified_at: 2026-10-30T21:33:17.308426773Z
+modified_at: 2026-10-30T22:34:46.069028875Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -53,6 +53,20 @@ history:
   author: joe
   timestamp: 2026-10-30T21:33:18.960560174Z
   changes: []
+- id: 01a18ef3-83af-7e63-9325-6bf2029e031e
+  author: aida-auto-bump
+  timestamp: 2026-10-30T22:34:46.063454642Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18ef3-83b5-78e2-965a-e1811084f953
+  timestamp: 2026-10-30T22:34:46.069024818Z
+  agent: aida
+  commit_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
+  summary: 'Base-only update from main (gh update-branch 35f874f4c6e3a3a63ee718852bd2f788b43361f2 -> c77f4e884990260153f342eabbc2f5cf500aca86); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
   branch: main
@@ -65,3 +79,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T21:28:13.588498596Z
   implemented_by: joe
+  completed_at: 2026-10-30T22:34:46.063450461Z
+  completion_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
