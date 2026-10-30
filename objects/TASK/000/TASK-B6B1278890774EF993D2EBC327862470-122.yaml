@@ -2,12 +2,12 @@ id: 01a18afe-5265-7ca3-872d-c0c6563ac05c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-122
 title: Refresh Devin/Cognition entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research (Devin Desktop/ACP, Managed Devins, single-writer stance, Security Profiles/Outposts, memory
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T04:08:05.477710071Z
-modified_at: 2026-10-30T05:33:22.707549493Z
+modified_at: 2026-10-30T07:07:42.687644437Z
 req_type: Task
 tags:
 - lifecycle:no-review
@@ -31,6 +31,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a18ba2-c4d8-7001-a802-c3a294b0ecc6
+  author: aida-auto-bump
+  timestamp: 2026-10-30T07:07:42.680961638Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a18ba2-c4df-7f50-8509-0fc64d00129b
+  timestamp: 2026-10-30T07:07:42.687635498Z
+  agent: aida
+  commit_sha: 6a474079e3d15772818f61475752ef5309536593
+  summary: 'Base-only update from main (gh update-branch ad827d127f3099576f7e121c8cfccc0da7b1e6a9 -> 00d6a096e560cf1532f91c672eba177174620982); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -39,3 +53,7 @@ filed_at:
   aida_build_sha: 9a86ae54ce5
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-30T07:07:42.680957278Z
+  completion_sha: 6a474079e3d15772818f61475752ef5309536593
