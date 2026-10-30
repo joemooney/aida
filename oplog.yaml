@@ -91936,5 +91936,27 @@ operations:
   timestamp: 2026-10-30T09:35:59.211429609Z
   kind: !SetStatus
     status: Needs Attention
-clock: 7123
+- id: 01a18c2b-950a-7522-b5de-8dbfccd3715b
+  target_id: 01a18b07-a7e4-7fd1-afab-65e787b05fcd
+  author: aida
+  node_id: '1'
+  lamport: 7124
+  timestamp: 2026-10-30T09:37:08.874471739Z
+  kind: !SetDescription
+    description: |
+      2026-10-29 21:18: `aida pr auto-queue-review --branch story-b6b1278890774ef993d2ebc327862470-096` from the primary reported 'PR #3110 carries no (REQ-ID) trailers', although every commit carries one. Cause: review_gates.rs (~1119) takes base/head from pr_base_head (lib_part5.rs:4461), which returns the forge's bare head_ref; git_log_messages(main..<head_ref>) fails because the branch exists only in the lane's seat clone, and unwrap_or_default() turns the error into 'no commits'. Creating a local tracking branch made it work. Every contained lane's PR hits this, so reviewers can't launch without a hand-filed story.
+
+      Acceptance:
+      1. Resolve the range from origin/<base>..origin/<head> (fetching the head ref, or using the PR head SHA from forge metadata) when the local branch is missing.
+      2. A git_log failure is reported as an error naming the range, never as 'no trailers'.
+      3. Test: PR head branch absent locally but present on origin, trailers found.
+
+      ADVISOR RULING 2026-10-30 02:40 (PR-3128 round 1). ONE rework push on PR-3128; BUNDLE all:
+      1. CI lib-0/lib-1 fail on gitlab_project_create::bug_2181_host_remote_credentials_tests::task_2001_every_host_remote_call_routes_its_credentials and seat_clone::clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read. The new fetch in resolve_log_range (lib_part5.rs) is a raw host-remote git call: route it through the existing credential-routing git helper and the lease-tree git wrapper. Do not grow either ratchet baseline. Also check review_gates::bug_775_commits_ahead_tests::concurrent_sibling_publication_has_one_winner_and_never_two_links; if it passes on main and fails here, fix it, and if it is a flake, say so in the PR body.
+      2. Prefer the forge's PR head SHA (change metadata) as the range head, plus a refreshed origin/<base>, so a stale remote-tracking ref cannot narrow or widen the range (minor finding 4).
+      3. AC2 test at the auto-queue layer: an unreadable range makes try_auto_queue_pr_review_unbumped return SkippedNeedsAttention, naming '<base>..<head>' and NOT 'no (REQ-ID) trailers'.
+      4. Criterion trace anchors (.acab779a, .acbcb0eb, .Test) on the tests in bug_035_seat_clone_log_range_tests.rs.
+      5. queue_cmd.rs ~10386: surface the git_log_messages error (naming the range) instead of a silent `let Ok .. else return`.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_035 task_2001 task_2143 bug_775` plus make check-ci-fast.
+clock: 7124
 node_id: '1'
