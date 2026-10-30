@@ -1,13 +1,18 @@
 id: 01a18a40-43b4-7ae0-9afc-a68a9ce1373f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-119
 title: Codex mail-wake wakes on mail the woken seat cannot act on
-description: '2026-10-29: the codex-mail-wake service bound to Codex''s thread delivered six advisor-addressed historical dispatch receipts; Codex (implementer) could not ack them. Acceptance: the adapter wakes only for mail addressed to the woken agent''s own handle/role (configurable), and the notice says which inbox it came from. Fold into STORY-HOME-096 if that lands first.'
+description: |-
+  2026-10-29: the codex-mail-wake service bound to Codex's thread delivered six advisor-addressed historical dispatch receipts; Codex (implementer) could not ack them. Acceptance: the adapter wakes only for mail addressed to the woken agent's own handle/role (configurable), and the notice says which inbox it came from. Fold into STORY-HOME-096 if that lands first.
+
+  ## Evidence 2026-10-29 18:02 (root cause)
+  scripts/codex-mail-wake.py is built for a Codex ADVISOR: watcher.py sets AIDA_SESSION_ROLE=advisor and runs `aida mailbox wake-snapshot --recipient advisor`. Installed against Codex implementer thread 01a185ba… at 17:32, it delivered the six advisor-addressed historical receipts at 17:33, but never woke Codex for the advisor's 17:52 message sent `--to codex-agent-02`; the operator had to prompt Codex by hand. Uninstalled 18:03 to stop advisor-mail wakes.
+  Acceptance (replaces the above): `install --recipient <handle|role>` (default: the agent handle registered for the thread, e.g. codex-agent-02, plus its role); the notification text names the recipient inbox; the advisor-only behaviour stays available as `--recipient advisor`. STORY-HOME-096 calls install with the spawned agent's handle.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T00:40:29.876190271Z
-modified_at: 2026-10-30T00:40:29.876190271Z
+modified_at: 2026-10-30T01:03:17.857208587Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -17,6 +22,11 @@ history:
 - id: 01a18a40-77fb-7b00-9340-27de1e3d10d0
   author: joe
   timestamp: 2026-10-30T00:40:43.259183520Z
+  session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+  changes: []
+- id: 01a18a55-26eb-7623-ae1e-d94e80d0d792
+  author: joe
+  timestamp: 2026-10-30T01:03:18.763309643Z
   session_id: 1fccff89-db7b-4173-8b69-6417ae15d5ea
   changes: []
 filed_at:
