@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T21:59:28.836589002Z
+modified_at: 2026-10-30T21:59:34.515819103Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -95,6 +95,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All spec acceptance criteria and round 0-2 ruling items are met in code and covered by tests (14/14 bug_home_038 pass locally), but required PR CI is red at this head: CI (lib-0) and CI (lib-1) fail in ''Run tests'' (run 41124379639), as they did at the previous head 190d51a; main and sibling PRs on the same base are green.. No triage reason was given.'
   created_at: 2026-10-30T21:59:28.836586651Z
   modified_at: 2026-10-30T21:59:28.836586651Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18ed3-4b02-7f02-99b3-df3d4c6e60cb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-038):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 58670d58025f
+    Recorded: 2026-10-30T21:13:53.790285607+00:00
+    Findings:
+    1. (blocker) Required CI is red at 58670d58025: run 41124379639, jobs CI (lib-0) 124298973450 and CI (lib-1) 124298973429, both fail in the 'Run tests' step; Build (ubuntu-latest) fails 'Require every CI lane'. The same two lanes failed at the previous head 190d51a63bc (run 41114706833). origin/main (508fe88, d7ff223, 8fd81b9) and other PR branches on the same base (BUG-HOME-037, -039, -041, -043) are green, so the failure is very likely caused by this PR. Both halves of the module-split aida-cli-lib unit binary fail, which points to at least two failing modules, or one test that breaks its neighbours (e.g. leaked global state or a ref or file left behind), rather than a single new test. The reviewer sandbox could not read the job logs (blob storage denied). The 14 bug_home_038 tests pass locally (cargo test --profile agent -p aida-cli-lib --lib bug_home_038). Fix: read the failing test names with 'gh run view 41124379639 --log-failed', fix the cause, push, and get both lib lanes green. Do not add retries or budgets to mask it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T21:59:34.402004747Z
+  modified_at: 2026-10-30T21:59:34.402004747Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
