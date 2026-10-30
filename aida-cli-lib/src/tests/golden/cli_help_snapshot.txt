@@ -11622,6 +11622,10 @@ Commands:
   rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
+  bare-id-twins             Find bare spec ids (TYPE-100) in descriptions and comments that also
+                            name this node's local spec with the same number (TYPE-HOME-100). A bare
+                            id resolves to the agreed spec, so prose meaning the local one should
+                            use the alias form. Reports only
   check                     Focused multi-agent drift diagnostic for one category
   heal                      Focused multi-agent drift heal for one category
   migrate-counter-scope     Migrate this project from per-type counters (each type counts
@@ -11753,6 +11757,30 @@ Options:
       --exclude <SPEC-ID>
           Omit a spec whose own documentation quotes detector examples
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor bare-id-twins
+Find bare spec ids (TYPE-100) in descriptions and comments that also name this node's local spec
+with the same number (TYPE-HOME-100). A bare id resolves to the agreed spec, so prose meaning the
+local one should use the alias form. Reports only
+
+Usage: aida doctor bare-id-twins [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16630,6 +16658,10 @@ Options:
 
       --description <DESCRIPTION>
           Optional human-readable description of this agent session
+
+      --no-mail-wake
+          Do not wake this session's thread when its inbox has mail (default: `[agents.codex]
+          mail_wake` in agents.toml, else on)
 
   -h, --help
           Print help (see a summary with '-h')
@@ -40239,6 +40271,32 @@ Working on aida itself
     "path": [
       "aida",
       "doctor",
+      "bare-id-twins"
+    ],
+    "about": "Find bare spec ids (TYPE-100) in descriptions and comments that also name this node's local spec with the same number (TYPE-HOME-100). A bare id resolves to the agreed spec, so prose meaning the local one should use the alias form. Reports only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
       "check"
     ],
     "about": "Focused multi-agent drift diagnostic for one category",
@@ -45027,6 +45085,11 @@ Working on aida itself
         "name": "no-exec",
         "takes_value": false,
         "help": "Print the complete resolved launch contract — argv, active role, prompt source, launch-context snapshot path, AIDA environment inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the child would consume — then exit without spawning a process, creating a worktree/lease, flipping spec status, or any network sync. See also `--show-prompt` (just the initial prompt) and `--show-context` (the full launch-context markdown body)"
+      },
+      {
+        "name": "no-mail-wake",
+        "takes_value": false,
+        "help": "Do not wake this session's thread when its inbox has mail (default: `[agents.codex] mail_wake` in agents.toml, else on)"
       },
       {
         "name": "no-prompt",

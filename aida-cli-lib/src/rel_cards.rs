@@ -831,6 +831,18 @@ pub(crate) fn not_found_requested_id(msg: &str) -> Option<String> {
 /// path, so the one-shot cache read is off the hot path.
 // trace:TASK-1082 | ai:claude
 pub(crate) fn known_spec_ids_for_suggestion(project_root: &std::path::Path) -> Vec<String> {
+    spec_id_pairs_for_suggestion(project_root)
+        .into_iter()
+        .flat_map(|(spec_id, agreed_id)| std::iter::once(spec_id).chain(agreed_id))
+        .collect()
+}
+
+/// [`known_spec_ids_for_suggestion`] with each spec id kept beside its agreed
+/// id, so a local twin can be named by its agreed id when it has one.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub(crate) fn spec_id_pairs_for_suggestion(
+    project_root: &std::path::Path,
+) -> Vec<(String, Option<String>)> {
     // Opening the dispenser or backend scaffolds `objects/` and
     // `.aida/dispenser.toml`, so an unattached store must not be opened: a
     // fresh clone's typo'd `aida show` left a plain `.aida-store/` that git
@@ -861,16 +873,9 @@ pub(crate) fn known_spec_ids_for_suggestion(project_root: &std::path::Path) -> V
     let Ok(rows) = backend.list_summaries(&filter) else {
         return Vec::new();
     };
-    let mut ids = Vec::with_capacity(rows.len());
-    for r in rows {
-        if let Some(s) = r.spec_id {
-            ids.push(s);
-        }
-        if let Some(a) = r.agreed_id {
-            ids.push(a);
-        }
-    }
-    ids
+    rows.into_iter()
+        .filter_map(|r| Some((r.spec_id?, r.agreed_id)))
+        .collect()
 }
 
 /// Glue for the top-level error handler: if `msg` is a "Requirement not found"
@@ -881,9 +886,42 @@ pub(crate) fn known_spec_ids_for_suggestion(project_root: &std::path::Path) -> V
 pub(crate) fn did_you_mean_for_not_found(msg: &str) -> Option<String> {
     let requested = not_found_requested_id(msg)?;
     let project_root = find_main_worktree_root().ok()?;
-    let known = known_spec_ids_for_suggestion(&project_root);
-    let suggestion = nearest_spec_id(&requested, &known)?;
+    let known = spec_id_pairs_for_suggestion(&project_root);
+    let suggestion = not_found_suggestion(&requested, &known)?;
     Some(format!("did you mean {suggestion}?"))
+}
+
+/// The did-you-mean target for a not-found id. A bare id whose number is a
+/// node-local spec's (`BUG-030` vs `BUG-<node>-030`) suggests that spec in its
+/// alias form (`BUG-HOME-030`) ahead of any spelling near-miss: the operator
+/// almost always meant this node's spec, not `BUG-1030`. A twin that already
+/// has an agreed id is suggested by that id. Otherwise the TASK-1082
+/// nearest-id lens. `known` pairs each spec id with its agreed id.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
+pub(crate) fn not_found_suggestion(
+    requested: &str,
+    known: &[(String, Option<String>)],
+) -> Option<String> {
+    let twins =
+        aida_core::node_alias::local_twins(requested, known.iter().map(|(id, _)| id.as_str()));
+    if !twins.is_empty() {
+        let shown: Vec<String> = twins
+            .iter()
+            .map(|twin| {
+                let agreed = known
+                    .iter()
+                    .find(|(id, _)| id.eq_ignore_ascii_case(twin))
+                    .and_then(|(_, agreed)| agreed.as_deref());
+                aida_core::node_alias::local_twin_label(twin, agreed)
+            })
+            .collect();
+        return Some(shown.join(" or "));
+    }
+    let known_ids: Vec<String> = known
+        .iter()
+        .flat_map(|(id, agreed)| std::iter::once(id.clone()).chain(agreed.clone()))
+        .collect();
+    nearest_spec_id(requested, &known_ids)
 }
 
 // TASK-679: fully-isolated unit tests for the canonical parent/child edge

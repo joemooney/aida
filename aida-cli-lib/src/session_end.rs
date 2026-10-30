@@ -122,7 +122,20 @@ pub(crate) fn resolve_session_to_end(
                 if msg.contains("ambiguous") {
                     return Err(id_err);
                 }
-                find_lease_by_branch(q, leases)
+                // A hex string is a session id, never a branch: say so,
+                // rather than reporting a missing branch.
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+                find_lease_by_branch(q, leases).map_err(|branch_err| {
+                    if crate::session_misc::looks_like_lease_id(q.trim()) {
+                        anyhow::anyhow!(
+                            "No session with id `{q}` — it may have ended already. \
+                             Run `aida session leases` to see active sessions; \
+                             any id it prints is accepted here"
+                        )
+                    } else {
+                        branch_err
+                    }
+                })
             }
         };
     }

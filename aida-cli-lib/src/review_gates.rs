@@ -1118,7 +1118,18 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     let review_forge = review_forge_for_kind(kind);
     let (base, head) = pr_base_head(project_root, review_forge, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
-    let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
+    // BUG-035: an unreadable range is not "no trailers" — say which range
+    // failed so the operator fixes the ref instead of re-trailering commits.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
+    let messages = match git_log_messages(project_root, &base, &head) {
+        Ok(messages) => messages,
+        Err(err) => {
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: cannot read commits {base}..{head} for {noun}-{} — no reviewer story filed: {err:#}",
+                pr.number
+            ));
+        }
+    };
     let ReviewCoverage {
         delivered: spec_ids,
         slice_refs,

@@ -99,6 +99,7 @@
 "Performance profile guard" = "fast"
 "Check formatting" = "fast"
 "Removed mode-flag spelling guard" = "fast"
+"Help golden snapshot co-change guard" = "fast"  # trace:TASK-B6B1278890774EF993D2EBC327862470-125 | ai:claude
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
