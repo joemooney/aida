@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+  "publishes": [
+    {
+      "at": "2026-10-30T05:45:59.038768199Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T01:06:10.803795422Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-021",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T01:34:09.335386576Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T05:16:20.898171180Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3113,
+        "verdict": "APPROVED",
+        "reviewed_sha": "45f2e9164d0fe2d077d897df8845b6b4174361b5"
+      }
+    },
+    {
+      "ts": "2026-10-30T05:45:02.475110023Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T05:45:20.545089397Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3113
+      }
+    },
+    {
+      "ts": "2026-10-30T05:45:56.291915999Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2742b18ee2e7b5dd32643ec149ca9ac8176a4fca",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-30T05:45:57.162835153Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-021",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2742b18ee2e7b5dd32643ec149ca9ac8176a4fca",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
