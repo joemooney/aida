@@ -88883,5 +88883,13 @@ operations:
       - Slice 1 (this lane): verified `wake-snapshot --recipient <handle>` + `mailbox wake-run` over armed rows (rows armed manually via a hidden `aida agent wake arm <handle>` for now) + the unit/health-job install + tests. Closes TASK-HOME-119's acceptance.
       - Slice 2: the `agent new` pending stamp, SessionStart hook arming, retire on end/GC, the `agent list` wake column and the doctor iteration.
       LIGHT tier: targeted tests + make check-ci-fast. trace:STORY-HOME-096.
-clock: 6913
+- id: 01a18a57-3a8b-7ad3-a5dd-00f789620ba7
+  target_id: 01a18a16-7fbb-7290-839f-6513351a7d4d
+  author: aida
+  node_id: '1'
+  lamport: 6914
+  timestamp: 2026-10-30T01:05:34.859624076Z
+  kind: !SetStatus
+    status: In Progress
+clock: 6914
 node_id: '1'
