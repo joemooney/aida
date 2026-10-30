@@ -93007,5 +93007,31 @@ operations:
   timestamp: 2026-10-30T13:50:11.489684598Z
   kind: !SetStatus
     status: Done
-clock: 7206
+- id: 01a18d15-3dfe-78a2-b13c-3d67e3f38a7b
+  target_id: 01a18d15-3381-7c12-93f6-5ed1a86d353d
+  author: aida
+  node_id: '1'
+  lamport: 7207
+  timestamp: 2026-10-30T13:52:22.014168807Z
+  kind: !Create
+    title: 'Review PR-3136: [AI:claude] fix(queue): rework lanes continue the spec''s held PR instead of forking a new branch (BUG-b6b1278890774ef993d2ebc327862470-022)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-022`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3136>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-022` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-022
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3136` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 7207
 node_id: '1'
