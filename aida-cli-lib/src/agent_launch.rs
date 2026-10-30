@@ -2004,7 +2004,9 @@ pub(crate) fn maybe_handle_agent_resume_or_duplicate(
         std::io::stderr().is_terminal(),
     );
 
-    if resume.duplicate_check {
+    // A generic pool member is not a duplicate: it launches beside the live
+    // members under its own handle. trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    if resume.duplicate_check && !agent_registry::is_pool_launch(role, spec) {
         if let Some(live) =
             matching_live_duplicate(&agent_launch_views(project_root), agent_type, role, spec)
         {
@@ -2613,6 +2615,25 @@ pub(crate) fn agent_new_with_config(
         .or_else(|| spec.as_deref().map(agent_new_scope_role));
     preflight_agent_new_delegation(&project_root, expected_role)?;
 
+    // Refuse a scope conflict before the bypass consent and resume prompts:
+    // a human must never answer them for a launch that cannot proceed.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    let early_role_instance = resolve_role_instance_for_launch(
+        &project_root,
+        role.as_deref(),
+        spec.as_deref(),
+        cwd.unwrap_or(&project_root),
+    );
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
+        enforce_agent_singleton_preflight(
+            &project_root,
+            role.as_deref(),
+            spec.as_deref(),
+            cwd.unwrap_or(&project_root),
+        )?;
+    }
+
     // Validate before any real agent launch even when --verbose is absent;
     // preview mode validates in its renderer above. Resolve the binary BEFORE
     // the consent gate so an unresolvable build fails fast rather than after a
@@ -2653,21 +2674,6 @@ pub(crate) fn agent_new_with_config(
         return Ok(());
     }
 
-    let early_role_instance = resolve_role_instance_for_launch(
-        &project_root,
-        role.as_deref(),
-        spec.as_deref(),
-        cwd.unwrap_or(&project_root),
-    );
-    // trace:BUG-1697 | ai:claude
-    if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
-        enforce_agent_singleton_preflight(
-            &project_root,
-            role.as_deref(),
-            spec.as_deref(),
-            cwd.unwrap_or(&project_root),
-        )?;
-    }
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
@@ -2904,6 +2910,18 @@ pub(crate) fn agent_new_bg_dispatch(
         .or_else(|| spec.as_deref().map(agent_new_scope_role));
     preflight_agent_new_delegation(&project_root, expected_role)?;
 
+    // Same ordering as the foreground path: refuse a scope conflict before
+    // the bypass consent gate. trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+    // trace:BUG-1697 | ai:claude
+    if resume.duplicate_check {
+        enforce_agent_singleton_preflight(
+            &project_root,
+            role.as_deref(),
+            spec.as_deref(),
+            cwd.unwrap_or(&project_root),
+        )?;
+    }
+
     // Validate before the detached/background launch too, and before the
     // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
     let _resolved_aida = aida_bin::process()?;
@@ -2937,15 +2955,6 @@ pub(crate) fn agent_new_bg_dispatch(
         return Ok(());
     }
 
-    // trace:BUG-1697 | ai:claude
-    if resume.duplicate_check {
-        enforce_agent_singleton_preflight(
-            &project_root,
-            role.as_deref(),
-            spec.as_deref(),
-            cwd.unwrap_or(&project_root),
-        )?;
-    }
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
@@ -4012,8 +4021,20 @@ pub(crate) fn enforce_agent_singleton_preflight(
     if let Some(conflict) =
         agent_registry::same_scope_conflict(project_root, &cfg, role, current_spec, worktree_path)
     {
+        // Name the way out: a spec-less launch of a spec-scoped role takes its
+        // own scope with `--spec`; a same-spec clash needs a different spec.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+        let fix = match (role, current_spec) {
+            (Some(r), None) if !agent_registry::is_repo_scoped_role(r) => {
+                "\nfix: launch with `--spec <ID>` so this agent holds its own spec scope (own worktree + lease); several agents may share a role when each holds its own spec."
+            }
+            (_, Some(_)) => {
+                "\nfix: that spec is already claimed; pick a different approved spec with `--spec <ID>`, or stop the holder first."
+            }
+            _ => "\nfix: stop the holder first (`aida agent ls` names it); this role allows one agent per scope.",
+        };
         anyhow::bail!(
-            "agent role `{}` is already active on this scope: {} (session {}, spec {}, pid {}).",
+            "agent role `{}` is already active on this scope: {} (session {}, spec {}, pid {}).{fix}",
             role.unwrap_or("(none)"),
             conflict.name_or_id,
             conflict.session_id,

@@ -3537,6 +3537,57 @@ fn no_duplicate_check_is_the_escape_hatch_for_the_role_singleton() {
     );
 }
 
+/// TASK-121: generic implementers form a pool — a second repo-scope implementer of
+/// another vendor launches beside a live one, the same spec stays exclusive, and the
+/// refusal of a singular role names the `--spec` fix.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
+#[test]
+fn generic_implementers_pool_while_spec_and_singular_roles_stay_exclusive() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().to_path_buf();
+    let binary = agent_registry::AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+    for (vendor, role, spec, handle) in [
+        ("codex", "implementer", None, "codex-agent-02"),
+        (
+            "claude",
+            "implementer",
+            Some("TASK-7"),
+            "claude-implementer-7",
+        ),
+        ("codex", "reviewer", None, "codex-reviewer-1"),
+    ] {
+        agent_registry::register_spawned_agent(
+            &project,
+            vendor,
+            std::process::id(),
+            Some(role.to_string()),
+            spec.map(str::to_string),
+            project.clone(),
+            Some(&binary),
+            Some(handle.to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+    }
+
+    // AC1: another generic implementer (different vendor) launches.
+    enforce_agent_singleton_preflight(&project, Some("implementer"), None, &project)
+        .expect("a generic implementer joins the pool");
+    // AC2: two pool members never hold the same spec.
+    let err =
+        enforce_agent_singleton_preflight(&project, Some("implementer"), Some("TASK-7"), &project)
+            .expect_err("the same spec stays exclusive");
+    let rendered = format!("{err:#}");
+    assert!(rendered.contains("claude-implementer-7"), "{rendered}");
+    assert!(rendered.contains("different approved spec"), "{rendered}");
+    // AC5: a singular role keeps its rule, and the refusal names the fix.
+    let err = enforce_agent_singleton_preflight(&project, Some("reviewer"), None, &project)
+        .expect_err("a reviewer stays one per scope");
+    assert!(format!("{err:#}").contains("--spec <ID>"), "{err:#}");
+}
+
 /// BUG-1697 AC3: `--allow-duplicate` only suppresses the confirmation prompt, per its own help
 /// text — it must NOT turn the duplicate check off. Only `--no-duplicate-check` does that.
 // trace:BUG-1697 | ai:claude
