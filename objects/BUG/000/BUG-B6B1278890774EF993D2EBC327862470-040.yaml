@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T22:42:20.759136354Z
+modified_at: 2026-10-30T22:59:19.585384944Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -68,6 +68,13 @@ comments:
   created_at: 2026-10-30T22:03:11.324762253Z
   modified_at: 2026-10-30T22:03:11.324762253Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18f09-ffa1-7c31-b65c-a9dfd86059a5
+  author: joe
+  content: 'Rework for PR-3142 (advisor ruling 2026-10-30) pushed as ee8fafe: merged origin/main (no rebase). Cause: STORY-098 moved the awaiting mail read into collect_mail_channel. The test''s context role ''advisor'' is not a verified audience key, so it takes the inspected-role path, which only counted mail (no previews, no overdue). That path now splits via split_mail_scopes_for_role and folds the result in with MailChannel::absorb_role. whoami counts role mail as direct. The test was not loosened. story_465 13/13, awaiting_you+whoami 108/108, make check-ci-fast exit 0.'
+  created_at: 2026-10-30T22:59:19.585384944Z
+  modified_at: 2026-10-30T22:59:19.585384944Z
+  session_id: 01a18efa6ff3
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18d27-53e3-7762-9954-20226499df1b
   author: joe
