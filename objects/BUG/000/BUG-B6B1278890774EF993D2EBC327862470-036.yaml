@@ -51,7 +51,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:44:31.925242148Z
-modified_at: 2026-10-30T11:12:05.322460954Z
+modified_at: 2026-10-30T11:12:08.826633065Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -124,6 +124,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Logic meets the 21:50 ruling and the 03:21 bundle (goldens, docs, agreed-id labels, anchors). But CI is red at head 6b1fbb6: contracts fails the manual''s spec-id leak check, and lib-0 ''Run tests'' fails (it also failed at d6bc8de; main is green).. No triage reason was given.'
   created_at: 2026-10-30T11:12:05.322459467Z
   modified_at: 2026-10-30T11:12:05.322459467Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c82-8de7-73d0-8c59-8ae758c5f831
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-036):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 712584ff2e3e
+    Recorded: 2026-10-30T10:19:00.397112574+00:00
+    Findings:
+    1. BLOCKER (CI red): CI run 41037889271 at 712584ff fails CI (lib-0) and CI (cli-0) at 'Run tests'; main is green at the base 1e3bb95. Cause: the new DoctorCommand::AmbiguousIds (aida-cli-lib/src/doctor_cmd_args.rs:34) adds a CLI path but none of the checked-in command-surface artifacts were regenerated: (a) aida-cli-lib/src/tests/golden/cli_help_snapshot.txt (story_1728_command_registry_tests::help_surface_matches_golden_snapshot; regenerate with AIDA_UPDATE_SNAPSHOTS=1), (b) aida-cli-lib/src/tests/golden/story_1728_main_policy.tsv (story_1728_policy_parity_tests::registered_policy_matches_mains_legacy_tables_for_every_verb; add a 'doctor ambiguous-ids' Read/Write row like the shell-substitution-holes rows at :509), (c) docs/cli-format-json-audit.md (aida-cli/tests/bug_1502_format_json_audit.rs::checked_in_audit_is_exhaustive_and_every_honoured_probe_parses needs an '| `aida doctor ambiguous-ids` |' row next to :326). The sandbox blocked downloading the job logs, so these test names come from reading the code, not from the logs; confirm with the CI output after regenerating.
+    2. Docs: docs/cli/07-project-setup.md:332 lists the focused doctor subcommands but omits the new 'ambiguous-ids' lint. Add it with a one-line description: report-only, and it flags bare TYPE-NNN tokens in descriptions or comments that also name a node-local spec.
+    3. Traceability: the five acceptance criteria (ac6dd87b, acc7fcab, rendering, ac12b260, ac4dbc90) are still untraced per 'aida criteria'. The new tests carry only the spec-level trace. Add criterion-level trace tags to the matching tests: bare_id_not_found_suggests_the_node_local_alias and bare_id_local_twins_ignore_leading_zeros_and_agreed_ids for acc7fcab, doctor_lint_flags_bare_ids_that_also_name_a_local_spec for ac12b260, the bug_home_036 module for ac4dbc90, and bare_id_local_twin_candidates_use_the_allocator_padding for the rendering criterion. Note that ac6dd87b and the original rendering criterion were superseded by the 21:50 ruling (A/C); the advisor should reconcile the criteria list, and the implementer should not test the superseded 'refuse as ambiguous' behaviour.
+    4. Minor (ruling C): not_found_suggestion (rel_cards.rs:896-903) and ambiguous_bare_id_lines (doctor_cmd.rs:335) render the twin with display_spec_id(local_id), which gives the alias-local form even when that twin already has an agreed_id. Ruling C says show the agreed id when the spec has one. Low impact today because STORY-HOME-104 has not backfilled agreed ids yet. Prefer the twin's agreed_id when present, or file a follow-up.
+    5. Minor / non-blocking: the local-twin signpost is only on 'aida show' (requirements_cli.rs:6287). 'aida edit', 'comment' and 'queue work' on a bare id that has a local twin stay silent. That is acceptable under ruling A (bare = agreed), but consider sharing local_twin_note with those mutating verbs, where opening the wrong spec costs more.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-30T11:12:08.679002031Z
+  modified_at: 2026-10-30T11:12:08.679002031Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18b1f-e560-7f93-9902-8b36e5583aef
