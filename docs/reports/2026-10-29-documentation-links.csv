@@ -169,7 +169,6 @@ aida-core/templates/.aida/discipline/git-sync-and-review.md,230,template-master,
 aida-core/templates/.aida/discipline/machinery-glossary.md,175,template-master,../archive/positioning/vs-claude-code-subagents.md,missing-path
 aida-core/templates/skills/aida-ecosystem-scan.md,22,template-master,../../docs/competitive-analysis/signals-to-watch.md,missing-path
 aida-core/templates/skills/aida-ecosystem-scan.md,67,template-master,../../docs/competitive-analysis/ecosystem-watch.md,missing-path
-docs/README.md,5,reference-requires-context,#deciding-whether-to-adopt,anchor-candidate
 docs/archive/DEVELOPER_GUIDE.html,239,historical-or-evidence,user-guide.md,missing-path
 docs/archive/DEVELOPER_GUIDE.html,240,historical-or-evidence,admin-guide.md,missing-path
 docs/archive/DEVELOPER_GUIDE.html,244,historical-or-evidence,#1-project-overview,anchor-candidate
@@ -218,7 +217,5 @@ docs/archive/positioning/vs-claude-code-subagents.md,113,historical-or-evidence,
 docs/archive/rendered/admin-guide.html,14,historical-or-evidence,DEVELOPER_GUIDE.html,missing-path
 docs/archive/rendered/admin-guide.html,31,historical-or-evidence,DEVELOPER_GUIDE.md,missing-path
 docs/mailbox.md,114,reference-requires-context,aida/discipline/substrate-as-bouncer.md,missing-path
-docs/positioning/README.md,7,reference-requires-context,../../README.md#what-makes-aida-distinct,anchor-candidate
-docs/positioning/README.md,52,reference-requires-context,../aida/discipline/agent-agnostic-vs-claude-specific.md,missing-path
 docs/user-guide-dark.html,90,documentation-tool-or-asset,DEVELOPER_GUIDE.md,missing-path
 docs/user-guide.html,89,documentation-tool-or-asset,DEVELOPER_GUIDE.md,missing-path

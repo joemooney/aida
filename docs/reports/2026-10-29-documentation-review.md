@@ -1,16 +1,16 @@
 # Documentation freshness and navigation review
 
-Date: 29 October 2026. Reviewed stack base: `b2c511eb9eec6d4932c9a2ba04ad3f2818517c90` (operator documentation slice). Post-fix working-tree hashes identify the content in this PR; the base identifies its Git history context. This is an author audit for independent review, not a merge approval or a declaration that the epic has landed.
+Date: 29 October 2026. Reviewed main base: `1db74dba1129632c01b5bae9ee5681dd76069db1` (restacked after the prerequisite overview/showcase merges). Post-fix working-tree hashes identify the content in this PR; the base identifies its Git history context. This is an author audit for independent review, not a merge approval or a declaration that the epic has landed.
 
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-113 | ai:codex -->
 
 ## Coverage and method
 
-The inventory covers 1,016 tracked documentation inputs: every `docs/` path and Markdown, reStructuredText and AsciiDoc elsewhere in the repository. It includes source templates, generated mirrors, assets and dated evidence. The four self-derived audit outputs are enumerated separately in the snapshot to avoid self-hash cycles. No runtime/untracked store data is included.
+The inventory covers 1,017 tracked documentation inputs: every `docs/` path and Markdown, reStructuredText and AsciiDoc elsewhere in the repository. It includes source templates, generated mirrors, assets and dated evidence. The four self-derived audit outputs are enumerated separately in the snapshot to avoid self-hash cycles. No runtime/untracked store data is included.
 
-Classification totals: 35 current reader references, 10 current static pages, 14 site sources/assets, 213 template masters, 117 derived agent mirrors, 358 historical/evidence inputs, eight decision records, 21 contextual evidence documents, 166 references requiring context, and 74 documentation tools/assets. Classification describes context and intended use; it does not certify the accuracy of every sentence.
+Classification totals: 37 current reader references, 10 current static pages, 15 site sources/assets, 213 template masters, 117 derived agent mirrors, 358 historical/evidence inputs, eight decision records, 21 contextual evidence documents, 164 references requiring context, and 74 documentation tools/assets. Classification describes context and intended use; it does not certify the accuracy of every sentence.
 
-The post-fix scan examined 2,591 local links. There are **zero candidates in current reader references or static pages**. The remaining 223 candidates are retained for contextual verification: 86 template-master references, 47 historical/evidence references, 88 references requiring context and two documentation-tool/asset references. Template-relative and historical links can be valid in their original context; these are candidates, not 223 confirmed defects. External URLs are not fetched. Code fences, inline code and template placeholders are excluded from ordinary navigation checking. Candidate line numbers are navigation aids; confirmed evidence below was inspected in source.
+The post-fix scan examined 2,584 local links. There are **zero candidates in current reader references or static pages**. The remaining 220 candidates are retained for contextual verification: 86 template-master references, 47 historical/evidence references, 85 references requiring context and two documentation-tool/asset references. Template-relative and historical links can be valid in their original context; these are candidates, not 220 confirmed defects. External URLs are not fetched. Code fences, inline code and template placeholders are excluded from ordinary navigation checking. Candidate line numbers are navigation aids; confirmed evidence below was inspected in source.
 
 Substantive source/help checks cover the changed newcomer/operator routes, init profile and MCP behavior, clone allocation, transport, cache labels, modes/overrides, reporting/effort attribution and the seven curated guides across this PR stack. The site scripts, accessible names, keyboard controls, responsive rules, source provenance and generated navigation were inspected. Unchanged legacy/backend prose, external vendor setup and every historical statement were not re-executed or certified.
 
@@ -28,7 +28,7 @@ Eleven issue groups: one critical, eight important, two minor. The Git diff is t
 | Important | [Setup reference](../cli/07-project-setup.md):185 | Sanitized-intake anchor used an obsolete heading order | Anchor matches the current source heading |
 | Important | [Generated glossary](../cli/12-glossary.md):28,424,426,563 | Pack-relative filenames absent in the manual directory | Two compatibility navigation pages link to existing generated sections; no definitions duplicated and no generated/template content hand-edited |
 | Important | [README](../../README.md):16; cache source | Unconditional cache reconstruction wording | Reconstruction scoped to available canonical history |
-| Important | [Overview](../what-is-aida.md) and HTML; reviewed commit `9bb1164fe1e` / merged PR #3093 | Stack started before that independent merge | Carried forward the reviewed selectable-autonomy content and styling, preserving the later human-inclusive introduction and Metrics corrections |
+| Important | [Overview](../what-is-aida.md) and HTML; merged PR #3093 | Stack started before that independent merge | Replayed only the eight slice commits onto current main, preserving main's opening sentence and selectable-autonomy content alongside conversational onboarding and Metrics corrections |
 | Minor | [Overview](../what-is-aida.md):76 and HTML equivalent; commit metadata | Historical counts could read as current | Explicit commit date and historical-snapshot label in both formats |
 | Minor | [Library master](../showcase/library-template.html):4, landing page and library | Complete assessment not directly discoverable from the final site journey | Visible link to the readable assessment, with its capabilities, integrations, offline operation and limitations |
 
@@ -42,15 +42,21 @@ Seven tracked Markdown guides are the curated publication set in `docs/showcase/
 
 ## Verification and reproduction
 
-- `python3 docs/showcase/build.py` regenerated the source-derived site. Unchanged-input rebuild stability and seven source hashes were checked.
-- `python3 docs/audit-documentation.py --base b2c511eb9eec6d4932c9a2ba04ad3f2818517c90` regenerates the inventory, candidates and snapshot. The helper is a reporting tool, not a new CI or runtime gate.
+- `python3 docs/showcase/build.py --overview` regenerated the source-derived site. Unchanged-input rebuild stability and seven source hashes were checked.
+- `python3 docs/audit-documentation.py --base origin/main` regenerates the inventory, candidates and snapshot. The helper is a reporting tool, not a new CI or runtime gate.
 - `make check-ci-fast` is the required repository gate. Its completed result and spawned author self-check findings are recorded in the PR/spec handoff. No direct cargo build/test was run.
-- Review the bounded before/after diff with `git diff b2c511eb9ee..HEAD -- README.md docs/`.
+- Review the bounded before/after diff with `git diff origin/main..HEAD -- README.md docs/`.
 
 Artifacts: [inventory](2026-10-29-documentation-inventory.csv), [link candidates](2026-10-29-documentation-links.csv), [snapshot](2026-10-29-documentation-snapshot.json).
 
 ## Remaining gaps and integration follow-up
 
-The 223 contextual candidates require their source/publication context before changing them. Historical evidence stays dated. The 166 context-dependent references have no blanket freshness certification. External links, live installations for every vendor, browser/assistive-technology behavior and production deployments were not exhaustively re-tested; source inspection is not a substitute for those checks.
+The 220 contextual candidates require their source/publication context before changing them. Historical evidence stays dated. The 164 context-dependent references have no blanket freshness certification. External links, live installations for every vendor, browser/assistive-technology behavior and production deployments were not exhaustively re-tested; source inspection is not a substitute for those checks.
 
-The content PRs are stacked and remain subject to independent review/integration. The independently merged overview changes from PR #3093 are carried forward in this audit, including a human-inclusive resolution of the introductory paragraph. Retargeting the stack still requires ordinary independent integration review. PR #3090 was still open at `eb306b090cd8b71bf1d9c0c0658c7befa10d7eab` during inspection; the trust page's post-land source check remains an integration follow-up. No approval or authority for that lane is supplied by this audit.
+The eight content PRs were rebuilt on current main after advisor feedback and remain subject to fresh independent review at their new heads. Pre-squash prerequisite commits were not replayed. Main's exact overview opening sentence was retained. PR #3090 is merged; the trust page's statements were checked against the landed verdict/mandate sources: independent review at the current head, the audited human exception, separate CI/hold checks and validated mandate scope remain accurate. This audit grants no review or merge authority.
+
+## Advisor correction pass
+
+The correction pass also restored clone-local `aida init` / `aida node acquire` before creating specs, the allocation retry and duplicate-ID refusal details, and queue freshness/unpublished-store commands. It removed duplicate onboarding copy, restored an uninstall section, corrected trust/autonomy links, updated Metrics pricing limitations and Appendix B notes, and replaced stale publication process notes with manifest ownership guidance. The documentation index and positioning links now reach existing anchors/files.
+
+The standalone overview is now generated by `build.py --overview` from its Markdown and `overview-template.html`; this optional step requires Pandoc for GFM tables and nested lists. The ordinary guide/library build continues to use Python's standard library plus Git. Rebuild stability is checked for both routes. No runtime or protected gate implementation was modified.
