@@ -159,11 +159,7 @@ pub(crate) fn handle_whoami_command(flags: &WhoamiFlags) -> Result<()> {
         return Ok(());
     }
     let agent = agent_output_mode();
-    if agent {
-        print!("{}", view.render_toon());
-    } else {
-        print!("{}", view.render_human());
-    }
+    print!("{}", view.render(agent));
     if let Some(rows) = identity {
         println!();
         if !agent {

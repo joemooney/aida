@@ -31,8 +31,13 @@ pub(crate) struct WhoamiView {
     pub handle: String,
     pub role: String,
     pub agent_type: String,
+    /// The harness's own session id (Claude, Codex, agy), shortened.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// The AIDA lease id (`AIDA_SESSION_ID`), a different namespace from the
+    /// harness session id; shown only when no harness id is known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lease_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub node: Option<NodeIdentity>,
     pub mail: MailLine,
@@ -92,7 +97,9 @@ impl From<crate::awaiting_you::MailChannel> for MailLine {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub(crate) enum Working {
-    /// This session holds a lease (or registry claim) on `spec`.
+    /// This session holds a lease (or registry claim) on `spec`. `lease` is
+    /// `None` for a registry claim; `age_secs` is the lease's age, or for a
+    /// claim the age of the session row that names it.
     Spec {
         spec: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,6 +146,31 @@ pub(crate) fn resolved_handle(facts: &MailIdentityFacts) -> String {
         .unwrap_or_else(|| facts.user().to_string())
 }
 
+/// What this process knows about its session besides its mail facts: the
+/// registry row the session lookup selected, the AIDA lease id, the seat
+/// purpose and the mandate state. [`collect`] reads them from the process;
+/// tests supply fixtures.
+pub(crate) struct SessionInputs {
+    pub entry: Option<crate::agent_registry::AgentRegistryEntry>,
+    pub lease_id: Option<String>,
+    pub purpose: Option<String>,
+    pub mandate: crate::gate::mandate::MandateState,
+    /// The queue identity (`current_user_id`).
+    pub user: String,
+}
+
+impl SessionInputs {
+    fn observed() -> Self {
+        Self {
+            entry: crate::agent_handle::current_session_entry_for_cwd(),
+            lease_id: env_nonempty("AIDA_SESSION_ID"),
+            purpose: env_nonempty("AIDA_SESSION_PURPOSE"),
+            mandate: crate::gate::mandate::current_state(),
+            user: crate::current_user_id(None),
+        }
+    }
+}
+
 /// Gather the view. `main_root` is the main checkout (registry, leases,
 /// store, cache); `worktree` is the checkout this process runs in.
 pub(crate) fn collect(
@@ -147,9 +179,26 @@ pub(crate) fn collect(
     facts: &MailIdentityFacts,
     now: DateTime<Utc>,
 ) -> WhoamiView {
+    collect_with(main_root, worktree, facts, SessionInputs::observed(), now)
+}
+
+/// [`collect`] over explicit session inputs.
+pub(crate) fn collect_with(
+    main_root: &Path,
+    worktree: &Path,
+    facts: &MailIdentityFacts,
+    inputs: SessionInputs,
+    now: DateTime<Utc>,
+) -> WhoamiView {
     let store = main_root.join(".aida-store");
     let aliases = aida_core::node_alias::NodeAliasMap::load(&store);
-    let entry = crate::agent_handle::current_session_entry_for_cwd();
+    let SessionInputs {
+        entry,
+        lease_id,
+        purpose,
+        mandate,
+        user,
+    } = inputs;
 
     let role = facts
         .role()
@@ -161,11 +210,13 @@ pub(crate) fn collect(
         .as_ref()
         .map(|e| e.agent_type.clone())
         .unwrap_or_else(crate::agent_registry::detect_agent_type);
-    let session_id = entry
+    let session_id: Option<String> = entry
         .as_ref()
         .and_then(|e| e.native_session_id.clone().or(e.claude_session_id.clone()))
-        .map(|s| s.chars().take(8).collect())
-        .or_else(|| env_nonempty("AIDA_SESSION_ID"));
+        .map(|s| s.chars().take(8).collect());
+    // The lease id is a different namespace; label it, and only when no
+    // harness id names the session.
+    let shown_lease_id = session_id.is_none().then(|| lease_id.clone()).flatten();
 
     let limits = aida_core::mailbox_logical::ReadLimits::with_deadline(
         std::time::Instant::now() + MAIL_READ_BUDGET,
@@ -173,41 +224,37 @@ pub(crate) fn collect(
     let mail = crate::collect_mail_channel(main_root, None, facts, &limits).into();
 
     let canonical = aida_core::node_alias::canonical_ids();
-    let working = match current_work(main_root, worktree, now) {
-        Some((spec, lease, age_secs)) => Working::Spec {
+    let working = match current_work(
+        main_root,
+        worktree,
+        lease_id.as_deref(),
+        entry.as_ref(),
+        now,
+    ) {
+        Some(Working::Spec {
+            spec,
+            lease,
+            age_secs,
+        }) => Working::Spec {
             spec: aliases.display(&spec, canonical),
             lease,
             age_secs,
         },
-        None => match entry.as_ref().and_then(|e| e.current_spec.clone()) {
-            Some(spec) => Working::Spec {
-                spec: aliases.display(&spec, canonical),
-                lease: None,
-                age_secs: None,
-            },
-            None => Working::Idle {
-                next: queue_head(main_root, &role, &aliases),
-            },
+        _ => Working::Idle {
+            next: queue_head(main_root, &user, &role, &aliases),
         },
     };
 
-    let state = crate::gate::mandate::current_state();
-    let mandate = match &state {
-        crate::gate::mandate::MandateState::Active(_) => crate::mandate::status_line(
-            &state,
-            now,
-            &crate::mandate_gates::describe(Some(main_root)),
-        ),
-        _ => None,
-    };
-    let purpose = env_nonempty("AIDA_SESSION_PURPOSE");
-    let goal = (mandate.is_some() || purpose.is_some()).then_some(GoalLine { mandate, purpose });
+    let goal = goal_line(&mandate, purpose, now, || {
+        crate::mandate_gates::describe(Some(main_root))
+    });
 
     WhoamiView {
         handle: resolved_handle(facts),
         role,
         agent_type,
         session_id,
+        lease_id: shown_lease_id,
         node: this_node(&store, &aliases),
         mail,
         working,
@@ -236,7 +283,10 @@ pub(crate) fn head_branch(worktree: &Path) -> Option<String> {
     let head = head.trim();
     match head.strip_prefix("ref: refs/heads/") {
         Some(branch) => Some(branch.to_string()),
-        None if !head.is_empty() => Some(format!("detached {}", &head[..head.len().min(8)])),
+        None if !head.is_empty() => Some(format!(
+            "detached {}",
+            head.chars().take(8).collect::<String>()
+        )),
         None => None,
     }
 }
@@ -263,64 +313,105 @@ pub(crate) fn this_node(
     })
 }
 
-/// The spec this session holds a lease on: the lease named by
-/// `AIDA_SESSION_ID`, else the lease whose worktree holds `worktree`.
+/// The spec this session is on, unaliased: the lease named by `lease_id`
+/// (`AIDA_SESSION_ID`), else the lease whose worktree holds `worktree`, each
+/// aged from its start; else the spec the session's registry row claims,
+/// aged from that row's start (rows record no separate claim time).
 fn current_work(
     main_root: &Path,
     worktree: &Path,
+    lease_id: Option<&str>,
+    entry: Option<&crate::agent_registry::AgentRegistryEntry>,
     now: DateTime<Utc>,
-) -> Option<(String, Option<String>, Option<i64>)> {
+) -> Option<Working> {
+    let age = |since: DateTime<Utc>| Some((now - since).num_seconds().max(0));
     let leases = crate::list_leases(main_root);
-    let by_id = env_nonempty("AIDA_SESSION_ID")
-        .and_then(|sid| leases.iter().find(|l| l.id == sid).cloned());
-    let lease = by_id.or_else(|| crate::active_lease_for_cwd(main_root, worktree))?;
-    let age = (now - lease.started_at).num_seconds().max(0);
-    Some((lease.scope, Some(lease.id), Some(age)))
+    let by_id = lease_id.and_then(|sid| leases.iter().find(|l| l.id == sid).cloned());
+    if let Some(lease) = by_id.or_else(|| crate::active_lease_for_cwd(main_root, worktree)) {
+        return Some(Working::Spec {
+            age_secs: age(lease.started_at),
+            spec: lease.scope,
+            lease: Some(lease.id),
+        });
+    }
+    let entry = entry?;
+    Some(Working::Spec {
+        spec: entry.current_spec.clone()?,
+        lease: None,
+        age_secs: age(entry.started_at),
+    })
 }
 
-/// The head of `role`'s queue for this user: `<ID> <title>`, resolved from
-/// the queue YAML and a read-only cache lookup. `None` on any miss.
-fn queue_head(
+/// The goal line: the active mandate's status line (with the human gates
+/// `gates` describes) and the seat purpose; `None` when neither is set.
+pub(crate) fn goal_line(
+    mandate: &crate::gate::mandate::MandateState,
+    purpose: Option<String>,
+    now: DateTime<Utc>,
+    gates: impl FnOnce() -> String,
+) -> Option<GoalLine> {
+    let mandate = match mandate {
+        crate::gate::mandate::MandateState::Active(_) => {
+            crate::mandate::status_line(mandate, now, &gates())
+        }
+        _ => None,
+    };
+    (mandate.is_some() || purpose.is_some()).then_some(GoalLine { mandate, purpose })
+}
+
+/// The next item for `role` as `<ID> <title>`, from the same source and in
+/// the same order as `aida queue next`: `user`'s own queue, then the entries
+/// routed to `role` from every other queue file (the `role:<role>` pool
+/// included). Items whose spec is closed (completed, rejected, superseded)
+/// are skipped. An unrouted item counts as the implementer's. Ids and titles
+/// come from a read-only cache lookup; an item the cache does not know is
+/// skipped. `None` when nothing is left.
+pub(crate) fn queue_head(
     main_root: &Path,
+    user: &str,
     role: &str,
     aliases: &aida_core::node_alias::NodeAliasMap,
 ) -> Option<String> {
-    #[derive(serde::Deserialize)]
-    struct Row {
-        requirement_id: String,
-        #[serde(default)]
-        position: i64,
-        #[serde(default)]
-        for_role: Option<String>,
-    }
-    let store = main_root.join(".aida-store");
-    let user = aida_core::db::resolve_queue_user(&store, &crate::current_user_id(None));
-    let text =
-        std::fs::read_to_string(store.join("registry/queues").join(format!("{user}.yaml"))).ok()?;
-    let rows: Vec<Row> = serde_yaml::from_str(&text).ok()?;
-    let head = rows
-        .into_iter()
-        .filter(|r| r.for_role.as_deref().unwrap_or("implementer") == role)
-        .min_by_key(|r| r.position)?;
-    let cache = main_root.join(".aida/cache.db");
-    let conn =
-        rusqlite::Connection::open_with_flags(&cache, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .ok()?;
-    let (id, title): (String, String) = conn
-        .query_row(
-            "SELECT COALESCE(agreed_id, spec_id, ''), title \
-             FROM requirements_cache WHERE id = ?1",
-            [head.requirement_id.as_str()],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok()?;
-    (!id.is_empty()).then(|| {
-        format!(
-            "{} {}",
-            aliases.display(&id, aida_core::node_alias::canonical_ids()),
-            title
-        )
-    })
+    let storage = aida_core::Storage::new(main_root.join(".aida-store"));
+    let entries = crate::queue_role_fallback::queue_list_with_role_fallback(
+        &storage,
+        user,
+        Some(role),
+        /* include_completed */ false,
+    )
+    .ok()?;
+    let conn = rusqlite::Connection::open_with_flags(
+        main_root.join(".aida/cache.db"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .ok()?;
+    entries
+        .iter()
+        .filter(|e| {
+            e.for_role
+                .as_deref()
+                .map(crate::canonical_role_name)
+                .as_deref()
+                .unwrap_or("implementer")
+                == role
+        })
+        .find_map(|e| {
+            let (id, title, status): (String, String, String) = conn
+                .query_row(
+                    "SELECT COALESCE(agreed_id, spec_id, ''), title, status \
+                     FROM requirements_cache WHERE id = ?1",
+                    [e.requirement_id.to_string()],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .ok()?;
+            (!id.is_empty() && !crate::is_terminal_status_str(&status)).then(|| {
+                format!(
+                    "{} {}",
+                    aliases.display(&id, aida_core::node_alias::canonical_ids()),
+                    title
+                )
+            })
+        })
 }
 
 /// `2m`, `3h05m`, `2d4h` — a compact age.
@@ -343,6 +434,8 @@ impl WhoamiView {
         ];
         if let Some(s) = &self.session_id {
             parts.push(format!("session {s}"));
+        } else if let Some(l) = &self.lease_id {
+            parts.push(format!("lease {l}"));
         }
         parts.join(" · ")
     }
@@ -375,10 +468,13 @@ impl WhoamiView {
                 spec,
                 lease,
                 age_secs,
-            } => match (lease, age_secs) {
-                (Some(_), Some(age)) => format!("{spec} (lease {})", format_age(*age)),
-                _ => format!("{spec} (claim)"),
-            },
+            } => {
+                let kind = if lease.is_some() { "lease" } else { "claim" };
+                match age_secs {
+                    Some(age) => format!("{spec} ({kind} {})", format_age(*age)),
+                    None => format!("{spec} ({kind})"),
+                }
+            }
             Working::Idle { next: Some(next) } => format!("idle · next: {next}"),
             Working::Idle { next: None } => "idle".to_string(),
         }
@@ -399,6 +495,16 @@ impl WhoamiView {
         match &self.worktree.branch {
             Some(b) => format!("{} ({b})", self.worktree.path),
             None => self.worktree.path.clone(),
+        }
+    }
+
+    /// The view in the output mode `agent` selects: flat toon lines for an
+    /// agent (piped) reader, else the human block.
+    pub(crate) fn render(&self, agent: bool) -> String {
+        if agent {
+            self.render_toon()
+        } else {
+            self.render_human()
         }
     }
 
@@ -430,6 +536,9 @@ impl WhoamiView {
             format!("agent_type: {}", self.agent_type),
             format!("session: {}", self.session_id.as_deref().unwrap_or("-")),
         ];
+        if let Some(l) = &self.lease_id {
+            lines.push(format!("lease: {l}"));
+        }
         if let Some(node) = self.node_text() {
             lines.push(format!("node: {node}"));
         }
