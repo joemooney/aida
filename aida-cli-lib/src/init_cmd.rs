@@ -5458,7 +5458,7 @@ fn finish_clone_node_setup(
     // trace:BUG-2017 | ai:codex
     if let Some(binding) = work_binding {
         println!(
-            "WORK node {} ready (node-local allocation).",
+            "Work node {} ready (node-local allocation).",
             binding.node_id
         );
         return Ok(());
