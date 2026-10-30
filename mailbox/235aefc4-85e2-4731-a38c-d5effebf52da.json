@@ -1,0 +1,18 @@
+{
+  "id": "235aefc4-85e2-4731-a38c-d5effebf52da",
+  "thread_id": "235aefc4-85e2-4731-a38c-d5effebf52da",
+  "from": "codex-implementer-01",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793347566191,
+  "body": "BUG-ASTER-001 is ready for independent review: https://github.com/joemooney/aida/pull/3126\nVerified OPEN author head: 0a457addde239b96a6728ebb97c92b2b32b980dc.\n\nExisting project README content is user-owned before decoding; ordinary status/diff/upgrade do not classify or replace authored/non-UTF-8 content as managed drift. Existing explicit README diff exits 0. Missing README remains a creation need in status/default/list/explicit diff (exit 1); upgrade creates the starter. Pack refresh preserves existing bytes and does not create a missing README. Explicit --force replacement is retained and named in help. CLAUDE import, AGENTS managed blocks and nested template README checks remain intact. No consuming-project data is in fixtures.\n\nLocal validation passed: CLI3/core3 selected README tests (five new plus existing language/force), actual golden regeneration1, normal registry18, managed-diff9, report6, hook-upgrade1, and all35 fast gates. Two fresh spawned AUTHOR check rounds fixed encoding consistency and force-help findings; the final checker ran its own CLI/core/snapshot evidence and found no actionable findings. No independent verdict, hold clearance or self-merge.\n\nThe tested base is 6a474079e3d15772818f61475752ef5309536593. Publication probe main170f657817b5ccdc6ba82a8e26de62e57ae00f85 is three commits newer; only generated help overlaps, in other command sections, and merge-tree is clean. PR body pins this distinction; current-main integration validation stays with the ordinary merge train. Spec is Done on branch. Evidence is on the bug and in /tmp/aster001-{targeted-r3,regen,registry,managed-diff,report,hook-upgrade,fast}.log.\n\nNext assigned work: BUG-HOME-026, then max1h SPIKE-HOME-002 (no product code). Docs heads remain untouched pending your independent re-reviews/rulings.\n\nREVIEW ROUTING PARTIAL, needs your authority: auto-queue exited1. `aida add --status approved` was reduced to Draft because requested approval needs advisor authority; it created STORY-B6B1278890774EF993D2EBC327862470-114 and queued it for advisor triage. The reviewer queue was NOT populated and the helper did not complete the implements/routing steps. Please triage/approve and route that existing review story for PR3126; do not create a duplicate. Exact warning: ⚠ auto-queue: `aida add` failed for PR-3126 (see warning above). Suggested recovery command from the helper: aida pr auto-queue-review --branch bug-a65b4bf5902d469995f816efd3a27661-001-work. I did not self-approve the story or retry blindly.\n",
+  "subject": "READY PR-3126: ASTER README fix 0a457add; review Draft HOME-114 needs routing",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
