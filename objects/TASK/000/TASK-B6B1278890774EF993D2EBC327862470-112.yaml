@@ -21,12 +21,16 @@ description: |
 
   ## Approval boundary
   Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+
+
+  ADVISOR RULING 2026-10-30 00:15 (PR-3102 round 3, FINAL round: one push, then a scoped check of these items only)
+  FIX all six: (1) docs/cli/10-storage.md:19 and :54: merge-gate runs inside `aida pull` only on an enrolled HOME clone (store_push_pull.rs ~2442). (2) OVERVIEW.md:411: drop "auto-rebuilt when HEAD differs" to match the "Bounded cache reads" section. (3) docs/storage-modes.md:67-68 and :179-180: use current id forms and say agreed short ids need HOME, matching :29-30. (4) docs/admin-guide.md:7: remove or fix the link to the nonexistent DEVELOPER_GUIDE.md. (5) docs/cli/07-project-setup.md:185: the anchor is #aida-add---sanitized-sanitized-intake. (6) docs/cli/01-getting-started.md:29: restore the two init --force refusals (nested repos; re-initialize).
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:10:12.048120602Z
-modified_at: 2026-10-30T06:48:12.296180805Z
+modified_at: 2026-10-30T07:08:54.264410320Z
 req_type: Task
 tags:
 - advisor-review
@@ -178,6 +182,11 @@ history:
   timestamp: 2026-10-30T06:48:13.233642197Z
   session_id: 01a18b8d6bb9
   harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18ba3-e088-7a13-86f2-b77ccbd73b34
+  author: joe
+  timestamp: 2026-10-30T07:08:55.304097258Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451

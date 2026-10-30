@@ -91047,5 +91047,36 @@ operations:
       ADVISOR RULING 2026-10-30 00:15 (PR-3096 round 3, FINAL round: one push, then a scoped check of these items only)
       FIX: (1) first-project.md:78 points to an init-inventory that is gone; repoint or remove it. (2) first-project.md:9 and :522 mention removed install options and a quick reference; update both. (4) build.py docstring: claim only **bold** support. (5) operator block: show `aida init --help` before `aida init`. (6) aria-hide the ✳ in the page template's brand link, as index.html does. (7) README: link the .md source (or the published page URL), not a raw .html file.
       ACCEPTED, no action (3): docs-only acceptance needs no test; showcase pages are gated by build.py --check.
-clock: 7063
+- id: 01a18ba3-e12e-7532-bc58-b74648284810
+  target_id: 01a188da-efd0-7c12-91f9-ae2f6592676f
+  author: aida
+  node_id: '1'
+  lamport: 7064
+  timestamp: 2026-10-30T07:08:55.470282943Z
+  kind: !SetDescription
+    description: |
+      Slice 7 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Give operators a coherent supported setup/maintenance route without conflating it with the normal conversational user experience.
+
+      ## Acceptance
+      - [ ] Verify and correct current Linux installation/release, init/MCP opt-in, adopted/sibling-store, clone identity/allocation and data-layer guidance against source/help.
+      - [ ] Update the applicable administrator, storage, multi-node/multi-hub and setup-reference sections together so a reader follows one consistent route. Preserve still-valid detail rather than replacing it with unsupported generalizations.
+      - [ ] Separate canonical store history, derived cache and local/machine operational state; do not imply a cache rebuild restores unpublished history or grants. Legacy alternatives and migration constraints remain explicitly scoped.
+      - [ ] HOME/WORK and transport behavior reflect shipped code. Future hierarchical allocation/per-remote sharing proposals are not documented as shipped functionality.
+      - [ ] Broken source/template links are fixed at their authoritative source. If a touched doc is a template-generated mirror, edit the master and run the documented synchronization.
+
+      ## Layers / boundaries
+      Verified setup/storage references -> consistent operator guides and reader navigation -> supported installation/maintenance journey. No allocator, transport, grant, store or gate behavior changes.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+
+
+      ADVISOR RULING 2026-10-30 00:15 (PR-3102 round 3, FINAL round: one push, then a scoped check of these items only)
+      FIX all six: (1) docs/cli/10-storage.md:19 and :54: merge-gate runs inside `aida pull` only on an enrolled HOME clone (store_push_pull.rs ~2442). (2) OVERVIEW.md:411: drop "auto-rebuilt when HEAD differs" to match the "Bounded cache reads" section. (3) docs/storage-modes.md:67-68 and :179-180: use current id forms and say agreed short ids need HOME, matching :29-30. (4) docs/admin-guide.md:7: remove or fix the link to the nonexistent DEVELOPER_GUIDE.md. (5) docs/cli/07-project-setup.md:185: the anchor is #aida-add---sanitized-sanitized-intake. (6) docs/cli/01-getting-started.md:29: restore the two init --force refusals (nested repos; re-initialize).
+clock: 7064
 node_id: '1'
