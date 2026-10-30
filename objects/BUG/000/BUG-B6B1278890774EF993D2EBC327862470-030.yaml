@@ -18,12 +18,12 @@ description: |
   4. mark_agent_ended (agent_registry.rs ~1321) uses LAUNCHER_LOCK_BUDGET (write_entry_within), so the row is marked ended under the same contention.
   ACCEPTED, no action (finding 5): launcher_registration_waits_out_lock_held_past_sessionstart_budget is the deterministic reproduction of the 'handle allocation lock busy' message. No captured stderr artifact is needed.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_030` plus `make check-ci-fast`, then push.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T04:41:44.179006286Z
+modified_at: 2026-10-30T04:44:18.971428956Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -163,6 +163,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18b1f-7c9b-7f10-8a59-32e38a3b68d4
+  author: aida-session-start
+  timestamp: 2026-10-30T04:44:18.971428078Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
