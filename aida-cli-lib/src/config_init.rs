@@ -617,6 +617,11 @@ pub(crate) fn init_store_mirror_config_section() -> &'static str {
 # and must be reconciled deliberately; ordinary store writes remain best-effort.
 # Check drift anytime with `aida remote status`.
 #
+# A clone that must push the store to some hubs only declares them in its
+# untracked machine-local layer (`aida remote push-hubs gitlab`); one clone
+# that reaches every hub runs the union reconcile hourly (`aida remote bridge
+# --enable`). `hub-drift-guard` still escalates drift the bridge cannot union.
+#
 # [store.sync]
 # mirror_remotes = ["gitlab"]
 "#

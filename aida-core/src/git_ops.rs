@@ -1388,11 +1388,65 @@ fn commit_with_lock_recovery(repo: &Path, argv: &[&str]) -> Result<GitResult> {
     )
 }
 
+/// Decides whether this clone may push the spec store from `repo` to
+/// `remote`: `Some(reason)` refuses. Registered once by the CLI (the policy
+/// lives in a machine-local layer this crate does not read); unset means
+/// every remote is allowed.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+pub type StorePushGate = fn(&Path, &str) -> Option<String>;
+
+static STORE_PUSH_GATE: std::sync::OnceLock<StorePushGate> = std::sync::OnceLock::new();
+
+/// Register the process-wide [`StorePushGate`]. The first registration wins.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+pub fn set_store_push_gate(gate: StorePushGate) {
+    let _ = STORE_PUSH_GATE.set(gate);
+}
+
+/// Does a push of `target` (a branch name or a `<src>:<dst>` refspec) update
+/// the spec store branch?
+fn targets_store_branch(target: &str) -> bool {
+    let dst = target.rsplit(':').next().unwrap_or(target);
+    let dst = dst.trim_start_matches('+');
+    dst == "aida-store" || dst == "refs/heads/aida-store"
+}
+
+/// Refuse a store push the registered gate forbids — before any git runs, so
+/// a clone that must never push to a hub never even attempts it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn refuse_gated_store_push(repo: &Path, remote: &str, target: &str) -> Result<()> {
+    if !targets_store_branch(target) {
+        return Ok(());
+    }
+    if let Some(reason) = STORE_PUSH_GATE.get().and_then(|gate| gate(repo, remote)) {
+        anyhow::bail!("{reason}");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod store_push_gate_tests {
+    use super::targets_store_branch;
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    #[test]
+    fn only_store_branch_targets_are_gated() {
+        assert!(targets_store_branch("aida-store"));
+        assert!(targets_store_branch("refs/heads/aida-store"));
+        assert!(targets_store_branch("abc123:refs/heads/aida-store"));
+        assert!(targets_store_branch("+HEAD:aida-store"));
+        assert!(!targets_store_branch("main"));
+        assert!(!targets_store_branch("abc123:refs/heads/main"));
+        assert!(!targets_store_branch("refs/heads/aida-store-backup"));
+    }
+}
+
 /// Push to the remote. Returns true on success, false if rejected (non-fast-forward).
 pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
+    refuse_gated_store_push(repo, remote, branch)?;
     refuse_embedded_repos_for_push(repo, "HEAD")?; // trace:BUG-1929 | ai:claude
     let result = remote_git(repo, remote, &["push", "--end-of-options", remote, branch])?;
     if result.success {
@@ -1515,6 +1569,7 @@ pub fn push_exact_outcome(
         branch.trim() != "HEAD",
         "refusing to push to a branch named `HEAD`: the local checkout is detached"
     );
+    refuse_gated_store_push(repo, remote, branch)?;
     refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
     // The failure is classified from stderr prose, so pin git's (and ssh's /

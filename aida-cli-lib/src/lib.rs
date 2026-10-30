@@ -233,6 +233,8 @@ mod status_cmd;
 mod status_prs;
 mod status_sections;
 mod statusline_root;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+mod store_local;
 mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;

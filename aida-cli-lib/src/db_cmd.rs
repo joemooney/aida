@@ -622,7 +622,37 @@ fn run_db(
                         }
                     }
 
-                    if *push {
+                    // A clone whose push hubs exclude origin pushes the store
+                    // to those hubs instead and never attempts origin.
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+                    let redirect = if *push {
+                        let policy = crate::store_local::push_hubs(store_path);
+                        crate::store_local::redirected_store_hubs(&policy, |r| {
+                            aida_core::git_ops::has_remote(store_path, r)
+                        })
+                    } else {
+                        None
+                    };
+                    if let Some(hubs) = redirect {
+                        let Some(sha) = push_sha.as_deref() else {
+                            anyhow::bail!("store has no commit to push");
+                        };
+                        if hubs.is_empty() {
+                            anyhow::bail!(
+                                "this clone's push hubs (`aida remote push-hubs`) name no remote \
+                                 configured here and exclude origin; the store was not pushed"
+                            );
+                        }
+                        println!("Pushing to {} (this clone's push hubs)...", hubs.join(", "));
+                        let (pushed, failures) =
+                            crate::store_local::push_store_to_hubs(store_path, &branch, sha, &hubs);
+                        for hub in &pushed {
+                            println!("  pushed → {hub}");
+                        }
+                        if !failures.is_empty() {
+                            anyhow::bail!("store push failed: {}", failures.join("; "));
+                        }
+                    } else if *push {
                         println!("Pushing to origin/{}...", branch);
                         // trace:TASK-1717 | ai:claude — push the commit captured under
                         // the lock, by SHA. A rejection retakes the lock, rebases the

@@ -75,6 +75,13 @@ fn run_remote(
         crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
             remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
         }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+        crate::cli::RemoteCommand::Bridge { enable, disable } => {
+            store_local::handle_remote_bridge(&project_root, *enable, *disable)
+        }
+        crate::cli::RemoteCommand::PushHubs { hubs, all } => {
+            store_local::handle_remote_push_hubs(&project_root, hubs, *all)
+        }
     };
 }
 

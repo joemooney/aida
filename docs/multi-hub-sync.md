@@ -211,6 +211,37 @@ What `--execute` does, in order:
    only require explicit `--yes` consent before they reach every hub.
 5. **Push** the union to every hub — each is a fast-forward by construction.
 
+### 5. Clones that reach some hubs only — `push-hubs` and the hub bridge
+
+Some clones must not push to every hub: a work clone may push the store to gitlab and
+never to GitHub, while the home clone reaches both. The tracked `.aida/config.toml` is
+shared by every clone, so this is set in an untracked, machine-local layer,
+`~/.aida/store-local.toml`, keyed by the clone's primary checkout (seat worktrees of the
+clone resolve to the same entry):
+
+```
+aida remote push-hubs gitlab     # on the work clone: the store goes to gitlab only
+aida remote push-hubs --all      # remove the restriction
+aida remote bridge --enable      # on the clone that reaches every hub
+aida remote bridge               # show this clone's setting
+```
+
+- **Push hubs.** When `origin` is not listed, `aida db sync --push`, the `aida push`
+  store leg and per-write auto-push send the store to the listed hubs instead, and never
+  attempt `origin`. `remote mirror-sync` skips the store branch there, `remote reconcile`
+  reads every hub but pushes only to the listed ones, and every other store writer that
+  pushes is refused before git runs. An unreadable layer refuses every store push.
+- **Hub bridge.** The bridge clone's schedule registry gains `store-bridge-reconcile`
+  (runs `aida remote reconcile --execute` hourly; set `bridge_every` in the layer to change
+  it) and `store-bridge-reconcile-route`. The job never passes `--yes`: identity-bearing
+  content, or a conflict the union cannot resolve, fails the run and the route delivers it
+  to the advisor seat. A tracked or machine-global `[schedule]` job cannot run the
+  reconcile. It loads with a problem and never runs.
+- **Escalation.** `hub-drift-guard` is unchanged. It still routes drift the bridge could
+  not union.
+- Enabling the bridge (or `aida schedule install-cron` / `install-systemd` on the bridge
+  clone) removes a hand-installed `# aida-store-reconcile` crontab entry.
+
 ## When drift has already happened
 
 Don't force-push a shared branch to "fix" it — that destroys the other hub's commits.
