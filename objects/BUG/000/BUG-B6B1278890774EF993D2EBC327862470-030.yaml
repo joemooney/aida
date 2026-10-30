@@ -14,8 +14,34 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T03:28:08.834997827Z
+modified_at: 2026-10-30T03:31:30.989363751Z
 req_type: Bug
+comments:
+- id: 01a18adc-d62d-74d1-adc0-91b2406e15cf
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    **Root cause (from the 20:11 claude-advisor-07 launch):** after `claude` is spawned, `run_agent_foreground` calls `register_spawned_agent` -> `write_entry` -> `agent_handle::lock_namespace`, which gives up after a 250 ms SessionStart budget with `handle allocation lock busy; retry after agent gc`. The `?` returns from the launcher while the child still runs: the shell takes the terminal back, the error flashes, and claude (now a background job on the tty) dies. Evidence: the launch-context snapshot for that launch was never removed, and no registry row exists for pid 3627585, so the launcher never reached its wait/cleanup.
+
+    ### Acceptance criteria as tests
+    - **Reproduce (AC1):** from the evidence above (orphaned context file, missing registry row, SessionStart hook timed out at 5 s on a loaded host). A live interactive relaunch cannot run under a headless sandbox.
+    - **Unit (AC2/AC3):** a test holds the namespace lock, runs the post-spawn registration and checks that it returns a deferred warning, not an error, so the launcher still waits on the child.
+    - **Unit (AC3):** a test checks that the launcher's registration lock budget waits out a holder that releases after the 250 ms SessionStart budget.
+    - **Unit (AC4):** post-spawn warnings are collected and printed after the child exits, so the agent TUI cannot paint over them. Pre-spawn errors already exit before any exec.
+
+    ### Expected files
+    - `aida-cli-lib/src/agent_handle.rs` (lock with an explicit budget)
+    - `aida-cli-lib/src/agent_registry.rs` (launcher registration uses the longer budget)
+    - `aida-cli-lib/src/agent_launch.rs` (post-spawn steps non-fatal, warnings deferred)
+    - a new test module under `aida-cli-lib/src/tests/`
+
+    ### Ambiguities / conflicts as questions
+    - None. Headless launch paths that call `register_spawned_agent` get the same longer budget; I am not restructuring them.
+  created_at: 2026-10-30T03:31:30.989363751Z
+  modified_at: 2026-10-30T03:31:30.989363751Z
+  session_id: 01a18ad901c2
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18ad9-05f9-7f40-95b8-771fc2e06f7b
   author: aida-session-start
