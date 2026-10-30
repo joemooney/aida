@@ -9,17 +9,29 @@ description: |-
   2. Bounded total time (for example 60s), then defer the rest to `aida doctor --category merged-agent-worktrees`, saying so.
   3. The ship's merge result prints before cleanup starts, and cleanup can run detached or be skipped with a flag.
   4. Test with many worktrees showing that unmerged trees are not status-scanned.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T05:46:03.463273765Z
+modified_at: 2026-10-30T06:23:56.125725138Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T03:42:29.107943924Z
+comments:
+- id: 01a18b7a-b0dd-73e2-8cb6-1a3720a12aac
+  author: joe
+  content: |-
+    Implementer findings (draft TASKs could not be filed: ID allocation is read-only in this seat). PR #3123.
+
+    1. kind:bug-spotted: in a contained seat clone, `aida ship --no-merge` refuses at step 1 (host-git guard) even with a clean tree, and `aida pr auto-queue-review` / `aida add` fail with "Read-only file system". The branch was pushed with plain git and the PR opened with `gh`. Review was NOT auto-queued for PR-3123.
+    2. kind:design-choice: `--no-cleanup` now also skips step 6 (session reap + merged-worktree GC) instead of adding a new flag. The merged-only + 60s limits apply only to the quiet post-ship GC; the full `aida doctor` scan is unchanged.
+  created_at: 2026-10-30T06:23:56.125725138Z
+  modified_at: 2026-10-30T06:23:56.125725138Z
+  session_id: 01a18b56f95c
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18ae6-ec7a-7aa0-90e3-7bedb734e6d4
   author: joe
@@ -40,6 +52,15 @@ history:
   session_id: 01a18b56f95c
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a18b7a-2bed-79d2-ab35-1ea964fff21f
+  author: joe
+  timestamp: 2026-10-30T06:23:22.093469010Z
+  session_id: 01a18b56f95c
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -48,3 +69,7 @@ filed_at:
   aida_build_sha: 9a86ae54ce5
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-30T06:23:21.973894774Z
+  implemented_by: joe
