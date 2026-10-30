@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-29T23:51:50.048145719Z
+modified_at: 2026-10-30T00:09:24.373692189Z
 req_type: Task
 tags:
 - advisor-review
@@ -95,6 +95,22 @@ comments:
     TASK-B6B1278890774EF993D2EBC327862470-106
   created_at: 2026-10-29T18:33:17.654427386Z
   modified_at: 2026-10-29T18:33:17.654427386Z
+- id: 01a18a23-cc95-7df3-8758-9b3c1dea6d3f
+  author: joe
+  content: |
+    Advisor correction pass prepared for PR #3096. Replacement head: 0282a9609ed971b9e9d8f87a308b83c021bd5d96 on codex/docs-restack-106.
+
+    People can begin AIDA through the conversational coding workflow they already use. The newcomer guide separates operator setup, explains durable intent and capture limits, and renders from one Markdown source into the static showcase. README/overview entry copy, first-project links, mobile entry and uninstall guidance agree with that journey.
+
+    Rebuilt on current main (`1db74dba112`) after advisor feedback; only this slice's changes follow main. Pre-squash prerequisite commits were not replayed.
+
+    Validation: `make check-ci-fast` completed all 35 gates for this rebuilt head. Each slice's generated guide output reproduced. The final stack's guide/search/overview builds and audit reproduced in isolated author-check copies; desktop/mobile overview screenshots were inspected. No direct cargo, protected runtime changes, deployment or self-merge.
+
+    Author self-check: two fresh contexts; the first found stale human-exception wording in a linked guide, corrected in the final audit slice; the second found no remaining issues. These are author checks, not independent approval. Fresh independent review at each new head is required; the advisor integrates bottom-up.
+
+    The combined corrected stack is pushed at https://github.com/joemooney/aida/tree/docs/aida-product-preview-2026-10-29-revised . Existing PR heads are unchanged while explicit operator confirmation for the atomic force-with-lease update is pending (required by the operator Git workflow preference). Original preview preserved. No self-merge.
+  created_at: 2026-10-30T00:09:24.373692189Z
+  modified_at: 2026-10-30T00:09:24.373692189Z
 history:
 - id: 01a188d8-e7f2-7920-ae16-f28e478dd331
   author: joe
