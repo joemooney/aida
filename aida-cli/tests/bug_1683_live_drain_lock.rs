@@ -280,6 +280,13 @@ fn two_hour_live_lock_blocks_all_launch_entry_points() {
                     && text.contains("BUG-1683 independent fixture holder"),
                 "{cwd:?} {args:?}: missed holder gate: {text}"
             );
+            // The holder refusal must come before any host-resource probe, so
+            // it never depends on the runner's free disk.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-043 | ai:claude
+            assert!(
+                !text.contains("machine readiness"),
+                "{cwd:?} {args:?}: resource probe ran before the holder gate: {text}"
+            );
             if args[0] != "drain" {
                 assert!(
                     text.contains("cross-clone coordination unavailable"),
@@ -301,6 +308,29 @@ fn two_hour_live_lock_blocks_all_launch_entry_points() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("a drain is already running — skipping"));
     assert_eq!(std::fs::read(lock).unwrap(), bytes);
     assert!(!f.sentinel.exists());
+}
+
+/// The process test above passes on a host with ample disk whatever the
+/// order, so pin it in the source: `burndown run` takes the drain lock (the
+/// holder gate) before the machine-readiness probe.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-043 | ai:claude
+#[test]
+fn burndown_run_gates_on_the_drain_lock_before_machine_readiness() {
+    let source = include_str!("../../aida-cli-lib/src/burndown_run.rs");
+    let run = source
+        .split_once("pub(crate) fn handle_burndown_run(")
+        .expect("handle_burndown_run")
+        .1;
+    let lock = run
+        .find("drain_lock::acquire_drain_lock_with_specs(")
+        .expect("burndown run takes the drain lock");
+    let probe = run
+        .find("machine_readiness::probe(")
+        .expect("burndown run probes machine readiness");
+    assert!(
+        lock < probe,
+        "burndown run must refuse a held drain lock before probing host resources"
+    );
 }
 
 /// Binding alias evidence: inspect actual dispatch bodies, paired with the

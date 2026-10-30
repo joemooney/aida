@@ -14909,8 +14909,9 @@ Usage: aida pr [OPTIONS] <COMMAND>
 
 Commands:
   auto-queue-review  File the reviewer story for the change (PR/MR) open on the current branch and
-                     queue it to the `reviewer` role. Idempotent: skips when a `Review PR-<n>:` /
-                     `Review MR-<n>:` story already exists for it. Detects the change through the
+                     queue it to the `reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review
+                     MR-<n>:` story already exists for it, reuses that story, queues it again, and
+                     adds any links an interrupted run left out. Detects the change through the
                      configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via
                      `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH
                      and authenticated
@@ -14956,10 +14957,10 @@ Options:
           Print help (see a summary with '-h')
 ===== aida pr auto-queue-review
 File the reviewer story for the change (PR/MR) open on the current branch and queue it to the
-`reviewer` role. Idempotent: skips when a `Review PR-<n>:` / `Review MR-<n>:` story already exists
-for it. Detects the change through the configured Forge — GitHub via `gh` (looks up the branch's
-open PR), GitLab via `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH
-and authenticated.
+`reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review MR-<n>:` story already exists for it,
+reuses that story, queues it again, and adds any links an interrupted run left out. Detects the
+change through the configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via
+`glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH and authenticated.
 
 Intended trigger: right after the change opens, while the agent has the branch, commit range and
 spec list at hand. The auto-queue logic does its own forge detection, so the call is self-contained.
@@ -43467,7 +43468,7 @@ Working on aida itself
       "pr",
       "auto-queue-review"
     ],
-    "about": "File the reviewer story for the change (PR/MR) open on the current branch and queue it to the `reviewer` role. Idempotent: skips when a `Review PR-<n>:` / `Review MR-<n>:` story already exists for it. Detects the change through the configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH and authenticated",
+    "about": "File the reviewer story for the change (PR/MR) open on the current branch and queue it to the `reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review MR-<n>:` story already exists for it, reuses that story, queues it again, and adds any links an interrupted run left out. Detects the change through the configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH and authenticated",
     "flags": [
       {
         "name": "branch",

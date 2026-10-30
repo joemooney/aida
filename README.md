@@ -77,8 +77,10 @@ linked in AIDA. You develop and review the system; the agent handles the trackin
 commands as part of the work.
 
 The [getting-started guide](docs/getting-started.md) explains this journey and
-labels the one-time operator setup separately. The product showcase renders [that same guide source](docs/getting-started.md)
-in a reader-friendly layout. Autonomous delivery is optional.
+labels the one-time operator setup separately. Open the live [product website](https://joemooney.github.io/aida/) or the
+[local guide library](docs/showcase/library.html) for the rendered guides, including
+[capabilities](docs/product-capabilities.md) and [integrations](docs/product-integrations.md).
+GitHub renders the Markdown guides; it displays the HTML as source. Autonomous delivery is optional.
 
 ### Cloning an existing AIDA project
 
@@ -114,7 +116,7 @@ Useful starting points:
 
 - [OVERVIEW.md](OVERVIEW.md): vision, architecture, and feature surface in depth
 - [docs/what-is-aida.md](docs/what-is-aida.md): What is AIDA? (overview for managers and newcomers; a self-contained `what-is-aida.html` beside it is for offline reading)
-- [docs/getting-started.md](docs/getting-started.md): setup and first steps
+- [docs/getting-started.md](docs/getting-started.md): conversational development and one-time operator setup
 - [docs/cli/](docs/cli/README.md): CLI reference
 - [docs/lifecycle.md](docs/lifecycle.md): the spec lifecycle
 - [docs/autonomous-drain.md](docs/autonomous-drain.md): unattended queue drains

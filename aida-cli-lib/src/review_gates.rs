@@ -640,6 +640,8 @@ pub(crate) fn aida_subcmd_rel_add(
     let aida = aida_exe_path();
     match std::process::Command::new(&aida)
         .current_dir(project_root)
+        // Share the parent's fail-fast lock deadline. trace:BUG-HOME-041 | ai:claude
+        .envs(aida_core::io_pressure::fail_fast_deadline_env())
         .args(["rel", "add", from, to, "--type", rel_type])
         .output_retrying_etxtbsy()
     {
@@ -681,6 +683,8 @@ pub(crate) fn aida_subcmd_queue_add_for_reviewer_using(
 ) -> anyhow::Result<()> {
     let out = std::process::Command::new(aida)
         .current_dir(project_root)
+        // Share the parent's fail-fast lock deadline. trace:BUG-HOME-041 | ai:claude
+        .envs(aida_core::io_pressure::fail_fast_deadline_env())
         .args([
             "queue",
             "add",
@@ -1012,6 +1016,103 @@ pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverag
 #[path = "tests/bug_2208_refs_only_review_tests.rs"]
 mod bug_2208_refs_only_review_tests;
 
+/// The links an already-filed review story is missing: `(spec, "implements")`
+/// for each delivered spec and `(spec, "covers")` for each Refs-only slice
+/// that the story does not already point at. A run interrupted after `aida
+/// add` leaves the story without them; the re-run adds exactly these.
+// trace:BUG-HOME-041 | ai:claude
+pub(crate) fn missing_review_story_links(
+    store: &aida_core::RequirementsStore,
+    story: &aida_core::Requirement,
+    spec_ids: &[String],
+    slice_refs: &[String],
+) -> Vec<(String, &'static str)> {
+    let linked = |rel_type: &str, spec: &str| {
+        story.relationships.iter().any(|rel| {
+            rel.rel_type.to_string().eq_ignore_ascii_case(rel_type)
+                && store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == rel.target_id)
+                    .is_some_and(|target| {
+                        [target.spec_id.as_deref(), target.agreed_id.as_deref()]
+                            .into_iter()
+                            .flatten()
+                            .any(|id| id.eq_ignore_ascii_case(spec))
+                            || target.display_id().eq_ignore_ascii_case(spec)
+                    })
+        })
+    };
+    let wanted = spec_ids
+        .iter()
+        .map(|id| (id, "implements"))
+        .chain(slice_refs.iter().map(|id| (id, "covers")));
+    wanted
+        .filter(|(id, rel_type)| !linked(rel_type, id))
+        .map(|(id, rel_type)| (id.clone(), rel_type))
+        .collect()
+}
+
+#[cfg(test)]
+mod bug_home_041_review_link_repair_tests {
+    use super::*;
+
+    // The interrupted run: `aida add` filed `Review PR-8` but the process
+    // died before `rel add`, so the story exists with no link. The re-run's
+    // reuse path must name the missing links, and none once they exist.
+    // trace:BUG-HOME-041 | ai:claude
+    #[test]
+    fn an_existing_review_story_without_its_links_is_repaired_not_skipped() {
+        let mut spec = aida_core::Requirement::new("the fix".into(), String::new());
+        spec.spec_id = Some("BUG-7".into());
+        let mut slice = aida_core::Requirement::new("the epic".into(), String::new());
+        slice.spec_id = Some("STORY-3".into());
+        let mut story = aida_core::Requirement::new("Review PR-8: fix".into(), String::new());
+        story.spec_id = Some("STORY-8".into());
+        story.status = aida_core::RequirementStatus::Approved;
+        let mut store = aida_core::RequirementsStore::default();
+        store
+            .requirements
+            .extend([spec.clone(), slice.clone(), story.clone()]);
+        let specs = vec!["BUG-7".to_string()];
+        let slices = vec!["STORY-3".to_string()];
+
+        // The fixture's story is the one the re-run reuses.
+        let found = crate::pr_lookup::canonical_review_story(
+            &store,
+            ReviewForge::GitHub,
+            8,
+            Some(&specs),
+            None,
+        )
+        .expect("the re-run finds the interrupted story");
+        assert_eq!(found.display_id(), "STORY-8");
+        assert_eq!(
+            missing_review_story_links(&store, found, &specs, &slices),
+            vec![
+                ("BUG-7".to_string(), "implements"),
+                ("STORY-3".to_string(), "covers")
+            ]
+        );
+
+        // Once linked, nothing is repaired and nothing is duplicated.
+        let link = |rel: &str, target: &aida_core::Requirement| aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::from_str(rel),
+            target_id: target.id,
+            created_at: None,
+            created_by: None,
+        };
+        story.relationships = vec![link("implements", &spec), link("covers", &slice)];
+        assert!(missing_review_story_links(&store, &story, &specs, &slices).is_empty());
+        // A half-repaired story gets only the link it still lacks.
+        story.relationships = vec![link("implements", &spec)];
+        assert_eq!(
+            missing_review_story_links(&store, &story, &specs, &slices),
+            vec![("STORY-3".to_string(), "covers")]
+        );
+    }
+}
+
 // BUG-1944: callers use `live_work::try_auto_queue_pr_review`, which wraps
 // this and moves the PR's specs to In Progress. trace:BUG-1944 | ai:claude
 pub(crate) fn try_auto_queue_pr_review_unbumped(
@@ -1173,6 +1274,17 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
             persisted.as_deref(),
         ) {
             let existing_id = existing.display_id();
+            // A run interrupted after `aida add` filed the story but not its
+            // links: repair them rather than treating the story as complete.
+            // trace:BUG-HOME-041 | ai:claude
+            let repaired = missing_review_story_links(&store, existing, &spec_ids, &slice_refs);
+            for (spec, rel_type) in &repaired {
+                if *rel_type == "implements" {
+                    aida_subcmd_rel_add_implements(project_root, &existing_id, spec);
+                } else {
+                    aida_subcmd_rel_add(project_root, &existing_id, spec, rel_type);
+                }
+            }
             let note = format!(
                 "auto-queue retry reused canonical review story; covers {} spec{}",
                 spec_ids.len(),
@@ -1189,13 +1301,22 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
                     .with_review_spec(existing_id);
             }
             return AutoQueueOutcome::already_exists(format!(
-                "{} #{} reuses canonical review story {}",
+                "{} #{} reuses canonical review story {}{}",
                 format_review_label(review_forge, pr.number)
                     .split_once('-')
                     .map(|(prefix, _)| prefix)
                     .unwrap_or("PR"),
                 pr.number,
-                existing_id
+                existing_id,
+                if repaired.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " (repaired {} missing link{})",
+                        repaired.len(),
+                        if repaired.len() == 1 { "" } else { "s" }
+                    )
+                }
             ))
             .with_pr(pr.number)
             .with_specs(spec_ids)

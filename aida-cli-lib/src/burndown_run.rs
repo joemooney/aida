@@ -407,24 +407,6 @@ pub(crate) fn handle_burndown_run(
         ready.join(", ").cyan()
     );
 
-    // TASK-1298: an unattended run must prove the host can sustain the work,
-    // not merely that the spec substrate is healthy. Keep dry-run observational;
-    // the real launch refuses on hard machine-readiness failures.
-    // trace:TASK-1298 | ai:codex
-    if !dry_run {
-        let lanes = concurrency.unwrap_or(4).max(1);
-        let specs = max.unwrap_or(ready.len()).min(ready.len()).max(1);
-        let readiness_root =
-            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-        let report = machine_readiness::probe(&readiness_root, 20, lanes, specs);
-        machine_readiness::print_human(&report);
-        if !report.ready() {
-            anyhow::bail!(
-                "machine readiness failed — apply the remedies above, then re-run `aida burndown readiness --hours 20 --lanes {lanes} --specs {specs}`"
-            );
-        }
-    }
-
     // The skill re-resolves the ready set authoritatively (same gate), so the
     // preflight list is what WILL drain. Build the headless invocation.
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
@@ -480,6 +462,27 @@ pub(crate) fn handle_burndown_run(
     // so lock lifetime == `claude -p` child lifetime. trace:BUG-759 | ai:claude
     let _drain_guard =
         drain_lock::acquire_drain_lock_with_specs(&project_root, &drain_lock_command, &ready)?;
+    // TASK-1298: an unattended run must prove the host can sustain the work,
+    // not merely that the spec substrate is healthy. The real launch refuses
+    // on hard machine-readiness failures; dry-run returned above.
+    // trace:TASK-1298 | ai:codex
+    // BUG-043: probe only after the drain lock is ours. A live drain must be
+    // refused by name before any host-resource probe, so its refusal never
+    // depends on free disk; a readiness bail drops the guard and frees the lock.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-043 | ai:claude
+    {
+        let lanes = concurrency.unwrap_or(4).max(1);
+        let specs = max.unwrap_or(ready.len()).min(ready.len()).max(1);
+        let readiness_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        let report = machine_readiness::probe(&readiness_root, 20, lanes, specs);
+        machine_readiness::print_human(&report);
+        if !report.ready() {
+            anyhow::bail!(
+                "machine readiness failed — apply the remedies above, then re-run `aida burndown readiness --hours 20 --lanes {lanes} --specs {specs}`"
+            );
+        }
+    }
     // TASK-1798: `aida drain stop --now` SIGTERMs this launcher; revoke the
     // running child's grant in-process before exiting. Advisory: without the
     // handler the lock removal by `stop --now` still revokes it.

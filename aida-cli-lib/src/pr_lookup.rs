@@ -1204,6 +1204,8 @@ pub(crate) fn aida_subcmd_add_review_story(
     let aida = aida_exe_path();
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
+        // Share the parent's fail-fast lock deadline. trace:BUG-HOME-041 | ai:claude
+        .envs(aida_core::io_pressure::fail_fast_deadline_env())
         .args([
             "add",
             "--type",
