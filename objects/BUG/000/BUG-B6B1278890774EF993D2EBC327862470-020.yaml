@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T22:26:07.472529964Z
-modified_at: 2026-10-30T07:02:25.915244314Z
+modified_at: 2026-10-30T07:05:09.668104553Z
 req_type: Bug
 tags:
 - aida:alias
@@ -25,6 +25,12 @@ comments:
   content: Implemented alias help correction at bc06b22feae488b9681ce9442b02b19303c6241d. Both personal/project alias paths and add/remove are described; built-ins-only wording removed. Regenerated actual full CLI help snapshot (one exact regeneration test), then18 command-registry tests passed in normal comparison mode; fmt and all35fast gates passed. Logs /tmp/bug020-{actual-regen,registry-tests,fmt,fast}.log. One fresh spawned AUTHOR self-check independently ran snapshot comparison and diff checks; no findings, no independent verdict. Three-dot own diff is two files; publication main is2commits newer with no touched-file overlap and a clean merge-tree, proof /tmp/bug020-push-proof.json. Independent review/integration still required. No hold cleared or self-merge attempted.
   created_at: 2026-10-30T07:00:20.901059444Z
   modified_at: 2026-10-30T07:00:20.901059444Z
+- id: 01a18ba0-6f24-7b11-8a8b-8d820e148632
+  author: ai:codex:joe
+  content: |
+    Published PR #3125: https://github.com/joemooney/aida/pull/3125, verified OPEN at bc06b22feae488b9681ce9442b02b19303c6241d. Auto-queue succeeded: review STORY-B6B1278890774EF993D2EBC327862470-113 covers this bug and was routed to the reviewer queue. Advisor handoff was accepted for live claude-advisor-08 as mail 9f7fe10a-764b-4a97-a729-be37283b2c43. This is queue/send acceptance, not recipient acknowledgement or independent approval. All local validation is recorded above. No self-verdict, hold clearance or merge.
+  created_at: 2026-10-30T07:05:09.668104553Z
+  modified_at: 2026-10-30T07:05:09.668104553Z
 history:
 - id: 01a18a38-1acc-79f2-baf2-652302d7f8f5
   author: joe
