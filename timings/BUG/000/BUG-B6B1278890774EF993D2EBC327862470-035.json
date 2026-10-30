@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-035",
+  "publishes": [
+    {
+      "at": "2026-10-30T11:07:52.904418882Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T08:25:43.285769853Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-035",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T09:37:55.729525222Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-035",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T10:17:36.826767967Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-035",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T10:18:21.163525555Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-035",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-B6B1278890774EF993D2EBC327862470-035",
+        "branch": "bug-b6b1278890774ef993d2ebc327862470-035",
+        "first_seen": "2026-10-30T10:18:21.163473293+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T11:05:49.612847075Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-035",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T11:07:06.699898809Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-035",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3128
+      }
+    },
+    {
+      "ts": "2026-10-30T11:07:52.686355780Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-035",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3bd7aa16acf3a54b66bc3527d40d93494092a7f0",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
