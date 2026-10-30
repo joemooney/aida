@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T14:39:51.669916145Z
-modified_at: 2026-10-30T15:03:16.118156660Z
+modified_at: 2026-10-30T15:05:27.117209950Z
 req_type: Bug
 tags:
 - area:cache
@@ -65,6 +65,12 @@ comments:
   content: 'Advisor correction 07:58: aida-cargo-reap.service ALREADY runs with Nice=19 and IOSchedulingClass=idle, so ''ionice -c3'' is not a fix. Journal commits (jbd2) and writeback (flush kworkers) run in kernel threads and ignore the reaper''s IO class: a mass unlink still floods the journal. The real levers are (a) rate-limit the reap: delete in batches and sleep between them, or reap at most N GB per run; (b) skip the reap while any cargo build holds a slot; (c) the lock-wait IO-pressure report from the first comment. At 07:55 the reap had finished, but IO stayed at about 85%: the remaining load is concurrent rust-lld links plus writeback. So keep the lane count low while that lasts.'
   created_at: 2026-10-30T15:03:16.118156660Z
   modified_at: 2026-10-30T15:03:16.118156660Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18d58-274d-7453-8a5c-e07aabaa9e14
+  author: joe
+  content: 'Advisor measurement 08:02. The saturated device is sda, and sda is a SPINNING HDD (APPLE HDD ST1000, rotational=1). It holds /, $HOME, the repo, every worktree under ../aida-worktrees, .aida/cache.db, the store worktree and /tmp. sdb (the SSD, /mnt/build) holds only cargo target dirs and is idle. cargo-reap reaps target dirs on /mnt/build, so the reap cannot be what saturates sda now. sda is doing about 85 write IOPS with tiny throughput (a few MB/s): small fsync-heavy random writes from git, sqlite and mail across about 10 concurrent agents, at the seek limit of an HDD. Every lock ''stall'' is that seek queue. Structural fix (operator decision): move ../aida-worktrees, the .aida cache and the store worktree, ideally the whole repo, onto the SSD. Short of that: fewer concurrent agents, and the IO-pressure report on lock waits. The ''pid 19 held 10h'' question still needs its own check.'
+  created_at: 2026-10-30T15:05:27.117209950Z
+  modified_at: 2026-10-30T15:05:27.117209950Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d4b-c6ce-72a0-a586-c58512a5c7e1
