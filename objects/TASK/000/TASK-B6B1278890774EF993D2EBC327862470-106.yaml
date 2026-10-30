@@ -20,12 +20,17 @@ description: |
 
   ## Approval boundary
   Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+
+
+  ADVISOR RULING 2026-10-30 00:15 (PR-3096 round 3, FINAL round: one push, then a scoped check of these items only)
+  FIX: (1) first-project.md:78 points to an init-inventory that is gone; repoint or remove it. (2) first-project.md:9 and :522 mention removed install options and a quick reference; update both. (4) build.py docstring: claim only **bold** support. (5) operator block: show `aida init --help` before `aida init`. (6) aria-hide the ✳ in the page template's brand link, as index.html does. (7) README: link the .md source (or the published page URL), not a raw .html file.
+  ACCEPTED, no action (3): docs-only acceptance needs no test; showcase pages are gated by build.py --check.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T18:07:53.282215923Z
-modified_at: 2026-10-30T06:44:38.995001061Z
+modified_at: 2026-10-30T07:08:10.178496413Z
 req_type: Task
 tags:
 - advisor-review
@@ -223,6 +228,11 @@ history:
   timestamp: 2026-10-30T06:44:40.793613752Z
   session_id: 01a18b8bd3d2
   harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18ba3-340d-77f1-8dd3-d942614905be
+  author: joe
+  timestamp: 2026-10-30T07:08:11.149822149Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
   code_sha: 00500cf82ce06184249deb1482ec9b1e43d5f451

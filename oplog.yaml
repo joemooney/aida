@@ -91016,5 +91016,36 @@ operations:
   timestamp: 2026-10-30T07:07:50.841766832Z
   kind: !SetStatus
     status: Completed
-clock: 7062
+- id: 01a18ba3-348b-75e1-a1cd-9bb80ba7ccf4
+  target_id: 01a188d8-d1c2-77d3-a30b-220a95022694
+  author: aida
+  node_id: '1'
+  lamport: 7063
+  timestamp: 2026-10-30T07:08:11.275357118Z
+  kind: !SetDescription
+    description: |
+      Slice 1 of 8 for the product documentation/showcase epic.
+
+      [AFK after advisor approval] Tracer bullet: a person continues conversational coding with an AIDA-aware agent and can read one updated getting-started guide within the showcase. People remain developers, reviewers and collaborators; the outputs are the system and a durable intent record for maintenance, enhancement and working with others.
+
+      ## Acceptance
+      - [ ] The main newcomer journey describes ordinary conversation and configured background intent capture, with one-time operator setup separately labeled; it does not require people to learn mutation commands or adopt autonomous delivery.
+      - [ ] A current getting-started/first-project guide and a corresponding site entry page agree on that journey. The overview/README route readers to it without rewriting unrelated technical references.
+      - [ ] One source guide renders end-to-end into the site's shared, accessible layout, with working navigation, source provenance and local assets. The implementation remains the thinnest build/templating path needed for that one page, not a bulk handbook build.
+      - [ ] Text does not promise every utterance/unobserved action is recorded automatically. CLI/MCP facts are verified against current source/help.
+
+      ## Layers / boundaries
+      Source guide and overview entry copy -> small shared static layout/build path -> reader-facing guide and site onboarding. No backend, schema, authority or launch behavior changes. Reuse prototypes only after this slice is approved.
+
+      ## Primary callers / verification
+      People reading the product site or working conversationally with an AIDA-aware coding agent; agents use CLI/MCP, operators inspect/setup through the documented command surface. Cover desktop/mobile/keyboard and non-TTY agent callers as relevant. Source statements must match aida-core/aida-cli-lib and current command help. Keep internal SPEC IDs out of end-user prose. Docs-only automated repository gate: make check-ci-fast; no cargo. Do not modify the protected gate, review-verdict, merge-hold or ledger implementation lane.
+
+      ## Approval boundary
+      Draft intake only. This child is not approved, queued or implemented by this decomposition. Existing docs/product-site and hosted materials are unmerged prototypes/reference inputs, not an approved implementation to bulk merge. After advisor approval, implement this slice in its own claimed sibling worktree and PR.
+
+
+      ADVISOR RULING 2026-10-30 00:15 (PR-3096 round 3, FINAL round: one push, then a scoped check of these items only)
+      FIX: (1) first-project.md:78 points to an init-inventory that is gone; repoint or remove it. (2) first-project.md:9 and :522 mention removed install options and a quick reference; update both. (4) build.py docstring: claim only **bold** support. (5) operator block: show `aida init --help` before `aida init`. (6) aria-hide the ✳ in the page template's brand link, as index.html does. (7) README: link the .md source (or the published page URL), not a raw .html file.
+      ACCEPTED, no action (3): docs-only acceptance needs no test; showcase pages are gated by build.py --check.
+clock: 7063
 node_id: '1'
