@@ -1,0 +1,42 @@
+id: 01a18d28-9910-7161-8e93-fb6b713b720f
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-003
+title: 'Spike: what would an OpenCode adapter take (launch, posture, plugin hooks, mail wake, MCP)?'
+description: |
+  ## Why
+  OpenCode (anomalyco/opencode, MIT, ~223k stars, v1.19.5 on 2026-10-28) is the most-used open-source terminal agent and an integration target elsewhere (Spec Kit lists it; Devin Desktop drives it over ACP). AIDA has adapters for Claude Code, Codex and Antigravity only. OpenCode would be the fourth harness AIDA coordinates. Answer whether an adapter is worth building and what it would take, before anyone files implementation stories.
+
+  ## Questions (each answered with a probe against the current release, not docs alone)
+  1. **Launch and resume.** Can `aida agent new` start OpenCode headless and resume a named session (`opencode run`, session/continue flags, `opencode serve` + attach)? What identifies a session for `aida agent list`?
+  2. **Permission posture.** How does OpenCode's permission config (allow/ask/deny per tool) map to AIDA's contained / bypass tiers? Can it be contained the way Claude is, or must containment refuse it like Codex and agy (BUG-2144, BUG-2223)? What does `aida doctor --category permission-posture` need to read?
+  3. **Hooks via plugins.** Which OpenCode plugin events map to AIDA's session-start, tool-gate and stop/idle hooks? Does the plugin load in headless runs? SPIKE-92 found no Stop-hold (opencode #16626): confirm on the current release.
+  4. **Mail wake.** Can an idle session be woken for new mail (server API, SDK, or relaunch-with-resume)? Fit it into the per-vendor wake adapter ruled on STORY-HOME-096, or report "unsupported".
+  5. **MCP and skills.** Does registering the AIDA MCP server and shipping AIDA skills/commands into OpenCode's config work without per-project hand edits?
+  6. **Attribution.** Commit and trace format: `[AI:opencode]`, `ai:opencode`. Any collision with model-name attribution, given OpenCode runs many models?
+
+  ## Deliverable
+  A go / no-go recommendation, a findings comment per question with the probe used, and (on go) a decomposed set of draft stories for the adapter.
+
+  ## Out of scope
+  Implementing any adapter piece. Comparing OpenCode as a competitor (that is the roster's job).
+
+  ## See also
+  SPIKE-92, SPIKE-HOME-002, STORY-HOME-096, BUG-HOME-028
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T14:13:30.512568229Z
+modified_at: 2026-10-30T14:13:30.512568229Z
+req_type: Spike
+tags:
+- area:agents
+- vendor:opencode
+filed_at:
+  code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ee1fa1789a
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+human_only: true
