@@ -37,6 +37,30 @@ pub(crate) fn with_lock<T>(
     out
 }
 
+/// Open a ledger file for appending. A symlink in its place is refused, so
+/// an append can never land outside the ledger directory.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+fn open_append(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    options.open(path).map_err(|e| {
+        let linked = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+        if linked {
+            std::io::Error::new(
+                e.kind(),
+                format!("refusing to append to {}: it is a symlink", path.display()),
+            )
+        } else {
+            e
+        }
+    })
+}
+
 /// Every parseable event on the change's ledger, in file order. A line that
 /// does not parse (a torn final write) is skipped, never fatal.
 pub(crate) fn read_file(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
@@ -64,6 +88,22 @@ pub(crate) fn append(
     with_lock(&lock_file(root, change), || {
         append_locked(root, change, events, false)
     })
+    .map_err(|e| named(&ledger_file(root, change), e))
+}
+
+/// `e`, naming the ledger file that did not take the write (BUG-1571: a
+/// failed write names the artefact that did not land).
+fn named(file: &Path, e: std::io::Error) -> std::io::Error {
+    if e.to_string().contains(&file.display().to_string()) {
+        return e;
+    }
+    std::io::Error::new(
+        e.kind(),
+        format!(
+            "could not append to the gate ledger {}: {e}",
+            file.display()
+        ),
+    )
 }
 
 /// Append the change's `legacy-imported` event now if it has none, so the
@@ -126,10 +166,7 @@ fn write_events(
         lines.push_str(&line);
         lines.push('\n');
     }
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(ledger_file(root, change))?;
+    let mut file = open_append(&ledger_file(root, change))?;
     file.write_all(lines.as_bytes())?;
     file.sync_data()?;
     for event in pending.iter() {
@@ -161,4 +198,66 @@ pub(crate) fn append_one(root: &Path, event: GateEvent) -> std::io::Result<Deliv
     } else {
         Delivered::Unchanged
     })
+}
+
+/// The unbound ledger of a spec no change has been recorded against yet:
+/// `by-spec/<SPEC>.jsonl` beside the spec's index entry. It carries only
+/// verdict events whose `change` is the spec key, and is read together with
+/// the spec's change-bound records ([`super::project`]); once a change is
+/// indexed for the spec, new records land on that change.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn unbound_file(root: &Path, spec: &str) -> PathBuf {
+    ledger_dir(root)
+        .join("by-spec")
+        .join(format!("{}.jsonl", spec.trim().to_ascii_uppercase()))
+}
+
+/// Every parseable event on `spec`'s unbound ledger, in file order.
+pub(crate) fn read_unbound(root: &Path, spec: &str) -> Vec<GateEvent> {
+    let Ok(body) = std::fs::read_to_string(unbound_file(root, spec)) else {
+        return Vec::new();
+    };
+    body.lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect()
+}
+
+/// Append `record` as a verdict event on `spec`'s unbound ledger, unless
+/// that ledger already holds it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn append_unbound(
+    root: &Path,
+    spec: &str,
+    record: &crate::gate::review_verdict::JsonObj,
+) -> std::io::Result<Delivered> {
+    let spec = spec.trim().to_ascii_uppercase();
+    let safe = !spec.is_empty()
+        && !spec.starts_with('.')
+        && spec
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
+    if !safe || ChangeKey::parse(&spec).is_some() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("`{spec}` is not a spec id"),
+        ));
+    }
+    let file = unbound_file(root, &spec);
+    with_lock(&file.with_extension("lock"), || {
+        let existing = read_unbound(root, &spec);
+        if existing.iter().any(|e| e.verdict_record() == Some(record)) {
+            return Ok(Delivered::Unchanged);
+        }
+        let mut event = super::event::verdict_event_unbound(root, &spec, record);
+        event.seq = existing.last().map(|e| e.seq).unwrap_or(0) + 1;
+        event.at = chrono::Utc::now().to_rfc3339();
+        let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
+        line.push('\n');
+        let mut out = open_append(&file)?;
+        out.write_all(line.as_bytes())?;
+        out.sync_data()?;
+        Ok(Delivered::Appended)
+    })
+    .map_err(|e| named(&file, e))
 }

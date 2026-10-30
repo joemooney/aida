@@ -2559,6 +2559,72 @@ pub(crate) fn aida_contained_env() -> Result<bool> {
     parse_aida_contained(&raw.to_string_lossy())
 }
 
+/// What `AIDA_CONTAINED` held before this process changed it for its
+/// children, and the value it set: `(inherited, applied)`.
+static CONTAINED_ENV_APPLIED: std::sync::Mutex<
+    Option<(Option<std::ffi::OsString>, Option<std::ffi::OsString>)>,
+> = std::sync::Mutex::new(None);
+
+/// Set or clear `AIDA_CONTAINED` for the children this process launches.
+/// The value the process inherited is kept, so [`process_contained`] still
+/// answers for this process rather than for the children it posts.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn set_contained_env_for_children(contained: bool) {
+    let mut applied = CONTAINED_ENV_APPLIED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // A second export keeps the first one's inherited value, unless the env
+    // was changed in between: then the current value is what was inherited.
+    let current = std::env::var_os("AIDA_CONTAINED");
+    let inherited = match applied.take() {
+        Some((inherited, set)) if set == current => inherited,
+        _ => current,
+    };
+    if contained {
+        std::env::set_var("AIDA_CONTAINED", "1");
+    } else {
+        std::env::remove_var("AIDA_CONTAINED");
+    }
+    *applied = Some((inherited, std::env::var_os("AIDA_CONTAINED")));
+}
+
+/// Drop the remembered export (test guards that reset `AIDA_CONTAINED`).
+#[cfg(test)]
+pub(crate) fn forget_contained_env_for_children() {
+    *CONTAINED_ENV_APPLIED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+}
+
+/// Whether THIS process runs contained. A launcher resolves containment
+/// from the `[agents] contained` knob and exports `AIDA_CONTAINED=1` for its
+/// children ([`set_contained_env_for_children`]); that export must not make
+/// the launcher itself refuse its primary-side writes (collecting a
+/// reviewer's verdict onto the gate ledger). The inherited value answers
+/// while the env still holds what this process set; any later change to
+/// the env is read as it stands. A malformed value is contained (BUG-2146:
+/// fail closed).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn process_contained() -> bool {
+    // In the test binary every test shares one process env: a test may only
+    // set AIDA_CONTAINED under the env lock, so a test that does not hold it
+    // runs uncontained, as the primary side does, instead of racing a
+    // sibling's contained window.
+    #[cfg(test)]
+    if !crate::test_env::holds_env_lock() && !crate::test_env::is_path_isolated_process() {
+        return false;
+    }
+    let current = std::env::var_os("AIDA_CONTAINED");
+    let applied = CONTAINED_ENV_APPLIED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let raw = match applied.as_ref() {
+        Some((inherited, set)) if *set == current => inherited.clone(),
+        _ => current,
+    };
+    raw.is_some_and(|raw| parse_aida_contained(&raw.to_string_lossy()).unwrap_or(true))
+}
+
 /// The pure parse behind [`aida_contained_env`].
 // trace:BUG-2146 | ai:claude
 pub(crate) fn parse_aida_contained(raw: &str) -> Result<bool> {
@@ -4556,9 +4622,26 @@ fn run_vendor_headless_child(
         vendor.as_str(),
         child.id(),
     );
-    let status = child
-        .wait()
-        .with_context(|| format!("failed to wait for {}", vendor.program()));
+    // A vendor still alive after its final result (held up by an MCP child)
+    // is terminated past a bounded grace, so it frees its lane and cap slot.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+    let status = crate::headless_linger::wait_reaping_after_result(
+        &mut child,
+        log_path,
+        crate::headless_linger::result_grace(),
+    )
+    .map(|waited| {
+        if waited.reaped {
+            eprintln!(
+                "{} {} was still running {}s after its final result; terminated it and its children",
+                "Note:".cyan().bold(),
+                vendor.program(),
+                crate::headless_linger::result_grace().as_secs()
+            );
+        }
+        waited.status
+    })
+    .with_context(|| format!("failed to wait for {}", vendor.program()));
     // trace:STORY-1688 | ai:claude
     crate::lane_liveness::finish_headless_lane_for_child(
         log_path,

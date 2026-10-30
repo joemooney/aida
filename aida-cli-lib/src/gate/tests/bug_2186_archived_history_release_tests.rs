@@ -53,13 +53,37 @@ fn arm(root: &Path) {
         Some(REVIEWER.into()),
     ));
     hold.spec = Some(KEY.into());
-    mh::write_typed_hold(root, &hold).unwrap();
+    mh::place_hold(root, &hold).unwrap();
 }
 
 /// What the reviewer launchers do before each review run: clear the
-/// current verdict file so the run's summary cannot read a stale one.
+/// current verdict file so the run's summary cannot read a stale one. M1
+/// slice 2: the record path writes no current file (the round is a gate
+/// ledger event, which is never cleared), so there is nothing to clear.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 fn launch_reviewer(root: &Path) {
-    std::fs::remove_file(rv::verdict_path(root, KEY)).unwrap();
+    assert!(
+        !rv::verdict_path(root, KEY).exists(),
+        "no legacy file is written"
+    );
+}
+
+/// The current record for KEY, as the gates weigh it (the gate ledger).
+fn current(root: &Path) -> Value {
+    serde_json::from_str(
+        &rv::current_verdict(root, KEY)
+            .expect("a current verdict")
+            .body,
+    )
+    .unwrap()
+}
+
+/// A rework hold armed with no recorded refusal behind it: what a fresh
+/// reviewer worktree that kept no round history leaves (BUG-2216). The
+/// ledger never loses a round, so "the history is gone" is a refusal that
+/// never reached the shared record.
+fn arm_without_history(root: &Path) {
+    arm(root);
 }
 
 /// REQUEST CHANGES at OLD, a fresh reviewer launch, then APPROVE at HEAD.
@@ -76,6 +100,15 @@ fn rework_cycle(root: &Path) {
 /// BUG-1918 attestation gate and the forge are pinned by the STORY-1697
 /// tests; `labels_fail` models a transient forge failure in place.
 fn release(root: &Path, labels_fail: bool) -> (Result<Outcome>, Vec<String>) {
+    release_reading(root, labels_fail, None)
+}
+
+/// [`release`], with the arming-verdict read answering `body_override`.
+fn release_reading(
+    root: &Path,
+    labels_fail: bool,
+    body_override: Option<Value>,
+) -> (Result<Outcome>, Vec<String>) {
     let hold = mh::read_hold_record(root, PR).expect("an armed hold");
     let mut req = aida_core::Requirement::new("Improve a list".into(), "fixture".into());
     req.req_type = aida_core::RequirementType::Task;
@@ -100,12 +133,15 @@ fn release(root: &Path, labels_fail: bool) -> (Result<Outcome>, Vec<String>) {
             },
             read_hold: &|| mh::read_hold_record(root, PR),
             covered_specs: &|| Ok((vec!["TASK-41".into()], store.clone())),
-            read_body: &|key| {
-                Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
-                    root, key,
-                ))?)?)
+            read_body: &|key| match &body_override {
+                Some(body) => Ok(body.clone()),
+                None => Ok(serde_json::from_str(
+                    &rv::current_verdict(root, key)
+                        .context("arming verdict is missing")?
+                        .body,
+                )?),
             },
-            read_history: &|key| RetainedHistory::beside(&rv::verdict_path(root, key)),
+            read_history: &|key| RetainedHistory::projected(root, key),
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[root], PR, ids).map_err(anyhow::Error::msg)
             },
@@ -131,14 +167,43 @@ fn release(root: &Path, labels_fail: bool) -> (Result<Outcome>, Vec<String>) {
     (result, comments.into_inner())
 }
 
+/// A release attempt once the hold is gone: the stored hold record is reused.
+fn release_after_release(root: &Path) -> (Result<Outcome>, Vec<String>) {
+    let mut hold = mh::typed_hold(PR, mh::HoldReasonKind::Rework, "rework", Some(OLD.into()));
+    hold.verdict_ref = Some(mh::VerdictRef::new(
+        KEY,
+        Some(PR),
+        Some(OLD.into()),
+        Some(REVIEWER.into()),
+    ));
+    hold.spec = Some(KEY.into());
+    let comments = RefCell::new(Vec::new());
+    let result = release_with(
+        root,
+        &hold,
+        &Release {
+            verdict: mh::VerdictRef::new(KEY, Some(PR), Some(HEAD.into()), Some(REVIEWER.into())),
+            mandate: None,
+        },
+        &[],
+        || Ok(HEAD.into()),
+        |body| {
+            comments.borrow_mut().push(body.to_string());
+            Ok(())
+        },
+        || Ok(()),
+    )
+    .map(|()| Outcome::Released { mandate: None });
+    (result, comments.into_inner())
+}
+
 fn assert_released(root: &Path, result: Result<Outcome>) {
     assert_eq!(result.unwrap(), Outcome::Released { mandate: None });
     assert!(
-        !mh::hold_path(root, PR).exists(),
+        !mh::hold_is_open(root, PR),
         "the rework marker must be removed"
     );
-    let audit: Value =
-        serde_json::from_slice(&std::fs::read(mh::clearance_path(root, PR)).unwrap()).unwrap();
+    let audit = Value::Object(mh::recorded_clearance(root, PR).expect("a recorded release"));
     assert_eq!(audit["cleared_by"], PRINCIPAL);
     assert_eq!(audit["target_head_sha"], HEAD);
     // BUG-2216: the release emits the hold-release event exactly once, with
@@ -169,11 +234,18 @@ fn approval_at_a_new_head_releases_in_place_from_the_archived_refusal() {
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
     rework_cycle(root);
     // The schema the release reader must accept: the writer kept the
-    // refusal only in the per-commit archive, not in inline `rounds`.
-    let current: Value =
-        serde_json::from_slice(&std::fs::read(rv::verdict_path(root, KEY)).unwrap()).unwrap();
-    assert!(current.get("rounds").is_none(), "{current}");
+    // refusal as its own round on the gate ledger (M1 slice 2).
+    let current = current(root);
     assert!(current.get("release_grant").is_some(), "{current}");
+    let history = RetainedHistory::projected(root, KEY).unwrap();
+    assert!(
+        history
+            .archived
+            .iter()
+            .any(|r| r["verdict"] == "request-changes" && r["reviewed_sha"] == OLD),
+        "{:?}",
+        history.archived
+    );
 
     let (result, comments) = release(root, false);
     assert_released(root, result);
@@ -190,7 +262,7 @@ fn auto_release_retry_releases_after_the_in_place_attempt_failed() {
     let (in_place, _) = release(root, true);
     assert!(in_place.is_err(), "{in_place:?}");
     assert!(
-        mh::hold_path(root, PR).exists(),
+        mh::hold_is_open(root, PR),
         "a failed release keeps the marker"
     );
 
@@ -208,12 +280,9 @@ fn missing_refusal_history_releases_on_the_hold_markers_own_evidence() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
-    record(root, "request-changes", OLD);
-    arm(root);
-    launch_reviewer(root);
     // The refusal's history is gone; only the approval will be on record.
-    let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
-    std::fs::remove_dir_all(&archive).unwrap();
+    arm_without_history(root);
+    launch_reviewer(root);
     record(root, "approved", HEAD);
 
     let (result, comments) = release(root, false);
@@ -229,18 +298,15 @@ fn missing_history_with_a_stale_approval_stays_held() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
-    record(root, "request-changes", OLD);
-    arm(root);
+    arm_without_history(root);
     launch_reviewer(root);
-    let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
-    std::fs::remove_dir_all(&archive).unwrap();
     // The approval is at the arming head, not the live head.
     record(root, "approved", OLD);
 
     let (result, _) = release(root, false);
     let error = result.unwrap_err().to_string();
     assert!(error.contains("stale or unverifiable head"), "{error}");
-    assert!(mh::hold_path(root, PR).exists());
+    assert!(mh::hold_is_open(root, PR));
 }
 
 /// BUG-2216: the release happens exactly once — a second attempt after the
@@ -251,24 +317,29 @@ fn a_released_hold_is_released_exactly_once() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
-    record(root, "request-changes", OLD);
-    arm(root);
+    arm_without_history(root);
     launch_reviewer(root);
-    let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
-    std::fs::remove_dir_all(&archive).unwrap();
     record(root, "approved", HEAD);
 
     let (first, comments) = release(root, false);
     assert_released(root, first);
     assert_eq!(comments.len(), 1);
-    let clearance = std::fs::read(mh::clearance_path(root, PR)).unwrap();
+    let clearance = mh::recorded_clearance(root, PR).unwrap();
+    let events = std::fs::read(mh::hold_ledger_file(root, PR)).unwrap();
 
     let hold = mh::read_hold_record(root, PR);
     assert!(hold.is_none(), "the marker is gone after the release");
+    let (again, _) = release_after_release(root);
+    assert!(again.is_err(), "a second attempt finds no hold");
     assert_eq!(
-        std::fs::read(mh::clearance_path(root, PR)).unwrap(),
+        mh::recorded_clearance(root, PR).unwrap(),
         clearance,
         "nothing rewrites the recorded clearance"
+    );
+    assert_eq!(
+        std::fs::read(mh::hold_ledger_file(root, PR)).unwrap(),
+        events,
+        "a second attempt records nothing new"
     );
 }
 
@@ -297,17 +368,14 @@ fn only_rework_holds_release_on_the_markers_evidence() {
         if kind == mh::HoldReasonKind::Recusal {
             hold.recused_principals = vec!["advisor:recused".into()];
         }
-        mh::write_typed_hold(root, &hold).unwrap();
+        mh::place_hold(root, &hold).unwrap();
         launch_reviewer(root);
-        // One recording leaves no per-commit archive yet.
-        let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
-        let _ = std::fs::remove_dir_all(&archive);
         record(root, "approved", HEAD);
 
         let (result, _) = release(root, false);
         let error = result.unwrap_err().to_string();
         assert!(error.contains("Rework-only"), "{kind:?}: {error}");
-        assert!(mh::hold_path(root, PR).exists(), "{kind:?}");
+        assert!(mh::hold_is_open(root, PR), "{kind:?}");
     }
 
     // A legacy (plaintext) hold is refused the same way.
@@ -315,7 +383,10 @@ fn only_rework_holds_release_on_the_markers_evidence() {
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
     record(root, "request-changes", OLD);
-    mh::write_hold(root, PR, &format!("CHANGES REQUESTED for {KEY} at {OLD}")).unwrap();
+    // A legacy marker an older binary left in the primary checkout.
+    let marker = mh::hold_path(root, PR);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, format!("CHANGES REQUESTED for {KEY} at {OLD}\n")).unwrap();
     launch_reviewer(root);
     record(root, "approved", HEAD);
     let (result, _) = release(root, false);
@@ -323,7 +394,7 @@ fn only_rework_holds_release_on_the_markers_evidence() {
     // verdict reference, so the release has nothing to answer.
     let error = result.unwrap_err().to_string();
     assert!(error.contains("no arming verdict reference"), "{error}");
-    assert!(mh::hold_path(root, PR).exists());
+    assert!(mh::hold_is_open(root, PR));
 }
 
 #[test]
@@ -332,13 +403,15 @@ fn an_unreadable_archived_round_stays_held() {
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
     rework_cycle(root);
+    // A legacy per-commit archive entry, read through, that does not parse.
     let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
+    std::fs::create_dir_all(&archive).unwrap();
     std::fs::write(archive.join(format!("{OLD}.json")), "not json").unwrap();
 
     let (result, _) = release(root, false);
     let error = result.unwrap_err().to_string();
     assert!(error.contains("history is unreadable"), "{error}");
-    assert!(mh::hold_path(root, PR).exists());
+    assert!(mh::hold_is_open(root, PR));
 }
 
 #[test]
@@ -347,14 +420,13 @@ fn a_refusal_recorded_after_the_approval_stays_held() {
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
     rework_cycle(root);
-    // A later refusal at an unrelated sha lands in the archive only.
-    let path = rv::verdict_path(root, KEY);
-    let approval = std::fs::read(&path).unwrap();
+    // A later refusal at an unrelated sha lands in the retained history,
+    // while the arming read still answers the approval.
+    let approval = current(root);
     record(root, "rejected", "cccccccccccccccccccccccccccccccccccccccc");
-    std::fs::write(&path, approval).unwrap();
 
-    let (result, _) = release(root, false);
+    let (result, _) = release_reading(root, false, Some(approval));
     let error = result.unwrap_err().to_string();
     assert!(error.contains("strictly newer"), "{error}");
-    assert!(mh::hold_path(root, PR).exists());
+    assert!(mh::hold_is_open(root, PR));
 }

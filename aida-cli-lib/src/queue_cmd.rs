@@ -11162,12 +11162,10 @@ pub(crate) fn honour_auto_complete_sandbox(
 }
 
 // trace:BUG-2006 | ai:antigravity
+// The launcher keeps its own posture: the export is for its children only.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn apply_queue_work_contained_env(contained: bool) {
-    if contained {
-        std::env::set_var("AIDA_CONTAINED", "1");
-    } else {
-        std::env::remove_var("AIDA_CONTAINED");
-    }
+    session::set_contained_env_for_children(contained);
 }
 
 /// BUG-2010: true when caller is working the lease itself (self-claim under `--no-launch`).
@@ -13953,23 +13951,33 @@ pub(crate) fn run_standalone_reviewer(
         ),
     }
 
-    // BUG-2176: a contained reviewer cannot write the primary checkout's
-    // merge-holds either, so its rework marker stays in the review worktree,
-    // invisible to `aida pr ship` and gone once the worktree is removed.
-    // Adopt it whatever the verdict collection decided — a hold only tightens.
+    // BUG-2176 / M1 slice 2: a contained reviewer cannot write hold state,
+    // so its refusal's Rework hold is armed here, primary-side, from the
+    // verdict just collected onto the PR's gate ledger. A hold only tightens.
     // trace:BUG-2176 | ai:claude
-    match crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at) {
-        Ok(true) if !quiet => eprintln!(
-            "  {} adopted the reviewer's merge-hold marker for PR-{pr} from {}",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-            worktree.display()
-        ),
-        Ok(_) => {}
-        Err(err) => eprintln!(
-            "  {} could not adopt the reviewer's merge-hold marker for PR-{pr} from {} ({err}) — copy it to the primary checkout's .aida/merge-holds/ before removing the worktree",
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    // A legacy marker a pre-ledger reviewer left is collected too.
+    if let Err(err) =
+        crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at)
+    {
+        eprintln!(
+            "  {} could not collect the legacy merge-hold marker for PR-{pr} from {} ({err})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             worktree.display()
-        ),
+        );
+    }
+    if let Ok(c) = &collected {
+        match crate::merge_hold::arm_collected_refusal(project_root, pr, c) {
+            Ok(true) if !quiet => eprintln!(
+                "  {} armed PR-{pr}'s merge hold for the reviewer's refusal",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            Ok(_) => {}
+            Err(err) => eprintln!(
+                "  {} could not arm PR-{pr}'s merge hold for the reviewer's refusal ({err}) — run `aida merge-hold add {pr}` before shipping",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            ),
+        }
     }
 
     // STORY-439: tag-along reviewer-side calibration capture. Resolve

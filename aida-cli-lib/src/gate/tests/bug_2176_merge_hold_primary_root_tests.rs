@@ -1,10 +1,12 @@
-//! BUG-2176: merge-hold markers resolve against the primary checkout. A hold
+//! BUG-2176: merge holds resolve against the primary checkout. A hold
 //! written from a linked worktree (a headless reviewer in `aida-pr-N`) must be
 //! what `aida merge-hold list` and the `aida pr ship` gate read from the
-//! primary checkout, and must survive removing that worktree. Pure git
-//! fixtures, no forge.
+//! primary checkout, and must survive removing that worktree. M1 slice 2: the
+//! hold is an event on the primary's gate ledger; no hold state is written in
+//! a worktree. Pure git fixtures, no forge.
 // trace:BUG-2176 | ai:claude
 use super::*;
+use crate::gate::ledger::legacy::hold_marker_path as legacy_marker;
 use crate::merge_hold::{
     adopt_worktree_hold, stray_marker_warning, stray_markers_json, stray_worktree_markers,
 };
@@ -71,16 +73,20 @@ fn rework(pr: u64) -> MergeHoldRecord {
 #[test]
 fn a_hold_written_from_a_linked_worktree_is_read_from_the_primary_checkout() {
     let (_tmp, primary, linked) = primary_with_linked();
-    write_typed_hold(&linked, &rework(2726)).unwrap();
+    place_hold(&linked, &rework(2726)).unwrap();
 
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let ledger = hold_ledger_file(&linked, 2726);
     assert!(
-        local_hold_path(&primary, 2726).is_file(),
-        "the marker must land in the primary checkout"
+        ledger.starts_with(&primary) && ledger.is_file(),
+        "the hold must land on the primary checkout's gate ledger: {}",
+        ledger.display()
     );
     assert!(
-        !local_hold_path(&linked, 2726).exists(),
-        "no marker may be left in the reviewer's worktree"
+        !linked.join(".aida").exists(),
+        "no hold state may be left in the reviewer's worktree"
     );
+    assert!(!legacy_marker(&primary, 2726).exists(), "no legacy marker");
     // `aida merge-hold list` reads `list_holds` from the primary checkout.
     assert_eq!(
         list_holds(&primary)
@@ -112,38 +118,48 @@ fn a_hold_written_from_a_linked_worktree_is_read_from_the_primary_checkout() {
 #[test]
 fn a_clearance_from_a_linked_worktree_is_recorded_in_the_primary_checkout() {
     let (_tmp, primary, linked) = primary_with_linked();
-    write_typed_hold(&primary, &rework(7)).unwrap();
+    place_hold(&primary, &rework(7)).unwrap();
     assert!(read_hold_record(&linked, 7).is_some());
-    clear_hold(&linked, 7).unwrap();
+    release_hold(&linked, &rework(7), &PrincipalIdentity::human("joe"), None).unwrap();
     assert!(read_hold_record(&primary, 7).is_none());
-    assert_eq!(clearance_path(&linked, 7), clearance_path(&primary, 7));
-    assert!(clearance_path(&primary, 7).starts_with(&primary));
+    assert!(recorded_clearance(&primary, 7).is_some());
+    assert_eq!(hold_ledger_file(&linked, 7), hold_ledger_file(&primary, 7));
+    assert!(!linked.join(".aida").exists());
 }
 
 #[test]
-fn a_contained_writer_falls_back_locally_and_the_launcher_adopts_the_marker() {
+fn a_contained_writer_is_refused_and_leaves_nothing_in_its_worktree() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let (_tmp, primary, linked) = primary_with_linked();
-    // Stand-in for a sandbox that refuses writes outside the worktree: the
-    // primary's merge-holds path cannot become a directory.
-    std::fs::create_dir_all(primary.join(".aida")).unwrap();
-    std::fs::write(primary.join(".aida/merge-holds"), "occupied").unwrap();
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
+        let err = place_hold(&linked, &rework(2726)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+    }
+    assert!(!linked.join(".aida").exists(), "no local fallback marker");
+    assert!(read_hold_record(&primary, 2726).is_none());
+}
+
+#[test]
+fn a_legacy_worktree_marker_is_reported_then_collected_by_the_launcher() {
+    let (_tmp, primary, linked) = primary_with_linked();
     let since = std::time::SystemTime::now() - std::time::Duration::from_secs(5);
-    write_typed_hold(&linked, &rework(2726)).unwrap();
-    assert!(local_hold_path(&linked, 2726).is_file());
+    // A marker a pre-ledger reviewer left in its worktree.
+    let local = legacy_marker(&linked, 2726);
+    std::fs::create_dir_all(local.parent().unwrap()).unwrap();
+    std::fs::write(&local, serde_json::to_vec_pretty(&rework(2726)).unwrap()).unwrap();
 
     // The stray is reported where the gates cannot see it.
-    std::fs::remove_file(primary.join(".aida/merge-holds")).unwrap();
     let strays = stray_worktree_markers(&primary);
     assert_eq!(strays.len(), 1);
     assert_eq!(strays[0].0, 2726);
     let line = stray_marker_warning(2726, &strays[0].1, &primary, true);
     assert!(line.contains("held by the label alone"), "{line}");
-    assert!(line.contains(&local_hold_path(&primary, 2726).display().to_string()));
 
-    // The launcher, unconstrained, adopts it into the primary checkout.
+    // The launcher, unconstrained, collects it onto the primary's ledger.
     assert!(adopt_worktree_hold(&primary, &linked, 2726, since).unwrap());
-    assert!(!local_hold_path(&linked, 2726).exists());
-    let adopted = read_hold_record(&primary, 2726).expect("adopted marker");
+    assert!(!local.exists());
+    let adopted = read_hold_record(&primary, 2726).expect("adopted hold");
     assert_eq!(adopted.reason_kind, HoldReasonKind::Rework);
     assert_eq!(adopted.spec.as_deref(), Some("BUG-9"));
     assert!(stray_worktree_markers(&primary).is_empty());
@@ -152,23 +168,24 @@ fn a_contained_writer_falls_back_locally_and_the_launcher_adopts_the_marker() {
 #[test]
 fn adoption_skips_a_marker_older_than_the_review_run() {
     let (_tmp, primary, linked) = primary_with_linked();
-    std::fs::create_dir_all(local_hold_path(&linked, 5).parent().unwrap()).unwrap();
+    std::fs::create_dir_all(legacy_marker(&linked, 5).parent().unwrap()).unwrap();
     std::fs::write(
-        local_hold_path(&linked, 5),
+        legacy_marker(&linked, 5),
         serde_json::to_vec_pretty(&rework(5)).unwrap(),
     )
     .unwrap();
     let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
     assert!(!adopt_worktree_hold(&primary, &linked, 5, later).unwrap());
     assert!(read_hold_record(&primary, 5).is_none());
-    assert!(local_hold_path(&linked, 5).is_file());
+    assert!(legacy_marker(&linked, 5).is_file());
 }
 
 #[test]
 fn outside_a_repository_the_hold_stays_under_the_given_root() {
     let dir = tempfile::tempdir().unwrap();
-    write_typed_hold(dir.path(), &rework(3)).unwrap();
-    assert!(local_hold_path(dir.path(), 3).is_file());
+    place_hold(dir.path(), &rework(3)).unwrap();
+    assert!(hold_ledger_file(dir.path(), 3).starts_with(dir.path()));
+    assert!(hold_ledger_file(dir.path(), 3).is_file());
     assert_eq!(hold_store_root(dir.path()), dir.path());
 }
 
@@ -177,10 +194,10 @@ fn many_hold_path_calls_resolve_the_primary_checkout_at_most_once() {
     let (_tmp, primary, linked) = primary_with_linked();
     STORE_RESOLUTIONS.with(|n| n.set(0));
     for pr in 0..50 {
-        assert_eq!(hold_path(&linked, pr), local_hold_path(&primary, pr));
+        assert_eq!(hold_path(&linked, pr), legacy_marker(&primary, pr));
         assert_eq!(
             clearance_path(&linked, pr),
-            local_clearance_path(&primary, pr)
+            crate::gate::ledger::legacy::clearance_file_path(&primary, pr)
         );
     }
     let misses: Vec<_> = (0..20).map(|pr| read_hold(&linked, pr)).collect();
@@ -195,7 +212,7 @@ fn many_hold_path_calls_resolve_the_primary_checkout_at_most_once() {
 fn the_store_resolver_never_spawns_git() {
     let src = include_str!("../merge_hold_core.rs");
     let start = src.find("pub(crate) fn hold_store_root(").unwrap();
-    let end = start + src[start..].find("\npub(crate) fn holds_dir(").unwrap();
+    let end = start + src[start..].find("\npub(crate) fn hold_is_open(").unwrap();
     let body = &src[start..end];
     assert!(
         !body.contains("Command::new"),
@@ -264,55 +281,25 @@ fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
 #[test]
 fn a_linked_worktree_placement_is_audited_from_the_primary_checkout() {
     let (_tmp, primary, linked) = primary_with_linked();
-    write_typed_hold(&linked, &rework(2727)).unwrap();
-    std::fs::remove_file(local_hold_path(&primary, 2727)).unwrap();
+    place_hold(&linked, &rework(2727)).unwrap();
+    std::fs::remove_file(hold_ledger_file(&primary, 2727)).unwrap();
     assert_eq!(unrecorded_marker_removals(&primary), vec![2727]);
     assert_eq!(unrecorded_marker_removals(&linked), vec![2727]);
 }
 
-/// TASK-2153: a contained reviewer's fallback marker is placed in its own
-/// worktree with its placement event. Adoption moves the marker AND carries
-/// that placement into the primary's log at its original time, so the hold's
-/// waiting age is the real one and a hand-deleted adopted marker is detected
-/// from the primary.
+/// TASK-2153 / M1 slice 2: a collected legacy worktree marker is placed on
+/// the primary's ledger with a placement event in the primary's log, so a
+/// hand-deleted ledger is detected from the primary.
 // trace:TASK-1951 trace:TASK-2153 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
-fn adoption_carries_the_original_placement_event_to_the_primary() {
-    use crate::events::EventKind;
+fn a_collected_legacy_marker_is_audited_from_the_primary() {
     let (_tmp, primary, linked) = primary_with_linked();
-    std::fs::create_dir_all(primary.join(".aida")).unwrap();
-    std::fs::write(primary.join(".aida/merge-holds"), "occupied").unwrap();
     let since = std::time::SystemTime::now() - std::time::Duration::from_secs(5);
-    write_typed_hold(&linked, &rework(2728)).unwrap();
-    let placements = |root: &Path| -> Vec<chrono::DateTime<chrono::Utc>> {
-        crate::events::read_all(root)
-            .into_iter()
-            .filter_map(|e| match e.kind {
-                EventKind::MergeHoldChanged {
-                    pr: 2728,
-                    placed: true,
-                    ..
-                } => Some(e.ts),
-                _ => None,
-            })
-            .collect()
-    };
-    let original = placements(&linked);
-    assert_eq!(
-        original.len(),
-        1,
-        "the fallback placement is in the worktree log"
-    );
-
-    std::fs::remove_file(primary.join(".aida/merge-holds")).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    let local = legacy_marker(&linked, 2728);
+    std::fs::create_dir_all(local.parent().unwrap()).unwrap();
+    std::fs::write(&local, serde_json::to_vec_pretty(&rework(2728)).unwrap()).unwrap();
     assert!(adopt_worktree_hold(&primary, &linked, 2728, since).unwrap());
-    assert_eq!(
-        placements(&primary),
-        original,
-        "the primary log carries the original placement, at its original time"
-    );
-
-    std::fs::remove_file(local_hold_path(&primary, 2728)).unwrap();
+    std::fs::remove_file(hold_ledger_file(&primary, 2728)).unwrap();
     assert_eq!(unrecorded_marker_removals(&primary), vec![2728]);
 }

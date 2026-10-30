@@ -102,8 +102,6 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "merge_hold_core.rs",
         "merge-hold records: label sync, audit events, review carry-over proof and seat-clone root resolution",
         &[
-            "aida_core::fs_atomic::write_atomic",
-            "crate::events::Event",
             "crate::events::Event::new",
             "crate::events::EventKind",
             "crate::events::EventKind::MergeHoldChanged",
@@ -162,7 +160,6 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "aida_core::ExecutionMode::Operator",
             "aida_core::Requirement",
             "aida_core::RequirementsStore",
-            "aida_core::fs_atomic::write_atomic",
             "crate::events::Event::new",
             "crate::events::EventKind::MergeHoldChanged",
             "crate::events::active_seat",

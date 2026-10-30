@@ -59,6 +59,7 @@ pub(crate) fn recorded_keys(start: &Path) -> Vec<String> {
         .chain(
             stems(dir.join("by-spec"), "json")
                 .into_iter()
+                .chain(stems(dir.join("by-spec"), "jsonl"))
                 .filter_map(|k| spec_key(&k)),
         )
         .collect();
@@ -92,10 +93,22 @@ pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
     };
     recorded_keys(&root)
         .into_iter()
-        .filter_map(|k| ChangeKey::parse(&k))
-        .flat_map(|change| events(&root, change))
+        .flat_map(|k| match ChangeKey::parse(&k) {
+            Some(change) => events(&root, change),
+            None => store::read_unbound(&root, &k),
+        })
         .filter(|e| e.verdict_record().is_some())
         .collect()
+}
+
+/// The ledger file `event` was read from under the store root `root`: its
+/// change's file, or the unbound ledger of the spec it names.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn event_file(root: &Path, event: &GateEvent) -> PathBuf {
+    match ChangeKey::parse(&event.change) {
+        Some(change) => store::ledger_file(root, change),
+        None => store::unbound_file(root, &event.change),
+    }
 }
 
 /// The changes the ledger has recorded `spec` against. A derived cache,
@@ -158,6 +171,7 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
         .into_iter()
         .flat_map(|change| events(root, change))
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
+        .chain(store::read_unbound(root, &spec))
         .collect();
     out.sort_by(|a, b| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)));
     out

@@ -16,14 +16,16 @@
 //! checking the PR binding and that launch's own child grant, and appends it
 //! here. No verdict or hold state persists in a seat clone after collection.
 //!
-//! Slice 1 carries review verdicts. The legacy `.aida/review-verdicts/`
-//! files are read through ([`legacy`]) and preserved verbatim in a
-//! `legacy-imported` event on a change's first ledger write; nothing here
-//! deletes them.
+//! Slice 1 carried review verdicts; slice 2 makes the ledger their only
+//! writer and adds merge holds ([`hold`]). The legacy `.aida/review-verdicts/`
+//! and `.aida/merge-holds/` files are read through ([`legacy`]) and preserved
+//! verbatim in a `legacy-imported` event on a change's first ledger write;
+//! nothing here writes or deletes them.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
 
 pub(crate) mod event;
+pub(crate) mod hold;
 pub(crate) mod legacy;
 pub(crate) mod project;
 pub(crate) mod store;
@@ -135,6 +137,14 @@ pub(crate) fn store_root(start: &Path) -> std::io::Result<PathBuf> {
     Ok(resolved)
 }
 
+/// Whether this process runs in a contained seat, which never writes the
+/// gate ledger (its launcher collects what it records). The gate's verdict
+/// writer asks here, beside the rule it enforces.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn contained() -> bool {
+    crate::session::process_contained()
+}
+
 /// What recording an event did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Delivered {
@@ -149,7 +159,7 @@ pub(crate) enum Delivered {
 /// the ledger.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn record_event(start: &Path, event: GateEvent) -> std::io::Result<Delivered> {
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "a contained seat cannot write the gate ledger; the launcher that started it collects its verdict",
@@ -158,72 +168,61 @@ pub(crate) fn record_event(start: &Path, event: GateEvent) -> std::io::Result<De
     store::append_one(&store_root(start)?, event)
 }
 
-/// Before a PR-keyed verdict file is written: take the change's one-time
-/// legacy import now, so it captures the files as they were and the record
-/// about to be written lands on the ledger once, as its own `verdict` event.
-/// A contained writer cannot write the ledger; its submission is ingested
-/// after the primary side's own import. Best-effort, like the mirror.
+/// The single verdict writer (M1 slice 2): append `record` to the gate
+/// ledger for the key its canonical path names
+/// (`<root>/.aida/review-verdicts/<KEY>.json`). A change key lands on that
+/// change, indexed by `spec` when given. A spec key lands on the spec's most
+/// recent indexed change; a spec no change has been recorded against yet
+/// lands on its unbound entry ([`store::append_unbound`]), read with the
+/// spec's change-bound records. No legacy file is written.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn before_verdict_write(path: &Path) {
-    let Some((root, change)) = legacy::change_of_verdict_path(path) else {
-        return;
-    };
-    if crate::session::aida_contained_env().unwrap_or(false) {
-        return;
-    }
-    let imported = store_root(&root).and_then(|store| store::import_legacy(&store, change));
-    if let Err(e) = imported {
-        eprintln!(
-            "warning: could not import the legacy verdicts of {} into its gate ledger: {e}",
-            change.as_key()
-        );
-    }
-}
-
-/// Ledger half of a verdict write: append the record as a `verdict` event
-/// for the change its path names. A spec-keyed path has no change key and is
-/// skipped (slice 2 resolves spec → change). A contained writer skips it too:
-/// its file stays in its seat clone for the launcher to collect. Best-effort
-/// with a loud warning: the legacy file just written stays the compatibility
-/// record in slice 1.
-// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn mirror_verdict_write(
+pub(crate) fn record_verdict_at(
     path: &Path,
     record: &crate::gate::review_verdict::JsonObj,
     spec: Option<&str>,
-) {
-    let Some((root, change)) = legacy::change_of_verdict_path(path) else {
-        return;
-    };
-    if crate::session::aida_contained_env().unwrap_or(false) {
-        return;
+) -> std::io::Result<Delivered> {
+    let (root, key) =
+        crate::gate::review_verdict::canonical_verdict_key(path).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("{} is not a verdict key path", path.display()),
+            )
+        })?;
+    if crate::session::process_contained() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "a contained seat cannot write the gate ledger; the launcher that started it collects its verdict",
+        ));
     }
-    let event = event::verdict_event(&root, change, record, spec);
-    if let Err(e) = record_event(&root, event) {
-        eprintln!(
-            "warning: recorded {} but could not add it to the {} gate ledger: {e}",
-            path.display(),
-            change.as_key()
-        );
+    let store = store_root(&root)?;
+    if let Some(change) = ChangeKey::parse(&key) {
+        return store::append_one(&store, event::verdict_event(&store, change, record, spec));
+    }
+    let spec_key = key.trim().to_ascii_uppercase();
+    match project::changes_for_spec(&store, &spec_key).last() {
+        Some(change) => store::append_one(
+            &store,
+            event::verdict_event(&store, *change, record, Some(&spec_key)),
+        ),
+        None => store::append_unbound(&store, &spec_key, record),
     }
 }
 
 /// A verdict file written outside the record path (the review skill's
-/// heredoc) at a PR-keyed path: append it to that change's ledger as it
-/// stands. The file is left as written and nothing else is written beside
-/// it. Any other path, or a contained caller, records nothing.
+/// heredoc) at a canonical verdict path: append it to the ledger as it
+/// stands ([`record_verdict_at`]). The file is the skill's hand-off and is
+/// left as written. A contained caller records nothing: its launcher collects.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn adopt_verdict_file(
     path: &Path,
     record: &crate::gate::review_verdict::JsonObj,
 ) -> std::io::Result<()> {
-    let Some((root, change)) = legacy::change_of_verdict_path(path) else {
-        return Ok(());
-    };
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained()
+        || crate::gate::review_verdict::canonical_verdict_key(path).is_none()
+    {
         return Ok(());
     }
-    record_event(&root, event::verdict_event(&root, change, record, None)).map(|_| ())
+    record_verdict_at(path, record, None).map(|_| ())
 }
 
 /// A collected standalone verdict: the reviewer's record for `change`, then
@@ -236,7 +235,7 @@ pub(crate) fn record_collected_verdict(
     record: &crate::gate::review_verdict::JsonObj,
     spec_records: &[(String, crate::gate::review_verdict::JsonObj)],
 ) -> std::io::Result<usize> {
-    if crate::session::aida_contained_env().unwrap_or(false) {
+    if crate::session::process_contained() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "a contained seat cannot collect a verdict onto the gate ledger",

@@ -48,7 +48,7 @@ fn unrecorded_manual_marker_removal_is_detected_but_recorded_clear_is_not() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let record = typed_hold(4321, HoldReasonKind::Supervision, "fixture", None);
-    write_typed_hold(root, &record).unwrap();
+    place_hold(root, &record).unwrap();
     let mut placed = crate::events::Event::new(
         None,
         "",
@@ -60,11 +60,11 @@ fn unrecorded_manual_marker_removal_is_detected_but_recorded_clear_is_not() {
             human_attested: false,
         },
     );
-    std::fs::remove_file(hold_path(root, 4321)).unwrap();
+    std::fs::remove_file(hold_ledger_file(root, 4321)).unwrap();
     assert_eq!(unrecorded_marker_removals(root), vec![4321]);
     assert!(read_hold(root, 4321).is_some());
 
-    record_clearance(root, &record, &PrincipalIdentity::human("joe")).unwrap();
+    release_hold(root, &record, &PrincipalIdentity::human("joe"), None).unwrap();
     placed.kind = crate::events::EventKind::MergeHoldChanged {
         pr: 4321,
         placed: false,
@@ -89,8 +89,8 @@ fn tampered_hold_reads_as_held_until_a_clearance_is_recorded() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let record = typed_hold(8801, HoldReasonKind::Supervision, "supervised spec", None);
-    write_typed_hold(root, &record).unwrap();
-    std::fs::remove_file(hold_path(root, 8801)).unwrap();
+    place_hold(root, &record).unwrap();
+    std::fs::remove_file(hold_ledger_file(root, 8801)).unwrap();
 
     // Fail closed: the merge chokepoint must still see a hold, and it must
     // say WHY, not repeat the deleted marker's reason as if it were read.
@@ -110,10 +110,11 @@ fn tampered_hold_reads_as_held_until_a_clearance_is_recorded() {
 
     // The human-gated clearance is the door back out. After it, the PR
     // reads unheld and the tampering report stops.
-    record_clearance(
+    release_hold(
         root,
         &typed_hold(8801, HoldReasonKind::Unknown, MARKER_MISSING_REASON, None),
         &PrincipalIdentity::human("joe"),
+        None,
     )
     .unwrap();
     assert!(unrecorded_marker_removals(root).is_empty());
@@ -142,7 +143,7 @@ fn label_definition_failure_keeps_the_local_hold_marker() {
         "[forge]\nprovider = \"github\"\n",
     )
     .unwrap();
-    write_typed_hold(
+    place_hold(
         dir.path(),
         &typed_hold(44, HoldReasonKind::Supervision, "test", None),
     )
@@ -151,7 +152,8 @@ fn label_definition_failure_keeps_the_local_hold_marker() {
         Ok((false, "'aida:merge-hold-cleared' not found".into()))
     })
     .unwrap_err();
-    assert!(hold_path(dir.path(), 44).exists());
+    // M1 slice 2: the hold is open on the gate ledger.
+    assert!(hold_is_open(dir.path(), 44));
     assert!(read_hold(dir.path(), 44).is_some());
     assert!(matches!(
         read_label_state(dir.path(), 44),
@@ -248,10 +250,11 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
     let dir = tempfile::tempdir().unwrap();
     let record = typed_hold(2019, HoldReasonKind::Unknown, LABEL_ONLY_REASON, None);
     let actor = human_clear_actor(&record, "joe", None).unwrap();
-    record_clearance(dir.path(), &record, &actor).unwrap();
-    let clearance: HoldClearance =
-        serde_json::from_str(&std::fs::read_to_string(clearance_path(dir.path(), 2019)).unwrap())
-            .unwrap();
+    release_hold(dir.path(), &record, &actor, None).unwrap();
+    let clearance: HoldClearance = serde_json::from_value(serde_json::Value::Object(
+        recorded_clearance(dir.path(), 2019).unwrap(),
+    ))
+    .unwrap();
     assert_eq!(clearance.cleared_by, "human:joe");
     assert_eq!(clearance.detail, LABEL_ONLY_REASON);
 
@@ -273,7 +276,10 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
         .expect("clear handler must remain inspectable");
     let floor = clear.find("has_integrity_floor_authority()").unwrap();
     let read = clear.find("merge_hold::fetch_pinned_change(").unwrap();
-    let recorded = clear.rfind("merge_hold_core::record_clearance(").unwrap();
+    // M1 slice 2: the clearance is recorded by `release_hold` (a
+    // `hold-release` event on the gate ledger).
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    let recorded = clear.rfind("merge_hold_core::release_hold(").unwrap();
     assert!(
         floor < read && read < recorded,
         "floor, then forge read, then record"
@@ -286,12 +292,19 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
     // "nothing to clear" early return a missing marker would otherwise
     // take. trace:BUG-1693 | ai:claude
     let squashed = clear.split_whitespace().collect::<Vec<_>>().join(" ");
+    let tampering = squashed
+        .find(".or_else(|| tampering_record.as_ref().map(|(r, a)| (r, a, None)))")
+        .expect("clear must RECORD a clearance for a hold whose marker went missing");
     let door = squashed
         .find(
-            "if let Some((record, actor)) = &tampering_record { \
-             crate::gate::merge_hold_core::record_clearance( &root, record, actor, )?; }",
+            "if let Some((record, actor, verdict)) = release { \
+             crate::gate::merge_hold_core::release_hold(&root, record, actor, verdict)?; }",
         )
         .expect("clear must RECORD a clearance for a hold whose marker went missing");
+    assert!(
+        tampering < door,
+        "the tampering record feeds the recorded release"
+    );
     // TASK-2152: the no-hold return now lives in `finish_clear`, which
     // runs after every clearance is recorded. trace:TASK-1951 | ai:claude
     let no_hold = squashed
@@ -382,8 +395,9 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
         Some(OLD.into()),
         Some("claude-reviewer-1".into()),
     ));
-    write_typed_hold(root, &hold).unwrap();
-    let before = std::fs::read(hold_path(root, 2049)).unwrap();
+    place_hold(root, &hold).unwrap();
+    // M1 slice 2: the hold lives on the PR's gate ledger.
+    let before = std::fs::read(hold_ledger_file(root, 2049)).unwrap();
     let release = |head: Option<&str>| {
         refusal_release(
             &hold,
@@ -477,7 +491,7 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
     .unwrap();
     assert!(matches!(release(Some(HEAD)), RefusalRelease::Held(_)));
     // Deciding the condition never touches the marker.
-    assert_eq!(std::fs::read(hold_path(root, 2049)).unwrap(), before);
+    assert_eq!(std::fs::read(hold_ledger_file(root, 2049)).unwrap(), before);
 }
 
 // TASK-1801: a current verdict file the anchored reader refuses (here an
@@ -488,7 +502,7 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
 #[test]
 fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
     use crate::gate::review_verdict::{
-        archived_verdict_file_for_sha, read_recorded_verdict, read_verdict_for_sha, record_verdict,
+        archived_verdict_file_for_sha, read_recorded_verdict, read_verdict_for_sha,
         verdict_file_for_sha, verdict_path,
     };
     const HEAD: &str = "cd21a1dc0a9e1111111111111111111111111111";
@@ -506,18 +520,18 @@ fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
         None,
         Some("claude-reviewer-1".into()),
     ));
-    record_verdict(
-        root,
-        "TASK-1801",
-        Some("approved"),
-        Some(HEAD),
-        None,
-        None,
-        &[],
-        "claude-reviewer-1",
-    )
-    .unwrap();
+    // M1 slice 2: the record path writes the gate ledger only, so the
+    // current file and its per-sha archive are the legacy pair an older
+    // binary left, read through.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let current = verdict_path(root, "TASK-1801");
+    let body = format!(
+        r#"{{"verdict":"approved","reviewed_sha":"{HEAD}","recorded_by":"claude-reviewer-1","recorded_at":"2026-10-29T00:00:00Z"}}"#
+    );
+    let archive = crate::gate::review_verdict::verdict_archive_dir(&current).unwrap();
+    std::fs::create_dir_all(&archive).unwrap();
+    std::fs::write(&current, &body).unwrap();
+    std::fs::write(archive.join(format!("{HEAD}.json")), &body).unwrap();
     assert!(
         archived_verdict_file_for_sha(&current, HEAD).is_some(),
         "the fixture needs an archive that could answer for the head"
@@ -606,8 +620,9 @@ fn marker_references_its_verdict_and_carries_a_release_condition() {
     ));
     record.release_condition = Some("1. approved at head 2. squash names BUG-1460".into());
     record.spec = Some("BUG-1460".into());
-    write_typed_hold(dir.path(), &record).unwrap();
-    let body = std::fs::read_to_string(hold_path(dir.path(), 7)).unwrap();
+    place_hold(dir.path(), &record).unwrap();
+    // M1 slice 2: the hold is a `hold` event on the PR's gate ledger.
+    let body = std::fs::read_to_string(hold_ledger_file(dir.path(), 7)).unwrap();
     assert!(body.contains("\"verdict_ref\""), "{body}");
     let back = read_hold_record(dir.path(), 7).unwrap();
     assert_eq!(back.verdict_ref.as_ref().unwrap().key, "BUG-1460");
@@ -625,6 +640,8 @@ fn marker_references_its_verdict_and_carries_a_release_condition() {
     );
     // A pre-BUG-1532 typed marker (no new fields) still parses.
     let old = r#"{"schema_version":2,"pr":8,"reason_kind":"supervision","detail":"d","routing_state":"pending"}"#;
+    // A legacy marker file, read through.
+    std::fs::create_dir_all(hold_path(dir.path(), 8).parent().unwrap()).unwrap();
     std::fs::write(hold_path(dir.path(), 8), old).unwrap();
     let back = read_hold_record(dir.path(), 8).unwrap();
     assert_eq!(back.reason_kind, HoldReasonKind::Supervision);
@@ -642,20 +659,20 @@ fn hand_add_never_silently_overwrites_an_existing_marker() {
     let line = "RELEASE: squash subject must not name BUG-1288";
     write_hold(dir.path(), 1999, line).unwrap();
     let fresh = typed_hold(1999, HoldReasonKind::Supervision, "one line", None);
-    let err = place_hand_hold(dir.path(), &fresh, false).unwrap_err();
+    let err = place_hold_by_hand(dir.path(), &fresh, false).unwrap_err();
     assert!(err.contains(line) && err.contains("--replace"), "{err}");
     let body = std::fs::read_to_string(hold_path(dir.path(), 1999)).unwrap();
     assert!(
         body.contains(line),
         "the existing body must survive: {body}"
     );
-    place_hand_hold(dir.path(), &fresh, true).unwrap();
+    place_hold_by_hand(dir.path(), &fresh, true).unwrap();
     assert_eq!(
         read_hold_record(dir.path(), 1999).unwrap().detail,
         "one line"
     );
     // No marker → placed.
-    place_hand_hold(
+    place_hold_by_hand(
         dir.path(),
         &typed_hold(2000, HoldReasonKind::Decision, "d", None),
         false,
@@ -679,11 +696,11 @@ fn write_read_clear_round_trip() {
     .unwrap();
     let reason = read_hold(root, 42).expect("hold must be present");
     assert!(reason.contains("drive"), "{reason}");
-    // Clear → gone.
-    clear_hold(root, 42).unwrap();
+    // Release → gone, and the release is on the ledger beside the hold.
+    let held = read_hold_record(root, 42).unwrap();
+    release_hold(root, &held, &PrincipalIdentity::human("joe"), None).unwrap();
     assert!(read_hold(root, 42).is_none());
-    // Clearing an absent hold is a no-op success.
-    clear_hold(root, 42).unwrap();
+    assert!(recorded_clearance(root, 42).is_some());
 }
 
 #[test]
@@ -800,7 +817,7 @@ fn typed_recusal_round_trip_and_label_update_preserve_routing() {
         placed_by: None,
         absorbed: Vec::new(),
     };
-    write_typed_hold(dir.path(), &record).unwrap();
+    place_hold(dir.path(), &record).unwrap();
     record_label_state(dir.path(), 2023, &LabelState::Synced).unwrap();
     let reread = read_hold_record(dir.path(), 2023).unwrap();
     assert_eq!(reread.reason_kind, HoldReasonKind::Recusal);
@@ -842,8 +859,8 @@ fn recusal_requires_named_principal_and_malformed_json_stays_held() {
         placed_by: None,
         absorbed: Vec::new(),
     };
-    assert!(write_typed_hold(dir.path(), &record).is_err());
-    std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+    assert!(place_hold(dir.path(), &record).is_err());
+    std::fs::create_dir_all(hold_path(dir.path(), 7).parent().unwrap()).unwrap();
     std::fs::write(hold_path(dir.path(), 7), "{not-json").unwrap();
     let held = read_hold_record(dir.path(), 7).unwrap();
     assert_eq!(held.reason_kind, HoldReasonKind::Unknown);
@@ -867,7 +884,7 @@ fn legacy_detail_is_preserved_when_absorbed_by_rework() {
     let legacy_detail = "I wrote this; another reader is needed";
     write_hold(dir.path(), 8, legacy_detail).unwrap();
     let rework = typed_hold(8, HoldReasonKind::Rework, "changes requested", None);
-    write_typed_hold(dir.path(), &rework).unwrap();
+    place_hold(dir.path(), &rework).unwrap();
     let got = read_hold_record(dir.path(), 8).unwrap();
     assert_eq!(got.reason_kind, HoldReasonKind::Rework);
     assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Supervision);
@@ -917,9 +934,11 @@ fn clearance_is_recorded_as_the_human_principal() {
     let dir = tempfile::tempdir().unwrap();
     let record = recused_record();
     let actor = human_clear_actor(&record, "joe", None).unwrap();
-    record_clearance(dir.path(), &record, &actor).unwrap();
-    let body = std::fs::read_to_string(clearance_path(dir.path(), 42)).unwrap();
-    let clearance: HoldClearance = serde_json::from_str(&body).unwrap();
+    release_hold(dir.path(), &record, &actor, None).unwrap();
+    let clearance: HoldClearance = serde_json::from_value(serde_json::Value::Object(
+        recorded_clearance(dir.path(), 42).unwrap(),
+    ))
+    .unwrap();
     assert_eq!(clearance.cleared_by, "human:joe");
     assert_eq!(clearance.reason_kind, HoldReasonKind::Recusal);
     assert_eq!(clearance.target_head_sha.as_deref(), Some("head-a"));
@@ -942,7 +961,7 @@ fn human_principal_round_trips() {
 fn a_rework_hold_never_displaces_a_recusal_hold() {
     let dir = tempfile::tempdir().unwrap();
     let recusal = recused_record();
-    write_typed_hold(dir.path(), &recusal).unwrap();
+    place_hold(dir.path(), &recusal).unwrap();
     let mut rework = typed_hold(
         42,
         HoldReasonKind::Rework,
@@ -950,7 +969,7 @@ fn a_rework_hold_never_displaces_a_recusal_hold() {
         Some("abc1234-full".into()),
     );
     rework.spec = Some("BUG-1".into());
-    write_typed_hold(dir.path(), &rework).unwrap();
+    place_hold(dir.path(), &rework).unwrap();
     let got = read_hold_record(dir.path(), 42).unwrap();
     assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
     assert_eq!(got.recused_principals, recusal.recused_principals);
@@ -964,7 +983,7 @@ fn a_rework_hold_never_displaces_a_recusal_hold() {
 #[test]
 fn recusal_written_after_rework_is_primary_and_absorbs_rework() {
     let dir = tempfile::tempdir().unwrap();
-    write_typed_hold(
+    place_hold(
         dir.path(),
         &typed_hold(
             42,
@@ -975,7 +994,7 @@ fn recusal_written_after_rework_is_primary_and_absorbs_rework() {
     )
     .unwrap();
     let recusal = recused_record();
-    write_typed_hold(dir.path(), &recusal).unwrap();
+    place_hold(dir.path(), &recusal).unwrap();
     let got = read_hold_record(dir.path(), 42).unwrap();
     assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
     assert_eq!(got.recused_principals, recusal.recused_principals);
@@ -994,15 +1013,15 @@ fn recusal_written_after_rework_is_primary_and_absorbs_rework() {
 fn same_kind_refresh_unions_existing_absorbed_holds() {
     let dir = tempfile::tempdir().unwrap();
     let recusal = recused_record();
-    write_typed_hold(dir.path(), &recusal).unwrap();
-    write_typed_hold(
+    place_hold(dir.path(), &recusal).unwrap();
+    place_hold(
         dir.path(),
         &typed_hold(42, HoldReasonKind::Rework, "changes", None),
     )
     .unwrap();
     let mut refreshed = recused_record();
     refreshed.label_state = Some("synced".into());
-    write_typed_hold(dir.path(), &refreshed).unwrap();
+    place_hold(dir.path(), &refreshed).unwrap();
     let got = read_hold_record(dir.path(), 42).unwrap();
     assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
     assert_eq!(got.label_state.as_deref(), Some("synced"));
@@ -1041,9 +1060,9 @@ fn composition_rejects_invalid_recusal_and_accepts_valid_existing_recusal() {
     let dir = tempfile::tempdir().unwrap();
     let mut invalid = recused_record();
     invalid.recused_principals.clear();
-    assert!(write_typed_hold(dir.path(), &invalid).is_err());
-    write_typed_hold(dir.path(), &recused_record()).unwrap();
-    assert!(write_typed_hold(
+    assert!(place_hold(dir.path(), &invalid).is_err());
+    place_hold(dir.path(), &recused_record()).unwrap();
+    assert!(place_hold(
         dir.path(),
         &typed_hold(42, HoldReasonKind::Rework, "changes", None)
     )
@@ -1054,10 +1073,10 @@ fn composition_rejects_invalid_recusal_and_accepts_valid_existing_recusal() {
 #[test]
 fn hand_replace_discards_recusal_but_default_hand_add_refuses() {
     let dir = tempfile::tempdir().unwrap();
-    write_typed_hold(dir.path(), &recused_record()).unwrap();
+    place_hold(dir.path(), &recused_record()).unwrap();
     let rework = typed_hold(42, HoldReasonKind::Rework, "manual rework", None);
-    assert!(place_hand_hold(dir.path(), &rework, false).is_err());
-    place_hand_hold(dir.path(), &rework, true).unwrap();
+    assert!(place_hold_by_hand(dir.path(), &rework, false).is_err());
+    place_hold_by_hand(dir.path(), &rework, true).unwrap();
     let got = read_hold_record(dir.path(), 42).unwrap();
     assert_eq!(got.reason_kind, HoldReasonKind::Rework);
     assert!(got.absorbed.is_empty());
@@ -1070,7 +1089,7 @@ fn old_typed_markers_without_absorbed_still_parse() {
     let record = typed_hold(42, HoldReasonKind::Supervision, "old marker", None);
     let mut json = serde_json::to_value(record).unwrap();
     json.as_object_mut().unwrap().remove("absorbed");
-    std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+    std::fs::create_dir_all(hold_path(dir.path(), 42).parent().unwrap()).unwrap();
     std::fs::write(
         hold_path(dir.path(), 42),
         serde_json::to_vec(&json).unwrap(),
@@ -1087,9 +1106,9 @@ fn preserving_rework_write_does_not_reconcile_existing_recusal_route() {
     let mut recusal = recused_record();
     recusal.routed_to = vec![PrincipalIdentity::parse("agent:cold-reader")];
     recusal.routing_state = HoldRoutingState::Routed;
-    write_marker(dir.path(), &recusal, false, false, None).unwrap();
+    append_hold(dir.path(), &recusal, false, false).unwrap();
     let expected_route = recusal.routed_to.clone();
-    write_typed_hold(
+    place_hold(
         dir.path(),
         &typed_hold(42, HoldReasonKind::Rework, "changes requested", None),
     )
@@ -1104,10 +1123,10 @@ fn preserving_rework_write_does_not_reconcile_existing_recusal_route() {
 #[test]
 fn preserving_path_still_rejects_invalid_recusal_refresh() {
     let dir = tempfile::tempdir().unwrap();
-    write_marker(dir.path(), &recused_record(), false, false, None).unwrap();
+    append_hold(dir.path(), &recused_record(), false, false).unwrap();
     let mut invalid = recused_record();
     invalid.recused_principals.clear();
-    assert!(write_typed_hold(dir.path(), &invalid).is_err());
+    assert!(place_hold(dir.path(), &invalid).is_err());
 }
 
 #[test]
@@ -1141,7 +1160,7 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
     // probes liveness, so it lives on the explicit `merge-hold list --fix`.
     for forbidden in [
         "reconcile_recusal_hold",
-        "write_typed_hold",
+        "place_hold",
         "merge_hold::write_hold",
         "sysinfo::",
     ] {
@@ -1193,7 +1212,7 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
     std::fs::create_dir_all(dir.path().join(".aida/agents")).unwrap();
     let mut record = typed_hold(44, HoldReasonKind::Recusal, "recused", Some("abc".into()));
     record.recused_principals = vec![PrincipalIdentity::parse("agent:author")];
-    write_typed_hold(dir.path(), &record).unwrap();
+    place_hold(dir.path(), &record).unwrap();
 
     std::fs::write(dir.path().join(".aida/agents/reader.toml"), format!("id = \"reader\"\nagent_type = \"codex\"\npid = {}\nrole = \"reviewer\"\navailability = \"available\"\n", std::process::id())).unwrap();
     let routed = reconcile_recusal_hold(dir.path(), 44, Some("abc")).unwrap();
@@ -1269,7 +1288,7 @@ fn label_state_persistence_lives_in_protected_core_for_typed_and_legacy_markers(
         "manual check",
         Some("abc1234".into()),
     );
-    write_typed_hold(dir.path(), &record).unwrap();
+    place_hold(dir.path(), &record).unwrap();
     record_label_state(
         dir.path(),
         102,
@@ -1347,8 +1366,8 @@ fn routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence() {
         Ok(())
     };
 
-    // 1. write_marker_with_route persists ONLY routed_to and routing_state from the proposal.
-    write_marker_with_route(dir.path(), &original, true, false, None, tamper_route).unwrap();
+    // 1. append_hold_with_route persists ONLY routed_to and routing_state from the proposal.
+    append_hold_with_route(dir.path(), &original, true, false, tamper_route).unwrap();
     let persisted = read_hold_record(dir.path(), 2099).unwrap();
     assert_eq!(
         persisted.routed_to,

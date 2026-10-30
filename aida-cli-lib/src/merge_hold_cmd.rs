@@ -961,7 +961,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             }
             // BUG-1562: never silently overwrite an existing marker's body.
             // trace:BUG-1562 | ai:claude
-            crate::gate::merge_hold_core::place_hand_hold(&root, &record, *replace)
+            crate::gate::merge_hold_core::place_hold_by_hand(&root, &record, *replace)
                 .map_err(|e| anyhow::anyhow!(e))?;
             if record.release_condition.is_none() {
                 println!(
@@ -1134,37 +1134,21 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         }
                         _ => None,
                     };
-                    // BUG-1693: persist the local clearance before removing
-                    // the marker or changing forge labels. A failed audit
-                    // write must leave the hold in place.
-                    // TASK-1757: the same per-PR hold lock auto-release and
-                    // every placement take. trace:TASK-1951 trace:TASK-1757 | ai:claude
-                    crate::gate::merge_hold_core::with_hold_lock(
-                        &root,
-                        *pr,
-                        || -> anyhow::Result<()> {
-                            if let Some((record, actor)) = &cleared {
-                                crate::gate::merge_hold_core::record_clearance_with_verdict(
-                                    &root,
-                                    record,
-                                    actor,
-                                    released_by_verdict.clone(),
-                                )?;
-                            }
-                            if let Some((record, actor)) = &tampering_record {
-                                crate::gate::merge_hold_core::record_clearance(
-                                    &root, record, actor,
-                                )?;
-                            }
-                            if let Some((record, actor)) = &label_only_record {
-                                crate::gate::merge_hold_core::record_clearance(
-                                    &root, record, actor,
-                                )?;
-                            }
-                            crate::gate::merge_hold_core::clear_hold(&root, *pr)?;
-                            Ok(())
-                        },
-                    )??;
+                    // BUG-1693: record the release before changing forge
+                    // labels. M1 slice 2: the release is one `hold-release`
+                    // event on the PR's gate ledger, appended under the
+                    // per-PR hold lock (TASK-1757); the hold it answers stays
+                    // on the ledger as evidence.
+                    // trace:TASK-1951 trace:TASK-1757 | ai:claude
+                    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+                    let release = cleared
+                        .as_ref()
+                        .map(|(record, actor)| (record, actor, released_by_verdict.clone()))
+                        .or_else(|| tampering_record.as_ref().map(|(r, a)| (r, a, None)))
+                        .or_else(|| label_only_record.as_ref().map(|(r, a)| (r, a, None)));
+                    if let Some((record, actor, verdict)) = release {
+                        crate::gate::merge_hold_core::release_hold(&root, record, actor, verdict)?;
+                    }
                     if let Some((record, actor)) = &cleared {
                         if record.reason_kind
                             == crate::gate::merge_hold_core::HoldReasonKind::Recusal
@@ -1250,7 +1234,17 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         return Ok(());
                     }
                     for (pr, _reason, terminal) in &stale {
-                        let _ = crate::gate::merge_hold_core::clear_hold(&root, *pr);
+                        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+                        if let Some(record) =
+                            crate::gate::merge_hold_core::read_hold_record(&root, *pr)
+                        {
+                            let _ = crate::gate::merge_hold_core::release_hold_by(
+                                &root,
+                                &record,
+                                "aida:stale-sweep",
+                                None,
+                            );
+                        }
                         if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
                             eprintln!(
                                 "  {} label not dropped on PR #{pr}: {err}",

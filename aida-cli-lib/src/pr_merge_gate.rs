@@ -192,8 +192,8 @@ pub(crate) fn stamp_pr_review_verdict(
     ci_terminal_green: Option<bool>,
 ) -> std::io::Result<std::path::PathBuf> {
     // One verified write through the anchored boundary: the CI fields are
-    // folded onto the built object, so they also reach the per-sha archive
-    // and nothing re-reads or rewrites the verdict by path.
+    // folded onto the built object, so they also reach the gate ledger's
+    // round at the sha and nothing re-reads or rewrites the verdict by path.
     // trace:TASK-1951 trace:TASK-1668 | ai:claude
     let path = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
     let mut object = crate::gate::review_verdict::build_verdict_object(
@@ -244,8 +244,15 @@ mod task_168_pr_verdict_metadata_tests {
         )
         .unwrap();
 
-        let value: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        // M1 slice 2: the stamped record is the current one on the gate
+        // ledger; the reviewer's file is its input, left as written.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        let value: serde_json::Value = serde_json::from_str(
+            &crate::gate::review_verdict::current_verdict_at(&path)
+                .unwrap()
+                .body,
+        )
+        .unwrap();
         // BUG-1505: the drain stamp canonicalizes the reviewer's spelling.
         assert_eq!(value["verdict"], "approved");
         assert_eq!(value["summary"], "clean");
@@ -272,10 +279,15 @@ mod task_168_pr_verdict_metadata_tests {
 
         stamp_pr_review_verdict(tmp.path(), 1966, Some(sha), None, Some(sha), Some(true)).unwrap();
 
-        let archive = crate::gate::review_verdict::archived_verdict_file_for_sha(&path, sha)
-            .expect("the round is archived by sha");
-        let value: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+        // M1 slice 2: the ledger's round at the sha is the per-sha record.
+        let at_sha = crate::gate::ledger::project::verdict_events_at(tmp.path(), "PR-1966", sha);
+        let value = serde_json::Value::Object(
+            at_sha
+                .first()
+                .and_then(|e| e.verdict_record())
+                .expect("the round is archived by sha")
+                .clone(),
+        );
         assert_eq!(value["ci_terminal_sha"], sha);
         assert_eq!(value["ci_terminal_green"], true);
     }
