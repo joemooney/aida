@@ -27,6 +27,8 @@ pub struct GitResult {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
+    /// Exit code; `None` when git was killed by a signal. trace:BUG-034 | ai:claude
+    pub code: Option<i32>,
 }
 
 /// Run a git command in the given working directory.
@@ -109,6 +111,7 @@ fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Res
         success: output.status.success(),
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        code: output.status.code(),
     })
 }
 
@@ -1336,7 +1339,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-m", message]);
-    let result = git(repo, &argv)?;
+    let result = commit_failure::with_lock_backoff(|| git(repo, &argv), std::thread::sleep)?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -1348,7 +1351,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     ) {
         Ok(false) // nothing to commit — not an error
     } else {
-        anyhow::bail!("git commit failed: {}", result.stderr);
+        Err(commit_failure::error(&result)) // trace:BUG-034 | ai:claude
     }
 }
 
@@ -1365,9 +1368,9 @@ pub fn commit_paths(repo: &Path, message: &str, paths: &[&str]) -> Result<()> {
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-q", "-m", message, "--"]);
     argv.extend_from_slice(paths);
-    let result = git(repo, &argv)?;
+    let result = commit_failure::with_lock_backoff(|| git(repo, &argv), std::thread::sleep)?;
     if !result.success {
-        anyhow::bail!("git commit failed: {}", result.stderr);
+        return Err(commit_failure::error(&result)); // trace:BUG-034 | ai:claude
     }
     Ok(())
 }
@@ -1583,6 +1586,8 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
     Ok(sha)
 }
 
+// trace:BUG-034 | ai:claude
+mod commit_failure;
 // trace:BUG-2211 | ai:claude
 mod config_lock;
 mod evidence;
