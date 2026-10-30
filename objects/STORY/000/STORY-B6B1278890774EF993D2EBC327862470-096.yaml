@@ -37,8 +37,14 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T04:00:21.846030687Z
+modified_at: 2026-10-30T04:24:09.832299004Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a18b08-cda8-7bc3-ade9-a62a2c7860c2
+  created_at: 2026-10-30T04:24:09.832295679Z
+  created_by: joe
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
   author: joe
@@ -219,6 +225,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18b0d-80f5-7c23-b122-dffb36216f08
+  author: joe
+  timestamp: 2026-10-30T04:24:40.437078258Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
