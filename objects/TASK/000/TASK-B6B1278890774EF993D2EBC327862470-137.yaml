@@ -8,12 +8,12 @@ description: |-
   - scripts/test-time-budget.toml sets that key to 35, with the trailing comment updated to cite max 15.2s (CI runs on 2026-10-30, PR-3142/PR-3149).
   - No other entry changes; the test itself is not modified or weakened.
   - Gate: FASTTRACK (make check-ci-fast only, no cargo).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:08:25.227020523Z
-modified_at: 2026-10-30T23:12:12.244128711Z
+modified_at: 2026-10-30T23:28:09.754696225Z
 req_type: Task
 tags:
 - ci-flake
@@ -52,6 +52,15 @@ history:
   session_id: 01a18f1568dd
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a18f24-661a-7760-9d0f-deb9b18971ef
+  author: joe
+  timestamp: 2026-10-30T23:28:09.754732464Z
+  session_id: 01a18f1568dd
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -60,3 +69,9 @@ filed_at:
   aida_build_sha: cdbecda7678
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: aida ship refuses to run git in this contained seat''s private clone (''its git configuration and hooks are writable by the seat''); commit 9c512bfecbf is ready, make check-ci-fast passed (36 gates)'
+  lean: branch is ready; publish from the host side (or re-run aida ship after the seat-publish fix in PR-3143 lands)
+  raised_by: implementer
+  raised_at: 2026-10-30T23:28:09.754696225Z
