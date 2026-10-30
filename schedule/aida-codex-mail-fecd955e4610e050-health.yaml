@@ -1,0 +1,6 @@
+job: aida-codex-mail-fecd955e4610e050-health
+last_run: 2026-10-30T00:44:19.577718233Z
+last_by:
+  seat: substrate
+  vendor: tick
+result: ok
