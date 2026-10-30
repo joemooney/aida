@@ -1,0 +1,45 @@
+id: 01a18d40-b975-7e73-bdea-a80bb4cdbfa7
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-041
+title: A sandboxed seat's stuck cache refresh worker held the cache lock 10h+; every cache writer and the stale-lock healer hang instead of failing fast
+description: |
+  ## What happened
+  A `cache refresh --worker` launched from a sandboxed seat (lock-info: pid 19, pid_ns 4026535667, started 2026-10-30T03:49:16Z, phase "rebuild cache", expected 120 s, heartbeat never advanced) still held the `.aida/cache.db` write lock more than 10 h later. Every cache-writing command from the primary checkout then hung until killed:
+
+  - `aida pr ship` (>5 min, 2026-10-29; the PR was created but the review item was not)
+  - `aida doctor --category permission-posture` (>60 s)
+  - `aida pr auto-queue-review --branch ...` (killed at 180 s after it added STORY-HOME-129, before it linked and queued it)
+  - `aida rel add STORY-HOME-129 TASK-HOME-127 --type implements` (killed at 120 s)
+  - `aida doctor heal stale-locks` (killed at 90 s, both with `--json` and without), even though it is the remedy the lock error message names.
+
+  `.aida/cache.db.refresh.log` prints the right diagnosis ("held since ... 10h 38m ago ... run `aida doctor heal stale-locks`"), but the interactive commands block silently instead of printing it, and the healer itself blocks.
+
+  ## Expected
+  1. A writer that cannot get the cache lock fails within a bounded time with the holder diagnosis, rather than hanging.
+  2. `aida doctor heal stale-locks` must not need the lock it is healing. When the holder's PID namespace is not ours, it reports "holder in another PID namespace: liveness unknown" and names the operator action, instead of hanging.
+  3. A worker whose heartbeat has not advanced in N times its expected duration is treated as stale (or its seat's sandbox exit releases it).
+
+  ## Acceptance
+  - With a lock-info naming a foreign pid_ns and a stale heartbeat, `aida rel add`, `aida pr auto-queue-review` and `aida doctor heal stale-locks` each exit within 30 s with the holder diagnosis.
+  - `aida doctor heal stale-locks` makes progress against that state (heals it, or explains exactly what the operator must do).
+  - `aida pr auto-queue-review` interrupted after the add step is repaired by a re-run: today its idempotency guard ("story already exists") would skip the link and queue steps.
+
+  ## See also
+  BUG-1644 (lock-info resolved per worktree), BUG-HOME-028 (noted the doctor hang)
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T14:39:51.669916145Z
+modified_at: 2026-10-30T14:39:51.669916145Z
+req_type: Bug
+tags:
+- area:cache
+- area:locks
+filed_at:
+  code_sha: bd35c50292a984ef4f0c29737f46c97b4305a030
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ee1fa1789a
+  vendor: claude
+  session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
