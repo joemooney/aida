@@ -89885,5 +89885,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 6996
+- id: 01a18b1a-e1ee-79a3-ba57-9b9942e60a5f
+  target_id: 01a18b1a-cdd3-7360-8dea-d48a67fd64d6
+  author: aida
+  node_id: '1'
+  lamport: 6997
+  timestamp: 2026-10-30T04:39:17.230515282Z
+  kind: !Create
+    title: 'Review PR-3118: [AI:claude] docs(competitive): refresh Devin/Cognition roster rows from 2026-10-29 research (TASK-B6B1278890774EF993D2EBC327862470-122)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/task-home-122-devin-refresh`.
+
+      - PR: <https://github.com/joemooney/aida/pull/3118>
+      - Branch: `docs/task-home-122-devin-refresh` → `main`
+
+      ## Covers
+
+      - TASK-B6B1278890774EF993D2EBC327862470-122
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 3118` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6997
 node_id: '1'
