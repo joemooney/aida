@@ -8,12 +8,12 @@ description: |-
   - scripts/test-time-budget.toml sets that key to 35, with the trailing comment updated to cite max 15.2s (CI runs on 2026-10-30, PR-3142/PR-3149).
   - No other entry changes; the test itself is not modified or weakened.
   - Gate: FASTTRACK (make check-ci-fast only, no cargo).
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:08:25.227020523Z
-modified_at: 2026-10-30T23:35:26.045751656Z
+modified_at: 2026-10-30T23:52:26.345563115Z
 req_type: Task
 tags:
 - ci-flake
@@ -71,6 +71,20 @@ history:
   author: joe
   timestamp: 2026-10-30T23:35:28.508553755Z
   changes: []
+- id: 01a18f3a-9fc9-7323-9b7a-7c7f7f34a018
+  author: aida-auto-bump
+  timestamp: 2026-10-30T23:52:26.313951826Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a18f3a-9fe9-7e32-acec-5d4c02127344
+  timestamp: 2026-10-30T23:52:26.345558572Z
+  agent: aida
+  commit_sha: 9e3da314ac4ea7cde5ba21da18887a9eb34a53f2
+  summary: One-line budget raise 15->35 for bug_1677 with comment citing max 15.2s (PR-3142/PR-3149, 2026-10-30); no other entries or test changed; all PR CI green, mergeStateStatus CLEAN
+  review_verdict: approved
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -79,6 +93,10 @@ filed_at:
   aida_build_sha: cdbecda7678
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-30T23:52:26.313946949Z
+  completion_sha: 9e3da314ac4ea7cde5ba21da18887a9eb34a53f2
 attention_reason:
   category: other
   detail: 'work complete locally but unable to publish: aida ship refuses to run git in this contained seat''s private clone (''its git configuration and hooks are writable by the seat''); commit 9c512bfecbf is ready, make check-ci-fast passed (36 gates)'
