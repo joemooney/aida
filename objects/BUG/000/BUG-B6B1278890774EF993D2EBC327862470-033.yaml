@@ -19,12 +19,12 @@ description: |
   5. Summary wording: '{n} without a local merge signal skipped', not 'unmerged skipped'.
   ACCEPTED, no action: the deadline is checked between worktrees; one slow iteration is bounded by a single git status.
   Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib bug_home_033 bug_1719 story_1728` plus make check-ci-fast.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:42:18.442441896Z
-modified_at: 2026-10-30T07:19:03.180468726Z
+modified_at: 2026-10-30T07:45:18.151710042Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -126,6 +126,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a18bc5-2f47-7340-ac87-a799949b8cd5
+  author: aida-session-start
+  timestamp: 2026-10-30T07:45:18.151705467Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
