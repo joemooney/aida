@@ -32,12 +32,12 @@ description: |
   3. CI gates fail: "docs/architecture/external-tool-output-classifiers.md does not match the markers in the tree". Regenerate or update that doc to match.
   4. Every new commit message must end with "(Refs STORY-B6B1278890774EF993D2EBC327862470-096)". The PR's commit range has no REQ-ID trailer, so no review story could be filed.
   5. Gate: LIGHT. Run `cargo test -p aida-cli-lib story_1728` plus `make check-ci-fast`, then push. Do not run the full suite.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T03:30:27.216843802Z
+modified_at: 2026-10-30T04:00:21.846030687Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -210,6 +210,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18af7-e32f-7ba3-846e-89b27b6565a9
+  author: joe
+  timestamp: 2026-10-30T04:01:03.791211989Z
+  session_id: 01a18adbd720
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
