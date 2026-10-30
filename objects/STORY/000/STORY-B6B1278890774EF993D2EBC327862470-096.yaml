@@ -50,12 +50,12 @@ description: |
 
 
   ADVISOR NOTE 2026-10-29 23:33: SUPERSEDES the 23:26 note. The advisor pushed the lane's commit 6bdf89bc8a7 to the PR-3110 branch (story-b6b1278890774ef993d2ebc327862470-096), so all seven fixes are on the PR now. REMAINING WORK ONLY: check out the PR-3110 branch, regenerate the help golden snapshot (command_registry::story_1728 help_surface_matches_golden_snapshot), run `cargo test -p aida-cli-lib --lib story_1728` plus make check-ci-fast, and push to that same branch. Do NOT open a new PR and do NOT redo the fixes.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T07:05:27.931088704Z
+modified_at: 2026-10-30T07:07:04.071302552Z
 req_type: Story
 relationships:
 - rel_type:
@@ -316,6 +316,15 @@ history:
   timestamp: 2026-10-30T06:30:42.638387045Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a18ba2-420c-7b31-969c-e55e5207397d
+  author: joe
+  timestamp: 2026-10-30T07:07:09.196765649Z
+  session_id: 01a18b84fae1
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
