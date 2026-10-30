@@ -9,12 +9,12 @@ description: |
   - Unit test group_member_exit_check_accepts_zombie_and_reaped_child (a killed-but-unreaped child and a reaped one).
   - ALSO fix the follow-up the lane found: under load the timeout can fire before the script writes descendant.pid, and the test panics on unwrap(). Wait for the pid file (bounded) or treat its absence as a clear test failure message.
   Then open the PR. Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T06:13:41.027123386Z
-modified_at: 2026-10-30T10:51:46.721780439Z
+modified_at: 2026-10-30T11:11:38.581431235Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -88,6 +88,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18c82-1855-7840-97c8-a59ba57f30b6
+  author: joe
+  timestamp: 2026-10-30T11:11:38.581465402Z
+  session_id: 01a18c6fe4d1
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
   branch: main
@@ -96,3 +105,9 @@ filed_at:
   aida_build_sha: 2742b18ee2e
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+attention_reason:
+  category: other
+  detail: 'work complete locally but unable to publish: aida ship refuses to run git in this seat (contained seat''s private clone with seat-writable git config/hooks) — same refusal that parked the first lane. Fix is commit 460a2bd4d73 on branch bug-b6b1278890774ef993d2ebc327862470-037 in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-037; tree clean.'
+  lean: 'Seat provisioning is producing unpublishable clones; fix that (or publish from a host-owned clone after auditing .git/config and .git/hooks), then cherry-pick 460a2bd4d73 and run aida ship --no-merge. Validation: new unit test group_member_exit_check_accepts_zombie_and_reaped_child 200/200 under 8-way CPU load; make check-ci-fast 35/35 pass; the ScoreEnv tests (incl. generated_tool_help_timeout_kills_group_and_retains_reason) cannot run in this sandbox because ScoreEnv writes to hard-coded /tmp and /var/tmp (EROFS) — CI must exercise them.'
+  raised_by: implementer
+  raised_at: 2026-10-30T11:11:38.581431235Z
