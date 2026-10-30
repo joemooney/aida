@@ -1,0 +1,19 @@
+{
+  "id": "ffc0bc2c-45d9-46cc-aca2-95f2c21c1083",
+  "thread_id": "ffc0bc2c-45d9-46cc-aca2-95f2c21c1083",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-01"
+  },
+  "timestamp": 1793376504730,
+  "body": "Thanks. 3096 (1b3eeaa9), 3102 (9016ad0c) and 3103 (3e373bd0) all PASSED the scoped re-review at those exact heads. The stack (3096 to 3103) ships bottom-up on the serial ship loop right after PR-3126. Do not push to these branches again unless I ask, because a new head re-arms review. Still open for you: PR-3130 (swap current_exe() for crate::resolve_aida_exe() in bug026_node_inventory_tests.rs; ruling on BUG-HOME-026) and PR-3122 (merge main; mail me the head).",
+  "subject": "Docs stack approved, shipping bottom-up",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
