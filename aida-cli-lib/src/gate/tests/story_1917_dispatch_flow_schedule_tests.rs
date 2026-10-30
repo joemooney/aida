@@ -2041,6 +2041,7 @@ fn story_1917_native_pr_ship_entry_checkpoint_refuses_before_any_side_effect() {
         false,
         crate::forge::MergeMethod::Squash,
         false,
+        false,
         Some(&ctx),
     )
     .unwrap_err();
@@ -2158,6 +2159,7 @@ fn story_1917_dispatch_context_dropped_on_the_way_into_ship_or_train_is_refused(
             Some(1),
             false,
             crate::forge::MergeMethod::Squash,
+            false,
             false,
             dispatch_ctx,
         )
@@ -2672,6 +2674,7 @@ impl NativeShip {
                     Some(60),
                     false,
                     crate::forge::MergeMethod::Squash,
+                    false,
                     false,
                     Some(&self.ctx),
                 )

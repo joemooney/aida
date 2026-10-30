@@ -971,6 +971,40 @@ pub(crate) struct MailChannel {
     pub stale_automated: usize,
 }
 
+impl MailChannel {
+    /// Fold in a role channel built apart from this one (the inspected role
+    /// that is not a verified audience key): its count, previews, overdue
+    /// requests and stale notices join this channel's, so the notice names
+    /// that role's mail by sender and subject like any direct mail.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+    pub(crate) fn absorb_role(&mut self, role: MailChannel) {
+        use aida_core::mailbox::Intent;
+        self.stale_automated += role.stale_automated;
+        if role.role_unread == 0 {
+            return;
+        }
+        self.role_unread += role.role_unread;
+        if self.role.is_none() {
+            self.role = role.role;
+        }
+        let rank = |i: Intent| match i {
+            Intent::Request => 0,
+            Intent::Handoff => 1,
+            Intent::Fyi => 2,
+        };
+        self.previews.extend(role.previews);
+        self.previews.sort_by(|a, b| {
+            rank(a.intent)
+                .cmp(&rank(b.intent))
+                .then_with(|| a.age_secs.cmp(&b.age_secs))
+        });
+        self.previews.truncate(MAIL_PREVIEW_LINES);
+        self.overdue_requests.extend(role.overdue_requests);
+        self.overdue_requests
+            .sort_by(|a, b| b.age_secs.cmp(&a.age_secs));
+    }
+}
+
 /// One unread message, as the per-turn notice names it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]

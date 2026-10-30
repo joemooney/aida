@@ -167,6 +167,13 @@ pub enum PrCommand {
         #[clap(long)]
         force_delete_branch: bool,
 
+        /// Merge a PR whose base is not the default branch. Without this,
+        /// ship refuses such a PR: a stacked PR whose parent already merged
+        /// would land on the parent's branch instead of the default.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+        #[clap(long)]
+        allow_stacked_base: bool,
+
         /// Implementer's self-assessed actual complexity at ship time:
         /// `low` / `med` / `high`. Captured to
         /// `.aida/complexity-calibration/<SPEC>.yaml` alongside the

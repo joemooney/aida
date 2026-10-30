@@ -541,6 +541,118 @@ fn inspected_role_unread(
         .collect()
 }
 
+/// The unread-mail channel for the session `facts` describe: its own inbox
+/// headline plus the labelled shared scopes. `ctx_role` is the status
+/// context's role, which joins the shared scope. The read is passive — it
+/// never marks mail seen — and stops at `limits`' deadline, marking the
+/// channel partial. Shared by the awaiting report (and so the per-turn
+/// notice) and `aida whoami`, so both count the same mail for the same handle.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+pub(crate) fn collect_mail_channel(
+    project_root: &std::path::Path,
+    ctx_role: Option<&str>,
+    facts: &MailIdentityFacts,
+    limits: &aida_core::mailbox_logical::ReadLimits,
+) -> awaiting_you::MailChannel {
+    // Registered clients report their own private handle, never an
+    // inherited parent's AIDA_USER. Shell/operator reads retain BUG-767's
+    // user-only headline. Other permitted inbox identities stay labelled
+    // separately, matching mailbox notice and explicit acknowledgement.
+    // trace:STORY-1843 | ai:codex
+    // One resolved fact set feeds both the headline and the shared
+    // scopes. trace:TASK-2345 | ai:claude
+    let audience = aida_core::mailbox_logical::ResolvedAudience::from_facts(facts);
+    // The mail itself is the logical view across this repository's
+    // worktrees and the canonical store, filtered to the verified
+    // audience; only mail with no read evidence counts as unread.
+    // trace:STORY-1843 | ai:claude
+    let view = crate::mailbox_view::read_own_mail(
+        project_root,
+        &project_root.join(".aida-store"),
+        &audience,
+        limits,
+    );
+    let unread: Vec<aida_core::mailbox::Message> = view.unread().into_iter().cloned().collect();
+    // A bound handle is verified in core; an unbound reader's headline
+    // is its user.
+    let own_handle = facts.own_handle().map(str::to_string);
+    let operator = own_handle
+        .clone()
+        .unwrap_or_else(|| facts.user().to_string());
+    let mut shared: Vec<String> = if own_handle.is_some() {
+        audience
+            .keys()
+            .filter(|id| *id != operator)
+            .map(str::to_string)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    // The status context's role (TASK-1245: the advisor heartbeat sets
+    // it from a plain env) is the seat's role channel. When it is not one
+    // of the verified audience's keys it is not recipient authority, so its
+    // unread mail is only COUNTED, by the source-local operator
+    // inspection (this checkout plus the store), never projected.
+    // trace:TASK-1245 trace:STORY-1843 | ai:claude
+    // BUG-HOME-040: the role's mail is the seat's DIRECT mail, so the
+    // resolved role key is passed apart from the shared scope.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+    let now = chrono::Utc::now().timestamp();
+    let mut role_key = None;
+    let mut inspected_role = None;
+    if let Some(raw) = ctx_role
+        .map(str::to_string)
+        .or_else(|| facts.role().map(str::to_string))
+        .filter(|s| !s.trim().is_empty())
+    {
+        let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
+        match audience
+            .narrowed_to(&role)
+            .and_then(|a| a.keys().next().map(str::to_string))
+        {
+            Some(key) => {
+                shared.retain(|s| *s != key);
+                if key != operator {
+                    role_key = Some(key);
+                }
+            }
+            None if role != operator => inspected_role = Some(role),
+            None => {}
+        }
+    }
+    let mut channel = awaiting_you::split_mail_scopes_for_role(
+        &operator,
+        role_key.as_deref(),
+        &shared,
+        &unread,
+        &std::collections::HashMap::new(),
+        now,
+    );
+    if let Some(role) = inspected_role {
+        let counted: std::collections::HashSet<&str> =
+            unread.iter().map(|m| m.id.as_str()).collect();
+        // The inspected role's mail is the seat's direct mail too, so it is
+        // split like the audience role's: named by sender and subject, its
+        // unanswered requests overdue, its old automated notices collapsed.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+        let inspected: Vec<aida_core::mailbox::Message> =
+            inspected_role_unread(project_root, &role, &counted)
+                .into_iter()
+                .filter(|m| m.to != aida_core::mailbox::Recipient::Broadcast)
+                .collect();
+        channel.absorb_role(awaiting_you::split_mail_scopes_for_role(
+            "",
+            Some(&role),
+            &[],
+            &inspected,
+            &std::collections::HashMap::new(),
+            now,
+        ));
+    }
+    channel.partial = view.is_partial();
+    channel
+}
+
 /// [`collect_awaiting_report_inner`] with the mail channel's identity facts
 /// supplied, so a test asserts the operator/shared mail split from synthetic
 /// facts instead of the real session binding of whoever runs it.
@@ -855,103 +967,12 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // fleet-wide view survives without leaking into the operator-gated count.
     // trace:STORY-741 | ai:claude
     // trace:BUG-767 | ai:claude
-    let mail = {
-        // Registered clients report their own private handle, never an
-        // inherited parent's AIDA_USER. Shell/operator reads retain BUG-767's
-        // user-only headline. Other permitted inbox identities stay labelled
-        // separately, matching mailbox notice and explicit acknowledgement.
-        // trace:STORY-1843 | ai:codex
-        // One resolved fact set feeds both the headline and the shared
-        // scopes. trace:TASK-2345 | ai:claude
-        let facts = mail_facts();
-        let audience = aida_core::mailbox_logical::ResolvedAudience::from_facts(&facts);
-        // The mail itself is the logical view across this repository's
-        // worktrees and the canonical store, filtered to the verified
-        // audience; only mail with no read evidence counts as unread.
-        // trace:STORY-1843 | ai:claude
-        let view = crate::mailbox_view::read_own_mail(
-            project_root,
-            &project_root.join(".aida-store"),
-            &audience,
-            &crate::mailbox_view::passive_limits(),
-        );
-        let unread: Vec<aida_core::mailbox::Message> = view.unread().into_iter().cloned().collect();
-        // A bound handle is verified in core; an unbound reader's headline
-        // is its user.
-        let own_handle = facts.own_handle().map(str::to_string);
-        let operator = own_handle
-            .clone()
-            .unwrap_or_else(|| facts.user().to_string());
-        let mut shared: Vec<String> = if own_handle.is_some() {
-            audience
-                .keys()
-                .filter(|id| *id != operator)
-                .map(str::to_string)
-                .collect()
-        } else {
-            Vec::new()
-        };
-        // The status context's role (TASK-1245: the advisor heartbeat sets
-        // it from a plain env) is the seat's role channel. When it is not one
-        // of the verified audience's keys it is not recipient authority, so its
-        // unread mail is only COUNTED, by the source-local operator
-        // inspection (this checkout plus the store), never projected.
-        // trace:TASK-1245 trace:STORY-1843 | ai:claude
-        // BUG-HOME-040: the role's mail is the seat's DIRECT mail, so the
-        // resolved role key is passed apart from the shared scope.
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
-        let now = chrono::Utc::now().timestamp();
-        let mut role_key = None;
-        let mut inspected_role = None;
-        if let Some(raw) = ctx
-            .role
-            .clone()
-            .or_else(|| facts.role().map(str::to_string))
-            .filter(|s| !s.trim().is_empty())
-        {
-            let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
-            match audience
-                .narrowed_to(&role)
-                .and_then(|a| a.keys().next().map(str::to_string))
-            {
-                Some(key) => {
-                    shared.retain(|s| *s != key);
-                    if key != operator {
-                        role_key = Some(key);
-                    }
-                }
-                None if role != operator => inspected_role = Some(role),
-                None => {}
-            }
-        }
-        let mut channel = awaiting_you::split_mail_scopes_for_role(
-            &operator,
-            role_key.as_deref(),
-            &shared,
-            &unread,
-            &std::collections::HashMap::new(),
-            now,
-        );
-        if let Some(role) = inspected_role {
-            let counted: std::collections::HashSet<&str> =
-                unread.iter().map(|m| m.id.as_str()).collect();
-            let inspected = inspected_role_unread(project_root, &role, &counted);
-            channel.stale_automated += inspected
-                .iter()
-                .filter(|m| awaiting_you::is_stale_automated(m, now))
-                .count();
-            let fresh = inspected
-                .iter()
-                .filter(|m| !awaiting_you::is_stale_automated(m, now))
-                .count();
-            if fresh > 0 {
-                channel.role_unread += fresh;
-                channel.role = Some(role);
-            }
-        }
-        channel.partial = view.is_partial();
-        channel
-    };
+    let mail = collect_mail_channel(
+        project_root,
+        ctx.role.as_deref(),
+        &mail_facts(),
+        &crate::mailbox_view::passive_limits(),
+    );
 
     // Pending worker directives — the enqueue channel (`aida human audit`,
     // MCP directive posters, hand-written overnight plans) lands in the local
