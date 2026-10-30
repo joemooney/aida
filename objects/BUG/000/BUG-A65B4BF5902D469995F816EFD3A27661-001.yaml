@@ -31,12 +31,12 @@ description: |
 
   - Redesigning scaffold template storage or the adoption plane.
   - Changing consuming-project documentation.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T20:44:42.826469822Z
-modified_at: 2026-10-30T07:09:49.091509174Z
+modified_at: 2026-10-30T07:57:12.146167288Z
 req_type: Bug
 tags:
 - aida:scaffold
@@ -57,6 +57,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18bd0-1452-7832-87e0-8db863a341b8
+  author: joe
+  timestamp: 2026-10-30T07:57:12.146164726Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main
