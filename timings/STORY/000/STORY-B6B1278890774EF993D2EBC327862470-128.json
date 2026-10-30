@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-128",
+  "publishes": [
+    {
+      "at": "2026-10-30T21:27:55.303437550Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T17:49:28.304201279Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-128",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T19:51:02.837342865Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-128",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-128",
+        "branch": "origin/story-b6b1278890774ef993d2ebc327862470-128",
+        "first_seen": "2026-10-30T19:51:02.837305659+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T21:08:21.623932012Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-128",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-30T21:08:37.808677646Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-128",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3147
+      }
+    },
+    {
+      "ts": "2026-10-30T21:27:55.185531897Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-128",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c159bbdf4b721d66827f58e5905ea8efa510be04",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
