@@ -22,12 +22,12 @@ description: |
 
   ADVISOR RULING 2026-10-29 22:50 (PR-3117 round 2 at c3cb9bb2): FASTTRACK, one line, push to PR-3117.
   Add #[cfg(unix)] to launcher_waits_for_child_when_registration_lock_stays_busy (aida-cli-lib/src/tests/bug_030_launch_registry_lock_tests.rs:92 spawns /bin/sh). Do not grow the portability allowlist. Run scripts/check-portability.sh plus make check-ci-fast; no cargo is needed. Nothing else changes; round-1 findings 1-4 are verified fixed.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:20:56.704301873Z
-modified_at: 2026-10-30T05:49:08.052723272Z
+modified_at: 2026-10-30T07:26:04.261551046Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -110,6 +110,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 are all addressed and every criterion is traced, but CI (gates) is red: the new test spawns /bin/sh with no #[cfg(unix)] gate, which trips the portability ratchet.. No triage reason was given.'
   created_at: 2026-10-30T05:48:59.944180338Z
   modified_at: 2026-10-30T05:48:59.944180338Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18bb3-93e5-76e2-a481-c8daad71fa53
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-10-30T07:26:04.261546764Z
+  modified_at: 2026-10-30T07:26:04.261546764Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
 history:
 - id: 01a18ad9-05f9-7f40-95b8-771fc2e06f7b
@@ -218,6 +224,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a18bb3-93e5-76e2-a481-c8cc32b2e179
+  author: joe
+  timestamp: 2026-10-30T07:26:04.261542560Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
