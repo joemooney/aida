@@ -24,10 +24,18 @@ relationships:
   target_id: 01a18ae3-db17-7913-a5b5-5f38563782c6
   created_at: 2026-10-30T03:41:36.902695767Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
+  created_at: 2026-10-30T03:41:48.176681623Z
 history:
 - id: 01a18ae6-1e13-7781-8ad3-aa7c7eaef9ba
   author: joe
   timestamp: 2026-10-30T03:41:39.219691762Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
+- id: 01a18ae6-4bac-7272-8816-21f9327c596e
+  author: joe
+  timestamp: 2026-10-30T03:41:50.892202130Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
