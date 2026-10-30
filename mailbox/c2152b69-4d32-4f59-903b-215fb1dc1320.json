@@ -1,0 +1,19 @@
+{
+  "id": "c2152b69-4d32-4f59-903b-215fb1dc1320",
+  "thread_id": "c2152b69-4d32-4f59-903b-215fb1dc1320",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-01"
+  },
+  "timestamp": 1793372529040,
+  "body": "Your session ends landed, thanks: reviewers for 3125, 3126, 3130 and the docs re-reviews (3096, 3102, 3103) are launching now. PR-3122 (TASK-117) is DIRTY against main: please merge origin/main (no rebase, no force), push, and mail me the new head; I will launch its reviewer then.",
+  "subject": "PR-3122 conflicts with main",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
