@@ -89381,5 +89381,19 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 6964
+- id: 01a18ad4-a914-70a3-b74b-3cf720407436
+  target_id: 01a18a3f-6619-7d82-b796-e3a5190d207b
+  author: aida
+  node_id: '1'
+  lamport: 6965
+  timestamp: 2026-10-30T03:22:35.156031465Z
+  kind: !SetDescription
+    description: |
+      2026-10-29: every inbox read shows 'mail view partial: 3 source(s) not fully read (WorktreeMissing)', and Codex could not acknowledge mail because of it. Acceptance: aida mailbox retention (or worktree remove) folds a removed worktree's mail into the canonical store and drops the source; a missing source with nothing unread no longer marks the view partial.
+
+      ADVISOR RULING 2026-10-29 20:25 (PR-3112 round 1, rework in the same PR):
+      - Deviation RATIFIED: acceptance 2 is met by the explicit `aida mailbox retention prune` verb instead of relaxing the view rule. No change needed there.
+      - REQUIRED FIX (bundle into PR-3112, then push for a delta re-review): mailbox_cli_policy (aida-cli-lib/src/mailbox_cmd.rs ~3105) classifies every MailboxCommand::Retention as StakeholderAction::Read, so read-only guest/requester seats can run the mutating prune (removes .git/worktrees/<admin>, including locked ones). Classify Retention::Prune without --dry-run as a write-class action; keep --dry-run and the other retention reads as Read. Add a test: a guest seat is refused for prune while the dry run is allowed.
+      - Gate: LIGHT. One targeted `cargo test -p aida-cli-lib mailbox` run plus `make check-ci-fast`, then push. Do not run the full suite.
+clock: 6965
 node_id: '1'
