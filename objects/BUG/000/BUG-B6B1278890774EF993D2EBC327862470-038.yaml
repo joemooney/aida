@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T11:14:10.376429150Z
-modified_at: 2026-10-30T21:13:53.883126442Z
+modified_at: 2026-10-30T21:59:21.661737818Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -83,6 +83,12 @@ comments:
     Gate: LIGHT (cargo test -p aida-cli-lib --lib bug_home_038 plus aida-core seat_clone_detect, plus make check-ci-fast).
   created_at: 2026-10-30T19:28:08.484638716Z
   modified_at: 2026-10-30T19:28:08.484638716Z
+  session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+- id: 01a18ed3-193d-7881-baee-e9ca44326935
+  author: joe
+  content: 'ADVISOR RULING 2026-10-30 15:02 (PR-3143 round 3, FINAL). The code passes review on substance (every round 0-2 item is met); the only blocker is three deterministic CI ratchets on run 41124379639: (1) gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor: register the new seat_clone_detect / ship_from_seat gate-authority paths in the gate floor registry (do NOT exempt them); (2) command_registry help_surface_matches_golden_snapshot: regenerate the help golden for the new --from-seat flag (AIDA_UPDATE_SNAPSHOTS=1; all 3 golden locations); (3) gitlab_project_create::bug_2181_host_remote_credentials_tests::task_2001_every_host_remote_call_routes_its_credentials: route the new host push/PR calls in ship_from_seat through the credential-routing helper that the ratchet requires. Merge origin/main first. Run those 3 tests by filter plus make check-ci-fast. A delta-only re-review follows.'
+  created_at: 2026-10-30T21:59:21.661737818Z
+  modified_at: 2026-10-30T21:59:21.661737818Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
 history:
 - id: 01a18d92-f635-7483-9c75-5931cad7d43c
