@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:39:10.999893193Z
-modified_at: 2026-10-30T05:43:52.513937257Z
+modified_at: 2026-10-30T05:45:30.047623275Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -46,6 +46,20 @@ comments:
     - None: the sandbox grant already shows the primary mailbox is the intended write target.
   created_at: 2026-10-30T04:32:47.294579293Z
   modified_at: 2026-10-30T04:32:47.294579293Z
+  session_id: 01a18b0992c3
+  harness_version: 2.1.314 (Claude Code)
+- id: 01a18b57-80bf-78b3-b9f3-bb046b15690e
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` in the seat clone fails with "requirement ID allocation failed: Read-only file system", no upstream declared)
+
+    1. **kind:bug-spotted, severity:major**: `aida ship <SPEC> --no-merge` cannot publish from a contained seat clone. With a clean tree it printed "step 1: committing uncommitted work", then failed: "could not list staged files to check for sandbox stand-ins: refusing to run git in <clone>: it is a contained seat's private clone" (the BUG-2169 guard). The refused git call seems to be read as a dirty tree. Workaround used: plain `git push` (it also could not write the upstream config) plus `gh pr create` -> PR #3121.
+    2. **kind:bug-spotted, severity:minor**: `aida pr auto-queue-review` fails in a seat clone because `aida add` needs a declared node upstream (and the clone is read-only for ID allocation). PR #3121 was **not** auto-queued for review; re-run `aida pr auto-queue-review --branch bug-b6b1278890774ef993d2ebc327862470-031` from the primary checkout.
+    3. **kind:design-choice**: a verified seat clone now reads and writes the primary checkout's `.aida/mailbox` for every mailbox surface (CLI, logical view, MCP). An unverified clone stays local and the send output says so. The regression test checks the advisor inbox via `inbox_for` rather than the bound own-audience view, because role-queued mail stays pending until a reader with a recipient UUID binds it.
+
+    Branch: bug-b6b1278890774ef993d2ebc327862470-031 · Commit: bd4c759e4e9 · PR #3121
+  created_at: 2026-10-30T05:45:30.047623275Z
+  modified_at: 2026-10-30T05:45:30.047623275Z
   session_id: 01a18b0992c3
   harness_version: 2.1.314 (Claude Code)
 history:
