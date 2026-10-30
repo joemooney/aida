@@ -92544,5 +92544,28 @@ operations:
   timestamp: 2026-10-30T11:15:11.443698099Z
   kind: !SetStatus
     status: In Progress
-clock: 7167
+- id: 01a18c88-3d91-7f60-a4e5-dd7efe1e6944
+  target_id: 01a18b71-4e23-78b1-92ef-f10f26cf87ca
+  author: aida
+  node_id: '1'
+  lamport: 7168
+  timestamp: 2026-10-30T11:18:21.329151640Z
+  kind: !SetDescription
+    description: |
+      2026-10-29 23:13: CI lib-1 on PR-3112 (run 41011660578) failed at aida-cli-lib/src/regen/score.rs:1135 in regen::score::tests::generated_tool_help_timeout_kills_group_and_retains_reason. PR-3112 touches only mailbox retention, and the same test passes on main, so this is a flake. It made a ship stop, and the failed jobs were rerun by hand. Acceptance: find the race (likely the timeout window versus process-group kill timing under a loaded runner), fix it at the race, not by widening the window (TASK-1956 convention), and stress it locally (for example 200 iterations under load) with zero failures.
+
+      ADVISOR NOTE 2026-10-30 03:53: the first lane fixed this (commit 185421df638) but could not publish: its seat clone was flagged as having writable git config/hooks, so both the lane's and the host's `aida ship` refused to run git there (a correct safety refusal). That clone is parked at ../aida-worktrees/.parked/037-unpublishable-20261030 for audit. REDO the same fix in a fresh seat:
+      - assert_group_member_exits (aida-cli-lib/src/regen/score.rs ~1135) decides liveness from a pidfd only: a missing pid or a start-time mismatch means gone; otherwise wait on the pidfd for exit. Keep the 30s deadline.
+      - Unit test group_member_exit_check_accepts_zombie_and_reaped_child (a killed-but-unreaped child and a reaped one).
+      - ALSO fix the follow-up the lane found: under load the timeout can fire before the script writes descendant.pid, and the test panics on unwrap(). Wait for the pid file (bounded) or treat its absence as a clear test failure message.
+      Then open the PR. Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
+
+
+      ADVISOR RULING 2026-10-30 04:20 (PR-3133 round 1). ONE rework push to the PR-3133 branch (bug-b6b1278890774ef993d2ebc327862470-037):
+      1. (blocking) The start-identity comparison must trim both sides (the fixture writes a trailing newline). As it stands the check always reads 'PID reused' and passes vacuously.
+      2. Add a test that would FAIL if the check were vacuous: a live descendant with a matching start identity must make the check wait or fail within the deadline, not return immediately.
+      3. Bundle any other findings in the PR-3133 verdict.
+      If `aida ship` refuses to publish from your seat again (BUG-HOME-038), commit and stop; the advisor publishes after inspection.
+      Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
+clock: 7168
 node_id: '1'

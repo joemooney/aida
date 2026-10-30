@@ -9,12 +9,20 @@ description: |
   - Unit test group_member_exit_check_accepts_zombie_and_reaped_child (a killed-but-unreaped child and a reaped one).
   - ALSO fix the follow-up the lane found: under load the timeout can fire before the script writes descendant.pid, and the test panics on unwrap(). Wait for the pid file (bounded) or treat its absence as a clear test failure message.
   Then open the PR. Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
+
+
+  ADVISOR RULING 2026-10-30 04:20 (PR-3133 round 1). ONE rework push to the PR-3133 branch (bug-b6b1278890774ef993d2ebc327862470-037):
+  1. (blocking) The start-identity comparison must trim both sides (the fixture writes a trailing newline). As it stands the check always reads 'PID reused' and passes vacuously.
+  2. Add a test that would FAIL if the check were vacuous: a live descendant with a matching start identity must make the check wait or fail within the deadline, not return immediately.
+  3. Bundle any other findings in the PR-3133 verdict.
+  If `aida ship` refuses to publish from your seat again (BUG-HOME-038), commit and stop; the advisor publishes after inspection.
+  Gate: LIGHT. Run `cargo test -p aida-cli-lib --lib regen::score` plus make check-ci-fast.
 status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T06:13:41.027123386Z
-modified_at: 2026-10-30T11:16:56.180615219Z
+modified_at: 2026-10-30T11:18:20.236071594Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -112,6 +120,11 @@ history:
   timestamp: 2026-10-30T11:16:57.053190475Z
   session_id: 01a18c860df5
   harness_version: 2.1.314 (Claude Code)
+  changes: []
+- id: 01a18c88-3d06-7402-9f85-1410f1d77b74
+  author: joe
+  timestamp: 2026-10-30T11:18:21.190617328Z
+  session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
