@@ -146,9 +146,14 @@ pub enum DiffSlice {
 ///   declared JSON Pointer slots from `slots_for_file`. JSON-key-order
 ///   differences are not drift.
 ///
-/// All other files are diffed whole.
+/// Existing seeds with no managed portion (README.md) are user-owned and
+/// omitted. Other files are diffed whole.
 /// trace:FR-1-027 | ai:claude
 pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> DiffSlice {
+    // trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+    if is_user_owned_seed(path) {
+        return DiffSlice::Match;
+    }
     // ManagedMerge files (slot-shared JSON): compare only declared slots,
     // ignore user-owned keys and JSON object-key ordering noise.
     // trace:BUG-1-066 | ai:claude
@@ -1054,8 +1059,8 @@ pub enum FileCategory {
     /// AIDA owns these; drift = stale on-disk copy. `upgrade` overwrites
     /// without prompting.
     Template,
-    /// Scaffolded once at `init`, then user-owned (CLAUDE.md, AGENTS.md).
-    /// Drift is *expected* after first apply. `upgrade` leaves alone.
+    /// Scaffolded once at `init`, then user-owned (README.md, CLAUDE.md,
+    /// AGENTS.md). Existing content is left alone except for managed portions.
     /// AGENTS.md is special-cased: a delimited AIDA-AUTOGEN block inside
     /// the seed file IS auto-upgraded (see FR-1-035 + report.rs).
     Seed,
@@ -1098,6 +1103,15 @@ impl FileCategory {
             FileCategory::ManagedMerge => "managed-merge",
         }
     }
+}
+
+/// A seed whose existing contents contain no AIDA-managed portion.
+/// Missing seeds still need creation; CLAUDE.md and AGENTS.md retain their
+/// import/managed-block checks. Nested README files remain template-owned.
+// trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex
+pub fn is_user_owned_seed(path: &Path) -> bool {
+    FileCategory::from_path(path) == FileCategory::Seed
+        && !matches!(path.to_str(), Some("CLAUDE.md" | "AGENTS.md"))
 }
 
 /// Represents a scaffolding artifact to be generated

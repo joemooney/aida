@@ -206,6 +206,8 @@ mod relay_mail;
 mod relay_stall;
 // trace:TASK-2347 | ai:codex
 mod codex_mail_health;
+// trace:STORY-HOME-128 | ai:claude
+mod mail_backlog;
 mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
@@ -583,6 +585,8 @@ mod session;
 mod session_liveness;
 mod session_manifest;
 mod session_misc_cmd;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
+mod whoami_view;
 // trace:TASK-1177 | ai:claude — the substrate-state reap pass for sessions
 // whose spec is finished, branch merged, and process exited.
 mod session_reap;

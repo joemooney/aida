@@ -53,11 +53,12 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             rebase,
             merge_method,
             final_slice,
+            allow_stacked_base,
         } => {
             let resolved_method =
                 pr_ship::validate_ship_merge_method(*rebase, *merge_method, *final_slice)
                     .map_err(anyhow::Error::msg)?;
-            pr_ship_with_method(
+            pr_ship_with_method_and_dispatch_ctx(
                 *n,
                 *no_pull,
                 *no_cleanup,
@@ -72,6 +73,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
                 *no_complete,
                 resolved_method,
                 *final_slice,
+                *allow_stacked_base,
+                None,
             )
         }
         PrCommand::Train {
@@ -2145,6 +2148,7 @@ pub(crate) fn pr_ship_with_method(
         no_complete,
         merge_method,
         final_slice,
+        false,
         None,
     )
 }
@@ -2166,6 +2170,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     no_complete: bool,
     merge_method: crate::forge::MergeMethod,
     final_slice: bool,
+    allow_stacked_base: bool,
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
 ) -> Result<()> {
     use pr_ship::{
@@ -2457,21 +2462,36 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             }
         );
         if !child_prs.is_empty() {
+            // BUG-HOME-042: the merge is followed by an automatic retarget.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
             eprintln!(
-                "    retarget them to {} first ({}), then delete `{}` — or re-run with --force-delete-branch to orphan them.",
-                retarget_base,
-                open_child_prs
-                    .iter()
-                    .map(|n| format!("gh pr edit {n} --base {retarget_base}"))
-                    .collect::<Vec<_>>()
-                    .join("; "),
-                ship_branch
+                "    after the merge they are retargeted to `{}` and their CI re-run; `{}` is deleted once none targets it.",
+                retarget_base, ship_branch
             );
         } else {
             eprintln!(
                 "    re-target those branches off `{}` before deleting it — or re-run with --force-delete-branch to orphan them.",
                 ship_branch
             );
+        }
+    }
+
+    // ---- BUG-HOME-042: refuse a PR whose base is not the default branch. ----
+    // A stacked PR whose parent merged still targets the parent's branch
+    // until retargeted; merging it would land the work on a dead branch.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    if !already_merged {
+        if let Some(change) = target_change.as_ref() {
+            let default_branch = crate::forge::local_origin_head_branch(&project_root)
+                .or_else(|| crate::forge::probe_default_branch(&project_root));
+            if let Some(refusal) = pr_ship::stacked_base_refusal(
+                pr_number,
+                &change.base,
+                default_branch.as_deref(),
+                allow_stacked_base,
+            ) {
+                anyhow::bail!(refusal);
+            }
         }
     }
 
@@ -3682,6 +3702,28 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 None,
             );
         }
+    }
+
+    // BUG-HOME-042: PRs stacked on the merged branch move to the branch it
+    // merged into, get a CI run there, and the merged branch is deleted once
+    // nothing targets it. trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    if merged_this_run && !delete_branch && !open_child_prs.is_empty() {
+        eprintln!(
+            "  step 3b: moving {} stacked PR(s) off `{}`",
+            open_child_prs.len(),
+            ship_branch
+        );
+        let mut ports = ForgeStackRetargetPorts {
+            forge: crate::forge::forge_for(&project_root),
+            project_root: project_root.clone(),
+        };
+        pr_ship::retarget_stacked_children(
+            &mut ports,
+            &ship_branch,
+            &retarget_base,
+            &open_child_prs,
+            !branch_in_sibling && stacked_children.is_empty(),
+        );
     }
 
     // STORY-439: ship-side calibration capture. Resolve every spec the PR
@@ -6363,6 +6405,40 @@ pub(crate) fn open_child_prs(project_root: &std::path::Path, branch: &str) -> Ve
         .into_iter()
         .map(|c| c.id)
         .collect()
+}
+
+/// BUG-HOME-042: the real [`pr_ship::StackRetargetPorts`]: the forge for the
+/// retarget and the CI re-trigger, `git push origin --delete` for the branch.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+struct ForgeStackRetargetPorts {
+    forge: Box<dyn crate::forge::Forge>,
+    project_root: std::path::PathBuf,
+}
+
+impl pr_ship::StackRetargetPorts for ForgeStackRetargetPorts {
+    fn retarget(&mut self, pr: u64, base: &str) -> Result<()> {
+        self.forge.retarget_change(pr, base)
+    }
+
+    fn retrigger_ci(&mut self, pr: u64) -> Result<()> {
+        self.forge.retrigger_change_ci(pr)
+    }
+
+    fn delete_remote_branch(&mut self, branch: &str) -> Result<()> {
+        let out = aida_core::git_ops::host_remote_git_command(&self.project_root, "origin")
+            .args(["push", "--quiet", "origin", "--delete", branch])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "git push origin --delete {branch} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
+    fn say(&mut self, line: &str) {
+        eprintln!("{line}");
+    }
 }
 
 /// BUG-733: best-effort metadata lookup for an explicit ship target. `aida pr

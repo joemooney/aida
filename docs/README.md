@@ -2,12 +2,12 @@
 
 Start here. This index orders the docs by where you are in the journey — from
 *"what is this?"* to running it for a team to extending it. Not sure AIDA is for
-you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
+you at all? Jump to [Deciding whether to adopt](#3-deciding-whether-to-adopt).
 
 > New to AIDA? The three-doc on-ramp is **[Why AIDA?](WHY-AIDA.md)** →
 > **[Getting started](getting-started.md)** → **[First project](first-project.md)**.
-> That's the 15-minute path from "why does this exist" to a merged spec graph on
-> your own machine.
+> Follow it from the product rationale to a bounded change on your own machine.
+> Setup and delivery time depend on your project and agent configuration.
 
 > **How this library is organized.** Sections 1–6 are the **user-facing manual** — guides and reference you read to *use* AIDA (these are the docs destined for the unified "AIDA Book"). Section 7 is **working & internal artifacts** — plans, competitive analysis, spikes — generated *by* running the project. They're indexed here so they're findable, but they are **not manual material** and aren't curated for the book.
 
@@ -18,7 +18,17 @@ you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
 | Doc | What it gives you |
 |-----|-------------------|
 | [WHY-AIDA.md](WHY-AIDA.md) | The problem statement — *why this exists* before *how it works*. |
-| [getting-started.md](getting-started.md) | Install (cargo / binary / Docker / source), `aida init`, your first requirement. |
+| [README installation](../README.md#install) | Install AIDA on a supported Linux system. |
+| [getting-started.md](getting-started.md) | Develop conversationally with an AIDA-aware agent, retain agreed intent, and separate one-time operator setup. |
+| [showcase/index.html](showcase/index.html) · [library](showcase/library.html) | Portable product website and searchable guide library. |
+| [product-capabilities.md](product-capabilities.md) | Capture intent, coordinate delivery and inspect evidence across changes. |
+| [product-integrations.md](product-integrations.md) | Connect coding agents, the store and external project tools with explicit setup. |
+| [configuration-guide.md](configuration-guide.md) | Choose the project footprint, protocols and policy. |
+| [product-workflow.md](product-workflow.md) | Follow a change through capture, implementation, review and integration. |
+| [selectable-autonomy.md](selectable-autonomy.md) | Choose human participation while preserving authority and review gates. |
+| [trust-and-evidence.md](trust-and-evidence.md) | Understand the boundaries and limits of recorded evidence. |
+| [metrics-guide.md](metrics-guide.md) | Interpret measured usage and unknown attribution. |
+| [operator-setup.md](operator-setup.md) | Prepare an agent and project, including adopted clones. |
 | [first-project.md](first-project.md) | The follow-along: a TODO CLI from a blank repo to a six-spec graph with two features driven to *Completed*. The best "see what it's *for*" doc. |
 | [using-aida-with-claude-code.md](using-aida-with-claude-code.md) | How AIDA and Claude Code fit together (skills, MCP, the daily loop). |
 
@@ -26,7 +36,7 @@ you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
 
 | Doc | What it gives you |
 |-----|-------------------|
-| **[cli/](cli/README.md)** | **The CLI reference manual** — *when and why* to use every command and option (not just *what*, which is `aida <cmd> --help`), with a lifecycle journey spine. 11 chapters; readable as an mdBook (`mdbook serve docs/cli`). The deepest day-to-day reference. |
+| **[cli/](cli/README.md)** | **The CLI reference manual** — *when and why* to use every command and option (not just *what*, which is `aida <cmd> --help`), with a lifecycle journey spine. 12 chapters; readable as an mdBook (`mdbook serve docs/cli`). The deepest day-to-day reference. |
 | [user-guide.md](user-guide.md) | *Retired* — a stale `v0.1.0`-era duplicate; now a pointer to the docs above. |
 | [requirement-types.md](requirement-types.md) | What each of the 19 requirement types is *for* and how to write one well — the intent + best-practice layer over the enum's reference list. |
 | [lifecycle.md](lifecycle.md) | The Draft → Approved → Planned → In Progress → Done → Completed → Released state machine, the verb for each transition, and the edge cases. |

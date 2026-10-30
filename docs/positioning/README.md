@@ -4,7 +4,7 @@
 
 Sister documents:
 
-- [README.md](../../README.md#what-makes-aida-distinct) — the elevator pitch: AIDA's defensible niche in eight bullets. <!-- trace:TASK-289 | ai:claude -->
+- [README.md](../../README.md#what-it-provides) — the product capabilities and entry route. <!-- trace:TASK-289 | ai:claude -->
 - [OVERVIEW.md](../../OVERVIEW.md) — the big-picture vision.
 - [WHY-AIDA.md](../WHY-AIDA.md) — narrative for "why does this exist?"
 - [competitive-analysis/](../competitive-analysis/README.md) — the living landscape tracking; its dated snapshots are in [`../archive/competitive-analysis/`](../archive/competitive-analysis/).
@@ -49,7 +49,7 @@ The short reading path:
    memory before queues, drains, roles, hooks, or orchestrators. <!-- trace:TASK-1216 | ai:codex -->
 4. [composition.md](composition.md) for how AIDA layers with Spec Kit, Agent
    Teams, MCP editors, GitHub Issues, and plain markdown.
-5. [../aida/discipline/agent-agnostic-vs-claude-specific.md](../aida/discipline/agent-agnostic-vs-claude-specific.md)
+5. [../../aida-core/templates/.aida/discipline/agent-agnostic-vs-claude-specific.md](../../aida-core/templates/.aida/discipline/agent-agnostic-vs-claude-specific.md)
    for the universal-discipline vs per-agent-convenience split.
 
 ---

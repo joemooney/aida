@@ -11,8 +11,10 @@ use std::path::PathBuf;
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
     /// File the reviewer story for the change (PR/MR) open on the current
-    /// branch and queue it to the `reviewer` role. Idempotent: skips when a
-    /// `Review PR-<n>:` / `Review MR-<n>:` story already exists for it.
+    /// branch and queue it to the `reviewer` role. Idempotent: when a
+    /// `Review PR-<n>:` / `Review MR-<n>:` story already exists for it, reuses
+    /// that story, queues it again, and adds any links an interrupted run
+    /// left out.
     /// Detects the change through the configured Forge — GitHub via `gh`
     /// (looks up the branch's open PR), GitLab via `glab` (looks up the
     /// branch's open MR) — so that provider's CLI must be on PATH and
@@ -164,6 +166,13 @@ pub enum PrCommand {
         // trace:BUG-434 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         force_delete_branch: bool,
+
+        /// Merge a PR whose base is not the default branch. Without this,
+        /// ship refuses such a PR: a stacked PR whose parent already merged
+        /// would land on the parent's branch instead of the default.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+        #[clap(long)]
+        allow_stacked_base: bool,
 
         /// Implementer's self-assessed actual complexity at ship time:
         /// `low` / `med` / `high`. Captured to

@@ -3022,8 +3022,19 @@ pub fn ensure_index_lock_clear_for_write(
     if git_process_likely_owns_index_lock(repo, &lock_path) {
         return Ok(false);
     }
+    let mtime = std::fs::metadata(&lock_path)
+        .and_then(|m| m.modified())
+        .ok();
     match std::fs::remove_file(&lock_path) {
-        Ok(()) => Ok(true),
+        Ok(()) => {
+            // Say what was removed, so a recovered write is never silent.
+            // trace:BUG-HOME-041 | ai:claude
+            let warning = stale_index_lock_warning(mtime);
+            eprintln!("aida: {warning}");
+            #[cfg(test)]
+            LAST_INDEX_LOCK_WARNING.with(|last| *last.borrow_mut() = Some(warning));
+            Ok(true)
+        }
         Err(e) if !lock_path.exists() => Ok(true),
         Err(e) => Err(e).with_context(|| {
             format!(
@@ -3033,6 +3044,24 @@ pub fn ensure_index_lock_clear_for_write(
             )
         }),
     }
+}
+
+/// The notice printed when a stale store `index.lock` is removed.
+// trace:BUG-HOME-041 | ai:claude
+fn stale_index_lock_warning(mtime: Option<std::time::SystemTime>) -> String {
+    let from = mtime
+        .map(|t| {
+            chrono::DateTime::<chrono::Utc>::from(t)
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        })
+        .unwrap_or_else(|| "an unknown time".to_string());
+    format!("removed stale store index.lock from {from}")
+}
+
+#[cfg(test)]
+thread_local! {
+    static LAST_INDEX_LOCK_WARNING: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(feature = "native")]
@@ -7688,8 +7717,22 @@ mod tests {
         std::fs::write(repo.join("f.txt"), "initial").unwrap();
         add(&repo, &["f.txt"]).unwrap();
         std::fs::write(&lock, "").unwrap();
+        let mtime = std::fs::metadata(&lock).unwrap().modified().unwrap();
+        LAST_INDEX_LOCK_WARNING.with(|last| *last.borrow_mut() = None);
         assert!(commit(&repo, "initial").unwrap());
         assert!(!lock.exists(), "stale lock should be cleared");
+        // trace:BUG-HOME-041 | ai:claude
+        let warning = LAST_INDEX_LOCK_WARNING.with(|last| last.borrow().clone());
+        assert_eq!(
+            warning.as_deref(),
+            Some(stale_index_lock_warning(Some(mtime)).as_str())
+        );
+        assert!(
+            warning
+                .unwrap()
+                .starts_with("removed stale store index.lock from 20"),
+            "the warning names the lock's mtime"
+        );
 
         std::fs::write(repo.join("f.txt"), "changed").unwrap();
         add(&repo, &["f.txt"]).unwrap();

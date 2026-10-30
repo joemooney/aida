@@ -2584,6 +2584,22 @@ every = "2m"
 while = "mandate.dispatch_active == true && dispatch.pending > 0"
 enabled = true
 
+# STORY-HOME-128: the mail-backlog guard. Every 30m it looks for unread
+# [request]/[handoff] mail older than [doctor.mail_backlog] max_age_mins
+# (default 30) addressed to a live agent or a role one holds, and nudges each
+# recipient through its wake path: a reminder mail an armed Codex session's
+# mail wake delivers, a `mail-backlog-guard-route-<seat>` due job for a Claude
+# seat, or a `mail-backlog-guard-route-operator` item in `aida awaiting` when
+# there is no wake path. Silent with no backlog; the same message is re-nudged
+# at most every renudge_mins (default 60). Enabled: unlike the gates below it
+# needs no per-host threshold to be right.
+# trace:STORY-HOME-128 | ai:claude
+[[schedule.jobs]]
+name = "mail-backlog-guard"
+command = "doctor check mail-backlog"
+every = "30m"
+enabled = true
+
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
 # project has nothing to guard until it declares a budget under
 # [performance.budgets], and a job that runs against an empty budget list would
@@ -2784,6 +2800,8 @@ mod story_1226_init_schedule_section_tests {
             "cache-refresh-tick",
             "history-index-tick",
             "dispatch-tick",
+            // trace:STORY-HOME-128 | ai:claude
+            "mail-backlog-guard",
             "groom-drafts",
             "hub-drift-guard",
             "hub-drift-guard-route",
@@ -2808,7 +2826,8 @@ mod story_1226_init_schedule_section_tests {
         // The history tick and dispatch-tick join the four existing enabled defaults.
         // trace:STORY-1661 | ai:codex
         // trace:STORY-1917 | ai:agy
-        assert_eq!(jobs.len(), 6);
+        // trace:STORY-HOME-128 | ai:claude
+        assert_eq!(jobs.len(), 7);
         assert!(jobs
             .iter()
             .all(|job| job["enabled"].as_bool() == Some(true)));
@@ -5439,7 +5458,7 @@ fn finish_clone_node_setup(
     // trace:BUG-2017 | ai:codex
     if let Some(binding) = work_binding {
         println!(
-            "WORK node {} ready (node-local allocation).",
+            "Work node {} ready (node-local allocation).",
             binding.node_id
         );
         return Ok(());

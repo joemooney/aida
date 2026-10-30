@@ -1112,3 +1112,73 @@ fn task118_a_worktree_on_absent_media_is_never_pruned() {
     assert!(rows.is_empty());
     assert!(view_from(&r.main, &r.store, &operator()).is_partial());
 }
+
+/// Write `m` raw into `dir` with its `timestamp` replaced by `ts` (`None`
+/// drops the key), the shape an unstamping writer leaves on disk.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+fn put_raw_timestamp(dir: &Path, m: &Message, ts: Option<serde_json::Value>) {
+    let mut value = serde_json::to_value(m).unwrap();
+    let obj = value.as_object_mut().unwrap();
+    match ts {
+        Some(ts) => obj.insert("timestamp".into(), ts),
+        None => obj.remove("timestamp"),
+    };
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{}.json", m.id)),
+        serde_json::to_vec(&value).unwrap(),
+    )
+    .unwrap();
+}
+
+/// The default own-audience view (`aida mailbox inbox`, MCP `read_inbox`)
+/// reads mail with no time and mail stamped in seconds instead of failing
+/// the source or dating it 1970: the unstamped ones carry a real time, the
+/// seconds-scale one its own time, and an unstamped message replicated in a
+/// local mailbox and the canonical store is one record, not a conflict.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
+#[test]
+fn bug_032_own_view_dates_unstamped_and_seconds_scale_mail() {
+    let r = mail_repo();
+    let audience = operator();
+    let before = chrono::Utc::now().timestamp_millis() - 60_000;
+    let local = crate::mailbox_store::mailbox_dir(&r.main);
+    let canonical = crate::mailbox_store::canonical_dir(&r.store);
+    put_raw_timestamp(&local, &mail("absent", "operator", 0, false), None);
+    put_raw_timestamp(
+        &crate::mailbox_store::mailbox_dir(&r.sib),
+        &mail("null", "operator", 0, false),
+        Some(serde_json::Value::Null),
+    );
+    put_raw_timestamp(
+        &canonical,
+        &mail("seconds", "operator", 0, false),
+        Some(1_793_050_232.into()),
+    );
+    let twin = mail("twin", "operator", 0, false);
+    put_raw_timestamp(&local, &twin, None);
+    put_raw_timestamp(&canonical, &twin, None);
+
+    let view = view_from(&r.main, &r.store, &audience);
+    assert_eq!(view.coverage(), &Coverage::Complete);
+    assert_eq!(
+        ids(&view.unread()),
+        vec!["absent", "null", "seconds", "twin"]
+    );
+    let ts = |id: &str| {
+        view.records()
+            .iter()
+            .find(|rec| rec.message.id == id)
+            .unwrap()
+            .message
+            .timestamp
+    };
+    for id in ["absent", "null", "twin"] {
+        assert!(ts(id) >= before, "{id} is dated by its file, not the epoch");
+    }
+    assert_eq!(ts("seconds"), 1_793_050_232_000);
+    for id in ["absent", "null", "seconds", "twin"] {
+        let shown = crate::mailbox_root::format_mail_timestamp(ts(id));
+        assert!(!shown.starts_with("1970"), "{id} renders as {shown}");
+    }
+}

@@ -8,7 +8,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ### `aida init`
 
-*(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + MCP registration + scaffolding, plus first-machine-global defaults. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
+*(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + selected agent scaffolding, plus first-machine-global defaults. MCP registration is explicit opt-in with `--with-mcp`; the CLI is the default surface for CLI-capable agents. See the [operator route](../operator-setup.md) for adopted projects and sibling-store setup. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
 
 ---
 
@@ -20,7 +20,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ### `aida scaffold`
 
-**One line** — manage the Claude Code furniture `init` wrote (skills, commands, hooks, MCP config, templates) after the fact.
+**One line** — manage the Claude Code furniture `init` wrote (skills, commands, hooks, templates, and MCP config when explicitly requested) after the fact.
 
 **Mental model.** `init` scaffolds once; the *binary* keeps evolving. `scaffold` is the family that reconciles the on-disk scaffolding against the binary's *current* embedded templates: `status` reports drift, `diff` shows it, `upgrade` heals it **category-aware**, `apply` (re)writes it, `extract` pulls templates out for hand-customization. The key insight is the category model — AIDA-owned template files (skills/commands/hooks) are safe to overwrite; user-owned seed files (CLAUDE.md, AGENTS.md) are not — which is exactly why `upgrade` exists instead of a blunt `apply --force`.
 
@@ -33,7 +33,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - `diff` — exits non-zero on drift, so it pairs with `status`: `status` says "N modified," `diff` shows you *what* before you decide to `upgrade`. CI/pre-commit-hookable.
 - `extract` — materializes the embedded templates to disk so you can edit them; the deliberate "I want to diverge from the defaults" path.
 
-**Gotchas.** `status` reporting "modified" on a file you *intended* to edit (CLAUDE.md) is expected, not an error — that's a seed file; drift there is your content, and `upgrade` will correctly leave it. Don't reflexively "fix" it.
+**Seed ownership.** An existing `README.md` belongs to the project: authored content is not scaffold drift, and ordinary `upgrade` and `refresh` preserve it. `scaffold diff README.md` also skips the starter comparison and exits 0. A missing README is reported by `status` and by default or explicit `diff` (exit 1); `upgrade` creates the starter when it is absent. Pack-only `refresh` neither creates nor replaces README. Explicit `upgrade --force` can replace it. `CLAUDE.md` import checks and `AGENTS.md` managed-block checks still report AIDA-owned drift, as do stale template files. <!-- trace:BUG-A65B4BF5902D469995F816EFD3A27661-001 | ai:codex -->
 
 **Chains with** — runs after a binary `aida upgrade`; pairs `status` → `diff` → `upgrade`.
 
@@ -182,7 +182,7 @@ remote-tracking ref. Local hook-profile installation/verification is the existin
 policy; it does not change the canonical store.
 
 **Sanitization is refusal-only.** A reviewed policy (below) gates every push
-and every store write; see [sanitized intake](#sanitized-intake-aida-add---sanitized).
+and every store write; see [sanitized intake](#aida-add---sanitized-sanitized-intake).
 It can only refuse known shapes and listed tokens, so keep work-filed defects
 generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
@@ -613,8 +613,8 @@ legacy single-file storage and store initialization. A server discards the
 refused change from its in-memory state instead of reporting success; if it
 cannot reload, it refuses further saves until a reload succeeds.
 
-**Remaining acceptance:** actual recoverable FF pull is not available in this
-slice. The client guard does not enforce hub receiving hooks or PUBLIC
+**Boundary:** recoverable fast-forward store pull is implemented as described
+above. The client guard does not enforce hub receiving hooks or PUBLIC
 forwarding, and raw Git, other AIDA writers that do not go through the store
 backend, and foreign writers can bypass it. No history rewrite, clean export,
 live hub hook or automatic forwarding is provided.
