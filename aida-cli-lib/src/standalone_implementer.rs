@@ -262,6 +262,28 @@ struct Slot {
     #[serde(default)]
     start: Option<String>,
     spec: String,
+    /// The child's stream-json log, once launched. A slot whose log holds
+    /// the final result no longer counts toward the cap.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    log: Option<PathBuf>,
+}
+
+/// Record the child's log on this process's slot, so the cap stops counting
+/// the slot once the child logs its final result. Best effort.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
+    let path = slots_dir(project_root).join(format!("{}.json", std::process::id()));
+    let Some(mut slot) = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|body| serde_json::from_str::<Slot>(&body).ok())
+    else {
+        return;
+    };
+    slot.log = Some(log_path.to_path_buf());
+    if let Ok(body) = serde_json::to_string(&slot) {
+        let _ = aida_core::write_atomic(&path, body);
+    }
 }
 
 /// A held concurrency slot; released when dropped.
@@ -311,8 +333,17 @@ pub(crate) fn acquire_slot_with(
             .ok()
             .and_then(|body| serde_json::from_str::<Slot>(&body).ok());
         match slot {
+            // A launcher whose child already logged its final result is
+            // finishing, not running: its slot stays but is not counted.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
             Some(slot) if slot.pid != pid && is_alive(slot.pid, slot.start.as_deref()) => {
-                running.push(slot.spec)
+                let finishing = slot
+                    .log
+                    .as_deref()
+                    .is_some_and(crate::headless_linger::log_has_final_result);
+                if !finishing {
+                    running.push(slot.spec)
+                }
             }
             _ => {
                 let _ = std::fs::remove_file(&path);
@@ -339,6 +370,7 @@ pub(crate) fn acquire_slot_with(
         pid,
         start: aida_core::liveness::process_start_identity(pid),
         spec: spec.to_string(),
+        log: None,
     };
     aida_core::write_atomic(&path, serde_json::to_string(&slot)?)
         .with_context(|| format!("writing {}", path.display()))?;
@@ -430,6 +462,8 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         .join(".aida")
         .join("headless-logs")
         .join(format!("{}-{}.jsonl", launch.branch, launch.session_id));
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+    record_slot_log(launch.project_root, &log_path);
     eprintln!(
         "{} {}",
         crate::glyph(crate::glyphs::Glyph::FlowActive)
