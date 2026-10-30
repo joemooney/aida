@@ -29,8 +29,8 @@ It is alpha software, Linux-only, and released under the MIT licence.
   on its execution mode (drain, drive, guided, operator, or decide) and tells
   you what will be asked of you before anything starts. Queues, leases, briefs,
   and an inter-agent mailbox coordinate the rest.
-- **CLI and MCP surfaces.** The `aida` CLI is the primary surface for people and
-  CLI-capable agents. `aida mcp-serve` exposes the same requirements as MCP tools
+- **CLI and MCP surfaces.** The `aida` CLI is the primary tool surface for
+  CLI-capable agents and operators. `aida mcp-serve` exposes the same requirements as MCP tools
   over stdio for MCP-native clients.
 
 ## Who it is for
@@ -71,37 +71,14 @@ pure-Rust `protox` crate.
 
 ## Quick start
 
-```bash
-cd my-project
-git init                      # if it is not already a git repository
-aida init                     # orphan-branch store, cache, agent skills, commit hooks
+Start with your usual conversational coding agent. Discuss a change, agree on
+acceptance criteria, and ask the agent to keep the intent and implementation
+linked in AIDA. You develop and review the system; the agent handles the tracking
+commands as part of the work.
 
-aida add --type story --title "Rate-limit the login endpoint"
-aida list
-aida show <SPEC-ID>
-```
-
-`aida init` sets up the store and cache and generates Claude Code skills,
-commands, and commit-validation hooks. Add `--with-mcp` to also scaffold MCP
-registrations for Claude Code and Codex. See `aida init --help` for the other
-options.
-
-Link code to the spec with a trace comment, then ask why the code exists:
-
-```rust
-// trace:<SPEC-ID> | ai:claude
-fn throttle_login(ip: IpAddr) -> Result<()> { /* ... */ }
-```
-
-```bash
-aida why src/auth.rs:42
-```
-
-From there, a spec moves through its lifecycle: approve it
-(`aida edit <SPEC-ID> --status approved`), queue it (`aida queue add <SPEC-ID>`),
-and pick it up in an isolated worktree (`aida queue work`). The
-[getting-started guide](docs/getting-started.md) and
-[first project walkthrough](docs/first-project.md) run one spec end to end.
+The [getting-started guide](docs/getting-started.md) explains this journey and
+labels the one-time operator setup separately. The product showcase renders [that same guide source](docs/getting-started.md)
+in a reader-friendly layout. Autonomous delivery is optional.
 
 ### Cloning an existing AIDA project
 

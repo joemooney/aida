@@ -813,8 +813,9 @@ pub(crate) fn handle_mailbox_command(
                 );
                 for s in &rows {
                     let when = chrono::DateTime::from_timestamp_millis(s.latest_ts)
+                        .filter(|_| aida_core::mailbox::timestamp_is_known(s.latest_ts))
                         .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)))
-                        .unwrap_or_else(|| "?".to_string());
+                        .unwrap_or_else(|| "unknown time".to_string());
                     println!(
                         "  {} {:<14} {} unread / {} total  {}",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -853,8 +854,9 @@ pub(crate) fn handle_mailbox_command(
             println!("{}", "Mailbox overview".bold());
             for s in &summaries {
                 let when = chrono::DateTime::from_timestamp_millis(s.latest_ts)
+                    .filter(|_| aida_core::mailbox::timestamp_is_known(s.latest_ts))
                     .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)))
-                    .unwrap_or_else(|| "?".to_string());
+                    .unwrap_or_else(|| "unknown time".to_string());
                 let unread = if s.unread > 0 {
                     format!("{} unread", s.unread).cyan().to_string()
                 } else {
