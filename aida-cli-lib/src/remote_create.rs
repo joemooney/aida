@@ -630,6 +630,10 @@ struct RemoteBranchStanding {
     remote: String,
     head: Option<String>,
     ahead_behind: Option<(u32, u32)>,
+    /// Commits on this hub's tip that no other hub has — the signature of a
+    /// clone pushing to this hub only, bypassing the mirror.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-120 | ai:claude
+    only_here: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -729,6 +733,74 @@ fn remote_branch_verdict(drift: &RemoteBranchDrift) -> String {
     }
 }
 
+/// Count, per hub, the store commits its tracking ref carries that no other
+/// hub's does. Read-only; leaves `only_here` as `None` when a tracking ref is
+/// missing (fetch failed) so the hint never guesses.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-120 | ai:claude
+fn fill_hub_only_commits(
+    project_root: &Path,
+    branch: &str,
+    standings: &mut [RemoteBranchStanding],
+) {
+    let refs: Vec<String> = standings
+        .iter()
+        .map(|s| format!("refs/remotes/{}/{branch}", s.remote))
+        .collect();
+    for (i, s) in standings.iter_mut().enumerate() {
+        let mut args = vec!["rev-list", "--count", refs[i].as_str(), "--not"];
+        args.extend(
+            refs.iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, r)| r.as_str()),
+        );
+        s.only_here = git_out(project_root, &args).and_then(|o| o.trim().parse().ok());
+    }
+}
+
+/// When `aida-store` diverged because some hub carries commits no other hub
+/// has, name that hub and suggest scheduling the reconcile from a clone that
+/// can reach every hub (STORY-HOME-097 automates this).
+// trace:TASK-B6B1278890774EF993D2EBC327862470-120 | ai:claude
+fn store_bypass_hint_lines(
+    branch_reports: &[(String, Vec<RemoteBranchStanding>, RemoteBranchDrift)],
+) -> Vec<String> {
+    let Some((_, standings, _)) = branch_reports.iter().find(|(branch, _, drift)| {
+        branch == STORE_BRANCH && matches!(drift, RemoteBranchDrift::Diverged)
+    }) else {
+        return Vec::new();
+    };
+    let hubs: Vec<(&str, u32)> = standings
+        .iter()
+        .filter_map(|s| match s.only_here {
+            Some(n) if n > 0 => Some((s.remote.as_str(), n)),
+            _ => None,
+        })
+        .collect();
+    if hubs.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = Vec::new();
+    for (hub, n) in &hubs {
+        lines.push(format!(
+            "{} {hub} has {n} {STORE_BRANCH} commit{} no other hub has: a clone is pushing the",
+            crate::glyph(crate::glyphs::Glyph::Warning),
+            if *n == 1 { "" } else { "s" }
+        ));
+        lines.push(format!("  store to {hub} only, bypassing the mirror."));
+    }
+    lines.push(
+        "  If that clone must not push to every hub, run the reconcile on a schedule from a"
+            .to_string(),
+    );
+    lines.push("  clone that reaches every hub, e.g. an hourly crontab entry:".to_string());
+    lines.push(
+        "    0 * * * * cd <bridge-clone> && flock -n ~/.aida/store-reconcile.lock aida remote reconcile --execute >> ~/.aida/store-reconcile.log 2>&1"
+            .to_string(),
+    );
+    lines
+}
+
 fn remote_status_guidance_lines(
     branch_reports: &[(String, Vec<RemoteBranchStanding>, RemoteBranchDrift)],
     release_tag: Option<&str>,
@@ -742,7 +814,7 @@ fn remote_status_guidance_lines(
         .any(|(_, _, drift)| matches!(drift, RemoteBranchDrift::Behind(_)));
 
     if any_diverged {
-        return vec![
+        let mut lines = vec![
             format!(
                 "{} remotes disagree on a shared branch. For `aida-store`, run `aida remote reconcile`",
                 crate::glyph(crate::glyphs::Glyph::Cross)
@@ -752,6 +824,8 @@ fn remote_status_guidance_lines(
             "  branches, merge the divergent tips and push to every remote — never".to_string(),
             "  force-push a shared branch to resolve.".to_string(),
         ];
+        lines.extend(store_bypass_hint_lines(branch_reports));
+        return lines;
     }
 
     if any_behind {
@@ -1179,9 +1253,13 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                 remote: r.clone(),
                 head,
                 ahead_behind,
+                only_here: None,
             });
         }
         let drift = classify_remote_branch_drift(&standings);
+        if *b == STORE_BRANCH && drift == RemoteBranchDrift::Diverged {
+            fill_hub_only_commits(project_root, b, &mut standings);
+        }
         match drift {
             RemoteBranchDrift::Diverged => any_diverged = true,
             RemoteBranchDrift::Behind(_) => any_behind = true,
@@ -1214,6 +1292,7 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                             "head": s.head,
                             "local_ahead": s.ahead_behind.map(|(a, _)| a),
                             "local_behind": s.ahead_behind.map(|(_, b)| b),
+                            "only_on_this_hub": s.only_here,
                         })
                     })
                     .collect();
@@ -3128,6 +3207,7 @@ mod tests {
             remote: remote.to_string(),
             head: Some(head.to_string()),
             ahead_behind,
+            only_here: None,
         }
     }
 
@@ -3198,6 +3278,57 @@ mod tests {
 
         assert!(guidance.contains("remote reconcile"), "{guidance}");
         assert!(guidance.contains("merge the divergent tips"), "{guidance}");
+    }
+
+    #[test]
+    fn diverged_store_names_the_bypass_hub_and_suggests_scheduled_reconcile() {
+        let mut gitlab = standing("gitlab", SHA_A, Some((0, 121)));
+        gitlab.only_here = Some(121);
+        let mut origin = standing(
+            "origin",
+            "3333333333333333333333333333333333333333",
+            Some((0, 0)),
+        );
+        origin.only_here = Some(0);
+        let guidance = remote_status_guidance_lines(
+            &[(
+                "aida-store".to_string(),
+                vec![origin, gitlab],
+                RemoteBranchDrift::Diverged,
+            )],
+            None,
+            &[],
+        )
+        .join("\n");
+
+        assert!(
+            guidance.contains("gitlab has 121 aida-store commits no other hub has"),
+            "{guidance}"
+        );
+        assert!(guidance.contains("store to gitlab only"), "{guidance}");
+        assert!(!guidance.contains("origin has"), "{guidance}");
+        assert!(
+            guidance.contains("aida remote reconcile --execute"),
+            "{guidance}"
+        );
+        assert!(guidance.contains("crontab"), "{guidance}");
+    }
+
+    #[test]
+    fn diverged_store_without_hub_only_commits_adds_no_bypass_hint() {
+        let guidance = remote_status_guidance_lines(
+            &[(
+                "aida-store".to_string(),
+                vec![standing("origin", SHA_A, Some((0, 0)))],
+                RemoteBranchDrift::Diverged,
+            )],
+            None,
+            &[],
+        )
+        .join("\n");
+
+        assert!(!guidance.contains("bypassing the mirror"), "{guidance}");
+        assert!(!guidance.contains("crontab"), "{guidance}");
     }
 
     #[test]
