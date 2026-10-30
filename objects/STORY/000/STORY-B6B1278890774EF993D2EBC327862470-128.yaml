@@ -1,0 +1,27 @@
+id: 01a18d34-b83d-7151-a0aa-44fba6ea8550
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-128
+title: 'Scheduled mail-backlog guard: nudge any live agent with unread requests/handoffs older than 30 minutes'
+description: |-
+  Operator idea 2026-10-30 07:26 ('an hourly schedule in aida schedule to remind active agents to read their mail'), after the advisor left seven Codex handoffs unread for 9+ hours (BUG-HOME-040).
+  Design (use the existing guard + route pattern in `aida schedule`):
+  1. New `aida doctor check mail-backlog`: for each LIVE agent (aida agent ls) and each seat role, count unread [request]/[handoff] mail addressed to its handle or role that is older than a threshold (default 30m). It fails, listing agent, sender, kind, age and subject.
+  2. Substrate job `mail-backlog-guard`, every 30m (configurable), runs that check.
+  3. On failure, nudge each named agent through its wake path: Codex via the STORY-HOME-096 mail wake; Claude seats via the per-turn notice (BUG-HOME-040) plus a seat job `mail-backlog-guard-route` for the addressed seat; anything with no wake path is escalated in `aida awaiting` for the operator.
+  4. Conditional: no backlog means no nudge (no blanket hourly reminder spam). Re-nudge the same message at most once an hour.
+  5. Tests: a stale [request] to a live agent produces one nudge; a fresh one does not; a handled (read) one clears it.
+  Depends on: BUG-HOME-040 (notice content) for the Claude-side delivery.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T14:26:44.925792593Z
+modified_at: 2026-10-30T14:26:44.925792593Z
+req_type: Story
+filed_at:
+  code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ee1fa1789a
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
