@@ -8,7 +8,7 @@
 <body>
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
 <a class="skip" href="#main">Skip to content</a>
-<header class="guide-header"><a class="brand" href="index.html">✳ AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html" aria-current="page">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a></nav></header>
+<header class="guide-header"><a class="brand" href="index.html"><span aria-hidden="true">✳</span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="getting-started.html" aria-current="page">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a></nav></header>
 <main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="build-as-you-already-work">Build as you already work</h1>
 <p>Keep working with your conversational coding agent. Explain the change, discuss tradeoffs, inspect the implementation and decide what should happen next. With AIDA configured in the project, your agent can use its CLI or MCP tools to maintain a durable record of requirements, decisions and the work that fulfills them.</p>
 <p>The result is the system you developed and a record of its intent: why it behaves that way, what was agreed and where the implementation came from. That record helps you maintain and enhance the system and work with other people and agents.</p>
@@ -27,8 +27,8 @@
 <p>Read the <a href="../what-is-aida.html">AIDA overview</a> for selectable autonomy and current limitations. AIDA is alpha software and supports Linux only.</p>
 <h2 id="one-time-operator-setup">One-time operator setup</h2>
 <p>An operator installs AIDA and connects it to the coding agent. Follow the <a href="../../README.md#install">installation instructions</a> on a supported Linux machine, then run these commands inside the intended Git repository:</p>
-<pre><code>aida init
-aida init --help</code></pre>
+<pre><code>aida init --help
+aida init</code></pre>
 <p>The full footprint scaffolds project guidance and agent skills for selected profiles; <code>--agent</code> chooses profiles explicitly. The CLI is the default tool surface for agents with shell access. MCP registration is opt-in with <code>--with-mcp</code>; <code>aida mcp-serve</code> provides the stdio server for MCP clients. Check the <a href="../agents/aida-mcp-install-matrix.md">client setup matrix</a> for your harness. Agent permissions, project policy and review authority still need deliberate configuration.</p>
 <p>For an <a href="../../README.md#cloning-an-existing-aida-project">existing AIDA project</a>, follow its own onboarding guidance before reinitializing or changing configuration. Operators can consult the <a href="../cli/07-project-setup.md">setup reference</a> and <a href="../cli/10-storage.md">storage reference</a>. The <a href="../first-project.md">first-project walkthrough</a> is a detailed command-oriented exercise for operators and agents; ordinary users can start with the conversational journey above.</p>
 <h2 id="uninstall">Uninstall</h2>
