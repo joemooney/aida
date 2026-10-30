@@ -134,9 +134,9 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     // hooks; host git never runs there. Same fixed refusal process as below.
     // trace:BUG-2169 | ai:claude
     if let Some(clone_root) = crate::seat_clone_detect::seat_clone_root(cwd) {
-        // BUG-HOME-038: the seat itself, proven contained by capability, may
-        // run git in its own clone, with hooks, fsmonitor and every config
-        // file but the clone's own switched off.
+        // BUG-HOME-038: the seat itself, proven contained by capability and
+        // in the clone of its own session lease, may run git there, with
+        // hooks, fsmonitor and every config file but the clone's own off.
         // trace:BUG-HOME-038 | ai:claude
         if crate::seat_clone_detect::contained_in_clone(&clone_root) {
             return contained_seat_git_command(cwd);
@@ -260,8 +260,8 @@ pub fn refused_seat_clone(cwd: impl AsRef<Path>) -> Option<PathBuf> {
     (!crate::seat_clone_detect::contained_in_clone(&clone_root)).then_some(clone_root)
 }
 
-/// Git for a contained seat in its own clone (BUG-HOME-038 ruling, condition
-/// 2): no hooks, no fsmonitor, no system or global config file. The clone's
+/// Git for a contained seat in its own leased clone (BUG-HOME-038 ruling,
+/// condition 2): no hooks, no fsmonitor, no system or global config file. The clone's
 /// own config is the seat's to write and is read as usual. The author and
 /// committer default to the user's global identity, which the disabled
 /// global config would otherwise drop.

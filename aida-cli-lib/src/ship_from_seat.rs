@@ -12,9 +12,11 @@
 //!      lease's branch, whose prerequisites the host already has;
 //!   4. the bundle is fetched into `refs/aida/seat-import/<branch>`, never
 //!      into `refs/heads`; the diff stat against the default branch and the
-//!      clone's config/hooks report are printed;
-//!   5. the quarantined commit is pushed to `origin/<branch>` and the PR is
-//!      opened, titled with the commit subject.
+//!      clone's config/hooks report are printed, and the STORY-469 trailer
+//!      check runs on the imported commits. A dry run fetches into a scratch
+//!      repository instead and stops here, leaving no ref in main;
+//!   5. the quarantined commit is pushed to `origin/<branch>`, the quarantine
+//!      ref is deleted, and the PR is opened, titled with the commit subject.
 //!
 //! trace:BUG-HOME-038 | ai:claude
 
@@ -39,7 +41,7 @@ pub(crate) struct FromSeatOptions {
     pub(crate) spec: Option<String>,
     /// Push without opening the PR.
     pub(crate) no_pr: bool,
-    /// Import, verify and report, then stop before pushing.
+    /// Verify and report in a scratch repository; import and push nothing.
     pub(crate) dry_run: bool,
 }
 
@@ -191,37 +193,169 @@ fn git_text(main: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Import a recorded seat's branch into quarantine: bundle it in the seat
-/// sandbox, verify it, fetch it. Returns the quarantine ref and the tip.
+/// A verified seat branch fetched into a quarantine ref: in main for a real
+/// run, or in a scratch repository borrowing main's objects for a dry run, so
+/// a dry run leaves no ref in main.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) struct Staged {
+    /// The repository holding `reference`.
+    pub(crate) repo: PathBuf,
+    /// The quarantine ref.
+    pub(crate) reference: String,
+    /// The branch tip the bundle carried.
+    pub(crate) tip: String,
+    /// The dry run's scratch repository, removed on drop.
+    _scratch: Option<tempfile::TempDir>,
+}
+
+/// Verify the seat's bundle `bytes` against `main`, then fetch it into
+/// quarantine: main's `refs/aida/seat-import/<branch>`, or with `dry_run` the
+/// same ref in a scratch bare repository whose alternates borrow main's
+/// objects (`git bundle verify` and that fetch write nothing to main).
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn stage_bundle(
+    main: &Path,
+    branch: &str,
+    bytes: &[u8],
+    dry_run: bool,
+) -> Result<Staged> {
+    let mut bundle = tempfile::Builder::new()
+        .prefix("aida-from-seat-")
+        .suffix(".bundle")
+        .tempfile()
+        .context("could not create a temporary bundle file")?;
+    std::io::Write::write_all(&mut bundle, bytes).context("could not write the seat bundle")?;
+    let tip = verify_bundle(main, bundle.path(), branch)?;
+    if !dry_run {
+        let reference = quarantine_bundle(main, bundle.path(), branch, &tip)?;
+        return Ok(Staged {
+            repo: main.to_path_buf(),
+            reference,
+            tip,
+            _scratch: None,
+        });
+    }
+    let scratch = tempfile::Builder::new()
+        .prefix("aida-from-seat-dry-run-")
+        .tempdir()
+        .context("could not create the dry run's scratch repository")?;
+    let init = aida_core::git_ops::host_git_command(scratch.path())
+        .args(["init", "--bare", "--quiet"])
+        .output()
+        .context("could not run `git init` for the dry run")?;
+    if !init.status.success() {
+        anyhow::bail!(
+            "could not create the dry run's scratch repository: {}",
+            String::from_utf8_lossy(&init.stderr).trim()
+        );
+    }
+    let objects = main
+        .join(".git")
+        .join("objects")
+        .canonicalize()
+        .context("could not resolve main's object directory")?;
+    std::fs::write(
+        scratch
+            .path()
+            .join("objects")
+            .join("info")
+            .join("alternates"),
+        format!("{}\n", objects.display()),
+    )
+    .context("could not point the dry run's scratch repository at main's objects")?;
+    let reference = quarantine_bundle(scratch.path(), bundle.path(), branch, &tip)?;
+    Ok(Staged {
+        repo: scratch.path().to_path_buf(),
+        reference,
+        tip,
+        _scratch: Some(scratch),
+    })
+}
+
+/// Import a recorded seat's branch into main's quarantine: bundle it in the
+/// seat sandbox, verify it, fetch it. Returns the quarantine ref and the tip.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn import_seat_branch(
     seat: &HostRecordedClone,
     branch: &str,
 ) -> Result<(String, String)> {
     let bytes = crate::seat_clone::bundle_branch(&seat.main, &seat.root, branch)?;
-    let mut bundle = tempfile::Builder::new()
-        .prefix("aida-seat-import-")
-        .suffix(".bundle")
-        .tempfile()
-        .context("could not create a temporary bundle file")?;
-    std::io::Write::write_all(&mut bundle, &bytes).context("could not write the seat bundle")?;
-    let tip = verify_bundle(&seat.main, bundle.path(), branch)?;
-    let quarantine = quarantine_bundle(&seat.main, bundle.path(), branch, &tip)?;
-    Ok((quarantine, tip))
+    let staged = stage_bundle(&seat.main, branch, &bytes, false)?;
+    Ok((staged.reference, staged.tip))
+}
+
+/// The STORY-469 commit-trailer check on the seat's commits in `range`
+/// (read in `repo`): some commit carries a `(SPEC-ID)` trailer, and every
+/// trailer resolves to a live spec through `resolve`. A seat branch with no
+/// commit in `range` has nothing to publish.
+// trace:BUG-HOME-038 trace:STORY-469 | ai:claude
+pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Result<()>
+where
+    F: FnMut(&str) -> crate::trace::SpecResolution,
+{
+    let commits = crate::trace::read_commits_in_range(repo, range)?;
+    if commits.is_empty() {
+        anyhow::bail!("refusing to publish: the seat branch adds no commit ({range})");
+    }
+    let trailered = commits
+        .iter()
+        .any(|(_, subject)| !crate::extract_spec_ids_from_commit(subject).is_empty());
+    if !trailered {
+        anyhow::bail!(
+            "refusing to publish: no seat commit carries a `(SPEC-ID)` trailer. Amend the \
+             commit inside the seat, then publish again"
+        );
+    }
+    let violations = crate::trace::validate_trailer_references(&commits, resolve);
+    if !violations.is_empty() {
+        anyhow::bail!(
+            "{}",
+            crate::trace::format_trailer_guard_refusal("ship --from-seat", &violations).join("\n")
+        );
+    }
+    Ok(())
+}
+
+/// What `aida ship --from-seat` needs from outside the repository, so a test
+/// can drive the handler without bwrap, a forge or a requirement store.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) struct Deps<'a> {
+    /// Bundle `refs/heads/<branch>` of the clone (`main`, `clone`, `branch`).
+    pub(crate) bundle: &'a dyn Fn(&Path, &Path, &str) -> Result<Vec<u8>>,
+    /// The forge to open the PR on, for `main`.
+    pub(crate) forge: &'a dyn Fn(&Path) -> Box<dyn crate::forge::Forge>,
+    /// Called with `main` and the branch once the PR is open.
+    pub(crate) after_open: &'a dyn Fn(&Path, &str),
 }
 
 /// The `aida ship --from-seat` handler.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
     let cwd = std::env::current_dir().context("could not read the current directory")?;
-    if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(&cwd) {
+    run_from(
+        &cwd,
+        opts,
+        &Deps {
+            bundle: &crate::seat_clone::bundle_branch,
+            forge: &|main| crate::forge::forge_for_open_change(main),
+            after_open: &|main, branch| {
+                let _ = crate::queue_review_for_open_pr(main, branch);
+            },
+        },
+    )
+}
+
+/// [`run`] from `cwd`.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Result<()> {
+    if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(cwd) {
         anyhow::bail!(
             "`aida ship --from-seat` runs from the main checkout, not from inside the seat \
              clone {}",
             clone.display()
         );
     }
-    let project_root = crate::find_project_root()?;
+    let project_root = crate::find_project_root_from(cwd)?;
     let main = crate::main_worktree_root_from(&project_root);
     let seat = recorded_seat(&main, &opts.clone)?;
     let main = seat.main.clone();
@@ -236,32 +370,58 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
         },
     )?;
     eprintln!(
-        "{} aida ship --from-seat — {} on branch {} from {}",
+        "{} aida ship --from-seat — {} on branch {} from {}{}",
         "→".cyan().bold(),
         aida_core::node_alias::display_spec_id(&spec).bold(),
         branch,
-        seat.root.display()
+        seat.root.display(),
+        if opts.dry_run { " (dry run)" } else { "" }
     );
     for line in crate::seat_clone::config_hooks_report(&main, &seat.root) {
         eprintln!("  seat {line}");
     }
 
-    let (quarantine, tip) = import_seat_branch(&seat, &branch)?;
+    let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
+    let staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
+    let (quarantine, tip) = (&staged.reference, &staged.tip);
     eprintln!(
-        "  {} bundle verified and fetched into {quarantine} ({tip})",
-        crate::glyph(crate::glyphs::Glyph::Check).green()
+        "  {} bundle verified ({tip}){}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        if opts.dry_run {
+            " into a scratch repository"
+        } else {
+            ""
+        }
     );
     let base = crate::detect_default_branch_ref(&main).unwrap_or_else(|| "origin/main".into());
-    let stat = git_text(
+    let base_oid = git_text(
         &main,
-        &["diff", "--stat", &format!("{base}...{quarantine}")],
+        &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
+    )?;
+    let stat = git_text(
+        &staged.repo,
+        &["diff", "--stat", &format!("{base_oid}...{quarantine}")],
     )?;
     eprintln!("  changes against {base}:");
     for line in stat.lines() {
         eprintln!("    {line}");
     }
+    let store = crate::load_store_for_lookup(&main);
+    if store.is_none() {
+        eprintln!(
+            "{} ship --from-seat: no requirement store reachable; trailer spec-IDs are not \
+             resolved",
+            "warning:".yellow().bold()
+        );
+    }
+    seat_trailer_check(&staged.repo, &format!("{base_oid}..{quarantine}"), |id| {
+        crate::trace::resolve_spec_in_store(store.as_ref(), id)
+    })?;
     if opts.dry_run {
-        eprintln!("  dry run: not pushed; {quarantine} holds the imported commit");
+        eprintln!(
+            "  dry run: would push {tip} to origin/{branch}{}; nothing was imported",
+            if opts.no_pr { "" } else { " and open the PR" }
+        );
         return Ok(());
     }
 
@@ -282,6 +442,8 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
              retrying"
         );
     }
+    // Pushed: the quarantine ref has done its job (a failure above keeps it).
+    git_text(&main, &["update-ref", "-d", quarantine, tip])?;
     if opts.no_pr {
         eprintln!(
             "{} aida ship --from-seat — {branch} pushed (--no-pr; no PR opened)",
@@ -290,14 +452,15 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
         return Ok(());
     }
 
-    let pr = match crate::change_lookup_for_branch(&main, &branch) {
-        crate::forge::ChangeLookup::Found(change) => {
+    let forge = (deps.forge)(&main);
+    let pr = match forge.change_for_branch(&branch) {
+        Ok(crate::forge::ChangeLookup::Found(change)) => {
             eprintln!("  found open PR-{} for branch {branch}", change.id);
             change.id
         }
-        _ => open_seat_pr(&main, &seat, &branch, &quarantine)?,
+        _ => open_seat_pr(&*forge, &main, &seat, &branch, tip)?,
     };
-    let _ = crate::queue_review_for_open_pr(&main, &branch);
+    (deps.after_open)(&main, &branch);
     eprintln!(
         "{} aida ship --from-seat — PR-{pr} open for {} (not merged)",
         "⏸".yellow().bold(),
@@ -306,47 +469,51 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
     Ok(())
 }
 
-/// Open the PR for a published seat branch: titled with the commit subject,
-/// its body the commit body plus a note that it was published from the seat.
+/// The PR body for a published seat commit: the commit body, then the note
+/// that it was published from the seat by the host.
 // trace:BUG-HOME-038 | ai:claude
-fn open_seat_pr(
-    main: &Path,
-    seat: &HostRecordedClone,
-    branch: &str,
-    quarantine: &str,
-) -> Result<u64> {
-    let message = git_text(main, &["log", "-1", "--format=%B", quarantine])?;
-    let title = git_text(main, &["log", "-1", "--format=%s", quarantine])?;
-    if title.is_empty() {
-        anyhow::bail!("the seat's commit has an empty subject; cannot title the PR");
-    }
-    let mut body = crate::pr_ship::derive_pr_body_from_commit(&message);
+pub(crate) fn seat_pr_body(message: &str, seat_name: &str) -> String {
+    let mut body = crate::pr_ship::derive_pr_body_from_commit(message);
     if !body.trim().is_empty() {
         body.push_str("\n\n");
     }
     body.push_str(&format!(
-        "Published from seat `{}` with `aida ship --from-seat`: bundled inside the seat \
-         sandbox, verified and pushed by the host; no seat hook ran.",
-        seat.root
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
+        "Published from seat `{seat_name}` with `aida ship --from-seat`: bundled inside the \
+         seat sandbox, verified and pushed by the host; no seat hook ran."
     ));
+    body
+}
+
+/// Open the PR for a published seat branch at `tip`: titled with the commit
+/// subject, its body [`seat_pr_body`].
+// trace:BUG-HOME-038 | ai:claude
+fn open_seat_pr(
+    forge: &dyn crate::forge::Forge,
+    main: &Path,
+    seat: &HostRecordedClone,
+    branch: &str,
+    tip: &str,
+) -> Result<u64> {
+    let message = git_text(main, &["log", "-1", "--format=%B", tip])?;
+    let title = git_text(main, &["log", "-1", "--format=%s", tip])?;
+    if title.is_empty() {
+        anyhow::bail!("the seat's commit has an empty subject; cannot title the PR");
+    }
+    let seat_name = seat
+        .root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let specs = crate::extract_spec_ids_from_commit(&message);
     let req = crate::forge::OpenChange {
         branch: branch.to_string(),
         base: crate::forge::default_branch_of(main),
         title,
-        body,
+        body: seat_pr_body(&message, &seat_name),
         draft: false,
     };
-    let change = crate::gate::ledger::open_change_bound(
-        &*crate::forge::forge_for_open_change(main),
-        main,
-        req,
-        &specs,
-    )
-    .context("could not open a forge change request")?;
+    let change = crate::gate::ledger::open_change_bound(forge, main, req, &specs)
+        .context("could not open a forge change request")?;
     if change.id == 0 {
         anyhow::bail!(
             "the PR was created but its number could not be read: {}",

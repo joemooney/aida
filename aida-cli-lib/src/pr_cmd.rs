@@ -7903,8 +7903,9 @@ pub(crate) struct ShipArgs {
 
     /// Publish a contained seat's committed branch from the main checkout:
     /// bundle it inside the seat sandbox, verify the bundle, print its diff
-    /// stat and the clone's git config and hooks, push it and open the PR.
-    /// The seat's hooks never run. Never merges.
+    /// stat and the clone's git config and hooks, check its commit trailers,
+    /// push it and open the PR. The seat's hooks never run. Never merges.
+    /// With --dry-run, nothing is imported or pushed.
     // trace:BUG-HOME-038 | ai:claude — plain `//` keeps the marker out of `--help`.
     #[clap(
         long,

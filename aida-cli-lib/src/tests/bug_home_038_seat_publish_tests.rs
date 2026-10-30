@@ -4,9 +4,9 @@
 //! trace:BUG-HOME-038 | ai:claude
 
 use super::s4_host_git_tests::leased_clone;
-use super::tests::{fixture, ref_exists};
+use super::tests::{fixture, ref_exists, Fixture};
 use super::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// `git -C dir args…` through the test helper (auto-maintenance off); its
 /// trimmed stdout. Panics on failure.
@@ -81,9 +81,18 @@ fn plant_hooks(clone: &Path, sentinel: &Path, root: &Path) {
     );
 }
 
-/// Condition 2: with main's `.git` unwritable, host git runs in the seat's
-/// own clone, and neither a planted pre-push hook nor a `core.hooksPath` hook
-/// ever runs. With it writable again, the refusal is back.
+/// This process's session is `id` (and no Claude Code session id leaks in).
+fn session(id: &str) -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ID", Some(id)),
+        ("CLAUDE_CODE_SESSION_ID", None),
+    ])
+}
+
+/// Condition 2: with main's `.git` unwritable and this process's session
+/// leasing the clone, host git runs in the seat's own clone, and neither a
+/// planted pre-push hook nor a `core.hooksPath` hook ever runs. Without the
+/// session's lease, the refusal is back.
 #[cfg(unix)]
 #[test]
 fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
@@ -102,6 +111,7 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
 
     let main_git = fx.main.join(".git");
     {
+        let _session = session("c0ffee038002");
         let _ro = ReadOnlyDir::new(&main_git);
         assert!(aida_core::seat_clone_detect::contained_in_clone(&clone));
         assert_eq!(aida_core::git_ops::refused_seat_clone(&clone), None);
@@ -125,12 +135,45 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
         std::fs::read_to_string(&sentinel).unwrap_or_default()
     );
     assert!(ref_exists(&fx.origin, "refs/heads/seat-pushed"));
-    // Main writable again: this process is the host, and git is refused.
+    // Not this process's lease any more: git is refused.
+    let _other = session("c0ffee0380ff");
     assert!(!aida_core::seat_clone_detect::contained_in_clone(&clone));
     assert_eq!(
         aida_core::git_ops::refused_seat_clone(&clone),
         Some(clone.clone())
     );
+}
+
+/// Ruling item 1: a contained process holding seat A's lease is refused in
+/// seat B's clone (readable to it, but B's config is not A's to run).
+#[cfg(unix)]
+#[test]
+fn bug_home_038_contained_seat_is_refused_in_another_seats_clone() {
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("SKIP (root ignores directory permissions)");
+        return;
+    }
+    let fx = fixture();
+    let seat_a = super::s4_host_git_tests::leased_clone_on(&fx, "seat-a", "c0ffee038005", "a");
+    let seat_b = super::s4_host_git_tests::leased_clone_on(&fx, "seat-b", "c0ffee038006", "b");
+    let _session = session("c0ffee038005");
+    let main_git = fx.main.join(".git");
+    let _ro = ReadOnlyDir::new(&main_git);
+    assert!(aida_core::seat_clone_detect::contained_in_clone(&seat_a));
+    assert!(!aida_core::seat_clone_detect::contained_in_clone(&seat_b));
+    assert_eq!(
+        aida_core::git_ops::refused_seat_clone(&seat_b),
+        Some(seat_b.clone())
+    );
+    let err = crate::ship::tracked_changes_pending(&seat_b)
+        .expect_err("seat B's clone is refused to seat A")
+        .to_string();
+    assert!(err.contains(&seat_b.display().to_string()), "{err}");
+    let status = aida_core::git_ops::host_git_command(&seat_b)
+        .args(["status", "--porcelain"])
+        .output()
+        .unwrap();
+    assert!(!status.status.success(), "git ran in seat B's clone");
 }
 
 /// A commit on `branch` in main, then the branch deleted: the objects stay
@@ -319,4 +362,198 @@ fn bug_home_038_bwrap_import_quarantines_the_seat_branch() {
     let report = config_hooks_report(&fx.main, &clone).join("\n");
     assert!(report.contains("core.hookspath"), "{report}");
     assert!(report.contains("pre-push"), "{report}");
+}
+
+/// A leased seat clone on `branch` with one committed change titled
+/// `subject` (hooks off); returns the clone and its tip.
+fn seat_with_commit(
+    fx: &Fixture,
+    name: &str,
+    id: &str,
+    branch: &str,
+    subject: &str,
+) -> (PathBuf, String) {
+    let clone = super::s4_host_git_tests::leased_clone_on(fx, name, id, branch);
+    git_ok(&clone, &["config", "user.name", "Seat"]);
+    git_ok(&clone, &["config", "user.email", "seat@example.com"]);
+    std::fs::write(clone.join(format!("{name}.txt")), "seat\n").unwrap();
+    git_ok(&clone, &["add", "."]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-qm",
+            subject,
+            "-m",
+            "The seat's change.",
+        ],
+    );
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    (clone, tip)
+}
+
+/// The handler's bundle step without bwrap: test git bundles the branch in
+/// the clone against main's `origin/main`.
+fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8>> {
+    let base = git_ok(main, &["rev-parse", "origin/main"]);
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(clone)
+        .args(["bundle", "create", "-", &format!("refs/heads/{branch}")])
+        .args(["--not", &base])
+        .output()?;
+    anyhow::ensure!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(out.stdout)
+}
+
+fn opts(clone: &Path, dry_run: bool, no_pr: bool) -> crate::ship_from_seat::FromSeatOptions {
+    crate::ship_from_seat::FromSeatOptions {
+        clone: clone.to_path_buf(),
+        spec: Some("BUG-1".into()),
+        no_pr,
+        dry_run,
+    }
+}
+
+/// Every seat-import quarantine ref in `repo`.
+fn import_refs(repo: &Path) -> String {
+    git_ok(
+        repo,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            crate::ship_from_seat::QUARANTINE_PREFIX,
+        ],
+    )
+}
+
+/// Every ref in `repo` with its object.
+fn all_refs(repo: &Path) -> String {
+    git_ok(repo, &["for-each-ref", "--format=%(objectname) %(refname)"])
+}
+
+/// Ruling items 3–5: `--dry-run` imports nothing; a real run pushes the
+/// quarantined commit to the LEASE's branch on origin, deletes the
+/// quarantine ref, and opens the PR with the "published from seat" note.
+#[test]
+fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
+    let fx = fixture();
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "publish",
+        "c0ffee038007",
+        "seat-feat",
+        "fix: seat change (BUG-1)",
+    );
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let opened_for = std::cell::RefCell::new(Vec::<String>::new());
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, branch| opened_for.borrow_mut().push(branch.to_string()),
+    };
+
+    let before = all_refs(&fx.main);
+    crate::ship_from_seat::run_from(&fx.main, opts(&clone, true, false), &deps).unwrap();
+    assert_eq!(all_refs(&fx.main), before, "a dry run changed main's refs");
+    assert!(!ref_exists(&fx.origin, "refs/heads/seat-feat"));
+    assert!(forge.opened.lock().unwrap().is_empty());
+
+    crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps).unwrap();
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-feat"]),
+        tip
+    );
+    assert_eq!(
+        import_refs(&fx.main),
+        "",
+        "the quarantine ref outlived the push"
+    );
+    let opened = forge.opened.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].branch, "seat-feat");
+    assert_eq!(opened[0].title, "fix: seat change (BUG-1)");
+    assert!(
+        opened[0].body.contains("Published from seat"),
+        "{}",
+        opened[0].body
+    );
+    assert!(
+        opened[0].body.contains("The seat's change."),
+        "{}",
+        opened[0].body
+    );
+    assert_eq!(*opened_for.borrow(), vec!["seat-feat".to_string()]);
+}
+
+/// `--from-seat` run from inside a seat clone is refused before anything.
+#[test]
+fn bug_home_038_from_seat_inside_a_clone_is_refused() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(&fx, "inside", "c0ffee038008", "inside", "fix: x (BUG-1)");
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| panic!("bundled from inside a clone"),
+        forge: &|_| panic!("forge reached from inside a clone"),
+        after_open: &|_, _| {},
+    };
+    let err = crate::ship_from_seat::run_from(&clone, opts(&clone, false, true), &deps)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("runs from the main checkout"), "{err}");
+}
+
+/// Ruling item 2: a seat commit with no `(SPEC-ID)` trailer is refused
+/// before the push, its quarantine ref kept; a dead trailer is refused by
+/// the STORY-469 check.
+#[test]
+fn bug_home_038_from_seat_trailer_check_runs_before_push() {
+    let fx = fixture();
+    let (clone, _) = seat_with_commit(&fx, "bare", "c0ffee038009", "bare", "fix: no trailer");
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| panic!("forge reached despite a refused trailer"),
+        after_open: &|_, _| {},
+    };
+    let err = crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, true), &deps)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("carries a `(SPEC-ID)` trailer"), "{err}");
+    assert!(!ref_exists(&fx.origin, "refs/heads/bare"));
+    assert_eq!(import_refs(&fx.main), "refs/aida/seat-import/bare");
+
+    let base = git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    let (clone, _) = seat_with_commit(&fx, "dead", "c0ffee03800a", "dead", "fix: y (BUG-404)");
+    let range = format!("{base}..HEAD");
+    let err = crate::ship_from_seat::seat_trailer_check(&clone, &range, |_| {
+        crate::trace::SpecResolution::Missing
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("BUG-404"), "{err}");
+    crate::ship_from_seat::seat_trailer_check(&clone, &range, |_| {
+        crate::trace::SpecResolution::Live
+    })
+    .unwrap();
+}
+
+#[test]
+fn bug_home_038_seat_pr_body_notes_the_seat() {
+    let body = crate::ship_from_seat::seat_pr_body(
+        "fix: x (BUG-1)\n\nWhy it changed.\n",
+        "aida-seat-aida-x",
+    );
+    assert!(body.contains("Why it changed."), "{body}");
+    assert!(
+        body.contains("Published from seat `aida-seat-aida-x`"),
+        "{body}"
+    );
 }

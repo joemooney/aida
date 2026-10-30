@@ -270,14 +270,68 @@ pub fn has_real_git_dir(clone_root: &Path) -> bool {
 }
 
 /// Whether THIS process is proven contained inside the seat clone at
-/// `clone_root`, by capability alone: the clone verifies against its main
-/// ([`clone_writer_main`]) and a write probe under that main's `.git` is
-/// denied (`EROFS` or `EACCES`). A process that can write main's git
-/// directory is the host, and host git never runs seat-written config. No
-/// environment variable is consulted.
+/// `clone_root` AND that clone is its own. Both must hold:
+///
+/// - containment: the clone verifies against its main
+///   ([`clone_writer_main`]) and a write probe under that main's `.git` is
+///   denied (`EROFS` or `EACCES`), probed once per process per main
+///   ([`main_git_write_denied`]). A process that can write main's git
+///   directory is the host, and host git never runs seat-written config;
+/// - ownership: the clone root is the tree of this process's own session
+///   lease ([`own_clone_lease_root`]). A contained seat can read its
+///   siblings' clones; running git in one would run that seat's config in
+///   this process, so every clone but its own is refused.
 // trace:BUG-HOME-038 | ai:claude
 pub fn contained_in_clone(clone_root: &Path) -> bool {
-    clone_writer_main(clone_root).is_some_and(|main| git_dir_write_denied(&main.join(".git")))
+    let Some(main) = clone_writer_main(clone_root) else {
+        return false;
+    };
+    let Ok(root) = clone_root.canonicalize() else {
+        return false;
+    };
+    own_clone_lease_root(&main).is_some_and(|own| own == root) && main_git_write_denied(&main)
+}
+
+/// The tree of this process's own `clone` session lease in `main`: the
+/// session id AIDA exports on the launch path (`AIDA_SESSION_ID`, then
+/// `CLAUDE_CODE_SESSION_ID`) names `<main>/.aida/sessions/<id>.toml`, read
+/// host-side and FIFO-safe. `None` without a session, for an id that is not
+/// a plain file name, or when that lease is not a `clone` lease.
+// trace:BUG-HOME-038 | ai:claude
+pub fn own_clone_lease_root(main: &Path) -> Option<PathBuf> {
+    let id = ["AIDA_SESSION_ID", "CLAUDE_CODE_SESSION_ID"]
+        .iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .map(|value| value.trim().to_string())
+        .find(|value| !value.is_empty())?;
+    let plain = id
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    if !plain {
+        return None;
+    }
+    let lease = main
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{id}.toml"));
+    let root = lease_clone_root(&read_regular_file(&lease)?)?;
+    root.canonicalize().ok()
+}
+
+/// [`git_dir_write_denied`] on `main`'s `.git`, probed once per process per
+/// main: every host git call in a seat clone asks, and each probe would
+/// otherwise create and unlink a file in main's git directory.
+// trace:BUG-HOME-038 | ai:claude
+fn main_git_write_denied(main: &Path) -> bool {
+    static PROBED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<PathBuf, bool>>> =
+        std::sync::OnceLock::new();
+    let mut probed = PROBED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *probed
+        .entry(main.to_path_buf())
+        .or_insert_with(|| git_dir_write_denied(&main.join(".git")))
 }
 
 /// Whether creating a scratch file directly under `git_dir` fails with
