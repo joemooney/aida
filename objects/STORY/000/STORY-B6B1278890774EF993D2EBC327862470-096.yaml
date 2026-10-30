@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-29T23:54:52.731570808Z
-modified_at: 2026-10-30T00:03:55.912064439Z
+modified_at: 2026-10-30T00:04:06.159623685Z
 req_type: Story
 comments:
 - id: 01a18a1e-c988-76e0-bd6d-75bdcf591391
@@ -29,6 +29,12 @@ comments:
     Follow-up spike for agy injection: see the agy wake spike filed alongside this note.
   created_at: 2026-10-30T00:03:55.912064439Z
   modified_at: 2026-10-30T00:03:55.912064439Z
+  session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
+- id: 01a18a1e-f18f-7673-9910-bdbb19641827
+  author: joe
+  content: 'Agy follow-up spike: SPIKE-HOME-002.'
+  created_at: 2026-10-30T00:04:06.159623685Z
+  modified_at: 2026-10-30T00:04:06.159623685Z
   session_id: 1b444f41-0180-4b90-95e1-e30a1b6300a4
 history:
 - id: 01a18a16-cccf-7491-8e11-ad9a8230f0a5
