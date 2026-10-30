@@ -4,7 +4,7 @@ This guide covers administrative topics including project configuration, storage
 
 **Related Documentation:**
 - [User Guide](user-guide.md) - End-user documentation for using AIDA
-- [Developer's Guide](agents/aida-repository-guide.md) - For developers maintaining and extending AIDA
+- [Repository guide](agents/aida-repository-guide.md) - For developers maintaining and extending AIDA
 
 ---
 

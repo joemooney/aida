@@ -72,8 +72,8 @@ AIDA initialized — distributed git-canonical mode.
 
 This illustrative setup explicitly opts into MCP registration. It sets up a git-canonical requirements store (one YAML file per spec
 on the orphan `aida-store` branch), a SQLite read cache, the MCP server config,
-and the Claude Code skills. The full inventory of what `aida init` writes is in
-[CLI initialization reference](cli/01-getting-started.md#aida-init).
+and the Claude Code skills. The [initialization reference](cli/01-getting-started.md#aida-init) explains the
+command-oriented setup workflow. Inspect `aida init --help` for current options.
 
 ---
 

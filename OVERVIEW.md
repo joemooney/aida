@@ -408,7 +408,7 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)
 - **Branch:** `aida-store` on origin
-- **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; auto-rebuilt when the cache's recorded HEAD doesn't match the orphan's HEAD
+- **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; ordinary reads use the [bounded cache-read contract](#bounded-cache-reads) when freshness differs
 - **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
 <!-- trace:TASK-1604 | ai:codex -->
 

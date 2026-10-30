@@ -64,8 +64,8 @@ myproject/
 ├── .aida-store/                           ← worktree of aida-store branch (gitignored)
 │   ├── metadata.yaml
 │   └── objects/
-│       ├── FR/000/FR-1-001.yaml
-│       └── EPIC/000/EPIC-1-001.yaml
+│       ├── FR/000/FR-<node-uuid>-001.yaml
+│       └── EPIC/000/EPIC-<node-uuid>-001.yaml
 └── (your code)
 ```
 
@@ -176,8 +176,8 @@ aida init --centralized
 | **Merge conflicts** | Rare (per-file) | Rare (per-file) | N/A | N/A | Frequent (monolithic file) |
 | **Web dashboard** | Via aida-server | Via aida-server | Via aida-server | Via aida-server | Via aida-server |
 | **Multi-repo workspace** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **Node-namespaced IDs** | ✅ (`FR-1-001`) | ✅ (`FR-1-001`) | ❌ | ❌ | ❌ |
-| **Agreed short IDs (merge gate)** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Node-namespaced IDs** | ✅ (`FR-<node-uuid>-001`) | ✅ (`FR-<node-uuid>-001`) | ❌ | ❌ | ❌ |
+| **Agreed short IDs (merge gate)** | Enrolled HOME only | Enrolled HOME only | ❌ | ❌ | ❌ |
 | **Setup complexity** | Trivial (`aida init`) | One extra flag | Build w/ feature + DB setup | Trivial (`--centralized`) | Trivial (manual) |
 | **Max practical scale** | ~100K reqs | ~100K reqs | Unlimited | ~100K reqs | ~500 reqs |
 
