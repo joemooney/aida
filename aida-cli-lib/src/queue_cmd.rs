@@ -6817,6 +6817,7 @@ pub(crate) fn handle_queue_command(
             tail,
             status,
             reason,
+            ruling,
             resume,
             force,
             steal,
@@ -6842,6 +6843,7 @@ pub(crate) fn handle_queue_command(
                     tail: *tail,
                     status: status.as_deref(),
                     reason: reason.as_deref(),
+                    ruling: ruling.as_deref(),
                     resume: *resume,
                     force: *force,
                     steal: *steal,
@@ -7822,6 +7824,7 @@ pub(crate) struct ReworkFlags<'a> {
     pub tail: bool,
     pub status: Option<&'a str>,
     pub reason: Option<&'a str>,
+    pub ruling: Option<&'a str>,
     pub resume: bool,
     pub force: bool,
     pub steal: bool,
@@ -7845,6 +7848,9 @@ impl ReworkFlags<'_> {
         }
         if self.reason.is_some() {
             v.push("--reason");
+        }
+        if self.ruling.is_some() {
+            v.push("--ruling");
         }
         if self.resume {
             v.push("--resume");
@@ -7877,6 +7883,11 @@ pub(crate) fn handle_rework_entry(
     flags: &ReworkFlags<'_>,
 ) -> Result<()> {
     if let Some(id) = id {
+        // The ruling is recorded first so a chained `--work` launch reads it
+        // into its pickup prompt. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+        if let Some(ruling) = flags.ruling {
+            record_rework_ruling(storage, id, ruling)?;
+        }
         return handle_queue_rework(
             storage,
             id,
@@ -7921,6 +7932,31 @@ pub(crate) fn handle_rework_entry(
         &mut |spec| run_aida_interactive(&["decide", spec]),
         &mut |spec| run_aida_interactive(&["show", spec]),
     )
+}
+
+/// `aida rework --ruling TEXT`: record the ruling as a spec comment tagged so
+/// [`latest_ruling_comment`] finds it, and every later pickup prompt leads
+/// with it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn record_rework_ruling(storage: &Storage, id: &str, ruling: &str) -> Result<()> {
+    let ruling = ruling.trim();
+    anyhow::ensure!(!ruling.is_empty(), "--ruling needs the ruling text");
+    let store = storage.load()?;
+    let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_unambiguous(id)?
+    }
+    .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+    let comment = aida_core::Comment::new(get_default_author(), ruling_comment_text(ruling));
+    storage.update_spec_atomically(req, |r| {
+        r.add_comment(comment);
+    })?;
+    println!(
+        "  {} ruling recorded; the next pickup prompt leads with it",
+        "·".dimmed()
+    );
+    Ok(())
 }
 
 /// Run `aida <args>` with the terminal attached (the `[d]` and `[o]` keys).
@@ -8957,15 +8993,65 @@ pub(crate) fn preclaim_collision_check(
     PreclaimDecision::Proceed
 }
 
+/// BUG-022: whether this pickup resolves the spec's open PR head as its
+/// branch. `aida queue rework` sends a refused spec back to Approved, which the
+/// status test alone reads as a fresh pickup — so a Rework hold standing on
+/// the spec's PR also qualifies. An explicit `--branch` always wins: it is the
+/// deliberate way to start a new branch instead.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+pub(crate) fn queue_work_wants_rework_pr_branch(
+    plan: &QueueWorkPlan,
+    explicit_branch: Option<&str>,
+    spec_rework_held: bool,
+) -> bool {
+    explicit_branch.is_none()
+        && (queue_work_plan_wants_pr_head_branch(plan)
+            || (spec_rework_held && plan.review_target.is_none() && plan.entries.len() == 1))
+}
+
+/// BUG-022: an open PR carrying a Rework hold for the spec is the spec's PR —
+/// the hold record names the spec, so no title/branch match is needed.
+/// Any other open PR still has to name the spec (BUG-1074).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+pub(crate) fn rework_pr_head_accepted(
+    held_prs: &[u64],
+    pr_number: u64,
+    matches_spec: impl FnOnce() -> bool,
+) -> bool {
+    held_prs.contains(&pr_number) || matches_spec()
+}
+
+/// BUG-022: the PRs whose Rework hold names `spec`, read from the primary's
+/// merge-hold markers. Ids are compared canonically, so a node-label id and
+/// its node-local twin match.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+fn rework_held_prs_for_spec(project_root: &std::path::Path, spec: &str) -> Vec<u64> {
+    use crate::gate::merge_hold_core as mh;
+    let canonical = |id: &str| aida_core::node_alias::expand_or_keep(id).to_ascii_uppercase();
+    let wanted = canonical(spec);
+    let root = mh::hold_store_root(project_root);
+    mh::list_holds(&root)
+        .into_iter()
+        .filter_map(|(pr, _)| mh::read_hold_record(&root, pr).map(|r| (pr, r)))
+        .filter(|(_, r)| r.reason_kind == mh::HoldReasonKind::Rework)
+        .filter(|(_, r)| r.spec.as_deref().is_some_and(|s| canonical(s) == wanted))
+        .map(|(pr, _)| pr)
+        .collect()
+}
+
 fn rework_pr_head_branch_override(
     project_root: &std::path::Path,
     plan: &QueueWorkPlan,
     explicit_branch: Option<&str>,
-) -> Option<String> {
-    if explicit_branch.is_some() || !queue_work_plan_wants_pr_head_branch(plan) {
+) -> Option<(u64, String)> {
+    if explicit_branch.is_some() || plan.review_target.is_some() || plan.entries.len() != 1 {
         return None;
     }
     let spec = plan.entries.first()?.spec_id.as_str();
+    let held_prs = rework_held_prs_for_spec(project_root, spec);
+    if !queue_work_wants_rework_pr_branch(plan, explicit_branch, !held_prs.is_empty()) {
+        return None;
+    }
     // BUG-1023: a findings-led rework belongs on the already-open PR branch.
     // Seed session_start with that head so the implementer lease and phase 2
     // drive the same branch instead of deriving the plain spec branch.
@@ -8982,10 +9068,13 @@ fn rework_pr_head_branch_override(
     let Some(head_branch) = pr.head_branch.filter(|branch| !branch.trim().is_empty()) else {
         return None;
     };
-    let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
-        .map(|meta| meta.body)
-        .unwrap_or_default();
-    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body).then_some(head_branch)
+    rework_pr_head_accepted(&held_prs, pr.number, || {
+        let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
+            .map(|meta| meta.body)
+            .unwrap_or_default();
+        rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body)
+    })
+    .then_some((pr.number, head_branch))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10347,8 +10436,19 @@ pub(crate) fn append_untraced_criteria_prompt_block(
     let Ok((base, head)) = pr_base_head(project_root, forge, pr_n) else {
         return;
     };
-    let Ok(messages) = git_log_messages(project_root, &base, &head) else {
-        return;
+    // BUG-035: an unreadable range still never blocks the launch, but it is
+    // not silent: the operator learns which range failed and why the prompt
+    // carries no criteria list.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
+    let messages = match git_log_messages(project_root, &base, &head) {
+        Ok(messages) => messages,
+        Err(err) => {
+            eprintln!(
+                "warning: cannot read commits {base}..{head} for PR-{pr_n} ({err:#}); \
+                 the reviewer prompt omits the untraced acceptance criteria list"
+            );
+            return;
+        }
     };
     let mut spec_ids: Vec<String> = Vec::new();
     for msg in &messages {
@@ -10577,6 +10677,74 @@ pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&
         .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
         .max_by_key(|c| c.created_at)
         .map(|c| c.content.as_str())
+}
+
+/// The tag that marks a spec comment as an advisor ruling. Rulings are
+/// written by hand (`aida comment add ID "Advisor ruling …"`) as well as by
+/// `aida rework --ruling`, so the match is on the comment's first line.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) const RULING_TAG: &str = "Advisor ruling";
+
+/// Whether a comment is an advisor ruling: its first non-empty line starts
+/// with `Ruling` or `Advisor ruling` (any case, after markdown emphasis or a
+/// `[` bracket).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn is_ruling_comment(content: &str) -> bool {
+    let first = content
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .trim_start_matches(['#', '*', '_', '[', ' '])
+        .to_ascii_lowercase();
+    first.starts_with("ruling") || first.starts_with("advisor ruling")
+}
+
+/// `--ruling` text as stored: tagged unless the caller already tagged it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn ruling_comment_text(ruling: &str) -> String {
+    if is_ruling_comment(ruling) {
+        ruling.to_string()
+    } else {
+        format!("{RULING_TAG}: {ruling}")
+    }
+}
+
+/// The advisor ruling recorded LAST on the spec (by comment time), replies
+/// included. A later ruling supersedes an earlier one.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn latest_ruling_comment(
+    comments: &[aida_core::Comment],
+) -> Option<&aida_core::Comment> {
+    fn walk<'a>(comments: &'a [aida_core::Comment], out: &mut Vec<&'a aida_core::Comment>) {
+        for c in comments {
+            out.push(c);
+            walk(&c.replies, out);
+        }
+    }
+    let mut all = Vec::new();
+    walk(comments, &mut all);
+    all.into_iter()
+        .filter(|c| is_ruling_comment(&c.content))
+        .max_by_key(|c| c.created_at)
+}
+
+/// Lead a pickup prompt with the spec's latest advisor ruling, so a
+/// relaunched lane works from it rather than from the description alone.
+/// The pickup line stays last, as in [`rework_pickup_prompt`].
+// trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+pub(crate) fn prepend_ruling(prompt: String, ruling: Option<&aida_core::Comment>) -> String {
+    // Agent gates wear a tighter verdict contract, as in `prepend_due_jobs`.
+    let Some(ruling) = ruling.filter(|_| std::env::var("AIDA_AGENT_GATE_NAME").is_err()) else {
+        return prompt;
+    };
+    format!(
+        "ADVISOR RULING ({} by {}) — binding; where it differs from the spec description, \
+         the ruling wins:\n{}\n\n{prompt}",
+        ruling.created_at.format("%Y-%m-%d %H:%M UTC"),
+        ruling.author,
+        ruling.content.trim()
+    )
 }
 
 // BUG-1213: the rework round a pickup is entering: the original
@@ -11058,12 +11226,10 @@ pub(crate) fn honour_auto_complete_sandbox(
 }
 
 // trace:BUG-2006 | ai:antigravity
+// The launcher keeps its own posture: the export is for its children only.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn apply_queue_work_contained_env(contained: bool) {
-    if contained {
-        std::env::set_var("AIDA_CONTAINED", "1");
-    } else {
-        std::env::remove_var("AIDA_CONTAINED");
-    }
+    session::set_contained_env_for_children(contained);
 }
 
 /// BUG-2010: true when caller is working the lease itself (self-claim under `--no-launch`).
@@ -11166,7 +11332,10 @@ pub(crate) fn scope_conflict_resume_hint(
     adopting: Option<&str>,
     clone: bool,
 ) -> String {
-    let id = &conflict_id[..conflict_id.len().min(8)];
+    // The FULL lease id: an 8-hex prefix is a timestamp and is routinely
+    // shared by two sessions, so `aida session end <prefix>` was ambiguous.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+    let id = conflict_id;
     match (refusal, adopting) {
         (Some(why), _) => format!(
             " `--resume` cannot re-enter it in place: {why} (`aida session show {id}` shows \
@@ -11174,7 +11343,6 @@ pub(crate) fn scope_conflict_resume_hint(
              {id} --force` discards it."
         ),
         (None, Some(adopted)) => {
-            let adopted = &adopted[..adopted.len().min(8)];
             format!(
                 " `--resume` re-enters only the newest orphaned lease ({adopted}), not this \
                  one: commit or stash its work there, or `aida session end {id} --force` \
@@ -11516,8 +11684,16 @@ pub(crate) fn handle_queue_work(
     // lease creation, or status writes. Shell roles route; grants authorize.
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
     let project_root = find_main_worktree_root()?;
-    let rework_branch_override =
-        rework_pr_head_branch_override(&project_root, &plan, branch_override);
+    let rework_pr = rework_pr_head_branch_override(&project_root, &plan, branch_override);
+    // BUG-022: say where the rework goes, and how to fork instead.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+    if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
+        eprintln!(
+            "  rework: continuing open PR #{pr} on its branch `{branch}`; \
+             pass --branch <name> to start a new branch instead"
+        );
+    }
+    let rework_branch_override = rework_pr.map(|(_, branch)| branch);
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
     // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
     // --path or --branch naming another one refuses rather than guess.
@@ -11840,6 +12016,23 @@ pub(crate) fn handle_queue_work(
         review_findings.as_deref(),
         &rework_comments,
     );
+    // An advisor ruling left as a spec comment leads the implementer pickup;
+    // a lane that read only the description repeated the overruled change.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+    if !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided {
+        if plan.mode == QueueWorkMode::Item {
+            let spec_id = plan
+                .entries
+                .first()
+                .map(|entry| entry.spec_id.as_str())
+                .unwrap_or(plan.anchor_display.as_str());
+            if let Ok(store) = storage.load() {
+                if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
+                    prompt = prepend_ruling(prompt, latest_ruling_comment(&req.comments));
+                }
+            }
+        }
+    }
     // Interactive implementers and every headless phase receive the same
     // resolved, capped type+lane protocol. Reviewers are included headlessly
     // because there is no conversational pickup hook to inject it later.
@@ -12359,10 +12552,11 @@ pub(crate) fn handle_queue_work(
                         adopting,
                         conflict.tree_kind == crate::seat_clone::TreeKind::Clone,
                     );
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
                     anyhow::bail!(
                         "lease {} for scope `{}` looks orphaned (dormant process, \
                          worktree has {} uncommitted change(s) at {}).{}",
-                        &conflict.id[..conflict.id.len().min(8)],
+                        conflict.id,
                         plan.scope,
                         dirty_entries,
                         conflict.worktree_path.display(),
@@ -12392,20 +12586,36 @@ pub(crate) fn handle_queue_work(
             // "work there is lost unless committed" is evaluable in place.
             // trace:BUG-777 | ai:claude
             let recovery = stale_lease_recovery_for_lease(&conflict);
-            let short_conflict_id = conflict.id[..conflict.id.len().min(8)].to_string();
+            // Refusals name the FULL lease id so the `aida session end <id>`
+            // they suggest is unambiguous.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-023 | ai:claude
+            let conflict_id = conflict.id.as_str();
+            // A dead lease whose worktree is gone has nothing left to lose, so
+            // it is released without `--force-claim`; only a verdict of
+            // ReclaimableClean { worktree_missing: true } is released here.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+            let released_gone = crate::session_reap::release_gone_worktree_lease(
+                &project_root_for_conflict,
+                &conflict,
+                &recovery.verdict,
+            );
             match &recovery.verdict {
-                StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
+                StaleLeaseRecovery::ReclaimableClean { worktree_missing }
+                    if force_claim || released_gone =>
+                {
                     eprintln!(
                         "  {} released orphaned lease {} ({})",
                         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        short_conflict_id.yellow(),
+                        conflict_id.yellow(),
                         if *worktree_missing {
                             "owning session gone, worktree already removed".dimmed()
                         } else {
                             "owning session gone, worktree clean".dimmed()
                         }
                     );
-                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    if !released_gone {
+                        let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    }
                     remaining -= 1;
                     if remaining == 0 {
                         anyhow::bail!(
@@ -12425,7 +12635,7 @@ pub(crate) fn handle_queue_work(
                          refusing so that work is not discarded (--force-claim does NOT \
                          override this). Uncommitted: {}.{}",
                         plan.scope,
-                        short_conflict_id,
+                        conflict_id,
                         conflict.role.as_deref().unwrap_or("(unset)"),
                         conflict.worktree_path.display(),
                         dirty_entries,
@@ -12447,7 +12657,7 @@ pub(crate) fn handle_queue_work(
                          Recovery: `aida queue work {} --force-claim` releases the dead lease \
                          and takes the scope.{}",
                         plan.scope,
-                        short_conflict_id,
+                        conflict_id,
                         conflict.role.as_deref().unwrap_or("(unset)"),
                         conflict.worktree_path.display(),
                         recovery.worktree_state_phrase(),
@@ -12498,11 +12708,11 @@ pub(crate) fn handle_queue_work(
                      worktree (work there is lost unless committed), \
                      or `aida session end {}` manually.{}",
                     plan.scope,
-                    short_conflict_id,
+                    conflict_id,
                     conflict.role.as_deref().unwrap_or("(unset)"),
                     conflict.worktree_path.display(),
                     recovery.worktree_state_phrase(),
-                    short_conflict_id,
+                    conflict_id,
                     force_claim_note
                 );
             }
@@ -12533,7 +12743,6 @@ pub(crate) fn handle_queue_work(
                 )
                 .cyan()
             );
-            let short_id = &conflict.id[..conflict.id.len().min(8)];
             session_end(
                 Some(&conflict.id),
                 /* spec */ None,
@@ -12571,9 +12780,9 @@ pub(crate) fn handle_queue_work(
                      (resolve manually: `aida session end {} --force` discards uncommitted \
                      changes and `--include-in-use` overrides a live process in the worktree; \
                      or commit/stash the changes or stop the process first, then re-run)",
-                    short_id,
+                    conflict_id,
                     e,
-                    short_id,
+                    conflict_id,
                 ) // trace:BUG-1986 | ai:claude
             })?;
             remaining -= 1;
@@ -12675,6 +12884,9 @@ pub(crate) fn handle_queue_work(
         || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
     let preclaim_bypass = force_claim
         || queue_work_plan_wants_pr_head_branch(&plan)
+        // BUG-022: the open PR is the one this pickup continues, not a
+        // collision. trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
+        || rework_branch_override.is_some()
         || preclaim_review_session
         || preclaim_orchestrator_corroborated
         || resume.is_some()
@@ -13489,6 +13701,35 @@ pub(crate) fn release_refused_review_lease(
     true
 }
 
+/// A standalone reviewer has exited: once its verdict is on the ledger, its
+/// review (`scope` over this review's own `worktree`) is reaped — tree,
+/// lease, and review branch — so neither the lease nor the tree blocks the
+/// next review of the PR. With no verdict collected, the tree is what the
+/// recovery text points at, so the review is kept; a review the reap refuses
+/// (dirty tree, unpushed commits, a live holder) keeps its lease, which is how
+/// the dead-reviewer reap tears the tree down after the PR merges. Returns
+/// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+pub(crate) fn end_finished_review(
+    project_root: &std::path::Path,
+    scope: &str,
+    worktree: &std::path::Path,
+    verdict_collected: bool,
+) -> Vec<(String, std::result::Result<String, String>)> {
+    list_leases(project_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(scope) && l.worktree_path == worktree)
+        .map(|l| {
+            let outcome = if verdict_collected {
+                crate::session_reap::reap_finished_review(project_root, &l)
+            } else {
+                Err("no verdict was collected; its review tree is kept for recovery".to_string())
+            };
+            (l.id, outcome)
+        })
+        .collect()
+}
+
 /// Advisor comment 35: whether a failed pickup's lease is released — only a
 /// PR-scoped review pickup whose child grant was refused. An implementer's
 /// lease stays for the manual continuation.
@@ -13832,23 +14073,61 @@ pub(crate) fn run_standalone_reviewer(
         ),
     }
 
-    // BUG-2176: a contained reviewer cannot write the primary checkout's
-    // merge-holds either, so its rework marker stays in the review worktree,
-    // invisible to `aida pr ship` and gone once the worktree is removed.
-    // Adopt it whatever the verdict collection decided — a hold only tightens.
+    // BUG-2176 / M1 slice 2: a contained reviewer cannot write hold state,
+    // so its refusal's Rework hold is armed here, primary-side, from the
+    // verdict just collected onto the PR's gate ledger. A hold only tightens.
     // trace:BUG-2176 | ai:claude
-    match crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at) {
-        Ok(true) if !quiet => eprintln!(
-            "  {} adopted the reviewer's merge-hold marker for PR-{pr} from {}",
-            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-            worktree.display()
-        ),
-        Ok(_) => {}
-        Err(err) => eprintln!(
-            "  {} could not adopt the reviewer's merge-hold marker for PR-{pr} from {} ({err}) — copy it to the primary checkout's .aida/merge-holds/ before removing the worktree",
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+    // A legacy marker a pre-ledger reviewer left is collected too.
+    if let Err(err) =
+        crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at)
+    {
+        eprintln!(
+            "  {} could not collect the legacy merge-hold marker for PR-{pr} from {} ({err})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             worktree.display()
-        ),
+        );
+    }
+    if let Ok(c) = &collected {
+        match crate::merge_hold::arm_collected_refusal(project_root, pr, c) {
+            Ok(true) if !quiet => eprintln!(
+                "  {} armed PR-{pr}'s merge hold for the reviewer's refusal",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            Ok(_) => {}
+            Err(err) => eprintln!(
+                "  {} could not arm PR-{pr}'s merge hold for the reviewer's refusal ({err}) — run `aida merge-hold add {pr}` before shipping",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            ),
+        }
+    }
+
+    // The reviewer has exited and its verdict is collected (or known to be
+    // missing): its finished review is reaped now, before any exit path
+    // below. A launcher still sitting in the tree steps out of it first; any
+    // other cwd is left alone (it is process-wide state).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
+    if std::env::current_dir().is_ok_and(|cwd| {
+        cwd.starts_with(worktree)
+            || worktree
+                .canonicalize()
+                .is_ok_and(|tree| cwd.starts_with(tree))
+    }) {
+        let _ = std::env::set_current_dir(project_root);
+    }
+    for (id, outcome) in end_finished_review(project_root, scope, worktree, collected.is_ok()) {
+        let id = &id[..id.len().min(8)];
+        match outcome {
+            Ok(_) if !quiet => eprintln!(
+                "  {} ended reviewer session {id} for PR-{pr} and removed its review tree",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            Err(why) if !quiet => eprintln!(
+                "  {} kept reviewer session {id} for PR-{pr}: {why}",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            ),
+            _ => {}
+        }
     }
 
     // STORY-439: tag-along reviewer-side calibration capture. Resolve
@@ -17020,6 +17299,10 @@ pub(crate) struct ReworkArgs {
     // trace:BUG-1294 | ai:claude
     #[clap(long, allow_hyphen_values = true)]
     pub reason: Option<String>,
+    /// Record an advisor ruling the next pickup prompt leads with.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+    #[clap(long, allow_hyphen_values = true, value_name = "TEXT")]
+    pub ruling: Option<String>,
     /// Chain `aida queue work --resume`.
     #[clap(long)]
     pub resume: bool,
@@ -17067,6 +17350,7 @@ fn run_rework(
                     tail,
                     status,
                     reason,
+                    ruling,
                     resume,
                     force,
                     steal,
@@ -17085,6 +17369,7 @@ fn run_rework(
                             tail: *tail,
                             status: status.as_deref(),
                             reason: reason.as_deref(),
+                            ruling: ruling.as_deref(),
                             resume: *resume,
                             force: *force,
                             steal: *steal,
@@ -17113,6 +17398,7 @@ fn run_rework(
                     tail,
                     status,
                     reason,
+                    ruling,
                     resume,
                     force,
                     steal,
@@ -17130,6 +17416,7 @@ fn run_rework(
                             tail: *tail,
                             status: status.as_deref(),
                             reason: reason.as_deref(),
+                            ruling: ruling.as_deref(),
                             resume: *resume,
                             force: *force,
                             steal: *steal,

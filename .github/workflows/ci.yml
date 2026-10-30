@@ -664,6 +664,27 @@ jobs:
           bash scripts/check-removed-flags.sh
           bash tests/test_check_removed_flags.sh
 
+      # TASK-125: a branch that edits *_args.rs or command_registry.rs but not
+      # the golden help snapshot fails here, without a build, instead of in the
+      # `Run tests` shard after a full CI cycle. Pure git diff; classified
+      # `fast` so `make check-ci-fast` runs it before every push.
+      # trace:TASK-B6B1278890774EF993D2EBC327862470-125 | ai:claude
+      - name: Help golden snapshot co-change guard
+        if: matrix.shard == 'gates'
+        run: |
+          bash tests/test_check_help_golden_cochange.sh
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # The checkout is depth 1, which hides the merge base and the PR's
+            # commit messages (the opt-out trailer); deepen past both.
+            if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+              git fetch --no-tags --deepen=200 origin \
+                "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+            else
+              git fetch --no-tags origin "${{ github.base_ref }}" || true
+            fi
+            bash scripts/check-help-golden-cochange.sh "origin/${{ github.base_ref }}"
+          fi
+
       # TASK-1205: portability ratchet for Linux-only assumptions in test code.
       # Existing sites live in scripts/portability-allowlist.txt. The growth
       # verifier is loaded from the trusted base revision so comparison-only

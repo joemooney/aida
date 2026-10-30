@@ -100,6 +100,10 @@ const FIXED_FILES: &[(&str, &str)] = &[
     ("registry/agreed_counters.toml", "toml"),
     ("registry/blocks.yaml", "yaml"),
     ("registry/blocks.lock", "empty"),
+    // Block lineage records carry only opaque node ids and ranges.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+    ("registry/pools.yaml", "yaml"),
+    ("registry/root.yaml", "yaml"),
     (".aida/.advisor-seat-hint-shown", "txt"),
     (".aida/.format-hint-shown", "txt"),
 ];

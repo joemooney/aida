@@ -480,3 +480,76 @@ fn reservation_recipient_requires_the_row_or_its_session() {
         .unwrap();
     assert_eq!(reservation_recipient(agents, "rev-a", "row-1", &[]), None);
 }
+
+// A mail-wake watcher reads an armed, live row's own handle and role only:
+// never this process's user, aliases, role or vendor group.
+// trace:STORY-HOME-096 | ai:claude
+#[test]
+fn story_home_096_watched_row_reads_its_own_handle_and_role_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let live = |_: u32, start: &str| start == "S1";
+    let armed = row(
+        dir.path(),
+        "armed",
+        &row_body(
+            "armed",
+            u32::MAX - 7,
+            "pid_start = \"S1\"\nrole = \"implementer\"\nmail_wake = \"armed\"\n",
+        ),
+    );
+    let facts = MailIdentityFacts::watched_with(&armed, live).unwrap();
+    assert_eq!(inbox_identities(&facts), vec!["seat-a", "implementer"]);
+    let audience = ResolvedAudience::from_facts(&facts);
+    assert!(audience.narrowed_to("advisor").is_none());
+    assert!(audience.narrowed_to("claude").is_none(), "no vendor group");
+
+    let refusals = [
+        (
+            "pending",
+            "pid_start = \"S1\"\nmail_wake = \"pending\"\n",
+            BindingRefusal::NotArmed,
+        ),
+        (
+            "retired",
+            "pid_start = \"S1\"\nmail_wake = \"retired\"\n",
+            BindingRefusal::NotArmed,
+        ),
+        ("unset", "pid_start = \"S1\"\n", BindingRefusal::NotArmed),
+        (
+            "recycled",
+            "pid_start = \"S2\"\nmail_wake = \"armed\"\n",
+            BindingRefusal::NotLive,
+        ),
+        (
+            "nostart",
+            "mail_wake = \"armed\"\n",
+            BindingRefusal::NotLive,
+        ),
+        (
+            "ended",
+            "pid_start = \"S1\"\nmail_wake = \"armed\"\nended_at = \"2026-10-27T00:00:00Z\"\n",
+            BindingRefusal::Ended,
+        ),
+    ];
+    for (id, extra, why) in refusals {
+        let path = row(dir.path(), id, &row_body(id, u32::MAX - 7, extra));
+        assert_eq!(
+            MailIdentityFacts::watched_with(&path, live),
+            Err(why),
+            "{id}"
+        );
+    }
+    let renamed = row(
+        dir.path(),
+        "renamed",
+        &row_body(
+            "other-id",
+            u32::MAX - 7,
+            "pid_start = \"S1\"\nmail_wake = \"armed\"\n",
+        ),
+    );
+    assert_eq!(
+        MailIdentityFacts::watched_with(&renamed, live),
+        Err(BindingRefusal::Corrupt)
+    );
+}

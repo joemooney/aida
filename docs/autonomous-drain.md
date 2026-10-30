@@ -112,9 +112,9 @@ A PR's checks collapse to one coarse pass/fail for the drain's CI phase and for
 drain shelves `ci-red` or `pr ship` aborts:
 
 - **The supervised merge-hold itself.** `merge-hold-gate` is designed to be red
-  while `.aida/merge-holds/PR-<n>` exists. `aida pr ship` keeps the hold through
+  while the PR's hold is open on its gate ledger (`aida merge-hold list`). `aida pr ship` keeps the hold through
   the CI watch, releases it at the merge step, waits (up to 180s) for the gate
-  to re-run green, then merges. A red gate with **no** local marker is a
+  to re-run green, then merges. A red gate with **no** open ledger hold is a
   lingering label — `aida merge-hold clear <n>` re-syncs it.
 - **Informational checks.** A red check is ignored only when it is *not* a
   branch-protection-required check **and** matches the allow-list below.

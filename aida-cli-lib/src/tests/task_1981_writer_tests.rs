@@ -107,6 +107,7 @@ fn block(node: &str, prefix: &str, start: u32) -> AgreedIdBlock {
         range_end: start + 9,
         next: start,
         allocated_at: chrono::Utc::now(),
+        pool_id: None,
     }
 }
 

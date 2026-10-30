@@ -286,9 +286,12 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
     assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
 
     record(&format!("{SPEC} #{PR}")).expect("the solo human approves their own claim");
+    // M1 slice 2: the record is on the gate ledger, not a verdict file.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let raw: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::gate::review_verdict::verdict_path(root.path(), SPEC))
-            .unwrap(),
+        &crate::gate::review_verdict::current_verdict(root.path(), SPEC)
+            .expect("the recorded verdict")
+            .body,
     )
     .unwrap();
     assert!(raw.to_string().contains("\"solo_human\":true"), "{raw}");

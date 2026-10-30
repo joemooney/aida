@@ -700,6 +700,9 @@ mod task_1460_phase3_archive_tests {
         let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
         record(root, &path, "approved", R1);
         // The current file is then corrupted, or carries no reviewed commit.
+        // (M1 slice 2: the round is on the ledger; the bad file is written
+        // beside it.)
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         for bad in [
             "{not json",
             r#"{"summary":"no verdict"}"#,

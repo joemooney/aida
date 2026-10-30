@@ -9,6 +9,45 @@ use std::path::Path;
 
 const PR: u64 = 42;
 
+thread_local! {
+    /// How many times this thread ran [`prove_carry_over`] (STORY-080 AC4:
+    /// the proof is computed once and read from the ledger after that).
+    pub(crate) static PROOFS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Proofs computed on this thread so far.
+pub(crate) fn proofs() -> usize {
+    PROOFS.with(|n| n.get())
+}
+
+/// The carry-over events on PR-42's gate ledger under `repo` whose head is
+/// `head`, oldest first.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+pub(crate) fn carry_events(repo: &Path, head: &str) -> Vec<crate::gate::ledger::GateEvent> {
+    use crate::gate::ledger::{project, store_root, ChangeKey, EventBody};
+    let root = store_root(repo).unwrap();
+    project::events(&root, ChangeKey::pr(PR))
+        .into_iter()
+        .filter(|e| {
+            matches!(
+                e.body,
+                EventBody::CarryOverProof { .. } | EventBody::CarryOverRefused { .. }
+            ) && e.head.as_deref() == Some(head)
+        })
+        .collect()
+}
+
+/// The `carry-over-proof` on the ledger for `head`, if any.
+pub(crate) fn proof_event(repo: &Path, head: &str) -> Option<CarryOver> {
+    carry_events(repo, head)
+        .into_iter()
+        .rev()
+        .find_map(|e| match e.body {
+            crate::gate::ledger::EventBody::CarryOverProof { proof, .. } => Some(proof),
+            _ => None,
+        })
+}
+
 pub(crate) fn git(repo: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
@@ -98,6 +137,8 @@ pub(crate) fn fixture() -> (Fixture, String) {
     git(repo, &["config", "user.email", "aida@example.test"]);
     git(repo, &["config", "user.name", "AIDA Test"]);
     git(repo, &["config", "commit.gpgsign", "false"]);
+    // Gate-ledger and activity writes never ride along in a test commit.
+    std::fs::write(repo.join(".git/info/exclude"), ".aida/\n").unwrap();
     write(repo, "a.txt", &lines(30, "a"));
     write(repo, "b.txt", &lines(30, "b"));
     commit(repo, "base");
@@ -290,25 +331,39 @@ fn moved(approved: &str, head: &str) -> crate::gate::ship::ApprovalHeadRefusal {
     }
 }
 
-// (6) The record is written, and re-read correctly on a second attempt; a
-// record that disagrees with the fresh proof is replaced, and a forged record
-// never stands in for a failing proof.
+// (6) STORY-080 AC4: the proof is appended to the change's gate ledger once
+// and read back by the next gate without recomputing; a legacy record file
+// is neither written nor read, a proof from another rules version or base
+// tip is proven afresh, and a forged file never stands in for a failing
+// proof.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 #[test]
 fn record_is_written_and_reread_on_a_second_attempt() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let (tmp, approved) = fixture();
     let repo = tmp.path();
     git(repo, &["merge", "--quiet", "--no-edit", "main"]);
     let h = head(repo);
     let site = CarryOverSite::new(repo, Some("main"));
 
+    let before = proofs();
     let (first, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
         .expect("a moved head is eligible")
         .expect("first attempt carries over");
     assert_eq!(outcome, Some(RecordOutcome::Written));
-    let stored = read_record(repo, PR, &h).expect("record written");
-    assert_eq!(stored, first);
-    let raw: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(record_path(repo, PR, &h)).unwrap()).unwrap();
+    assert_eq!(proofs(), before + 1);
+    let events = carry_events(repo, &h);
+    assert_eq!(events.len(), 1, "{events:?}");
+    let event = &events[0];
+    assert_eq!(
+        event.patch_id.as_deref(),
+        Some(first.head_patch_id.as_str())
+    );
+    assert_eq!(event.base_ref.as_deref(), Some("main"));
+    assert_eq!(event.base_tip.as_deref(), Some(first.base_tip.as_str()));
+    assert_eq!(proof_event(repo, &h).as_ref(), Some(&first));
+    let raw = serde_json::to_value(event).unwrap();
+    assert_eq!(raw["kind"], "carry-over-proof");
     for key in [
         "approved_sha",
         "new_head",
@@ -319,8 +374,9 @@ fn record_is_written_and_reread_on_a_second_attempt() {
         "base_ref",
         "recorded_at",
     ] {
-        assert!(raw.get(key).is_some(), "record lacks {key}: {raw}");
+        assert!(raw["proof"].get(key).is_some(), "proof lacks {key}: {raw}");
     }
+    assert!(!repo.join(".aida").join("review-carryover").exists());
 
     let (second, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
         .unwrap()
@@ -328,31 +384,36 @@ fn record_is_written_and_reread_on_a_second_attempt() {
     assert_eq!(
         outcome,
         Some(RecordOutcome::AlreadyRecorded {
-            recorded_at: first.recorded_at.clone()
+            recorded_at: event.at.clone()
         })
     );
-    assert!(second.same_proof(&first));
-    assert_eq!(
-        read_record(repo, PR, &h).unwrap().recorded_at,
-        first.recorded_at
-    );
+    assert_eq!(second, first);
+    assert_eq!(proofs(), before + 1, "the second gate read the event");
+    assert_eq!(carry_events(repo, &h).len(), 1);
     assert!(carry_over_line(&second, outcome.as_ref().unwrap()).contains("approval carried over"));
 
-    // A tampered record is replaced by the fresh proof.
-    let mut forged = first.clone();
-    forged.head_patch_id = "0".repeat(40);
+    // A proof under another rules version is not reused: the head proves
+    // afresh and a current proof is appended.
+    let ledger = crate::gate::ledger::store::ledger_file(
+        &crate::gate::ledger::store_root(repo).unwrap(),
+        crate::gate::ledger::ChangeKey::pr(PR),
+    );
+    let body = std::fs::read_to_string(&ledger).unwrap();
     std::fs::write(
-        record_path(repo, PR, &h),
-        serde_json::to_string(&forged).unwrap(),
+        &ledger,
+        body.replace(
+            &format!("\"proof_version\":{PROOF_VERSION}"),
+            "\"proof_version\":0",
+        ),
     )
     .unwrap();
-    let (_, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
         .unwrap()
         .unwrap();
-    assert_eq!(outcome, Some(RecordOutcome::Replaced));
-    assert!(read_record(repo, PR, &h).unwrap().same_proof(&first));
+    assert_eq!(proofs(), before + 2, "an old-version proof is re-proven");
+    assert_eq!(carry_events(repo, &h).len(), 2);
 
-    // A forged "carried over" record for an evil head grants nothing.
+    // A forged legacy record for an evil head grants nothing.
     git(repo, &["reset", "--quiet", "--hard", &approved]);
     git(
         repo,
@@ -362,9 +423,13 @@ fn record_is_written_and_reread_on_a_second_attempt() {
     let evil = commit(repo, "Merge branch 'main' into pr");
     let mut forged = first;
     forged.new_head = evil.clone();
-    std::fs::create_dir_all(record_path(repo, PR, &evil).parent().unwrap()).unwrap();
+    let legacy = repo
+        .join(".aida")
+        .join("review-carryover")
+        .join(format!("PR-{PR}"));
+    std::fs::create_dir_all(&legacy).unwrap();
     std::fs::write(
-        record_path(repo, PR, &evil),
+        legacy.join(format!("{evil}.json")),
         serde_json::to_string(&forged).unwrap(),
     )
     .unwrap();
@@ -373,6 +438,132 @@ fn record_is_written_and_reread_on_a_second_attempt() {
         matches!(refused, Err(CarryOverRefusal::MergeEdited { .. })),
         "{refused:?}"
     );
+    // The refusal is kept on the ledger with its reason and read back.
+    let refusals = carry_events(repo, &evil);
+    assert_eq!(refusals.len(), 1, "{refusals:?}");
+    let crate::gate::ledger::EventBody::CarryOverRefused { reason, .. } = &refusals[0].body else {
+        panic!("expected a carry-over-refused event: {refusals:?}");
+    };
+    assert!(reason.contains("changes of its own"), "{reason}");
+    let count = proofs();
+    let again = carry_over_for_refusal(&site, PR, &moved(&approved, &evil)).unwrap();
+    assert!(matches!(again, Err(CarryOverRefusal::MergeEdited { .. })));
+    assert_eq!(proofs(), count, "a stored refusal is not recomputed");
+}
+
+// STORY-080 AC4: a content change drops the approval. A commit of the PR's
+// own after the approved one is refused, the ledger keeps the refusal with
+// the changed patch identity's reason, and no proof is recorded for it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn a_content_change_drops_the_approval_and_the_ledger_says_why() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    // Same structure as a base merge, but the PR's diff changed: rewrite the
+    // reviewed line, then merge main cleanly on top.
+    set_line(repo, "a.txt", 5, "a line 5 — changed after review");
+    commit(repo, "pr: post-review change");
+    let h = clean_merge(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    let refused = carry_over_for_refusal(&site, PR, &moved(&approved, &h)).unwrap();
+    assert!(refused.is_err(), "{refused:?}");
+    assert!(proof_event(repo, &h).is_none());
+    let events = carry_events(repo, &h);
+    assert_eq!(events.len(), 1, "{events:?}");
+    let crate::gate::ledger::EventBody::CarryOverRefused {
+        reason,
+        approved_sha,
+        ..
+    } = &events[0].body
+    else {
+        panic!("expected a carry-over-refused event: {events:?}");
+    };
+    assert_eq!(approved_sha, &approved);
+    assert_eq!(reason, &refused.unwrap_err().reason());
+
+    // A changed patch identity is stored with the new patch id and read
+    // back as the same refusal.
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let fresh = append_answer(
+        repo,
+        PR,
+        "main",
+        &approved,
+        &approved,
+        &Err(CarryOverRefusal::PatchChanged {
+            approved_patch_id: "a".repeat(40),
+            head_patch_id: "b".repeat(40),
+        }),
+    );
+    assert!(fresh, "a deterministic refusal is appended");
+    match stored_answer(repo, PR, "main", &approved, &approved) {
+        Some(Err(CarryOverRefusal::PatchChanged { head_patch_id, .. })) => {
+            assert_eq!(head_patch_id, "b".repeat(40))
+        }
+        other => panic!("the stored refusal reads back: {other:?}"),
+    }
+    let event = carry_events(repo, &approved).pop().unwrap();
+    assert_eq!(event.patch_id, Some("b".repeat(40)));
+    // A transient refusal is never stored.
+    assert!(!append_answer(
+        repo,
+        PR,
+        "main",
+        &approved,
+        &approved,
+        &Err(CarryOverRefusal::Git {
+            detail: "offline".into()
+        }),
+    ));
+}
+
+// STORY-080 AC4: the ship approval gate, the ship-held mandate and the
+// corpus merge-hold gate agree on ONE carry-over-proof event: the first gate
+// computes it, the other two read it, and the proof runs once.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+#[test]
+fn ship_mandate_and_corpus_gate_share_one_proof() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let v = approval(&approved);
+    let before = proofs();
+
+    // The mandate prover (quiet) runs first, as in a mandate ship.
+    let mandate = crate::gate::mandate_ship::mandate_carry_over(
+        repo,
+        PR,
+        std::slice::from_ref(&v),
+        Some(&h),
+        Some("main"),
+    );
+    assert_eq!(mandate, Some(Ok(h.clone())));
+    assert_eq!(proofs(), before + 1);
+
+    // The ship gate pins the merge on the stored event.
+    let site = CarryOverSite::new(repo, Some("main"));
+    let pin = crate::gate::approval::pr_ship_approval_gate(
+        repo,
+        PR,
+        std::slice::from_ref(&v),
+        Some(&h),
+        &policy(&v),
+        false,
+        true,
+        Some(&site),
+    )
+    .expect("the ship gate carries over");
+    assert_eq!(pin.as_deref(), Some(h.as_str()));
+
+    // The corpus (merge-hold) gate clears on the same event.
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    corpus_gate(repo, &[], "main", &h).expect("the corpus gate carries over");
+
+    assert_eq!(proofs(), before + 1, "one proof for three gates");
+    assert_eq!(carry_events(repo, &h).len(), 1);
 }
 
 #[test]
@@ -412,13 +603,10 @@ fn unresolvable_inputs_refuse() {
     ));
 }
 
-/// The `aida pr ship` gate end to end: an attested approval at the approved
-/// commit, a head that only merged main — the gate pins the merge to the new
-/// head, prints, and writes both records; an evil head refuses and says why.
-#[test]
-fn ship_gate_carries_over_and_refuses_with_the_reason() {
+/// An attested, independent approval recorded at `sha`.
+fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
     use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
-    let approval = |sha: &str| RecordedVerdict {
+    RecordedVerdict {
         kind: VerdictKind::Approved,
         raw: "approved".into(),
         reviewed_sha: Some(sha.into()),
@@ -431,19 +619,30 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
             ..Default::default()
         }),
         ..Default::default()
-    };
-    let policy = |v: &RecordedVerdict| {
-        let mut p = crate::gate::ship::ShipApprovalPolicy {
-            reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
-            shipper: vec!["session:independent-shipper".into()],
-            ..Default::default()
-        };
-        let a = v.attestation.as_ref().unwrap();
-        let k = a.authority_key(v.recorded_at.as_deref()).unwrap();
-        p.verified_authority.insert(k, a.identity.clone());
-        p
-    };
+    }
+}
 
+/// A ship policy under which [`approval`]'s attestation verifies and the
+/// shipper is not its author.
+fn policy(
+    v: &crate::gate::review_verdict::RecordedVerdict,
+) -> crate::gate::ship::ShipApprovalPolicy {
+    let mut p = crate::gate::ship::ShipApprovalPolicy {
+        reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
+        shipper: vec!["session:independent-shipper".into()],
+        ..Default::default()
+    };
+    let a = v.attestation.as_ref().unwrap();
+    let k = a.authority_key(v.recorded_at.as_deref()).unwrap();
+    p.verified_authority.insert(k, a.identity.clone());
+    p
+}
+
+/// The `aida pr ship` gate end to end: an attested approval at the approved
+/// commit, a head that only merged main — the gate pins the merge to the new
+/// head, prints, and writes both records; an evil head refuses and says why.
+#[test]
+fn ship_gate_carries_over_and_refuses_with_the_reason() {
     let (tmp, approved) = fixture();
     let repo = tmp.path();
     git(repo, &["merge", "--quiet", "--no-edit", "main"]);
@@ -466,7 +665,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
         Some(h.as_str()),
         "pinned to the proven head"
     );
-    assert!(read_record(repo, PR, &h).is_some());
+    assert!(proof_event(repo, &h).is_some());
     let activity = std::fs::read_to_string(repo.join(".aida/advisor-activity.jsonl")).unwrap();
     assert!(
         activity.contains("pr-merge-approval-carried-over"),
@@ -507,7 +706,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
     let text = format!("{err:#}");
     assert!(text.contains("did not carry over"), "{text}");
     assert!(text.contains("changes of its own"), "{text}");
-    assert!(read_record(repo, PR, &evil).is_none());
+    assert!(proof_event(repo, &evil).is_none());
 }
 
 /// Merge main into the PR cleanly; returns the new head.
@@ -563,7 +762,7 @@ fn retargeted_base_with_an_unreviewed_commit_refuses() {
         "{refused:?}"
     );
     assert!(on_main.proven_base().is_none());
-    assert!(read_record(repo, PR, &h).is_none());
+    assert!(proof_event(repo, &h).is_none());
 }
 
 #[test]
@@ -598,23 +797,32 @@ fn merge_time_base_must_match_the_proven_base() {
     assert_eq!(site.proven_base().as_deref(), Some("main"));
 }
 
-// (item 3) A quiet (preflight) site proves without recording; the pinning
-// gate records once.
+// (item 3) A quiet (preflight) site reports no outcome, so it prints
+// nothing; its proof goes on the ledger (STORY-080 AC4), and the pinning
+// gate reads it there instead of proving again.
 #[test]
 fn quiet_site_proves_without_recording() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let (tmp, approved) = fixture();
     let repo = tmp.path();
     let h = clean_merge(repo);
     let quiet = CarryOverSite::quiet(repo, Some("main"));
+    let before = proofs();
     let (proof, outcome) = carry_over_for_refusal(&quiet, PR, &moved(&approved, &h))
         .unwrap()
         .unwrap();
     assert_eq!(proof.new_head, h);
-    assert_eq!(outcome, None);
+    assert_eq!(outcome, None, "a quiet site announces nothing");
+    assert_eq!(proof_event(repo, &h).as_ref(), Some(&proof));
+    let pinning = CarryOverSite::new(repo, Some("main"));
+    let (_, outcome) = carry_over_for_refusal(&pinning, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
     assert!(
-        read_record(repo, PR, &h).is_none(),
-        "a quiet site writes nothing"
+        matches!(outcome, Some(RecordOutcome::AlreadyRecorded { .. })),
+        "{outcome:?}"
     );
+    assert_eq!(proofs(), before + 1);
 }
 
 // (item 4) The release/burndown merge path (`merge_path_approval_gate`):
@@ -670,7 +878,7 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
         Ok(Some(clean.clone())),
         "the merge path pins to the proven head"
     );
-    assert!(read_record(repo, PR, &clean).is_some());
+    assert!(proof_event(repo, &clean).is_some());
     let retargeted = decide(&clean, Some("x")).expect_err("a retargeted base refuses");
     assert!(retargeted.contains("now targets `x`"), "{retargeted}");
 
@@ -716,8 +924,8 @@ fn corpus_gate_clears_a_clean_base_merge_of_the_approved_head() {
     record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
     corpus_gate(repo, &[], "main", &h).expect("a clean base merge carries the approval over");
     assert!(
-        read_record(repo, PR, &h).is_none(),
-        "the corpus gate proves quietly"
+        proof_event(repo, &h).is_some(),
+        "the corpus gate's proof goes on the ledger for every later gate"
     );
 
     let bodies = crate::gate::merge_hold_core::corpus_gate_bodies(&[repo], PR, &[]).unwrap();

@@ -588,7 +588,7 @@ impl BatchPorts for GitHubPorts {
         }
     }
 
-    fn clear_hold(&mut self, pr: u64) -> Result<()> {
+    fn release_merge_hold(&mut self, pr: u64) -> Result<()> {
         let status = std::process::Command::new(crate::resolve_aida_exe())
             .current_dir(&self.main_worktree)
             .args(["merge-hold", "clear", &pr.to_string()])

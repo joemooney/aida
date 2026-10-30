@@ -695,6 +695,51 @@ fn cap_refuses_past_the_live_count_with_its_own_exit_code() {
     );
 }
 
+/// BUG-027: a live launcher whose child already logged its final result is
+/// finishing (its vendor may linger on an MCP child for the grace period),
+/// so it does not hold a cap slot against a new launch.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+#[test]
+fn cap_ignores_a_launcher_whose_child_logged_its_final_result() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".aida").join("standalone-implementers");
+    let done_log = tmp.path().join("done.jsonl");
+    std::fs::write(
+        &done_log,
+        "{\"type\":\"assistant\"}\n{\"type\":\"result\",\"is_error\":false}\n",
+    )
+    .unwrap();
+    let busy_log = tmp.path().join("busy.jsonl");
+    std::fs::write(&busy_log, "{\"type\":\"assistant\"}\n").unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    let slot_with_log = |pid: u32, spec: &str, log: &std::path::Path| {
+        std::fs::write(
+            dir.join(format!("{pid}.json")),
+            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log}).to_string(),
+        )
+        .unwrap();
+    };
+    slot_with_log(11, "STORY-1", &done_log);
+    slot_with_log(12, "STORY-2", &busy_log);
+    write_slot(&dir, 13, "STORY-3");
+    let alive = |_: u32, _: Option<&str>| true;
+
+    let guard = acquire_slot_with(tmp.path(), "STORY-4", 3, 500, alive)
+        .expect("the finished lane frees its slot for a cap of 3");
+    assert!(
+        dir.join("11.json").exists(),
+        "a live finishing launcher's slot is kept, only not counted"
+    );
+    drop(guard);
+
+    std::fs::write(&busy_log, "{\"type\":\"result\",\"is_error\":true}\n").unwrap();
+    slot_with_log(12, "STORY-2", &busy_log);
+    let err = acquire_slot_with(tmp.path(), "STORY-4", 1, 500, alive)
+        .err()
+        .expect("the slot without a log still counts");
+    assert!(format!("{err:#}").contains("STORY-3"));
+}
+
 // trace:STORY-1662.AC7 | ai:claude
 #[test]
 fn cap_comes_from_config_with_a_default_of_three() {

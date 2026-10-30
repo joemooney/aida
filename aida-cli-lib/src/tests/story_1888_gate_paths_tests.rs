@@ -3490,6 +3490,7 @@ fn all_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 const GATE_KERNELS: &[&str] = &[
     "branch_policy.rs",
     "fleet_lanes.rs",
+    "hold_collect.rs",
     "kernel_deps.rs",
     "mandate.rs",
     "mandate_drive.rs",

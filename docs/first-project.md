@@ -7,7 +7,7 @@ merged, traceable feature graph — six specs filed, two driven all the way to
 *Completed*, in a single sitting.
 
 > **Time:** ~15 min to read · ~1–2 hours to follow along on your own machine.
-> **You'll need:** the `aida` binary on your PATH ([install](getting-started.md)),
+> **You'll need:** the `aida` binary on your PATH ([install](../README.md#install)),
 > `git`, and [Claude Code](https://claude.com/claude-code).
 >
 > No Claude Code? You can still run every `aida` command in this doc — just

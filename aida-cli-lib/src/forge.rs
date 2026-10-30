@@ -4407,6 +4407,9 @@ pub(crate) mod fake {
         /// Change id for every `mark_change_ready` call.
         // trace:BUG-1690 | ai:claude
         pub(crate) readied: Arc<Mutex<Vec<u64>>>,
+        /// When set, `open_change` opens a change with this number.
+        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+        pub(crate) opens_as: Option<u64>,
     }
 
     impl RecordingForge {
@@ -4423,6 +4426,7 @@ pub(crate) mod fake {
                 closed: Arc::new(Mutex::new(Vec::new())),
                 commented: Arc::new(Mutex::new(Vec::new())),
                 readied: Arc::new(Mutex::new(Vec::new())),
+                opens_as: None,
             }
         }
 
@@ -4454,8 +4458,17 @@ pub(crate) mod fake {
         fn kind(&self) -> ForgeKind {
             ForgeKind::GitHub
         }
-        fn open_change(&self, _: OpenChange) -> Result<ChangeRef> {
-            anyhow::bail!("RecordingForge: open_change not scripted")
+        fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+            let Some(id) = self.opens_as else {
+                anyhow::bail!("RecordingForge: open_change not scripted")
+            };
+            Ok(ChangeRef {
+                id,
+                url: format!("https://example.test/pull/{id}"),
+                branch: req.branch,
+                base: req.base,
+                title: Some(req.title),
+            })
         }
         fn change_for_branch(&self, _: &str) -> Result<ChangeLookup> {
             Ok(self.open_for_branch.clone())
