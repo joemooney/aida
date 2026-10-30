@@ -1,0 +1,33 @@
+id: 01a18c44-dfbd-71b2-a39a-258aa298a9a4
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-120
+title: 'Review PR-3131: [AI:claude] fix(ids): bare ids point at this node''s local twin instead of staying silent (BUG-B6B1278890774EF993D2EBC327862470-036)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-036`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3131>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-036` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-036
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3131` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-30T10:04:46.397336515Z
+modified_at: 2026-10-30T10:04:46.397336515Z
+req_type: Story
+filed_at:
+  code_sha: 1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1e3bb952442
+  vendor: claude
+  session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
