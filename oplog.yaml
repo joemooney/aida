@@ -91661,5 +91661,13 @@ operations:
       1. CI lib-1 (story_1888_gate_paths_tests), from the review_carryover move into gate/: add the `// mandate-gate` marker line; register the file as a gate module wherever the boundary registry lists them; remove the review_carryover paths from gate/orchestrator_leaves.rs. Do not edit test expectations.
       2. AC2: the orchestrator adopt paths (orchestrator_leases.rs ~1387 and ~1730) return before the binding hook. Bind there too, with a test that adopting an already-open PR binds earlier spec verdicts.
       Run `cargo test -p aida-cli-lib --lib story_1888 gate::` plus make check-ci-fast (with env -u AIDA_CONTAINED). A scoped re-review checks only these two items plus CI.
-clock: 7103
+- id: 01a18bfe-f288-7320-b98b-b61630f0abed
+  target_id: 01a1874b-b26a-7d50-af2e-102a5512f699
+  author: aida
+  node_id: '1'
+  lamport: 7104
+  timestamp: 2026-10-30T08:48:23.688159694Z
+  kind: !SetStatus
+    status: Approved
+clock: 7104
 node_id: '1'
