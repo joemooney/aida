@@ -124,7 +124,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-29T10:54:07.466820155Z
-modified_at: 2026-10-30T09:06:50.829095397Z
+modified_at: 2026-10-30T09:50:05.143222558Z
 req_type: Story
 tags:
 - architecture
@@ -866,6 +866,13 @@ comments:
   created_at: 2026-10-30T08:48:29.302263541Z
   modified_at: 2026-10-30T08:48:29.302263541Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+- id: 01a18c37-6d57-7961-ac4a-0f5a80032573
+  author: joe
+  content: 'Round 3 on PR-3120, pushed e55899c. (1) story_1888 ratchets fixed: marker added to gate/review_carryover.rs, the file registered as an orchestrator in gate/orchestrator_leaves.rs (outside paths: aida_core::git_ops::configure_remote_credentials, crate::pr_cmd::pr_ship_target_branch), stale review_carryover entries removed. That file is gate-protected, so this needs a human merge. (3) AC2: both orchestrator adopt paths bind via gate::ledger::adopt_change_bound; test adopting_an_open_pr_binds_the_specs_pre_pr_verdicts passes. (2) AC7 finding DISPUTED: the advisor rulings of 2026-10-29 22:55 (slice 3 round 1) and 2026-10-30 01:50 (round 2) in this spec''s description amend AC7 and waive the line-count collapse, so the plain trailer stays. Local: story_1888 (52 ok), adopt/TASK-1443 tests ok, make check-ci-fast 35/35. 16 gate:: tests could not run in this seat (read-only hermetic test HOME, BUG-1642 setup), so CI is the gate for them.'
+  created_at: 2026-10-30T09:50:05.143222558Z
+  modified_at: 2026-10-30T09:50:05.143222558Z
+  session_id: 01a18c0fbcf2
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a1874b-dc8f-7a71-adda-3a5dac64cede
   author: joe
