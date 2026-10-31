@@ -10,12 +10,12 @@ description: |-
   3. Regression test: a PR claimed for TASK-<node>-138 whose title says (TASK-139), where legacy TASK-139 exists, refuses the record and completes nothing wrong.
   4. Implementers' PR-title guidance (pr create / aida commit) uses the full canonical or display ID the lane claimed, never a bare short form that can resolve elsewhere.
   Relates to BUG-HOME-046 (numeric ID identity), but is independent: this is coverage checking, not ID parsing.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T09:59:23.571151255Z
+modified_at: 2026-10-31T11:07:17.457639341Z
 req_type: Bug
 tags:
 - ids
@@ -30,6 +30,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a191a4-78cc-7303-b3a0-477d80ce4b88
+  author: joe
+  timestamp: 2026-10-31T11:07:17.580797449Z
+  session_id: 01a191664ad6
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 988a7ae5ea9fc5048e4d3e9322a4ffd1af0113b7
   branch: main
@@ -38,3 +47,7 @@ filed_at:
   aida_build_sha: c0ab6f09380
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T11:07:17.457639341Z
+  implemented_by: joe
