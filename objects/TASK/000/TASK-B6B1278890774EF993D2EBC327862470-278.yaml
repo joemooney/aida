@@ -1,0 +1,33 @@
+id: 01a19409-c4ee-7922-a1d0-c48943819fba
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-278
+title: Publish the product website on GitLab Pages as well as GitHub Pages
+description: |
+  ## Why
+  The product website deploys only to GitHub Pages, as a manual snapshot onto the `gh-pages` branch (docs/showcase/README.md). The canonical GitLab hub is self-hosted, and an air-gapped deployment would have only a GitLab-style server inside the gap. GitLab's equivalent is GitLab Pages: a CI job named `pages` whose output folder (default `public/`) is served.
+
+  ## Acceptance
+  1. A `pages` job in `.gitlab-ci.yml` copies the published showcase files (the same set as the gh-pages snapshot) into `public/`. It runs only on an explicit trigger or tag, matching the gh-pages policy of publishing from an approved merged revision, never on every mirrored push.
+  2. Documented in docs/showcase/README.md next to the GitHub Pages notes: how to trigger it, the resulting URL, and that the self-hosted instance's admin must enable Pages (Pages domain and wildcard DNS).
+  3. The two hosts publish identical content from the same revision. A check, or a written procedure, confirms the file sets match.
+  4. If the instance does not have Pages enabled, the task records that as a blocker for the operator instead of working around it.
+
+  ## Out of scope
+  New site content.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:17:10.638818101Z
+modified_at: 2026-10-31T22:17:10.638818101Z
+req_type: Task
+tags:
+- docs
+- gitlab
+- website
+filed_at:
+  code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
