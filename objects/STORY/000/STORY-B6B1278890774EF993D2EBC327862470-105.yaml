@@ -26,12 +26,12 @@ description: |
   - Resolution chain: BUG-ggg (agreed) and BUG-1-mmm (alias) both resolve to the spec whose local id is BUG-B6B...-nnn. trace: comments, commit trailers and blocked-by edges that name BUG-1-mmm keep working through the alias. Rewrite edges in the store to the new id; do not rewrite git history.
   - Node 1 is retired after the migration and never allocates again.
   - SKETCH QUESTION for the lane (advisor rules on the sketch): do the 5746 flat pre-node specs (agreed id only, no local id) also get b6b local ids under the "every spec has a local id" rule? Lay out the cost and benefit; the advisor's default is yes, done in the same one-time pass if the alias mechanism is identical.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T17:46:34.848633520Z
+modified_at: 2026-10-31T17:51:14.649023347Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -179,6 +179,15 @@ history:
   timestamp: 2026-10-31T17:46:36.910632970Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a19316-4cd9-7f00-b97d-1e8a6805e811
+  author: aida-orchestrator
+  timestamp: 2026-10-31T17:51:14.649050579Z
+  session_id: 01a193131f0d
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -191,3 +200,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T17:44:55.997676165Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC4/AC5 met with tests; AC1 command path works in fixture but the post-merge runbook leaves the live root with no b6b block (add falls back to pending); AC2 sync-promotion half untested; agent-mode list omits the local ID; backfill swallows an unparsable blocks.yaml and overwrites the ledger. CI in progress at review time (cli-1 green, 6 jobs running).
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-105 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-31T17:51:14.649023347Z
