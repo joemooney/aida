@@ -7,12 +7,39 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:20.408058815Z
-modified_at: 2026-10-31T21:38:53.676755293Z
+modified_at: 2026-10-31T21:40:25.758362389Z
 req_type: Bug
 tags:
 - epic-home-003
 - regroup
 - ship
+comments:
+- id: 01a193e8-201e-7a72-b2c4-f5e0c179a04c
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Root cause: `store_snapshot_stable` treats ANY store HEAD move (and any new `objects/` commit) during collection as a change, so with ~5 fleet writers committing unrelated specs every attempt is discarded and the 3-attempt bound refuses.
+
+    Fix: pin the evidence to the `before` snapshot (HEAD + every ref/worktree tip) and judge stability by the *evidence scope* of what was collected: the delta between the pinned tips and the after-snapshot (new/changed tips, forced-move dropped commits, and HEAD's symmetric difference) must contain no commit touching any read spec's object path (id + aliases) and no commit adding/removing a `spec_id:`/`agreed_id:` line naming any read id (`-G`). Unrelated concurrent writes are now stable; a write to an excluded spec is still a change -> re-collect -> refuse after the bound. A store that fails to load mid-collection is retried rather than read as "no current record". Attempts raised to 5 with linear backoff (0.5s, 1s, ...).
+
+    ### Acceptance criteria as tests
+    - **Unit (git fixture):** a concurrent writer committing an unrelated spec on HEAD between the snapshots is stable under the pinned scope (bug_2195 tests).
+    - **Unit (git fixture):** commit touching the excluded spec's object path, or a new object whose agreed_id names it, is unstable (criterion 3).
+    - **Unit:** `collect_on_stable_store` recollects/refuses with the scope-aware `stable` (bug_2179 tests updated).
+    - (1) pinned commit: the snapshot's tips are the pin; delta measured from them.
+
+    ### Expected files
+    - `aida-cli-lib/src/gate/mandate_traces.rs`
+    - `aida-cli-lib/src/gate/mandate_ship.rs`
+    - `aida-cli-lib/src/gate/tests/bug_2195_store_snapshot_tests.rs`, `bug_2179_mandate_recollect_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - Full rewrite of the readers to read at the pinned commit (instead of working tree / `--all`) is not done; the scoped-delta check proves the read equals the pinned read for the evidence paths. Acceptable?
+  created_at: 2026-10-31T21:40:25.758362389Z
+  modified_at: 2026-10-31T21:40:25.758362389Z
+  session_id: 01a193e6837a
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a193e6-8741-75e1-9ad7-86aacf85c21f
   author: aida-session-start
