@@ -8,6 +8,6 @@ result: done
 due_since: 2026-10-30T19:27:38.052798545Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-10-31T07:14:43.915892189Z
+  trip_id: dev-autopromote@2026-10-31T16:09:47.152602662Z
   job: dev-autopromote
-  error: 'exit 1: build of 38624ff8462f88888160ce85c7e5d7c417bbb9e1 failed; log /home/joe/.aida/dev-autopromote/20261031T065213Z-38624ff8462f.log; tail:    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 5m 02s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha 38624ff8462, but HEAD is 518815e3c293dde8c94830f0e55ccf7a68cbd477." | help: aida --version'
+  error: 'exit 1: build of d12cca28a61c8f00c7d30cb4a4cafc7e3566104b failed; log /home/joe/.aida/dev-autopromote/20261031T154722Z-d12cca28a61c.log; tail: cargo: queued for a build slot (2 in use; priority normal; set AIDA_CARGO_NO_SLOT=1 to bypass; run cargo ps to see who holds them) |     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 5m 25s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
