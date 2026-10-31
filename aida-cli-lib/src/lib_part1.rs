@@ -1417,7 +1417,7 @@ pub(crate) fn rewrite_groom_alias(args: &[String]) -> (Vec<String>, Option<Strin
 
 /// TASK-858: bare `aida agent` (no recognized subcommand) defaults to
 /// `aida agent new`, git-style, forwarding any flags/args to `new`. The
-/// recognized subcommands (`new`, `register`, `ls`, `status`, `gc`,
+/// recognized subcommands (`new`, `register`, `list`, `ls`, `status`, `gc`,
 /// `dispatch-health`, `pause`, `resume`, `stop`, `list-roles`) pass through
 /// unchanged, and `aida agent --help` / `-h` keeps clap's parent help (so the
 /// surface stays discoverable). Mirrors the pre-clap argv-rewrite pattern used
@@ -1431,6 +1431,8 @@ pub(crate) fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
         const KNOWN_SUBCOMMANDS: &[&str] = &[
             "new",
             "register",
+            // trace:TASK-B6B1278890774EF993D2EBC327862470-117 | ai:codex
+            "list",
             "ls",
             "status",
             "gc",
