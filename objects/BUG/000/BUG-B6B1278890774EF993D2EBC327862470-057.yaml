@@ -1,0 +1,23 @@
+id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-057
+title: Headless rework lane ignores the newest advisor brief comment when an older review verdict prescribes different work (merge-only brief skipped twice)
+description: 'Observed 2026-10-31 (advisor): BUG-HOME-051 lanes launched 12:31 and 13:16 with a spec comment ''ADVISOR BRIEF 13:10 (merge-only, retry): PR-3169 CONFLICTS with main ... git merge origin/main, resolve, push''. Both lanes instead re-ran the earlier review''s bwrap test instructions, reported they could not run cargo in the sandbox, and exited at the old head f976c90 with no merge (logs /tmp/aida_lane_bug-051-merge2.log, /tmp/aida_lane_bug-051-merge4.log). The advisor resolved the conflict by hand. BUG-HOME-021 (lanes read only the description) is completed, so comments are now read, but the brief is not ranked above the stale verdict. Expected: the lane prompt puts the newest advisor brief (ADVISOR BRIEF / REWORK BRIEF comments newer than the last verdict) first and labels older verdict findings as superseded context. Also: a PR with merge conflicts against main should be surfaced to the lane as the first task. Acceptance: (1) prompt-assembly test: a spec with a verdict then a newer brief yields a prompt whose first task is the brief; (2) a conflicting PR adds a ''resolve conflicts with main first'' item; (3) BUG-021''s tests still pass.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T21:37:29.201146410Z
+modified_at: 2026-10-31T21:37:29.201146410Z
+req_type: Bug
+tags:
+- epic-home-003
+- headless
+- regroup
+filed_at:
+  code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a4a6e2a6d18
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
