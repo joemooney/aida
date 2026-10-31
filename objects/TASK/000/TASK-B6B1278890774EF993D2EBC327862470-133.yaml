@@ -11,13 +11,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-30T21:28:04.432862500Z
-modified_at: 2026-10-30T21:28:04.432862500Z
+modified_at: 2026-10-31T00:23:15.318100041Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-128
 - finding-hash:3144d4c1
 - from-review:STORY-B6B1278890774EF993D2EBC327862470-128
 - kind:carried-forward
+comments:
+- id: 01a18f56-d676-7590-aa96-5faeeb43d0e4
+  author: joe
+  content: |
+    ADVISOR RULING 17:25 (2026-10-28 rule: rule once, bundle): this task carries all three STORY-128 carried-forward findings in ONE PR: (1) TASK-133 tests for the route_backlog I/O layer (nudged.json recording, failed-nudge retry, dropping records); (2) TASK-134 builtin_routed_seat_task must accept only route names for seats that exist (or the known seat set), not any mail-backlog-guard-route-<x>, with a refusal test; (3) TASK-135 operator escalations (seat operator) must reach the aida awaiting cron channel whether or not a session role is set, with a test. Gate: LIGHT (one targeted cargo test -p aida-cli-lib with the mail_backlog / maintenance_schedule filters, plus make check-ci-fast).
+  created_at: 2026-10-31T00:23:15.318100041Z
+  modified_at: 2026-10-31T00:23:15.318100041Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 filed_at:
   code_sha: 25d50e8d3350d29dbfc5489e94e86bd1a855400f
   branch: main
