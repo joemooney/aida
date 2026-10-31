@@ -248,7 +248,7 @@ fn bare_agent_defaults_to_agent_new() {
         s(&["aida", "agent", "list-roles", "--json"])
     );
 
-    // `aida agent ls` still reaches the Ls variant after the rewrite.
+    // `aida agent ls` still reaches the List variant after the rewrite.
     assert!(matches!(
         crate::command_registry::try_parse_from(rewrite_agent_default_new(&s(&[
             "aida", "agent", "ls"
@@ -257,7 +257,7 @@ fn bare_agent_defaults_to_agent_new() {
         .command
         .registered::<crate::agent_launch::AgentArgs>(),
         crate::agent_launch::AgentArgs {
-            inner: AgentCommand::Ls {
+            inner: AgentCommand::List {
                 all: false,
                 stale: false,
                 ended: false,
