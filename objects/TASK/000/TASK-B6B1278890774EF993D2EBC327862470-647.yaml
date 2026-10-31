@@ -1,0 +1,20 @@
+id: 01a1942b-b767-7d91-a6d3-44243d120bdb
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-647
+agreed_id: TASK-2611
+title: 'runbook probe: agreed ID minting after STORY-105 backfill'
+description: Probe created by the advisor to verify the STORY-105 post-merge runbook; closed immediately.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:54:15.399879962Z
+modified_at: 2026-10-31T22:54:15.399879962Z
+req_type: Task
+filed_at:
+  code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 44c7b666325
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
