@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T11:53:30.293923257Z
+modified_at: 2026-10-31T12:13:52.986432913Z
 req_type: Bug
 tags:
 - ids
@@ -246,6 +246,62 @@ comments:
   created_at: 2026-10-31T11:53:30.293923257Z
   modified_at: 2026-10-31T11:53:30.293923257Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a191dd-3fe6-70c2-ba3b-7a8a1583f38f
+  author: joe
+  content: |
+    ## Renumber mapping (AC3): dry run, store untouched
+
+    Produced by `aida doctor --fix id-collisions --dry-run --mapping docs/plans/2026-10-31-id-collision-renumber.tsv` with this PR's worktree build. The file is committed on the PR branch. There are 30 renumbers; the other member of each numeric group keeps its ID. The new IDs are node-local, as the 02:35 signoff answer (2) requires.
+
+    | old | new | uuid |
+    |---|---|---|
+    | BUG-0445 | BUG-b6b1278890774ef993d2ebc327862470-149 | 01a11e21-05fa-7c30-ac87-758f3c2c51df |
+    | STORY-0444 | STORY-b6b1278890774ef993d2ebc327862470-253 | 01a10fa3-6c65-7c61-a2a0-a940321569ff |
+    | TASK-396 | TASK-b6b1278890774ef993d2ebc327862470-247 | 019e45a1-7be1-7991-bbb7-93d44b2d7b56 |
+    | TASK-0412 | TASK-b6b1278890774ef993d2ebc327862470-248 | 019ea082-94be-7dd3-8313-dc80ed4ab5b4 |
+    | TASK-0413 | TASK-b6b1278890774ef993d2ebc327862470-249 | 019eaa0a-fa8d-7f01-bc48-8a2f06ad2d9c |
+    | TASK-414 | TASK-b6b1278890774ef993d2ebc327862470-250 | 019e466d-f21a-7461-9c1e-5f769b1ffce4 |
+    | TASK-415 | TASK-b6b1278890774ef993d2ebc327862470-251 | 019e467f-f4fb-7cd3-8e14-2a09d6f9afea |
+    | TASK-0416 | TASK-b6b1278890774ef993d2ebc327862470-252 | 019eacf1-3dc0-7101-8bdb-3cbc0807889e |
+    | TASK-417 | TASK-b6b1278890774ef993d2ebc327862470-253 | 019e4688-22cb-7600-a6fd-f93b24a1becb |
+    | TASK-418 | TASK-b6b1278890774ef993d2ebc327862470-254 | 019e4695-748b-76b0-9934-3def29d2b278 |
+    | TASK-0420 | TASK-b6b1278890774ef993d2ebc327862470-255 | 019ef78b-9e9c-7fe2-8133-f5d0af2a94fe |
+    | TASK-421 | TASK-b6b1278890774ef993d2ebc327862470-256 | 019e47f9-b4c4-7362-bd86-b896d2db5a3b |
+    | TASK-422 | TASK-b6b1278890774ef993d2ebc327862470-257 | 019e4839-2457-7cb3-8a51-b81db16cf9c4 |
+    | TASK-0423 | TASK-b6b1278890774ef993d2ebc327862470-258 | 019ef78b-a6ef-72d1-b4df-c22df0c65bf7 |
+    | TASK-424 | TASK-b6b1278890774ef993d2ebc327862470-259 | 019e4848-2ecd-74b3-8e38-cb1806e06458 |
+    | TASK-0425 | TASK-b6b1278890774ef993d2ebc327862470-260 | 019ef78c-052b-7081-8db0-c403178751f3 |
+    | TASK-0426 | TASK-b6b1278890774ef993d2ebc327862470-261 | 019ef78c-06e8-7663-b405-511443cd2641 |
+    | TASK-427 | TASK-b6b1278890774ef993d2ebc327862470-262 | 019e48c4-7e69-7222-806d-24c888b1a03c |
+    | TASK-429 | TASK-b6b1278890774ef993d2ebc327862470-263 | 019e48cd-8b95-7301-8059-68af25765cda |
+    | TASK-430 | TASK-b6b1278890774ef993d2ebc327862470-264 | 019e48d7-93dc-7c61-9ffb-81b756254179 |
+    | TASK-431 | TASK-b6b1278890774ef993d2ebc327862470-265 | 019e48d8-5a50-7113-af15-7adf8f207420 |
+    | TASK-432 | TASK-b6b1278890774ef993d2ebc327862470-266 | 019e4b7e-24a0-7ab1-b28c-4758ddaee827 |
+    | TASK-434 | TASK-b6b1278890774ef993d2ebc327862470-267 | 019e4b7e-53a5-77f0-a6ab-e4193f51cadb |
+    | TASK-0435 | TASK-b6b1278890774ef993d2ebc327862470-268 | 019ef7a5-ff3b-7f50-a3ab-7c9d9ed6ca82 |
+    | TASK-436 | TASK-b6b1278890774ef993d2ebc327862470-269 | 019e4bc9-3bb9-77e1-8cff-922917589d3c |
+    | TASK-0437 | TASK-b6b1278890774ef993d2ebc327862470-270 | 019ef7a6-02b8-7c81-92ce-247494b0c73a |
+    | TASK-438 | TASK-b6b1278890774ef993d2ebc327862470-271 | 019e4bc9-76b4-7523-9b56-48ca581fe6e8 |
+    | TASK-439 | TASK-b6b1278890774ef993d2ebc327862470-272 | 019e4bc9-b645-7e43-8f81-1fa977599ee3 |
+    | TASK-0440 | TASK-b6b1278890774ef993d2ebc327862470-273 | 019f1c08-eeb1-75f0-a921-0518e2f5bf53 |
+    | TASK-446 | TASK-b6b1278890774ef993d2ebc327862470-274 | 019e4da0-82b4-79d2-bcf5-60c5e06b7a36 |
+
+    The survivors differ from the 02:15 sketch for TASK-420, TASK-423 and TASK-435. On recount, the padded TASK-0420, TASK-0423 and TASK-0435 have fewer references, so they are the ones renumbered.
+
+    The tracked-tree rewrites for this mapping are committed on this branch. They touch 38 files: CHANGELOG, the templates and their mirrors, and trace and prose comments. The rewrite is exact-case, so lowercase links stay unchanged, and code string literals are not touched.
+
+    Post-merge apply (advisor): `aida doctor --fix id-collisions --mapping docs/plans/2026-10-31-id-collision-renumber.tsv --yes`. After it, `aida doctor check id-collisions` must report zero groups.
+  created_at: 2026-10-31T12:09:18.566500998Z
+  modified_at: 2026-10-31T12:09:18.566500998Z
+  session_id: 01a191cf86c2
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a191e1-6fda-7e80-b187-cb10932c6a89
+  author: joe
+  content: 'FOLLOW-UPS (one draft task wanted, per the 2026-10-28 rule; this seat could not mint it because the sandbox makes ID allocation read-only, so the advisor needs to file it): (1) the server REST/gRPC surfaces still expose id_config.digits, which no longer governs minting; (2) drop ''digits: 4'' from the store metadata.yaml after the apply; (3) switch the cache sync guard spec_id_collisions from text grouping to id_key grouping after the apply. The cache lookups now use the indexed id_key and agreed_id_key columns (schema 16), so finding 13 is closed and needs no follow-up.'
+  created_at: 2026-10-31T12:13:52.986432913Z
+  modified_at: 2026-10-31T12:13:52.986432913Z
+  session_id: 01a191cf86c2
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
