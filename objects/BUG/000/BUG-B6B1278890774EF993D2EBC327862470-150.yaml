@@ -2,16 +2,25 @@ id: 01a19405-a734-7463-89cb-04c6aaefd73c
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-150
 title: 'aida deputy: a refused job''s result line names an .out file that is never written'
 description: 'Observed 2026-10-31 ~15:10 (operator test of the deputy at main 584e95e): ''aida deputy submit --wait -- echo hello'' was correctly refused with exit 126 ''refused:exec-not-allowed (echo is not aida or an --allow-exec path)'', but the result line pointed at .aida/deputy/default/out/01a19404-2d99-....out and that file was never created. Expected: a refused job writes its refusal reason (policy rule, the argv, the remedy e.g. ''restart with aida deputy --allow-exec <path>'') to the .out file it names, so every result line''s path exists; the completion mail and ''aida awaiting'' failed-job entry (STORY-155) point at the same file. Acceptance: (1) a refused submit produces an .out file holding the refusal reason and remedy; (2) test: refused job, result line path exists and contains ''exec-not-allowed''; (3) an accepted job''s output file behaviour is unchanged. Related: STORY-HOME-099, STORY-HOME-155.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:12:40.884457867Z
-modified_at: 2026-10-31T22:12:40.884457867Z
+modified_at: 2026-10-31T22:19:26.431855938Z
 req_type: Bug
 tags:
 - deputy
 - epic-home-003
+history:
+- id: 01a1940b-d75f-72f0-9029-d0dcab38d18e
+  author: aida-session-start
+  timestamp: 2026-10-31T22:19:26.431855072Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
