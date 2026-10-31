@@ -17,12 +17,12 @@ description: |
 
   ## Out of scope
   Local models for coding agents in an air gap (see docs/what-is-aida.md, Air-gapped development).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-10-31T20:18:37.615695438Z
+modified_at: 2026-10-31T20:19:10.427794357Z
 req_type: Spike
 tags:
 - air-gap
@@ -38,6 +38,14 @@ history:
   timestamp: 2026-10-31T20:18:45.742830330Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1939d-bbdb-7972-bad4-bbb6863d9fe4
+  author: joe
+  timestamp: 2026-10-31T20:19:10.427791049Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
