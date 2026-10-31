@@ -15654,7 +15654,7 @@ pub(crate) struct DoctorArgs {
     /// spec recording the migration's old -> new table. Repeatable. Defaults
     /// to the spec that owns the leading-zero migration, when present.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-    #[clap(long, value_name = "SPEC", requires = "fix")]
+    #[clap(long, value_name = "SPEC", requires = "fix", value_parser = crate::spec_arg::spec_id)]
     pub preserve: Vec<String>,
 
     /// Run a store-wide semantic contradiction sweep combining mechanical joins
