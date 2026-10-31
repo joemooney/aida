@@ -95,12 +95,35 @@ Gotchas learned the hard way:
 - Docker on this host is the podman shim (`/var/run/docker.sock` →
   `/run/podman/podman.sock`); the docker executor works because the service
   runs as root. There is no `docker` group.
-- A push to the mirror's `main` starts a branch pipeline that competes with MR
-  pipelines; the project has "auto-cancel redundant pipelines" on so a new push
-  to an MR cancels the previous run of that MR.
+- A push to the mirror's `main` no longer runs the merge gates. Each GitHub
+  merge mirrors to `main` after GitHub CI already passed on that commit, so
+  re-running verify / test / bwrap-confinement there only duplicated it and
+  competed with MR pipelines and implementer lanes for this host's disk. The
+  `main` pipeline is **nightly** instead (see section 4). The gate jobs are
+  `interruptible: true` and the workflow sets
+  `auto_cancel: on_new_commit: interruptible`, so a new push to an MR cancels
+  the previous run of that MR.
 - The merge-hold gate job (`aida-merge-hold-gate`, included from
   `aida-core/templates/gitlab-ci-merge-hold-gate.yml`) is alpine-based with
   `needs: []` and no cache, so it runs in seconds regardless of the above.
+
+## 4. Nightly `main` pipeline (one-time setup)
+
+The merge gates (verify, test, bwrap-confinement) run for:
+
+- merge-request pipelines (unchanged);
+- scheduled pipelines on the default branch (`$CI_PIPELINE_SOURCE == "schedule"`);
+- manual runs from the UI (`$CI_PIPELINE_SOURCE == "web"`, CI/CD > Pipelines >
+  Run pipeline).
+
+A plain push to `main` runs none of them. Release jobs still run on `vN` tags.
+
+Create the schedule once in the GitLab UI: **CI/CD > Schedules > New schedule**,
+interval pattern daily (for example `0 3 * * *`, pick an hour when no
+implementer lanes run), target branch `main`, active. Nothing in the
+repository creates it.
+
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-141 | ai:claude -->
 
 <!-- trace:STORY-1216 | ai:claude -->
 <!-- trace:TASK-1274 | ai:codex -->
