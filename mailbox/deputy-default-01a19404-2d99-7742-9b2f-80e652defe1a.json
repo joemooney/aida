@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a19404-2d99-7742-9b2f-80e652defe1a",
+  "thread_id": "deputy-01a19404-2d99-7742-9b2f-80e652defe1a",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-agent-43"
+  },
+  "timestamp": 1793484664664,
+  "body": "Deputy \"default\" finished job 01a19404-2d99-7742-9b2f-80e652defe1a: rc 126 (refused:exec-not-allowed (echo is not `aida` or an --allow-exec path)).\nCommand: echo hello\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a19404-2d99-7742-9b2f-80e652defe1a.out\nRead it with `aida deputy log 01a19404-2d99-7742-9b2f-80e652defe1a`.\n`aida awaiting` lists it until you run `aida deputy ack 01a19404-2d99-7742-9b2f-80e652defe1a`.\n",
+  "subject": "deputy job 01a19404 FAILED: rc 126",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
