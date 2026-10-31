@@ -1482,3 +1482,116 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
         assert_eq!(status(), RequirementStatus::Approved);
     }
 }
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+fn product_grant(delegable: &[&str]) -> crate::gate::seat_authority::SeatGrant {
+    let now = chrono::Utc::now();
+    crate::gate::seat_authority::SeatGrant {
+        id: "grant-test".into(),
+        principal: "joe".into(),
+        subject: "joe".into(),
+        session_id: "s".into(),
+        seat: "product".into(),
+        tty_issued_at: now,
+        delegable_seats: delegable.iter().map(|s| s.to_string()).collect(),
+        parent_grant_id: None,
+        issued_at: now,
+        expires_at: now + chrono::Duration::hours(1),
+        revoked_at: None,
+        binding: Vec::new(),
+    }
+}
+
+// AC1 + AC2: one command, naming the grant's own seat and keeping its
+// existing delegations.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+#[test]
+fn bug052_refusal_widens_the_parents_own_grant() {
+    let grant = product_grant(&["advisor", "implementer"]);
+    let cause = anyhow::anyhow!("inner cause with its own hint");
+    let text = agent_new_delegation_refusal(
+        std::path::Path::new("/proj"),
+        "product",
+        Some(&grant),
+        &cause,
+    );
+    assert!(
+        text.contains(
+            "aida role enter product --delegate-seat advisor --delegate-seat implementer --delegate-seat product"
+        ),
+        "{text}"
+    );
+    assert!(!text.contains("role enter advisor"), "{text}");
+    assert_eq!(text.matches("role enter").count(), 1, "{text}");
+    assert!(!text.contains("inner cause"), "{text}");
+}
+
+// AC1: no grant says so and names the command that starts one.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+#[test]
+fn bug052_no_grant_names_the_command_that_starts_one() {
+    let cause = anyhow::anyhow!("no valid parent seat grant is active");
+    let text =
+        agent_new_delegation_refusal(std::path::Path::new("/proj"), "implementer", None, &cause);
+    assert!(
+        text.contains("no valid parent seat grant is active"),
+        "{text}"
+    );
+    assert!(
+        text.contains("aida role enter advisor --delegate-seat implementer"),
+        "{text}"
+    );
+    assert_eq!(text.matches("role enter").count(), 1, "{text}");
+}
+
+// A roster denial is not fixed by re-entry, so it carries no command.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+#[test]
+fn bug052_roster_denial_carries_no_reentry_command() {
+    let grant = product_grant(&["implementer"]);
+    let cause = anyhow::anyhow!("requested child seat `implementer` is no longer allowed");
+    let text = agent_new_delegation_refusal(
+        std::path::Path::new("/proj"),
+        "implementer",
+        Some(&grant),
+        &cause,
+    );
+    assert!(text.contains("no longer allowed"), "{text}");
+    assert!(!text.contains("role enter"), "{text}");
+}
+
+// AC3: the picker marks a seat the grant cannot delegate, with the command.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+#[test]
+fn bug052_picker_marks_undelegable_seats() {
+    let mut annotations = std::collections::BTreeMap::new();
+    let names: Vec<String> = ["product", "implementer"].map(String::from).to_vec();
+    let delegable = vec!["implementer".to_string()];
+    crate::role::mark_undelegable_roles(&mut annotations, &names, "product", &delegable);
+    let product = annotations
+        .get("product")
+        .and_then(|a| a.not_delegated.clone())
+        .expect("product is marked");
+    assert_eq!(
+        product,
+        "aida role enter product --delegate-seat implementer --delegate-seat product"
+    );
+    assert!(annotations
+        .get("implementer")
+        .is_none_or(|a| a.not_delegated.is_none()));
+    let row = crate::role::RolePickerRow {
+        marker: " ".into(),
+        name: "product".into(),
+        global: true,
+        recency: "now".into(),
+        purpose: None,
+        live_driver_recency: None,
+        single_instance: false,
+        not_delegated: Some(product.clone()),
+    };
+    let label = crate::role::format_role_picker_option(&row, 200);
+    assert!(
+        label.contains(&format!("(not delegated: {product})")),
+        "{label}"
+    );
+}

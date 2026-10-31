@@ -558,12 +558,19 @@ pub(crate) struct RolePickerRow {
     pub(crate) live_driver_recency: Option<String>,
     /// True for repo-wide single-instance seats such as advisor/product.
     pub(crate) single_instance: bool,
+    /// The re-entry command when the active grant cannot delegate this seat.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+    pub(crate) not_delegated: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RolePickerLaunchAnnotation {
     pub(crate) live_driver_recency: Option<String>,
     pub(crate) single_instance: bool,
+    /// Set when the active grant cannot delegate this seat: the command that
+    /// widens it. The row is marked and selecting it is refused.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+    pub(crate) not_delegated: Option<String>,
 }
 
 /// TASK-713: word-wrap `text` to `width` columns, capped at `max_lines`
@@ -664,6 +671,7 @@ pub(crate) fn pick_role_with_header(
                 purpose: role.purpose.clone(),
                 live_driver_recency: annotation.and_then(|a| a.live_driver_recency.clone()),
                 single_instance: annotation.map(|a| a.single_instance).unwrap_or(false),
+                not_delegated: annotation.and_then(|a| a.not_delegated.clone()),
             }
         })
         .collect();
@@ -757,6 +765,10 @@ pub(crate) fn assemble_role_picker_items(
 pub(crate) fn format_role_picker_option(row: &RolePickerRow, width: usize) -> String {
     let scope = if row.global { " [global]" } else { "" };
     let mut label = format!("{} {}{} · {}", row.marker, row.name, scope, row.recency);
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+    if let Some(command) = row.not_delegated.as_deref() {
+        label.push_str(&format!(" · (not delegated: {command})"));
+    }
 
     if let Some(seat) = format_role_picker_launch_status(row) {
         label.push_str(" · ");
@@ -930,7 +942,20 @@ pub(crate) fn resolve_child_role(
     }
     if std::io::stdin().is_terminal() {
         let header = format!("Select a role for the new {} agent:", agent_type);
-        let annotations = role_picker_launch_annotations(project_root, chrono::Utc::now());
+        let mut annotations = role_picker_launch_annotations(project_root, chrono::Utc::now());
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+        if let Some(grant) = crate::gate::seat_authority::current_grant(project_root) {
+            let names: Vec<String> = list_roles(project_root)?
+                .into_iter()
+                .map(|role| role.name)
+                .collect();
+            mark_undelegable_roles(
+                &mut annotations,
+                &names,
+                &grant.seat,
+                &grant.delegable_seats,
+            );
+        }
         // TASK-1462: prefer the operator's active shell role as the picker's
         // default cursor; `implementer` remains the fallback when no role is
         // active. `pick_role_with_header` itself no-ops the highlight if the
@@ -940,12 +965,25 @@ pub(crate) fn resolve_child_role(
         let default_highlight = child_role_picker_default_highlight(&active_role, is_default);
         // `pick_role_with_header` returns Ok(None) on cancel → propagate as
         // the abort signal.
-        pick_role_with_header(
+        let picked = pick_role_with_header(
             project_root,
             &header,
             Some(&default_highlight),
             Some(&annotations),
-        )
+        )?;
+        // Refuse an undelegable seat at selection, before any session picker.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+        if let Some(command) = picked
+            .as_deref()
+            .and_then(|name| annotations.get(name))
+            .and_then(|a| a.not_delegated.as_deref())
+        {
+            anyhow::bail!(
+                "cannot launch child seat `{}`: the active grant does not delegate it. From a human terminal, run `eval \"$({command})\"`, then retry `aida agent new` in that same shell.",
+                picked.as_deref().unwrap_or_default()
+            );
+        }
+        Ok(picked)
     } else {
         eprintln!(
             "{} no --role given, defaulting to {} (non-interactive launch)",
@@ -953,6 +991,27 @@ pub(crate) fn resolve_child_role(
             "implementer".cyan()
         );
         Ok(Some("implementer".to_string()))
+    }
+}
+
+/// Mark every role in `names` the parent grant (`parent_seat`, delegating
+/// `delegable`) cannot delegate with the command that widens the grant. Pure
+/// so the picker's marking is testable without a TTY or a live grant.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+pub(crate) fn mark_undelegable_roles(
+    annotations: &mut std::collections::BTreeMap<String, RolePickerLaunchAnnotation>,
+    names: &[String],
+    parent_seat: &str,
+    delegable: &[String],
+) {
+    for name in names {
+        let seat = canonical_role_name(name);
+        if delegable.iter().any(|s| *s == seat) {
+            continue;
+        }
+        annotations.entry(name.clone()).or_default().not_delegated = Some(
+            crate::gate::seat_authority::widen_delegation_command(parent_seat, delegable, &seat),
+        );
     }
 }
 
@@ -1010,6 +1069,7 @@ pub(crate) fn role_picker_launch_annotations(
                     RolePickerLaunchAnnotation {
                         single_instance: role_picker_role_is_single_instance(&cfg, role),
                         live_driver_recency: None,
+                        not_delegated: None,
                     },
                 )
             })

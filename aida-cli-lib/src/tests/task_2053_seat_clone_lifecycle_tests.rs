@@ -1772,6 +1772,249 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
     );
 }
 
+/// BUG-051: every probe `git status` entry is named by its path, and a set
+/// of findings is never rendered as an empty list.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[test]
+fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
+    assert_eq!(describe_status_entry("? notes.txt"), "untracked: notes.txt");
+    assert_eq!(
+        describe_status_entry("1 .M N... 100644 100644 100644 0123abc 0123abc src/a b.rs"),
+        "changed (.M): src/a b.rs"
+    );
+    assert_eq!(
+        describe_status_entry("2 R. N... 100644 100644 100644 aaa aaa R100 new.rs\told.rs"),
+        "renamed (R.): old.rs -> new.rs"
+    );
+    assert_eq!(
+        describe_status_entry("u UU N... 100644 100644 100644 100644 a b c conflict.rs"),
+        "unmerged (UU): conflict.rs"
+    );
+    assert_eq!(describe_status_entry("garbage"), "garbage");
+
+    let clean = ProbeFacts::default();
+    assert!(!clean.unshipped());
+    assert!(unshipped_items(&clean).is_empty());
+
+    // Commits counted on no listed ref still produce a named line.
+    let orphaned = ProbeFacts {
+        unpushed: 3,
+        ..ProbeFacts::default()
+    };
+    let items = unshipped_items(&orphaned);
+    assert!(items.len() >= 2, "{items:?}");
+    assert!(items[0].contains("3 commit(s)"), "{items:?}");
+    assert!(unshipped_reason(&orphaned).contains("3 commit(s) on no listed ref"));
+
+    let dirty = ProbeFacts {
+        dirty: vec!["? scratch.txt".into()],
+        unpushed: 1,
+        unpushed_refs: vec!["1 commit(s) on refs/heads/feat".into()],
+        ..ProbeFacts::default()
+    };
+    let items = unshipped_items(&dirty);
+    assert_eq!(items[0], "untracked: scratch.txt");
+    assert!(items.iter().any(|i| i.contains("refs/heads/feat")));
+    let reason = unshipped_reason(&dirty);
+    assert!(reason.contains("untracked: scratch.txt"), "{reason}");
+    assert!(reason.contains("refs/heads/feat"), "{reason}");
+}
+
+/// BUG-051: the session's runtime links and build/cache output are not work.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.acbe987b | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_051_runtime_links_and_build_output_are_not_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    let clone = tmp.path();
+    std::os::unix::fs::symlink(tmp.path(), clone.join(".aida-store")).unwrap();
+    for noise in [
+        "? .aida-store",
+        "? .aida/cache.db",
+        "? .aida/cache.db-wal",
+        "? .aida/agents/claude.json",
+        "? target/debug/aida",
+    ] {
+        assert!(is_runtime_noise_entry(clone, noise), "{noise}");
+    }
+    for work in [
+        "? scratch.txt",
+        "? .aida/config.toml",
+        "? src/target/x.rs",
+        "1 .M N... 100644 100644 100644 a a target/tracked.rs",
+    ] {
+        assert!(!is_runtime_noise_entry(clone, work), "{work}");
+    }
+    // A real `.aida-store` directory, not the link, still counts.
+    let other = tempfile::tempdir().unwrap();
+    std::fs::create_dir(other.path().join(".aida-store")).unwrap();
+    assert!(!is_runtime_noise_entry(other.path(), "? .aida-store"));
+}
+
+/// A seat clone (lease `id`) whose one commit on `feat` was pushed to origin
+/// by URL, after which origin's `feat` gained a commit (an update-branch
+/// merge). Neither the clone nor main tracks origin's `feat`, so the plain
+/// probe counts the seat commit as one origin lacks.
+fn ancestor_of_origin_seat(fx: &Fixture, name: &str, id: &str) -> PathBuf {
+    let clone = seat(fx, name, id);
+    seat_commit(&clone, "work.txt");
+    let origin = fx.origin.to_str().unwrap();
+    seat_git(&clone, &["push", "-q", origin, "feat:refs/heads/feat"]);
+    let other = fx.root.join(format!("{name}-other"));
+    seat_git(
+        &fx.root,
+        &["clone", "-q", "-b", "feat", origin, other.to_str().unwrap()],
+    );
+    seat_git(
+        &other,
+        &["commit", "-q", "--allow-empty", "-m", "merge main"],
+    );
+    seat_git(&other, &["push", "-q", "origin", "feat"]);
+    // The precondition is that neither the clone nor main tracks origin's
+    // branch: with a tracking ref at the seat's tip the probe would count
+    // nothing whatever the ancestor rule did. Whether the push leaves one
+    // depends on the git version (CI's did), so remove it rather than assume.
+    for dir in [&clone, &fx.main] {
+        if ref_exists(dir, "refs/remotes/origin/feat") {
+            git_ok(dir, &["update-ref", "-d", "refs/remotes/origin/feat"]);
+        }
+        assert!(!ref_exists(dir, "refs/remotes/origin/feat"));
+    }
+    assert_eq!(known(probe(&fx.main, &clone)).unpushed, 1);
+    clone
+}
+
+/// BUG-051: the lease classifier (reap, status and the dormant-lease checks
+/// read clones the same way) applies session end's ancestor-of-origin rule:
+/// the clone reads clean, while a seat commit origin lacks still counts.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_051_bwrap_lease_classifier_counts_an_ancestor_of_origin_as_pushed() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    aida_core::seat_clone_detect::note_host_main(&fx.main);
+    let id = "c0ffee000053";
+    let clone = ancestor_of_origin_seat(&fx, "bug051c", id);
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|lease| lease.id == id)
+        .expect("clone lease");
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert!(entries.is_empty(), "{entries:?}");
+    assert!(ref_exists(&fx.main, "refs/remotes/origin/feat"));
+
+    seat_commit(&clone, "more.txt");
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert_eq!(
+        entries,
+        vec!["1 commit(s) that origin does not have".to_string()]
+    );
+}
+
+/// BUG-051: the ref-tips probe output splits into ref tips and the candidate
+/// commits origin lacks, so a seat commit on top of one main reaches leaves
+/// that one excused; output without the separator is all ref tips.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[test]
+fn bug_051_split_tips_separates_ref_tips_from_candidates() {
+    let split = crate::seat_clone::split_tips;
+    assert_eq!(split("a\nb\n--\nc\nd\n"), (vec!["a", "b"], vec!["c", "d"]));
+    assert_eq!(split("a\n--\n"), (vec!["a"], vec![]));
+    assert_eq!(split("a\nb\n"), (vec!["a", "b"], vec![]));
+    assert_eq!(split(""), (vec![], vec![]));
+}
+
+/// BUG-051: the refresh fetch never runs without budget, or for a branch name
+/// git would not accept.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[test]
+fn bug_051_refresh_origin_branch_needs_budget_and_a_valid_branch() {
+    let fx = fixture();
+    let refresh = crate::seat_clone::refresh_origin_branch;
+    let budget = std::time::Duration::from_secs(5);
+    assert!(!refresh(&fx.main, "main", std::time::Duration::ZERO));
+    assert!(!refresh(&fx.main, "", budget));
+    assert!(!refresh(&fx.main, "-x", budget));
+    assert!(!refresh(&fx.main, "a..b", budget));
+    // origin's `main` is already tracked at the same commit: nothing moved.
+    assert!(!refresh(&fx.main, "main", budget));
+    git_ok(&fx.main, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    assert!(refresh(&fx.main, "main", budget));
+    assert!(ref_exists(&fx.main, "refs/remotes/origin/main"));
+}
+
+/// BUG-051: a seat branch published by URL (no tracking ref in the clone or
+/// main), whose origin copy then gained a commit (an update-branch merge), is
+/// pushed: session end, without `--force`, removes the clone. The session's
+/// runtime links and build output do not hold it either.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.Tests | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000051";
+    let clone = ancestor_of_origin_seat(&fx, "bug051a", id);
+
+    std::os::unix::fs::symlink(&fx.main, clone.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(clone.join(".aida/agents")).unwrap();
+    std::fs::write(clone.join(".aida/agents/claude.json"), "{}").unwrap();
+    std::fs::write(clone.join(".aida/cache.db"), "db").unwrap();
+    std::fs::create_dir_all(clone.join("target/debug")).unwrap();
+    std::fs::write(clone.join("target/debug/aida"), "bin").unwrap();
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    end_session(id, false).unwrap();
+    assert!(!clone.exists());
+    assert!(!crate::lease_path(&fx.main, id).exists());
+    assert!(!fx
+        .main
+        .join(".aida/salvage")
+        .join(clone.file_name().unwrap())
+        .exists());
+}
+
+/// BUG-051: an untracked file refuses session end, and the refusal names it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.Tests | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_051_bwrap_session_end_refusal_names_the_untracked_file() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000052";
+    let clone = seat(&fx, "bug051b", id);
+    std::fs::write(clone.join("scratch-notes.txt"), "draft\n").unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let refused = format!("{:#}", end_session(id, false).unwrap_err());
+    assert!(
+        refused.contains("untracked: scratch-notes.txt"),
+        "{refused}"
+    );
+    assert!(clone.exists());
+    assert!(crate::lease_path(&fx.main, id).exists());
+}
+
 /// BUG-049 (ruling 3): the real seat-clone teardown removes the clone's
 /// Claude Code trust entry when pre-trust is on, and (ruling 1) leaves
 /// `~/.claude.json` byte-identical when it is off.
