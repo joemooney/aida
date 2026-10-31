@@ -93,16 +93,26 @@ pub fn headless_argv(adapter: &VendorAdapter, brief: &str) -> Option<Vec<String>
 // trace:TASK-1195 | ai:codex
 pub fn ask_ai_argv(adapter: &VendorAdapter, prompt: &str) -> Option<Vec<String>> {
     match adapter {
+        // BUG-050: a one-shot `claude -p` is headless too: no Monitor, no
+        // background tasks. The posture's tool list is ended by `-p`.
+        // Uncontained: no contained settings are parsed, so nothing refuses.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
         VendorAdapter::Headless {
             command: "claude", ..
-        } => Some(vec![
-            "-p".to_string(),
-            "--permission-mode".to_string(),
-            "plan".to_string(),
-            "--permission-prompts".to_string(),
-            "none".to_string(),
-            prompt.to_string(),
-        ]),
+        } => Some(
+            crate::session::headless_claude_posture(Vec::new())
+                .unwrap_or_default()
+                .into_iter()
+                .chain([
+                    "-p".to_string(),
+                    "--permission-mode".to_string(),
+                    "plan".to_string(),
+                    "--permission-prompts".to_string(),
+                    "none".to_string(),
+                    prompt.to_string(),
+                ])
+                .collect(),
+        ),
         VendorAdapter::Headless {
             command: "codex", ..
         } => Some(vec![
@@ -882,8 +892,11 @@ mod tests {
     fn ask_ai_argv_claude_uses_plan_mode_with_no_prompts() {
         let adapter = vendor_adapter("claude").unwrap();
         let argv = ask_ai_argv(&adapter, "REVIEW PROMPT").unwrap();
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        crate::session::assert_headless_posture(&argv, false, "ask-ai");
+        let at = argv.iter().position(|a| a == "-p").unwrap();
         assert_eq!(
-            argv,
+            argv[at..],
             vec![
                 "-p".to_string(),
                 "--permission-mode".to_string(),

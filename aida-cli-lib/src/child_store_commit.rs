@@ -277,6 +277,44 @@ impl StatusEntry {
     }
 }
 
+/// New spec objects in `store` that no commit holds yet (untracked or only
+/// staged-added under `objects/`) and that were written at least `min_age`
+/// ago, waiting for a host commit: a contained session's queued specs, or a
+/// host add whose auto-commit failed or was off.
+/// Returns `(spec_id, age)` sorted by spec ID; an unreadable status is empty.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+pub(crate) fn queued_spec_objects(
+    store: &Path,
+    min_age: std::time::Duration,
+) -> Vec<(String, std::time::Duration)> {
+    let Ok(entries) = store_status(store) else {
+        return Vec::new();
+    };
+    let now = std::time::SystemTime::now();
+    let mut queued: Vec<(String, std::time::Duration)> = entries
+        .iter()
+        .filter(|e| {
+            let mut fields = e.fields.split(' ');
+            match fields.next() {
+                Some("?") => true,
+                Some("1") => fields.next().is_some_and(|xy| xy.starts_with('A')),
+                _ => false,
+            }
+        })
+        .filter(|e| e.path.starts_with("objects/") && e.path.ends_with(".yaml"))
+        .filter_map(|e| {
+            let modified = std::fs::metadata(store.join(&e.path))
+                .and_then(|m| m.modified())
+                .ok()?;
+            let age = now.duration_since(modified).unwrap_or_default();
+            let stem = Path::new(&e.path).file_stem()?.to_str()?.to_string();
+            (age >= min_age).then_some((stem, age))
+        })
+        .collect();
+    queued.sort();
+    queued
+}
+
 /// The store's uncommitted entries (modified, added, deleted, renamed,
 /// copied, unmerged or untracked; ignored files excluded).
 // trace:BUG-2185 | ai:claude

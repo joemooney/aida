@@ -2,6 +2,7 @@
 //!
 //! Handles communication with Claude via CLI or direct API.
 
+use crate::ai::headless_posture::{headless_claude_posture, DISABLE_BACKGROUND_TASKS_ENV};
 use crate::ai::prompts;
 use crate::ai::responses::{
     self, DraftSpecResponse, DuplicatesResponse, EvaluationResponse, GenerateChildrenResponse,
@@ -242,12 +243,11 @@ impl AiClient {
 
     /// Send request via Claude CLI
     fn send_cli_request(&self, cli_path: &PathBuf, prompt: &str) -> Result<String, AiError> {
-        // Use --print flag for non-interactive output
-        // Use -p flag to pass the prompt
         let output = Command::new(cli_path)
-            .arg("--print")
-            .arg("-p")
-            .arg(prompt)
+            .args(claude_print_args(prompt)?)
+            // BUG-050: belt and braces alongside the `--settings` env.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+            .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
             .output()
             .map_err(|e| AiError::CliExecFailed(e.to_string()))?;
 
@@ -272,9 +272,41 @@ impl AiClient {
     }
 }
 
+/// The argv (after the `claude` program) for the AI client's one-shot
+/// `claude --print -p <prompt>`. A print-mode run has no later turn, so it
+/// takes the shared headless posture (no `Monitor`, no background tasks)
+/// first; the posture's variadic tool list is ended by `--print`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+fn claude_print_args(prompt: &str) -> Result<Vec<String>, AiError> {
+    let mut args =
+        headless_claude_posture(Vec::new()).map_err(|e| AiError::CliExecFailed(e.to_string()))?;
+    args.extend(["--print".to_string(), "-p".to_string(), prompt.to_string()]);
+    Ok(args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    #[test]
+    fn the_ai_client_print_run_takes_the_headless_posture() {
+        let args = claude_print_args("hello").unwrap();
+        let at = args
+            .windows(3)
+            .position(|w| w == ["--disallowed-tools", "AskUserQuestion", "Monitor"])
+            .expect("disallowed tools");
+        assert_eq!(args[at + 3], "--print", "{args:?}");
+        let settings_at = args.iter().position(|a| a == "--settings").unwrap();
+        let settings: serde_json::Value = serde_json::from_str(&args[settings_at + 1]).unwrap();
+        assert_eq!(settings["env"][DISABLE_BACKGROUND_TASKS_ENV], "1");
+        assert!(settings["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r == "Monitor"));
+        assert_eq!(&args[args.len() - 2..], ["-p", "hello"]);
+    }
 
     #[test]
     fn test_mode_detection() {
