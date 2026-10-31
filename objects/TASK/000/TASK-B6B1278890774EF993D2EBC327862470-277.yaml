@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.470798142Z
-modified_at: 2026-10-31T22:23:33.532557986Z
+modified_at: 2026-10-31T22:23:40.989046749Z
 req_type: Task
 tags:
 - air-gap
@@ -34,6 +34,12 @@ comments:
   modified_at: 2026-10-31T22:22:45.103918131Z
   session_id: 01a19317-50be-7103-a820-408213c53b0b
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1940f-b9bd-73d2-bf4b-daa9898c3d11
+  author: joe
+  content: 'ADVISOR 15:24: approved. Per AC3, describe single-hub mode (STORY-HOME-164, which superseded 165) as planned, not current, unless 164 has merged when you write it. Docs-only: FASTTRACK gate (make check-ci-fast).'
+  created_at: 2026-10-31T22:23:40.989046749Z
+  modified_at: 2026-10-31T22:23:40.989046749Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1940f-9c9c-7bc2-b372-5391b71b2076
   author: joe
