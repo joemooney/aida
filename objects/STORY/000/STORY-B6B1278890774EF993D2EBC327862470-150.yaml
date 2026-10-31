@@ -2,12 +2,12 @@ id: 01a19198-a973-72a0-a5cb-75f41ebbe7e6
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-150
 title: aida agent new --rotate for Codex sessions (follow-on to STORY-HOME-101)
 description: 'STORY-HOME-101 ships rotation supervision for Claude only (advisor signoff 2026-10-31 04:00, Q5). Codex shares run_tracked_agent_after_spawn, but its native thread id is known only after startup, so freshness falls back to ts >= spawn plus a handle match, and mail-wake re-arming must be stamped per generation. Acceptance: (1) --rotate works for codex with the same handle, lease and worktree; (2) freshness uses the thread id once known, else the ts fallback, tested; (3) mail-wake is re-armed for every generation, tested.'
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T10:54:23.603768457Z
-modified_at: 2026-10-31T14:30:49.027356413Z
+modified_at: 2026-10-31T15:20:55.941722793Z
 req_type: Story
 tags:
 - agents
@@ -66,6 +66,15 @@ history:
   session_id: 01a1925c9298
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1928c-affc-77e1-a685-6262222587a2
+  author: joe
+  timestamp: 2026-10-31T15:20:56.060815539Z
+  session_id: 01a1925c9298
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 273549a2d9d738b1846028776855309da26a2ef7
   branch: main
@@ -74,3 +83,7 @@ filed_at:
   aida_build_sha: 361910ec4a0
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T15:20:55.941722793Z
+  implemented_by: joe

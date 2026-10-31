@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-150",
+  "publishes": [
+    {
+      "at": "2026-10-31T15:20:57.988459785Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-31T14:28:40.673416638Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-150",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}
