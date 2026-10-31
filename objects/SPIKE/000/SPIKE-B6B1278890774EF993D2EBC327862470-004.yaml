@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-10-31T20:19:10.427794357Z
+modified_at: 2026-10-31T20:19:38.986729363Z
 req_type: Spike
 tags:
 - air-gap
@@ -32,6 +32,13 @@ relationships:
   target_id: 01a1936d-7960-7510-8d5f-dfe276da71b9
   created_at: 2026-10-31T20:18:37.615689645Z
   created_by: joe
+comments:
+- id: 01a1939e-2b6a-7811-8836-4dec1dda3448
+  author: joe
+  content: 'ADVISOR BRIEF 13:22: run the probes in the description against two local bare repos in $TMPDIR (no network, no real hubs). Deliverable: findings doc at docs/plans/2026-10-31-airgap-bundle-grants.md answering each question with the probe command and its output, plus a recommendation; open a docs-only PR. LIGHT gate: make check-ci-fast.'
+  created_at: 2026-10-31T20:19:38.986729363Z
+  modified_at: 2026-10-31T20:19:38.986729363Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939d-5b6e-77e1-a48f-f78d777d0267
   author: joe
