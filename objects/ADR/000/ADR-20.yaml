@@ -2,7 +2,7 @@ id: 019f7d2f-ab88-7902-91b9-28bc9af29d91
 spec_id: ADR-20
 agreed_id: ADR-20
 title: Scoped advisors decide only local/reversible/grounded; cross-subsystem, keystone, security, contracts default to master-or-human (ratifies PROPOSAL-master-advisor-arbitration)
-description: 'Operator ratified 2026-07-19: subsystem advisor authority narrows with scope — in-fence, grounded, reversible only; conflicts, keystone/security, public contracts, file formats, orchestrator semantics, lifecycle vocabulary stay with the master advisor or human gate unless explicitly delegated. Delivers TASK-0437.'
+description: 'Operator ratified 2026-07-19: subsystem advisor authority narrows with scope — in-fence, grounded, reversible only; conflicts, keystone/security, public contracts, file formats, orchestrator semantics, lifecycle vocabulary stay with the master advisor or human gate unless explicitly delegated. Delivers TASK-b6b1278890774ef993d2ebc327862470-270.'
 status: Approved
 priority: Medium
 owner: ''
@@ -14,5 +14,11 @@ tags:
 - adr
 - from-ratification
 - subsystems
+history:
+- id: 01a192ac-bb97-7530-a7f4-71726957c721
+  author: joe
+  timestamp: 2026-10-31T15:55:56.183015024Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-07-20T01:42:04.202623625Z

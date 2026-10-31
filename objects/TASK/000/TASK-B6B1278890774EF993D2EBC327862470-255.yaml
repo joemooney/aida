@@ -1,5 +1,5 @@
 id: 019ef78b-9e9c-7fe2-8133-f5d0af2a94fe
-spec_id: TASK-0420
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-255
 title: Review Claude-to-Codex migration guidance for accuracy and tone
 description: |-
   Review docs/agents/porting-claude-code-to-codex.md and the cross-link added to docs/agents/cross-agent-onboarding.md.
@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:03.004224420Z
-modified_at: 2026-06-25T07:43:54.156410703Z
+modified_at: 2026-10-31T15:54:46.711277886Z
 req_type: Task
 tags:
 - docs-review
@@ -64,6 +64,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ab-ac37-76c1-945c-000f34e44834
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.711277522Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-0420
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-255
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-0420 (now resolve to the survivor): 7be3b56ce4b7593b3b0c3d5472ae07e4be97d12b 4ed99484c85c9f8335a6bfc67feb1e13fd4c8973'
 implementation_info:
   implemented: false
   completed_at: 2026-06-25T07:43:51.999567872Z

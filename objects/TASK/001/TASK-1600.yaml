@@ -56,17 +56,17 @@ comments:
   modified_at: 2026-10-06T05:14:54.587943646Z
 - id: 01a10fa3-8daa-7c62-9ca3-4390352a5a96
   author: mcp
-  content: Independent review handoff recorded as STORY-0444, linked with implements/implemented-by. MCP intake filed it Draft and queued it for advisor triage; no authority override or self-approval was used. PR 2438 is open with CI pending.
+  content: Independent review handoff recorded as STORY-b6b1278890774ef993d2ebc327862470-253, linked with implements/implemented-by. MCP intake filed it Draft and queued it for advisor triage; no authority override or self-approval was used. PR 2438 is open with CI pending.
   created_at: 2026-10-06T05:15:39.306704422Z
   modified_at: 2026-10-06T05:15:39.306704422Z
 - id: 01a10fa3-d60d-7660-b336-7199bee43da7
   author: mcp
-  content: 'Correction to the preceding handoff note: STORY-0444 was created and queued for advisor triage, but the implements/implemented-by graph writes did NOT succeed. Both add_relationship calls were refused with ''MCP tool call requires approval, but approval policy is never''. The review-to-implementation connection is recorded in the review description and these comments; graph edges remain for the advisor to add.'
+  content: 'Correction to the preceding handoff note: STORY-b6b1278890774ef993d2ebc327862470-253 was created and queued for advisor triage, but the implements/implemented-by graph writes did NOT succeed. Both add_relationship calls were refused with ''MCP tool call requires approval, but approval policy is never''. The review-to-implementation connection is recorded in the review description and these comments; graph edges remain for the advisor to add.'
   created_at: 2026-10-06T05:15:57.837048849Z
   modified_at: 2026-10-06T05:15:57.837048849Z
 - id: 01a10fa7-6c6a-7731-a0d8-d20d007fe7d4
   author: joe
-  content: 'Advisor flag 22:20: spec reads DONE while PR 2438 is still OPEN and unreviewed — premature completion (same disease this spec exists to fix; nothing merged under the trailer yet). Guided-mode gate still applies: PR 2438 must not merge without review sign-off. Review story STORY-0444 is queued. If review requests changes, rework will reset the status; if the PR is abandoned, this Done is false and must be reverted.'
+  content: 'Advisor flag 22:20: spec reads DONE while PR 2438 is still OPEN and unreviewed — premature completion (same disease this spec exists to fix; nothing merged under the trailer yet). Guided-mode gate still applies: PR 2438 must not merge without review sign-off. Review story STORY-b6b1278890774ef993d2ebc327862470-253 is queued. If review requests changes, rework will reset the status; if the PR is abandoned, this Done is false and must be reverted.'
   created_at: 2026-10-06T05:19:52.938484652Z
   modified_at: 2026-10-06T05:19:52.938484652Z
   session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
@@ -99,6 +99,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a192ac-4032-72d1-80aa-3a816e49470a
+  author: joe
+  timestamp: 2026-10-31T15:55:24.594676118Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 processing_record:
 - id: 01a10fc7-b92f-7d20-8267-edc1fec64d25
   timestamp: 2026-10-06T05:55:09.743908043Z

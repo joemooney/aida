@@ -2,7 +2,7 @@ id: 01a0508a-5e3b-7b03-b865-19cd37d5d195
 spec_id: TASK-1-126
 agreed_id: TASK-150
 title: Codex pickup prompt references unavailable aida-pickup skill
-description: Headless TASK-0426 pickup prompt instructed Codex to follow the AIDA skill `aida-pickup`, but this Codex session did not list that skill under available skills. The workflow was still executable from the pasted instructions and AIDA CLI commands, but the missing skill means future headless drains may rely on prompt fallback instead of progressive-disclosure skill instructions.
+description: Headless TASK-b6b1278890774ef993d2ebc327862470-261 pickup prompt instructed Codex to follow the AIDA skill `aida-pickup`, but this Codex session did not list that skill under available skills. The workflow was still executable from the pasted instructions and AIDA CLI commands, but the missing skill means future headless drains may rely on prompt fallback instead of progressive-disclosure skill instructions.
 status: Completed
 priority: Low
 owner: joe
@@ -33,6 +33,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a192ac-3291-73b2-bcbd-756b17e2c867
+  author: joe
+  timestamp: 2026-10-31T15:55:21.105494675Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 processing_record:
 - id: 01a05b50-b91b-70b3-8987-91f5c96b1e89
   timestamp: 2026-09-01T04:53:32.059216900Z

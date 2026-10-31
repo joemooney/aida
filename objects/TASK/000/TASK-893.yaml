@@ -5,7 +5,7 @@ title: When Codex ships command-backed status lines, wire aida statusline into t
 description: |-
   WATCH / DEFERRED — no active AIDA work until the upstream trigger fires.
 
-  The AIDA-side Codex status fallback is ALREADY DONE: TASK-0413 scaffolded the [tui] status_line guidance + the "Codex has no command-backed status line" explanation; TASK-0414 shipped the opt-in aida-statusline bootstrap; docs/agents/codex-mcp-setup.md documents both. The only remaining piece is UPSTREAM and outside AIDA's control: Codex CLI does not support command-backed status lines (open FR: github.com/openai/codex issues #20043 and #20244).
+  The AIDA-side Codex status fallback is ALREADY DONE: TASK-b6b1278890774ef993d2ebc327862470-249 scaffolded the [tui] status_line guidance + the "Codex has no command-backed status line" explanation; TASK-0414 shipped the opt-in aida-statusline bootstrap; docs/agents/codex-mcp-setup.md documents both. The only remaining piece is UPSTREAM and outside AIDA's control: Codex CLI does not support command-backed status lines (open FR: github.com/openai/codex issues #20043 and #20244).
 
   REVISIT TRIGGER: when Codex ships command-backed status_line support, wire aida statusline (--color=always) into the Codex footer the way it drives Claude Code's statusLine.command, and refresh docs/agents/codex-mcp-setup.md + porting-claude-code-to-codex.md Appendix A.5.
 
@@ -23,6 +23,12 @@ tags:
 - parent:EPIC-0419
 - statusline
 - watch
+history:
+- id: 01a192ac-17ee-79d2-b225-21d52db62ccc
+  author: joe
+  timestamp: 2026-10-31T15:55:14.286330022Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 deferred: true
 deferred_at: 2026-07-20T04:46:36.222609208Z
 deferred_until: Codex ships command-backed status lines

@@ -8,7 +8,7 @@ description: |
 
   Acceptance:
   1. The home primary is root (`aida node enroll-root`, or a documented equivalent) and holds or grants agreed-ID blocks per type. `aida add` assigns the next agreed ID from this node's block AND a local ID in one write.
-  2. A clone without a usable block assigns a local ID only and marks the spec 'agreed id pending'. The next sync that reaches a block-holder assigns the agreed ID (the existing merge-gate promotion path; see TASK-446).
+  2. A clone without a usable block assigns a local ID only and marks the spec 'agreed id pending'. The next sync that reaches a block-holder assigns the agreed ID (the existing merge-gate promotion path; see TASK-b6b1278890774ef993d2ebc327862470-274).
   3. Backfill (one-time surgery, allowed): assign agreed IDs to every local-only spec, recorded as an alias, so existing local IDs, trailers and trace comments still resolve.
   4. `aida show` and `aida list` display the agreed ID first and the local ID beside it.
   5. Finish STORY-HOME-095 slice 2: effective_policy refuses when the local role says root but registry/root.yaml names another holder, plus dispensing from delegated blocks.
@@ -60,6 +60,11 @@ history:
   author: joe
   timestamp: 2026-10-30T05:00:49.743040769Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+  changes: []
+- id: 01a192ac-8c44-7a72-bb1e-d8e141d124e4
+  author: joe
+  timestamp: 2026-10-31T15:55:44.068429565Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c

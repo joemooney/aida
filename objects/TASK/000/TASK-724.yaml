@@ -1,9 +1,9 @@
 id: 019eb033-bd5c-7070-8228-2507e933ecfd
 spec_id: TASK-724
 agreed_id: TASK-724
-title: 'Spec Kit/OpenSpec/Kiro import: dry-run PREVIEW only (read-only) — TASK-0416 safe slice'
+title: 'Spec Kit/OpenSpec/Kiro import: dry-run PREVIEW only (read-only) — TASK-b6b1278890774ef993d2ebc327862470-252 safe slice'
 description: |-
-  SAFE drainable slice of TASK-0416 (parent stays parked for the actual graph-WRITING import + the import contract — operator wants that in the loop). Scope: a READ-ONLY preview, writes NOTHING to the graph:
+  SAFE drainable slice of TASK-b6b1278890774ef993d2ebc327862470-252 (parent stays parked for the actual graph-WRITING import + the import contract — operator wants that in the loop). Scope: a READ-ONLY preview, writes NOTHING to the graph:
   `aida import --dry-run <path> [--format spec-kit|openspec|kiro|auto]` parses neighbor artifacts (Spec Kit `specs/<f>/spec.md|plan.md|tasks.md`, OpenSpec `openspec/changes/<n>/...`, Kiro `requirements.md|design.md|tasks.md`), infers the records + parent/child/task edges it WOULD create, and prints a diff/preview with original artifact paths as references + source/provenance tags. Never overwrites source artifacts; never mutates the graph.
   EXCLUDED (deferred to parent / keyboard): the actual write-import, stable-ID assignment, dedup-on-conflict (the import contract).
   Acceptance: `aida import --dry-run <path>` auto-detects the format, prints would-create records + edges + provenance, exits with ZERO graph mutation; `--format` override works; absent/garbage path errors cleanly.
@@ -44,7 +44,7 @@ comments:
 - id: 01a108b1-1c2c-752c-aad1-9fb937976181
   author: joe
   content: |
-    Operator decision (Joe, 2026-10-04): not wanted — rejected and dequeued, overriding the earlier same-day salvage disposition. The July implementation remains on origin/task-724-import-dry-run-preview until that branch is deleted; if the import-preview idea ever returns, parent TASK-0416 is the place to revive it.
+    Operator decision (Joe, 2026-10-04): not wanted — rejected and dequeued, overriding the earlier same-day salvage disposition. The July implementation remains on origin/task-724-import-dry-run-preview until that branch is deleted; if the import-preview idea ever returns, parent TASK-b6b1278890774ef993d2ebc327862470-252 is the place to revive it.
   created_at: 2026-10-04T20:53:07.244803409Z
   modified_at: 2026-10-04T20:53:07.244803409Z
   session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
@@ -56,3 +56,8 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Rejected
+- id: 01a192ac-289c-74e2-8c91-4b5945ee17d4
+  author: joe
+  timestamp: 2026-10-31T15:55:18.556465951Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []

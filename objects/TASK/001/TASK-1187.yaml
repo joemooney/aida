@@ -3,9 +3,9 @@ spec_id: TASK-1187
 agreed_id: TASK-1187
 title: Align public README/overview AIDA pitch with migration positioning
 description: |-
-  Follow-up from TASK-0426, RE-SCOPED 2026-08-29 to the champion-product positioning (operator mandate: drop the research framing; build AIDA to win — see docs/competitive-analysis/2026-08-29-delta-champion-pivot.md).
+  Follow-up from TASK-b6b1278890774ef993d2ebc327862470-261, RE-SCOPED 2026-08-29 to the champion-product positioning (operator mandate: drop the research framing; build AIDA to win — see docs/competitive-analysis/2026-08-29-delta-champion-pivot.md).
 
-  The TASK-0426 merge (commit ab54b89) introduced "work-in-progress infrastructure project" and "closer to a research-grade substrate" into docs/agents/porting-claude-code-to-codex.md — that is the SUPERSEDED pre-pivot posture and must not be the public voice.
+  The TASK-b6b1278890774ef993d2ebc327862470-261 merge (commit ab54b89) introduced "work-in-progress infrastructure project" and "closer to a research-grade substrate" into docs/agents/porting-claude-code-to-codex.md — that is the SUPERSEDED pre-pivot posture and must not be the public voice.
 
   Acceptance:
   - Rewrite the AIDA positioning section in docs/agents/porting-claude-code-to-codex.md in the champion framing: AIDA is the agent-collaboration layer — stable spec IDs, typed relationships, code-to-spec traces, cross-vendor coordination (Claude Code + Codex parity) — stated as product strengths, not research hedges. No "research-grade", no "work-in-progress" identity language anywhere in the section.
@@ -33,6 +33,12 @@ relationships:
   target_id: 01a050ca-44bb-7683-8d00-d2e433ba06b5
   created_at: 2026-08-30T03:50:33.187161504Z
   created_by: joe
+history:
+- id: 01a192ac-4b05-7070-b675-72f779160188
+  author: joe
+  timestamp: 2026-10-31T15:55:27.365757043Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 execution_mode: drain
 implementation_info:
   implemented: true

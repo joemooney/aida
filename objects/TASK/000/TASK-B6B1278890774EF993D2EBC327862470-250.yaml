@@ -1,6 +1,5 @@
 id: 019e466d-f21a-7461-9c1e-5f769b1ffce4
-spec_id: TASK-414
-agreed_id: TASK-414
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-250
 title: simple-mode-with-more-items State preamble PR row should include 'no PR yet' variant
 description: |
   In `aida-core/templates/skills/aida-pickup.md` § Step 6 *Simple mode, queue has more items routed to this role* template (PR-130, around line 853):
@@ -27,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:27:51.066453970Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-10-31T15:54:46.699047844Z
 req_type: Task
 tags:
 - batch:overnight-2026-05-23
@@ -50,6 +49,17 @@ comments:
     Test status: docs-only change (markdown template); no test suite impact. cargo fmt --all --check passes.
   created_at: 2026-05-23T06:59:45.710097083Z
   modified_at: 2026-05-23T06:59:45.710097083Z
+history:
+- id: 01a192ab-ac2b-7d30-99c1-99ce51aba3db
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.699047767Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-414
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-250
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-414 (now resolve to the survivor): e15fffd87b2dd9b9ba9e6b7948e90d38ff025e6f'
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

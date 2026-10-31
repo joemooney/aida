@@ -1,6 +1,5 @@
 id: 019e4695-748b-76b0-9934-3def29d2b278
-spec_id: TASK-418
-agreed_id: TASK-418
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-254
 title: headless tail --since filters only events carrying a timestamp
 description: |
   TASK-398's `--since <duration>` filters events that carry a `timestamp` field
@@ -28,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T18:11:00.363548308Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-10-31T15:54:46.689777777Z
 req_type: Task
 tags:
 - from-implementer:TASK-398
@@ -40,5 +39,16 @@ comments:
   content: 'Dismissed by joe 2026-05-21: Defensible constraint. Events without timestamps cannot be filtered by time by definition — the alternative would be to either include all untimestamped events (defeating --since''s purpose) or drop them silently (data loss). The current behavior is the principled choice; --help text could mention it as a follow-up if confusion recurs.'
   created_at: 2026-05-21T04:48:55.829654493Z
   modified_at: 2026-05-21T04:48:55.829654493Z
+history:
+- id: 01a192ab-ac21-7c30-befc-a319490cd38d
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.689777706Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-418
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-254
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-418 (now resolve to the survivor): d12cca28a61c8f00c7d30cb4a4cafc7e3566104b ba3d5dbe0732ded54cc088e55ac7786fdf1301e4'
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z

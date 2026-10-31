@@ -61,7 +61,7 @@ description: |-
   ## Out of scope
 
   - Retry logic for the headless Claude sessions' own gh invocations (those happen inside skill code; covered by BUG-257 in spirit, but the skill template would need its own retry — separate concern).
-  - Retry across phases (if phase 4 fails permanently, don't auto-resume from phase 1 — that's TASK-396 territory).
+  - Retry across phases (if phase 4 fails permanently, don't auto-resume from phase 1 — that's TASK-b6b1278890774ef993d2ebc327862470-247 territory).
   - Adaptive retry (longer backoff during widespread outages). Fixed 3-attempt policy is sufficient; the \"is the API broken\" question is for the orchestrator's final-classification logic.
 
   ## Composes with
@@ -119,9 +119,15 @@ comments:
   author: joe
   content: |-
     [aida:followups] extracted from docs/plans/2026-05-21-bug-286-network-retry.md
-    filed 3 task(s): TASK-432, TASK-433, TASK-434
+    filed 3 task(s): TASK-b6b1278890774ef993d2ebc327862470-266, TASK-433, TASK-b6b1278890774ef993d2ebc327862470-267
   created_at: 2026-05-21T17:03:57.332333787Z
   modified_at: 2026-05-21T17:03:57.332333787Z
+history:
+- id: 01a192ac-5f96-7492-a9c5-f22a26aa8fff
+  author: joe
+  timestamp: 2026-10-31T15:55:32.630698784Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

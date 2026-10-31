@@ -1,5 +1,5 @@
 id: 019eaa0a-fa8d-7f01-bc48-8a2f06ad2d9c
-spec_id: TASK-0413
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-249
 title: Document and scaffold Codex status-line support
 description: 'Add Codex-facing AIDA guidance for Codex CLI''s built-in status_line footer. Acceptance criteria: AGENTS.md/Codex setup docs explain that Codex supports built-in footer items via [tui].status_line but does not currently support Claude Code-style arbitrary command status lines; AIDA''s existing `aida statusline` remains the command-backed source for Claude Code and shell use; scaffolded Codex guidance gives a concrete `~/.codex/config.toml` or `.codex/config.toml` snippet using built-in status_line IDs that complement AIDA sessions without claiming command execution support.'
 status: Completed
@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-09T01:41:46.765929805Z
-modified_at: 2026-06-09T06:12:20.556194273Z
+modified_at: 2026-10-31T15:54:46.696876528Z
 req_type: Task
 tags:
 - codex
@@ -21,6 +21,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ab-ac28-75f3-acad-cf850fbe7cdc
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.696876136Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-0413
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-249
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-0413 (now resolve to the survivor): 4ed99484c85c9f8335a6bfc67feb1e13fd4c8973 d33dc5a14c375171dfedb3b62bb2a9bbb7d57e8f'
 implementation_info:
   implemented: false
   completed_at: 2026-06-09T06:12:20.556194273Z

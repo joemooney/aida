@@ -1,7 +1,7 @@
 id: 019e53a2-8680-7530-be26-0fa51dd10f77
 spec_id: STORY-427
 agreed_id: STORY-427
-title: 'Review PR-232: [AI:claude] docs(skill): add ''no PR yet'' variant to simple-more PR preamble row (TASK-414)'
+title: 'Review PR-232: [AI:claude] docs(skill): add ''no PR yet'' variant to simple-more PR preamble row (TASK-b6b1278890774ef993d2ebc327862470-250)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e539f`) for branch `task-414`.
 
@@ -10,7 +10,7 @@ description: |
 
   ## Covers
 
-  - TASK-414
+  - TASK-b6b1278890774ef993d2ebc327862470-250
 
   ## Acceptance
 
@@ -36,6 +36,12 @@ comments:
   content: 'Auto-completed: PR #232 merged without a re-review iteration — the review story was left at In Progress.'
   created_at: 2026-05-23T07:10:29.597974856Z
   modified_at: 2026-05-23T07:10:29.597974856Z
+history:
+- id: 01a192ac-8faa-7101-8d6c-5110427fce44
+  author: joe
+  timestamp: 2026-10-31T15:55:44.938731634Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

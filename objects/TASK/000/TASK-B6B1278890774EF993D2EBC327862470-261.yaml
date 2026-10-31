@@ -1,5 +1,5 @@
 id: 019ef78c-06e8-7663-b405-511443cd2641
-spec_id: TASK-0426
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-261
 title: Refine external-facing AIDA positioning for agent migration audiences
 description: |-
   Refine the message for readers who are evaluating Claude Code, Codex CLI, and the broader AI coding-agent landscape, but do not already know AIDA.
@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.704172938Z
-modified_at: 2026-08-30T02:52:23.788460817Z
+modified_at: 2026-10-31T15:54:46.698994459Z
 req_type: Task
 tags:
 - docs-review
@@ -47,6 +47,16 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a192ab-ac2a-7571-90f4-d64fa7995c86
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.698994152Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-0426
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-261
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-0426 (now resolve to the survivor): ab54b896bcb746c5e21bf2e4aac265a9f8eca080'
 processing_record:
 - id: 01a05095-196c-7030-9544-d42516060aae
   timestamp: 2026-08-30T02:52:23.788460339Z

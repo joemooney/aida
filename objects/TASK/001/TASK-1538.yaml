@@ -596,7 +596,7 @@ comments:
     - slice-28-r2 questions 295f8bf9c7 (2635)
     - slice-29-r2 session_end d845bdd69c (1765)
     verify_stack ad50bb8233..slice-25: 7 commits (5 MOVE, 1 RETARGET, 1 TOOLING), checks 1-8 PASS. merge-tree into current origin/main 97453570d6 is clean (4 newer commits; none touch the moved text).
-    Conflicts carried into the MOVEs, so removed and added text match: (1) #2506's warn_if_pulled_binary_stale hint (`aida dev build`) is in upgrade_release.rs; (2) main's new `#[path = "tests/bug_0445_init_side_channel_tests.rs"] mod bug_0445_init_side_channel_tests;` (trace BUG-0445) is in session_end.rs after task_1171; (3) STORY-1641's names_self check in export_coordinating_bin_env is in orchestrator_leases.rs; (4) the lib.rs dev_build wiring auto-merged and is correct.
+    Conflicts carried into the MOVEs, so removed and added text match: (1) #2506's warn_if_pulled_binary_stale hint (`aida dev build`) is in upgrade_release.rs; (2) main's new `#[path = "tests/bug_0445_init_side_channel_tests.rs"] mod bug_0445_init_side_channel_tests;` (trace BUG-b6b1278890774ef993d2ebc327862470-149) is in session_end.rs after task_1171; (3) STORY-1641's names_self check in export_coordinating_bin_env is in orchestrator_leases.rs; (4) the lib.rs dev_build wiring auto-merged and is correct.
     Proof note: the first r2 attempt ran two lanes under host load ~60 and hit timing tests the moves don't touch. I filed BUG-1966 (bug_1683 two_hour_live_lock: fixture wraps each aida call in `timeout 30`; it also fails 1/5 on main ad50bb8233 under the same load), BUG-1967 (bug_1674 show_is_bounded 5 s ceiling, 26 s under load) and BUG-1968 (task_1507 bug_1923 failure-count race). Also open: BUG-1964 and BUG-1965 from earlier. The proof script lacked --no-fail-fast, so those failed runs stopped early; it now runs every binary. The tagged proofs are complete green re-runs.
 
     RUN 8 PROCESS FIXES (your 07:20 review):
@@ -1127,6 +1127,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ac-3cd0-7471-82bc-265c19cad67d
+  author: joe
+  timestamp: 2026-10-31T15:55:23.728463678Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 processing_record:
 - id: 01a10caf-6400-7440-9444-fb3c90eb3ecd
   timestamp: 2026-10-05T15:29:43.424798491Z

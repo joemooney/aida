@@ -1,9 +1,9 @@
 id: 019e5291-adea-7142-a5d4-ca9bacdd411f
 spec_id: BUG-349
 agreed_id: BUG-349
-title: 'auto-complete failure: phase 3 (reviewer) on TASK-417'
+title: 'auto-complete failure: phase 3 (reviewer) on TASK-b6b1278890774ef993d2ebc327862470-253'
 description: |
-  Auto-drafted by `aida queue work TASK-417 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+  Auto-drafted by `aida queue work TASK-b6b1278890774ef993d2ebc327862470-253 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
 
@@ -30,7 +30,7 @@ description: |
 
   ## Recovery hint shown to the user
 
-  Address the review feedback, then push fixups: `aida queue rework TASK-417 --work`
+  Address the review feedback, then push fixups: `aida queue rework TASK-b6b1278890774ef993d2ebc327862470-253 --work`
 
   ## Phase durations
 
@@ -43,7 +43,7 @@ description: |
   The line appended to `~/.aida/auto-complete.jsonl` for this run:
 
   ```json
-  {"spec_id":"TASK-417","started_at":"2026-05-23T01:55:03.570429731+00:00","completed_at":"2026-05-23T02:02:16.888526954+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"PR-224 base is 1 commit behind origin and overlaps 9 files touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  CLAUDE.md\n  aida-cli/src/cli.rs\n  aida-cli/src/main.rs\n  aida-core/templates/docs/aida-discipline/README.md\n  aida-core/templates/docs/aida-discipline/robust-project-root-resolution.md\n  aida-core/templates/memories/feedback_robust_project_root_resolution.md\n  docs/aida-discipline/README.md\n  docs/aida-discipline/robust-project-root-resolution.md\n  aida-cli/src/drain_state.rs\n\nRecover with:\n  aida pr rebase 224              # clean rebase + force-push-with-lease\n  aida pr rebase 224 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code).","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":191230},{"phase":2,"slug":"ci","elapsed_ms":235664},{"phase":3,"slug":"reviewer","elapsed_ms":4500}],"total_ms":433317,"binary_sha":"439245eb"}
+  {"spec_id":"TASK-b6b1278890774ef993d2ebc327862470-253","started_at":"2026-05-23T01:55:03.570429731+00:00","completed_at":"2026-05-23T02:02:16.888526954+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"PR-224 base is 1 commit behind origin and overlaps 9 files touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  CLAUDE.md\n  aida-cli/src/cli.rs\n  aida-cli/src/main.rs\n  aida-core/templates/docs/aida-discipline/README.md\n  aida-core/templates/docs/aida-discipline/robust-project-root-resolution.md\n  aida-core/templates/memories/feedback_robust_project_root_resolution.md\n  docs/aida-discipline/README.md\n  docs/aida-discipline/robust-project-root-resolution.md\n  aida-cli/src/drain_state.rs\n\nRecover with:\n  aida pr rebase 224              # clean rebase + force-push-with-lease\n  aida pr rebase 224 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code).","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":191230},{"phase":2,"slug":"ci","elapsed_ms":235664},{"phase":3,"slug":"reviewer","elapsed_ms":4500}],"total_ms":433317,"binary_sha":"439245eb"}
   ```
 
   ## Recurse-fix
@@ -64,8 +64,14 @@ tags:
 comments:
 - id: 019e7b92-1766-7f32-a1a7-d47a1f391c7c
   author: joe
-  content: 'Bulk-triaged 2026-05-30 (operator-approved): auto-drafted failure-event telemetry; referenced TASK-417 recovered to Completed, so the phase failure was transient/moot. Real orchestrator failure classes are captured by TASK-133 / TASK-136 / TASK-137. Audit trail preserved.'
+  content: 'Bulk-triaged 2026-05-30 (operator-approved): auto-drafted failure-event telemetry; referenced TASK-b6b1278890774ef993d2ebc327862470-253 recovered to Completed, so the phase failure was transient/moot. Real orchestrator failure classes are captured by TASK-133 / TASK-136 / TASK-137. Audit trail preserved.'
   created_at: 2026-05-31T01:07:12.358973770Z
   modified_at: 2026-05-31T01:07:12.358973770Z
+history:
+- id: 01a192ac-4e80-7d83-a11b-db005e44e4d9
+  author: joe
+  timestamp: 2026-10-31T15:55:28.256325375Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-11T12:48:31.383831391Z

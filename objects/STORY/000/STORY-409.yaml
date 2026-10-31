@@ -1,7 +1,7 @@
 id: 019e5097-eb6f-7312-bea1-28670c057b4a
 spec_id: STORY-409
 agreed_id: STORY-409
-title: 'Review PR-180: fix(mcp): close claim_task TOCTOU via O_EXCL spec-keyed lease (TASK-438)'
+title: 'Review PR-180: fix(mcp): close claim_task TOCTOU via O_EXCL spec-keyed lease (TASK-b6b1278890774ef993d2ebc327862470-271)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `019e5089`) for branch `task-438`.
 
@@ -10,7 +10,7 @@ description: |
 
   ## Covers
 
-  - TASK-438
+  - TASK-b6b1278890774ef993d2ebc327862470-271
 
   ## Acceptance
 
@@ -36,6 +36,12 @@ comments:
   content: 'Auto-completed: PR #180 merged without a re-review iteration — the review story was left at In Progress.'
   created_at: 2026-05-22T16:55:23.558372894Z
   modified_at: 2026-05-22T16:55:23.558372894Z
+history:
+- id: 01a192ac-88f5-7070-a9bd-a1877191426e
+  author: joe
+  timestamp: 2026-10-31T15:55:43.221134685Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

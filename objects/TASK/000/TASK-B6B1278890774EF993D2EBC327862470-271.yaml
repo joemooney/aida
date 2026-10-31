@@ -1,6 +1,5 @@
 id: 019e4bc9-76b4-7523-9b56-48ca581fe6e8
-spec_id: TASK-438
-agreed_id: TASK-438
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-271
 title: 'MCP tool_claim_task: TOCTOU race lets two concurrent claims on the same spec both succeed'
 description: |
   `aida-cli/src/mcp.rs:999-1047` (`tool_claim_task`) reads `.aida/sessions/*.toml` to look for an existing lease over the spec, then writes a new lease via `write_atomic` if none was found. The check and the write are not atomic — two MCP clients calling `claim_task` on the same spec concurrently can both pass the existence check and both end up with leases.
@@ -15,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T18:25:54.868058122Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-10-31T15:54:46.694372449Z
 req_type: Task
 tags:
 - from-review:PR-162
@@ -26,6 +25,17 @@ relationships:
   target_id: 019e5097-eb6f-7312-bea1-28670c057b4a
   created_at: 2026-05-22T16:49:59.608809076Z
   created_by: joe
+history:
+- id: 01a192ab-ac26-7d00-a89e-4028dbd58a7a
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.694372027Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-438
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-271
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-438 (now resolve to the survivor): 47b8fa2d1a097da7ac39529ecdf3410d2b0b06c4 9edd933344df61b8ea3b6dab317687501baafb28'
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

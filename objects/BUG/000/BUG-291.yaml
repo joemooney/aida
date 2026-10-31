@@ -1,9 +1,9 @@
 id: 019e4dda-423a-7081-a984-c7fe18f03bf4
 spec_id: BUG-291
 agreed_id: BUG-291
-title: 'auto-complete failure: phase 3 (reviewer) on TASK-439'
+title: 'auto-complete failure: phase 3 (reviewer) on TASK-b6b1278890774ef993d2ebc327862470-272'
 description: |
-  Auto-drafted by `aida queue work TASK-439 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+  Auto-drafted by `aida queue work TASK-b6b1278890774ef993d2ebc327862470-272 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
 
@@ -13,7 +13,7 @@ description: |
 
   ## Recovery hint shown to the user
 
-  Address the review feedback, then push fixups: `aida queue rework TASK-439 --work`
+  Address the review feedback, then push fixups: `aida queue rework TASK-b6b1278890774ef993d2ebc327862470-272 --work`
 
   ## Phase durations
 
@@ -26,7 +26,7 @@ description: |
   The line appended to `~/.aida/auto-complete.jsonl` for this run:
 
   ```json
-  {"spec_id":"TASK-439","started_at":"2026-05-22T03:57:15.131940749+00:00","completed_at":"2026-05-22T04:03:21.881229180+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"the reviewer session exited 1","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":153413},{"phase":2,"slug":"ci","elapsed_ms":204355},{"phase":3,"slug":"reviewer","elapsed_ms":8018}],"total_ms":366749,"binary_sha":"aa983452"}
+  {"spec_id":"TASK-b6b1278890774ef993d2ebc327862470-272","started_at":"2026-05-22T03:57:15.131940749+00:00","completed_at":"2026-05-22T04:03:21.881229180+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"the reviewer session exited 1","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":153413},{"phase":2,"slug":"ci","elapsed_ms":204355},{"phase":3,"slug":"reviewer","elapsed_ms":8018}],"total_ms":366749,"binary_sha":"aa983452"}
   ```
 
   ## Recurse-fix
@@ -47,8 +47,14 @@ tags:
 comments:
 - id: 019e7b94-73f1-71d2-af5b-807f558811cf
   author: joe
-  content: 'Bulk-triaged 2026-05-30 (operator-approved): auto-drafted failure-event telemetry; referenced TASK-439 recovered to Completed, so the phase failure was transient/moot. Real orchestrator failure classes are captured by TASK-133 / TASK-136 / TASK-137. Audit trail preserved.'
+  content: 'Bulk-triaged 2026-05-30 (operator-approved): auto-drafted failure-event telemetry; referenced TASK-b6b1278890774ef993d2ebc327862470-272 recovered to Completed, so the phase failure was transient/moot. Real orchestrator failure classes are captured by TASK-133 / TASK-136 / TASK-137. Audit trail preserved.'
   created_at: 2026-05-31T01:09:47.121496590Z
   modified_at: 2026-05-31T01:09:47.121496590Z
+history:
+- id: 01a192ac-6d17-7e51-961e-28eb61238d44
+  author: joe
+  timestamp: 2026-10-31T15:55:36.087352351Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-11T12:48:31.383831391Z

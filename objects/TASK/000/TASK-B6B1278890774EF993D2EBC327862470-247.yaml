@@ -1,6 +1,5 @@
 id: 019e45a1-7be1-7991-bbb7-93d44b2d7b56
-spec_id: TASK-396
-agreed_id: TASK-396
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-247
 title: Orchestrator should detect phase artifacts on rerun and resume at the right phase (don't restart phase 1 unconditionally)
 description: |-
   Today `aida queue work --auto-complete` unconditionally starts at **phase 1 (implementer)** on every invocation, regardless of whether artifacts from a previous attempt already exist on the branch. For a spec whose phase 1 actually completed (commits + open PR) but whose drain was interrupted before phase 4 (merge) or phase 5 (pull) or phase 6 (build), a rerun should detect the artifacts and resume at the appropriate phase — not pointlessly re-spawn a phase-1 implementer that would just discover its own work already shipped.
@@ -50,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T13:44:31.457273448Z
-modified_at: 2026-06-06T08:37:27.312551754Z
+modified_at: 2026-10-31T15:54:46.707663773Z
 req_type: Task
 tags:
 - autonomous-drain
@@ -65,3 +64,14 @@ comments:
   content: Disposition sweep 2026-06-06 — COMPLETED. Superseded by shipped work — pre-flight phase-resumability (detect artifacts, skip completed phases, AlreadyComplete no-op) shipped as STORY-491/492 (--resume-drain, drain_resume.rs).
   created_at: 2026-06-06T08:37:25.149263825Z
   modified_at: 2026-06-06T08:37:25.149263825Z
+history:
+- id: 01a192ab-ac33-7322-8f62-5b2c8ccfbff0
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.707663395Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-396
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-247
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-396 (now resolve to the survivor): 46f4f04c98c8cda6cb10f164c5a2fc42dc1d4514'

@@ -30,14 +30,14 @@ description: |-
 
   ## Out of scope
 
-  - Phase-resumability across orchestrator restarts (TASK-396 — different problem; this is about engaging a fresh orchestrator on an externally-progressed PR).
-  - Auto-resuming after a partial drain failure (a flavour of TASK-396 too).
+  - Phase-resumability across orchestrator restarts (TASK-b6b1278890774ef993d2ebc327862470-247 — different problem; this is about engaging a fresh orchestrator on an externally-progressed PR).
+  - Auto-resuming after a partial drain failure (a flavour of TASK-b6b1278890774ef993d2ebc327862470-247 too).
   - The TASK-402 friction cluster (different recovery path — that's about resuming the implementer, this is about advancing past the implementer).
 
   ## Related
 
   - TASK-358 / PR-125 — the spec whose recovery surfaced this gap (manual implementation + manual PR, no easy way to re-engage orchestrator for review/merge).
-  - TASK-396 — phase-resumability (different scope but adjacent).
+  - TASK-b6b1278890774ef993d2ebc327862470-247 — phase-resumability (different scope but adjacent).
   - TASK-402 — resume-after-failure UX cluster (different leg of recovery: this is what happens AFTER you've gotten past phase 1).
   - Memory \`feedback_check_orchestrator_before_manual_steps\` — once this lands, the \"is the orchestrator driving this?\" check has a clean answer for the manual-recovery path.
 status: Completed
@@ -65,6 +65,12 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded recovery verb — `aida queue work` accepts a PR-N form (or `aida pr drive`) to re-engage the orchestrator on phases 3-6 when implementation shipped outside it; state-aware entry + clean refusals, no open decision (spec's a/b is a minor surface choice the implementer can settle), matches reliability phase.
   created_at: 2026-06-06T08:34:48.023785631Z
   modified_at: 2026-06-06T08:34:48.023785631Z
+history:
+- id: 01a192ac-149f-76a1-a7eb-2dcdd6dc5a42
+  author: joe
+  timestamp: 2026-10-31T15:55:13.439583268Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 implementation_info:
   implemented: false
   completed_at: 2026-06-07T04:04:16.801750685Z

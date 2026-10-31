@@ -1,7 +1,7 @@
 id: 01a05092-eb5a-7201-85a2-3c7a35b1991e
 spec_id: STORY-794
 agreed_id: STORY-794
-title: 'Review PR-1622: [AI:codex] docs(agents): refine AIDA migration positioning (TASK-0426)'
+title: 'Review PR-1622: [AI:codex] docs(agents): refine AIDA migration positioning (TASK-b6b1278890774ef993d2ebc327862470-261)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a05087`) for branch `task-0426`.
 
@@ -10,7 +10,7 @@ description: |
 
   ## Covers
 
-  - TASK-0426
+  - TASK-b6b1278890774ef993d2ebc327862470-261
 
   ## Acceptance
 
@@ -44,6 +44,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ac-a3e9-7c71-ae44-ba3b3daca468
+  author: joe
+  timestamp: 2026-10-31T15:55:50.121442159Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 implementation_info:
   implemented: false
   completed_at: 2026-08-30T02:52:23.782328766Z

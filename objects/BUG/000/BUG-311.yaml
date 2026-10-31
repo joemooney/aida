@@ -37,7 +37,7 @@ description: |-
 
   ## Why this is high priority
 
-  \`--steal\` is the documented escape hatch for the dormant-lease friction class. If it silently fails, the recovery flow is broken for every spec in this state. Tonight three drain runs (TASK-440, TASK-439, TASK-437) hit the dormant-lease pattern; if BUG-307 takes a few days to ship, \`--steal\` is the workaround — but only if it works.
+  \`--steal\` is the documented escape hatch for the dormant-lease friction class. If it silently fails, the recovery flow is broken for every spec in this state. Tonight three drain runs (TASK-440, TASK-b6b1278890774ef993d2ebc327862470-272, TASK-437) hit the dormant-lease pattern; if BUG-307 takes a few days to ship, \`--steal\` is the workaround — but only if it works.
 
   ## Related
 
@@ -67,5 +67,11 @@ comments:
   content: Commit 269ac33c references this requirement
   created_at: 2026-05-22T15:48:13.236232668Z
   modified_at: 2026-05-22T15:48:13.236232668Z
+history:
+- id: 01a192ac-51f3-7600-a179-113e32b3a8a6
+  author: joe
+  timestamp: 2026-10-31T15:55:29.139075852Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z

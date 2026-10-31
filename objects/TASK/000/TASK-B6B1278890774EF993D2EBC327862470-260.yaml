@@ -1,5 +1,5 @@
 id: 019ef78c-052b-7081-8db0-c403178751f3
-spec_id: TASK-0425
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-260
 title: Create end-to-end Codex migration validation runbook
 description: |-
   Define and execute a practical validation path proving a Codex CLI session can participate in AIDA work without relying on Claude Code-specific semantics.
@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.259874534Z
-modified_at: 2026-06-25T07:47:52.582100393Z
+modified_at: 2026-10-31T15:54:46.692294329Z
 req_type: Task
 tags:
 - dogfood
@@ -40,6 +40,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ab-ac24-7202-a508-80fa3e0c5ae1
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.692294097Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-0425
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-260
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-0425 (now resolve to the survivor): 1df577dc879604e2abdd010d495960dcbc4c3335'
 implementation_info:
   implemented: false
   completed_at: 2026-06-25T07:47:50.781417718Z

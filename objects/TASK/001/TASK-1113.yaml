@@ -2,7 +2,7 @@ id: 019f3b28-e10b-7720-9b13-cdea7a5e7b77
 spec_id: TASK-1113
 agreed_id: TASK-1113
 title: 'STORY-762 slice 1: claude-shell audit + doctor vendor-binary check + graceful codex-only degrades'
-description: 'The code slice of the codex-only story: (1) audited every unconditional claude-binary site — list_agents liveness already graceful-None, session launchers vendor-dispatched upstream, exec-resume/agent-new-claude intentionally claude, generate_intent TTY-gated with guided error; (2) new doctor category vendor-binary — probes ONLY the vendors the project resolves to (interactive default via the agents knob, orchestrator headless, configured TUI), so a codex-only machine reports clean without claude and a missing resolved vendor is flagged with install-or-repoint guidance; (3) questions clarify missing-claude error now names the codex-only alternatives (questions answer / manual edit) instead of demanding an install. Acid-tested: status/list/doctor clean on a claude-less PATH with vendor=codex; doctor flags codex when it too is absent; normal machines unchanged. Remaining story acceptance (full TASK-0425 runbook claude-less) stays on STORY-762.'
+description: 'The code slice of the codex-only story: (1) audited every unconditional claude-binary site — list_agents liveness already graceful-None, session launchers vendor-dispatched upstream, exec-resume/agent-new-claude intentionally claude, generate_intent TTY-gated with guided error; (2) new doctor category vendor-binary — probes ONLY the vendors the project resolves to (interactive default via the agents knob, orchestrator headless, configured TUI), so a codex-only machine reports clean without claude and a missing resolved vendor is flagged with install-or-repoint guidance; (3) questions clarify missing-claude error now names the codex-only alternatives (questions answer / manual edit) instead of demanding an install. Acid-tested: status/list/doctor clean on a claude-less PATH with vendor=codex; doctor flags codex when it too is absent; normal machines unchanged. Remaining story acceptance (full TASK-b6b1278890774ef993d2ebc327862470-260 runbook claude-less) stays on STORY-762.'
 status: Completed
 priority: Medium
 owner: ''
@@ -30,6 +30,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ac-47b6-7511-ac41-f2db4ad6aac2
+  author: joe
+  timestamp: 2026-10-31T15:55:26.518507542Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 implementation_info:
   implemented: false
   completed_at: 2026-07-07T06:51:02.278237630Z

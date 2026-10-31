@@ -1,7 +1,7 @@
 id: 01a12b0f-714a-7f73-9270-5fd4cfac049e
 spec_id: BUG-1960
 agreed_id: BUG-1960
-title: 'BUG-0445 follow-ups: zsh init side-channel never run in CI; no trap cleanup; AIDA_INIT_CD_FILE leaks to init''s children'
+title: 'BUG-b6b1278890774ef993d2ebc327862470-149 follow-ups: zsh init side-channel never run in CI; no trap cleanup; AIDA_INIT_CD_FILE leaks to init''s children'
 description: |
   Minors from the night review of PR #2505 at 16078e0fba. (1) CI has no zsh, so the zsh wrapper path in bug_0445_init_side_channel_tests.rs always skips. Run it once in zsh, or install zsh in CI. (2) dev_cmd.rs ~1492-1503: no trap, so Ctrl-C during init leaves an empty aida-init-cd.* file in TMPDIR. This is harmless, since each run uses a fresh mktemp name. (3) init_bootstrap.rs ~438-450: AIDA_INIT_CD_FILE is inherited by every process init spawns, and a nested emit_enter_dir would overwrite it. Scope it to the binary.
 
@@ -70,6 +70,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a192ac-7a9c-7541-94e5-70ffcf786e16
+  author: joe
+  timestamp: 2026-10-31T15:55:39.548249572Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 processing_record:
 - id: 01a13412-5376-78b2-bc6b-a97bd87c7856
   timestamp: 2026-10-13T07:02:58.678787618Z

@@ -1,6 +1,5 @@
 id: 019e47f9-b4c4-7362-bd86-b896d2db5a3b
-spec_id: TASK-421
-agreed_id: TASK-421
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-256
 title: Clean up 3 build warnings in aida-cli main.rs (origin_pushed unused, capitalize dead)
 description: |-
   ## Symptom
@@ -36,7 +35,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T00:40:07.620668478Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-10-31T15:54:46.689937312Z
 req_type: Task
 tags:
 - cleanup
@@ -68,9 +67,20 @@ comments:
     - Removed dead `fn capitalize` (introduced 2026-03-15 in ad394e04 with the initial git backend CLI integration) — zero callers anywhere in the workspace.
 
     Test status: `cargo build --release` and `cargo build` warning-free; `cargo fmt --all -- --check` clean.
-    Follow-up: TASK-424 (child) — workspace-level lint config to prevent warning regression.
+    Follow-up: TASK-b6b1278890774ef993d2ebc327862470-259 (child) — workspace-level lint config to prevent warning regression.
   created_at: 2026-05-21T02:06:39.843400749Z
   modified_at: 2026-05-21T02:06:39.843400749Z
+history:
+- id: 01a192ab-ac21-7c30-befc-a324abf380b4
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.689937031Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-421
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-256
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-421 (now resolve to the survivor): 92d6c8e804edb04e5248ad98794052e8e4043638'
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

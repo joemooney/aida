@@ -34,7 +34,7 @@ comments:
     - Hook HANDLERS: all AIDA hooks are command-type (.sh) -> Codex supports command hooks (near-identical schema: matcher/hooks/hookSpecificOutput/permissionDecision) -> port.
     - permissionDecision / defer / continue:false: NONE of AIDA's shipped hooks emit these -> no dependency, nothing to port (escalation is punt/NeedsAttention, already portable).
     - .claude/commands + .claude/skills: convenience; real workflows already live in AIDA CLI/MCP -> map prompt-only ones to Codex skills (.agents/skills/<n>/SKILL.md), state-changing ones stay CLI verbs. Codex has NO custom-slash-command files; migrate-to-codex converts Claude slash-commands to skills.
-    - Command-backed status line (statusLine.command = aida statusline): the ONE hard Claude-only dependency (observability, not correctness). Already handled to AIDA's fullest extent by TASK-0413/0414 + codex-mcp-setup.md; the native-wiring remainder is upstream-gated and filed as a DEFERRED watch-item (see the new TASK above).
+    - Command-backed status line (statusLine.command = aida statusline): the ONE hard Claude-only dependency (observability, not correctness). Already handled to AIDA's fullest extent by TASK-b6b1278890774ef993d2ebc327862470-249/0414 + codex-mcp-setup.md; the native-wiring remainder is upstream-gated and filed as a DEFERRED watch-item (see the new TASK above).
     - Starter memory pack (~/.claude/projects/<slug>/memory/): guidance only -> mirror key rules into AGENTS.md.
     - os_wrap around claude -p: Claude-launch-specific -> needs a deliberate Codex wrapper (tracked separately; see the bubblewrap section).
 
@@ -49,6 +49,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ac-2221-7182-89d0-a6d77a12e5bd
+  author: joe
+  timestamp: 2026-10-31T15:55:16.897050842Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 implementation_info:
   implemented: false
   completed_at: 2026-06-25T07:47:24.450797959Z

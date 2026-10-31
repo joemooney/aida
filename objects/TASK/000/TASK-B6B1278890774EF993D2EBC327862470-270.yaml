@@ -1,5 +1,5 @@
 id: 019ef7a6-02b8-7c81-92ce-247494b0c73a
-spec_id: TASK-0437
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-270
 title: Define cross-subsystem arbitration and master advisor authority
 description: |-
   Define how AIDA handles decisions that span subsystem boundaries or exceed a subsystem advisor's authority.
@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:52.568667667Z
-modified_at: 2026-07-20T01:13:07.273290838Z
+modified_at: 2026-10-31T15:54:46.703720252Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -40,6 +40,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ab-ac2f-7c31-8b89-51be59ec4933
+  author: aida-renumber
+  timestamp: 2026-10-31T15:54:46.703720041Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-0437
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-270
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-0437 (now resolve to the survivor): f2d23bc89aa1196318e6d09b2ef0e474dae31d34'
 implementation_info:
   implemented: false
   completed_at: 2026-07-20T01:13:04.420050578Z

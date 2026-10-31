@@ -14,7 +14,7 @@ description: |-
       worktrees (BUG-704 fixed via the tracked .aida/config.toml fallback)
     - core reads (status/list/queue/awaiting) pass with `claude` stripped from PATH
     - headless drains route to `codex exec` (STORY-683); codex prompt pack ships (STORY-763);
-      codex statusline variant ships (TASK-0413); `aida agent new codex` exists
+      codex statusline variant ships (TASK-b6b1278890774ef993d2ebc327862470-249); `aida agent new codex` exists
     - a full implement -> CI -> merge -> auto-bump lifecycle was validated end to end with a real
       codex implementer in a claude-less environment (STORY-762, 5m09s)
 
@@ -88,6 +88,12 @@ relationships:
 - rel_type: Parent
   target_id: 01a079b1-72cd-7240-a06a-a978137b59df
   created_at: 2026-09-07T02:27:50.240642666Z
+history:
+- id: 01a192ac-7e1d-73c3-9692-ab4bdbccc631
+  author: joe
+  timestamp: 2026-10-31T15:55:40.445807153Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 deferred: true
 deferred_at: 2026-09-07T06:17:55.247559939Z
 deferred_until: next work-machine visit — the TASK-1196 environment smoke and the STORY-782 fan-out decision are its only remaining children; run the smoke, then decide fan-out from what the environment permits

@@ -3,7 +3,7 @@ spec_id: TASK-1186
 agreed_id: TASK-1186
 title: Create a cold-reader positioning path for agent migration audiences
 description: |-
-  Follow-up from TASK-0426. Review docs/positioning/README.md, docs/positioning/agent-decision-matrix.md, and related hub pages for readers comparing Claude Code, Codex CLI, and other coding-agent tools without prior AIDA context.
+  Follow-up from TASK-b6b1278890774ef993d2ebc327862470-261. Review docs/positioning/README.md, docs/positioning/agent-decision-matrix.md, and related hub pages for readers comparing Claude Code, Codex CLI, and other coding-agent tools without prior AIDA context.
 
   Acceptance:
   - Add or revise a short path that explains where AIDA sits in the agent landscape without assuming internal project knowledge.
@@ -48,6 +48,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a192ac-4420-75e0-a542-3747bcab1d27
+  author: joe
+  timestamp: 2026-10-31T15:55:25.600547146Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 processing_record:
 - id: 01a050de-67d2-7f21-92d4-b60635dd86f7
   timestamp: 2026-08-30T04:12:27.986659632Z

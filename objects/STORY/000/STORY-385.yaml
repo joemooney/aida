@@ -10,7 +10,7 @@ description: |-
   What it doesn't surface: **attention state.** The things a user has to do manual archaeology to discover:
 
   - Specs ◐ In Progress without an active lease (sticky-state-after-failed-drain — TASK-281, TASK-346, TASK-413, TASK-416 right now)
-  - Specs ◉ Done where the auto-bump scanner missed the commit format (TASK-422 currently, BUG-270 territory)
+  - Specs ◉ Done where the auto-bump scanner missed the commit format (TASK-b6b1278890774ef993d2ebc327862470-257 currently, BUG-270 territory)
   - Open PRs awaiting review/merge that aren't in any drain (BUG-238 / PR-151 right now)
   - Dormant leases (no live process, recoverable)
   - Stale reviewer leases on already-merged PRs (we had 9 of these earlier tonight before cleanup)
@@ -58,8 +58,8 @@ description: |-
       → \`aida queue recover <spec>\`  or  \`aida pull\` for TASK-416
 
   ⚠ Specs ◉ Done missed by auto-bump (1):
-      TASK-422 — merged at #153 (1d), commit format may not match scanner (BUG-270)
-      → \`aida db reconcile-status\` or \`aida edit TASK-422 --status completed\`
+      TASK-b6b1278890774ef993d2ebc327862470-257 — merged at #153 (1d), commit format may not match scanner (BUG-270)
+      → \`aida db reconcile-status\` or \`aida edit TASK-b6b1278890774ef993d2ebc327862470-257 --status completed\`
 
   ⚠ Open PRs awaiting review/merge (1):
       PR-151 (BUG-238) — CI green, verdict PASS in comments
@@ -134,8 +134,8 @@ comments:
 
     ```
     ⚠ Findings awaiting triage (3):
-        PR-150  template-shape  cosmetic  TASK-431 — Verdict file column needs lease prefix
-        BUG-285 followup        minor     TASK-432 — Pre-check should also fire on `--force`
+        PR-150  template-shape  cosmetic  TASK-b6b1278890774ef993d2ebc327862470-265 — Verdict file column needs lease prefix
+        BUG-285 followup        minor     TASK-b6b1278890774ef993d2ebc327862470-266 — Pre-check should also fire on `--force`
         TASK-413 design-choice  minor     TASK-433 — Status preamble could include retry count
         → `aida findings list` for full view; `aida findings promote <ID>` or `aida findings dismiss <ID> --reason ...`
     ```
@@ -307,6 +307,12 @@ comments:
       - `aida status --cleanup` performance — the gh + git invocations could
   created_at: 2026-05-24T16:24:55.778224544Z
   modified_at: 2026-05-24T16:24:55.778224544Z
+history:
+- id: 01a192ac-99dd-7ed0-8256-94f1cd720c31
+  author: joe
+  timestamp: 2026-10-31T15:55:47.549838529Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

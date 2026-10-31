@@ -1,7 +1,7 @@
 id: 019f7c66-7892-7e91-80be-67e96bfdb4b7
 spec_id: STORY-778
 agreed_id: STORY-778
-title: 'Review PR-1536: [AI:codex] docs(agents): design subsystem advisor routing (TASK-0434 TASK-0435 TASK-0436 TASK-0437 SPIKE-75)'
+title: 'Review PR-1536: [AI:codex] docs(agents): design subsystem advisor routing (TASK-0434 TASK-b6b1278890774ef993d2ebc327862470-268 TASK-0436 TASK-b6b1278890774ef993d2ebc327862470-270 SPIKE-75)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `019f7c60`) for branch `codex-strategy-spike-75`.
 
@@ -11,9 +11,9 @@ description: |
   ## Covers
 
   - TASK-0434
-  - TASK-0435
+  - TASK-b6b1278890774ef993d2ebc327862470-268
   - TASK-0436
-  - TASK-0437
+  - TASK-b6b1278890774ef993d2ebc327862470-270
   - SPIKE-75
 
   ## Acceptance
@@ -68,6 +68,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a192ac-966d-75a1-aaff-98d9736f3cdf
+  author: joe
+  timestamp: 2026-10-31T15:55:46.669311708Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 implementation_info:
   implemented: false
   completed_at: 2026-07-20T01:13:04.420050578Z
