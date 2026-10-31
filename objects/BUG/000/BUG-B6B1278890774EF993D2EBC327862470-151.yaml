@@ -25,16 +25,25 @@ description: |
   - AC3 (honest wording): when no registered advisor is found, the handshake and hook say "no registered advisor" and name the check to run, never assert "no live advisor". If other evidence shows an advisor (an unexpired advisor seat grant held by a live process), report the advisor as live but unregistered.
   - AC4 (doctor): `aida doctor check advisor-handshake` reports registered advisors, unregistered live advisor evidence, and the hello's state, instead of `total: 0`.
   - AC5 (timestamps): `ended_at` records when the session actually ended, not `started_at`.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-10-31T22:16:54.008855195Z
+modified_at: 2026-10-31T22:23:29.775521082Z
 req_type: Bug
 tags:
 - area:agents
 - area:registry
+history:
+- id: 01a1940f-8def-7313-80d3-270615a3923f
+  author: joe
+  timestamp: 2026-10-31T22:23:29.775517807Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
