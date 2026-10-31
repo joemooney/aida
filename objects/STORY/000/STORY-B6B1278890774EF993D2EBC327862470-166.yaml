@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:00:23.068491024Z
-modified_at: 2026-10-31T21:27:58.541020634Z
+modified_at: 2026-10-31T21:39:09.636117411Z
 req_type: Story
 comments:
 - id: 01a1939e-3d5a-7973-8ebb-0b168adc6c0c
@@ -23,6 +23,12 @@ comments:
   content: 'ADVISOR BRIEF 13:22: implement ACs as written; register the subcommand in the mandate module (command_registry, clap types in its _args.rs), human-TTY refusal tested, update the help golden in the same commit. LIGHT gate: one cargo test -p aida-cli-lib mandate filter + make check-ci-fast.'
   created_at: 2026-10-31T20:19:43.578675142Z
   modified_at: 2026-10-31T20:19:43.578675142Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a193e6-f6c4-7291-a4c9-1c3a8efbbffb
+  author: joe
+  content: 'ADVISOR REWORK BRIEF round 2 (14:40), PR-3175. ONE item: a running ''aida deputy'' caches the mandate expiry at start (deputy_cmd.rs ~309-316) and stops at the pre-renewal expiry. Fix: on each worker tick (or before each job), re-read the mandate by its id and use its current expires_at; stop only when the re-read mandate is expired, stopped or missing. Test: start a deputy against a mandate, renew it, advance past the old expiry (fake clock / short TTL), the deputy keeps running; stop the mandate, the deputy stops. Also ACCEPTED (ruled once): the implementer''s note that pre-change binaries ignore a renewed mandate whose total lifetime passes 24h is fine: it fails closed and the live binary is promoted from main. LIGHT gate: cargo test -p aida-cli-lib deputy + mandate filter; make check-ci-fast. Push to the PR branch.'
+  created_at: 2026-10-31T21:39:09.636117411Z
+  modified_at: 2026-10-31T21:39:09.636117411Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939d-a436-74e1-9fc6-4cf863956a2d
