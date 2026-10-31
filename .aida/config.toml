@@ -447,6 +447,20 @@ enabled = true
 # trace:TASK-1563 | ai:claude
 [worktree_pool]
 worktree_parent = "../aida-worktrees"
+# BUG-049: pre-trust each implementer seat clone (aida-seat-*) and compete
+# lane in ~/.claude.json before a lane's claude starts there. Reviewer trees
+# (aida-pr-N) are never trusted: trust would apply the reviewed branch's own
+# .claude/settings.json to its reviewer. Every write also prunes the entries
+# of trees under worktree_parent that no longer exist, and dismissal drops the
+# entry at once, so ~/.claude.json stays bounded. Off means AIDA never writes
+# the file at all. A fresh
+# seat is otherwise untrusted, Claude Code ignores .claude/settings.json's
+# permissions.allow, and the lane's Bash calls are denied. The operator
+# authorized trusting aida-worktrees/* seats on 2026-10-25. Read from the
+# default branch's committed copy only (BUG-1723: a branch cannot switch it on
+# for itself). Override on one host with AIDA_TRUST_SEAT_WORKTREES=0|1.
+# trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+trust_seat_worktrees = true
 
 # ADR-72 removed the ADR-65 "weekly-windows-triage" Product reminder: AIDA is
 # Linux-only and agents do not triage Windows/macOS work. trace:TASK-1723 | ai:claude

@@ -1771,3 +1771,60 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
         vec!["1 commit(s) that origin does not have".to_string()]
     );
 }
+
+/// BUG-049 (ruling 3): the real seat-clone teardown removes the clone's
+/// Claude Code trust entry when pre-trust is on, and (ruling 1) leaves
+/// `~/.claude.json` byte-identical when it is off.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_b6b_049_bwrap_destroy_drops_the_clone_trust_entry_only_when_on() {
+    if !bwrap_live() {
+        return;
+    }
+    use crate::claude_trust::{ensure_seat_trusted_in, TrustWrite, ENV_OVERRIDE};
+    let fx = fixture();
+    let home = crate::home_dir().expect("hermetic test home");
+    let read_projects = || -> serde_json::Value {
+        std::fs::read_to_string(home.join(".claude.json"))
+            .ok()
+            .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+            .map(|v| v["projects"].clone())
+            .unwrap_or(serde_json::Value::Null)
+    };
+
+    // On: the entry written at launch goes with the clone.
+    let on = seat(&fx, "trust-on", "c0ffee000491");
+    let key = on.to_string_lossy().into_owned();
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(ENV_OVERRIDE, Some("1"))]);
+        assert!(matches!(
+            ensure_seat_trusted_in(&home, &fx.main, &on).unwrap(),
+            TrustWrite::Written(_) | TrustWrite::AlreadyTrusted(_)
+        ));
+        assert!(read_projects().get(&key).is_some());
+        let removed = destroy(&fx.main, &on, DestroyMode::SalvageUnshipped, None).unwrap();
+        assert!(matches!(removed, Destroyed::Removed { .. }), "{removed:?}");
+    }
+    assert!(!on.exists());
+    assert!(
+        read_projects().get(&key).is_none(),
+        "entry outlived the clone"
+    );
+
+    // Off: teardown never touches the file, even for a seat with an entry.
+    let off = seat(&fx, "trust-off", "c0ffee000492");
+    let off_key = off.to_string_lossy().into_owned();
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(ENV_OVERRIDE, Some("1"))]);
+        ensure_seat_trusted_in(&home, &fx.main, &off).unwrap();
+    }
+    let before = std::fs::read(home.join(".claude.json")).unwrap();
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(ENV_OVERRIDE, Some("0"))]);
+        let removed = destroy(&fx.main, &off, DestroyMode::SalvageUnshipped, None).unwrap();
+        assert!(matches!(removed, Destroyed::Removed { .. }), "{removed:?}");
+        assert_eq!(std::fs::read(home.join(".claude.json")).unwrap(), before);
+    }
+    assert!(read_projects().get(&off_key).is_some());
+}
