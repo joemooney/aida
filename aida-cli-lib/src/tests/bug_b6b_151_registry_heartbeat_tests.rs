@@ -31,6 +31,8 @@ fn rewrite(root: &Path, entry: &AgentRegistryEntry) {
 
 // AC1: the root cause. A SessionStart write that loses the namespace lock
 // leaves no row, and before this fix nothing ever wrote one later.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
 #[test]
 fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
     let tmp = TempDir::new().unwrap();
@@ -54,6 +56,7 @@ fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
 
 // AC2: delete a live session's row; the prompt hook brings it back with a
 // newer heartbeat.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
 #[test]
 fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat() {
     let tmp = TempDir::new().unwrap();
@@ -72,6 +75,8 @@ fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat(
 
 // AC2 / AC5: a present row is refreshed in place, so `last_active_at` moves
 // past `started_at`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn the_prompt_heartbeat_refreshes_last_active_at_and_keeps_started_at() {
     let tmp = TempDir::new().unwrap();
@@ -155,6 +160,7 @@ fn retired_rows(root: &Path) -> Vec<AgentRegistryEntry> {
 
 // AC1: row names are per pid, so a reused pid used to erase the earlier
 // process's row. It is now retired under a name unique to that process.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
 #[test]
 fn a_recycled_pids_row_is_retired_not_overwritten_at_session_start() {
     let tmp = TempDir::new().unwrap();
@@ -173,6 +179,7 @@ fn a_recycled_pids_row_is_retired_not_overwritten_at_session_start() {
     assert_eq!(kept.ended_at, Some(old.last_active_at));
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
 #[test]
 fn a_recycled_pids_row_is_retired_by_the_launcher_and_the_mcp_touch() {
     let tmp = TempDir::new().unwrap();
@@ -207,6 +214,7 @@ fn a_recycled_pids_row_is_retired_by_the_launcher_and_the_mcp_touch() {
 
 // AC5: with a refreshed heartbeat, gc ends a dead row at its last activity,
 // not at its start.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start() {
     let tmp = TempDir::new().unwrap();
@@ -249,6 +257,7 @@ fn overdue_record(main: &Path) -> HelloRecord {
 
 // AC3: the reason never asserts "no live advisor"; a live grant holder makes
 // the advisor "live but unregistered".
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.acecfc34 | ai:claude
 #[test]
 fn the_unreachable_reason_says_registered_or_live_but_unregistered() {
     let tmp = TempDir::new().unwrap();
@@ -306,6 +315,7 @@ fn held_grants_reads_only_unexpired_unrevoked_grants_for_the_seat() {
 
 // AC4: the doctor check reports the registered advisors, the unregistered
 // evidence and the hello's state instead of nothing.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac561615 | ai:claude
 #[test]
 fn the_doctor_report_names_advisors_grant_evidence_and_hello_state() {
     let tmp = TempDir::new().unwrap();
