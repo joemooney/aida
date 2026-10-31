@@ -2,12 +2,12 @@ id: 01a18a48-0391-7f13-8b5e-f8d961716571
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-026
 title: aida node list prints only the current node's summary instead of every registered node with its label
 description: '2026-10-29: operator ran `aida node list`; it printed only ''WORK node b6b1278890774ef993d2ebc327862470 (node-local allocation; no global blocks).'' Its help says it lists ALL nodes in the shared registry and marks the current one with `*`. The registry holds legacy numeric entries (registry/nodes.toml, ids 1..N with hostname/clone_path) and UUID nodes, plus labels in registry/node_aliases.toml (HOME -> b6b1..., ASTER -> a65b...). Acceptance: node list shows one row per known node (UUID node ids from node_aliases.toml, nodes.toml, id-block/pool records and spec-ID namespaces seen in the store), with label (current + retired), hostname/clone path when known, role, and a `*` on this clone; the ''WORK node'' role wording follows STORY-HOME-098''s rewording.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-31T04:51:18.076862900Z
+modified_at: 2026-10-31T06:35:21.614007555Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -166,6 +166,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a190ab-8288-7820-9909-6b39955c96b4
+  author: aida-auto-bump
+  timestamp: 2026-10-31T06:35:21.608241609Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a190ab-828d-73f3-8bf1-b1391ffecde5
+  timestamp: 2026-10-31T06:35:21.614003145Z
+  agent: aida
+  commit_sha: 38624ff8462f88888160ce85c7e5d7c417bbb9e1
+  summary: 'Base-only update from main (gh update-branch 42ab20cb9fb2a12389e443cd6998d7c35dccdcdb -> 2d8f7dbd59bd443ef6f6727744c69769af433fa8); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -174,3 +188,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-31T06:35:21.608236238Z
+  completion_sha: 38624ff8462f88888160ce85c7e5d7c417bbb9e1
