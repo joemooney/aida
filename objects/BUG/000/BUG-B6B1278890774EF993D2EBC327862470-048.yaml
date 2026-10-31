@@ -1,0 +1,31 @@
+id: 01a1914a-561b-7fe2-b2cc-356dcd31c8e9
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-048
+title: 'Merge-time completion trusts PR-title trailers blindly: a bare legacy ID completed an unrelated spec (PR-3159 completed legacy TASK-139 instead of TASK-HOME-138)'
+description: |-
+  2026-10-31: PR-3159 implemented TASK-HOME-138 (with 139/140 superseded into it), but its title trailer was '(TASK-138 TASK-139 TASK-140)'. Bare TASK-139 resolves to the legacy spec TASK-1-114 (a Draft, 'aida-doctor ~ aida-recover consolidation candidate'). serial-ship's per-trailer approval re-record moved it Draft -> Done (02:10, advisor grant) and the merge completed it (02:26). Meanwhile TASK-HOME-138 stayed in-progress. The advisor reverted it with --force and completed TASK-HOME-138 by hand.
+
+  Acceptance:
+  1. Before recording an approval or completing on merge, every trailer ID must resolve to a spec that this PR's branch or lease actually covers (the claimed spec, the specs bundled into it by a recorded ruling or supersede, or the PR's queued review-story coverage). A trailer that resolves outside that set is refused with a clear message naming both IDs; nothing is recorded or completed for it.
+  2. A trailer that names a Draft/Approved spec never jumps it to Done/Completed unless that spec is in the covered set.
+  3. Regression test: a PR claimed for TASK-<node>-138 whose title says (TASK-139), where legacy TASK-139 exists, refuses the record and completes nothing wrong.
+  4. Implementers' PR-title guidance (pr create / aida commit) uses the full canonical or display ID the lane claimed, never a bare short form that can resolve elsewhere.
+  Relates to BUG-HOME-046 (numeric ID identity), but is independent: this is coverage checking, not ID parsing.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T09:28:50.459211418Z
+modified_at: 2026-10-31T09:28:50.459211418Z
+req_type: Bug
+tags:
+- ids
+- ship
+- trailers
+filed_at:
+  code_sha: 988a7ae5ea9fc5048e4d3e9322a4ffd1af0113b7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c0ab6f09380
+  vendor: claude
+  session: 510d8c08-7912-4189-943d-65d110c7abc2
