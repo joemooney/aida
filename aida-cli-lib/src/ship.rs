@@ -179,14 +179,26 @@ pub(crate) fn format_ship_plan(spec: &str, branch: &str, mode: FinishMode, dirty
 /// sandboxed seat worktree carries untracked bind-mounted devices
 /// (`.claude/agents`, `.gitmodules`, ...) that `git add` cannot stage, and a
 /// stray scratch file must never ride into the spec commit. A failed status
-/// is pending work, never "nothing to commit" (BUG-1985 F4).
+/// is pending work, never "nothing to commit" (BUG-1985 F4). A seat clone
+/// host git refuses is not a failed status: it is its own error, naming the
+/// clone (BUG-HOME-038).
 // trace:TASK-2351 | ai:claude
-pub(crate) fn tracked_changes_pending(project_root: &std::path::Path) -> bool {
-    aida_core::git_ops::host_git_command(project_root)
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn tracked_changes_pending(project_root: &std::path::Path) -> anyhow::Result<bool> {
+    if let Some(clone) = aida_core::git_ops::refused_seat_clone(project_root) {
+        anyhow::bail!(
+            "{}",
+            crate::gate::ship::seat_clone_refusal(
+                &clone,
+                &aida_core::seat_clone_detect::host_git_refusal(&clone)
+            )
+        );
+    }
+    Ok(aida_core::git_ops::host_git_command(project_root)
         .args(["status", "--porcelain", "--untracked-files=no"])
         .output()
         .map(|o| !o.status.success() || !o.stdout.is_empty())
-        .unwrap_or(true)
+        .unwrap_or(true))
 }
 
 /// Step 1's commit: stage tracked changes only (`git add -u`) and commit them
@@ -529,7 +541,7 @@ mod tests {
     fn untracked_files_alone_are_not_pending_work() {
         let tmp = repo();
         std::fs::write(tmp.path().join("stray.txt"), "x\n").unwrap();
-        assert!(!tracked_changes_pending(tmp.path()));
+        assert!(!tracked_changes_pending(tmp.path()).unwrap());
         assert_eq!(untracked_regular_files(tmp.path()), vec!["stray.txt"]);
     }
 
@@ -537,12 +549,12 @@ mod tests {
     fn tracked_edit_and_staged_addition_are_pending_work() {
         let tmp = repo();
         std::fs::write(tmp.path().join("a.txt"), "changed\n").unwrap();
-        assert!(tracked_changes_pending(tmp.path()));
+        assert!(tracked_changes_pending(tmp.path()).unwrap());
 
         let tmp = repo();
         std::fs::write(tmp.path().join("new.txt"), "n\n").unwrap();
         git(tmp.path(), &["add", "new.txt"]);
-        assert!(tracked_changes_pending(tmp.path()));
+        assert!(tracked_changes_pending(tmp.path()).unwrap());
     }
 
     // Reverting step 1 to `git add -A` sweeps the stray file into HEAD.
@@ -574,7 +586,7 @@ mod tests {
             .output()
             .unwrap();
         assert_eq!(String::from_utf8_lossy(&files.stdout), "a.txt\n");
-        assert!(!tracked_changes_pending(tmp.path()));
+        assert!(!tracked_changes_pending(tmp.path()).unwrap());
         assert_eq!(untracked_regular_files(tmp.path()), vec!["stray.txt"]);
     }
 

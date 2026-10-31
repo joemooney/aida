@@ -2,6 +2,18 @@
 // trace:STORY-1889 | ai:claude
 // mandate-gate
 
+/// Why `aida ship` stops in a seat clone it cannot prove it is contained in,
+/// and how the host publishes the seat's commit instead. `host_refusal` is
+/// host git's own refusal for `clone`.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn seat_clone_refusal(clone: &std::path::Path, host_refusal: &str) -> String {
+    format!(
+        "{host_refusal} — this is not uncommitted work. Commit inside the seat, then publish \
+         from the main checkout with `aida ship --from-seat {}`",
+        clone.display()
+    )
+}
+
 // trace:TASK-1602 | ai:codex
 #[derive(Debug, Clone)]
 pub(crate) struct ShipDriveBlock {

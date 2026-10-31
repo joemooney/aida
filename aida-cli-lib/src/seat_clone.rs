@@ -1764,6 +1764,90 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// A bundle of `refs/heads/<branch>` alone, made by git inside the probe
+/// sandbox ([`probe_sandbox_args`]: hooks and fsmonitor off, no system or
+/// global config, the clone's own config replaced) and returned as bytes.
+/// Its prerequisites are the clone's pinned base (host-owned) or, without a
+/// pin, the clone's `origin/*` refs. The caller verifies what comes back: it
+/// is seat-made data.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn bundle_branch(main: &Path, clone: &Path, branch: &str) -> Result<Vec<u8>> {
+    let head = format!("refs/heads/{branch}");
+    let base = pinned_base(main, clone);
+    let mut args: Vec<&std::ffi::OsStr> = vec![
+        "bundle".as_ref(),
+        "create".as_ref(),
+        "-".as_ref(),
+        head.as_ref(),
+        "--not".as_ref(),
+    ];
+    match &base {
+        Some(base) => args.push(base.as_ref()),
+        None => args.push("--remotes=origin".as_ref()),
+    }
+    run_sandboxed(clone, main, "git", &args, SALVAGE_OUTPUT_CAP).map_err(|failure| {
+        anyhow::anyhow!(
+            "could not bundle {head} of {} inside the seat sandbox: {failure}",
+            clone.display()
+        )
+    })
+}
+
+/// The clone's git config and hooks as report lines for the operator: every
+/// config key (read from a host-side copy by `git config --file`, which
+/// follows no include) and every hook file that is not a `.sample`. Seat
+/// files are read FIFO-safe; nothing here runs in the clone.
+// trace:BUG-HOME-038 | ai:claude
+pub(crate) fn config_hooks_report(main: &Path, clone: &Path) -> Vec<String> {
+    let mut lines = Vec::new();
+    let read = aida_core::seat_clone_detect::read_regular_file;
+    match read(&clone.join(".git").join("config")) {
+        None => lines.push("config: unreadable (not a regular file under 64 KiB)".to_string()),
+        Some(body) => {
+            let keys = tempfile::NamedTempFile::new()
+                .ok()
+                .and_then(|copy| {
+                    std::fs::write(copy.path(), body).ok()?;
+                    let mut cmd = git(main);
+                    cmd.args(["config", "--file"])
+                        .arg(copy.path())
+                        .args(["--name-only", "--list"]);
+                    run(cmd, "list the clone's config keys").ok()
+                })
+                .unwrap_or_default();
+            if keys.is_empty() {
+                lines.push("config: no keys could be listed".to_string());
+            } else {
+                // Seat-written names: escaped for display.
+                let keys: Vec<String> =
+                    keys.lines().map(|k| k.escape_debug().to_string()).collect();
+                lines.push(format!("config: {}", keys.join(", ")));
+            }
+        }
+    }
+    let hooks: Vec<String> = std::fs::read_dir(clone.join(".git").join("hooks"))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|name| !name.ends_with(".sample"))
+                .map(|name| name.escape_debug().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    if hooks.is_empty() {
+        lines.push("hooks: none (and none run: the bundle is made with hooks off)".to_string());
+    } else {
+        let mut hooks = hooks;
+        hooks.sort();
+        lines.push(format!(
+            "hooks: {} (not run: the bundle is made with hooks off)",
+            hooks.join(", ")
+        ));
+    }
+    lines
+}
+
 /// Whether `clone` is where [`clone_path`] puts a seat clone of `main`: an
 /// `aida-seat-*` directory that can be pinned, directly under main's
 /// `[worktree_pool] worktree_parent`, and neither inside main nor holding it.
@@ -2153,3 +2237,8 @@ mod retention_tests;
 #[cfg(test)]
 #[path = "tests/bug_031_seat_clone_mailbox_tests.rs"]
 mod seat_clone_mailbox_tests;
+
+// trace:BUG-HOME-038 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_home_038_seat_publish_tests.rs"]
+mod seat_publish_tests;
