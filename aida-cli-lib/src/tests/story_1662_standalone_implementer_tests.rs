@@ -128,7 +128,7 @@ fn outcome_classifier_gives_one_line_and_exit_code_per_outcome() {
         ),
     ];
     for (outcome, vendor, line, code) in cases {
-        let (got_line, got_code) = report(&outcome, vendor);
+        let (got_line, got_code) = report(&outcome, vendor, None);
         assert_eq!(got_line, line, "{outcome:?} vendor={vendor:?}");
         assert!(!got_line.contains('\n'), "one stdout line: {got_line:?}");
         assert_eq!(got_code, code, "{outcome:?} vendor={vendor:?}");

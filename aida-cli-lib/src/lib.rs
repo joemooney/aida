@@ -235,6 +235,8 @@ mod status_cmd;
 mod status_prs;
 mod status_sections;
 mod statusline_root;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+mod store_local;
 mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;
@@ -409,6 +411,8 @@ mod glyph_config;
 mod glyphs;
 mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude — resume a lane parked on its own background run.
+mod headless_background;
 mod headless_linger;
 mod headless_tail;
 mod headless_tee;
