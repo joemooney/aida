@@ -149,7 +149,10 @@ Based on analysis:
 2. **Type**: Determine from changes (feat for new functionality, fix for bug fixes, etc.)
 3. **Scope**: Extract from file paths or requirement feature category
 4. **Description**: Summarize the change concisely
-5. **REQ-ID**: Use primary requirement ID from traces
+5. **REQ-ID**: Use primary requirement ID from traces, written as the full
+   canonical or display id the lane claimed (`TASK-HOME-138`), never a bare
+   short form (`TASK-138`) that can resolve to a different spec
+   <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude -->
 
 ### Step 6: Create Commit
 

@@ -175,6 +175,7 @@ fn bug_1997_pr_ship_squash_subject_never_none_when_ids_withheld() {
     let pr = |title: &str, body: &str| PrShipMetadata {
         title: title.to_string(),
         body: body.to_string(),
+        number: None,
     };
 
     // --no-complete: normalized is "fix: prose", equal to the head commit
