@@ -90,6 +90,14 @@ handoff contract. Preserve supervised judgment and draft-only policy:
 draft creation path. Opening a PR never earns Completed before merge.
 <!-- trace:TASK-1613 | ai:codex -->
 
+A seat working in its own clone commits there; the host then publishes from
+the main checkout with `aida ship --from-seat <clone>`. The seat's branch is
+bundled inside the seat sandbox, verified, and fetched into a quarantine ref,
+never run as host git in the clone. The command prints the diff stat and the
+clone's git config and hooks, checks commit trailers, pushes, and opens the
+PR. It never merges; `--dry-run` imports and pushes nothing.
+<!-- trace:BUG-B6B1278890774EF993D2EBC327862470-038 | ai:claude -->
+
 ---
 
 ### `aida pr`

@@ -269,6 +269,217 @@ pub fn has_real_git_dir(clone_root: &Path) -> bool {
     is_real_dir(&clone_root.join(".git"))
 }
 
+/// Whether THIS process is proven contained inside the seat clone at
+/// `clone_root` AND that clone is its own. The proof rests only on facts a
+/// seat cannot forge (BUG-HOME-038 ruling, round 2):
+///
+/// - read-only main: a write probe under the `.git` of the main the clone
+///   names fails with `EROFS` ([`main_git_read_only`]). `EACCES` and `EPERM`
+///   prove nothing (a seat can `chmod` a directory it owns, so a forged main
+///   in a writable place would pass), and the host sees the real main
+///   writable, so it is never "contained";
+/// - host-written record: that same main holds this process's own `clone`
+///   session lease ([`own_clone_lease_root`]) whose recorded tree
+///   canonicalises to this clone's root AND is the same directory (device
+///   and inode) as the root this check began with. An arbitrary read-only
+///   path (a squashfs under `/snap`) holds no such record. A contained seat
+///   can read its siblings' clones, but only its own lease names its own
+///   clone, so every other clone is refused.
+///
+/// The marker and alternates ([`clone_writer_main`]) only say where to look;
+/// neither is trusted on its own.
+// trace:BUG-HOME-038 | ai:claude
+pub fn contained_in_clone(clone_root: &Path) -> bool {
+    let Some(session) = session_id() else {
+        return false;
+    };
+    let Some(identity) = clone_root
+        .canonicalize()
+        .ok()
+        .and_then(|root| dir_identity(&root))
+    else {
+        return false;
+    };
+    contained_as(clone_root, &session, identity, &mut main_git_read_only)
+}
+
+/// A directory's `(device, inode)`, read without following a final symlink.
+/// `None` off Unix, or when `path` is not a real directory.
+// trace:BUG-HOME-038 | ai:claude
+pub fn dir_identity(path: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if !meta.file_type().is_dir() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some((meta.dev(), meta.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+/// [`contained_in_clone`] for session `session`, the clone directory
+/// `identity` captured when the check began, and the read-only test
+/// `main_read_only` (the seam the unit tests inject a probe result through).
+// trace:BUG-HOME-038 | ai:claude
+fn contained_as(
+    clone_root: &Path,
+    session: &str,
+    identity: (u64, u64),
+    main_read_only: &mut dyn FnMut(&Path) -> bool,
+) -> bool {
+    let Some(main) = clone_writer_main(clone_root) else {
+        return false;
+    };
+    let Ok(root) = clone_root.canonicalize() else {
+        return false;
+    };
+    let recorded = lease_clone_root_for(&main, session);
+    let is_this_clone =
+        recorded.is_some_and(|own| own == root && dir_identity(&own) == Some(identity));
+    is_this_clone && main_read_only(&main)
+}
+
+/// The session id AIDA exports on the launch path (`AIDA_SESSION_ID`, then
+/// `CLAUDE_CODE_SESSION_ID`), when it is a plain file name.
+fn session_id() -> Option<String> {
+    let id = ["AIDA_SESSION_ID", "CLAUDE_CODE_SESSION_ID"]
+        .iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .map(|value| value.trim().to_string())
+        .find(|value| !value.is_empty())?;
+    id.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        .then_some(id)
+}
+
+/// The tree of this process's own `clone` session lease in `main`: the
+/// session id ([`session_id`]) names `<main>/.aida/sessions/<id>.toml`, read
+/// host-side and FIFO-safe. `None` without a session, for an id that is not
+/// a plain file name, or when that lease is not a `clone` lease.
+// trace:BUG-HOME-038 | ai:claude
+pub fn own_clone_lease_root(main: &Path) -> Option<PathBuf> {
+    lease_clone_root_for(main, &session_id()?)
+}
+
+/// The canonical tree of session `id`'s `clone` lease in `main`.
+fn lease_clone_root_for(main: &Path, id: &str) -> Option<PathBuf> {
+    let lease = main
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{id}.toml"));
+    let root = lease_clone_root(&read_regular_file(&lease)?)?;
+    root.canonicalize().ok()
+}
+
+thread_local! {
+    /// The probe errno [`with_containment_probe`] injects on this thread.
+    static FAKE_PROBE: std::cell::Cell<Option<Option<i32>>> = const { std::cell::Cell::new(None) };
+}
+
+/// Run `f` with every containment write probe on this thread reporting
+/// `errno` (`None`: the write succeeded), uncached. For tests in this and
+/// dependent crates, so no real read-only mount is needed; restored
+/// afterwards, even on panic.
+// trace:BUG-HOME-038 | ai:claude
+#[doc(hidden)]
+pub fn with_containment_probe<R>(errno: Option<i32>, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<Option<i32>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            FAKE_PROBE.with(|p| p.set(self.0));
+        }
+    }
+    let _restore = Restore(FAKE_PROBE.with(|p| p.replace(Some(errno))));
+    f()
+}
+
+/// Whether `main`'s `.git` is on a read-only mount: the write probe fails
+/// with `EROFS`. Probed once per process per main ([`cached_probe`]): every
+/// host git call in a seat clone asks, and each probe would otherwise create
+/// and unlink a file in main's git directory.
+// trace:BUG-HOME-038 | ai:claude
+fn main_git_read_only(main: &Path) -> bool {
+    if let Some(errno) = FAKE_PROBE.with(std::cell::Cell::get) {
+        return is_erofs(errno);
+    }
+    static PROBED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<PathBuf, bool>>> =
+        std::sync::OnceLock::new();
+    cached_probe(PROBED.get_or_init(Default::default), main, &mut |main| {
+        is_erofs(git_dir_write_probe(&main.join(".git")))
+    })
+}
+
+/// `cache`'s answer for `main`, computed with `probe` only the first time.
+fn cached_probe(
+    cache: &std::sync::Mutex<std::collections::HashMap<PathBuf, bool>>,
+    main: &Path,
+    probe: &mut dyn FnMut(&Path) -> bool,
+) -> bool {
+    let mut probed = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *probed
+        .entry(main.to_path_buf())
+        .or_insert_with(|| probe(main))
+}
+
+/// Whether a probe's errno is `EROFS`, the only failure that proves a
+/// read-only mount.
+fn is_erofs(errno: Option<i32>) -> bool {
+    #[cfg(unix)]
+    {
+        errno == Some(libc::EROFS)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = errno;
+        false
+    }
+}
+
+/// The errno of creating a scratch file directly under `git_dir`; `None`
+/// when the create succeeded (the probe is removed at once) or off Unix,
+/// where nothing is proven.
+// trace:BUG-HOME-038 | ai:claude
+pub fn git_dir_write_probe(git_dir: &Path) -> Option<i32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        let probe = git_dir.join(format!(
+            "aida-containment-probe-{}-{nanos}",
+            std::process::id()
+        ));
+        // O_WRONLY | O_CREAT | O_EXCL, never through a symlink.
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&probe)
+        {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&probe);
+                None
+            }
+            // An error without an errno is still a failure, never EROFS.
+            Err(err) => Some(err.raw_os_error().unwrap_or(-1)),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = git_dir;
+        None
+    }
+}
+
 /// The refusal text for host git aimed at a seat clone.
 // trace:BUG-2169 | ai:claude
 pub fn host_git_refusal(clone_root: &Path) -> String {
@@ -357,6 +568,156 @@ mod bug_2192_lease_scan_tests {
         std::fs::remove_file(sessions.join("b.toml")).unwrap();
         assert_eq!(clone_lease_roots(main.path()), vec![seat]);
         crate::host_git_cache::ALWAYS_SETTLED.with(|s| s.set(false));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod bug_home_038_containment_tests {
+    use super::*;
+
+    const SESSION: &str = "c0ffee038100";
+
+    /// A main at `dir/name` and its seat clone at `dir/aida-seat-<name>`,
+    /// laid out from plain files the way the creator leaves them: the
+    /// clone's real `.git` borrows main's objects, its marker names main, and
+    /// (when `leased`) main holds `SESSION`'s `clone` lease naming it.
+    /// Returns (main, clone), both canonical.
+    fn layout(dir: &Path, name: &str, leased: bool) -> (PathBuf, PathBuf) {
+        let main = dir.join(name);
+        let clone = dir.join(format!("{CLONE_DIR_PREFIX}{name}"));
+        std::fs::create_dir_all(main.join(".git/objects")).unwrap();
+        std::fs::create_dir_all(main.join(".aida/sessions")).unwrap();
+        let (main, clone) = (main.canonicalize().unwrap(), make_clone(&clone, &main));
+        if leased {
+            let path = toml::Value::String(clone.display().to_string());
+            std::fs::write(
+                main.join(format!(".aida/sessions/{SESSION}.toml")),
+                format!("tree_kind = \"clone\"\nworktree_path = {path}\n"),
+            )
+            .unwrap();
+        }
+        (main, clone)
+    }
+
+    /// The clone side of [`layout`] at `clone`, pointing at `main`.
+    fn make_clone(clone: &Path, main: &Path) -> PathBuf {
+        std::fs::create_dir_all(clone.join(".git/objects/info")).unwrap();
+        std::fs::create_dir_all(clone.join(".aida")).unwrap();
+        std::fs::write(
+            clone.join(".git/objects/info/alternates"),
+            format!("{}\n", main.join(".git/objects").display()),
+        )
+        .unwrap();
+        let main_value = toml::Value::String(main.display().to_string());
+        std::fs::write(
+            clone.join(MARKER_RELATIVE),
+            format!("main = {main_value}\n"),
+        )
+        .unwrap();
+        clone.canonicalize().unwrap()
+    }
+
+    /// The containment check with the probe answering `errno`.
+    fn contained_with(clone: &Path, identity: (u64, u64), errno: Option<i32>) -> bool {
+        contained_as(clone, SESSION, identity, &mut |_| is_erofs(errno))
+    }
+
+    /// (a) A forged main in a writable temp dir, its `.git` chmod 0555 and
+    /// holding a lease for the clone: the real probe fails with EACCES, which
+    /// no longer counts, so the clone is refused.
+    #[test]
+    fn forged_main_with_0555_git_is_refused() {
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!("SKIP (root ignores directory permissions)");
+            return;
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+        let (main, clone) = layout(dir.path(), "forged", true);
+        let identity = dir_identity(&clone).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        let git = main.join(".git");
+        std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let errno = git_dir_write_probe(&git);
+        std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(errno, Some(libc::EACCES));
+        assert!(!contained_with(&clone, identity, errno));
+        assert!(!contained_as(&clone, SESSION, identity, &mut |main| {
+            is_erofs(git_dir_write_probe(&main.join(".git")))
+        }));
+    }
+
+    /// (b) A marker pointing at a read-only main (EROFS injected) that holds
+    /// no record of this clone is refused.
+    #[test]
+    fn read_only_main_without_record_is_refused() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (_, clone) = layout(dir.path(), "snap", false);
+        let identity = dir_identity(&clone).unwrap();
+        assert!(!contained_with(&clone, identity, Some(libc::EROFS)));
+    }
+
+    /// (c) EROFS plus a matching lease record is allowed; a writable main
+    /// (the host's view) is not, nor is another session's lease.
+    #[test]
+    fn read_only_main_with_matching_record_is_allowed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (_, clone) = layout(dir.path(), "real", true);
+        let identity = dir_identity(&clone).unwrap();
+        assert!(contained_with(&clone, identity, Some(libc::EROFS)));
+        assert!(!contained_with(&clone, identity, None));
+        assert!(!contained_with(&clone, identity, Some(libc::EPERM)));
+        assert!(!contained_as(&clone, "c0ffee0381ff", identity, &mut |_| {
+            true
+        }));
+    }
+
+    /// (d) The lease's path still canonicalises to the clone root, but the
+    /// directory there is no longer the one the check began with: refused.
+    #[test]
+    fn matching_path_with_different_inode_is_refused() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (main, clone) = layout(dir.path(), "swapped", true);
+        let identity = dir_identity(&clone).unwrap();
+        std::fs::rename(&clone, dir.path().join("moved-away")).unwrap();
+        let clone = make_clone(&clone, &main);
+        assert_ne!(dir_identity(&clone), Some(identity));
+        assert!(!contained_with(&clone, identity, Some(libc::EROFS)));
+        let fresh = dir_identity(&clone).unwrap();
+        assert!(contained_with(&clone, fresh, Some(libc::EROFS)));
+    }
+
+    /// The probe cache runs the probe once per main and answers later calls
+    /// from the cache, even when the probe would now answer differently.
+    #[test]
+    fn probe_cache_probes_each_main_once() {
+        let cache = std::sync::Mutex::new(std::collections::HashMap::new());
+        let mut calls = Vec::new();
+        let (a, b) = (Path::new("/main-a"), Path::new("/main-b"));
+        let mut ask = |main: &Path, answer: bool| {
+            cached_probe(&cache, main, &mut |m| {
+                calls.push(m.to_path_buf());
+                answer
+            })
+        };
+        assert!(ask(a, true));
+        assert!(ask(a, false), "a's first answer is cached");
+        assert!(!ask(b, false));
+        assert!(!ask(b, true), "b's first answer is cached");
+        assert!(ask(a, false));
+        assert_eq!(calls, vec![a.to_path_buf(), b.to_path_buf()]);
+    }
+
+    /// The injected probe errno bypasses the cache and is restored after.
+    #[test]
+    fn injected_probe_is_scoped_and_uncached() {
+        let main = Path::new("/no-such-main-038");
+        assert!(with_containment_probe(Some(libc::EROFS), || {
+            main_git_read_only(main)
+        }));
+        assert!(!with_containment_probe(Some(libc::EACCES), || {
+            main_git_read_only(main)
+        }));
+        assert!(FAKE_PROBE.with(std::cell::Cell::get).is_none());
     }
 }
 

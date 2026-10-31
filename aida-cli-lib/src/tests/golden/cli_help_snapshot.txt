@@ -14893,6 +14893,12 @@ Options:
       --no-trailer-check
           Bypass the client-side trailer spec-ID check before shipping
 
+      --from-seat <CLONE>
+          Publish a contained seat's committed branch from the main checkout: bundle it inside the
+          seat sandbox, verify the bundle, print its diff stat and the clone's git config and hooks,
+          check its commit trailers, push it and open the PR. The seat's hooks never run. Never
+          merges. With --dry-run, nothing is imported or pushed
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -43431,6 +43437,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "from-seat",
+        "takes_value": true,
+        "help": "Publish a contained seat's committed branch from the main checkout: bundle it inside the seat sandbox, verify the bundle, print its diff stat and the clone's git config and hooks, check its commit trailers, push it and open the PR. The seat's hooks never run. Never merges. With --dry-run, nothing is imported or pushed"
       },
       {
         "name": "help",

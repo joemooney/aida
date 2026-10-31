@@ -4551,6 +4551,9 @@ pub(crate) mod fake {
         /// When set, `open_change` opens a change with this number.
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
         pub(crate) opens_as: Option<u64>,
+        /// Every `open_change` request.
+        // trace:BUG-HOME-038 | ai:claude
+        pub(crate) opened: Arc<Mutex<Vec<OpenChange>>>,
     }
 
     impl RecordingForge {
@@ -4568,6 +4571,7 @@ pub(crate) mod fake {
                 commented: Arc::new(Mutex::new(Vec::new())),
                 readied: Arc::new(Mutex::new(Vec::new())),
                 opens_as: None,
+                opened: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
@@ -4600,6 +4604,7 @@ pub(crate) mod fake {
             ForgeKind::GitHub
         }
         fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
+            self.opened.lock().unwrap().push(req.clone());
             let Some(id) = self.opens_as else {
                 anyhow::bail!("RecordingForge: open_change not scripted")
             };
