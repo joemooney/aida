@@ -1,0 +1,27 @@
+id: 01a193a0-758f-70d1-8614-ef30f78e55df
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-154
+title: 'note (non-blocking): two acceptance items are post-merge operator work: remove …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-149, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  note (non-blocking): two acceptance items are post-merge operator work: remove 'digits: 4' from .aida-store/metadata.yaml, then run 'aida doctor --fix id-collisions' (--dry-run, then --yes) until 'aida doctor' reports 0 id-collision groups. Leave the task open until both are done.
+  Reviewed sha: 9b58bbb9530701d536b7278ec018c4ec43f0a542
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T20:22:09.039397949Z
+modified_at: 2026-10-31T20:22:09.039397949Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-149
+- finding-hash:b8e5fe7e
+- from-review:TASK-B6B1278890774EF993D2EBC327862470-149
+- kind:carried-forward
+filed_at:
+  code_sha: 271e42d368032e9e155226631512ebdde8c71ba5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
