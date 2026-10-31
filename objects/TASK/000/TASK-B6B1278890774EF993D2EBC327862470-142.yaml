@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T06:27:56.481481791Z
-modified_at: 2026-10-31T08:34:23.674892293Z
+modified_at: 2026-10-31T09:07:33.235308494Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-133
@@ -31,6 +31,13 @@ comments:
     ADVISOR RULING 2026-10-31 01:00: DO IT; it corrects a side effect of the advisor 17:25 ruling on TASK-133. Operator escalations (seat operator) must surface only in sessions a human reads: the operator terminal, plus interactive (non-headless) advisor sessions. Never surface them in headless lanes (AIDA_HEADLESS=1) or in implementer/reviewer seats, and never let a non-operator seat make the operator escalation cron.next or clear it with schedule done. Tests: a headless implementer notice omits it; an operator-terminal notice shows it; schedule done mail-backlog-guard-route-operator from an implementer seat is refused. Gate: LIGHT (cargo test -p aida-cli-lib with the mail_backlog / maintenance_schedule filters, plus make check-ci-fast).
   created_at: 2026-10-31T07:55:26.994661292Z
   modified_at: 2026-10-31T07:55:26.994661292Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19136-d8f3-7cf0-9cad-674d1aa05a3f
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-31 02:10 on PR-3160 round 1 (2026-10-28 rule: ruled once). ONE new commit: the schedule-done refusal for mail-backlog-guard-route-operator must resolve the seat EXACTLY as the notice filter does (env OR lease), through one shared helper, and fail CLOSED when the seat cannot be resolved. A role-leased implementer session without AIDA_SESSION_ROLE must be refused; test that case. Gate: LIGHT.
+  created_at: 2026-10-31T09:07:33.235308494Z
+  modified_at: 2026-10-31T09:07:33.235308494Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a190f4-e77f-7821-83b1-5e17e2fdf403
