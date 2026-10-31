@@ -1,0 +1,42 @@
+id: 01a1936a-430b-7770-8be4-960048e05e4d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-054
+title: 'agent new delegation refusal: hint hard-codes ''role enter advisor'', picker offers undelegable seats, re-entry drops existing delegations'
+description: |
+  ## Observed (operator terminal, 2026-10-31)
+  The operator ran `aida role enter product --no-resume --delegate-seat advisor --delegate-seat implementer --delegate-seat reviewer --delegate-seat integrator`, then `aida agent new` → Claude → `product`:
+
+  ```
+  Error: cannot launch child seat `product`: the active `product` grant does not delegate `product` (re-enter the role to include it: `aida role enter product --delegate-seat product`). From a human terminal in /home/joe/ai/aida, run `eval "$(aida role enter advisor --delegate-seat product)"`, then retry ...
+  ```
+
+  The refusal is correct: a grant delegates only the seats it lists (`validate_child_delegation`, aida-cli-lib/src/gate/seat_authority.rs). The recovery guidance around it is wrong or unhelpful:
+
+  1. **The two hints disagree.** The inner cause names the grant's own seat (`aida role enter product --delegate-seat product`, correct). The wrapper in `preflight_agent_new_delegation` (aida-cli-lib/src/agent_launch.rs, from 0cc97d963b3 / BUG-2188) hard-codes `aida role enter advisor --delegate-seat {seat}`. Following that hint switches the operator into the advisor role instead of widening the product grant.
+  2. **The role picker offers seats the grant cannot delegate.** `aida agent new` listed `product` as selectable and refused only after selection.
+  3. **Re-entry drops existing delegations unless they are retyped.** Adding one seat meant repeating all four existing `--delegate-seat` flags.
+
+  ## Acceptance
+  - AC1: The `agent new` delegation refusal shows ONE recovery command. It names the parent grant's actual seat (`aida role enter <parent-seat> --delegate-seat <requested>`), never a hard-coded `advisor`. When no grant is active, it says so and names the command that starts one. Test: the refusal text for parent=product, requested=product contains `role enter product` and does not contain `role enter advisor`.
+  - AC2: The recovery command keeps the parent's current delegations: it lists every seat already delegated plus the requested one, so pasting it does not narrow the grant. Test: parent delegates {advisor, implementer}, requested=product → the command carries all three `--delegate-seat` flags.
+  - AC3: The interactive role picker in `aida agent new` either hides seats the active grant cannot delegate or marks them `(not delegated: <command>)` and refuses selection before any further prompt (no session picker). Test: picker rows for a grant without `product` mark or omit `product`.
+  - AC4: The BUG-2188 behaviour stays: the refusal happens before any setup or lease, and scrubbed launchers still get terminal-recovery guidance (existing bug_2002_launch_lease_tests / bug_1808 tests stay green, updated only for the new text).
+
+  ## Out of scope
+  Changing the delegation policy itself (a grant still does not implicitly delegate its own seat). Separate cosmetic oddity, not required here: `role enter --no-resume` prints "✓ Resumed role".
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T19:22:57.163389269Z
+modified_at: 2026-10-31T19:22:57.163389269Z
+req_type: Bug
+tags:
+- area:agents
+- area:grants
+filed_at:
+  code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
