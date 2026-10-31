@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T20:50:21.938533871Z
+modified_at: 2026-10-31T20:53:39.355607373Z
 req_type: Story
 tags:
 - architecture
@@ -57,6 +57,91 @@ comments:
   created_at: 2026-10-31T20:19:34.649310557Z
   modified_at: 2026-10-31T20:19:34.649310557Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a193bd-4d9b-7ba1-a86b-60e05a9b3289
+  author: joe
+  content: |-
+    ## Implementer sketch: single-hub allocation (no root) and the multi-hub transition
+
+    Sketch only, no code. Builds on main plus PR-3170 (STORY-105: delegated-block dispensing, `refuse_foreign_root_record`, `delegated_block_in`). Code read: `aida-core/src/allocation_authority.rs`, `aida-core/src/allocation_lineage.rs`, `aida-cli-lib/src/db_block.rs` (claim loop and `rollback_unpushed_claim`), `aida-cli-lib/src/node_cmd.rs` (`enroll-root`, `upstream`, `refuse_mirror_upstream`, `print_allocation_report`), `aida-cli-lib/src/store_sync.rs` (`[store.sync] mirror_remotes`).
+
+    ### Where things stand today
+    - Every block claim goes through `require_global`: only a clone whose local setting is root can claim. It pushes `registry/blocks.yaml` by CAS (`push_exact` to `origin`, roll back and retry when rejected).
+    - `PoolRecord`s are defined and checked, but **no production code writes one yet**. On main only tests create them, and no command grants a pool. All 118 blocks in this repo's store are legacy (`pool_id: None`). There is no `registry/root.yaml` and no `pools.yaml`.
+    - "Hub" is not a stored concept. The code assumes `origin`, and mirrors are a list of clone-local remote names in tracked `[store.sync] mirror_remotes`.
+
+    ### 1. How the store learns its hub count
+    **Proposal: hubs go in tracked `.aida/config.toml` under `[store.hubs]`, identified by URL, not by remote name.**
+
+    ```toml
+    [store.hubs]
+    # One entry = single-hub mode. A second entry requires an enrolled root.
+    github = { urls = ["github.com/joemooney/aida"] }
+    gitlab = { urls = ["gitlab.joemooney.com/ai/aida"] }
+    ```
+
+    - Remote names are local to each clone (this repo's WORK clone calls GitLab `origin`, and the HOME clone calls GitHub `origin`), so a hub is matched by **normalized URL**: scheme, user, port and `.git` are stripped, leaving `host/path`. `urls` takes a list so one server reached over ssh and https still counts as one hub. Each clone works out which of its remotes reaches each hub with `git remote get-url --push`, using every push URL of the remote, so the `all` remote counts too.
+    - `[store.sync] mirror_remotes` stays as it is and is never counted as a hub (AC1). A remote that is a mirror and also matches a declared hub URL is a config error, reported by `aida node show` and `doctor`.
+    - **When nothing is declared** (existing projects): the store is treated as single-hub only once the hub is written down. `aida init` and the first `aida db block claim` on an undeclared project write `[store.hubs]` from the claiming clone's `origin` push URL and print "commit `.aida/config.toml`". Until the entry is committed and reachable from the code default branch, the clone **does not mint** and keeps issuing node-local IDs. Reason: if two clones each guessed "my `origin` is the hub", this repo's HOME and WORK clones would both mint from different refs, which is exactly the collision this spec exists to prevent. Writing the hub down is the price of leaving out the root.
+    - Why tracked config rather than the store branch: the hub list is policy that goes through code review, like `mirror_remotes`. BUG-2017's rule ("shared store content never grants authority") stays intact. The hub list does **not** grant authority either: authority is still push permission on the hub ref (section 2). The list only says which ref counts.
+    - **Detecting an undeclared second hub that store records are pushed to:** every claim records where it was ordered (section 2: the block's `pool_id` is `hub:<hub>:<TYPE>`). A clone whose claim remote does not match a declared hub URL **cannot claim**. The refusal names its remote URL, the declared hub, and both fixes ("push to the declared hub" or "declare a second hub; that needs `aida node enroll-root`"). An undeclared server can therefore hold copies of records but can never order claims. Sync also reports, without refusing, any block whose `hub:` id is not declared.
+
+    ### 2. The single-hub claim path (CAS on `aida-store`, no root)
+    New function `allocation_authority::claim_authority(store) -> ClaimAuthority`, replacing `require_global` at the claim call sites (`handle_block_command::Claim`, `auto_allocate_block_inner`, `claim_first_block`, `ensure_block_capacity`):
+
+    | Store state | Result |
+    |---|---|
+    | `registry/root.yaml` present | `Rooted`: today's PR-3170 behaviour, unchanged (root claims; nodes spend delegated blocks) |
+    | no root, exactly one hub declared, and this clone has a remote matching it | `HubCas { remote, hub }` |
+    | no root, one hub, no matching remote | refuse, naming the hub URL |
+    | no root, more than one hub declared | refuse claims, naming `aida node enroll-root` (AC4); blocks already held stay spendable |
+    | no hub declared | node-local only, with the "declare the hub" notice |
+
+    The `HubCas` claim reuses the existing loop as it stands (store write lock, then blocks lock, pull-rebase **from the hub remote**, `claim_block_with_floor`, commit, `push_exact(hub_remote)`, roll back and retry when rejected). The only change is the stamp: `pool_id = "hub:<hub>:<TYPE>"`. Because `claim_block_with_floor` already starts above every existing block of the type and above the agreed counter floor, a new block cannot overlap a legacy root block or an agreed ID that was already issued.
+
+    **The implicit pool is virtual, not written.** `LineageView` gets `hubs: &HubSet`. A `pool_id` of the form `hub:<h>:<T>` resolves to a synthesized root pool `{range 1..=u32::MAX, parent None, holder "hub:<h>", home_ref "hub:<h>"}` **only while** the store has no `root.yaml` and `<h>` is the one declared hub. `check_invariants` accepts that synthesized root pool in place of `RootPoolNotHeldByRoot`. Sibling overlap checks still run across every block of the type, so the AC6 sync backstop needs no change (`overlapping_ranges` and the claim check run on every sync in both modes). Nothing is migrated, and pools.yaml stays empty in single-hub mode.
+
+    **Spendability (AC3) = the block is on the hub's ref.** In `HubCas` mode, `block_status` adds a check: the identical block record (node, type, range, pool_id) must appear in `git show refs/remotes/<hub-remote>/aida-store:registry/blocks.yaml`. That remote-tracking ref only moves when a push to the hub succeeds or the hub is fetched, so "present there" means "pushed to the hub and ordered by CAS". It is cheaper than a reachability walk and robust to rebases. (Blocks are append-only, and a block removed from the hub is already a conflict.) A claim committed locally but never pushed, or a block that only appears in an imported store or bundle, fails with a new `Unusable::NotOnHub(type, hub)`, and `aida add` falls back to node-local with the once-per-session notice. This replaces the root-only `require_global` gate with "push permission on the hub", which is the intent of BUG-2017 and STORY-095 AC3.
+
+    The upstream concept (`aida node upstream`) is **not needed** in single-hub mode: the hub is the upstream for every clone, and the block's `hub:` id is checked against the clone's matching remote. `upstream` stays as it is for rooted stores.
+
+    ### 3. Transition when a second writable hub appears
+    Order: **enroll the root first, then add the hub.**
+    1. `aida node enroll-root [--dry-run]` on a single-hub store (AC5): it writes `root.yaml` (as today) **and materializes** each virtual pool in use as a real `PoolRecord` with the **same `pool_id`** `hub:<h1>:<T>`, `parent None`, `holder_node = root`, `home_ref = <h1>/aida-store`, and range `1..=u32::MAX`. Every existing block keeps its `pool_id`, its lineage now reaches a root pool held by the root, nothing is renumbered, and every agreed ID still resolves. The dry run lists the pools it would write and the count of blocks and IDs each one covers. The write is a single CAS commit to h1. (Existing legacy `pool_id: None` root blocks are unchanged; PR-3170 already lets the root dispense them.)
+    2. `aida node hub add <name> --url <url>` (new, **refuses without an enrolled root** and names `aida node enroll-root`, AC4): it writes the `[store.hubs]` entry, and the root grants a child pool for each type in use, homed on the new hub and carved from the root pool's `free_ranges`. That subtraction already removes every existing block, so IDs issued before the grant can never reappear in it (AC5). **The grant is a claim against a pool homed on h1, so it is pushed to h1 by CAS**, which orders it against h1's own claims. It reaches h2 by normal sync or by bundle. Clones on h2 then claim against the h2 pool by CAS on h2 (rooted mode, through the existing PR-3170 delegated path with `upstream = <h2 remote>`).
+    3. A hand-edited second `[store.hubs]` entry with no root is caught when the config is read: the "more than one hub, no root" row above. Claims are refused with the enroll command named, and held blocks keep dispensing (AC4).
+
+    **This repo** (GitHub `origin` and GitLab mirror; the WORK clone pushes only to GitLab; a cron job bridges them): per the advisor this counts as **two writable hubs**, so it stays rooted. Declare both under `[store.hubs]`, take `gitlab` out of `mirror_remotes` (a remote cannot be both), enroll HOME as root, then `hub add gitlab` grants the WORK pool. PR-3170's enroll-root runbook should run this order.
+
+    ### 4. Migrating the existing enroll-root path
+    - A store that already has `root.yaml` runs in rooted mode whatever its hub count. No forced demotion: transfer-root is still planned and out of scope.
+    - `require_global` stays only for non-claim global writes (explicit global IDs and aliases, canonical promotion). Claim sites move to `claim_authority`.
+    - v1 `authoritative = true` clones keep reading as root. On a single-hub store with no `root.yaml`, such a clone is treated as `HubCas` for claims, so its legacy blocks still dispense and new claims get the `hub:` stamp. `doctor` suggests recording either the hub or the root.
+    - `aida node show` (AC1) gains `Mode: single-hub (hub github → this clone reaches it as \`origin\`)`, or `multi-hub (root node N): github, gitlab`, or `multi-hub, NO ROOT: claims refused; run \`aida node enroll-root\``, plus the hub list and the mirrors.
+
+    ### 5. Test plan
+    - **unit** (`allocation_lineage_tests`): a virtual hub pool resolves only with one declared hub and no root; the synthesized root pool passes `check_invariants`; materialized pools keep block lineage; a grant carved from `free_ranges` excludes every pre-enrollment block.
+    - **unit** (`allocation_authority`): the `claim_authority` table above, one case per row; URL normalization (ssh/https/port/`.git`, multi-push-URL `all` remote); mirror-and-hub config error.
+    - **command-level** (`aida-cli/tests/story_164_single_hub.rs`, bare-repo fixtures in the style of `story_095_block_delegation.rs`):
+      - AC2: two clones of one bare hub, no root; both run `db block claim BUG` at once and get disjoint ranges, the loser's push is rejected and retried; `aida add` mints `BUG-<n>`.
+      - AC3: a claim whose push is blocked (pre-receive hook rejects, no rollback) is not spendable and `aida add` falls back to node-local; a block injected through an imported store is not spendable; a clone whose remote does not match the hub is refused.
+      - AC4: a second hub declared with no root refuses `claim`, naming `aida node enroll-root`; a held block still dispenses; `node hub add` without a root refuses.
+      - AC5: claims plus IDs on one hub, `enroll-root --dry-run` writes nothing and lists pools, `enroll-root` keeps every ID resolving, `hub add` grants a pool disjoint from all earlier blocks.
+      - AC6: overlapping claims from two unrooted hubs (forced) are refused at sync in both modes.
+      - AC1: `node show` mode lines.
+    - **docs**: AC7 rewrite of `docs/cli/10-storage.md` (single hub first; root, pools and lineage as the multi-hub and air-gap case), plus a regenerated help golden for `node hub`.
+
+    ### Expected files
+    `aida-core/src/allocation_authority.rs`, `aida-core/src/allocation_lineage.rs` (+ tests), new `aida-core/src/store_hubs.rs` (config parse + URL normalize), `aida-cli-lib/src/db_block.rs`, `aida-cli-lib/src/node_cmd.rs` + `node_cmd_args.rs`, `aida-cli-lib/src/store_sync.rs` (config read only), `docs/cli/10-storage.md`, help golden, new integration test.
+
+    ### Questions for signoff
+    1. **Is a virtual implicit pool acceptable** (resolved from config, never written), as opposed to writing a `hub:` pool record on the first claim? Virtual means no first-claim race on pools.yaml and nothing to migrate. Written means the store is self-describing without the config.
+    2. **Is requiring an explicit, committed `[store.hubs]` entry before minting acceptable**, as opposed to defaulting to `origin`? I recommend explicit: guessing `origin` makes this repo's two clones mint on two refs.
+    3. **Is it acceptable to ship `node hub add` together with the pool grant in this story**, or should the grant split into its own story so that this story ends at AC4's refusal plus AC5's materialization?
+    4. Air-gap bundles (open question 3) are **deferred**: a grant carried in a bundle is valid because it was ordered on h1 before the bundle was made, and the h2 clone checks it against h2's ref after import. That needs the spike's answer on whether the import counts as an "imported store".
+  created_at: 2026-10-31T20:53:39.355607373Z
+  modified_at: 2026-10-31T20:53:39.355607373Z
+  session_id: 01a193ba465d
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
