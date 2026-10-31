@@ -1,23 +1,41 @@
 id: 01a1918f-9cce-7603-952e-d68dd02f99c1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-144
-title: 'minor: queue_cmd.rs ~13430 fresh headless arm mints via issue_headless_child ->…'
-description: |-
-  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-045, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+title: 'Contained headless child issuance: fail fast for every role, typed quota refusal, dead issuer removed'
+description: |
+  Bundled cleanup from the PR-3157 (BUG-HOME-045) approved review. This task absorbs TASK-HOME-143, TASK-HOME-145 and TASK-HOME-146 (advisor ruling 2026-10-31 04:15, 2026-10-28 one-ruling rule).
 
-  minor: queue_cmd.rs ~13430 fresh headless arm mints via issue_headless_child -> issue_child, which ignores containment. Reviewers are covered only by the refuse_unpresentable_contained_reviewer preflight; a contained headless non-reviewer seat gets no fail-fast. The test doc claiming every launch path mints through the containment-aware issuer overstates this.
-  Reviewed sha: c1ab08efe4d73b686cda1c9d3e75ef2cf5ed7337
-status: Draft
+  1. queue_cmd.rs (~13430): the fresh headless arm mints through issue_headless_child -> issue_child, which ignores containment. Route every headless child launch, reviewer and non-reviewer, through the containment-aware issuer so a contained headless seat without a presentable key fails fast before launch. Correct the test doc that claims every path already does this.
+  2. preflight_sandboxed_child_key: key-quota exhaustion must return ChildGrantRefused (not a plain bail) so it gets the same lease-release handling as the ELOOP refusal. (was TASK-HOME-145)
+  3. seat_authority.rs issue_sandboxed_child has no callers: delete it, or make it the one issuer used by item 1. (was TASK-HOME-143)
+  4. Add criterion-id traces to the BUG-045 tests, plus one contained record+collect test for AC ace2889c, so `aida criteria` stops listing the BUG-045 ACs as untraced. (was TASK-HOME-146)
+
+  Acceptance:
+  - A contained headless non-reviewer launch with no presentable key refuses before spawning, with a test.
+  - Key-quota exhaustion in the preflight yields ChildGrantRefused and releases the lease, with a test.
+  - No dead child issuer remains in seat_authority.rs.
+  - `aida criteria BUG-HOME-045` reports no untraced criteria.
+  Gate: LIGHT (one targeted cargo test + make check-ci-fast).
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T10:44:30.542167402Z
-modified_at: 2026-10-31T10:44:30.542167402Z
+modified_at: 2026-10-31T11:13:30.910665522Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-045
 - finding-hash:e019936e
 - from-review:BUG-B6B1278890774EF993D2EBC327862470-045
 - kind:carried-forward
+history:
+- id: 01a191aa-2b1e-7090-a0bd-b099b1917f9d
+  author: joe
+  timestamp: 2026-10-31T11:13:30.910662148Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 273549a2d9d738b1846028776855309da26a2ef7
   branch: main
