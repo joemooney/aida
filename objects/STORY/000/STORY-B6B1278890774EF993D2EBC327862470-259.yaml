@@ -1,0 +1,59 @@
+id: 01a19423-3a36-78f1-b432-798f19cdd670
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-259
+title: 'Review PR-3179: [AI:claude] fix(deputy): a refused job writes its reason and remedy to the .out file its result names (BUG-B6B1278890774EF993D2EBC327862470-150)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1940b`) for branch `bug-b6b1278890774ef993d2ebc327862470-150`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3179>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-150` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-150
+  - STORY-B6B1278890774EF993D2EBC327862470-105
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3179` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:44:59.062490157Z
+modified_at: 2026-10-31T22:45:08.859876044Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a19405-a734-7463-89cb-04c6aaefd73c
+  created_at: 2026-10-31T22:45:02.373188482Z
+  created_by: joe
+- rel_type:
+    custom: implements
+  target_id: 01a18b22-974c-7f91-b2c0-2293b1395170
+  created_at: 2026-10-31T22:45:08.859872120Z
+  created_by: joe
+history:
+- id: 01a19423-4f27-7ba1-baf1-d0e595b9badc
+  author: joe
+  timestamp: 2026-10-31T22:45:04.423953198Z
+  session_id: 01a1940bcee7
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19423-67d8-7793-b739-64e757819cf1
+  author: joe
+  timestamp: 2026-10-31T22:45:10.744708480Z
+  session_id: 01a1940bcee7
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: ae0d46b8cc164cec895c5322e5ee073e9290ed05
+  branch: bug-b6b1278890774ef993d2ebc327862470-150
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a1940bcee7
+  harness_version: 2.1.316 (Claude Code)

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-150",
+  "publishes": [
+    {
+      "at": "2026-10-31T22:45:28.567435322Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-31T22:19:44.200163378Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-150",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}

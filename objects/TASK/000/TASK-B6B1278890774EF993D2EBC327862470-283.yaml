@@ -1,0 +1,29 @@
+id: 01a19423-d596-72f1-94c3-c81404434d8e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-283
+title: 'deputy: cancel-before-run also writes its .out note; orphaned jobs still rely on any partial output'
+description: |
+  Beyond the refused-job fix, a job cancelled before it ran (sweep_cancel_requests, aida-cli-lib/src/deputy/worker.rs) now also writes a one-line note to the .out file its result names, for the same reason: its result pointed at a file that was never created. Orphaned jobs (recover_orphans) were left unchanged: a job that started already has an .out file, but if the deputy died between claiming the job and opening the file, the result would still name a missing file.
+
+  Raised by the implementer while working BUG-B6B1278890774EF993D2EBC327862470-150.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-150 · Commit: 9179020a5f9 · PR-3179
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:45:38.838275166Z
+modified_at: 2026-10-31T22:45:38.838275166Z
+req_type: Task
+tags:
+- deputy
+- from-implementer:BUG-b6b1278890774ef993d2ebc327862470-150
+- kind:design-choice
+- severity:cosmetic
+filed_at:
+  code_sha: ae0d46b8cc164cec895c5322e5ee073e9290ed05
+  branch: bug-b6b1278890774ef993d2ebc327862470-150
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a1940bcee7
+  harness_version: 2.1.316 (Claude Code)
