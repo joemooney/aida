@@ -142,6 +142,26 @@ bwrap-confinement:
     - AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --bin aida
         bwrap_write_confinement_live_or_fail_closed -- --nocapture
 
+# GitLab Pages: the same product website as GitHub Pages' gh-pages branch,
+# assembled by the same script from the pipeline's revision, so both hosts serve
+# identical files. Like gh-pages it publishes only from an approved merged
+# revision: a vN release tag, or a manual "Run pipeline" on the default branch
+# with PUBLISH_PAGES=true. Never on mirrored pushes or merge requests. The
+# instance admin must enable Pages; see docs/showcase/README.md.
+# trace:TASK-2604 | ai:claude
+pages:
+  stage: release
+  before_script: []
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PUBLISH_PAGES == "true"'
+  script:
+    - python3 docs/showcase/publish.py --rev "$CI_COMMIT_SHA" --out public
+    - python3 docs/showcase/publish.py --rev "$CI_COMMIT_SHA" --compare public
+  artifacts:
+    paths:
+      - public
+
 # STORY-1048: GitLab release publishing is intentionally triggered by mirrored
 # vN tags. Linux assets are built on GitLab so the GitLab hub is not just a
 # pointer to GitHub. Releases are Linux-only (ADR-72), so there are no Darwin
