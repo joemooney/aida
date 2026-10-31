@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T14:13:18.865775624Z
-modified_at: 2026-10-31T16:24:21.093749498Z
+modified_at: 2026-10-31T17:03:28.256719875Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -101,6 +101,12 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a192ea-93ea-7190-ba35-edbba7ba41ca
+  author: joe
+  timestamp: 2026-10-31T17:03:29.258098376Z
+  session_id: 01a192dd8fe1
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e564a298167291f6bac3ebc7fe842839c1a2285c
   branch: main
@@ -117,7 +123,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Code meets all 4 criteria on read, but CI lib-1 is red at the reviewed head and on every earlier head of this branch, while main and sibling PRs are green. The bwrap-live BUG-051 tests run only in CI, so criteria 1/2/4 have no passing evidence.
+  detail: 'Code meets all 4 criteria on read and every criterion is traced (aida criteria: untested none), and the round-1 asks (fixture precondition, one shared ancestor-of-origin helper, budget-bounded fetch) are addressed; but CI (lib-1) is red at the reviewed head (run 41221272429, job 124596147095, step ''Run tests''), the same shard as round 1, while lib-1 passes on main at 796646253. Cannot approve on red CI. Criteria: ac225260 verified by bug_051_refusal_items_name_every_path_and_are_never_empty + bug_051_bwrap_session_end_refusal_names_the_untracked_file (bwrap, CI-only); ac79099f verified by bug_051_bwrap_lease_classifier_counts_an_ancestor_of_origin_as_pushed / bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin / bug_051_refresh_origin_branch_needs_budget_and_a_valid_branch (bwrap tests unverified until lib-1 is green); acbe987b verified by bug_051_runtime_links_and_build_output_are_not_work + the session-end bwrap test; Tests criterion traced to the two bwrap session-end tests (unverified until lib-1 is green).'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-051 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T16:22:46.734279240Z
+  shelved_at: 2026-10-31T17:03:28.256719875Z
