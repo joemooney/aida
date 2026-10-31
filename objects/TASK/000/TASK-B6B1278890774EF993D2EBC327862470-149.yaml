@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T20:38:59.231711397Z
+modified_at: 2026-10-31T20:45:25.060259594Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -79,6 +79,12 @@ comments:
   content: 'ADVISOR 13:36 post-merge (PR-3171 merged 271e42d): live binary promoted at 271e42d; aida doctor --fix id-collisions --yes renumbered 7 legacy groups (BUG-34, STORY-41/42, TASK-31..34) with 0 referrer rewrites; 0 collision groups remain; metadata.yaml carries no digits key. Post-merge runbook complete.'
   created_at: 2026-10-31T20:38:59.231711397Z
   modified_at: 2026-10-31T20:38:59.231711397Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a193b5-c2c4-71b1-aa2b-cf9aaa735a37
+  author: joe
+  content: 'ADVISOR RULING 13:47 on the four carried-forward drafts (10-28 rule, ruled once): TASK-154 DONE (post-merge runbook completed 13:36, 0 collision groups). TASK-153 ACCEPTED: the renumber is a one-time single-user surgery tool, its run is complete with 0 referrer rewrites and 0 groups left, so the unwarned agreed_id clear has no remaining input to act on. TASK-155 ACCEPTED: a single budget-step flake, re-run green; the test-time-budget gate re-trips if it recurs. TASK-156 ACCEPTED: O(N^2) only within a batch, fine at current import sizes. No follow-up specs.'
+  created_at: 2026-10-31T20:45:25.060259594Z
+  modified_at: 2026-10-31T20:45:25.060259594Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a19213-9b1f-7a82-b146-412ba9b18a8f
