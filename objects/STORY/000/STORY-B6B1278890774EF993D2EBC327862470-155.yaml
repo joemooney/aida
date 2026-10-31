@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:09:24.781126891Z
-modified_at: 2026-10-31T17:31:48.199350639Z
+modified_at: 2026-10-31T17:34:58.343353450Z
 req_type: Story
 comments:
 - id: 01a1928b-a36f-7401-88ad-ec654c92f5b8
@@ -25,6 +25,32 @@ comments:
   created_at: 2026-10-31T15:19:47.311235933Z
   modified_at: 2026-10-31T15:19:47.311235933Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19307-6727-7c90-b8a1-425b9ecc2a67
+  author: joe
+  content: |-
+    ## Implementer approach (slice 2)
+
+    ### Acceptance criteria as tests
+    - **AC0 (operator live merge-hold clear through a pty job):** no automated test; it is the operator's manual step and cannot be done from a contained headless seat. Left for the operator to confirm here.
+    - **AC1, unit (deputy):** `failed_jobs_list_until_acknowledged`: a failed job (rc, requester session, output path) shows in `deputy::unacked_failed_jobs` until `aida deputy ack <id>` writes `incoming/<name>/<id>.ack`. Scoped to the reading session when AIDA_SESSION_ID is set, all otherwise. **Unit (awaiting_you):** the new `deputy_failed` contribution is rendered in the human, agent (TOON), JSON and compact views (it is covered by the existing contribution-fixture invariant).
+    - **AC2, fixture (worker, real bash):** `a_finished_job_mails_its_requester`: a done job and a failed job each leave one mailbox message to the requester's mail identity, with rc and output path. The requester's mail identity is recorded at submit (`Requester.mail_to`, serde-default so old jobs parse). The existing submit --wait command test stays unchanged.
+    - **AC3, fixture:** `a_paused_deputy_claims_nothing_and_running_jobs_finish`: pause while a job runs; it finishes; a job queued while paused stays in incoming/; resume and it runs. Command-level: `resume` refuses without a human terminal (same check as `allow`); `pause` needs none (it only lowers authority).
+    - **AC4, fixture:** `a_short_ttl_grant_stops_the_deputy`: grant probe expires 1s in; a running job finishes, the deputy exits on its own (no stop flag), a job queued after expiry is never claimed, and a `stopped` ledger row names why. Same for `a_mandate_end_stops_the_deputy` and `--keep-after-mandate` keeps it running. Grant invalid now exits (slice 1 idled).
+    - **AC5, unit:** slice-3 hook stubs in `deputy/hooks.rs`, called at claim: (a) a job carrying a submit capability/delegation field is refused (`refused:delegation-unverifiable`), (b) a per-deputy command policy file (`deputy.commands`, slice 3's allowlist) makes every claim refuse (`refused:command-policy-unsupported`) instead of being ignored, (c) a TTY policy that cannot be read or carries unknown (slice-3) fields refuses the job instead of running it detached.
+
+    ### Expected files
+    - `aida-cli-lib/src/deputy/{mod,worker,policy,tests}.rs`, new `deputy/hooks.rs`
+    - `aida-cli-lib/src/deputy_cmd.rs`, `deputy_cmd_args.rs` (pause/resume/ack; unhide --keep-after-mandate)
+    - `aida-cli-lib/src/awaiting_you.rs`, `status_awaiting.rs`, `statusbar_cmd.rs` (struct literal)
+    - help golden, `docs/cli/06-roles-sessions.md`
+
+    ### Ambiguities / conflicts as questions
+    - AC5 names "the slice-3 tty policy hooks"; the 099 sketch names slice 3 as: per-loop command policy/deny list, and a submitter delegation/capability. I stub exactly those two plus the unreadable-policy path. Is that the intended set?
+    - Who may pause/resume? I take: pause from anywhere that can write the deputy's root (lowers authority), resume only at the human terminal.
+  created_at: 2026-10-31T17:34:58.343353450Z
+  modified_at: 2026-10-31T17:34:58.343353450Z
+  session_id: 01a193046a6d
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a191dd-b7e7-70b3-8177-0ebe5af4e0f9
   author: joe
