@@ -1093,9 +1093,10 @@ fn traces_in_line(line: &str, spec: &str) -> Vec<String> {
     while let Some(pos) = search.find("trace:") {
         let hit = &search[pos..];
         if let Some(id) = crate::parse_trace_id_token(hit) {
-            if id.eq_ignore_ascii_case(spec)
-                || id.starts_with(&format!("{}.", spec.to_ascii_uppercase()))
-            {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the
+            // spec part (before a `.criterion` suffix) matches numerically.
+            let base = id.split_once('.').map_or(id.as_str(), |(b, _)| b);
+            if aida_core::id_identity::same_id(base, spec) {
                 traces.push(id);
             }
         }

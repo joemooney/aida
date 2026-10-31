@@ -3987,7 +3987,7 @@ fn plan_followups_parse_edges() {
     );
 }
 
-/// TASK-431: "no followups" sentinel bullets (None / N/A / Nothing /
+/// TASK-b6b1278890774ef993d2ebc327862470-265: "no followups" sentinel bullets (None / N/A / Nothing /
 /// (none), with or without an em-dash/colon/dash explanation) are dropped,
 /// while a real bullet that merely STARTS with one of those words is kept.
 #[test]

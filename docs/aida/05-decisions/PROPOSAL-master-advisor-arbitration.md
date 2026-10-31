@@ -1,7 +1,7 @@
 # ADR-20 (Accepted) - Master advisor arbitrates cross-subsystem and high-risk work
 
 Status: Accepted 2026-07-19 (operator ratification; store decision ADR-20)
-Specs: TASK-0437
+Specs: TASK-b6b1278890774ef993d2ebc327862470-270
 
 ## Context
 
@@ -36,4 +36,4 @@ override applies: tightening supervision is free; loosening from master/human to
 local subsystem authority requires an explicit force-style act and leaves an
 audit trail.
 
-<!-- trace:TASK-0437 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-270 | ai:codex -->

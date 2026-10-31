@@ -461,7 +461,64 @@ fn the_config_default_rotates_only_a_terminal_launch() {
     assert!(rotation_enabled("claude", false, true, true));
     assert!(!rotation_enabled("claude", false, true, false));
     assert!(!rotation_enabled("claude", false, false, true));
-    assert!(!rotation_enabled("codex", true, true, true));
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+#[test]
+fn codex_rotates_like_claude_and_other_vendors_do_not() {
+    assert!(rotation_enabled("codex", true, false, false));
+    assert!(rotation_enabled("codex", false, true, true));
+    assert!(!rotation_enabled("codex", false, true, false));
+    assert!(!rotation_enabled("antigravity", true, true, true));
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+#[test]
+fn a_generation_uses_its_seeded_id_else_the_thread_its_hook_recorded() {
+    assert_eq!(
+        generation_session_id(Some("seed"), Some("t")).as_deref(),
+        Some("seed")
+    );
+    assert_eq!(
+        generation_session_id(None, Some("thread-1")).as_deref(),
+        Some("thread-1")
+    );
+    assert_eq!(generation_session_id(None, Some("  ")), None);
+    assert_eq!(generation_session_id(None, None), None);
+}
+
+/// Codex freshness: with the thread known, only that thread's handoff
+/// counts; with none, any same-handle handoff written after the spawn does.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+#[test]
+fn codex_freshness_uses_the_thread_once_known_else_the_spawn_time() {
+    let other = [record(
+        5,
+        "advisor",
+        "claude-advisor-08",
+        Some("thread-2"),
+        false,
+    )];
+    let own = [record(
+        5,
+        "advisor",
+        "claude-advisor-08",
+        Some("thread-1"),
+        false,
+    )];
+    let before_spawn = [record(
+        -5,
+        "advisor",
+        "claude-advisor-08",
+        Some("thread-1"),
+        false,
+    )];
+    let known = run(Some("thread-1"));
+    assert!(fresh_handoff(&other, &known).is_none());
+    assert!(fresh_handoff(&own, &known).is_some());
+    let unknown = run(None);
+    assert!(fresh_handoff(&other, &unknown).is_some());
+    assert!(fresh_handoff(&before_spawn, &unknown).is_none());
 }
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude

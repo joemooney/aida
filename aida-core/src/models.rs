@@ -2424,7 +2424,10 @@ pub struct IdConfiguration {
     /// Numbering strategy
     #[serde(default)]
     pub numbering: NumberingStrategy,
-    /// Number of digits for the numeric portion (default 3 = 001)
+    /// Legacy digit count. It no longer drives minting or display: `[ids]
+    /// seq_width` in `.aida/config.toml` does (`aida config digits N` writes
+    /// that). Kept only so existing metadata.yaml files still parse.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     #[serde(default = "default_id_digits")]
     pub digits: u8,
     /// Configured requirement types
@@ -4798,14 +4801,16 @@ impl Requirement {
 
     /// Case-insensitive match on the native `spec_id` or the `agreed_id`.
     // trace:BUG-1535 | ai:claude
+    /// Leading zeros in the sequence are insignificant (BUG-HOME-046).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     pub fn matches_id_ignore_case(&self, id: &str) -> bool {
         self.spec_id
             .as_deref()
-            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+            .is_some_and(|s| crate::id_identity::same_id(s, id))
             || self
                 .agreed_id
                 .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                .is_some_and(|s| crate::id_identity::same_id(s, id))
     }
 
     /// Gets the effective status string, preferring custom_status if set
@@ -6202,17 +6207,27 @@ impl RequirementsStore {
         crate::node_alias::resolve_literal_first_opt(id, |id| self.spec_id_index_exact(id))
     }
 
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric
+    // identity; an exact-text match still wins over a padded twin so a
+    // pre-migration collision answers deterministically.
     fn spec_id_index_exact(&self, id: &str) -> Option<usize> {
-        let native = self.requirements.iter().position(|r| {
+        let literal = self.requirements.iter().position(|r| {
             r.spec_id
                 .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                .is_some_and(|s| s.trim().eq_ignore_ascii_case(id.trim()))
+        });
+        let native = literal.or_else(|| {
+            self.requirements.iter().position(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|s| crate::id_identity::same_id(s, id))
+            })
         });
         native.or_else(|| {
             self.requirements.iter().position(|r| {
                 r.agreed_id
                     .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                    .is_some_and(|s| crate::id_identity::same_id(s, id))
             })
         })
     }
@@ -6538,7 +6553,10 @@ impl RequirementsStore {
         feature_prefix: Option<&str>,
         type_prefix: Option<&str>,
     ) -> String {
-        let digits = self.id_config.digits;
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids]
+        // seq_width` governs minting; `id_config.digits` no longer does (its
+        // `digits: 4` minted the TASK-04xx twins of unpadded TASK-4xx).
+        let digits = crate::id_identity::installed_widths().mint_width();
 
         match self.id_config.format {
             IdFormat::SingleLevel => {
@@ -6582,7 +6600,7 @@ impl RequirementsStore {
                     };
                 }
 
-                format!("{}-{:0>width$}", prefix, number, width = digits as usize)
+                format!("{}-{:0>width$}", prefix, number, width = digits)
             }
             IdFormat::TwoLevel => {
                 // trace:BUG-2017 | ai:codex
@@ -6616,13 +6634,7 @@ impl RequirementsStore {
                 if number == 0 {
                     return String::new();
                 }
-                format!(
-                    "{}-{}-{:0>width$}",
-                    feat,
-                    typ,
-                    number,
-                    width = digits as usize
-                )
+                format!("{}-{}-{:0>width$}", feat, typ, number, width = digits)
             }
         }
     }
@@ -6662,7 +6674,8 @@ impl RequirementsStore {
     /// Uses SingleLevel format with the override prefix, respects numbering strategy
     fn generate_requirement_id_with_override(&mut self, prefix: &str) -> String {
         let prefix_upper = prefix.to_uppercase();
-        let digits = self.id_config.digits;
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids] seq_width`.
+        let digits = crate::id_identity::installed_widths().mint_width();
         // trace:BUG-2017 | ai:codex
         if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
             && Requirement::validate_prefix(&prefix_upper).is_none()
@@ -6704,12 +6717,7 @@ impl RequirementsStore {
             };
         }
 
-        format!(
-            "{}-{:0>width$}",
-            prefix_upper,
-            number,
-            width = digits as usize
-        )
+        format!("{}-{:0>width$}", prefix_upper, number, width = digits)
     }
 
     /// Get the type prefix for a RequirementType enum value
@@ -8021,6 +8029,90 @@ mod tests {
             from_all, from_derive,
             "RequirementType::ALL is out of sync with the enum (TS decl: {decl})"
         );
+    }
+
+    /// AC1: leading zeros are insignificant; an exact-text match wins over a
+    /// padded twin, and a write refuses the ambiguity.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_lookup_is_numeric() {
+        let mut padded = Requirement::new("padded".into(), "d".into());
+        padded.spec_id = Some("TASK-0418".into());
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![padded.clone()];
+        for id in ["TASK-418", "task-00418", "TASK-0418"] {
+            assert_eq!(
+                store.get_requirement_by_spec_id(id).unwrap().id,
+                padded.id,
+                "{id}"
+            );
+            assert_eq!(
+                store.get_requirement_unambiguous(id).unwrap().unwrap().id,
+                padded.id
+            );
+        }
+        assert!(store.get_requirement_by_spec_id("TASK-4180").is_none());
+        let mut plain = Requirement::new("plain".into(), "d".into());
+        plain.spec_id = Some("TASK-418".into());
+        store.requirements.push(plain.clone());
+        assert_eq!(
+            store.get_requirement_by_spec_id("TASK-418").unwrap().id,
+            plain.id
+        );
+        assert_eq!(
+            store.get_requirement_by_spec_id("TASK-0418").unwrap().id,
+            padded.id
+        );
+        assert!(store.get_requirement_unambiguous("TASK-418").is_err());
+    }
+
+    /// AC5c: flipping `[ids] seq_width` 0 -> 4 -> 0 on a store holding
+    /// mixed-padding IDs renames nothing and collides with nothing: every
+    /// padding still resolves, rendering follows the width, and minting pads
+    /// new numbers to it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_seq_width_flip_on_mixed_padding_store() {
+        use crate::id_identity::{install_widths_for_thread, IdWidths};
+        let mut padded = Requirement::new("padded".into(), "d".into());
+        padded.spec_id = Some("TASK-0418".into());
+        let mut plain = Requirement::new("plain".into(), "d".into());
+        plain.spec_id = Some("TASK-7".into());
+        let mut store = RequirementsStore::new();
+        store.id_config.numbering = NumberingStrategy::PerPrefix;
+        store.requirements = vec![padded.clone(), plain.clone()];
+        store.prefix_counters.insert("TASK".into(), 419);
+        let prior = install_widths_for_thread(None);
+        let mut minted = Vec::new();
+        for (width, rendered_padded, rendered_plain) in [
+            (0, "TASK-418", "TASK-7"),
+            (4, "TASK-0418", "TASK-0007"),
+            (0, "TASK-418", "TASK-7"),
+        ] {
+            install_widths_for_thread(Some(IdWidths {
+                seq_width: Some(width),
+                node_seq_width: Some(3),
+            }));
+            for (req, ids) in [
+                (&padded, ["TASK-418", "TASK-0418", "task-00418"]),
+                (&plain, ["TASK-7", "TASK-0007", "TASK-007"]),
+            ] {
+                for id in ids {
+                    assert_eq!(
+                        store.get_requirement_unambiguous(id).unwrap().unwrap().id,
+                        req.id,
+                        "width {width}: {id}"
+                    );
+                }
+            }
+            assert_eq!(crate::id_identity::render_id("TASK-0418"), rendered_padded);
+            assert_eq!(crate::id_identity::render_id("TASK-7"), rendered_plain);
+            // Stored IDs are never re-padded.
+            assert_eq!(store.requirements[0].spec_id.as_deref(), Some("TASK-0418"));
+            minted.push(store.generate_requirement_id(None, Some("TASK")));
+        }
+        install_widths_for_thread(prior);
+        assert_eq!(minted, ["TASK-419", "TASK-0420", "TASK-421"]);
     }
 
     // BUG-1535: an ambiguous id (native spec_id on one object, agreed_id on

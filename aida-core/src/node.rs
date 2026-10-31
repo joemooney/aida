@@ -1130,7 +1130,16 @@ impl AgreedCounters {
 
     /// Format an agreed ID: `FR-423`
     pub fn format_agreed_id(type_prefix: &str, seq: u32) -> String {
-        format!("{}-{}", type_prefix.to_uppercase(), seq)
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids]
+        // seq_width`; unset keeps agreed IDs unpadded, as they always were.
+        format!(
+            "{}-{:0>width$}",
+            type_prefix.to_uppercase(),
+            seq,
+            width = crate::id_identity::installed_widths()
+                .seq_width
+                .unwrap_or(0)
+        )
     }
 }
 

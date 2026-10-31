@@ -460,7 +460,7 @@ or "phase complete" checkpoints (those belong in `add_comment` or the session ma
 | 2 | Tools missing inside the session | Codex not started from the project root (`aida mcp-serve` discovered the wrong / no project). Restart with `codex --cd /path/to/project`. |
 | 2 | `tests/test_mcp_doc_consistency.sh` fails on tool count | A doc drifted from the live `tools/list`. Trust `tools/list`, fix the doc, file a finding (Step 9d). |
 | 3 | `add_requirement` rejects the `type` | `type` must be a lowercase taxonomy value (`task`, `bug`, `story`, …). Do not invent `SPEC-N`. |
-| 3 | `claim_task` succeeds for two agents on one spec | Known TOCTOU race (TASK-438). Check `list_active_leases()` first; avoid concurrent same-spec claims until it closes. |
+| 3 | `claim_task` succeeds for two agents on one spec | Known TOCTOU race (TASK-b6b1278890774ef993d2ebc327862470-271). Check `list_active_leases()` first; avoid concurrent same-spec claims until it closes. |
 | 5 | `update_requirement` refuses `approved`/`planned`/`completed` | Gate working as designed — those are advisor-only / merge-driven. Use `draft`/`in-progress`/`done`. |
 | 5 | `add_comment` errors on a `body` arg | The arg is `text`, not `body`. |
 | 6 | CLI doesn't show the MCP write | Cache staleness — run `aida cache status`; a stale MCP-created spec is the BUG-310 class (now fixed). Re-read; if it persists, file a finding. |
@@ -491,4 +491,4 @@ Anywhere the real surface diverged from the intended flow, the divergence was ca
 finding/follow-up spec (Step 9d) rather than left as an unresolved note — which is itself
 part of the acceptance.
 
-trace:TASK-0425 | ai:claude
+trace:TASK-b6b1278890774ef993d2ebc327862470-260 | ai:claude

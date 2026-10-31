@@ -13,6 +13,13 @@ branch = "aida-store"
 [id_format]
 policy = "blocks-then-fallback"
 
+# Spec ID number padding (mint + display). This store's legacy IDs are
+# unpadded; the old metadata.yaml `digits: 4` minted zero-padded twins of
+# them and no longer drives minting. Node-local IDs keep 3 digits.
+[ids]
+seq_width = 0
+node_seq_width = 3
+
 [hints]
 workflow_hints = true
 

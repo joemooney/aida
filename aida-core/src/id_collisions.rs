@@ -40,7 +40,9 @@ impl IdCandidate {
     /// — or an object with no spec_id — only by its UUID.
     pub fn unambiguous_handle(&self, colliding_id: &str) -> String {
         match non_empty(&self.spec_id) {
-            Some(s) if !s.eq_ignore_ascii_case(colliding_id.trim()) => s.to_string(),
+            // A padded twin of the colliding id is the same id (BUG-HOME-046):
+            // only a UUID reaches it.
+            Some(s) if !crate::id_identity::same_id(s, colliding_id) => s.to_string(),
             _ => self.uuid.to_string(),
         }
     }
@@ -166,8 +168,9 @@ fn non_empty(s: &Option<String>) -> Option<&str> {
 }
 
 fn candidate(row: &IdRow, id: &str) -> Option<IdCandidate> {
-    let native = non_empty(&row.spec_id).is_some_and(|s| s.eq_ignore_ascii_case(id));
-    let agreed = non_empty(&row.agreed_id).is_some_and(|s| s.eq_ignore_ascii_case(id));
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
+    let native = non_empty(&row.spec_id).is_some_and(|s| crate::id_identity::same_id(s, id));
+    let agreed = non_empty(&row.agreed_id).is_some_and(|s| crate::id_identity::same_id(s, id));
     if !native && !agreed {
         return None;
     }
@@ -222,7 +225,9 @@ where
             .into_iter()
             .flatten()
         {
-            let key = id.to_ascii_uppercase();
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
+            // group by numeric identity: TASK-0042 and TASK-42 collide.
+            let key = crate::id_identity::id_key(id);
             if !keys.contains(&key) {
                 keys.push(key);
             }
@@ -290,6 +295,28 @@ mod tests {
             title: title.to_string(),
             status: "Draft".to_string(),
         }
+    }
+
+    /// AC4: ids that differ only by leading zeros collide (BUG-HOME-046).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn padded_twins_are_one_collision_group() {
+        let rows = [
+            row("TASK-0418", None, "padded"),
+            row("TASK-418", None, "plain"),
+        ];
+        let found = find_id_collisions(rows.iter());
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, "TASK-418");
+        assert_eq!(found[0].candidates.len(), 2);
+        // Every padding is ambiguous; each handle is the UUID.
+        let err = resolve_candidates("TASK-00418", candidates_for_id(rows.iter(), "TASK-00418"))
+            .unwrap_err();
+        for c in &err.candidates {
+            assert_eq!(c.unambiguous_handle("TASK-00418"), c.uuid.to_string());
+        }
+        let clean = [row("TASK-418", None, "a"), row("TASK-4180", None, "b")];
+        assert!(find_id_collisions(clean.iter()).is_empty());
     }
 
     // The BUG-34 shape: a native fixture holds BUG-34 as its spec_id, and the

@@ -128,6 +128,8 @@ mod store_hooks;
 pub mod home;
 // trace:BUG-1535 | ai:claude
 pub mod id_collisions;
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric ID identity.
+pub mod id_identity;
 // trace:STORY-1644 | ai:claude — natural numeric requirement-ID ordering.
 pub mod id_order;
 pub mod idle;

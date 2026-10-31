@@ -1367,6 +1367,19 @@ pub enum AgentNewCommand {
         // trace:STORY-HOME-096 | ai:claude
         #[clap(long)]
         no_mail_wake: bool,
+
+        /// Supervise the session across context rotations: when it exits
+        /// after writing a fresh seat handoff, relaunch it in the same
+        /// worktree under the same handle and lease with the handoff loaded
+        /// (a 5s countdown; Ctrl-C stops it). A handoff counts once it
+        /// carries this session's thread id, or, before the thread is
+        /// known, was written after the launch under this handle. `aida
+        /// session handoff --write --final`, or an exit without a fresh
+        /// handoff, ends it for real. Default: `[agents.codex] rotate` in
+        /// agents.toml, else off.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+        #[clap(long, conflicts_with_all = ["noexec", "show_context", "show_prompt"])]
+        rotate: bool,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.

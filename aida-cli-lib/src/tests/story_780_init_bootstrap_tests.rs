@@ -284,7 +284,7 @@ fn the_scaffolded_wrapper_routes_init_and_advertises_init_cd() {
     // FILE (`init-cd-file`), never the stdout-capturing `init-cd` token: the
     // two are mutually exclusive, because a binary that sees `init-cd` prints
     // markers to a stdout this wrapper no longer reads.
-    // trace:BUG-0445 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
     use crate::shell_eval::{marker_has_cap, INIT_CD_CAP, INIT_CD_FILE_CAP, INIT_CD_FILE_ENV};
     let script = crate::dev_cmd::SHELL_HELPERS;
     assert!(
@@ -315,7 +315,7 @@ fn the_scaffolded_wrapper_routes_init_and_advertises_init_cd() {
 /// The regression itself: the init arm must run the binary with stdout
 /// ATTACHED. A `$(command aida ...)` capture is what made the child see a pipe
 /// (auto-selecting the agent format) and buffered its prompts invisibly.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn the_init_arm_never_captures_the_childs_stdout() {
     let script = crate::dev_cmd::SHELL_HELPERS;
@@ -374,7 +374,7 @@ fn the_init_arm_never_captures_the_childs_stdout() {
 }
 
 /// Pure channel choice on the binary's side of the negotiation.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn enter_dir_channel_prefers_the_side_channel_file() {
     use crate::init_bootstrap::{enter_dir_channel, EnterDirChannel};

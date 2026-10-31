@@ -152,9 +152,10 @@ channels = ["worktree"]
 # guard_timeout_secs / build_timeout_secs, positive-integer policy values).
 sites = 2
 
+# 12 since BUG-HOME-046: write_ids_widths writes the [ids] widths.
 [readers."aida-cli-lib/src/init_cmd.rs"]
 channels = ["worktree", "write", "probe", "prose"]
-sites = 11
+sites = 12
 
 [readers."aida-cli-lib/src/intake.rs"]
 channels = ["worktree"]
@@ -388,6 +389,12 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# IdWidths::load reads the [ids] mint/display widths (integers, policy only).
+# trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+[readers."aida-core/src/id_identity.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-core/src/agents_config.rs"]
 channels = ["worktree"]
 sites = 4
@@ -531,6 +538,11 @@ init_submodules = "policy"
 [keys.worktree.id_format]
 policy = "policy"
 counter_scope = "policy"
+
+# Spec ID number padding for minting and display (BUG-HOME-046).
+[keys.worktree.ids]
+seq_width = "policy"
+node_seq_width = "policy"
 
 [keys.worktree.review]
 mode = "policy"

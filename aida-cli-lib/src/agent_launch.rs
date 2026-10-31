@@ -975,6 +975,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             name: None,
             description: None,
             no_mail_wake: false,
+            rotate: false,
         }),
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
@@ -1143,6 +1144,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             name,
             description,
             no_mail_wake,
+            rotate,
         } => agent_new_codex_wake(
             role.clone(),
             spec.clone(),
@@ -1164,7 +1166,9 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 *allow_duplicate,
                 !*no_duplicate_check,
             ),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone()),
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
+                .rotating(*rotate),
             name.clone(),
             description.clone(),
             *no_mail_wake,
@@ -2713,13 +2717,14 @@ pub(crate) fn agent_new_with_config_wake(
             config.agent_type
         )
     })?;
-    // Rotation is claude-only in this slice: `--rotate`, else
-    // `[agents.claude] rotate = true` on a terminal launch (a scripted or
+    // Rotation covers claude and codex: `--rotate`, else
+    // `[agents.<vendor>] rotate = true` on a terminal launch (a scripted or
     // piped launch never rotates unless it passed `--rotate`).
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
     let explicit_rotate = flag_options.rotate;
     let config_rotate = flag_options.use_config_defaults
-        && config.agent_type == "claude"
+        && crate::agent_rotation::rotation_supported(config.agent_type)
         && load_agents_tool_bool(&project_root, config.agent_type, "rotate")?.unwrap_or(false);
     let mut rotate = crate::agent_rotation::rotation_enabled(
         config.agent_type,
@@ -6185,6 +6190,7 @@ fn run_tracked_agent_after_spawn(
             None,
             on_spawn,
         )?
+        .status
     };
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
@@ -6297,7 +6303,7 @@ fn run_rotating_agent(
         }
         let spawned_at = chrono::Utc::now();
         let first_spawn = on_spawn.take();
-        let status = run_agent_generation(
+        let exit = run_agent_generation(
             binary,
             &config,
             &plan,
@@ -6325,13 +6331,22 @@ fn run_rotating_agent(
                 }
             },
         )?;
+        let status = exit.status;
         let exited_at = chrono::Utc::now();
+        // Codex's thread id is known only once its SessionStart hook has
+        // recorded it on the generation's row; until then (or if it never
+        // does) freshness falls back to `ts >= spawn` plus the handle.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+        let session_id = agent_rotation::generation_session_id(
+            plan.native_session_id.as_deref(),
+            exit.native_session_id.as_deref(),
+        );
         let records = agent_rotation::read_handoff_log(&plan.project_root, &seat);
         let decision = agent_rotation::rotation_decision(
             &agent_rotation::GenerationRun {
                 seat: &seat,
                 handle: &plan.name,
-                native_session_id: plan.native_session_id.as_deref(),
+                native_session_id: session_id.as_deref(),
                 spawned_at,
             },
             exited_at,
@@ -6380,7 +6395,7 @@ fn run_rotating_agent(
         generation += 1;
         on_gap(generation);
         handoff = Some((plan.project_root.join(next), stamp.to_rfc3339()));
-        previous_session = plan.native_session_id.take();
+        previous_session = session_id;
         plan.native_session_id = agent_native_session_id_for_new(config.agent_type);
         reseed_session_args(
             config.agent_type,
@@ -6388,6 +6403,14 @@ fn run_rotating_agent(
             plan.native_session_id.as_deref(),
         );
     }
+}
+
+/// One generation's exit: its status, and the native session id its row
+/// recorded by then (a Codex thread the SessionStart hook bound).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+struct GenerationExit {
+    status: std::process::ExitStatus,
+    native_session_id: Option<String>,
 }
 
 /// Spawn one child, wait for it, and clean up its registry row.
@@ -6405,7 +6428,7 @@ fn run_agent_generation(
     mail_wake: Option<agent_registry::MailWake>,
     rotation: Option<RotationEnv<'_>>,
     on_spawn: impl FnOnce(),
-) -> Result<std::process::ExitStatus> {
+) -> Result<GenerationExit> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
     // (or the TASK-876 `AIDA_OS_WRAP` per-host override is set) and the agent is
@@ -6630,16 +6653,21 @@ fn run_agent_generation(
     if let Some(restore) = title_restore {
         agent_registry::restore_terminal_title(restore);
     }
-    if let Err(err) =
-        agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid)
-    {
-        eprintln!(
-            "{} failed to mark agent registry entry ended for {}#{}: {err}",
-            "warning:".yellow().bold(),
-            config.agent_type,
-            child_pid
-        );
-    }
+    let native_session_id =
+        match agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid) {
+            // The ended row keeps the session id the child's hook recorded.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+            Ok(row) => row.and_then(|row| row.native_session_id.or(row.claude_session_id)),
+            Err(err) => {
+                eprintln!(
+                    "{} failed to mark agent registry entry ended for {}#{}: {err}",
+                    "warning:".yellow().bold(),
+                    config.agent_type,
+                    child_pid
+                );
+                None
+            }
+        };
     if let Some(ctx) = launch_context {
         if let Err(err) = std::fs::remove_file(&ctx.path) {
             if err.kind() != std::io::ErrorKind::NotFound {
@@ -6651,7 +6679,10 @@ fn run_agent_generation(
             }
         }
     }
-    Ok(status)
+    Ok(GenerationExit {
+        status,
+        native_session_id,
+    })
 }
 
 /// Register a spawned child, wait for it, then print any deferred warnings.
@@ -6726,6 +6757,11 @@ mod bug_030_launch_registry_lock_tests;
 #[cfg(test)]
 #[path = "tests/story_101_rotation_launch_tests.rs"]
 mod story_101_rotation_launch_tests;
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_150_codex_rotation_tests.rs"]
+mod story_150_codex_rotation_tests;
 
 /// Inspect or resume past Claude Code sessions in this project,
 /// enriched with the AIDA role + most-recent spec for each session

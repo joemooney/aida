@@ -1,7 +1,7 @@
 # First-class subsystems and specialized advisor routing
 
 Date: 2026-07-19
-Specs: TASK-0434, TASK-0435, TASK-0436, TASK-0437
+Specs: TASK-0434, TASK-b6b1278890774ef993d2ebc327862470-268, TASK-0436, TASK-b6b1278890774ef993d2ebc327862470-270
 Status: design proposal
 
 This plan turns the strategy cluster into one coherent build shape. It is not
@@ -15,9 +15,9 @@ an implementation patch. The proposed contract is:
 - keep universal context always loaded, then add focused subsystem context.
 
 <!-- trace:TASK-0434 | ai:codex -->
-<!-- trace:TASK-0435 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-268 | ai:codex -->
 <!-- trace:TASK-0436 | ai:codex -->
-<!-- trace:TASK-0437 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-270 | ai:codex -->
 
 ## Current State
 
@@ -232,11 +232,11 @@ store from inferred memberships.
 ## Acceptance Mapping
 
 - TASK-0434: registry shape, fields, membership algorithm, migration, examples.
-- TASK-0435: routing rules, role naming, fallback, headless advisor selection,
+- TASK-b6b1278890774ef993d2ebc327862470-268: routing rules, role naming, fallback, headless advisor selection,
   audit trail.
 - TASK-0436: memory/docs/graph/helper context model, universal context rule,
   CLI/TUI/session focus indicators, inference order.
-- TASK-0437: local-vs-master authority, conflict handling, keystone/security
+- TASK-b6b1278890774ef993d2ebc327862470-270: local-vs-master authority, conflict handling, keystone/security
   defaults, narrowed autopilot authority, examples.
 
 ## Open Build Questions
