@@ -7,12 +7,18 @@ description: |
   2. Remove `digits: 4` from the store's metadata.yaml (a one-time store edit; single user, no shim).
   3. Switch the cache sync guard (spec_id_collisions) from text grouping to numeric id_key grouping.
   Acceptance: none of the three remains; doctor reports 0 id-collision groups; a sync-guard test covers padded twins.
+
+
+  Bundled at 2026-10-31 08:40 (advisor; PR-3161 final-review findings, 2026-10-28 one-ruling rule). These absorb TASK-HOME-150/151/152:
+  4. admit_numeric_identity (aida-core/src/db/git_backend.rs ~1700): build ONE agreed-id index per add/batch, not a scan of every object per row, and include IDs staged earlier in the same batch. Test with a 2-row batch whose second row collides with the first.
+  5. Remove DEFAULT_PRESERVE (doctor_renumber.rs:59; it hard-codes this store's spec) and rename the test file bug_0445_init_side_channel_tests.rs to its renumbered ID.
+  6. Anchor the BUG-046 tests to criterion IDs so `aida criteria BUG-HOME-046` reports none untraced; amend the AC5 criterion text to the shipped [ids] seq_width key.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T13:08:40.863701564Z
+modified_at: 2026-10-31T15:37:59.872103115Z
 req_type: Task
 history:
 - id: 01a19213-9b1f-7a82-b146-412ba9b18a8f
@@ -23,6 +29,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1929c-5330-7380-92b2-6289ef65627d
+  author: joe
+  timestamp: 2026-10-31T15:38:00.880059076Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes: []
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
