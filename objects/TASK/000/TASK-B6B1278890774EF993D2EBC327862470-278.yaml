@@ -14,12 +14,12 @@ description: |
 
   ## Out of scope
   New site content.
-status: Approved
+status: InProgress
 priority: Low
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:10.638818101Z
-modified_at: 2026-10-31T22:23:37.263970440Z
+modified_at: 2026-10-31T23:19:41.023106634Z
 req_type: Task
 tags:
 - docs
@@ -42,6 +42,14 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: TASK-2604
+- id: 01a19442-fedf-7170-a381-342a51a08b0d
+  author: aida-session-start
+  timestamp: 2026-10-31T23:19:41.023104178Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
