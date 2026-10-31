@@ -9,12 +9,12 @@ description: |
   2. A branch whose head is an ancestor of origin's copy of that branch counts as pushed.
   3. Symlinked store dirs (.aida-store -> primary) and gitignored build or cache files (.aida/cache.db*, .aida/agents, target/) are not "work".
   4. Tests: an ancestor-of-origin branch ends cleanly; an untracked file is refused and named.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T14:13:18.865775624Z
-modified_at: 2026-10-31T14:13:46.412005080Z
+modified_at: 2026-10-31T15:22:10.412622668Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -35,6 +35,14 @@ history:
   timestamp: 2026-10-31T14:13:48.506476321Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a1928d-d26c-7e51-95e0-6c236737b795
+  author: aida-session-start
+  timestamp: 2026-10-31T15:22:10.412618457Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e564a298167291f6bac3ebc7fe842839c1a2285c
   branch: main
