@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T09:27:10.888734566Z
+modified_at: 2026-10-31T10:44:02.474129419Z
 req_type: Bug
 tags:
 - ids
@@ -146,6 +146,20 @@ comments:
     - None beyond those the advisor answered. Note: status flip to in-progress refused (Needs Attention needs advisor authority); working under the implementer lease.
   created_at: 2026-10-31T09:27:10.888734566Z
   modified_at: 2026-10-31T09:27:10.888734566Z
+  session_id: 01a191485f3f
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a1918f-2f2a-7273-b3c3-037c7a4a09a2
+  author: joe
+  content: |-
+    ## Implementer handoff (seat rotated at context ceiling, 2026-10-31 03:44)
+
+    Pushed branch bug-b6b1278890774ef993d2ebc327862470-046 @ a8f7f1a022b: numeric identity (aida-core/src/id_identity.rs), numeric lookups (models, git backend, cache, node-alias, trace matching), mint seam with skip/refuse, doctor grouping by key, new `aida doctor renumber-id-collisions [--dry-run] [--yes]`, `aida init --id-width N`, `[ids]` widths in mint and display, list ID column sizing, docs, help golden. Tests: 397 targeted aida-core + 13 aida-cli-lib pass. In the full aida-core lib run, the only failures are environmental (worktree_pool*, worktree_holders, mailbox_logical story1843, bug2188 partial pool).
+
+    The live dry-run plan matches the approved sketch: renumber BUG-0445, STORY-0444, TASK-0412/0413/0416/0425/0426/0437/0440 and TASK-396/414/415/417/418/420-424/427/429-432/434-436/438/439/446.
+
+    REMAINING: (1) confirm make check-ci-fast; (2) run the worktree binary `doctor renumber-id-collisions --yes`, review and commit the tree rewrites, then check that `aida doctor check id-collisions` reports zero; (3) post the old->new table here; (4) file implementer findings: cache uses LIKE+same_id instead of key columns; subcommand name differs from sketch; JSON spec_id output, Centralized dispenser and id_config.digits are not width-governed; the aida-add literal duplicate guard is unchanged; explicit-ID refusal applies only to differently padded twins; the BUG-2017 test was updated for skip semantics; (5) open the PR via /aida-pr. The handoff file write was refused by the sandbox.
+  created_at: 2026-10-31T10:44:02.474129419Z
+  modified_at: 2026-10-31T10:44:02.474129419Z
   session_id: 01a191485f3f
   harness_version: 2.1.316 (Claude Code)
 history:
