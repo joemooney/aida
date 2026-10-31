@@ -13,12 +13,12 @@ description: |-
   Must not weaken the boundary: no prompt (refuse as today) when not a TTY, under AIDA_HEADLESS, under any agent harness env (CLAUDECODE, CODEX_*, AIDA_AGENT_*), inside a contained seat, or when a grant is present but invalid/expired (that path keeps its existing message). A --yes flag does not skip the prompt (the human keystroke is the proof); '--grant-inline=no' restores pure refusal for scripts.
 
   Acceptance: (1) TTY, no grant, answer y: child launches with a child-specific grant, the role-enter audit event is recorded with principal and seat, the parent shell env is unchanged afterwards; (2) answer n: today's refusal text, exit non-zero; (3) non-TTY / headless / agent env / contained: no prompt, today's refusal; (4) an existing valid grant: no prompt, today's behaviour; (5) the BUG-052 picker marks still apply (undelegable seats refused before the prompt); (6) docs: agent new section + FAQ-42 updated to say a human terminal is offered the inline grant. Tests: PTY-driven CLI test for (1)(2), env-matrix unit test for (3). Architecture/security-adjacent: implementer posts a short sketch of the in-process mint path and gets advisor signoff before coding.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-10-31T22:25:28.390832589Z
+modified_at: 2026-10-31T23:34:33.192118314Z
 req_type: Story
 tags:
 - agent-new
@@ -115,6 +115,14 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: STORY-2215
+- id: 01a19450-9be8-7e92-8057-64e8b47e0b4d
+  author: aida-session-start
+  timestamp: 2026-10-31T23:34:33.192114507Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
