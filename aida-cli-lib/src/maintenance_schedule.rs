@@ -158,6 +158,10 @@ pub(crate) enum JobSource {
     Project,
     Global,
     Legacy,
+    /// Synthesized from this clone's machine-local `~/.aida/store-local.toml`
+    /// (the hub-bridge reconcile and its route).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    Local,
 }
 
 impl JobSource {
@@ -166,6 +170,7 @@ impl JobSource {
             JobSource::Project => "project",
             JobSource::Global => "global",
             JobSource::Legacy => "legacy",
+            JobSource::Local => "local",
         }
     }
 }
@@ -633,6 +638,26 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("substrate job '{name}' needs a `command`"))?;
             match parse_scheduled_command(raw) {
+                // A tracked or machine-global job would run the reconcile on
+                // every clone, including one that must never push to origin.
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+                Ok(c)
+                    if c.display == crate::store_local::BRIDGE_COMMAND
+                        && source != JobSource::Local =>
+                {
+                    (
+                        None,
+                        Some(InvalidCommand {
+                            raw: raw.to_string(),
+                            error: format!(
+                                "scheduled job '{name}': `{}` runs only on the clone marked \
+                                 as the hub bridge — remove this job and run `aida remote \
+                                 bridge --enable` on that clone",
+                                crate::store_local::BRIDGE_COMMAND
+                            ),
+                        }),
+                    )
+                }
                 Ok(c) => (Some(c), None),
                 Err(e) => (
                     None,
@@ -832,10 +857,92 @@ fn load_registry(project_root: &Path) -> Result<Option<LoadedScheduleConfig>> {
         None => None,
     };
     let mut merged = merge_registries(project, global);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    // A malformed local layer drops only the bridge jobs, never the registry.
+    let local = bridge_jobs(project_root).unwrap_or_else(|e| {
+        eprintln!("warning: hub-bridge job not loaded: {e:#}");
+        Vec::new()
+    });
+    if !local.is_empty() {
+        let config = merged.get_or_insert_with(|| ScheduleConfigLoaded {
+            min_gap: default_min_gap(),
+            tasks: Vec::new(),
+        });
+        config
+            .tasks
+            .retain(|t| local.iter().all(|l| l.name != t.name));
+        config.tasks.extend(local);
+    }
     if let Some(config) = merged.as_mut() {
         disable_unknown_bindings(config);
     }
     Ok(merged)
+}
+
+/// The machine-local layer's jobs: the hub-bridge reconcile and its route,
+/// only when `~/.aida/store-local.toml` marks this clone `bridge = true` and
+/// `project_root` is the clone's primary checkout (a seat worktree of the
+/// bridge clone never runs it). They replace a same-named registry job.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn bridge_jobs(project_root: &Path) -> Result<Vec<Task>> {
+    let Some(path) = crate::store_local::layer_path() else {
+        return Ok(Vec::new());
+    };
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let entry = crate::store_local::load_from(&path, &crate::store_local::clone_key(project_root))?;
+    if !entry.bridge || !crate::store_local::is_primary_checkout(project_root) {
+        return Ok(Vec::new());
+    }
+    bridge_tasks(entry.bridge_every.as_deref())
+}
+
+/// Build the bridge job pair. Pure, so a test can check the exact shape.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn bridge_tasks(every: Option<&str>) -> Result<Vec<Task>> {
+    use crate::store_local::{BRIDGE_COMMAND, BRIDGE_JOB, BRIDGE_ROUTE_JOB, DEFAULT_BRIDGE_EVERY};
+    let every = every.unwrap_or(DEFAULT_BRIDGE_EVERY).to_string();
+    let job = build_task(
+        JobConfig {
+            name: BRIDGE_JOB.to_string(),
+            command: Some(BRIDGE_COMMAND.to_string()),
+            prompt: None,
+            interval: Some(every),
+            on: Vec::new(),
+            when: None,
+            while_: None,
+            quiet_hours: None,
+            enabled: true,
+            seats: Vec::new(),
+            kind: Some(JobKind::Substrate),
+        },
+        JobSource::Local,
+    )
+    .context("invalid bridge_every in ~/.aida/store-local.toml")?;
+    let route = build_task(
+        JobConfig {
+            name: BRIDGE_ROUTE_JOB.to_string(),
+            command: None,
+            prompt: Some(format!(
+                "The hub-bridge reconcile (`aida {BRIDGE_COMMAND}`) stopped on this clone. Read the \
+                 routed trip evidence: identity-bearing content waits for your consent \
+                 (`aida remote reconcile --execute --yes` only after `aida store scrub-preview` \
+                 shows it is safe to publish); a conflict the union cannot resolve needs the \
+                 manual path. Never force-push a shared branch. Then `aida schedule done {BRIDGE_ROUTE_JOB}`."
+            )),
+            interval: None,
+            on: vec![format!("CronJobFailed:{BRIDGE_JOB}")],
+            when: None,
+            while_: None,
+            quiet_hours: None,
+            enabled: true,
+            seats: vec!["advisor".to_string()],
+            kind: Some(JobKind::Seat),
+        },
+        JobSource::Local,
+    )?;
+    Ok(vec![job, route])
 }
 
 /// A `CronJobFailed:<job>` binding must name a job in the merged registry
@@ -2861,7 +2968,28 @@ fn install_driver_command(
             &mut crate::schedule_driver::RealDriverHost,
         )
     })?;
+    retire_stopgap_reconcile_cron(project_root, crate::store_local::remove_stopgap_cron);
     Ok(())
+}
+
+/// On the hub-bridge clone, the installed tick now runs the reconcile, so
+/// the hand-installed stopgap crontab entry would run it twice: remove it
+/// with `remove` (the real crontab edit outside tests). Best-effort — a
+/// crontab that cannot be read never fails the install.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn retire_stopgap_reconcile_cron(project_root: &Path, remove: impl FnOnce() -> Result<bool>) {
+    if !bridge_jobs(project_root).is_ok_and(|jobs| !jobs.is_empty()) {
+        return;
+    }
+    match remove() {
+        Ok(true) => println!(
+            "Removed the stopgap `{}` crontab entry — `{}` replaces it.",
+            crate::store_local::STOPGAP_CRON_MARKER,
+            crate::store_local::BRIDGE_JOB
+        ),
+        Ok(false) => {}
+        Err(e) => eprintln!("warning: could not check the crontab for the stopgap entry: {e:#}"),
+    }
 }
 
 /// `aida schedule uninstall-cron`.
@@ -3401,6 +3529,18 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             ScheduledCommand {
                 display: "dev build --if-main-green",
                 args: &["dev", "build", "--if-main-green"],
+                hook_allowed: false,
+            },
+        ),
+        // The hub-bridge reconcile. Never `--yes`: identity-bearing content
+        // stops the run and the failure routes to the advisor. Only a job
+        // from this clone's machine-local layer may run it (`build_task`).
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+        (
+            &[crate::store_local::BRIDGE_COMMAND],
+            ScheduledCommand {
+                display: crate::store_local::BRIDGE_COMMAND,
+                args: &["remote", "reconcile", "--execute"],
                 hook_allowed: false,
             },
         ),
@@ -4699,6 +4839,181 @@ mod tests {
         assert_eq!(out.len(), 3);
         assert_eq!(git(&["rev-list", "--count", "HEAD"]), "1");
         assert_eq!(schedule_ledger::load_all(&store).len(), 3);
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ace81ddf | ai:claude
+    #[test]
+    fn bridge_job_reconciles_without_yes_and_routes_failures_to_advisor() {
+        let tasks = bridge_tasks(None).unwrap();
+        let job = &tasks[0];
+        assert_eq!(job.name, crate::store_local::BRIDGE_JOB);
+        assert_eq!(job.kind, JobKind::Substrate);
+        assert_eq!(job.source, JobSource::Local);
+        assert_eq!(job.interval, Some(Duration::hours(1)));
+        assert!(job.enabled);
+        let argv = job.command.as_ref().unwrap().args;
+        assert_eq!(argv, ["remote", "reconcile", "--execute"]);
+        assert!(
+            !argv.contains(&"--yes"),
+            "identity content must stop the run"
+        );
+        assert!(!job.command.as_ref().unwrap().hook_allowed);
+
+        let route = &tasks[1];
+        assert_eq!(route.name, crate::store_local::BRIDGE_ROUTE_JOB);
+        assert_eq!(route.kind, JobKind::Seat);
+        assert!(route.applies_to_seat("advisor"));
+        assert_eq!(
+            route.on,
+            vec![EventTrigger {
+                kind: "CronJobFailed".to_string(),
+                job: Some(crate::store_local::BRIDGE_JOB.to_string()),
+            }]
+        );
+
+        let slower = bridge_tasks(Some("6h")).unwrap();
+        assert_eq!(slower[0].interval, Some(Duration::hours(6)));
+        assert!(bridge_tasks(Some("soon")).is_err());
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acc25d32 | ai:claude
+    #[test]
+    fn tracked_reconcile_job_never_runs() {
+        let cfg = parse_project(
+            r#"
+[schedule]
+[[schedule.jobs]]
+name = "reconcile-everywhere"
+command = "remote reconcile --execute"
+every = "1h"
+enabled = true
+"#,
+        )
+        .unwrap()
+        .unwrap();
+        let job = &cfg.tasks[0];
+        assert!(
+            job.command.is_none(),
+            "a tracked job must not get a runnable command"
+        );
+        let invalid = job.invalid_command.as_ref().unwrap();
+        assert!(invalid.error.contains("hub bridge"), "{}", invalid.error);
+        // The machine-global layer applies to every clone too.
+        let rebuilt = build_task(
+            JobConfig {
+                name: "g".into(),
+                command: Some("remote reconcile --execute".into()),
+                prompt: None,
+                interval: Some("1h".into()),
+                on: Vec::new(),
+                when: None,
+                while_: None,
+                quiet_hours: None,
+                enabled: true,
+                seats: Vec::new(),
+                kind: None,
+            },
+            JobSource::Global,
+        )
+        .unwrap();
+        assert!(rebuilt.command.is_none() && rebuilt.invalid_command.is_some());
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acc25d32 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac3ff691 | ai:claude
+    #[test]
+    fn only_a_clone_marked_bridge_gets_the_bridge_jobs() {
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".aida")).unwrap();
+        std::fs::write(
+            project.path().join(".aida/config.toml"),
+            r#"
+[schedule]
+[[schedule.jobs]]
+name = "hub-drift-guard"
+command = "doctor check remote-drift --fail-on-findings"
+every = "6h"
+enabled = true
+"#,
+        )
+        .unwrap();
+        let names = |root: &Path| -> Vec<String> {
+            load_registry(root)
+                .unwrap()
+                .unwrap()
+                .tasks
+                .iter()
+                .map(|t| t.name.clone())
+                .collect()
+        };
+        assert_eq!(names(project.path()), vec!["hub-drift-guard"]);
+
+        let layer = home
+            .path()
+            .join(".aida")
+            .join(crate::store_local::LOCAL_LAYER_FILE);
+        let key = crate::store_local::clone_key(project.path());
+        crate::store_local::write_bridge(&layer, &key, true).unwrap();
+        let registry = load_registry(project.path()).unwrap().unwrap();
+        let got: Vec<&str> = registry.tasks.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(
+            got,
+            vec![
+                "hub-drift-guard",
+                crate::store_local::BRIDGE_JOB,
+                crate::store_local::BRIDGE_ROUTE_JOB
+            ]
+        );
+        // The drift guard stays the escalation for what the bridge cannot union.
+        assert!(registry.tasks[0].enabled && registry.tasks[0].problem.is_none());
+        assert!(registry.tasks.iter().all(|t| t.enabled));
+
+        // Another clone on the same machine is not the bridge.
+        let other = tempfile::tempdir().unwrap();
+        assert!(load_registry(other.path())
+            .unwrap()
+            .is_none_or(|c| c.tasks.is_empty()));
+    }
+
+    /// The install path's stopgap retirement removes the marker line on the
+    /// bridge clone and leaves the crontab alone on any other clone.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac9e5341 | ai:claude
+    #[test]
+    fn install_retires_the_stopgap_cron_only_on_the_bridge_clone() {
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let bridge = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let layer = home
+            .path()
+            .join(".aida")
+            .join(crate::store_local::LOCAL_LAYER_FILE);
+        crate::store_local::write_bridge(
+            &layer,
+            &crate::store_local::clone_key(bridge.path()),
+            true,
+        )
+        .unwrap();
+        let stopgap = "# aida-store-reconcile\n\
+                       0 * * * * flock -n ~/.aida/store-reconcile.lock aida remote reconcile --execute\n\
+                       30 2 * * * backup.sh\n";
+        let crontab = std::cell::RefCell::new(stopgap.to_string());
+        let remove = || -> Result<bool> {
+            let next = crate::store_local::crontab_without_stopgap(&crontab.borrow());
+            Ok(next.map(|body| *crontab.borrow_mut() = body).is_some())
+        };
+
+        retire_stopgap_reconcile_cron(other.path(), remove);
+        assert_eq!(
+            *crontab.borrow(),
+            stopgap,
+            "a non-bridge clone keeps the stopgap"
+        );
+
+        retire_stopgap_reconcile_cron(bridge.path(), remove);
+        assert_eq!(*crontab.borrow(), "30 2 * * * backup.sh\n");
     }
 
     // trace:TASK-1532 | ai:agy

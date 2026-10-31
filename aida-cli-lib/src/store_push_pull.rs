@@ -594,6 +594,34 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
         );
         return;
     }
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    if let Some(hubs) =
+        crate::store_local::redirected_store_hubs(&crate::store_local::push_hubs(store_path), |r| {
+            git_ops::has_remote(store_path, r)
+        })
+    {
+        let crate::store_local::HubPush {
+            pushed, failures, ..
+        } = crate::store_local::push_store_to_hubs(store_path, &branch, &sha, &hubs);
+        if failures.is_empty() && !pushed.is_empty() {
+            eprintln!(
+                "  {} auto-pushed aida-store to {} ({reason})",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                pushed.join(", ")
+            );
+        } else {
+            eprintln!(
+                "  {} stored locally; push deferred ({reason}: {})",
+                "Warning:".yellow().bold(),
+                if failures.is_empty() {
+                    "no push hub is configured here".to_string()
+                } else {
+                    failures.join("; ")
+                }
+            );
+        }
+        return;
+    }
     let refspec = format!("{sha}:refs/heads/{branch}");
     match run_remote_git_with_timeout(
         store_path,
@@ -1234,8 +1262,14 @@ fn fan_out_mirror_refspec(
 ) {
     let cfg = read_store_sync_config(project_root).unwrap_or_default();
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let push_hubs = (branch == "aida-store").then(|| crate::store_local::push_hubs(project_root));
     for mirror in &cfg.mirror_remotes {
         if mirror == "origin" {
+            continue;
+        }
+        if let Some(policy) = push_hubs.as_ref().filter(|p| !p.allows(mirror)) {
+            println!("  mirror {}", policy.refusal(mirror));
             continue;
         }
         if !aida_core::git_ops::has_remote(repo, mirror) {
@@ -1607,7 +1641,23 @@ pub(crate) fn handle_push_command(
         );
     } else if !code_only {
         let store_has_origin = git_ops::has_remote(store_path, "origin");
-        if store_has_origin {
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+        let redirect = crate::store_local::redirected_store_hubs(
+            &crate::store_local::push_hubs(store_path),
+            |r| git_ops::has_remote(store_path, r),
+        );
+        let store_has_origin = store_has_origin || redirect.is_some();
+        if let Some(hubs) = &redirect {
+            println!(
+                "{} aida-store → {} (this clone's push hubs)",
+                "Pushing store".cyan().bold(),
+                if hubs.is_empty() {
+                    "nowhere".to_string()
+                } else {
+                    hubs.join(", ")
+                }
+            );
+        } else if store_has_origin {
             println!("{} aida-store → origin", "Pushing store".cyan().bold());
         } else {
             println!(
@@ -1665,6 +1715,28 @@ pub(crate) fn handle_push_command(
             Err(e) => {
                 eprintln!("  {} store push failed: {e:#}", "Warning:".yellow().bold());
                 store_outcome = PushLegOutcome::Failed(format!("store push failed: {e:#}"));
+            }
+            Ok(Some((branch, sha))) if redirect.is_some() => {
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+                let hubs = redirect.unwrap_or_default();
+                let crate::store_local::HubPush {
+                    pushed, failures, ..
+                } = crate::store_local::push_store_to_hubs(store_path, &branch, &sha, &hubs);
+                for hub in &pushed {
+                    println!("  pushed → {hub}");
+                }
+                store_outcome = if hubs.is_empty() {
+                    PushLegOutcome::Failed(
+                        "this clone's push hubs (`aida remote push-hubs`) exclude origin and name \
+                         no remote configured here; the store was not pushed"
+                            .to_string(),
+                    )
+                } else if failures.is_empty() {
+                    println!("  {}", "store push complete".green());
+                    PushLegOutcome::Pushed
+                } else {
+                    PushLegOutcome::Failed(format!("store push failed: {}", failures.join("; ")))
+                };
             }
             Ok(Some((branch, sha))) => {
                 match git_ops::push_exact(store_path, "origin", &sha, &branch) {

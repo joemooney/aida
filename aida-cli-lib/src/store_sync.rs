@@ -1363,6 +1363,15 @@ pub(crate) fn allocation_push_step(
     let (kind, stderr) = match pushed {
         Ok(PushOutcome::Pushed) => return AllocationPushStep::Published,
         Ok(PushOutcome::Failed { kind, stderr }) => (kind, stderr),
+        // This clone's push hubs forbid the push (no declared hub is a remote
+        // here, or the layer is unreadable). The spec is committed locally;
+        // keep it and publish once the hubs are fixed.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+        Err(e) if aida_core::git_ops::is_store_push_refusal(&e) => {
+            return AllocationPushStep::Defer {
+                detail: Some(format!("{e:#}")),
+            }
+        }
         Err(e) => {
             return fail_step(
                 spec_id,

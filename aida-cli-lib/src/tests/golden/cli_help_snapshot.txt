@@ -8432,6 +8432,16 @@ Commands:
                fast-forwards to it. Dry-run by default — prints the plan and exits 2 when the hubs
                disagree; add --execute to perform the merge and the pushes. Never force-pushes; a
                conflict the structural union cannot resolve stops the reconcile with the manual path
+  bridge       Show or set whether this clone is the hub bridge: the one clone that reaches every
+               hub and runs `remote reconcile --execute` on the schedule tick (hourly by default),
+               so a clone that pushes the store to one hub only never leaves the hubs diverged.
+               Machine-local (`~/.aida/store-local.toml`), never tracked. Identity-bearing content
+               stops the run and routes to the advisor. Once the schedule tick is installed, the
+               hand-installed `# aida-store-reconcile` crontab entry is removed
+  push-hubs    Show or set the remotes this clone may push the spec store to. Machine-local
+               (`~/.aida/store-local.toml`). When `origin` is not listed, `db sync --push`, `aida
+               push`, auto-push, `remote mirror-sync` and `remote reconcile` never push to it; the
+               store goes to the listed hubs instead and a hub bridge clone carries it to the rest
   help         Print this message or the help of the given subcommand(s)
 
 Options:
@@ -8702,6 +8712,70 @@ Options:
       --yes
           Consent to publishing identity-bearing registry content (email addresses currently on one
           hub only) to every hub; without it the reconcile stops and lists what would be published
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida remote bridge
+Show or set whether this clone is the hub bridge: the one clone that reaches every hub and runs
+`remote reconcile --execute` on the schedule tick (hourly by default), so a clone that pushes the
+store to one hub only never leaves the hubs diverged. Machine-local (`~/.aida/store-local.toml`),
+never tracked. Identity-bearing content stops the run and routes to the advisor. Once the schedule
+tick is installed, the hand-installed `# aida-store-reconcile` crontab entry is removed
+
+Usage: aida remote bridge [OPTIONS]
+
+Options:
+      --enable
+          Mark this clone as the hub bridge
+
+      --disable
+          Stop running the bridge reconcile from this clone
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida remote push-hubs
+Show or set the remotes this clone may push the spec store to. Machine-local
+(`~/.aida/store-local.toml`). When `origin` is not listed, `db sync --push`, `aida push`, auto-push,
+`remote mirror-sync` and `remote reconcile` never push to it; the store goes to the listed hubs
+instead and a hub bridge clone carries it to the rest
+
+Usage: aida remote push-hubs [OPTIONS] [HUBS]...
+
+Arguments:
+  [HUBS]...
+          Remote names, e.g. `gitlab`. Without names (or --all), print the current setting
+
+Options:
+      --all
+          Remove the restriction: every hub may receive the store again
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -37247,6 +37321,73 @@ Working on aida itself
         "name": "yes",
         "takes_value": false,
         "help": "Consent to publishing identity-bearing registry content (email addresses currently on one hub only) to every hub; without it the reconcile stops and lists what would be published"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "remote",
+      "bridge"
+    ],
+    "about": "Show or set whether this clone is the hub bridge: the one clone that reaches every hub and runs `remote reconcile --execute` on the schedule tick (hourly by default), so a clone that pushes the store to one hub only never leaves the hubs diverged. Machine-local (`~/.aida/store-local.toml`), never tracked. Identity-bearing content stops the run and routes to the advisor. Once the schedule tick is installed, the hand-installed `# aida-store-reconcile` crontab entry is removed",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "disable",
+        "takes_value": false,
+        "help": "Stop running the bridge reconcile from this clone"
+      },
+      {
+        "name": "enable",
+        "takes_value": false,
+        "help": "Mark this clone as the hub bridge"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "remote",
+      "push-hubs"
+    ],
+    "about": "Show or set the remotes this clone may push the spec store to. Machine-local (`~/.aida/store-local.toml`). When `origin` is not listed, `db sync --push`, `aida push`, auto-push, `remote mirror-sync` and `remote reconcile` never push to it; the store goes to the listed hubs instead and a hub bridge clone carries it to the rest",
+    "flags": [
+      {
+        "name": "all",
+        "takes_value": false,
+        "help": "Remove the restriction: every hub may receive the store again"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
