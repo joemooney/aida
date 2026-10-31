@@ -688,6 +688,129 @@ impl CloneDispenser {
         }
         Ok(inner)
     }
+
+    /// The bound counter, read without its lock, when this process cannot
+    /// write the directory that holds it: a contained session, whose sandbox
+    /// denies the main checkout's `.git` but grants the store worktree.
+    /// `None` when the normal locked provider applies.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+    fn contained_state(&self) -> Result<Option<crate::dispenser::DispenserState>> {
+        if self.inner.is_some()
+            || resolve(&self.root)?.authoritative
+            || crate::work_binding::load(&self.root)?.is_none()
+        {
+            return Ok(None);
+        }
+        let path = crate::work_binding::counter_path(&self.root)?;
+        if path.parent().is_none_or(dir_writable) {
+            return Ok(None);
+        }
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(&self.root)?;
+        let state = crate::work_binding::bound_counter_state(&path)?
+            .context("bound WORK counter missing; explicit recovery required")?;
+        let binding = node(&self.root)?;
+        if state.mode != (crate::dispenser::IdMode::Distributed { node_id: binding }) {
+            bail!(
+                "dispenser does not match this clone's node binding; run `{}` for the repair",
+                crate::work_binding::DOCTOR_ALLOCATION_COMMAND
+            )
+        }
+        Ok(Some(state))
+    }
+
+    /// The highest sequence this node has filed under `prefix` in the store
+    /// worktree, committed or still queued for the host (0 when none). A
+    /// contained mint lands here before any counter knows about it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+    fn filed_high_water(&self, prefix: &str) -> Result<u32> {
+        let node = node(&self.root)?;
+        let Some(local) =
+            crate::id_identity::IdKey::parse(&format!("{prefix}-{node}-1")).map(|k| k.prefix)
+        else {
+            return Ok(0);
+        };
+        Ok(
+            crate::object_store::list_objects(&self.root.join("objects"))?
+                .iter()
+                .filter_map(|(stem, _)| crate::id_identity::IdKey::parse(stem))
+                .filter(|k| k.prefix == local)
+                .filter_map(|k| k.seq.parse::<u32>().ok())
+                .max()
+                .unwrap_or(0),
+        )
+    }
+
+    /// A contained session's next number: past both the read-only counter
+    /// and every number already filed in the store. Only under the store
+    /// write lock, held until the new object is written, so no other seat
+    /// and no host writer can pick the same number in between.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+    fn contained_next(
+        &self,
+        state: &crate::dispenser::DispenserState,
+        prefix: &str,
+    ) -> Result<u32> {
+        if !crate::db::store_write_lock_held(&self.root) {
+            bail!(
+                "this session cannot write the ID counter in {}, and a new ID can only be issued while holding the store write lock",
+                crate::work_binding::counter_path(&self.root)?
+                    .parent()
+                    .unwrap_or(&self.root)
+                    .display()
+            )
+        }
+        self.contained_peek(state, prefix)
+    }
+
+    fn contained_peek(
+        &self,
+        state: &crate::dispenser::DispenserState,
+        prefix: &str,
+    ) -> Result<u32> {
+        let counter = state
+            .sequences
+            .get(&prefix.to_uppercase())
+            .copied()
+            .unwrap_or(0);
+        counter
+            .max(self.filed_high_water(prefix)?)
+            .checked_add(1)
+            .context("node-local sequence exhausted")
+    }
+}
+
+/// Whether this process may create files in `dir`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+fn dir_writable(dir: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else {
+            return false;
+        };
+        // SAFETY: `c` is a valid NUL-terminated path for the call's duration.
+        unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        true
+    }
+}
+
+/// Whether a new ID minted at `root` is issued without the clone's counter
+/// lock (a contained session), so the store write must be queued for the
+/// host to commit.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+pub fn contained_allocation(root: &Path) -> bool {
+    CloneDispenser {
+        root: root.into(),
+        inner: None,
+        migrate_registered_legacy: false,
+    }
+    .contained_state()
+    .is_ok_and(|s| s.is_some())
 }
 impl crate::dispenser::Dispenser for CloneDispenser {
     fn node_local_only(&self) -> bool {
@@ -731,8 +854,7 @@ impl crate::dispenser::Dispenser for CloneDispenser {
         {
             bail!("invalid node-local allocation prefix")
         }
-        let inner = self.inner()?;
-        inner.state()?;
+        self.state()?;
         let binding = node(&self.root)?;
         if seq == 0 {
             bail!("node-local sequence is exhausted or invalid")
@@ -748,13 +870,26 @@ impl crate::dispenser::Dispenser for CloneDispenser {
         let seq = self.next(prefix)?;
         self.format_id(prefix, seq)
     }
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude — a contained
+    // session mints past the read-only counter and the filed high-water; the
+    // host's counter then jumps past what contained sessions filed.
     fn next(&self, prefix: &str) -> Result<u32> {
-        self.inner()?.next(prefix)
+        if let Some(state) = self.contained_state()? {
+            return self.contained_next(&state, prefix);
+        }
+        let inner = self.inner()?;
+        inner.next_above(prefix, self.filed_high_water(prefix)?)
     }
     fn peek(&self, prefix: &str) -> Result<u32> {
+        if let Some(state) = self.contained_state()? {
+            return self.contained_peek(&state, prefix);
+        }
         self.inner()?.peek(prefix)
     }
     fn state(&self) -> Result<crate::dispenser::DispenserState> {
+        if let Some(state) = self.contained_state()? {
+            return Ok(state);
+        }
         self.inner()?.state()
     }
 }
@@ -1727,5 +1862,121 @@ mod tests {
             .save(&dir.path().join("registry/blocks.yaml"))
             .is_err());
         assert!(!dir.path().join("registry").exists());
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude — a contained
+    // session (the clone's `.git` read-only, the store worktree writable)
+    // mints final IDs under the store write lock without touching the counter.
+    #[cfg(unix)]
+    mod contained {
+        use super::*;
+        use std::os::unix::fs::PermissionsExt;
+
+        struct ReadOnlyGit(PathBuf);
+        impl ReadOnlyGit {
+            fn new(root: &Path) -> Self {
+                let git = root.join(".git");
+                std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o555)).unwrap();
+                ReadOnlyGit(git)
+            }
+        }
+        impl Drop for ReadOnlyGit {
+            fn drop(&mut self) {
+                let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+            }
+        }
+
+        fn bound_clone() -> Option<(tempfile::TempDir, String)> {
+            if unsafe { libc::geteuid() } == 0 {
+                eprintln!("skipping: root ignores directory write bits");
+                return None;
+            }
+            let dir = tempfile::tempdir().unwrap();
+            crate::git_ops::init(dir.path()).unwrap();
+            let node = crate::work_binding::bootstrap(dir.path())
+                .unwrap()
+                .unwrap()
+                .node_id;
+            // The host installs the store hooks once; a contained session
+            // only verifies them.
+            crate::git_ops::resolve_store_hooks_dir(dir.path()).unwrap();
+            Some((dir, node))
+        }
+
+        fn add_bug(root: &Path, title: &str) -> String {
+            let backend = GitBackend::new(root).unwrap().with_auto_commit(false);
+            let mut req = Requirement::new(title.into(), "fixture".into());
+            req.req_type = crate::RequirementType::Bug;
+            backend.add_requirement(req).unwrap().spec_id.unwrap()
+        }
+
+        #[test]
+        fn contained_add_mints_past_counter_and_filed_ids_and_host_jumps_past_them() {
+            let Some((dir, node)) = bound_clone() else {
+                return;
+            };
+            let root = dir.path();
+            assert_eq!(add_bug(root, "host first"), format!("BUG-{node}-001"));
+            let counter = crate::work_binding::counter_path(root).unwrap();
+            let before = std::fs::read(&counter).unwrap();
+            {
+                let _ro = ReadOnlyGit::new(root);
+                assert!(contained_allocation(root));
+                assert_eq!(add_bug(root, "contained one"), format!("BUG-{node}-002"));
+                assert_eq!(add_bug(root, "contained two"), format!("BUG-{node}-003"));
+                // Readable in the same session before any host commit.
+                let backend = GitBackend::new(root).unwrap();
+                let store = backend.load().unwrap();
+                assert!(store
+                    .requirements
+                    .iter()
+                    .any(|r| r.spec_id.as_deref() == Some(&format!("BUG-{node}-003"))));
+            }
+            assert_eq!(
+                std::fs::read(&counter).unwrap(),
+                before,
+                "counter untouched"
+            );
+            assert!(!contained_allocation(root));
+            // The host counter still says 1; it jumps past what was filed.
+            assert_eq!(add_bug(root, "host second"), format!("BUG-{node}-004"));
+            assert_eq!(add_bug(root, "host third"), format!("BUG-{node}-005"));
+        }
+
+        #[test]
+        fn concurrent_contained_seats_never_share_an_id() {
+            let Some((dir, node)) = bound_clone() else {
+                return;
+            };
+            let root = dir.path().to_path_buf();
+            let _ro = ReadOnlyGit::new(&root);
+            let seats: Vec<_> = (0..4)
+                .map(|seat| {
+                    let root = root.clone();
+                    std::thread::spawn(move || {
+                        (0..5)
+                            .map(|n| add_bug(&root, &format!("seat {seat} spec {n}")))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            let mut ids: Vec<String> = seats.into_iter().flat_map(|s| s.join().unwrap()).collect();
+            ids.sort();
+            let expected: Vec<String> = (1..=20).map(|n| format!("BUG-{node}-{n:03}")).collect();
+            assert_eq!(ids, expected, "20 distinct, gap-free IDs");
+        }
+
+        #[test]
+        fn contained_mint_refuses_outside_the_store_write_lock() {
+            let Some((dir, _node)) = bound_clone() else {
+                return;
+            };
+            let _ro = ReadOnlyGit::new(dir.path());
+            let provider = dispenser(dir.path(), None).unwrap();
+            let err = provider.next("BUG").unwrap_err();
+            assert!(format!("{err:#}").contains("store write lock"), "{err:#}");
+            // Peeking needs no lock and advances nothing.
+            assert_eq!(provider.peek("BUG").unwrap(), 1);
+        }
     }
 }

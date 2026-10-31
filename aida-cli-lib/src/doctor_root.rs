@@ -3,6 +3,11 @@
 
 use crate::*;
 
+/// How long a spec a contained session filed may wait for the host to commit
+/// it before `aida doctor` reports it (`store-queued-specs`).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+pub(crate) const QUEUED_SPEC_MAX_AGE_MINUTES: u64 = 30;
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct DoctorFinding {
     pub(crate) category: String,
@@ -836,6 +841,35 @@ pub(crate) fn collect_doctor_findings_at(
                 unwritable.display(),
                 unwritable.display()
             ),
+            safe_heal: false,
+        });
+    }
+    // A spec a contained session filed waits in the store worktree for the
+    // host to commit it. One still waiting after QUEUED_SPEC_MAX_AGE means no
+    // host commit has run since: name the specs and the drain.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+    let queued = crate::child_store_commit::queued_spec_objects(
+        &store_worktree,
+        std::time::Duration::from_secs(QUEUED_SPEC_MAX_AGE_MINUTES * 60),
+    );
+    if !queued.is_empty() {
+        let oldest = queued
+            .iter()
+            .map(|(_, age)| age.as_secs() / 60)
+            .max()
+            .unwrap_or(0);
+        let ids: Vec<&str> = queued.iter().map(|(id, _)| id.as_str()).collect();
+        push(DoctorFinding {
+            category: "store-worktree".to_string(),
+            id: "store-queued-specs".to_string(),
+            summary: format!(
+                "{} spec{} filed by a contained session still waiting for the host to commit (oldest {oldest} min, over {QUEUED_SPEC_MAX_AGE_MINUTES} min): {}",
+                queued.len(),
+                if queued.len() == 1 { " is" } else { "s are" },
+                ids.join(", ")
+            ),
+            action: "run `aida db sync` from a host (not sandboxed) shell to commit them"
+                .to_string(),
             safe_heal: false,
         });
     }
