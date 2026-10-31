@@ -7,7 +7,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T10:54:23.603768457Z
-modified_at: 2026-10-31T14:28:38.772497273Z
+modified_at: 2026-10-31T14:30:49.027356413Z
 req_type: Story
 tags:
 - agents
@@ -20,6 +20,29 @@ comments:
   created_at: 2026-10-31T11:15:25.889504963Z
   modified_at: 2026-10-31T11:15:25.889504963Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1925e-cdc3-7a02-bb42-e464f8ff464c
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **(1) unit + command-level:** `rotation_enabled` admits codex (explicit `--rotate`, or `[agents.codex] rotate` on a TTY); a command-level test drives `run_rotating_agent` with a fake `sh` codex across two generations and asserts same handle, lease id, cwd and that the lease stays Live in the gap.
+    - **(2) unit + command-level:** a pure `generation_session_id(seeded, learned)` picks the seeded id, else the thread id the codex SessionStart hook recorded on the generation's registry row (read from `mark_agent_ended`'s returned row). Pure tests: with a known thread, a same-handle handoff from another thread is rejected and one from this thread matches; with none, the `ts >= spawn` + handle fallback applies. Command-level: fake codex records its thread on its own row; a sibling same-handle handoff with a different thread written after spawn does not relaunch, while the own-thread one does; generation 2 gets `AIDA_ROTATION_PREVIOUS_SESSION` = generation 1's thread.
+    - **(3) command-level:** with `mail_wake = Some(Pending)`, every generation's own registry row is stamped `mail_wake = "pending"` (observed from inside each child), so the codex hook re-arms it per generation.
+
+    ### Expected files
+    - `aida-cli-lib/src/agent_rotation.rs` (codex enablement, session-id selection)
+    - `aida-cli-lib/src/agent_launch.rs` (codex `--rotate` dispatch, config default, learned thread plumbing)
+    - `aida-cli-lib/src/agent_launch_args.rs` (Codex `--rotate`)
+    - tests: `tests/agent_rotation_tests.rs`, new `tests/story_150_codex_rotation_tests.rs`
+    - `docs/cli/06-roles-sessions.md`, help golden
+
+    ### Ambiguities / conflicts as questions
+    - None.
+  created_at: 2026-10-31T14:30:49.027356413Z
+  modified_at: 2026-10-31T14:30:49.027356413Z
+  session_id: 01a1925c9298
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a191ab-db87-7011-8bcf-f104ffe63d83
   author: joe
