@@ -16,12 +16,12 @@ description: |
   7. Interacts with STORY-HOME-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
 
   Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-HOME-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T10:38:49.632174475Z
+modified_at: 2026-10-31T10:42:52.975795685Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -45,6 +45,95 @@ comments:
   created_at: 2026-10-31T10:26:55.746580598Z
   modified_at: 2026-10-31T10:26:55.746580598Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a1918d-e853-77b0-a055-612cb921f7a3
+  author: joe
+  content: |-
+    ## Architecture sketch: `aida agent new` as a rotation supervisor (no code yet)
+
+    Grounded in the current code: `agent_launch.rs::run_tracked_agent_after_spawn`, `seat_rotation.rs`, `agent_handle.rs`, `relay_mail.rs` (STORY-1843), `gate/seat_authority.rs::issue_child`, `leases.rs::lease_state_for`, `advisor_handshake.rs`.
+
+    ### 1. Process model
+    - A foreground `aida agent new` already acts as a parent: it `spawn`s the vendor binary, forwards Ctrl-C/SIGTERM (`install_child_signal_forwarder`), registers the child after the spawn, `wait`s, then calls `mark_agent_ended` and removes the context file. The supervisor makes that last part a loop: **prepare once, run N generations**.
+    - Prepare once (unchanged, still runs before the spawn): role picker, lease preflight, delegation and bypass gates, `prepare_agent_launch_attempt` (worktree, lease, handle reservation), mail-wake decision.
+    - Per generation: a fresh native session id (`agent_seed_session_args`), a fresh child grant, a fresh context file, spawn, register a new registry row (generation N), wait, `mark_agent_ended`, and print the deferred warnings (BUG-030 path).
+    - After a generation exits, the supervisor runs a **decision step**: `Exit` (no fresh handoff, or a final one), `Crash` (guard tripped, see section 5), or `Relaunch`. Only `Relaunch` loops.
+    - The supervisor is **opt-in for the first slice**: `aida agent new <vendor> --rotate`, or `[agents.<vendor>] rotate = true` in `agents.toml`. When rotation is off, the code path and behaviour are byte-identical to today. `--bg`, `--no-exec`, `--show-*` and the headless lanes never supervise.
+    - The exit code is the last generation's. Relaunch decisions never change it.
+
+    ### 2. What counts as a fresh handoff
+    Today `write_handoff` keys only on **seat** (the role, e.g. `advisor`). It records `ts` and `seat` in `log.jsonl` and nothing about who wrote it. On its own, that cannot tell this child's handoff from a sibling advisor's or a stale one. Proposal:
+    - `aida session handoff --write` also stamps the writer into the header comment and the `log.jsonl` record: `handle` (`AIDA_HANDLE` or `AIDA_USER`), `native_session_id` (`CLAUDE_CODE_SESSION_ID` / `CODEX_THREAD_ID`) and `generation` (a new `AIDA_ROTATION_GENERATION` env var the supervisor exports).
+    - A new `--final` flag writes the same record with `"final": true`: the handoff is recorded, but the session ends for real.
+    - **Fresh** = a `log.jsonl` record where **all** of these hold: `seat == plan role` AND `handle == plan.name` AND (`native_session_id == this generation's seeded id`, OR, when the vendor did not expose one, `ts >= this generation's spawn time`) AND not `final`. Using the log record rather than the mtime of `latest.md` avoids clock and copy races, and a sibling seat writing the same `latest.md` cannot trigger us.
+    - Edge case: the handoff is written to the main root (`main_worktree_root_from`). The supervisor reads the same main root, so seat clones and worktrees agree.
+
+    ### 3. Keeping the same handle, lease, spec claim, worktree and mail identity
+    - **Handle and mail: reuse the relay-run protocol, not a new mechanism.** `relay_mail` already makes one logical recipient (run id = reservation `recipient_id`) span many child sessions: `bind` reserves the label for the run, `child-bind` binds each generation's native session id, `end` records the terminal generation, `reconcile_relay_runs` retires a crashed controller, and `agent_handle` already treats a live run as the holder during the gaps (`run_holding`). The supervisor becomes an **in-process relay controller**: at the first `Relaunch` decision it calls `relay_mail::bind` for `plan.name` (holding the capability in memory, never on argv), then `child_bind` per generation, then `end(Exit|Stop|Blocked)` at the real exit. Mail sent during the gap is accepted for the next generation. Ack state lives in the mailbox keyed by recipient, so it is not replayed. That covers "unread mail is not lost and nothing is double-acked".
+      - Alternative (lighter): skip the relay run and re-present the original launch token or reservation each generation, with the supervisor stamping `launcher_pid`. That is simpler, but it does not hold the handle during the gap after `UNBOUND_RESERVATION_TTL_SECS` and it duplicates what STORY-1843 already solved. **Lean: relay run.**
+    - **Lease and spec claim:** created once, released only at the real exit. Risk: `lease_state_for` judges liveness by `active_pid`, else by a live claude session in the worktree. In the 5 s gap neither holds, so a concurrent reaper or `agent gc` could read the lease as stale. Fix: the supervisor stamps itself as the lease's `active_pid`/`active_pid_start_time` (it outlives every generation) and records each child with `record_launched_worker` (already done per spawn) so authorship stays correct.
+    - **Worktree:** `plan.launch_cwd` is reused unchanged. The spec status is not touched between generations.
+    - **Grant:** `issue_child` binds the grant to the launcher's process token, and the supervisor *is* that launcher, so each generation gets a fresh grant (fresh keyring secret) from the same parent. The parent grant's expiry still caps the TTL: if the parent grant has expired, the relaunch stops with that reason instead of starting an un-granted child.
+
+    ### 4. Handoff injection at SessionStart
+    - The supervisor exports `AIDA_ROTATION_GENERATION=N` and `AIDA_ROTATION_HANDOFF=<path of the fresh handoff file>` to generation N≥2.
+    - The SessionStart hook (`session_start.rs`, templated in `aida-core/templates`) prints the same block as `aida session handoff --seat <seat> --show` (mandate, then standing orders, then the handoff) when the variable is set. It also prints a one-line banner: `Rotated: <handle> #N (previous generation ended <ts>)`.
+    - An initial-prompt fallback for vendors with no SessionStart hook: send a short positional prompt, "Read your handoff: `aida session handoff --seat <seat> --show`". Codex has SessionStart via the AIDA hook today, so this is only for future vendors.
+    - Body size is already capped (`HANDOFF_MAX_BYTES` = 16 kB), so the injection cannot blow the fresh context.
+
+    ### 5. Loop and crash-loop limits
+    - Window: at most `max_relaunches` (default 3) per `window` (default 10 min), set in `[agents] rotate_*`. When the limit is reached the supervisor stops and prints: `stopped: 3 relaunches in 10 min (limit); last handoff <path>`.
+    - A crash is an exit within 60 s of spawn **without** a fresh handoff. In practice that is a normal exit, but it is reported as `stopped: <handle> #N exited after 12s without a handoff; not relaunching` (it never loops). A fast exit **with** a fresh handoff is a legitimate rotation and counts only against the window.
+    - A non-zero exit code with a fresh handoff still relaunches, because the handoff is the agent's explicit intent. **Open question Q3.**
+    - Every decision is appended to the relay run record and to `.aida/handoff/<seat>/log.jsonl` (`event: rotate|stop`, with the reason).
+
+    ### 6. Operator stop
+    - Countdown on stderr: `relaunching <handle> #N+1 in 5s — Ctrl-C to stop` (a 1 s tick, so it stays visible after the child's TUI exits).
+    - During the countdown, SIGINT/SIGTERM are caught by the supervisor itself. The child forwarder is stopped at this point, as it already is today. The handler ends the run (`relay end Stop`, release the lease, `mark_agent_ended`) and exits 130.
+    - A non-tty stdin (piped launch) never relaunches unless `--rotate` was given explicitly, so scripts are never surprised.
+    - `aida session handoff --final` is the in-session way to stop.
+
+    ### 7. Interaction with the seat rotation ceiling notice
+    - `rotation_notice_line` currently says "write a handoff, then exit and start a fresh session". When `AIDA_ROTATION_GENERATION` is set (the session is supervised), the notice changes to: "write a handoff with `aida session handoff --seat <seat> --write -`, then exit; `aida agent new` relaunches you as `<handle>`". The unsupervised wording stays as it is.
+    - The ceiling itself (`AIDA_SEAT_CONTEXT_CEILING`) is unchanged. The supervisor never kills a child for crossing it; rotation is always agent-initiated.
+
+    ### 8. Handshake (STORY-HOME-100)
+    - `sent_this_session` keys on the registry row's start time, so generation N's new row would send a new hello. Proposal: the hello carries `generation` and `previous_native_session_id`, and the advisor-side `advisor_lines`/`aida agent ls` render it as `claude-implementer-12 #3 (rotated)` instead of a new agent. The thread id stays `aida-hello-<handle>`, so the advisor sees one thread.
+    - Advisor seats do not send a hello (they are the recipient), so rotating an advisor only changes `ls`.
+
+    ### 9. `aida agent ls`
+    - Registry rows gain `rotation_run` (the relay run id) and `generation`. `ls` groups by run and shows the live row as `<handle> #N`, with the last rotation time (the previous row's `ended_at`). Ended rows from the same run collapse into that one line.
+
+    ### 10. BUG-HOME-030 interaction
+    - BUG-030's fix (post-spawn bookkeeping is non-fatal, warnings are deferred until the child exits, longer registry lock budget) is the invariant the loop has to preserve **per generation**: each generation's registration failure is a deferred warning, printed before the countdown, never a `?` that drops the terminal mid-session.
+    - New hazard: the relay `bind`/`child_bind` calls take the handle namespace lock. They must run **before** spawn (bind at the decision step, child-bind with the seeded native session id) or, when run after the spawn, follow the same deferred-warning rule. **Lean: before spawn**, so a lock failure refuses the relaunch cleanly at the countdown instead of crashing a live child.
+
+    ### 11. Vendor support
+    - **Claude (first slice):** foreground interactive, with a seeded `--session-id`, so freshness keys on the exact native id.
+    - **Codex (same slice if cheap, otherwise slice 2):** `agent_new_codex_wake` goes through the same `run_tracked_agent_after_spawn`, so the loop is shared. The native id is the thread id, which is only known after startup, so freshness falls back to `ts >= spawn` plus handle match. Mail-wake re-arming is stamped per registry row (`stamp_launch_mail_wake`), so every generation re-stamps it.
+    - Antigravity, `--bg` and headless lanes are out of scope (AC6).
+
+    ### 12. Test plan
+    - **Unit (pure):** a `rotation_decision(exit, spawned_at, now, handoff_records, history, policy) -> Exit|Crash|Relaunch|Limit` table covering a stale handoff, another handle's handoff, a sibling seat, a final handoff, a fast exit with and without a handoff, the window limit, and an expired grant. A freshness matcher over `log.jsonl` records (by session id, and the ts fallback).
+    - **Unit:** the `write_handoff` stamp fields and `--final`. The supervised wording of `rotation_notice_line`. The `ls` rendering of `#N`.
+    - **Command-level, with a real `sh` child like the BUG-030 test:** the child writes a fresh handoff and exits, and the supervisor relaunches it with the same handle, lease id, cwd and `AIDA_ROTATION_GENERATION=2`. A child that exits without a handoff gets no relaunch. Three fast rotations stop with the limit message. SIGINT during the countdown (an injected countdown clock) stops it and releases the lease. Mail sent during the gap is visible to generation 2 and not re-acked. A lease probe during the gap reads Live.
+    - **Relay reuse:** `run_holding` holds the label across the gap, and an ended run releases it.
+    - No interactive end-to-end in CI. Manual verification: `aida agent new claude --role advisor --rotate`, run a handoff, exit, check the same handle in `aida agent ls`.
+
+    ### Expected files (for the later implementation slice)
+    `agent_launch.rs` (loop around the spawn and wait, decision step), a new `agent_rotation.rs` (pure policy, countdown, relay glue), `seat_rotation.rs` (stamped handoff, `--final`, supervised notice), the session handoff args (`--final`, then regenerate the help golden), `session_start.rs` plus the hook template (injection), `agent_registry*.rs` (generation fields, `ls`), `advisor_handshake.rs` (generation in hello), `agent_config.rs` (rotate knobs), and tests under `src/tests/`.
+
+    ### Open questions for the advisor
+    1. **Opt-in or default-on?** Lean: opt-in (`--rotate` / `agents.toml`) for slice 1, then default-on for advisor/reviewer/product seats once it is proven.
+    2. **Relay run or lightweight token reuse** for holding the handle across the gap? Lean: relay run (it already handles mail, the gap and crash reconciliation).
+    3. **Non-zero exit with a fresh handoff:** relaunch or stop? Lean: relaunch, because the handoff states the intent.
+    4. **Lease liveness during the gap:** is it acceptable for the supervisor to stamp itself as `active_pid` (it then owns the lease's liveness for the whole run)? Or should the reapers learn about relay runs instead?
+    5. **Codex in slice 1, or slice 2?** Its freshness test is weaker (ts fallback, no seeded id).
+    6. **Should a stale `latest.md` for the seat still be injected into generation 1** (an operator-started session)? That is today's manual `--show` flow. Lean: no; injection only for generations ≥2.
+    7. **Slicing:** slice 1 = claude + stamped handoff + `--final` + the loop + the guard + the countdown + the same handle via relay. Slice 2 = `ls` generation display + generation in the handshake + codex. OK?
+  created_at: 2026-10-31T10:42:38.803451225Z
+  modified_at: 2026-10-31T10:42:38.803451225Z
+  session_id: 01a1918a645d
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18ae8-d622-72c1-a3a5-8d4fa60beadd
   author: joe
@@ -64,6 +153,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1918e-1faf-7cd2-9011-70f1747f94d8
+  author: joe
+  timestamp: 2026-10-31T10:42:52.975832286Z
+  session_id: 01a1918a645d
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -72,3 +170,9 @@ filed_at:
   aida_build_sha: 9a86ae54ce5
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+attention_reason:
+  category: design-fork
+  detail: 'Architecture sketch posted as a spec comment per the advisor brief (sketch only, no code). It needs advisor signoff and answers to 7 open questions before implementation: opt-in vs default-on, relay-run vs token reuse for the handle, relaunch on non-zero exit, lease liveness during the gap, codex slice, generation-1 injection, and slicing.'
+  lean: Opt-in --rotate, claude first; reuse the relay-mail run (STORY-1843) to hold the handle; the supervisor stamps itself as lease active_pid; slice 1 = loop+guard+countdown+stamped handoff+--final
+  raised_by: implementer
+  raised_at: 2026-10-31T10:42:52.975795685Z
