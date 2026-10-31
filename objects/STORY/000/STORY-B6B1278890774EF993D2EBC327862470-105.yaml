@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T17:52:26.329853190Z
+modified_at: 2026-10-31T19:30:40.926771605Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -133,6 +133,13 @@ comments:
   created_at: 2026-10-31T17:52:26.329853190Z
   modified_at: 2026-10-31T17:52:26.329853190Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19371-569e-7c82-851a-c1cb94681398
+  author: joe
+  content: 'Round 2 rework pushed as 7a7b799 on PR-3170 and addresses all six items. (1) The backfill claims the root''s per-type blocks after it assigns numbers; any other claim on a bound clone is refused before the backfill. (2) A merge-gate promotion test. (3) The TOON local_id column. (4) Fail-closed blocks.yaml, nodes.toml and counter loads, tested with a corrupt blocks.yaml. (5) Node-1 retirement is bundled into the backfill per the 10-31 ruling: renames, agreed IDs kept, retired_at in nodes.toml, both mappings in the dry run, and FILE.tree.tsv for --tree-only. No follow-up spec, per the ruling. (6) The delegated block is resolved under the lock. The exact post-merge runbook is in the PR body.'
+  created_at: 2026-10-31T19:30:40.926771605Z
+  modified_at: 2026-10-31T19:30:40.926771605Z
+  session_id: 01a19329796c
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
