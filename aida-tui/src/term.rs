@@ -51,7 +51,7 @@ impl TermGuard {
         // store, before raw mode is on) is benign: restore_terminal's
         // disable_raw_mode / LeaveAlternateScreen / cursor::Show are all
         // no-ops when their state was never entered.
-        // trace:BUG-110 | ai:claude trace:TASK-429 | ai:claude
+        // trace:BUG-110 | ai:claude trace:TASK-b6b1278890774ef993d2ebc327862470-263 | ai:claude
         TERMINAL_NEEDS_RESTORE.store(true, Ordering::SeqCst);
         terminal::enable_raw_mode().context("failed to enter terminal raw mode")?;
         // Own teardown now. Any `?` past this point drops `guard` on the

@@ -40,7 +40,7 @@
 - **TASK-395** (Low) — Stream / follow headless drain output (aida logs tail) — pretty rather than raw JSONL
 - **TASK-402** (Medium) — aida queue work --resume: resume-after-failure path UX cleanup (4-friction cluster)
 - **TASK-405** (Medium) — aida queue work: support PR-only invocation (drive phases 3-6 when implementation shipped outside the orchestrator)
-- **TASK-415** (Medium) — aida-pickup.md + aida-pr.md: replace hand-written State preamble blocks with aida state-snapshot calls
+- **TASK-b6b1278890774ef993d2ebc327862470-251** (Medium) — aida-pickup.md + aida-pr.md: replace hand-written State preamble blocks with aida state-snapshot calls
 - **TASK-463** (Low) — Commit message validator: support [AI:tool1+tool2] multi-author AI tags for cross-agent commits
 - **TASK-465** (Low) — Refactor scaffolding-pack tests away from hardcoded counts toward structural assertions
 - **TASK-467** (Low) — global_auto_claim_summary should honour per-type auto_claim re-enable in opt-out case
@@ -191,14 +191,14 @@ The biggest volume lever. These are real-but-low-priority — archiving them to 
 - **TASK-409** (Low) — **Audit a real headless-drain log corpus.** Once a handful of
 - **TASK-410** (Low) — **Telemetry on the inconclusive path.** `~/.aida/auto-complete.jsonl`
 - **TASK-411** (Low) — **Auto-retry with bounded backoff.** Out of scope for BUG-266 (a
-- **TASK-431** (Low) — parse_plan_followups should filter sentinel bullets (None, N/A, Nothing)
-- **TASK-432** (Low) — Wrap phase 5 `aida pull` subprocess in a coarser retry-on-failure that
+- **TASK-b6b1278890774ef993d2ebc327862470-265** (Low) — parse_plan_followups should filter sentinel bullets (None, N/A, Nothing)
+- **TASK-b6b1278890774ef993d2ebc327862470-266** (Low) — Wrap phase 5 `aida pull` subprocess in a coarser retry-on-failure that
 - **TASK-433** (Low) — Route `gh_pr_list_first`'s gh subprocess through `network_retry` to
-- **TASK-434** (Low) — Add a `[orchestrator] retry_backoff_factor` knob so a project that wants
+- **TASK-b6b1278890774ef993d2ebc327862470-267** (Low) — Add a `[orchestrator] retry_backoff_factor` knob so a project that wants
 - **TASK-441** (Low) — **Calibration ledger (STORY-347)** is now unblocked — cold-boot and fork can run in parallel for the same punt and record both verdicts. The acceptance criteria mentioned in SPIKE-11 §"Composes with" is now satisfiable
 - **TASK-442** (Low) — **Toolset-of-fork investigation** — flagged as a follow-up SPIKE in the SPIKE-11 writeup. The fork inherits the source's tools; whether the advisor should run with a restricted toolset (read-only, no Bash) is undecided
 - **TASK-445** (Low) — Composable telemetry: emit a usage-log line for auto-claim events so we can graph "how often does auto-claim fire" across alpha users
-- **TASK-446** (Low) — Consider extending the same auto-claim hook to `aida db merge-gate` (which can also create new agreed IDs as it promotes node-aware → short)
+- **TASK-b6b1278890774ef993d2ebc327862470-274** (Low) — Consider extending the same auto-claim hook to `aida db merge-gate` (which can also create new agreed IDs as it promotes node-aware → short)
 - **TASK-450** (Low) — aida init / scaffold: offer to git-add scaffolded files so new projects can commit cleanly
 - **TASK-459** (Low) — Add an `aida experiment` command only after the manual protocol has repeated
 - **TASK-460** (Low) — Add cost/token capture if Codex exposes stable local accounting

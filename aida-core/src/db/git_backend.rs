@@ -535,7 +535,12 @@ impl GitBackend {
         let files = object_store::list_objects(&self.objects_root)?;
         for (_name, path) in &files {
             if let Ok(req) = object_store::read_object_from_path(path) {
-                if req.agreed_id.as_deref() == Some(spec_id.as_str()) {
+                // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                if req
+                    .agreed_id
+                    .as_deref()
+                    .is_some_and(|a| crate::id_identity::same_id(a, &spec_id))
+                {
                     return Ok(Some(req));
                 }
             }
@@ -581,6 +586,63 @@ impl GitBackend {
             // detail already attached by read_object's `with_context`).
             let req = object_store::read_object(&self.objects_root, &spec_id)?;
             return Ok(Some(req));
+        }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — leading
+        // zeros are insignificant: `TASK-0042` reads `TASK-42.yaml`. Only
+        // the one shard directory is listed. With several twins (a
+        // pre-migration collision) the first in sorted order answers; write
+        // paths refuse the ambiguity before reaching here.
+        if let Some(stem) = object_store::numeric_twin_stems(&self.objects_root, &spec_id)?
+            .into_iter()
+            .next()
+        {
+            return Ok(Some(object_store::read_object(&self.objects_root, &stem)?));
+        }
+        Ok(None)
+    }
+
+    /// The UUID of the requirement already holding `id` (as its object file
+    /// under any padding, or as an agreed id under any padding), for
+    /// mint-time admission. The agreed-id half scans the store's text only
+    /// when no object file matches.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    pub fn id_holder(&self, id: &str) -> Result<Option<uuid::Uuid>> {
+        for stem in object_store::numeric_twin_stems(&self.objects_root, id)? {
+            if let Ok(req) = object_store::read_object(&self.objects_root, &stem) {
+                return Ok(Some(req.id));
+            }
+        }
+        self.agreed_id_holder(id, None)
+    }
+
+    /// The UUID of a requirement whose `agreed_id` names `id`'s number under
+    /// any padding. `skip_stem` excludes the object filed under exactly that
+    /// literal id (the file a same-literal re-import replaces).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    fn agreed_id_holder(&self, id: &str, skip_stem: Option<&str>) -> Result<Option<uuid::Uuid>> {
+        if crate::id_identity::IdKey::parse(id).is_none() {
+            return Ok(None);
+        }
+        // Only a file whose `agreed_id:` line names the same number is
+        // parsed, so a miss costs one text read per object.
+        for (name, path) in object_store::list_objects(&self.objects_root)? {
+            if skip_stem.is_some_and(|s| name.eq_ignore_ascii_case(s)) {
+                continue;
+            }
+            let Ok(text) = crate::read_atomic(&path) else {
+                continue;
+            };
+            let names_it = text.lines().any(|line| {
+                line.strip_prefix("agreed_id:").is_some_and(|v| {
+                    let v = v.trim().trim_matches('"').trim_matches('\'');
+                    crate::id_identity::same_id(v, id)
+                })
+            });
+            if names_it {
+                if let Ok(req) = object_store::read_object_from_path(&path) {
+                    return Ok(Some(req.id));
+                }
+            }
         }
         Ok(None)
     }
@@ -1415,6 +1477,235 @@ impl GitBackend {
             .map(|(sid, _)| object_store::read_object(&self.objects_root, &sid))
             .collect::<Result<Vec<_>>>()?;
         crate::allocation_authority::admit(&self.root, incoming, &existing)
+    }
+
+    /// Mint a fresh spec ID for `template` exactly as `add_requirement` would
+    /// (same prefix rules, same dispenser, same [`crate::id_identity::allocate_id`]
+    /// skip of numbers used under any padding) and persist the advanced
+    /// counters. Used by `aida doctor --fix id-collisions`.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    pub fn mint_spec_id(&self, template: &Requirement) -> Result<String> {
+        let _lock = self.lock_store()?;
+        let meta = self.load_metadata()?;
+        let mut temp_store = self.assemble_store(meta, Vec::new());
+        let type_prefix = temp_store.get_type_prefix(&template.req_type);
+        let mut probe = template.clone();
+        probe.spec_id = None;
+        probe.agreed_id = None;
+        let minted = crate::id_identity::allocate_id(
+            || {
+                temp_store.add_requirement_with_id(probe.clone(), None, type_prefix.as_deref());
+                Ok(temp_store
+                    .requirements
+                    .last()
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_default())
+            },
+            &|id| self.id_holder(id),
+            template.id,
+        )?;
+        if minted.is_empty() {
+            anyhow::bail!(
+                "{}",
+                crate::allocation_authority::failure_message(
+                    "requirement ID allocation failed",
+                    "nothing was renumbered"
+                )
+            );
+        }
+        self.save_metadata(&Self::extract_metadata(&temp_store))?;
+        Ok(minted)
+    }
+
+    /// Predict, WITHOUT advancing any counter or writing anything, a free ID
+    /// [`Self::mint_spec_id`] could hand `template`: the next number (for a
+    /// node-local clone, past this node's highest filed number) plus
+    /// `headroom` (so IDs minted meanwhile do not land on it),
+    /// skipping numbers already used under any padding and any key in
+    /// `reserved` (earlier predictions in the same plan). Used by the
+    /// `aida doctor --fix id-collisions --dry-run` mapping.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    pub fn peek_spec_id(
+        &self,
+        template: &Requirement,
+        headroom: u32,
+        reserved: &std::collections::HashSet<String>,
+    ) -> Result<String> {
+        let meta = self.load_metadata()?;
+        let mut temp_store = self.assemble_store(meta, Vec::new());
+        let prefix = template
+            .prefix_override
+            .as_deref()
+            .map(str::to_uppercase)
+            .or_else(|| temp_store.get_type_prefix(&template.req_type))
+            .unwrap_or_else(|| "REQ".to_string());
+        let free = |id: &str| -> Result<bool> {
+            Ok(!id.is_empty()
+                && !reserved.contains(&crate::id_identity::id_key(id))
+                && self.id_holder(id)?.is_none())
+        };
+        let budget = headroom as usize + crate::id_identity::MAX_ALLOCATION_SKIPS * 4;
+        if temp_store
+            .dispenser
+            .as_ref()
+            .is_some_and(|d| d.node_local_only())
+        {
+            // A node-local clone dispenser takes its counter's write lock even
+            // to peek, so predict from the store instead: past the highest
+            // number this node already filed under the prefix.
+            let node = crate::allocation_authority::node(&self.root)?;
+            let local = crate::id_identity::IdKey::parse(&format!("{prefix}-{node}-1"))
+                .map(|k| k.prefix)
+                .unwrap_or_default();
+            let high = object_store::list_objects(&self.objects_root)?
+                .iter()
+                .filter_map(|(stem, _)| crate::id_identity::IdKey::parse(stem))
+                .filter(|k| k.prefix == local)
+                .filter_map(|k| k.seq.parse::<u32>().ok())
+                .max()
+                .unwrap_or(0);
+            let width = crate::id_identity::installed_widths().node_mint_width();
+            let start = high.saturating_add(1).saturating_add(headroom);
+            for seq in start..start.saturating_add(budget as u32) {
+                let id = format!("{prefix}-{node}-{seq:0width$}");
+                if free(&id)? {
+                    return Ok(id);
+                }
+            }
+        } else if let Some(dispenser) = temp_store.dispenser.clone() {
+            let key = if dispenser.node_local_only()
+                || temp_store.id_config.numbering != crate::models::NumberingStrategy::Global
+            {
+                prefix.clone()
+            } else {
+                "GLOBAL".to_string()
+            };
+            let start = dispenser.peek(&key)?.saturating_add(headroom);
+            for seq in start..start.saturating_add(budget as u32) {
+                let id = dispenser.format_id(&prefix, seq)?;
+                if free(&id)? {
+                    return Ok(id);
+                }
+            }
+        } else {
+            // No dispenser: the counters live only in this in-memory copy,
+            // which is never saved, so generating ahead advances nothing.
+            let mut probe = template.clone();
+            probe.spec_id = None;
+            probe.agreed_id = None;
+            let type_prefix = temp_store.get_type_prefix(&template.req_type);
+            for drawn in 0..budget {
+                temp_store.add_requirement_with_id(probe.clone(), None, type_prefix.as_deref());
+                let id = temp_store
+                    .requirements
+                    .last()
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_default();
+                if drawn >= headroom as usize && free(&id)? {
+                    return Ok(id);
+                }
+            }
+        }
+        anyhow::bail!("no free spec ID found for prefix {prefix} within {budget} numbers")
+    }
+
+    /// Renumber requirements in ONE store commit: each `(old, new)` pair
+    /// moves the object filed as the literal `old` to `new.spec_id` (same
+    /// UUID), and every `referrers` row (other objects whose text was
+    /// rewritten) is staged alongside. Refuses before writing anything when
+    /// an old object is missing, belongs to another UUID, or the new number
+    /// is already used under any padding.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    pub fn renumber_requirements(
+        &self,
+        renames: &[(String, Requirement)],
+        referrers: &[Requirement],
+        subject: &str,
+    ) -> Result<usize> {
+        #[cfg(all(unix, feature = "native"))]
+        if self.work_admission()?.is_some() {
+            anyhow::bail!("renumbering is not supported on a WORK-transport clone");
+        }
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
+        let _lock = self.lock_store()?;
+        for (old, new) in renames {
+            let on_disk = object_store::read_object(&self.objects_root, old)
+                .with_context(|| format!("renumber: cannot read {old}"))?;
+            anyhow::ensure!(
+                on_disk.id == new.id,
+                "renumber: {old} belongs to {}, not {}; nothing was written",
+                on_disk.id,
+                new.id
+            );
+            let new_sid = new
+                .spec_id
+                .as_deref()
+                .context("renumber: target has no spec_id")?;
+            anyhow::ensure!(
+                object_store::numeric_twin_stems(&self.objects_root, new_sid)?.is_empty(),
+                "renumber: {new_sid} is already used; nothing was written"
+            );
+        }
+        let mut paths: Vec<String> = Vec::new();
+        if self.metadata_path.exists() {
+            paths.push("metadata.yaml".to_string());
+        }
+        for (old, new) in renames {
+            let old_path = object_store::object_path(&self.objects_root, old)?;
+            object_store::write_object(&self.objects_root, new)?;
+            std::fs::remove_file(&old_path)
+                .with_context(|| format!("renumber: remove {}", old_path.display()))?;
+            paths.push(object_store::relative_object_path(old)?);
+            paths.push(object_store::relative_object_path(
+                new.spec_id.as_deref().unwrap_or_default(),
+            )?);
+        }
+        for row in referrers {
+            if let Some(sid) = self.stage_requirement_update(row)? {
+                paths.push(object_store::relative_object_path(sid)?);
+            }
+        }
+        let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+        self.auto_commit_paths(
+            &format!(
+                "{subject}: renumber {} requirement(s), rewrite {} referrer(s)",
+                renames.len(),
+                referrers.len()
+            ),
+            &refs,
+        );
+        Ok(renames.len())
+    }
+
+    /// Mint-time numeric admission for a NEW row carrying caller-supplied
+    /// ids: refuse when another requirement already holds the number under
+    /// any padding. Runs on every clone, authoritative included — the
+    /// authoritative early return in [`Self::admit_allocations`] is how padded
+    /// twins were once written.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    ///
+    /// Only a DIFFERENTLY padded twin refuses: a row written under the exact
+    /// same literal id replaces that one file (re-run imports rely on it),
+    /// and same-literal duplicates are the existing collision guards' job.
+    fn admit_numeric_identity(&self, req: &Requirement) -> Result<()> {
+        let Some(id) = req.spec_id.as_deref().filter(|s| !s.trim().is_empty()) else {
+            return Ok(());
+        };
+        let twin_holder = |i: &str| -> Result<Option<uuid::Uuid>> {
+            for stem in object_store::numeric_twin_stems(&self.objects_root, i)? {
+                if stem.eq_ignore_ascii_case(i.trim()) {
+                    continue;
+                }
+                if let Ok(other) = object_store::read_object(&self.objects_root, &stem) {
+                    return Ok(Some(other.id));
+                }
+            }
+            // The agreed-id half (AC2: spec_id OR agreed_id holds a number):
+            // an explicit id on the authoritative clone is refused while
+            // another spec carries it as its agreed id.
+            self.agreed_id_holder(i, Some(i.trim()))
+        };
+        crate::id_identity::admit_new_id(id, &twin_holder, req.id)
     }
 
     /// Record the granular field ops for one requirement update and write its
@@ -2650,6 +2941,7 @@ impl DatabaseBackend for GitBackend {
         let mut req = requirement;
         if req.spec_id.is_some() || req.agreed_id.is_some() {
             self.admit_allocations(std::slice::from_ref(&req))?;
+            self.admit_numeric_identity(&req)?;
         }
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
@@ -2674,12 +2966,22 @@ impl DatabaseBackend for GitBackend {
             // add_requirement_with_id. trace:TASK-856 | ai:claude
             let type_prefix = temp_store.get_type_prefix(&req.req_type);
             // Generate ID using the store's configured strategy
-            let req_clone = req.clone();
-            temp_store.add_requirement_with_id(req_clone, None, type_prefix.as_deref());
-            // The pushed req has the assigned spec_id
-            if let Some(last) = temp_store.requirements.last() {
-                req.spec_id = last.spec_id.clone();
-            }
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — mint
+            // through the shared seam: a number already used under any
+            // padding is skipped, never handed out as a padded twin.
+            let minted = crate::id_identity::allocate_id(
+                || {
+                    temp_store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
+                    Ok(temp_store
+                        .requirements
+                        .last()
+                        .and_then(|r| r.spec_id.clone())
+                        .unwrap_or_default())
+                },
+                &|id| self.id_holder(id),
+                req.id,
+            )?;
+            req.spec_id = Some(minted);
             // Persist the updated counters back to metadata
             let updated_meta = Self::extract_metadata(&temp_store);
             new_metadata = Some(updated_meta);
@@ -3093,6 +3395,7 @@ impl<'a> BulkWriter<'a> {
         // trace:BUG-2017 | ai:codex
         if req.spec_id.is_some() || req.agreed_id.is_some() {
             self.backend.admit_allocations(std::slice::from_ref(&req))?;
+            self.backend.admit_numeric_identity(&req)?;
         }
         if req.spec_id.is_none() {
             // Reuse RequirementsStore::add_requirement_with_id by building a
@@ -3136,7 +3439,10 @@ impl<'a> BulkWriter<'a> {
             let Some(sid) = req.spec_id.as_deref() else {
                 continue;
             };
-            if self.assigned.contains(sid) && object_store::object_exists(objects_root, sid)? {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — any padding counts.
+            if self.assigned.contains(sid)
+                && !object_store::numeric_twin_stems(objects_root, sid)?.is_empty()
+            {
                 collided.push(i);
             }
         }
@@ -3151,7 +3457,7 @@ impl<'a> BulkWriter<'a> {
         let mut taken: std::collections::HashSet<String> = self
             .staged
             .iter()
-            .filter_map(|r| r.spec_id.clone())
+            .filter_map(|r| r.spec_id.as_deref().map(crate::id_identity::id_key))
             .collect();
         for i in collided {
             let old = self.staged[i].spec_id.take().unwrap_or_default();
@@ -3170,8 +3476,8 @@ impl<'a> BulkWriter<'a> {
                     .and_then(|r| r.spec_id)
                     .unwrap_or_default();
                 if !sid.is_empty()
-                    && !taken.contains(&sid)
-                    && !object_store::object_exists(objects_root, &sid)?
+                    && !taken.contains(&crate::id_identity::id_key(&sid))
+                    && object_store::numeric_twin_stems(objects_root, &sid)?.is_empty()
                 {
                     new_sid = Some(sid);
                     break;
@@ -3183,7 +3489,7 @@ impl<'a> BulkWriter<'a> {
                      meanwhile; nothing was written"
                 );
             };
-            taken.insert(sid.clone());
+            taken.insert(crate::id_identity::id_key(&sid));
             self.assigned.insert(sid.clone());
             self.staged[i].spec_id = Some(sid);
         }
@@ -3927,6 +4233,187 @@ mod tests {
         backend.delete_requirement(&added.id).unwrap();
         let gone = backend.get_requirement_by_spec_id("FR-042").unwrap();
         assert!(gone.is_none());
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    fn bug_046_plant(backend: &GitBackend, spec_id: &str, title: &str) -> Requirement {
+        let mut r = Requirement::new(title.into(), String::new());
+        r.spec_id = Some(spec_id.into());
+        object_store::write_object(&backend.objects_root, &r).unwrap();
+        r
+    }
+
+    /// AC1: leading zeros are insignificant for lookup, both directions.
+    #[test]
+    fn bug_046_padded_and_unpadded_ids_resolve_to_one_object() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let a = bug_046_plant(&backend, "TASK-0418", "padded");
+        let b = bug_046_plant(&backend, "TASK-7", "plain");
+        for id in ["TASK-418", "task-00418", "TASK-0418"] {
+            let got = backend.get_requirement_by_spec_id(id).unwrap().unwrap();
+            assert_eq!(got.id, a.id, "{id}");
+        }
+        assert_eq!(
+            backend
+                .get_requirement_by_spec_id("TASK-007")
+                .unwrap()
+                .unwrap()
+                .id,
+            b.id
+        );
+        assert!(backend
+            .get_requirement_by_spec_id("TASK-4180")
+            .unwrap()
+            .is_none());
+        assert_eq!(backend.id_holder("TASK-418").unwrap(), Some(a.id));
+    }
+
+    /// AC2 regression: a number already used under another padding is
+    /// refused when supplied explicitly and skipped when dispensed.
+    #[test]
+    fn bug_046_mint_never_collides_with_a_padded_twin() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let first = backend
+            .add_requirement(Requirement::new("first".into(), String::new()))
+            .unwrap();
+        let key = crate::id_identity::IdKey::parse(first.spec_id.as_deref().unwrap()).unwrap();
+        let next: u64 = key.seq.parse::<u64>().unwrap() + 1;
+        // Plant the NEXT number under a padding the dispenser never writes.
+        let twin = format!("{}-0000{next}", key.prefix);
+        let planted = bug_046_plant(&backend, &twin, "planted twin");
+        let second = backend
+            .add_requirement(Requirement::new("second".into(), String::new()))
+            .unwrap();
+        let minted = second.spec_id.as_deref().unwrap();
+        assert!(
+            !crate::id_identity::same_id(minted, &twin),
+            "minted {minted} collides with planted {twin}"
+        );
+        let mut explicit = Requirement::new("explicit".into(), String::new());
+        explicit.spec_id = Some(format!("{}-{next}", key.prefix));
+        let err = backend.add_requirement(explicit).unwrap_err();
+        assert!(
+            err.downcast_ref::<crate::id_identity::IdTakenError>()
+                .is_some(),
+            "{err:#}"
+        );
+        assert_eq!(
+            backend
+                .id_holder(&format!("{}-{next}", key.prefix))
+                .unwrap(),
+            Some(planted.id)
+        );
+    }
+
+    /// AC3 plumbing: a renumber moves the object (same UUID) and refuses a
+    /// target number already in use.
+    #[test]
+    fn bug_046_renumber_moves_the_object_and_refuses_a_taken_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let a = bug_046_plant(&backend, "TASK-0418", "padded");
+        let _b = bug_046_plant(&backend, "TASK-418", "plain");
+        let _c = bug_046_plant(&backend, "TASK-9", "other");
+        let mut taken = a.clone();
+        taken.spec_id = Some("TASK-009".into());
+        assert!(backend
+            .renumber_requirements(&[("TASK-0418".into(), taken)], &[], "test")
+            .is_err());
+        let mut moved = a.clone();
+        moved.spec_id = Some("TASK-77".into());
+        backend
+            .renumber_requirements(&[("TASK-0418".into(), moved)], &[], "test")
+            .unwrap();
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-0418").unwrap());
+        assert_eq!(
+            backend
+                .get_requirement_by_spec_id("TASK-77")
+                .unwrap()
+                .unwrap()
+                .id,
+            a.id
+        );
+        assert_eq!(
+            object_store::numeric_twin_stems(&backend.objects_root, "TASK-418").unwrap(),
+            vec!["TASK-418".to_string()]
+        );
+    }
+
+    /// AC2: a number another spec holds as its AGREED id (under any padding)
+    /// is taken, so a dispensed local ID never lands on it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_id_holder_considers_agreed_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let mut holder = Requirement::new("agreed holder".into(), String::new());
+        holder.spec_id = Some("TASK-7-001".into());
+        holder.agreed_id = Some("TASK-0055".into());
+        object_store::write_object(&backend.objects_root, &holder).unwrap();
+        for id in ["TASK-55", "TASK-055", "task-0055"] {
+            assert_eq!(backend.id_holder(id).unwrap(), Some(holder.id), "{id}");
+        }
+        assert_eq!(backend.id_holder("TASK-550").unwrap(), None);
+        assert_eq!(backend.id_holder("BUG-55").unwrap(), None);
+        let mut explicit = Requirement::new("explicit".into(), String::new());
+        explicit.spec_id = Some("TASK-55".into());
+        let err =
+            crate::id_identity::admit_new_id("TASK-55", &|i| backend.id_holder(i), explicit.id)
+                .unwrap_err();
+        assert!(err
+            .downcast_ref::<crate::id_identity::IdTakenError>()
+            .is_some());
+    }
+
+    /// AC2 through the real add path on the AUTHORITATIVE clone: an explicit
+    /// caller-supplied `TASK-0035` is refused while another spec holds agreed
+    /// id `TASK-35`; nothing is written. A same-literal re-add of an object
+    /// whose agreed id is its own spec id still replaces that one file.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_add_refuses_an_explicit_id_held_as_another_specs_agreed_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        assert!(
+            crate::allocation_authority::resolve(&backend.root)
+                .unwrap()
+                .authoritative,
+            "fixture must be the authoritative clone"
+        );
+        let mut holder = Requirement::new("agreed holder".into(), String::new());
+        holder.spec_id = Some("TASK-7-001".into());
+        holder.agreed_id = Some("TASK-35".into());
+        object_store::write_object(&backend.objects_root, &holder).unwrap();
+
+        let mut explicit = Requirement::new("explicit".into(), String::new());
+        explicit.spec_id = Some("TASK-0035".into());
+        let err = backend.add_requirement(explicit).unwrap_err();
+        assert!(
+            err.downcast_ref::<crate::id_identity::IdTakenError>()
+                .is_some(),
+            "{err:#}"
+        );
+        assert!(
+            object_store::numeric_twin_stems(&backend.objects_root, "TASK-35")
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut own = Requirement::new("own agreed".into(), String::new());
+        own.spec_id = Some("TASK-36".into());
+        own.agreed_id = Some("TASK-36".into());
+        object_store::write_object(&backend.objects_root, &own).unwrap();
+        let mut reimport = Requirement::new("re-import".into(), String::new());
+        reimport.spec_id = Some("TASK-36".into());
+        reimport.agreed_id = Some("TASK-36".into());
+        backend.add_requirement(reimport).unwrap();
     }
 
     /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit

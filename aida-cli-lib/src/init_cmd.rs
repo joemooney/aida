@@ -2778,6 +2778,31 @@ enabled = true
 "#
 }
 
+#[cfg(test)]
+mod bug_046_id_width_tests {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn id_width_is_written_to_ids_table_preserving_other_config() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "# keep me\n[project]\nname = \"x\"\n",
+        )
+        .unwrap();
+        super::write_ids_widths(dir.path(), Some(4), Some(4)).unwrap();
+        let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
+        assert!(body.contains("# keep me"), "{body}");
+        let w = aida_core::id_identity::IdWidths::from_config_toml(&body);
+        assert_eq!((w.seq_width, w.node_seq_width), (Some(4), Some(4)));
+        // `aida config digits 0` sets only the legacy width.
+        super::write_ids_widths(dir.path(), Some(0), None).unwrap();
+        let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
+        let w = aida_core::id_identity::IdWidths::from_config_toml(&body);
+        assert_eq!((w.seq_width, w.node_seq_width), (Some(0), Some(4)));
+    }
+}
+
 /// STORY-1226: the scaffolded `[schedule]` section must list the default
 /// substrate + seat jobs and parse as valid TOML once uncommented.
 // trace:STORY-1226 | ai:claude
@@ -4684,7 +4709,7 @@ pub(crate) fn handle_init_distributed_worktree(
     // node-acquire / db-sync work without a manual `git push -u`. Skipped
     // silently when there's no origin (single-machine projects) or when
     // the push fails (offline, auth, etc.) — failure isn't fatal here.
-    // trace:BUG-23 trace:TASK-421 | ai:claude
+    // trace:BUG-23 trace:TASK-b6b1278890774ef993d2ebc327862470-256 | ai:claude
     //
     // BUG-559 root-cause prevention (TASK-844): the orphan-store push below is
     // the FIRST push to a fresh origin. A forge that adopts the first-pushed
@@ -6800,6 +6825,45 @@ pub(crate) struct InitArgs {
     // trace:STORY-652 | ai:claude
     #[clap(long, value_name = "NAME")]
     pub node_name: Option<String>,
+
+    /// Zero-pad the number in new spec IDs to N digits (TASK-0001 with 4),
+    /// for legacy and node-local IDs alike. IDs that differ only by leading
+    /// zeros are the same ID, so changing this later renames nothing.
+    /// Written to `[ids]` in .aida/config.toml.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[clap(long, value_name = "N", value_parser = clap::value_parser!(u8).range(0..=12))]
+    pub id_width: Option<u8>,
+}
+
+/// Record `[ids] seq_width` and/or `node_seq_width` in
+/// `<root>/.aida/config.toml` (`aida init --id-width N` sets both, `aida
+/// config digits N` the legacy one), keeping the rest of the file (comments
+/// included) intact. `None` leaves that key as it is.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+pub(crate) fn write_ids_widths(
+    root: &std::path::Path,
+    seq_width: Option<u8>,
+    node_seq_width: Option<u8>,
+) -> anyhow::Result<()> {
+    let path = root.join(".aida/config.toml");
+    let body = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut doc = body
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| anyhow::anyhow!("{} is malformed: {e}", path.display()))?;
+    if !doc.contains_table("ids") {
+        doc["ids"] = toml_edit::table();
+    }
+    if let Some(width) = seq_width {
+        doc["ids"]["seq_width"] = toml_edit::value(i64::from(width));
+    }
+    if let Some(width) = node_seq_width {
+        doc["ids"]["node_seq_width"] = toml_edit::value(i64::from(width));
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, doc.to_string())?;
+    Ok(())
 }
 
 // Handle init before path resolution (no DB exists yet)
@@ -6841,6 +6905,7 @@ fn run_init(
         remote,
         forge,
         gitlab,
+        id_width,
     } = &args;
     // STORY-757: the markdown-only first run — scaffold just a `specs/`
     // folder + a runnable `aida why` demo, none of the orphan-branch / cache
@@ -7155,6 +7220,11 @@ fn run_init(
     // `[project.capabilities]`, and print them so forge-dependent features
     // degrade explicitly. Best-effort. trace:STORY-1467 | ai:claude
     project_capabilities::record_and_report(&statusline_project_root());
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    if let Some(width) = id_width {
+        write_ids_widths(&statusline_project_root(), Some(*width), Some(*width))?;
+        println!("  Spec IDs: numbers padded to {width} digit(s) ([ids] in .aida/config.toml)");
+    }
     // trace:BUG-1938 | ai:claude
     config_commit::finish_init_refresh(&cfg_root, cfg_was_clean);
     // Register the initialized project in the machine-global project

@@ -80,7 +80,11 @@ impl Dispenser for Detached {
         valid_prefix(prefix)?;
         anyhow::ensure!(seq > 0, "node-local sequence is exhausted or invalid");
         match self.state()?.mode {
-            IdMode::Distributed { node_id } => Ok(format!("{prefix}-{node_id}-{seq:03}")),
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+            IdMode::Distributed { node_id } => {
+                let width = crate::id_identity::installed_widths().node_mint_width();
+                Ok(format!("{prefix}-{node_id}-{seq:0width$}"))
+            }
             _ => bail!("invalid WORK candidate mode"),
         }
     }

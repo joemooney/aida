@@ -215,7 +215,8 @@ fn node_alias_stored_spec_ids_cover_spec_id_and_agreed_id() {
     crate::object_store::write_object(&objects, &req).unwrap();
     let ids = stored_spec_ids(&objects);
     assert!(
-        ids.contains("TASK-HOME-001") && ids.contains("TASK-AK-007"),
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric keys.
+        ids.contains("TASK-HOME-1") && ids.contains("TASK-AK-7"),
         "{ids:?}"
     );
 }

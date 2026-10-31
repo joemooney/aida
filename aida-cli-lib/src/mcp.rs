@@ -644,7 +644,7 @@ fn leases_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("sessions")
 }
 
-// trace:TASK-438 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-271 | ai:claude
 /// Filename a MCP `claim_task` lease writes to. Keyed by lower-cased spec_id
 /// so two concurrent claims on the same spec target the same path — letting
 /// `OpenOptions::create_new(true)` enforce single-winner semantics. Distinct
@@ -3841,7 +3841,7 @@ impl<'a> McpServer<'a> {
 
         let dir = leases_dir(&self.project_root);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        // trace:TASK-438 | ai:claude
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-271 | ai:claude
         // Key the MCP claim file by spec_id (lower-cased) instead of lease_id,
         // so two concurrent claim_task calls on the same spec target the same
         // path. `create_new(true)` maps to O_EXCL|O_CREAT on POSIX and
@@ -3881,7 +3881,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: lease_id")?;
 
-        // trace:TASK-438 | ai:claude
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-271 | ai:claude
         // Lease files are no longer named `<lease_id>.toml` — MCP claims live
         // at `mcp-claim.<spec>.toml`, and session-start leases use their own
         // scheme. Scan the directory and match the embedded `id` field.
@@ -3952,7 +3952,7 @@ impl<'a> McpServer<'a> {
             .get("verb")
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: verb (drain|pause|exit)")?;
-        // trace:TASK-436 | ai:claude
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-269 | ai:claude
         // Validate the verb up front. The worker defensively maps unknown
         // verbs to `pause`, but the caller deserves a clear error rather than
         // a silently-misclassified "directive posted" success.
@@ -12709,7 +12709,7 @@ mod tests {
         assert!(err.contains("spec_id must be a string"), "{}", err);
     }
 
-    // trace:TASK-436 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-269 | ai:claude
     #[test]
     fn post_directive_rejects_unknown_verb() {
         let dir = tempdir().unwrap();
@@ -13141,7 +13141,7 @@ mod tests {
     /// Concurrent claim_task calls on the same spec must elect exactly one
     /// winner — the others must see `already_claimed`. Regression test for
     /// the pre-fix TOCTOU race between the existence check and the lease
-    /// write. trace:TASK-438 | ai:claude
+    /// write. trace:TASK-b6b1278890774ef993d2ebc327862470-271 | ai:claude
     #[test]
     fn concurrent_claim_task_on_same_spec_elects_one_winner() {
         let dir = tempdir().unwrap();

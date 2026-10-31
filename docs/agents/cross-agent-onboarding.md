@@ -260,7 +260,7 @@ Specs you'll want to track because they affect your operation:
 | Spec | What it does | Status (as of this brief) |
 |---|---|---|
 | **TASK-440** | Adds `outputSchema` descriptors to the MCP tools | Shipped |
-| **TASK-438** | Fixes TOCTOU race on `claim_task` (two concurrent claims could both succeed) | Approved |
+| **TASK-b6b1278890774ef993d2ebc327862470-271** | Fixes TOCTOU race on `claim_task` (two concurrent claims could both succeed) | Approved |
 | **BUG-310** | MCP-created specs not consistently visible to local CLI | Shipped |
 | **STORY-398** | Empirical Codex roundtrip + `docs/agents/codex-mcp-setup.md` | Shipped |
 | **STORY-399** | Path B — emit `structuredContent` matching `outputSchema` | Shipped (additive: text envelope preserved) |
