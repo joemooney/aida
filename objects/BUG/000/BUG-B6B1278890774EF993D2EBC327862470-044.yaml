@@ -7,12 +7,37 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T00:31:51.391990007Z
+modified_at: 2026-10-31T04:50:43.526453087Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T19:48:06.430426448Z
+comments:
+- id: 01a1904b-b6c6-7e91-9a1a-fe5af26084b0
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    (Resumed session: implementation was already drafted before this comment.)
+
+    ### Acceptance criteria as tests
+    - **Unit:** `resume_reason_needs_a_final_result_a_resumable_vendor_and_budget`, `the_reported_parking_results_read_as_waiting_and_a_finish_does_not` — live child build work or a waiting-on-background result text triggers a resume, bounded by MAX_AUTO_RESUMES=3.
+    - **Unit (linux):** `a_held_vendor_is_reaped_only_once_the_hold_lifts`, `a_vendor_that_resumes_after_its_held_work_is_not_reaped` — the linger reaper does not kill the vendor tree while its own build runs.
+    - **Command-level, mock vendor:** `a_run_parked_on_its_own_build_is_waited_for_and_resumed` (waits for the child build, then `--resume <same session>` with the continue message), `a_run_that_keeps_parking_is_resumed_a_bounded_number_of_times` (3 resumes then no-pr), `a_run_that_did_not_park_is_not_resumed`.
+    - **Unit + command-level:** `a_no_pr_report_names_the_uncommitted_paths` — `implementer: no-pr uncommitted=<n>`.
+
+    ### Expected files
+    - `aida-cli-lib/src/headless_background.rs` (new), `headless_linger.rs`, `session.rs`, `standalone_implementer.rs`, `lib.rs`
+    - `aida-cli-lib/src/tests/bug_044_headless_background_tests.rs`, `story_1662_standalone_implementer_tests.rs`
+    - `docs/cli/03-work-autonomy.md`
+
+    ### Ambiguities / conflicts as questions
+    - Scope is the standalone implementer launcher (`aida implement`-style lanes); the --auto-complete drain path is not changed here. Is that the intended surface? (Lanes 038d/041c were standalone launches.)
+  created_at: 2026-10-31T04:50:43.526453087Z
+  modified_at: 2026-10-31T04:50:43.526453087Z
+  session_id: 01a1904aacfa
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18e5a-f640-76a3-951a-92b3c103b557
   author: joe
