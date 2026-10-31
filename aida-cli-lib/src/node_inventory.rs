@@ -41,7 +41,11 @@ fn node<'a>(nodes: &'a mut BTreeMap<String, Node>, raw: &str) -> Result<&'a mut 
         }))
 }
 
-fn namespace(id: &str) -> Option<&str> {
+// A spec ID's middle segment is only node evidence when it is shaped like a
+// node ID (UUID or numeric) or already names a node another source recorded.
+// Two-level IDs (FEAT-TYPE-NNN, e.g. AUTH-FR-001) and label-scoped IDs share
+// the PREFIX-MIDDLE-SEQ shape, so a merely valid middle is not a node.
+fn namespace<'a>(id: &'a str, known: &BTreeMap<String, Node>) -> Option<&'a str> {
     // A bare object UUID is not a spec namespace, even if its final UUID
     // component happens to be decimal and fits a sequence number.
     if uuid::Uuid::parse_str(id).is_ok() || !aida_core::object_store::valid_spec_id_format(id) {
@@ -49,10 +53,12 @@ fn namespace(id: &str) -> Option<&str> {
     }
     let (_, rest) = id.split_once('-')?;
     let (middle, _) = rest.rsplit_once('-')?;
-    let normalized =
-        aida_core::node_alias::normalize_node(middle).unwrap_or_else(|_| middle.to_owned());
-    aida_core::node::validate_node_id(&normalized).ok()?;
-    Some(middle)
+    let normalized = aida_core::node_alias::normalize_node(middle);
+    let numeric = middle.bytes().all(|b| b.is_ascii_digit());
+    let id = normalized.as_deref().unwrap_or(middle);
+    aida_core::node::validate_node_id(id).ok()?;
+    (normalized.is_ok() || numeric || known.contains_key(&id.to_ascii_lowercase()))
+        .then_some(middle)
 }
 
 fn local_node(store: &Path) -> Result<Option<LocalNode>> {
@@ -75,6 +81,8 @@ fn local_node(store: &Path) -> Result<Option<LocalNode>> {
 
 fn read_nodes(store: &Path, local: Option<&LocalNode>, authoritative: bool) -> Result<Vec<Node>> {
     let mut nodes = BTreeMap::new();
+    // The registry loaders treat a failed exists() probe as an absent file;
+    // try_exists() surfaces an unreadable path instead of an incomplete view.
     let registry = store.join("registry/nodes.toml");
     registry.try_exists()?;
     for entry in aida_core::node::NodeRegistry::load(&registry)?.nodes {
@@ -93,7 +101,7 @@ fn read_nodes(store: &Path, local: Option<&LocalNode>, authoritative: bool) -> R
         node(&mut nodes, &id)?.labels.insert(label);
     }
     let blocks = store.join("registry/blocks.yaml");
-    blocks.try_exists()?;
+    blocks.try_exists()?; // see registry above
     for block in aida_core::node::BlockRegistry::load(&blocks)?.blocks {
         let row = node(&mut nodes, &block.node_id).context("invalid block node id")?;
         if row.hostname.is_none() && !block.hostname.is_empty() {
@@ -117,7 +125,7 @@ fn read_nodes(store: &Path, local: Option<&LocalNode>, authoritative: bool) -> R
                 .chain(requirement.spec_id.as_deref())
                 .chain(requirement.agreed_id.as_deref())
             {
-                if let Some(id) = namespace(id) {
+                if let Some(id) = namespace(id, &nodes) {
                     node(&mut nodes, id)?;
                 }
             }
@@ -146,8 +154,8 @@ impl Node {
     fn role_label(&self) -> &'static str {
         match (self.role, self.recorded_root) {
             (Some(AllocationRole::Root), _) => "root",
-            (Some(AllocationRole::Node), true) => "worker (recorded root)",
-            (Some(AllocationRole::Node), false) => "worker",
+            (Some(AllocationRole::Node), true) => "work node (recorded root)",
+            (Some(AllocationRole::Node), false) => "work node",
             (None, true) => "recorded root",
             (None, false) => "unknown",
         }

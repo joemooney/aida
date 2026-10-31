@@ -144,6 +144,10 @@ impl Fixture {
             true,
         );
         fixture.object("TASK-JM-BOX-002", None, None, false);
+        // Two-level (FEAT-TYPE-NNN) and label-scoped IDs share the
+        // PREFIX-MIDDLE-SEQ shape; neither middle is a node.
+        fixture.object("AUTH-FR-001", Some("AUTH-FR-001"), None, false);
+        fixture.object("BUG-HOME-026", Some("BUG-HOME-026"), None, false);
         fixture.object(
             &format!("BUG-{REMOTE}-002"),
             Some(&format!("BUG-{REMOTE}-002")),
@@ -188,7 +192,7 @@ fn node_inventory_unions_every_source_and_keeps_roles_separate() {
     let before = snapshot(fixture.root.path());
     let current = local_node(&fixture.store).unwrap();
     let rows = read_nodes(&fixture.store, current.as_ref(), false).unwrap();
-    assert_eq!(rows.len(), 8, "{rows:?}");
+    assert_eq!(rows.len(), 7, "{rows:?}");
     let row = |id: &str| rows.iter().find(|r| r.id.eq_ignore_ascii_case(id)).unwrap();
     assert_eq!(rows.iter().filter(|r| r.current).count(), 1);
     assert!(row(LOCAL).current);
@@ -213,7 +217,12 @@ fn node_inventory_unions_every_source_and_keeps_roles_separate() {
     );
     assert!(!row(SPEC).current);
     assert!(!row("3").current);
-    assert!(!row("JM-BOX").current);
+    for fake in ["JM-BOX", "FR", "HOME"] {
+        assert!(
+            !rows.iter().any(|r| r.id.eq_ignore_ascii_case(fake)),
+            "an unknown non-UUID namespace is not a node: {fake} in {rows:?}"
+        );
+    }
     assert_eq!(
         before,
         snapshot(fixture.root.path()),
@@ -225,7 +234,16 @@ fn node_inventory_unions_every_source_and_keeps_roles_separate() {
 fn node_inventory_worker_dispatch_lists_other_nodes_without_allocating() {
     let fixture = Fixture::populated();
     let before = snapshot(fixture.root.path());
-    let out = std::process::Command::new(crate::resolve_aida_exe())
+    let runner = crate::resolve_aida_exe();
+    assert_eq!(
+        runner
+            .parent()
+            .and_then(|deps| deps.file_name())
+            .and_then(|name| name.to_str()),
+        Some("deps"),
+        "expected this build's runner under target/<profile>/deps; an ambient AIDA_BIN redirects the resolver"
+    );
+    let out = std::process::Command::new(runner)
         .args([
             "--ignored",
             "--exact",
@@ -248,7 +266,7 @@ fn node_inventory_worker_dispatch_lists_other_nodes_without_allocating() {
     let marked: Vec<_> = text.lines().filter(|s| s.starts_with("* ")).collect();
     assert_eq!(marked.len(), 1, "{text}");
     assert!(
-        marked[0].contains(LOCAL) && marked[0].contains("worker"),
+        marked[0].contains(LOCAL) && marked[0].contains("work node"),
         "{text}"
     );
     assert!(!text.contains("WORK node"), "{text}");
@@ -347,7 +365,7 @@ fn node_inventory_keeps_a_root_record_without_pools_or_registry() {
     assert_eq!(rows[0].role, Some(AllocationRole::Node));
     assert_eq!(
         rows[0].role_label(),
-        "worker (recorded root)",
+        "work node (recorded root)",
         "report both facts without inferring local authority"
     );
 }
@@ -370,16 +388,27 @@ fn node_inventory_refuses_broken_sources_instead_of_reporting_a_complete_view() 
 
 #[test]
 fn node_inventory_namespace_and_display_boundaries() {
-    assert_eq!(namespace("TASK-JM-BOX-002"), Some("JM-BOX"));
-    assert_eq!(namespace("SEC-2-007"), Some("2"));
+    let mut nodes = BTreeMap::new();
+    assert_eq!(namespace("SEC-2-007", &nodes), Some("2"));
+    let spec = format!("BUG-{SPEC}-002");
+    assert_eq!(namespace(&spec, &nodes), Some(SPEC));
     for id in [
+        "TASK-JM-BOX-002",
+        "AUTH-FR-001",
+        "GEN-REQ-001",
         "TASK-123",
         "TASK--001",
         "TASK-node-next",
         "aaaaaaaa-bbbb-4ccc-8ddd-000000000123",
     ] {
-        assert_eq!(namespace(id), None, "{id}");
+        assert_eq!(namespace(id, &nodes), None, "{id}");
     }
+    node(&mut nodes, "JM-BOX").unwrap();
+    assert_eq!(
+        namespace("TASK-JM-BOX-002", &nodes),
+        Some("JM-BOX"),
+        "a registry-known legacy node keeps its namespace"
+    );
     let mut nodes = BTreeMap::new();
     let row = node(&mut nodes, LOCAL).unwrap();
     row.labels.insert("label\nnext".into());
