@@ -10752,40 +10752,24 @@ pub(crate) fn ruling_comment_text(ruling: &str) -> String {
 }
 
 /// The advisor ruling recorded LAST on the spec (by comment time), replies
-/// included. A later ruling supersedes an earlier one.
+/// included. A later ruling supersedes an earlier one. Production pickups
+/// use [`crate::rework_direction::latest_advisor_direction`], which also
+/// reads briefs (BUG-057).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+#[cfg(test)]
 pub(crate) fn latest_ruling_comment(
     comments: &[aida_core::Comment],
 ) -> Option<&aida_core::Comment> {
-    fn walk<'a>(comments: &'a [aida_core::Comment], out: &mut Vec<&'a aida_core::Comment>) {
-        for c in comments {
-            out.push(c);
-            walk(&c.replies, out);
-        }
-    }
-    let mut all = Vec::new();
-    walk(comments, &mut all);
-    all.into_iter()
-        .filter(|c| is_ruling_comment(&c.content))
-        .max_by_key(|c| c.created_at)
+    crate::rework_direction::latest_matching(comments, is_ruling_comment)
 }
 
-/// Lead a pickup prompt with the spec's latest advisor ruling, so a
-/// relaunched lane works from it rather than from the description alone.
-/// The pickup line stays last, as in [`rework_pickup_prompt`].
+/// Lead a pickup prompt with the spec's latest advisor ruling. The pickup
+/// line stays last. Production pickups go through
+/// [`crate::rework_direction::lead_rework_prompt`] (BUG-057).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+#[cfg(test)]
 pub(crate) fn prepend_ruling(prompt: String, ruling: Option<&aida_core::Comment>) -> String {
-    // Agent gates wear a tighter verdict contract, as in `prepend_due_jobs`.
-    let Some(ruling) = ruling.filter(|_| std::env::var("AIDA_AGENT_GATE_NAME").is_err()) else {
-        return prompt;
-    };
-    format!(
-        "ADVISOR RULING ({} by {}) — binding; where it differs from the spec description, \
-         the ruling wins:\n{}\n\n{prompt}",
-        ruling.created_at.format("%Y-%m-%d %H:%M UTC"),
-        ruling.author,
-        ruling.content.trim()
-    )
+    crate::rework_direction::lead_rework_prompt(prompt, ruling, None, None)
 }
 
 // BUG-1213: the rework round a pickup is entering: the original
@@ -11734,6 +11718,14 @@ pub(crate) fn handle_queue_work(
              pass --branch <name> to start a new branch instead"
         );
     }
+    // BUG-057: a rework PR that conflicts with main makes the merge the
+    // lane's first task. trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+    let rework_conflict = rework_pr
+        .as_ref()
+        .filter(|_| !list_sessions && !plan_only && !guided)
+        .and_then(|(pr, branch)| {
+            crate::rework_direction::detect_main_conflict(&project_root, *pr, branch)
+        });
     let rework_branch_override = rework_pr.map(|(_, branch)| branch);
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
     // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
@@ -12049,30 +12041,58 @@ pub(crate) fn handle_queue_work(
     } else {
         Vec::new()
     };
+    // An advisor ruling or brief left as a spec comment leads the implementer
+    // pickup; a lane that read only the description repeated the overruled
+    // change. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+    // BUG-057: a brief newer than the last verdict is the task; the verdict's
+    // findings become superseded context instead of the authoritative round.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+    let implementer_item = !role.eq_ignore_ascii_case("reviewer")
+        && !plan_only
+        && !guided
+        && plan.mode == QueueWorkMode::Item;
+    let lead_comments = if implementer_item {
+        let spec_id = plan
+            .entries
+            .first()
+            .map(|entry| entry.spec_id.as_str())
+            .unwrap_or(plan.anchor_display.as_str());
+        storage.load().ok().and_then(|store| {
+            store
+                .requirements
+                .iter()
+                .find(|r| spec_matches(r, spec_id))
+                .map(|r| r.comments.clone())
+        })
+    } else {
+        None
+    };
+    let direction = lead_comments
+        .as_deref()
+        .and_then(crate::rework_direction::latest_advisor_direction);
+    let brief_supersedes = review_findings.is_some()
+        && crate::rework_direction::brief_supersedes_verdict(
+            direction,
+            crate::rework_direction::last_verdict_at(
+                review_findings.as_deref(),
+                lead_comments.as_deref().unwrap_or(&[]),
+            ),
+        );
     let mut prompt = derive_rework_queue_work_prompt(
         &plan,
         &role,
         plan_only,
         guided,
-        review_findings.as_deref(),
+        review_findings.as_deref().filter(|_| !brief_supersedes),
         &rework_comments,
     );
-    // An advisor ruling left as a spec comment leads the implementer pickup;
-    // a lane that read only the description repeated the overruled change.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
-    if !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided {
-        if plan.mode == QueueWorkMode::Item {
-            let spec_id = plan
-                .entries
-                .first()
-                .map(|entry| entry.spec_id.as_str())
-                .unwrap_or(plan.anchor_display.as_str());
-            if let Ok(store) = storage.load() {
-                if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
-                    prompt = prepend_ruling(prompt, latest_ruling_comment(&req.comments));
-                }
-            }
-        }
+    if implementer_item {
+        prompt = crate::rework_direction::lead_rework_prompt(
+            prompt,
+            direction,
+            review_findings.as_deref().filter(|_| brief_supersedes),
+            rework_conflict.as_ref(),
+        );
     }
     // Interactive implementers and every headless phase receive the same
     // resolved, capped type+lane protocol. Reviewers are included headlessly

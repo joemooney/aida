@@ -2010,3 +2010,152 @@ fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
     assert_eq!(ruling.content, "Advisor ruling: widen to the test");
     assert!(crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "  ").is_err());
 }
+
+/// BUG-057: a lane relaunched with a merge-only `ADVISOR BRIEF` re-ran the
+/// older review verdict's work instead. A brief newer than the verdict leads
+/// the prompt, and the verdict's findings are relabelled superseded context.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+fn bug057_comment(mins_ago: i64, content: &str) -> aida_core::Comment {
+    let mut c = aida_core::Comment::new("advisor".to_string(), content.to_string());
+    c.created_at = chrono::Utc::now() - chrono::Duration::minutes(mins_ago);
+    c
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+#[test]
+fn brief_comments_are_advisor_direction() {
+    use crate::rework_direction::{is_advisor_direction_comment, is_brief_comment};
+    assert!(is_brief_comment(
+        "ADVISOR BRIEF 13:10 (merge-only, retry): PR-3169 CONFLICTS with main"
+    ));
+    assert!(is_brief_comment("**Rework brief:** merge main"));
+    assert!(!is_brief_comment("see the advisor brief above"));
+    assert!(is_advisor_direction_comment("Advisor ruling: keep it"));
+    assert!(is_advisor_direction_comment("## ADVISOR BRIEF\nmerge"));
+    assert!(!is_advisor_direction_comment(
+        "Returned from NeedsAttention"
+    ));
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+#[test]
+fn newer_brief_leads_and_supersedes_the_older_verdict() {
+    use crate::rework_direction::{
+        brief_supersedes_verdict, last_verdict_at, latest_advisor_direction, lead_rework_prompt,
+    };
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_GATE_NAME", None)]);
+    let findings =
+        "REVIEW FINDINGS TO ADDRESS (PR #3169):\nVerdict: request-changes\n- run the bwrap tests";
+    let comments = vec![
+        bug057_comment(120, "Advisor ruling: config-only change"),
+        bug057_comment(90, findings),
+        bug057_comment(
+            10,
+            "ADVISOR BRIEF 13:10 (merge-only, retry): git merge origin/main, resolve, push",
+        ),
+    ];
+    let direction = latest_advisor_direction(&comments).expect("the brief");
+    assert!(direction.content.contains("merge-only"));
+    let verdict_at = last_verdict_at(Some(findings), &comments);
+    assert!(brief_supersedes_verdict(Some(direction), verdict_at));
+
+    let prompt = lead_rework_prompt(
+        "/aida-pickup BUG-051".to_string(),
+        Some(direction),
+        Some(findings),
+        None,
+    );
+    assert!(
+        prompt.starts_with("ADVISOR BRIEF ("),
+        "first task is the brief: {prompt}"
+    );
+    let brief_at = prompt.find("merge-only").unwrap();
+    let ctx_at = prompt
+        .find("SUPERSEDED CONTEXT")
+        .expect("findings labelled superseded");
+    assert!(brief_at < ctx_at);
+    assert!(prompt[ctx_at..].contains("run the bwrap tests"));
+    assert!(!prompt.contains("AUTHORITATIVE TASK"));
+    assert!(
+        prompt.ends_with("/aida-pickup BUG-051"),
+        "pickup line stays last"
+    );
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+#[test]
+fn verdict_newer_than_the_brief_stays_authoritative() {
+    use crate::rework_direction::{brief_supersedes_verdict, last_verdict_at};
+    let findings = "REVIEW FINDINGS TO ADDRESS (PR #1):\nVerdict: request-changes";
+    let comments = vec![
+        bug057_comment(60, "ADVISOR BRIEF: merge main"),
+        bug057_comment(5, findings),
+    ];
+    let brief = &comments[0];
+    assert!(!brief_supersedes_verdict(
+        Some(brief),
+        last_verdict_at(Some(findings), &comments)
+    ));
+    // The live block's own `Recorded:` time counts even with no comment.
+    let recorded = format!(
+        "REVIEW FINDINGS TO ADDRESS (PR #1):\nRecorded: {}",
+        chrono::Utc::now().to_rfc3339()
+    );
+    assert!(!brief_supersedes_verdict(
+        Some(brief),
+        last_verdict_at(Some(&recorded), &[])
+    ));
+    // No verdict time at all: the findings stay authoritative.
+    assert!(!brief_supersedes_verdict(Some(brief), None));
+    // A ruling never supersedes a verdict; only a brief does.
+    let ruling = bug057_comment(1, "Advisor ruling: widen");
+    assert!(!brief_supersedes_verdict(
+        Some(&ruling),
+        last_verdict_at(Some(findings), &comments)
+    ));
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+#[test]
+fn conflicting_pr_adds_resolve_conflicts_first() {
+    use crate::rework_direction::{lead_rework_prompt, MainConflict};
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_GATE_NAME", None)]);
+    let conflict = MainConflict {
+        pr: 3169,
+        base: "main".to_string(),
+        files: vec!["aida-cli-lib/src/session_end.rs".to_string()],
+    };
+    let brief = bug057_comment(1, "ADVISOR BRIEF: merge main");
+    let prompt = lead_rework_prompt(
+        "/aida-pickup BUG-051".to_string(),
+        Some(&brief),
+        None,
+        Some(&conflict),
+    );
+    assert!(prompt.starts_with("FIRST TASK — resolve conflicts with main first"));
+    assert!(prompt.contains("PR #3169"));
+    assert!(prompt.contains("session_end.rs"));
+    assert!(prompt.contains("git merge origin/main"));
+    assert!(prompt.find("ADVISOR BRIEF").unwrap() > prompt.find("FIRST TASK").unwrap());
+    assert!(prompt.ends_with("/aida-pickup BUG-051"));
+
+    // No conflict, no direction: the prompt is untouched.
+    assert_eq!(lead_rework_prompt("p".to_string(), None, None, None), "p");
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+#[test]
+fn agent_gates_get_the_prompt_unchanged() {
+    use crate::rework_direction::{lead_rework_prompt, MainConflict};
+    let _guard =
+        crate::test_env::EnvVarsGuard::apply(&[("AIDA_AGENT_GATE_NAME", Some("security"))]);
+    let conflict = MainConflict {
+        pr: 1,
+        base: "main".to_string(),
+        files: vec![],
+    };
+    assert_eq!(
+        lead_rework_prompt("p".to_string(), None, None, Some(&conflict)),
+        "p"
+    );
+}
