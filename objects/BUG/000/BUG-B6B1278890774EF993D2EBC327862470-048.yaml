@@ -15,12 +15,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T11:07:17.457639341Z
+modified_at: 2026-10-31T11:12:22.674934886Z
 req_type: Bug
 tags:
 - ids
 - ship
 - trailers
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a191a8-f19b-77b1-92fc-dda6a7f1ea6b
+  created_at: 2026-10-31T11:12:22.674930874Z
+  created_by: joe
 history:
 - id: 01a19166-4eb3-7172-8f0a-f2ff30b1fe9b
   author: aida-session-start
@@ -39,6 +45,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a191a9-27d2-7b71-9056-e6b427f20e7b
+  author: joe
+  timestamp: 2026-10-31T11:12:24.530193011Z
+  changes: []
 filed_at:
   code_sha: 988a7ae5ea9fc5048e4d3e9322a4ffd1af0113b7
   branch: main
