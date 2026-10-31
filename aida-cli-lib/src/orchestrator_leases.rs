@@ -1217,7 +1217,9 @@ pub(crate) fn ensure_implementer_branch_pushed(
                 "could not verify the implementer seat clone's main checkout before phase-2 CI/teardown",
             ));
         };
-        return match crate::seat_clone::probe(&main, worktree) {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+        return match crate::seat_clone::probe_counting_origin(&main, worktree, Some(branch), &[], None)
+        {
             crate::seat_clone::Probe::Known(facts) if facts.branch.as_deref() != Some(branch) => {
                 Err(auto_complete::PhaseFailure::new(format!(
                     "implementer seat clone is on `{}` but phase 2 is driving `{branch}` — refusing to continue",

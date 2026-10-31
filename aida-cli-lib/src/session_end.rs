@@ -1103,8 +1103,16 @@ pub(crate) fn session_end(
         // TASK-2110: a squash-merged PR's head counts as shipped.
         // trace:TASK-2110 | ai:claude
         let shipped = crate::seat_clone::merged_pr_heads(&project_root, &target.branch);
-        match crate::seat_clone::probe_with_shipped(&project_root, &target.worktree_path, &shipped)
-        {
+        // BUG-051: a branch head that is an ancestor of origin's copy of the
+        // branch is pushed (the probe fetches that copy into main when needed).
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+        match crate::seat_clone::probe_counting_origin(
+            &project_root,
+            &target.worktree_path,
+            Some(&target.branch),
+            &shipped,
+            None,
+        ) {
             crate::seat_clone::Probe::Known(facts) => Some(facts),
             crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
                 "session {} works in the seat clone {}, whose state could not be read ({why}). \
@@ -1468,17 +1476,10 @@ pub(crate) fn session_end(
     // as uncommitted files: they need `--force` too (both are salvaged).
     // trace:TASK-2053 | ai:claude
     let dirty_entries = if let Some(facts) = &clone_facts {
-        let mut entries = facts.dirty.clone();
-        if facts.unpushed > 0 {
-            entries.push(format!(
-                "{} commit(s) that origin does not have, on:",
-                facts.unpushed
-            ));
-            // BUG-2224: name every ref that holds them, so a refusal is never
-            // an empty list. trace:BUG-2224 | ai:claude
-            entries.extend(facts.unpushed_refs.iter().map(|line| format!("  {line}")));
-        }
-        entries
+        // BUG-2224 / BUG-051: name every changed path and every ref holding
+        // commits origin lacks, so a refusal is never an empty list.
+        // trace:BUG-2224 trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+        crate::seat_clone::unshipped_items(facts)
     } else if has_worktree {
         dirty_entries_ignoring_runtime_links(
             &target.worktree_path,

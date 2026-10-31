@@ -1300,6 +1300,11 @@ pub(crate) fn probe_until(
     if is_empty_gitmodules_placeholder(clone) {
         facts.dirty.retain(|line| line != "? .gitmodules");
     }
+    // The session's runtime links and build/cache output are not work.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+    facts
+        .dirty
+        .retain(|line| !is_runtime_noise_entry(clone, line));
     let base = pinned_base(main, clone).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -1315,7 +1320,14 @@ pub(crate) fn probe_until(
         Ok(out) => out,
         Err(why) => return Probe::Unknown(why),
     };
-    let in_main = main_reachable_commits(main, tips.lines().map(str::trim), deadline);
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+    let (ref_tips, candidates) = split_tips(&tips);
+    let mut in_main = main_reachable_commits(main, ref_tips.into_iter(), deadline);
+    in_main.extend(main_reachable_commits(
+        main,
+        candidates.into_iter(),
+        deadline,
+    ));
     let count = probe_run(
         clone,
         main,
@@ -1349,18 +1361,213 @@ pub(crate) fn probe_until(
     Probe::Known(facts)
 }
 
+/// [`REF_TIPS_SCRIPT`]'s output as (ref tips, candidate commits), split at
+/// the [`TIPS_SEPARATOR`] line; output without one is all ref tips.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn split_tips(out: &str) -> (Vec<&str>, Vec<&str>) {
+    let mut lines = out.lines().map(str::trim);
+    let tips = lines
+        .by_ref()
+        .take_while(|line| *line != TIPS_SEPARATOR)
+        .collect();
+    (tips, lines.collect())
+}
+
 /// Why a clone with `facts` is kept: the work origin does not have, by ref.
 // trace:BUG-2224 | ai:claude
 pub(crate) fn unshipped_reason(facts: &ProbeFacts) -> String {
-    let mut parts = Vec::new();
-    if !facts.dirty.is_empty() {
-        parts.push(format!("{} uncommitted change(s)", facts.dirty.len()));
+    // BUG-051: name every item, never an empty list.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+    let mut parts: Vec<String> = facts
+        .dirty
+        .iter()
+        .map(|line| describe_status_entry(line))
+        .collect();
+    if facts.unpushed > 0 && facts.unpushed_refs.is_empty() {
+        parts.push(format!("{} commit(s) on no listed ref", facts.unpushed));
     }
     parts.extend(facts.unpushed_refs.iter().cloned());
     if parts.is_empty() {
         "it holds work origin does not have".to_string()
     } else {
         format!("it holds work origin does not have: {}", parts.join("; "))
+    }
+}
+
+/// Every item that makes a clone with `facts` unshipped, one per entry: each
+/// changed or untracked path ([`describe_status_entry`]), then the commits
+/// origin lacks with the refs holding them. Empty exactly when
+/// [`ProbeFacts::unshipped`] is false.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
+    let mut items: Vec<String> = facts
+        .dirty
+        .iter()
+        .map(|line| describe_status_entry(line))
+        .collect();
+    if facts.unpushed > 0 {
+        items.push(format!(
+            "{} commit(s) that origin does not have, on:",
+            facts.unpushed
+        ));
+        if facts.unpushed_refs.is_empty() {
+            items.push("  (no listed ref holds them)".to_string());
+        } else {
+            items.extend(facts.unpushed_refs.iter().map(|line| format!("  {line}")));
+        }
+    }
+    items
+}
+
+/// A `git status --porcelain=v2` entry as `<kind>: <path>`, so a refusal
+/// names the file rather than printing modes and object ids. A line that does
+/// not parse is shown as it is. The path is seat-written, so it is escaped.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn describe_status_entry(line: &str) -> String {
+    let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
+    let xy = line.split(' ').nth(1).unwrap_or("");
+    let described = match line.as_bytes().first() {
+        Some(b'?') => field(1).map(|p| format!("untracked: {}", p.escape_debug())),
+        Some(b'!') => field(1).map(|p| format!("ignored: {}", p.escape_debug())),
+        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", p.escape_debug())),
+        Some(b'2') => field(9).map(|p| match p.split_once('\t') {
+            Some((to, from)) => format!(
+                "renamed ({xy}): {} -> {}",
+                from.escape_debug(),
+                to.escape_debug()
+            ),
+            None => format!("renamed ({xy}): {}", p.escape_debug()),
+        }),
+        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", p.escape_debug())),
+        _ => None,
+    };
+    described.unwrap_or_else(|| line.escape_debug().to_string())
+}
+
+/// Whether a probe `git status` entry is the session's runtime state or
+/// build/cache output rather than work: the `.aida-store` link to the
+/// primary's store, `.aida/cache.db*`, `.aida/agents`, and `target/`. Only
+/// untracked entries qualify; `.aida-store` only while it is a symlink (read
+/// with metadata only; nothing in the clone is opened).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
+    let Some(path) = line.strip_prefix("? ") else {
+        return false;
+    };
+    let path = path.trim_end_matches('/');
+    if path == ".aida-store" {
+        return std::fs::symlink_metadata(clone.join(path))
+            .is_ok_and(|meta| meta.file_type().is_symlink());
+    }
+    path.starts_with(".aida/cache.db")
+        || path == ".aida/agents"
+        || path.starts_with(".aida/agents/")
+        || path == "target"
+        || path.starts_with("target/")
+}
+
+/// Bring origin's copy of `branch` into `main`'s `refs/remotes/origin/<branch>`
+/// (host git in main only, bounded, no prompts), so a clone whose branch head
+/// is an ancestor of it reads as pushed: [`main_reachable_commits`] excuses
+/// tips main reaches. A seat publishes through main ([`crate::ship_from_seat`])
+/// without a tracking ref in the clone, and origin's branch may since have
+/// gained commits (an update-branch merge). Best effort: a failure, an absent
+/// branch or a timeout changes nothing and the count stays conservative.
+/// Returns whether main's tracking ref moved (only then can a re-read differ).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn refresh_origin_branch(
+    main: &Path,
+    branch: &str,
+    timeout: std::time::Duration,
+) -> bool {
+    let valid = !timeout.is_zero()
+        && !branch.is_empty()
+        && !branch.starts_with('-')
+        && git(main)
+            .args(["check-ref-format", "--branch", branch])
+            .output()
+            .is_ok_and(|out| out.status.success());
+    if !valid {
+        return false;
+    }
+    let tracking = format!("refs/remotes/origin/{branch}");
+    let tip = || {
+        let mut cmd = git(main);
+        cmd.args(["rev-parse", "--verify", "--quiet", &tracking]);
+        run(cmd, "read origin's branch in the main checkout").ok()
+    };
+    let before = tip();
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .env(ACCESSOR_ENV, "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
+        .stdin(std::process::Stdio::null())
+        .args([
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "origin",
+        ])
+        .arg(format!("+refs/heads/{branch}:{tracking}"));
+    let fetched =
+        crate::command_output_with_timeout(fetch, timeout).is_some_and(|out| out.status.success());
+    fetched && tip() != before
+}
+
+/// The most one [`probe_counting_origin`] refresh fetch may take; it never
+/// takes more than half the check's remaining budget either.
+const ORIGIN_REFRESH_CAP: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// BUG-051: [`probe_until`] under the ancestor-of-origin rule: a branch head
+/// that is an ancestor of origin's copy of the branch counts as pushed. Every
+/// host reading that acts on whether a clone holds commits origin lacks
+/// (session end, reap, the lease classifiers, salvage, phase 2) goes through
+/// here, so they agree. The read-only status and awaiting surfaces call
+/// [`probe_until`] directly: they apply the same rule against main's
+/// last-fetched origin refs but never fetch or move them. A clone whose first reading
+/// counts no such commits costs no network. Otherwise origin's copy of
+/// `branch` (the host-recorded lease branch; the clone's checked-out branch
+/// when there is none) is fetched into main, bounded by half the remaining
+/// budget (`deadline`, else one [`PROBE_TIMEOUT`]) and [`ORIGIN_REFRESH_CAP`],
+/// and the clone is read again under the same deadline. A fetch that moves
+/// nothing, or a re-read with no answer, leaves the first (conservative)
+/// reading standing.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn probe_counting_origin(
+    main: &Path,
+    clone: &Path,
+    branch: Option<&str>,
+    shipped: &[String],
+    deadline: Option<std::time::Instant>,
+) -> Probe {
+    let first = probe_until(main, clone, shipped, deadline);
+    let Probe::Known(facts) = &first else {
+        return first;
+    };
+    if facts.unpushed == 0 {
+        return first;
+    }
+    let Some(branch) = branch
+        .filter(|b| !b.is_empty())
+        .map(str::to_owned)
+        .or_else(|| facts.branch.clone())
+    else {
+        return first;
+    };
+    let remaining = deadline.map_or(PROBE_TIMEOUT, |end| {
+        end.saturating_duration_since(std::time::Instant::now())
+    });
+    if !refresh_origin_branch(main, &branch, (remaining / 2).min(ORIGIN_REFRESH_CAP)) {
+        return first;
+    }
+    match probe_until(main, clone, shipped, deadline) {
+        again @ Probe::Known(_) => again,
+        _ => first,
     }
 }
 
@@ -1547,10 +1754,24 @@ exit 0
 "##;
 
 /// Inside the probe sandbox: the commit every ref of the clone points at
-/// (tags peeled), one per line, for [`main_reachable_commits`].
+/// (tags peeled), one per line, for [`main_reachable_commits`]; then a
+/// [`TIPS_SEPARATOR`] line and the newest 5000 commits the clone's refs
+/// reach that no `origin/*` ref does (older ones are not excused, so count). BUG-051: a seat commit on
+/// top of one that main now reaches (origin's branch gained a merge after
+/// the seat pushed) leaves no tip main reaches, so the candidates are checked
+/// too: each one main reaches is excused, and with it its ancestors.
 // trace:BUG-2224 | ai:claude
-const REF_TIPS_SCRIPT: &str =
-    "set -u\nexec git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)'\n";
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+const REF_TIPS_SCRIPT: &str = concat!(
+    "set -u\n",
+    "git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)' || exit 1\n",
+    "echo --\n",
+    "exec git rev-list --max-count=5000 --all --not --remotes=origin\n"
+);
+
+/// The line [`REF_TIPS_SCRIPT`] prints between the ref tips and the
+/// candidate commits.
+const TIPS_SEPARATOR: &str = "--";
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
