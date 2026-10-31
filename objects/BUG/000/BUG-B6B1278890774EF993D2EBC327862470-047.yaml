@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:21:31.863608220Z
-modified_at: 2026-10-31T08:12:33.242146138Z
+modified_at: 2026-10-31T08:29:18.202811689Z
 req_type: Bug
 tags:
 - salvage
@@ -59,6 +59,13 @@ comments:
   modified_at: 2026-10-31T07:58:34.760555098Z
   session_id: 01a190c46c72
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19113-d3fa-74d0-a845-805735623605
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-31 01:32 on PR-3158 round 1 (2026-10-28 rule: ruled once). ONE new commit: the AC1/AC2 regression test must actually run in CI. Either place it under the CI live-bwrap gate (the bwrap-confinement job) so it fails loudly when bwrap is unavailable there, or make it independent of live bwrap (a fixture clone with an empty read-only untracked .gitmodules; salvage and dismiss only inspect files and the index). A silent skip under green CI is not evidence. Gate: LIGHT.
+  created_at: 2026-10-31T08:29:18.202811689Z
+  modified_at: 2026-10-31T08:29:18.202811689Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a190c4-7036-7190-9a4d-00159ae21355
   author: aida-session-start
