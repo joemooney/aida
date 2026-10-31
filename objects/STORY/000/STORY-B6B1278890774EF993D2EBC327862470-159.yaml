@@ -1,0 +1,33 @@
+id: 01a1928d-64e8-7931-97f7-a273bae492b3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-159
+title: 'Review PR-3168: [AI:claude] feat(agent): aida agent new codex --rotate supervises Codex sessions across context rotations (STORY-B6B1278890774EF993D2EBC327862470-150)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-150`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3168>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-150` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-150
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3168` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T15:21:42.376206416Z
+modified_at: 2026-10-31T15:21:42.376206416Z
+req_type: Story
+filed_at:
+  code_sha: eaabde5c226c436a1f6c562396069101af91b4d4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e564a298167
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
