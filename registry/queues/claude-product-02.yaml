@@ -1,0 +1,8 @@
+- user_id: claude-product-02
+  requirement_id: 01a18d28-9910-7161-8e93-fb6b713b720f
+  position: 1000
+  added_by: claude-product-02
+  note: 'product 2026-10-31: only approved, unrouted spec; groomed (6 probe questions, go/no-go deliverable, scope bounded). Needs network to install current OpenCode release for probes.'
+  added_at: 2026-10-31T17:55:13.779192225Z
+  for_role: implementer
+  added_by_machine: imac
