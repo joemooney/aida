@@ -1,0 +1,29 @@
+id: 01a19431-508c-75d0-9f06-4bc7ed05f3d6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-152
+agreed_id: BUG-2378
+title: After the STORY-105 backfill the root node owns blocks but has no nodes.toml entry, so the allocation claims check refuses every hub reconcile; the clone still identifies as retired node 1
+description: |-
+  Observed 2026-10-31 15:58 (advisor, running PR-3170's post-merge runbook on the home root). Steps: aida node enroll-root (ok: root.yaml holder_node b6b1278890774ef993d2ebc327862470); aida doctor --fix agreed-ids --yes (ok: 451 agreed IDs, 412 node-1 renames, 14 block claims for b6b, node 1 marked retired_at in registry/nodes.toml). Then:
+  1. 'aida remote reconcile --execute' refuses: 'allocation claims check refused this store sync: 1 conflict(s)'. 'aida db block verify': 'node b6b1278890774ef993d2ebc327862470 owns 20 block(s) ... not in registry/nodes.toml'. GitHub (origin) has the backfill; the GitLab hub is stuck at 0de1131 (pre-backfill), so the WORK clone cannot see it.
+  2. The suggested fix 'aida node acquire --id b6b1278890774ef993d2ebc327862470 --force' refuses: 'Node id ... is taken' (b6b exists as the HOME native/alias node in node_aliases.toml and 'aida node list' marks it current+root), while verify says it is unregistered. Two registries disagree.
+  3. 'aida node show' on this clone still says 'Node 1 ... Active on this clone: yes (.aida/node.toml matches)' although node 1 is now retired; sessions keep writing 'claim lease ... (node 1)' commits.
+  Expected: enroll-root (or the backfill) registers the root's native node in nodes.toml (or the claims check/verify accept an alias-registered native node as registered, one definition used everywhere), and the retirement re-points this clone's .aida/node.toml identity to the root node. Acceptance: (1) after the runbook, 'aida db block verify' is clean and 'aida remote reconcile --execute' pushes to both hubs; (2) 'aida node show' reports the root node as this clone's identity; new lease/commit stamps use it; (3) one-time repair for THIS store via 'aida doctor --fix' (dry-run first) that the advisor runs; (4) CLI fixture: enroll-root + backfill + retire on a clone whose native node exists only as an alias, then verify + a sync to a second bare hub both succeed. Backup of the pre-runbook store: branch aida-store-backup-20261031-1555 (6999fae). Old node.toml saved at ~/.local/share/aida/ops/node.toml.node1.bak.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T23:00:22.284758314Z
+modified_at: 2026-10-31T23:00:22.284758314Z
+req_type: Bug
+tags:
+- epic-home-003
+- ids
+- store-sync
+filed_at:
+  code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 44c7b666325
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
