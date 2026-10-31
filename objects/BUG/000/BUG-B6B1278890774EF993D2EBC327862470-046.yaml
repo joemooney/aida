@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T13:07:39.625275362Z
+modified_at: 2026-10-31T13:08:26.732579727Z
 req_type: Bug
 tags:
 - ids
@@ -309,6 +309,12 @@ comments:
   modified_at: 2026-10-31T13:07:39.625275362Z
   session_id: 01a191cf86c2
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19213-63ec-71d1-bb9a-6c1878b00181
+  author: joe
+  content: 'ADVISOR 2026-10-31 06:10: round 2 pushed at 287fee6; review queued. REVIEWER NOTE: the lane did the tree rewrite with a Python port of the tool and hand-edited the help golden, because the sandbox blocked the real binary and AIDA_UPDATE_SNAPSHOTS. Verify both: the commit''s renames must match docs/plans/2026-10-31-id-collision-renumber.tsv exactly, case preserved, and CI''s golden test is the authority. The scratch files .rewrite046.py and .mapping-comment.md are untracked and must not be in the commit. The step-7 follow-ups are filed as one task (see the open list).'
+  created_at: 2026-10-31T13:08:26.732579727Z
+  modified_at: 2026-10-31T13:08:26.732579727Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
