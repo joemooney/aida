@@ -59,6 +59,7 @@ default_limit = 10
 "aida-cli::bug_2139_headless_child_grant orchestrated_headless_reviewer_gets_its_own_reviewer_grant" = 30  # max 13.6s, median 9.3s over 7 runs
 "aida-cli::task_1717_store_writer_lock remote_reconcile_uses_the_current_locked_preimage" = 30  # max 12.5s, median 12.0s over 7 runs
 "aida-cli::bug_2201_outside_project_reviewer contained_reviewer_in_outside_project_records_its_verdict" = 25  # max 11.4s, 6.1s-11.4s over 4 CI runs (main 40274006513, 40276227100, 40280943193; PR-2949 40328850083, a slow window both tests shared), x2 rounded; trace:STORY-1843 | ai:claude
+"aida-cli::bug_053_contained_add_cli contained_add_prints_the_final_id_and_queued_notice_and_show_resolves_it" = 25  # max 10.6s in CI (PR-3174 run 41244805881), x2.5 for shard load; trace:TASK-b6b1278890774ef993d2ebc327862470-161 | ai:claude
 "aida-cli-lib command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot" = 25  # max 11.2s, median 9.3s over 7 runs
 "aida-cli-lib gate::dispatch_auth::story_1917_dispatch_flow_schedule_tests::story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its_release" = 25  # max 10.3s (PR-3140, PR-3135 runs 2026-10-30), x2 rounded up to 5 s
 "aida-cli-lib session_end::bug_1983_grant_verdict_tests::one_rejection_table_drives_the_edit_gate_and_review_record" = 25  # max 10.4s, median 9.1s over 7 runs
