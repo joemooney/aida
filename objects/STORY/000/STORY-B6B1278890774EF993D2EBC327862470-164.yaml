@@ -1,0 +1,48 @@
+id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-164
+title: Short agreed IDs need no root on a single hub; require an enrolled root only when the store has more than one hub
+description: |
+  ## Why
+  Block delegation (STORY-HOME-095, STORY-HOME-105) requires an enrolled root clone before any clone can mint short agreed IDs. Most projects have ONE hub: a single git server the store syncs through (GitHub, GitLab, a bare repo; a store mirror counts as the same hub). On one hub, `git push` already orders every claim (compare-and-swap on the hub's `aida-store` ref). A root clone adds nothing there except a setup step and a single point of failure: it can't be moved yet (transfer-root is planned), and until it's enrolled every clone falls back to long node-local IDs.
+
+  The root earns its place only when the store lives on MORE THAN ONE hub that claims are pushed to independently, chiefly an air-gapped network with its own internal git server. Claims pushed to different hubs move different refs, so nothing orders them, and they collide when the hubs' stores next merge. There the root splits the number space between hubs before either one sees a claim.
+
+  ## Proposal (needs a sketch and advisor signoff: allocation authority, supersedes part of STORY-HOME-095 AC1/AC3)
+  Two allocation modes, selected from the project's declared hubs rather than by enrolling a clone:
+  - **Single-hub (the default):** the declared hub's store ref is the authority. One implicit pool per type, homed on that ref. Any clone whose upstream is that hub claims blocks by CAS push and mints agreed IDs. No root clone, no enrollment.
+  - **Multi-hub:** declaring a second hub (one that is not a mirror) requires an enrolled root. The root takes over the implicit pool, keeping every claim already made, and grants a disjoint pool homed on each hub.
+
+  ## Acceptance
+  1. **Hub declaration.** Tracked project config names the store's hub(s); mirror remotes listed under `[store.sync] mirror_remotes` are never separate hubs. `aida node show` reports the mode (single-hub or multi-hub) and the hub(s).
+  2. **Single-hub without a root.** On a fresh project with one hub and no enrolled root, `aida db block claim` on any clone whose upstream is the hub succeeds by CAS push, and `aida add` mints an agreed ID from the block. Test: two clones racing for the same block never both receive it (one push is rejected and retries).
+  3. **Authority stays push permission on the hub ref.** In single-hub mode a block is spendable only if its claim commit is reachable from the hub's store ref. A block that only appears in an imported store, or was claimed on any other remote, is never spendable (keeps BUG-2017 / STORY-HOME-095 AC3 intent). Test: a claim committed locally but never pushed to the hub is not spendable.
+  4. **Second hub requires a root.** Declaring a second non-mirror hub with no enrolled root is refused, and the refusal names the command that enrolls one. Clones keep minting from blocks they already hold.
+  5. **Promotion to multi-hub keeps history.** `aida node enroll-root` on a single-hub store turns the implicit pool(s) into root pools: every existing block and agreed ID stays valid, nothing is renumbered, and the root can then grant a disjoint pool homed on the new hub. Dry-run first. Test: IDs minted before enrollment still resolve and never reappear in a later grant.
+  6. **Sync backstop unchanged.** The claim check at every store sync still refuses overlapping claims in both modes.
+  7. **Docs.** `docs/cli/10-storage.md` leads with the single-hub case; root, pools and lineage are introduced as the multi-hub/air-gapped case.
+
+  ## Open questions for the sketch
+  - Where the hub list lives (tracked `.aida/config.toml` vs the store branch), and how a clone detects an undeclared second hub that store records are being pushed to.
+  - This repository: the WORK clone pushes only to the GitLab hub and a cron job bridges it to GitHub hourly. Is that a second hub (needs the root) or a mirror? Decide before PR-3170's enroll-root runbook runs.
+  - Whether pool grants can cross an air gap inside a git bundle without counting as an "imported store" (see the air-gap spike).
+
+  ## Related
+  STORY-HOME-095 (block delegation, done), STORY-HOME-105 (agreed IDs + backfill, PR-3170 in review), BUG-2017 (allocation authority).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T19:23:04.998731220Z
+modified_at: 2026-10-31T19:23:04.998731220Z
+req_type: Story
+tags:
+- architecture
+- from-operator
+- id-allocation
+filed_at:
+  code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
