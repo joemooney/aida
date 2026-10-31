@@ -2,12 +2,12 @@ id: 01a18a48-0391-7f13-8b5e-f8d961716571
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-026
 title: aida node list prints only the current node's summary instead of every registered node with its label
 description: '2026-10-29: operator ran `aida node list`; it printed only ''WORK node b6b1278890774ef993d2ebc327862470 (node-local allocation; no global blocks).'' Its help says it lists ALL nodes in the shared registry and marks the current one with `*`. The registry holds legacy numeric entries (registry/nodes.toml, ids 1..N with hostname/clone_path) and UUID nodes, plus labels in registry/node_aliases.toml (HOME -> b6b1..., ASTER -> a65b...). Acceptance: node list shows one row per known node (UUID node ids from node_aliases.toml, nodes.toml, id-block/pool records and spec-ID namespaces seen in the store), with label (current + retired), hostname/clone path when known, role, and a `*` on this clone; the ''WORK node'' role wording follows STORY-HOME-098''s rewording.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-31T04:48:07.781945106Z
+modified_at: 2026-10-31T04:49:43.054503208Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -69,6 +69,12 @@ comments:
   created_at: 2026-10-31T04:48:07.781945106Z
   modified_at: 2026-10-31T04:48:07.781945106Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a1904a-ca8e-76e2-b0bb-5544ce3cb372
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Inventory union, labels, roles, current marker and read-only behaviour are met and tested; but spec-ID namespace inference turns two-level IDs (FEAT-TYPE-NNN) into fake node rows, and list/show role wording disagree. CI green at prior head fb17a888 (run 41145841900); current head bc35d4a (main-only delta) CI run 41149654192 still queued.. No triage reason was given.'
+  created_at: 2026-10-31T04:49:43.054498881Z
+  modified_at: 2026-10-31T04:49:43.054498881Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
   author: joe
@@ -128,6 +134,14 @@ history:
   session_id: 01a18f56bfd5
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a1904a-ca8e-76e2-b0bb-5536273509b9
+  author: joe
+  timestamp: 2026-10-31T04:49:43.054488207Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -136,11 +150,3 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Inventory union, labels, roles, current marker and read-only behaviour are met and tested; but spec-ID namespace inference turns two-level IDs (FEAT-TYPE-NNN) into fake node rows, and list/show role wording disagree. CI green at prior head fb17a888 (run 41145841900); current head bc35d4a (main-only delta) CI run 41149654192 still queued.
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-026 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T00:35:50.544011672Z
