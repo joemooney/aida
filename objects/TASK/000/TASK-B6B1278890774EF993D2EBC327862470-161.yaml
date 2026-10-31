@@ -1,0 +1,23 @@
+id: 01a193fa-1350-7212-97b7-75db269a461c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-161
+title: Add a test-time budget entry for bug_053_contained_add_cli (10.6s over the 10s unbudgeted limit fails cli-1)
+description: 'FASTTRACK. CI cli-1 ''Test time budget'' failed on PR-3174 (run 41244805881, 2026-10-31 21:47Z): ''aida-cli::bug_053_contained_add_cli contained_add_prints_the_final_id_and_queued_notice_and_show_resolves_it: 10.6s with no budget entry (limit 10s for an unbudgeted test)''. The same step failed once on PR-3171 (run 41230254053, TASK-155 ruling said fix on recurrence; this is the recurrence). Fix: add one line to scripts/test-time-budget.toml in the style of neighbouring entries: "aida-cli::bug_053_contained_add_cli contained_add_prints_the_final_id_and_queued_notice_and_show_resolves_it" = 25  # max 10.6s in CI (PR-3174 run 41244805881), x2.5 for shard load; plus a trace comment. Gate: make check-ci-fast only (no cargo). Open the PR via aida ship.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:00:02.128832100Z
+modified_at: 2026-10-31T22:00:02.128832100Z
+req_type: Task
+tags:
+- ci
+- epic-home-003
+- fasttrack
+filed_at:
+  code_sha: 584e95e4505310c1a681700bd42eda3ccb951b98
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a4a6e2a6d18
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
