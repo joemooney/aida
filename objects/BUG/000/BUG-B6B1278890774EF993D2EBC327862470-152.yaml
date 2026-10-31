@@ -8,12 +8,12 @@ description: |-
   2. The suggested fix 'aida node acquire --id b6b1278890774ef993d2ebc327862470 --force' refuses: 'Node id ... is taken' (b6b exists as the HOME native/alias node in node_aliases.toml and 'aida node list' marks it current+root), while verify says it is unregistered. Two registries disagree.
   3. 'aida node show' on this clone still says 'Node 1 ... Active on this clone: yes (.aida/node.toml matches)' although node 1 is now retired; sessions keep writing 'claim lease ... (node 1)' commits.
   Expected: enroll-root (or the backfill) registers the root's native node in nodes.toml (or the claims check/verify accept an alias-registered native node as registered, one definition used everywhere), and the retirement re-points this clone's .aida/node.toml identity to the root node. Acceptance: (1) after the runbook, 'aida db block verify' is clean and 'aida remote reconcile --execute' pushes to both hubs; (2) 'aida node show' reports the root node as this clone's identity; new lease/commit stamps use it; (3) one-time repair for THIS store via 'aida doctor --fix' (dry-run first) that the advisor runs; (4) CLI fixture: enroll-root + backfill + retire on a clone whose native node exists only as an alias, then verify + a sync to a second bare hub both succeed. Backup of the pre-runbook store: branch aida-store-backup-20261031-1555 (6999fae). Old node.toml saved at ~/.local/share/aida/ops/node.toml.node1.bak.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-10-31T23:33:30.412144731Z
+modified_at: 2026-10-31T23:57:10.430106275Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -37,6 +37,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19465-519e-7ce2-8dd5-a24793071186
+  author: aida-orchestrator
+  timestamp: 2026-10-31T23:57:10.430125427Z
+  session_id: 01a194562b59
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
   branch: main
@@ -49,3 +58,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T23:33:30.412144731Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: CI red at head (Run tests failed in lib-0, cli-0, cli-1, rest; clippy pending); ancestor-tip pruning regresses BUG-2017's fast-forward duplicate refusal; AC2 stamp and AC3 repair paths untested
+  recovery_hint: address the review findings, move BUG-2378 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-31T23:57:10.430106275Z
