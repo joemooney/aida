@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:12:51.682698239Z
-modified_at: 2026-10-31T07:10:55.632949982Z
+modified_at: 2026-10-31T07:13:10.431064756Z
 req_type: Bug
 tags:
 - headless
@@ -57,6 +57,13 @@ comments:
   modified_at: 2026-10-31T06:01:31.416093193Z
   session_id: 01a1908aac6f
   harness_version: 2.1.314 (Claude Code)
+- id: 01a190ce-211f-7ff1-8969-c091fdb91006
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-31 00:20 on PR-3157 round 1 (2026-10-28 rule: ruled once). ONE new commit: (1) the contained-reviewer fail-fast must also cover the RESUME launch paths (every path that starts a reviewer whose child grant cannot be held), not only the fresh launch: refuse before spending a review; (2) test the wiring end to end at the launcher level for both fresh and resume. Gate: LIGHT (one targeted cargo test -p aida-cli-lib with the bug_045 filter, plus make check-ci-fast).
+  created_at: 2026-10-31T07:13:10.431064756Z
+  modified_at: 2026-10-31T07:13:10.431064756Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18f58-daa8-7f32-873d-a1a24562719c
   author: joe
