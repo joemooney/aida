@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-150
 agreed_id: BUG-2376
 title: 'aida deputy: a refused job''s result line names an .out file that is never written'
 description: 'Observed 2026-10-31 ~15:10 (operator test of the deputy at main 584e95e): ''aida deputy submit --wait -- echo hello'' was correctly refused with exit 126 ''refused:exec-not-allowed (echo is not aida or an --allow-exec path)'', but the result line pointed at .aida/deputy/default/out/01a19404-2d99-....out and that file was never created. Expected: a refused job writes its refusal reason (policy rule, the argv, the remedy e.g. ''restart with aida deputy --allow-exec <path>'') to the .out file it names, so every result line''s path exists; the completion mail and ''aida awaiting'' failed-job entry (STORY-155) point at the same file. Acceptance: (1) a refused submit produces an .out file holding the refusal reason and remedy; (2) test: refused job, result line path exists and contains ''exec-not-allowed''; (3) an accepted job''s output file behaviour is unchanged. Related: STORY-HOME-099, STORY-HOME-155.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:12:40.884457867Z
-modified_at: 2026-10-31T22:45:26.441582232Z
+modified_at: 2026-10-31T23:45:18.555797126Z
 req_type: Bug
 tags:
 - deputy
@@ -57,6 +57,21 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: BUG-2376
+- id: 01a1945a-74d0-7733-90e2-ae302c0f3c02
+  author: aida-auto-bump
+  timestamp: 2026-10-31T23:45:18.544689176Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1945a-74db-7b32-b322-36b255a19dbd
+  timestamp: 2026-10-31T23:45:18.555792460Z
+  agent: aida
+  commit_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
+  pr: 3179
+  summary: 'Base-only update from main (gh update-branch 6328d94c21707d08de0a4a7120cbd7b0de67fb41 -> 9a644c4b762720844cff811a58054fd9d6b3e6c4); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -69,3 +84,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T22:45:26.441582232Z
   implemented_by: joe
+  completed_at: 2026-10-31T23:45:18.544684698Z
+  completion_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
