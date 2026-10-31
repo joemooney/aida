@@ -1,0 +1,25 @@
+id: 01a1922e-400c-70f1-b51a-9d19d8680735
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-050
+title: Headless claude lanes end their only turn waiting on background cargo/Monitor and hang with work uncommitted
+description: |
+  Headless claude lanes (`aida queue work --no-human`, `claude -p --permission-mode dontAsk`) keep ending their only turn while a long cargo build runs in the background: either the command was auto-backgrounded, or the lane armed Monitor or run_in_background and said "I'll be notified". In -p mode no next turn ever comes. The `claude -p` process then stays alive until the background build exits, emits nothing, and the work is left uncommitted. The HEADLESS WAITING RULE in the brief does not prevent it. Seen 2026-10-31: BUG-048 round 3 hung about 35 min, BUG-046 round 3 ended after 5 min; both needed an advisor kill plus `--resume`.
+
+  Acceptance:
+  1. The contained headless claude settings deny the Monitor tool, and the launcher disables background Bash for headless lanes (deny run_in_background, or the Claude Code setting or env that disables background tasks, whichever the installed CLI honours). Probe and pick one, and pin it with a test on the generated settings/argv.
+  2. Safety net: when the headless wrapper sees a `result` event but the session's process group still has live children (or the result text says it is waiting), it resumes the same session once with a fixed continuation prompt ("Your background work has finished or must be run in the foreground now; continue and finish the task."), with a cap of N continuations. Tested with a fake claude that ends its turn while a child runs.
+  3. A lane that still ends with uncommitted work in its seat reports `implementer: no-pr reason=uncommitted-work` (not pr-opened with the old head), so the advisor can tell a stall from a finished push.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T13:37:47.020257057Z
+modified_at: 2026-10-31T13:37:47.020257057Z
+req_type: Bug
+filed_at:
+  code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0ee902ae50d
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
