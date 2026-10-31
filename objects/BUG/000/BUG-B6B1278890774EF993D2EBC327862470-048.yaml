@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T12:31:21.299153151Z
+modified_at: 2026-10-31T12:32:52.971880467Z
 req_type: Bug
 tags:
 - ids
@@ -47,6 +47,21 @@ comments:
   content: 'ADVISOR 2026-10-31 05:22 on the round-2 gap: pull-side auto-bump in db_reconcile.rs (:2276/:2320/:3275/:3304) is ACCEPTED without a fix in this PR. Reason: aida pr ship now refuses any branch commit whose trailer the PR does not cover, so no shipped commit can put an uncovered trailer on main. The only remaining source is a direct push to main, which has no branch or lease to check coverage against, and it is operator-authored. AC2 is satisfied for every shipped path. No follow-up spec (2026-10-28 rule).'
   created_at: 2026-10-31T12:21:09.222309096Z
   modified_at: 2026-10-31T12:21:09.222309096Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a191f2-d4eb-7d80-b66a-6b36fe8fc971
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 05:36: PR-3162 round 2 is CHANGES REQUESTED, and this CORRECTS my 05:22 acceptance. That acceptance assumed ship refuses every uncovered trailer, but a default SQUASH ship lets GitHub fill the commit body with every branch commit message, and the pull-time scan (db_reconcile.rs:2276) then completes any (SPEC-ID) found there. So the incident is still reachable. This is the FINAL round: be precise and complete.
+
+    1. Squash body: `aida pr ship` must set the squash commit body explicitly. Never let GitHub generate it from branch commit messages. The body may carry only trailers that pass the coverage check; drop or neutralize the rest (e.g. rewrite as "Refs" or strip the parentheses). Apply the branch-commit coverage check to EVERY merge method (squash, rebase, merge), not only rebase/merge (pr_cmd.rs:3125). Test: a squash ship of a branch whose commit ends "(TASK-139)" yields a body that the pull-time scan completes nothing from.
+    2. Fail CLOSED (pr_cmd.rs:5029-5045, :3131): if the commit range or the store cannot be read, ship refuses with a clear message. Add a test that `aida pr ship` actually calls the check.
+    3. One helper for every gate ID list: forge.rs:1530, pr_train.rs:793 and :918, pr_cmd.rs:1806-1808.
+    4. CI, read by the advisor (run 41200591138):
+       - lib-1 gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor: trailer_coverage.rs defines fn review_record_refusal, which is gate-authority code off the floor. Move the coverage decision into gate/ (the protected floor) and keep trailer_coverage.rs as the parsing/display side.
+       - lib-0 seat_clone::clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read: pr_cmd.rs has 49 raw git builders against an allowlist of 48. Use aida_core::git_ops::host_git_command for the new one; do not raise the allowlist.
+    The pull-time scan itself stays as is. Once 1 lands, no shipped commit can carry an uncovered trailer to main. Gate: LIGHT (targeted trailer_coverage, pr_ship, story_1888 and task_2143 tests) plus make check-ci-fast. No force push.
+  created_at: 2026-10-31T12:32:52.971880467Z
+  modified_at: 2026-10-31T12:32:52.971880467Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19166-4eb3-7172-8f0a-f2ff30b1fe9b
