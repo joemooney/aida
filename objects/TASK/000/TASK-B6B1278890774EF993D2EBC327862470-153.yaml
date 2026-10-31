@@ -6,18 +6,27 @@ description: |-
 
   minor (non-blocking, carried from round 1): doctor_renumber::plan treats a candidate as native whenever its spec_id matches, even when its agreed_id holds the same key. In a group with another agreed-only holder, build_rewrites then clears that agreed_id with no warning. Document this in plan()'s doc comment, or report it in Plan::unresolved.
   Reviewed sha: 9b58bbb9530701d536b7278ec018c4ec43f0a542
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T20:22:05.408318744Z
-modified_at: 2026-10-31T20:22:05.408318744Z
+modified_at: 2026-10-31T20:45:37.484066106Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-149
 - finding-hash:63a5ddcc
 - from-review:TASK-B6B1278890774EF993D2EBC327862470-149
 - kind:carried-forward
+history:
+- id: 01a193b5-f34c-7bd3-a7b3-ba592f3233c2
+  author: joe
+  timestamp: 2026-10-31T20:45:37.484063576Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 271e42d368032e9e155226631512ebdde8c71ba5
   branch: main
