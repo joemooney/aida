@@ -6170,10 +6170,13 @@ fn run_tracked_agent_after_spawn(
     }
 
     if let Some(role) = &plan.role {
-        let grant = crate::gate::seat_authority::issue_child(
+        // A contained role launch is sandboxed the same way a contained
+        // reviewer is. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+        let grant = crate::gate::seat_authority::issue_launch_child(
             &plan.project_root,
             &canonical_role_name(role),
             &plan.name,
+            is_contained_launch(config),
         )?;
         command
             .env("AIDA_SESSION_ROLE", role)
