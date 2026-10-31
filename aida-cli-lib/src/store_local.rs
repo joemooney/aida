@@ -180,12 +180,34 @@ pub(crate) fn push_hubs(project_root: &Path) -> PushHubs {
     }
 }
 
-/// The [`aida_core::git_ops::StorePushGate`] the CLI registers: refuse a
-/// store push to a remote this clone's push hubs exclude. `repo` may be the
-/// store worktree; it resolves to the same clone entry.
-pub(crate) fn store_push_gate(repo: &Path, remote: &str) -> Option<String> {
+/// The [`aida_core::git_ops::StorePushGate`] the CLI registers. A store push
+/// to `origin` that this clone's push hubs exclude is redirected to the
+/// declared hubs, so every origin-addressed store writer (`aida add`'s id
+/// allocation, node, alias and team registry writes) publishes to them
+/// instead of failing. A push to any other excluded hub is refused. `repo`
+/// may be the store worktree; it resolves to the same clone entry.
+pub(crate) fn store_push_gate(repo: &Path, remote: &str) -> aida_core::git_ops::StorePushRoute {
+    use aida_core::git_ops::StorePushRoute;
     let policy = push_hubs(repo);
-    (!policy.allows(remote)).then(|| policy.refusal(remote))
+    if policy.allows(remote) {
+        return StorePushRoute::Allow;
+    }
+    if remote == "origin" {
+        if let Some(hubs) =
+            redirected_store_hubs(&policy, |r| aida_core::git_ops::has_remote(repo, r))
+                .filter(|h| !h.is_empty())
+        {
+            return StorePushRoute::Redirect(hubs);
+        }
+    }
+    StorePushRoute::Refuse(policy.refusal(remote))
+}
+
+/// Register [`store_push_gate`] for this process. `main_entry` does it once;
+/// lib tests that exercise the gate call it too (the first registration
+/// wins, and with no store-local layer the gate allows every push).
+pub(crate) fn install_store_push_gate() {
+    aida_core::git_ops::set_store_push_gate(store_push_gate);
 }
 
 /// The hubs a store push goes to instead of `origin` when this clone's push
@@ -307,8 +329,21 @@ pub(crate) fn remove_stopgap_cron() -> Result<bool> {
     }
 }
 
+/// On `bridge --enable`, remove the stopgap crontab entry only when the
+/// schedule tick that runs the bridge job is already installed; otherwise
+/// the stopgap is the only thing reconciling, so it stays (`None`) until
+/// `aida schedule install` retires it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac9e5341 | ai:claude
+pub(crate) fn retire_stopgap_on_enable(
+    tick_installed: bool,
+    remove: impl FnOnce() -> Result<bool>,
+) -> Option<Result<bool>> {
+    tick_installed.then(remove)
+}
+
 /// `aida remote bridge` — show or change whether this clone is the hub
-/// bridge. Enabling also removes the hand-installed stopgap crontab entry.
+/// bridge. Enabling removes the hand-installed stopgap crontab entry once
+/// the schedule tick is installed.
 pub(crate) fn handle_remote_bridge(project_root: &Path, enable: bool, disable: bool) -> Result<()> {
     let path =
         layer_path().context("cannot resolve the home directory for the store-local layer")?;
@@ -343,14 +378,20 @@ pub(crate) fn handle_remote_bridge(project_root: &Path, enable: bool, disable: b
         }
     );
     if enable {
-        match remove_stopgap_cron() {
-            Ok(true) => println!(
+        let tick_installed = crate::schedule_driver::driver_status(Path::new(&key)).any_installed();
+        match retire_stopgap_on_enable(tick_installed, remove_stopgap_cron) {
+            Some(Ok(true)) => println!(
                 "{check} removed the stopgap `{STOPGAP_CRON_MARKER}` crontab entry — the bridge job replaces it"
             ),
-            Ok(false) => {}
-            Err(e) => eprintln!(
+            Some(Ok(false)) => {}
+            Some(Err(e)) => eprintln!(
                 "{} could not check the crontab for the stopgap entry: {e:#}",
                 crate::glyph(crate::glyphs::Glyph::Warning)
+            ),
+            None => println!(
+                "The schedule tick is not installed here, so nothing runs the bridge job yet. \
+                 Install it with `aida schedule install`; that also removes any stopgap \
+                 `{STOPGAP_CRON_MARKER}` crontab entry, which keeps reconciling until then."
             ),
         }
         println!(
@@ -489,6 +530,7 @@ mod tests {
         assert_eq!(entry, StoreLocal::default());
     }
 
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac9e5341 | ai:claude
     #[test]
     fn stopgap_cron_lines_are_removed_and_others_kept() {
         let tab = "MAILTO=\"\"\n\
@@ -528,46 +570,254 @@ mod tests {
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
 
+    /// A project at `<root>/proj` whose store clone `proj/.aida-store`
+    /// (branch `aida-store`) has three hubs seeded at the same commit:
+    /// `origin`, `gitlab` and `github`. The returned guard points AIDA_HOME
+    /// at a fresh home holding no layer yet.
+    struct Hubs {
+        _home: tempfile::TempDir,
+        _guard: crate::test_env::EnvVarGuard,
+        root: tempfile::TempDir,
+        layer: PathBuf,
+        proj: PathBuf,
+        store: PathBuf,
+        seed: String,
+    }
+
+    impl Hubs {
+        fn new() -> Self {
+            let home = tempfile::tempdir().unwrap();
+            let guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+            let root = tempfile::tempdir().unwrap();
+            let proj = root.path().join("proj");
+            std::fs::create_dir_all(&proj).unwrap();
+            git(&proj, &["init", "-q", "-b", "main"]);
+            git(&proj, &["commit", "-q", "--allow-empty", "-m", "code"]);
+            std::fs::write(proj.join(".git/info/exclude"), ".aida-store/\n").unwrap();
+            let store = proj.join(".aida-store");
+            std::fs::create_dir_all(&store).unwrap();
+            git(&store, &["init", "-q", "-b", "aida-store"]);
+            git(&store, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+            for hub in ["origin", "gitlab", "github"] {
+                let bare = root.path().join(format!("{hub}.git"));
+                std::fs::create_dir_all(&bare).unwrap();
+                git(&bare, &["init", "-q", "--bare"]);
+                git(&store, &["remote", "add", hub, bare.to_str().unwrap()]);
+                git(&store, &["push", "-q", hub, "aida-store"]);
+            }
+            let seed = git(&store, &["rev-parse", "HEAD"]);
+            let layer = home.path().join(".aida").join(LOCAL_LAYER_FILE);
+            Hubs {
+                _home: home,
+                _guard: guard,
+                root,
+                layer,
+                proj,
+                store,
+                seed,
+            }
+        }
+
+        /// Declare this store clone's push hubs.
+        fn push_hubs(&self, hubs: &[&str]) {
+            let hubs: Vec<String> = hubs.iter().map(|h| h.to_string()).collect();
+            write_push_hubs(&self.layer, &clone_key(&self.store), Some(&hubs)).unwrap();
+        }
+
+        fn tip(&self, hub: &str) -> String {
+            git(
+                &self.root.path().join(format!("{hub}.git")),
+                &["rev-parse", "aida-store"],
+            )
+        }
+
+        fn head(&self) -> String {
+            git(&self.store, &["rev-parse", "HEAD"])
+        }
+
+        /// Commit a store change locally and return the new head.
+        fn commit(&self, name: &str) -> String {
+            std::fs::write(self.store.join(name), name).unwrap();
+            git(&self.store, &["add", name]);
+            git(&self.store, &["commit", "-q", "-m", name]);
+            self.head()
+        }
+
+        /// Advance `hub`'s store from another clone (another machine's push).
+        fn advance(&self, hub: &str, name: &str) -> String {
+            let other = self.root.path().join(format!("other-{name}"));
+            let bare = self.root.path().join(format!("{hub}.git"));
+            git(
+                self.root.path(),
+                &[
+                    "clone",
+                    "-q",
+                    "-b",
+                    "aida-store",
+                    bare.to_str().unwrap(),
+                    other.to_str().unwrap(),
+                ],
+            );
+            std::fs::write(other.join(name), name).unwrap();
+            git(&other, &["add", name]);
+            git(&other, &["commit", "-q", "-m", name]);
+            git(&other, &["push", "-q", "origin", "aida-store"]);
+            git(&other, &["rev-parse", "HEAD"])
+        }
+    }
+
     /// Criterion 3 end to end: a clone whose push hubs are `gitlab` sends
     /// its store write to gitlab and leaves origin untouched.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
     #[test]
     fn gitlab_only_clone_pushes_the_store_to_gitlab_and_never_origin() {
-        let home = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
-        let root = tempfile::tempdir().unwrap();
-        let origin = root.path().join("origin.git");
-        let gitlab = root.path().join("gitlab.git");
-        for hub in [&origin, &gitlab] {
-            std::fs::create_dir_all(hub).unwrap();
-            git(hub, &["init", "-q", "--bare"]);
-        }
-        let store = root.path().join("store");
-        std::fs::create_dir_all(&store).unwrap();
-        git(&store, &["init", "-q", "-b", "aida-store"]);
-        git(&store, &["commit", "-q", "--allow-empty", "-m", "seed"]);
-        git(
-            &store,
-            &["remote", "add", "origin", origin.to_str().unwrap()],
+        use aida_core::git_ops::StorePushRoute;
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab"]);
+        assert_eq!(
+            store_push_gate(&h.store, "origin"),
+            StorePushRoute::Redirect(vec!["gitlab".to_string()])
         );
-        git(
-            &store,
-            &["remote", "add", "gitlab", gitlab.to_str().unwrap()],
+        assert_eq!(store_push_gate(&h.store, "gitlab"), StorePushRoute::Allow);
+        assert!(matches!(
+            store_push_gate(&h.store, "github"),
+            StorePushRoute::Refuse(_)
+        ));
+
+        std::fs::write(h.store.join("spec.yaml"), "id: X\n").unwrap();
+        crate::store_push_pull::auto_push_store_best_effort(&h.store, "test write");
+        let head = h.head();
+        assert_ne!(head, h.seed, "the pending write was committed");
+        assert_eq!(h.tip("gitlab"), head);
+        assert_eq!(h.tip("origin"), h.seed);
+        assert_eq!(h.tip("github"), h.seed);
+    }
+
+    /// With the gate registered (as `main_entry` does), a store writer that
+    /// addresses origin by name publishes to gitlab instead, rebases onto
+    /// gitlab when gitlab rejects it, and an excluded non-origin hub is
+    /// refused before git runs.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn registered_gate_redirects_origin_store_writers_to_gitlab() {
+        use aida_core::git_ops;
+        install_store_push_gate();
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab"]);
+
+        let first = h.commit("a.yaml");
+        assert!(git_ops::push_exact(&h.store, "origin", &first, "aida-store").unwrap());
+        assert!(git_ops::push(&h.store, "origin", "aida-store").unwrap());
+        assert_eq!(h.tip("gitlab"), first);
+        assert_eq!(h.tip("origin"), h.seed, "origin is never pushed");
+
+        // gitlab moved on: the writer's retry loop rebases onto gitlab (its
+        // store upstream), not origin, and the next push lands.
+        let elsewhere = h.advance("gitlab", "b.yaml");
+        let second = h.commit("c.yaml");
+        assert!(!git_ops::push_exact(&h.store, "origin", &second, "aida-store").unwrap());
+        git_ops::pull_rebase(&h.store, "origin", "aida-store").unwrap();
+        let rebased = h.head();
+        assert!(git_ops::is_ancestor(&h.store, &elsewhere, &rebased).unwrap());
+        assert!(git_ops::push_exact(&h.store, "origin", &rebased, "aida-store").unwrap());
+        assert_eq!(h.tip("gitlab"), rebased);
+        assert_eq!(h.tip("origin"), h.seed);
+
+        let err = git_ops::push_exact(&h.store, "github", &rebased, "aida-store").unwrap_err();
+        assert!(git_ops::is_store_push_refusal(&err), "{err:#}");
+        assert_eq!(h.tip("github"), h.seed);
+        // Code branches are never gated.
+        assert_eq!(
+            git_ops::store_push_route(&h.store, "github", "main"),
+            git_ops::StorePushRoute::Allow
         );
-        git(&store, &["push", "-q", "origin", "aida-store"]);
-        git(&store, &["push", "-q", "gitlab", "aida-store"]);
-        let seed = git(&store, &["rev-parse", "HEAD"]);
+    }
 
-        let layer = home.path().join(".aida").join(LOCAL_LAYER_FILE);
-        write_push_hubs(&layer, &clone_key(&store), Some(&["gitlab".to_string()])).unwrap();
-        assert!(store_push_gate(&store, "origin").is_some());
-        assert!(store_push_gate(&store, "gitlab").is_none());
+    /// `aida add` on a gitlab-only clone: the id-allocation publish succeeds
+    /// and lands on gitlab only. With no declared hub configured here it
+    /// defers (the spec stays committed locally) instead of failing.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn aida_add_on_a_gitlab_only_clone_publishes_to_gitlab_only() {
+        install_store_push_gate();
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab"]);
+        let filed = h.commit("objects-new-spec.yaml");
+        crate::store_sync::push_store_after_id_allocation(&h.store, &h.proj, "STORY-1")
+            .expect("aida add must not fail on a gitlab-only clone");
+        assert_eq!(h.tip("gitlab"), filed);
+        assert_eq!(h.tip("origin"), h.seed);
+        assert_eq!(h.tip("github"), h.seed);
 
-        std::fs::write(store.join("spec.yaml"), "id: X\n").unwrap();
-        crate::store_push_pull::auto_push_store_best_effort(&store, "test write");
-        let head = git(&store, &["rev-parse", "HEAD"]);
-        assert_ne!(head, seed, "the pending write was committed");
-        assert_eq!(git(&gitlab, &["rev-parse", "aida-store"]), head);
-        assert_eq!(git(&origin, &["rev-parse", "aida-store"]), seed);
+        h.push_hubs(&["gitlab-not-a-remote-here"]);
+        let deferred = h.commit("objects-second-spec.yaml");
+        crate::store_sync::push_store_after_id_allocation(&h.store, &h.proj, "STORY-2")
+            .expect("an unpublishable allocation defers, it never fails `aida add`");
+        assert_eq!(h.head(), deferred, "the spec stays committed locally");
+        assert_eq!(h.tip("origin"), h.seed);
+        assert_eq!(h.tip("gitlab"), filed);
+    }
+
+    /// `aida db sync --push` on a gitlab-only clone pushes to gitlab and
+    /// leaves origin's store ref unchanged.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn db_sync_push_on_a_gitlab_only_clone_never_touches_origin() {
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab"]);
+        let head = h.commit("spec.yaml");
+        crate::db_cmd::db_sync_push_leg(&h.store, "aida-store", Some(head.clone())).unwrap();
+        assert_eq!(h.tip("gitlab"), head);
+        assert_eq!(h.tip("origin"), h.seed);
+        assert_eq!(h.tip("github"), h.seed);
+
+        // Unrestricted: the normal origin push still runs.
+        write_push_hubs(&h.layer, &clone_key(&h.store), None).unwrap();
+        let next = h.commit("spec2.yaml");
+        crate::db_cmd::db_sync_push_leg(&h.store, "aida-store", Some(next.clone())).unwrap();
+        assert_eq!(h.tip("origin"), next);
+    }
+
+    /// The `aida push` store leg on a gitlab-only clone pushes to gitlab and
+    /// leaves origin's store ref unchanged.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn aida_push_store_leg_on_a_gitlab_only_clone_never_touches_origin() {
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab"]);
+        let head = h.commit("spec.yaml");
+        crate::store_push_pull::handle_push_command(&h.store, false, true, None, true, true)
+            .unwrap();
+        assert_eq!(h.tip("gitlab"), head);
+        assert_eq!(h.tip("origin"), h.seed);
+        assert_eq!(h.tip("github"), h.seed);
+    }
+
+    /// `remote mirror-push` is exempt from the push-hubs check because it
+    /// never carries the store branch.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn mirror_push_never_carries_the_store_branch() {
+        let lines = "refs/heads/main 1111 refs/heads/main 0000\n\
+                     refs/heads/aida-store 2222 refs/heads/aida-store 0000\n";
+        let refspecs = crate::remote_create::mirror_push_refspecs(lines);
+        assert_eq!(refspecs, vec!["1111:refs/heads/main".to_string()]);
+    }
+
+    /// `bridge --enable` leaves the stopgap entry alone until the tick that
+    /// runs the bridge job is installed.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac9e5341 | ai:claude
+    #[test]
+    fn bridge_enable_keeps_the_stopgap_until_the_tick_is_installed() {
+        let called = std::cell::Cell::new(false);
+        let out = retire_stopgap_on_enable(false, || {
+            called.set(true);
+            Ok(true)
+        });
+        assert!(out.is_none());
+        assert!(!called.get(), "the crontab is not touched without a tick");
+        let out = retire_stopgap_on_enable(true, || Ok(true));
+        assert!(matches!(out, Some(Ok(true))));
     }
 
     #[test]

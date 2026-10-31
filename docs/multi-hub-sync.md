@@ -229,8 +229,13 @@ aida remote bridge               # show this clone's setting
 - **Push hubs.** When `origin` is not listed, `aida db sync --push`, the `aida push`
   store leg and per-write auto-push send the store to the listed hubs instead, and never
   attempt `origin`. `remote mirror-sync` skips the store branch there, `remote reconcile`
-  reads every hub but pushes only to the listed ones, and every other store writer that
-  pushes is refused before git runs. An unreadable layer refuses every store push.
+  reads every hub but pushes only to the listed ones. Every other store writer that
+  addresses `origin` (an `aida add` id allocation, node, alias and team registry writes)
+  publishes to the listed hubs instead, and rebases onto the first of them when it
+  rejects the push. `remote mirror-push`, and the store leg of a `remote create` /
+  bootstrap, skip a hub that is not listed. A store push to any other excluded hub is
+  refused before git runs. An unreadable layer refuses every store push; an `aida add`
+  then keeps the new spec committed locally and publishes it once the layer is fixed.
 - **Hub bridge.** The bridge clone's schedule registry gains `store-bridge-reconcile`
   (runs `aida remote reconcile --execute` hourly; set `bridge_every` in the layer to change
   it) and `store-bridge-reconcile-route`. The job never passes `--yes`: identity-bearing
@@ -239,8 +244,10 @@ aida remote bridge               # show this clone's setting
   reconcile. It loads with a problem and never runs.
 - **Escalation.** `hub-drift-guard` is unchanged. It still routes drift the bridge could
   not union.
-- Enabling the bridge (or `aida schedule install-cron` / `install-systemd` on the bridge
-  clone) removes a hand-installed `# aida-store-reconcile` crontab entry.
+- `aida schedule install-cron` / `install-systemd` on the bridge clone removes a
+  hand-installed `# aida-store-reconcile` crontab entry. `aida remote bridge --enable`
+  removes it only when the schedule tick is already installed; until then the stopgap
+  is the only thing reconciling, so it stays.
 
 ## When drift has already happened
 

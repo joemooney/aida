@@ -429,6 +429,95 @@ pub(crate) struct DbArgs {
     pub inner: crate::cli::DbCommand,
 }
 
+/// The push leg of `aida db sync --push`: publish `push_sha` (the commit the
+/// local window captured under the store write lock).
+pub(crate) fn db_sync_push_leg(
+    store_path: &std::path::Path,
+    branch: &str,
+    mut push_sha: Option<String>,
+) -> anyhow::Result<()> {
+    // A clone whose push hubs exclude origin pushes the store to those hubs
+    // instead and never attempts origin.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let policy = crate::store_local::push_hubs(store_path);
+    let redirect = crate::store_local::redirected_store_hubs(&policy, |r| {
+        aida_core::git_ops::has_remote(store_path, r)
+    });
+    if let Some(hubs) = redirect {
+        let Some(sha) = push_sha.as_deref() else {
+            anyhow::bail!("store has no commit to push");
+        };
+        if hubs.is_empty() {
+            anyhow::bail!(
+                "this clone's push hubs (`aida remote push-hubs`) name no remote \
+                 configured here and exclude origin; the store was not pushed"
+            );
+        }
+        println!("Pushing to {} (this clone's push hubs)...", hubs.join(", "));
+        let (pushed, failures) =
+            crate::store_local::push_store_to_hubs(store_path, branch, sha, &hubs);
+        for hub in &pushed {
+            println!("  pushed → {hub}");
+        }
+        if !failures.is_empty() {
+            anyhow::bail!("store push failed: {}", failures.join("; "));
+        }
+        return Ok(());
+    }
+    println!("Pushing to origin/{}...", branch);
+    // trace:TASK-1717 | ai:claude — push the commit captured under
+    // the lock, by SHA. A rejection retakes the lock, rebases the
+    // CURRENT store (keeping any commit another writer made since)
+    // and pushes the new head once; a second rejection fails.
+    let pushed = match push_sha.as_deref() {
+        None => Err(anyhow::anyhow!("store has no commit to push")),
+        Some(sha) => aida_core::git_ops::push_exact(store_path, "origin", sha, branch),
+    };
+    let origin_sha = match pushed {
+        Ok(true) => {
+            println!("  Push complete.");
+            push_sha.clone()
+        }
+        Ok(false) => {
+            println!("  Push rejected. Pulling and retrying...");
+            let sha = aida_core::db::with_store_write_lock(store_path, || {
+                aida_core::git_ops::pull_rebase(store_path, "origin", branch).map_err(|e| {
+                    anyhow::anyhow!(
+                        "Pull failed: {}",
+                        crate::store_pull_failure_hint(store_path, &e.to_string())
+                    )
+                })?;
+                crate::ensure_no_spec_id_collisions_canonical(store_path)?;
+                aida_core::git_ops::head_sha(store_path)
+            })?;
+            if !aida_core::git_ops::push_exact(store_path, "origin", &sha, branch)? {
+                anyhow::bail!(
+                    "Push rejected again after rebasing onto origin/{branch}; \
+                     your commits are kept locally. Re-run `aida db sync --pull --push`."
+                );
+            }
+            println!("  Push complete after rebase.");
+            push_sha = Some(sha);
+            push_sha.clone()
+        }
+        Err(e) => {
+            eprintln!("  Push failed: {}", e);
+            None
+        }
+    };
+
+    // TASK-1096: fan out the store push to every configured mirror
+    // remote so a clone can't silently leave one hub behind — the
+    // drift-prevention leg. trace:TASK-1096 | ai:claude
+    // trace:TASK-1717 | ai:claude — only the commit origin accepted.
+    if let Some(sha) = origin_sha {
+        if let Some(project_root) = store_path.parent() {
+            crate::fan_out_store_mirror_push(store_path, branch, &sha, project_root);
+        }
+    }
+    Ok(())
+}
+
 fn run_db(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
@@ -576,7 +665,7 @@ fn run_db(
                         db_sync_local_window(store_path, *pull, *push, message.as_deref())
                     })?;
                     let branch = window.branch.clone();
-                    let mut push_sha = window.head;
+                    let push_sha = window.head;
 
                     if let Some(conflicts) = &window.conflicts {
                         if !conflicts.is_empty() {
@@ -622,101 +711,8 @@ fn run_db(
                         }
                     }
 
-                    // A clone whose push hubs exclude origin pushes the store
-                    // to those hubs instead and never attempts origin.
-                    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
-                    let redirect = if *push {
-                        let policy = crate::store_local::push_hubs(store_path);
-                        crate::store_local::redirected_store_hubs(&policy, |r| {
-                            aida_core::git_ops::has_remote(store_path, r)
-                        })
-                    } else {
-                        None
-                    };
-                    if let Some(hubs) = redirect {
-                        let Some(sha) = push_sha.as_deref() else {
-                            anyhow::bail!("store has no commit to push");
-                        };
-                        if hubs.is_empty() {
-                            anyhow::bail!(
-                                "this clone's push hubs (`aida remote push-hubs`) name no remote \
-                                 configured here and exclude origin; the store was not pushed"
-                            );
-                        }
-                        println!("Pushing to {} (this clone's push hubs)...", hubs.join(", "));
-                        let (pushed, failures) =
-                            crate::store_local::push_store_to_hubs(store_path, &branch, sha, &hubs);
-                        for hub in &pushed {
-                            println!("  pushed → {hub}");
-                        }
-                        if !failures.is_empty() {
-                            anyhow::bail!("store push failed: {}", failures.join("; "));
-                        }
-                    } else if *push {
-                        println!("Pushing to origin/{}...", branch);
-                        // trace:TASK-1717 | ai:claude — push the commit captured under
-                        // the lock, by SHA. A rejection retakes the lock, rebases the
-                        // CURRENT store (keeping any commit another writer made since)
-                        // and pushes the new head once; a second rejection fails.
-                        let pushed = match push_sha.as_deref() {
-                            None => Err(anyhow::anyhow!("store has no commit to push")),
-                            Some(sha) => {
-                                aida_core::git_ops::push_exact(store_path, "origin", sha, &branch)
-                            }
-                        };
-                        let origin_sha = match pushed {
-                            Ok(true) => {
-                                println!("  Push complete.");
-                                push_sha.clone()
-                            }
-                            Ok(false) => {
-                                println!("  Push rejected. Pulling and retrying...");
-                                let sha = aida_core::db::with_store_write_lock(store_path, || {
-                                    aida_core::git_ops::pull_rebase(store_path, "origin", &branch)
-                                        .map_err(|e| {
-                                            anyhow::anyhow!(
-                                                "Pull failed: {}",
-                                                crate::store_pull_failure_hint(
-                                                    store_path,
-                                                    &e.to_string()
-                                                )
-                                            )
-                                        })?;
-                                    crate::ensure_no_spec_id_collisions_canonical(store_path)?;
-                                    aida_core::git_ops::head_sha(store_path)
-                                })?;
-                                if !aida_core::git_ops::push_exact(
-                                    store_path, "origin", &sha, &branch,
-                                )? {
-                                    anyhow::bail!(
-                                    "Push rejected again after rebasing onto origin/{branch}; \
-                                     your commits are kept locally. Re-run `aida db sync --pull --push`."
-                                );
-                                }
-                                println!("  Push complete after rebase.");
-                                push_sha = Some(sha);
-                                push_sha.clone()
-                            }
-                            Err(e) => {
-                                eprintln!("  Push failed: {}", e);
-                                None
-                            }
-                        };
-
-                        // TASK-1096: fan out the store push to every configured mirror
-                        // remote so a clone can't silently leave one hub behind — the
-                        // drift-prevention leg. trace:TASK-1096 | ai:claude
-                        // trace:TASK-1717 | ai:claude — only the commit origin accepted.
-                        if let Some(sha) = origin_sha {
-                            if let Some(project_root) = store_path.parent() {
-                                crate::fan_out_store_mirror_push(
-                                    store_path,
-                                    &branch,
-                                    &sha,
-                                    project_root,
-                                );
-                            }
-                        }
+                    if *push {
+                        db_sync_push_leg(store_path, &branch, push_sha)?;
                     }
 
                     if !pull && !push {

@@ -160,8 +160,9 @@ pub enum RemoteCommand {
     /// schedule tick (hourly by default), so a clone that pushes the store
     /// to one hub only never leaves the hubs diverged. Machine-local
     /// (`~/.aida/store-local.toml`), never tracked. Identity-bearing content
-    /// stops the run and routes to the advisor. Enabling removes the
-    /// hand-installed `# aida-store-reconcile` crontab entry.
+    /// stops the run and routes to the advisor. Once the schedule tick is
+    /// installed, the hand-installed `# aida-store-reconcile` crontab entry is
+    /// removed.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
     #[clap(group(ArgGroup::new("bridge_mode").args(["enable", "disable"])))]
     Bridge {

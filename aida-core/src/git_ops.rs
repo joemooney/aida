@@ -1388,12 +1388,46 @@ fn commit_with_lock_recovery(repo: &Path, argv: &[&str]) -> Result<GitResult> {
     )
 }
 
-/// Decides whether this clone may push the spec store from `repo` to
-/// `remote`: `Some(reason)` refuses. Registered once by the CLI (the policy
-/// lives in a machine-local layer this crate does not read); unset means
-/// every remote is allowed.
+/// Where a store push from `repo` to a remote goes, as decided by the
+/// registered [`StorePushGate`].
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
-pub type StorePushGate = fn(&Path, &str) -> Option<String>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StorePushRoute {
+    /// Push to the remote as asked.
+    Allow,
+    /// The remote is excluded, but this clone publishes the store to these
+    /// hubs instead (never empty). The first is the clone's store upstream:
+    /// store writers rebase onto it when it rejects a push.
+    Redirect(Vec<String>),
+    /// Never push the store there; the reason.
+    Refuse(String),
+}
+
+/// Decides where this clone may push the spec store from `repo` to
+/// `remote`. Registered once by the CLI (the policy lives in a machine-local
+/// layer this crate does not read); unset means every remote is allowed.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+pub type StorePushGate = fn(&Path, &str) -> StorePushRoute;
+
+/// The error a store push the gate refuses fails with, so a caller that
+/// must not fail (an id allocation that is already committed locally) can
+/// defer the publish instead. Test with [`is_store_push_refusal`].
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+#[derive(Debug)]
+pub struct StorePushRefused(pub String);
+
+impl std::fmt::Display for StorePushRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for StorePushRefused {}
+
+/// Is `e` a store push the registered gate refused before git ran?
+pub fn is_store_push_refusal(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<StorePushRefused>().is_some()
+}
 
 static STORE_PUSH_GATE: std::sync::OnceLock<StorePushGate> = std::sync::OnceLock::new();
 
@@ -1411,24 +1445,91 @@ fn targets_store_branch(target: &str) -> bool {
     dst == "aida-store" || dst == "refs/heads/aida-store"
 }
 
-/// Refuse a store push the registered gate forbids — before any git runs, so
-/// a clone that must never push to a hub never even attempts it.
+/// The registered gate's route for a push of `target` to `remote`. Only a
+/// push that updates the store branch is gated.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
-fn refuse_gated_store_push(repo: &Path, remote: &str, target: &str) -> Result<()> {
+pub fn store_push_route(repo: &Path, remote: &str, target: &str) -> StorePushRoute {
     if !targets_store_branch(target) {
-        return Ok(());
+        return StorePushRoute::Allow;
     }
-    if let Some(reason) = STORE_PUSH_GATE.get().and_then(|gate| gate(repo, remote)) {
-        anyhow::bail!("{reason}");
+    STORE_PUSH_GATE
+        .get()
+        .map_or(StorePushRoute::Allow, |gate| gate(repo, remote))
+}
+
+/// The remote a store pull of `branch` from `remote` fetches. A clone whose
+/// push hubs exclude origin publishes the store to its first hub, so that
+/// hub is the tip its writers must rebase onto before pushing again.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn store_pull_remote(repo: &Path, remote: &str, branch: &str) -> String {
+    match store_push_route(repo, remote, branch) {
+        StorePushRoute::Redirect(hubs) if !hubs.is_empty() => hubs[0].clone(),
+        _ => remote.to_string(),
     }
-    Ok(())
+}
+
+/// Run a redirected store push against each hub: the first hub's result is
+/// the push's result (its rejection is the caller's rebase-and-retry signal);
+/// a later hub that fails is reported and left for the hub bridge.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn push_to_redirect_hubs<T>(
+    remote: &str,
+    hubs: &[String],
+    push_one: impl Fn(&str) -> Result<T>,
+    landed: impl Fn(&T) -> bool,
+) -> Result<T> {
+    let Some((first, rest)) = hubs.split_first() else {
+        return Err(StorePushRefused(format!(
+            "this clone's push hubs exclude `{remote}` and name no remote configured here"
+        ))
+        .into());
+    };
+    anyhow::ensure!(
+        hubs.iter().all(|h| h != remote),
+        "store push gate redirected `{remote}` to itself"
+    );
+    let primary = push_one(first);
+    for hub in rest {
+        match push_one(hub) {
+            Ok(r) if landed(&r) => {}
+            Ok(_) => eprintln!(
+                "  Warning: store push to `{hub}` did not land (diverged); the hub bridge reconciles it"
+            ),
+            Err(e) => eprintln!("  Warning: store push to `{hub}` failed: {e:#}"),
+        }
+    }
+    primary
 }
 
 #[cfg(test)]
 mod store_push_gate_tests {
-    use super::targets_store_branch;
+    use super::{push_to_redirect_hubs, targets_store_branch};
 
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn redirected_push_returns_the_first_hub_and_still_tries_the_rest() {
+        let tried = std::cell::RefCell::new(Vec::new());
+        let hubs = vec!["gitlab".to_string(), "backup".to_string()];
+        let first = push_to_redirect_hubs(
+            "origin",
+            &hubs,
+            |h| {
+                tried.borrow_mut().push(h.to_string());
+                Ok(h == "gitlab")
+            },
+            |ok| *ok,
+        )
+        .unwrap();
+        assert!(first);
+        assert_eq!(*tried.borrow(), hubs);
+        let none = push_to_redirect_hubs("origin", &[], |_| Ok(true), |ok| *ok).unwrap_err();
+        assert!(super::is_store_push_refusal(&none), "{none:#}");
+        assert!(
+            push_to_redirect_hubs("origin", &["origin".into()], |_| Ok(true), |ok| *ok).is_err()
+        );
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
     #[test]
     fn only_store_branch_targets_are_gated() {
         assert!(targets_store_branch("aida-store"));
@@ -1446,7 +1547,14 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
-    refuse_gated_store_push(repo, remote, branch)?;
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    match store_push_route(repo, remote, branch) {
+        StorePushRoute::Allow => {}
+        StorePushRoute::Refuse(reason) => return Err(StorePushRefused(reason).into()),
+        StorePushRoute::Redirect(hubs) => {
+            return push_to_redirect_hubs(remote, &hubs, |hub| push(repo, hub, branch), |ok| *ok)
+        }
+    }
     refuse_embedded_repos_for_push(repo, "HEAD")?; // trace:BUG-1929 | ai:claude
     let result = remote_git(repo, remote, &["push", "--end-of-options", remote, branch])?;
     if result.success {
@@ -1569,7 +1677,21 @@ pub fn push_exact_outcome(
         branch.trim() != "HEAD",
         "refusing to push to a branch named `HEAD`: the local checkout is detached"
     );
-    refuse_gated_store_push(repo, remote, branch)?;
+    // A store push to a hub this clone excludes goes to its declared hubs
+    // instead, before any git runs against the excluded one.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    match store_push_route(repo, remote, branch) {
+        StorePushRoute::Allow => {}
+        StorePushRoute::Refuse(reason) => return Err(StorePushRefused(reason).into()),
+        StorePushRoute::Redirect(hubs) => {
+            return push_to_redirect_hubs(
+                remote,
+                &hubs,
+                |hub| push_exact_outcome(repo, hub, sha, branch),
+                |o| matches!(o, PushOutcome::Pushed),
+            )
+        }
+    }
     refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
     // The failure is classified from stderr prose, so pin git's (and ssh's /
@@ -1610,6 +1732,8 @@ pub fn reject_option_like(what: &str, value: &str) -> Result<()> {
 /// Keep configured tracking-ref updates, but never read or write FETCH_HEAD.
 // trace:TASK-1604 | ai:codex
 fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String> {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let remote = &store_pull_remote(repo, remote, branch);
     reject_option_like("remote", remote)?;
     reject_option_like("branch", branch)?;
     let source = format!("refs/heads/{branch}");

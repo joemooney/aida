@@ -216,7 +216,7 @@ pub fn main_entry() {
     crate::shell_eval::take_init_cd_file_from_env();
     install_sigpipe_handler();
     // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
-    aida_core::git_ops::set_store_push_gate(crate::store_local::store_push_gate);
+    crate::store_local::install_store_push_gate();
     // One colour decision for the whole process: apply no-color.org's rule
     // for an empty `NO_COLOR` to the `colored` crate before any thread starts.
     // trace:BUG-1979 | ai:claude

@@ -4821,7 +4821,7 @@ mod tests {
         assert_eq!(schedule_ledger::load_all(&store).len(), 3);
     }
 
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ace81ddf | ai:claude
     #[test]
     fn bridge_job_reconciles_without_yes_and_routes_failures_to_advisor() {
         let tasks = bridge_tasks(None).unwrap();
@@ -4856,7 +4856,7 @@ mod tests {
         assert!(bridge_tasks(Some("soon")).is_err());
     }
 
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acc25d32 | ai:claude
     #[test]
     fn tracked_reconcile_job_never_runs() {
         let cfg = parse_project(
@@ -4899,7 +4899,8 @@ enabled = true
         assert!(rebuilt.command.is_none() && rebuilt.invalid_command.is_some());
     }
 
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acc25d32 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac3ff691 | ai:claude
     #[test]
     fn only_a_clone_marked_bridge_gets_the_bridge_jobs() {
         let home = tempfile::tempdir().unwrap();

@@ -513,19 +513,32 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
     }
 
     // The store leg, always last and never skipped when a remote exists —
-    // to every hub, after the code branch reached every hub.
-    for hub in &hubs {
+    // to every hub this clone may push the store to, after the code branch
+    // reached every hub. trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let policy = crate::store_local::push_hubs(dir);
+    let (store_hubs, excluded): (Vec<String>, Vec<String>) =
+        hubs.iter().cloned().partition(|h| policy.allows(h));
+    for hub in &excluded {
+        println!(
+            "  {} aida-store → {}",
+            "Note:".dimmed(),
+            policy.refusal(hub)
+        );
+    }
+    for hub in &store_hubs {
         if hub == "origin" {
             git_push_in(dir, "origin", &["push", "-u", "origin", "aida-store"])?;
         } else {
             git_push_in(dir, hub, &["push", hub.as_str(), "aida-store"])?;
         }
     }
-    println!(
-        "  {} pushed `aida-store` (the requirements store) to {}",
-        "+".green(),
-        hubs.join(", ")
-    );
+    if !store_hubs.is_empty() {
+        println!(
+            "  {} pushed `aida-store` (the requirements store) to {}",
+            "+".green(),
+            store_hubs.join(", ")
+        );
+    }
 
     // Wire the second hub as a mirror (store fan-out + code-leg hook). The
     // config change is left for init's own end-of-run refresh to settle.
@@ -539,11 +552,13 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
         )?;
     }
 
-    let disagreements = crate::gitlab_project_create::hub_disagreements(
+    let mut disagreements =
+        crate::gitlab_project_create::hub_disagreements(dir, &hubs, &[branch.as_str()]);
+    disagreements.extend(crate::gitlab_project_create::hub_disagreements(
         dir,
-        &hubs,
-        &[branch.as_str(), "aida-store"],
-    );
+        &store_hubs,
+        &["aida-store"],
+    ));
     if !disagreements.is_empty() {
         bail!(
             "the hubs do not agree after publishing:\n  {}\nRun `aida remote status` for the full picture.",
