@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T10:42:52.975795685Z
+modified_at: 2026-10-31T10:54:19.708760887Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -134,6 +134,21 @@ comments:
   modified_at: 2026-10-31T10:42:38.803451225Z
   session_id: 01a1918a645d
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19198-9a3c-7052-9ada-6a2bbd346fe6
+  author: joe
+  content: |
+    ADVISOR SIGNOFF 2026-10-31 04:00 on the sketch: APPROVED as written. Answers:
+    Q1: opt-in (--rotate, or [agents.<vendor>] rotate = true) for this slice. The operator can turn it on per vendor in agents.toml.
+    Q2: relay run (reuse STORY-1843; it already solves the gap, mail and crash reconciliation).
+    Q3: relaunch on a non-zero exit when a fresh handoff exists; the crash and window guards still apply.
+    Q4: yes, the supervisor stamps itself as the lease's active_pid/active_pid_start_time for the whole run.
+    Q5: Codex goes in a separate story (filed by the advisor). This slice is Claude only.
+    Q6: no injection into generation 1.
+    Q7: ONE slice for everything in the sketch except Codex, including the `ls` #N display and the handshake generation/previous_native_session_id (2026-10-28 rule: no follow-up chain).
+    Gate: LIGHT plus the command-level sh-child fixture tests the sketch lists; make check-ci-compile if it touches >10 files. Implementation may start.
+  created_at: 2026-10-31T10:54:19.708760887Z
+  modified_at: 2026-10-31T10:54:19.708760887Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18ae8-d622-72c1-a3a5-8d4fa60beadd
   author: joe
