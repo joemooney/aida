@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:11:57.652630509Z
-modified_at: 2026-10-31T20:18:54.516231395Z
+modified_at: 2026-10-31T20:18:59.197629686Z
 req_type: Task
 tags:
 - from-implementer:BUG-b6b1278890774ef993d2ebc327862470-053
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a1939d-8ffd-7700-910d-a71bfc794f69
+  author: joe
+  content: 'Closed by advisor ruling 13:20 on BUG-053: accepted as intended behavior (unique, not dense).'
+  created_at: 2026-10-31T20:18:59.197629686Z
+  modified_at: 2026-10-31T20:18:59.197629686Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939d-7db4-7960-a1f4-c1b39cd6b5d9
   author: joe
