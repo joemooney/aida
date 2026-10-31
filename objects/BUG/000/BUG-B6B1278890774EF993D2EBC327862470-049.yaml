@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:22:58.265909250Z
-modified_at: 2026-10-31T15:00:54.117120834Z
+modified_at: 2026-10-31T15:01:54.982828473Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -34,6 +34,20 @@ comments:
   modified_at: 2026-10-31T14:32:47.238081488Z
   session_id: 01a1925def67
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1927b-46a6-7bb1-862f-f1b7df1c4b38
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 08:04: PR-3167 round 1 is CHANGES REQUESTED. Rework ONE round, with everything in one push.
+    1. MAJOR, bounded growth, solved by design rather than by wiring every teardown: (a) pre-trust ONLY the directory a claude lane is actually spawned in, at the point of spawn (seat clones and the reviewer/compete worktrees that launch claude), not every dir under the root; (b) every write also PRUNES entries under the worktrees root whose path no longer exists, so growth is bounded no matter which teardown path ran. Dismiss/teardown removal stays as a fast path. Test: create 3 entries, delete 2 dirs, one write leaves exactly the live one (plus entries outside the root untouched).
+    2. MAJOR: launcher and dismiss wiring tests. A fixture HOME plus a fake claude: the entry exists BEFORE spawn (the fake asserts it), and is gone after dismiss.
+    3. Trace each test to its criterion ID.
+    4. Lock race: replace the stale-lock break with an OS advisory lock (flock on a sidecar lock file, with a timeout) so two writers never edit at once. Test with two concurrent writers.
+    5. doctor: when pre-trust is enabled, report it as on and stop claiming that headless lanes ignore the allow-list.
+    6. Key re-sorting: ACCEPTED as is. Claude Code does not depend on key order, and enabling serde_json preserve_order workspace-wide would change other output.
+    Gate: LIGHT plus make check-ci-fast. No force push.
+  created_at: 2026-10-31T15:01:54.982828473Z
+  modified_at: 2026-10-31T15:01:54.982828473Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a191e9-ed3f-7cc0-a193-eb4bb70fd0eb
   author: joe
