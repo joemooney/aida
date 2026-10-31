@@ -10753,8 +10753,8 @@ pub(crate) fn ruling_comment_text(ruling: &str) -> String {
 
 /// The advisor ruling recorded LAST on the spec (by comment time), replies
 /// included. A later ruling supersedes an earlier one. Production pickups
-/// use [`crate::rework_direction::latest_advisor_direction`], which also
-/// reads briefs (BUG-057).
+/// use [`crate::rework_direction::resolve_direction`], which also reads
+/// briefs (BUG-057).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
 #[cfg(test)]
 pub(crate) fn latest_ruling_comment(
@@ -10769,7 +10769,11 @@ pub(crate) fn latest_ruling_comment(
 // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
 #[cfg(test)]
 pub(crate) fn prepend_ruling(prompt: String, ruling: Option<&aida_core::Comment>) -> String {
-    crate::rework_direction::lead_rework_prompt(prompt, ruling, None, None)
+    let direction = crate::rework_direction::AdvisorDirection {
+        brief: None,
+        ruling,
+    };
+    crate::rework_direction::lead_rework_prompt(prompt, &direction, None, None)
 }
 
 // BUG-1213: the rework round a pickup is entering: the original
@@ -12021,7 +12025,18 @@ pub(crate) fn handle_queue_work(
     // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
     // the spec's recorded findings blocks (one per `queue rework`), not a
     // constant. trace:BUG-1213 | ai:claude
-    let rework_comments = if review_findings.is_some() {
+    // An advisor ruling or brief left as a spec comment leads the implementer
+    // pickup; a lane that read only the description repeated the overruled
+    // change. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
+    // BUG-057: a brief newer than the last verdict is the task; the verdict's
+    // findings become superseded context instead of the authoritative round.
+    // The assembly is a pure function so the whole path is testable.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+    let implementer_item = !role.eq_ignore_ascii_case("reviewer")
+        && !plan_only
+        && !guided
+        && plan.mode == QueueWorkMode::Item;
+    let spec_comments = if review_findings.is_some() || implementer_item {
         let spec_id = plan
             .entries
             .first()
@@ -12041,59 +12056,16 @@ pub(crate) fn handle_queue_work(
     } else {
         Vec::new()
     };
-    // An advisor ruling or brief left as a spec comment leads the implementer
-    // pickup; a lane that read only the description repeated the overruled
-    // change. trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
-    // BUG-057: a brief newer than the last verdict is the task; the verdict's
-    // findings become superseded context instead of the authoritative round.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
-    let implementer_item = !role.eq_ignore_ascii_case("reviewer")
-        && !plan_only
-        && !guided
-        && plan.mode == QueueWorkMode::Item;
-    let lead_comments = if implementer_item {
-        let spec_id = plan
-            .entries
-            .first()
-            .map(|entry| entry.spec_id.as_str())
-            .unwrap_or(plan.anchor_display.as_str());
-        storage.load().ok().and_then(|store| {
-            store
-                .requirements
-                .iter()
-                .find(|r| spec_matches(r, spec_id))
-                .map(|r| r.comments.clone())
-        })
-    } else {
-        None
-    };
-    let direction = lead_comments
-        .as_deref()
-        .and_then(crate::rework_direction::latest_advisor_direction);
-    let brief_supersedes = review_findings.is_some()
-        && crate::rework_direction::brief_supersedes_verdict(
-            direction,
-            crate::rework_direction::last_verdict_at(
-                review_findings.as_deref(),
-                lead_comments.as_deref().unwrap_or(&[]),
-            ),
-        );
-    let mut prompt = derive_rework_queue_work_prompt(
-        &plan,
-        &role,
-        plan_only,
-        guided,
-        review_findings.as_deref().filter(|_| !brief_supersedes),
-        &rework_comments,
-    );
-    if implementer_item {
-        prompt = crate::rework_direction::lead_rework_prompt(
-            prompt,
-            direction,
-            review_findings.as_deref().filter(|_| brief_supersedes),
-            rework_conflict.as_ref(),
-        );
-    }
+    let mut prompt =
+        crate::rework_direction::assemble_pickup_prompt(&crate::rework_direction::PickupInputs {
+            plan: &plan,
+            role: &role,
+            plan_only,
+            guided,
+            review_findings: review_findings.as_deref(),
+            spec_comments: &spec_comments,
+            conflict: rework_conflict.as_ref(),
+        });
     // Interactive implementers and every headless phase receive the same
     // resolved, capped type+lane protocol. Reviewers are included headlessly
     // because there is no conversational pickup hook to inject it later.
