@@ -16825,6 +16825,14 @@ Options:
           Do not wake this session's thread when its inbox has mail (default: `[agents.codex]
           mail_wake` in agents.toml, else on)
 
+      --rotate
+          Supervise the session across context rotations: when it exits after writing a fresh seat
+          handoff, relaunch it in the same worktree under the same handle and lease with the handoff
+          loaded (a 5s countdown; Ctrl-C stops it). A handoff counts once it carries this session's
+          thread id, or, before the thread is known, was written after the launch under this handle.
+          `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for
+          real. Default: `[agents.codex] rotate` in agents.toml, else off
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new antigravity
@@ -45459,6 +45467,11 @@ Working on aida itself
         "name": "role",
         "takes_value": true,
         "help": "Role propagated to the spawned Codex process as AIDA_SESSION_ROLE"
+      },
+      {
+        "name": "rotate",
+        "takes_value": false,
+        "help": "Supervise the session across context rotations: when it exits after writing a fresh seat handoff, relaunch it in the same worktree under the same handle and lease with the handoff loaded (a 5s countdown; Ctrl-C stops it). A handoff counts once it carries this session's thread id, or, before the thread is known, was written after the launch under this handle. `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for real. Default: `[agents.codex] rotate` in agents.toml, else off"
       },
       {
         "name": "show-context",

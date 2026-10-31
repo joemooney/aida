@@ -95,6 +95,8 @@ fn supervise(
     policy: RotationPolicy,
     on_gap: &mut dyn FnMut(u64),
 ) -> RotationOutcome {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+    let _serial = crate::agent_rotation::supervisor_test_lock();
     let sid = agent_native_session_id_for_new("claude");
     plan.native_session_id = sid.clone();
     run_rotating_agent(
