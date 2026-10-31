@@ -1,0 +1,32 @@
+id: 01a19202-2de2-7583-8ac9-195dc348c80c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-156
+title: 'Review PR-3165: [AI:claude] fix(seat-authority): contained headless children of every seat fail fast without a key; quota refusal is a ChildGrantRefused; dead issuer removed (TASK-B6B1278890774EF993D2'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a191d4`) for branch `task-b6b1278890774ef993d2ebc327862470-144`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3165>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-144` → `main`
+
+  ## Covers
+
+  - TASK-B6B1278890774EF993D2EBC327862470-144
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3165` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T12:49:38.786180461Z
+modified_at: 2026-10-31T12:49:38.786180461Z
+req_type: Story
+filed_at:
+  code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d083bdf13d4
+  vendor: claude
