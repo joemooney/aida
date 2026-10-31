@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:06:13.638469229Z
-modified_at: 2026-10-31T19:27:27.505059507Z
+modified_at: 2026-10-31T20:18:50.148706507Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -67,6 +67,12 @@ comments:
   created_at: 2026-10-31T19:27:27.505059507Z
   modified_at: 2026-10-31T19:27:27.505059507Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1939d-6ca4-7bb3-8760-997308520546
+  author: joe
+  content: 'ADVISOR RULING 13:20 (one-time ruling on non-blocking findings, 10-28 rule): TASK-275 (node-local host counter jumps past the highest filed number instead of filling gaps) is ACCEPTED as intended behavior. Reason: IDs must be unique, not dense; skipping past the high-water mark cannot collide, while gap filling could, and its old 64-taken failure mode is gone.'
+  created_at: 2026-10-31T20:18:50.148706507Z
+  modified_at: 2026-10-31T20:18:50.148706507Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a19324-33a0-7f61-a5dc-fb9d7370af97
   author: joe
