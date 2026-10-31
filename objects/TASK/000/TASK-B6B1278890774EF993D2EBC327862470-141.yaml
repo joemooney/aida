@@ -11,12 +11,12 @@ description: |-
   4. docs/gitlab-ci-runner.md says the main pipeline is nightly, with the one-time step to create the schedule (GitLab UI: CI/CD > Schedules, daily, target main). Creating the schedule is an operator step, not part of this PR.
   5. The header comment explains why main pushes don't run: GitHub CI already gated them.
   Gate: FASTTRACK (make check-ci-fast; no cargo). If a lint checks .gitlab-ci.yml, it passes.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:01:23.418689366Z
-modified_at: 2026-10-31T06:14:32.817260228Z
+modified_at: 2026-10-31T06:54:06.044475142Z
 req_type: Task
 tags:
 - ci
@@ -91,6 +91,20 @@ history:
   author: joe
   timestamp: 2026-10-31T06:00:52.982019841Z
   changes: []
+- id: 01a190bc-a7aa-7051-a0a4-d49d8ab19dd8
+  author: aida-auto-bump
+  timestamp: 2026-10-31T06:54:05.226152982Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a190bc-aadc-7160-8958-4d60f80b46dc
+  timestamp: 2026-10-31T06:54:06.044470636Z
+  agent: aida
+  commit_sha: 518815e3c293dde8c94830f0e55ccf7a68cbd477
+  summary: 'Base-only update from main (gh update-branch 48dff0e0e44e61a08c54fc87566b5e8803a3345f -> 5edb241a49968b8879bb7740bd30def77f409009); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
   branch: main
@@ -103,3 +117,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T05:22:29.927046286Z
   implemented_by: joe
+  completed_at: 2026-10-31T06:54:05.226148549Z
+  completion_sha: 518815e3c293dde8c94830f0e55ccf7a68cbd477
