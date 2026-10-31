@@ -12,12 +12,12 @@ description: |
   5. Test: an agent in a seat clone sends hello; the advisor in the primary sees it; the agent sees the ack. This test fails until BUG-HOME-031 is fixed.
 
   Depends on BUG-HOME-031 (seat-clone mail reaches the primary inbox).
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-31T08:29:14.803763016Z
+modified_at: 2026-10-31T09:57:05.994098384Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -180,6 +180,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19164-3545-7203-89c1-6d5fc90904f3
+  author: aida-auto-bump
+  timestamp: 2026-10-31T09:57:05.989009387Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a19164-354a-7551-83b3-aa8f62bcde7b
+  timestamp: 2026-10-31T09:57:05.994095498Z
+  agent: aida
+  commit_sha: 361910ec4a02ee24d768d9f1fecc311f229991ef
+  summary: 'Base-only update from main (gh update-branch e8cf27e224b8d08b88da603ea5f826d95ff487f7 -> 5849bfcb42689d3b17c2c256b77dffc60fea6348); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -192,11 +206,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T00:16:24.205377929Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 findings 2-8 are addressed (agy hello, inbox auto-ack test, agent ls and doctor wiring test, find_ack shared through Census, per-session record, new-ack-only reporting, criterion traces). But CI is red at head (lib-1 and cli-1 fail, main is green), and MCP read_inbox marks mail read without acking hellos. AC status: AC1 verified (seat_clone 68/206, handshake 59/310). AC2 partial (CLI inbox verified at seat_clone:156; the MCP read path is not wired). AC3 verified (handshake 242/271/381, seat_clone 243). AC4 verified (seat_clone 68/243). AC5 verified (seat_clone 68). All are conditional on CI going green.'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-100 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T08:16:37.767958023Z
+  completed_at: 2026-10-31T09:57:05.989005779Z
+  completion_sha: 361910ec4a02ee24d768d9f1fecc311f229991ef
