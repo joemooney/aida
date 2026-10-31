@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-31T07:02:11.866596360Z
+modified_at: 2026-10-31T07:02:21.896580490Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -81,6 +81,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core handshake logic is sound and AC1/AC4/AC5 are tested at the function level, but CI cli-0 is red at the head (main green at parent), AC2/AC3 command wiring is untested, the Antigravity hook branch skips the hello, and agent ls disagrees with doctor on acked hellos.. No triage reason was given.'
   created_at: 2026-10-31T07:02:11.866593932Z
   modified_at: 2026-10-31T07:02:11.866593932Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190c4-2d1e-77a1-b00d-fff4deb07c6d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-b6b1278890774ef993d2ebc327862470-100):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6382897f4ba5
+    Recorded: 2026-10-31T00:30:44.724350549+00:00
+    Findings:
+    1. CI red: job 'CI (cli-0)' failed in 'Run tests' at head 6382897 (run 41149240170). main is green at parent 2f29937, and no other recent CI run failed, so this PR probably caused it. The reviewer could not read the job log (the log/artifact host is blocked in the reviewer sandbox). Diagnose and fix it; cli-0 runs aida-cli integration tests, and likely suspects are agent ls output (agent_registry_root.rs now calls load_live_entries + Policy::load) and the new advisor-handshake category in the default doctor scan.
+    2. AC1 gap (aida-core/templates/hooks/aida-mail-notice.sh:153-157): hello() is called only in the non-agy branch. An 'aida agent new' Antigravity session (--client agy, SessionStart) never sends its hello, and an Antigravity advisor never sees pending hellos. Call hello in the agy branch and fold its lines into the injected systemMessage. The hook-script wiring itself is also untested: the tests call advisor_handshake::run() directly.
+    3. AC2 untested at command level: the auto-ack wiring in 'aida mailbox inbox' (mailbox_cmd.rs:745-758, which runs only when an ack plan commits) and run()'s advisor branch (advisor_handshake.rs:625-633, the per-turn notice listing hellos) have no tests. Tests cover only ack_hellos() and advisor_lines(). Add a test that drives the inbox read and checks that the ack lands in the agent's inbox, and one that checks the advisor's hook output lists the hello.
+    4. AC3 untested at command level: neither the 'aida agent ls' suffix wiring (agent_registry_root.rs:84-125) nor the doctor default-scan and light-path routing (doctor_cmd.rs:163-176, 1028-1035, 1623-1626) is exercised. Only pure ls_note() and finding() are tested. Add a test that runs agent ls and doctor (default scan and 'doctor check advisor-handshake') over an overdue record and asserts 'advisor unreachable' plus the mailbox path.
+    5. Inconsistency (advisor_handshake.rs:705-719 vs 742-746): doctor_scan suppresses a finding when find_ack() locates the ack but the record is not yet marked acked. ls_note() does not check find_ack, so 'aida agent ls' can show 'advisor unreachable' for an agent the advisor already acked (the record is updated only on the agent's next hook turn, or by ack_hellos when it can reach the record root). Make ls_note consult find_ack the same way.
+    6. Stale per-handle record (advisor_handshake.rs:351-353): send_hello returns AlreadySent whenever a record exists for the handle, with no session or age check, and records are never cleaned up. A later 'agent new' that reuses a handle (an explicit --name) never says hello and inherits the old acked or unreachable state in agent ls and doctor. Key the record to the session (or sent_at vs the registry entry's started_at) or reset it on a new launch.
+    7. Cosmetic (advisor_handshake.rs:510, mailbox_cmd.rs:752-757): ack_hellos returns every hello shown, including ones already acked, so a later inbox read that shows an old hello prints 'acked the advisor-handshake hello from X' again. Return only newly written acks.
+    8. Traceability: none of the five acceptance criteria is traced to a test ('aida criteria' lists all five as untraced). Add criterion-level trace tags (for example STORY-...-100.acf0ac12) to the tests that prove each criterion, so the criteria gate can see the coverage.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-31T07:02:18.142276332Z
+  modified_at: 2026-10-31T07:02:18.142276332Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18ae6-1e13-7781-8ad3-aa7c7eaef9ba
