@@ -511,12 +511,12 @@ mod pr_rebase;
 mod pr_ship;
 mod pr_ship_batch;
 mod pr_train;
-// BUG-HOME-048: title trailers complete only the specs a PR covers.
-mod trailer_coverage;
 mod presence;
 mod presence_cmd;
 mod process_probe;
 mod process_retry;
+// BUG-HOME-048: title trailers complete only the specs a PR covers.
+mod trailer_coverage;
 use crate::process_retry::RetryEtxtbsy;
 // BUG-677: the /proc probe + lease/spec liveness classifiers moved to
 // aida-core so aida-tui can compute liveness in-process. Re-export the shared
