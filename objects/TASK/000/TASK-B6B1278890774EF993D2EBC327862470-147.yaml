@@ -11,7 +11,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T13:06:37.462715043Z
-modified_at: 2026-10-31T15:38:47.354114584Z
+modified_at: 2026-10-31T15:38:56.690904757Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-144
@@ -23,6 +23,13 @@ relationships:
   target_id: 01a1918f-9cce-7603-952e-d68dd02f99c1
   created_at: 2026-10-31T15:38:47.354110940Z
   created_by: joe
+comments:
+- id: 01a1929d-2d32-7e30-b915-6b973e890ce4
+  author: joe
+  content: 'Superseded: accepted with a reason at the PR-3165 review (advisor 06:05 comment on TASK-HOME-144).'
+  created_at: 2026-10-31T15:38:56.690904757Z
+  modified_at: 2026-10-31T15:38:56.690904757Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a1929c-fcb1-7570-a680-7e9cf92c9136
   author: joe
