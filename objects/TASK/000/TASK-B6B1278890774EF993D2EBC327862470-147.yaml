@@ -1,0 +1,27 @@
+id: 01a19211-b916-7132-83b4-4fcf2d9414ec
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-147
+title: 'minor (non-blocking): autopilot_intake.rs:975 and questions.rs:1655 still mint …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-144, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): autopilot_intake.rs:975 and questions.rs:1655 still mint contained advisor children via bare issue_child (containment ignored), so the 'every seat / every launch path' claims in the commit title and bug_home_045_reviewer_verdict_tests.rs module doc overclaim; route them through issue_launch_child(.., contained) and extend the task_144 source scan.
+  Reviewed sha: da58a6c13b2ff677086b7a0409d83ed9736aca12
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T13:06:37.462715043Z
+modified_at: 2026-10-31T13:06:37.462715043Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-144
+- finding-hash:99b0a503
+- from-review:TASK-B6B1278890774EF993D2EBC327862470-144
+- kind:carried-forward
+filed_at:
+  code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d083bdf13d4
+  vendor: claude
