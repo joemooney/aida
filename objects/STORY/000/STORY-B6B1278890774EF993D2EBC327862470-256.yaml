@@ -1,0 +1,34 @@
+id: 01a19409-b52f-7e71-a2eb-404366bb7670
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-256
+title: aida agent new at a human terminal with no parent grant offers to mint one inline instead of refusing with an eval recipe
+description: |-
+  Operator request 2026-10-31 15:15. Today, plain 'aida agent new' from a human shell with no AIDA_SESSION_GRANT refuses: 'no valid parent seat grant is active. run eval "$(aida role enter advisor --delegate-seat implementer)", then retry'. This is the most common way a person starts a lane, and the refusal makes them do a two-step eval dance whose only purpose is to prove a human is at the terminal, which agent new can prove itself.
+
+  Design (advisor ruling): when stdin+stdout are a TTY, the human-presence checks that 'aida role enter' applies pass, and no valid parent grant exists, agent new prompts after the seat is picked:
+    No parent grant in this shell. Launch the implementer under a one-time grant from you (operator)? [Y/n]
+    (optional) Also delegate: [ ] reviewer [ ] integrator  ← only when the picked seat's work needs it; default none
+  On yes it mints a parent grant in-process through the SAME code path and audit record as 'aida role enter <parent> --delegate-seat <seat>' (principal = the human, parent role = the operator/advisor role that role enter would use), immediately derives the child-specific grant exactly as today, and does NOT export the parent grant into the user's shell (it lives only for this launch). On no it prints today's refusal text.
+
+  Must not weaken the boundary: no prompt (refuse as today) when not a TTY, under AIDA_HEADLESS, under any agent harness env (CLAUDECODE, CODEX_*, AIDA_AGENT_*), inside a contained seat, or when a grant is present but invalid/expired (that path keeps its existing message). A --yes flag does not skip the prompt (the human keystroke is the proof); '--grant-inline=no' restores pure refusal for scripts.
+
+  Acceptance: (1) TTY, no grant, answer y: child launches with a child-specific grant, the role-enter audit event is recorded with principal and seat, the parent shell env is unchanged afterwards; (2) answer n: today's refusal text, exit non-zero; (3) non-TTY / headless / agent env / contained: no prompt, today's refusal; (4) an existing valid grant: no prompt, today's behaviour; (5) the BUG-052 picker marks still apply (undelegable seats refused before the prompt); (6) docs: agent new section + FAQ-42 updated to say a human terminal is offered the inline grant. Tests: PTY-driven CLI test for (1)(2), env-matrix unit test for (3). Architecture/security-adjacent: implementer posts a short sketch of the in-process mint path and gets advisor signoff before coding.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:17:06.607335957Z
+modified_at: 2026-10-31T22:17:06.607335957Z
+req_type: Story
+tags:
+- agent-new
+- epic-home-003
+- grants
+- ux
+filed_at:
+  code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
