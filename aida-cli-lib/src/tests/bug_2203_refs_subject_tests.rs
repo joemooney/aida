@@ -72,6 +72,7 @@ fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
     let pr = PrShipMetadata {
         title: title.to_string(),
         body: String::new(),
+        number: None,
     };
     let (subject, trailer) =
         derive_pr_ship_squash_subject_from(root, &pr, "claude/bug-2169", false).unwrap();
