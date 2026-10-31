@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:21:31.863608220Z
-modified_at: 2026-10-31T07:03:47.520106757Z
+modified_at: 2026-10-31T07:58:34.760555098Z
 req_type: Bug
 tags:
 - salvage
@@ -37,6 +37,20 @@ comments:
     - None. Kept conservative: `.gitmodules` at HEAD, gitlinks in HEAD/index, and `.git/modules` contents still count as evidence.
   created_at: 2026-10-31T07:03:47.520106757Z
   modified_at: 2026-10-31T07:03:47.520106757Z
+  session_id: 01a190c46c72
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a190f7-b308-7362-a57a-bfad66dfa978
+  author: joe
+  content: |-
+    ## Implementer finding (kind:bug-spotted, severity:minor) — for advisor triage
+
+    Could not file this as a draft TASK from the seat: `aida add` failed with "requirement ID allocation failed: Read-only file system", and MCP file_finding was not permitted.
+
+    Seat sessions share TMPDIR=/tmp/claude-1000, and each Bash call runs in its own PID namespace (`$$` = 2), so fixed-name temp logs collide across seats. My `$TMPDIR/t.log` cargo log picked up another seat's build output (story-...-100), so an agent can read another seat's test or gate result as its own. Possible fix: a per-seat TMPDIR.
+
+    Also, the bwrap-gated seat_clone tests (including this bug's regression test) SKIP inside the Claude sandbox ("bwrap unavailable"), so they run only in CI. I checked the evidence script locally against 9 fixture repos instead: 0-byte read-only untracked, absent, no submodule section → no evidence; defines a submodule, unparseable, unreadable, symlink, directory, tracked in index → evidence.
+  created_at: 2026-10-31T07:58:34.760555098Z
+  modified_at: 2026-10-31T07:58:34.760555098Z
   session_id: 01a190c46c72
   harness_version: 2.1.316 (Claude Code)
 history:
