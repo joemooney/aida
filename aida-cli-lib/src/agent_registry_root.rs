@@ -1,4 +1,4 @@
-//! `aida agent ls/gc/stop/register`, registered-process validation and child signal forwarding (STORY-1488 slice 1)
+//! `aida agent list/gc/stop/register`, registered-process validation and child signal forwarding (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
@@ -197,7 +197,7 @@ pub(crate) fn unobserved_liveness_notes(
     }
     if heartbeat_rows || observer.isolated {
         notes.push(
-            "To check process liveness, run `aida agent ls` from a terminal outside the sandbox."
+            "To check process liveness, run `aida agent list` from a terminal outside the sandbox."
                 .to_string(),
         );
     }

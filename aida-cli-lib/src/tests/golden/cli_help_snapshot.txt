@@ -16364,8 +16364,8 @@ Usage: aida agent [OPTIONS] <COMMAND>
 Commands:
   new              Launch a new agent process
   register         Register an already-running raw-launched agent process
-  ls               List active agent processes
-  status           Show active agent processes (alias of `ls`)
+  list             List active agent processes [aliases: ls]
+  status           Show active agent processes (alias of `list`)
   gc               Prune dead-PID agent registry entries
   dispatch-health  Report dispatch health and recovery hints for active agent/spec work
   pause            Set a dispatch marker (NOT a process pause): marks the agent busy (e.g. budget
@@ -16401,7 +16401,7 @@ This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that ag
 A vendor TUI does not exit when its turn ends — it returns to its prompt — so a seat that has
 finished its work still holds this command. Budget for that: run it where you can leave it, or stop
 the seat with `aida agent stop <name>` once it reports. To tell a finished seat from a working one
-without attaching, read the CPU column in `aida agent status`: seconds of CPU across hours of age
+without attaching, read the CPU column in `aida agent list`: seconds of CPU across hours of age
 means the seat is idle at its prompt. Do NOT rely on the `status` column for that — it reports
 `busy` for a seat whose worktree any live lease covers, which for the main checkout is effectively
 always.
@@ -16830,10 +16830,10 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida agent ls
+===== aida agent list
 List active agent processes
 
-Usage: aida agent ls [OPTIONS]
+Usage: aida agent list [OPTIONS]
 
 Options:
       --all
@@ -16862,7 +16862,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent status
-Show active agent processes (alias of `ls`)
+Show active agent processes (alias of `list`)
 
 Usage: aida agent status [OPTIONS]
 
@@ -45378,7 +45378,7 @@ Working on aida itself
     "path": [
       "aida",
       "agent",
-      "ls"
+      "list"
     ],
     "about": "List active agent processes",
     "flags": [
@@ -45421,7 +45421,7 @@ Working on aida itself
       "agent",
       "status"
     ],
-    "about": "Show active agent processes (alias of `ls`)",
+    "about": "Show active agent processes (alias of `list`)",
     "flags": [
       {
         "name": "all",

@@ -342,7 +342,7 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             name.as_deref(),
             description.as_deref(),
         ),
-        AgentCommand::Ls { all, stale, ended } => agent_ls(*all, *stale, *ended),
+        AgentCommand::List { all, stale, ended } => agent_ls(*all, *stale, *ended),
         AgentCommand::Status { all, stale, ended } => agent_ls(*all, *stale, *ended),
         AgentCommand::Gc {
             dry_run,
@@ -537,7 +537,7 @@ pub(crate) fn dispatch_report_row(
         }
         // trace:TASK-2272 | ai:claude
         DispatchHealthState::Unverified => {
-            "unverified (can't check liveness from here); run `aida agent ls` outside the sandbox"
+            "unverified (can't check liveness from here); run `aida agent list` outside the sandbox"
                 .to_string()
         }
     };
@@ -4210,7 +4210,7 @@ pub(crate) fn enforce_agent_singleton_preflight(
             (_, Some(_)) => {
                 "\nfix: that spec is already claimed; pick a different approved spec with `--spec <ID>`, or stop the holder first."
             }
-            _ => "\nfix: stop the holder first (`aida agent ls` names it); this role allows one agent per scope.",
+            _ => "\nfix: stop the holder first (`aida agent list` names it); this role allows one agent per scope.",
         };
         anyhow::bail!(
             "agent role `{}` is already active on this scope: {} (session {}, spec {}, pid {}).{fix}",
@@ -6335,12 +6335,12 @@ pub(crate) fn supervise_spawned_child(
     use std::io::Write as _;
     let registry_id = post_spawn_step(
         register(),
-        "could not record this agent in the registry, so `aida agent ls` will not list it",
+        "could not record this agent in the registry, so `aida agent list` will not list it",
         &mut deferred_warnings,
     );
     // TASK-1498: `--verbose` process-registration diagnostics — confirms the
     // spawned pid and the registry entry id it was recorded under, right
-    // after the write that makes it visible to `aida agent ls`.
+    // after the write that makes it visible to `aida agent list`.
     // trace:TASK-1498 | ai:claude
     if verbose {
         if let Some(id) = &registry_id {
