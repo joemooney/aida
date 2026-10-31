@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T20:18:25.177656915Z
+modified_at: 2026-10-31T20:19:34.649310557Z
 req_type: Story
 tags:
 - architecture
@@ -50,6 +50,12 @@ comments:
   content: 'ADVISOR 13:20: STORY-165 (same proposal, shorter text) superseded into this spec. This is the single-hub-mode spec of record; it needs an implementer sketch plus advisor signoff before implementation (architecture change to block delegation / enroll-root).'
   created_at: 2026-10-31T20:18:25.177656915Z
   modified_at: 2026-10-31T20:18:25.177656915Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a1939e-1a79-71e0-8578-ddef9757202f
+  author: joe
+  content: 'ADVISOR BRIEF 13:22 (SKETCH ONLY, no code): post an implementation sketch as a comment on this spec: how the store learns its hub count (remote config vs recorded hubs), the single-hub claim path (CAS on aida-store with no root), the transition when a second writable hub appears (this repo has TWO: GitHub + GitLab, so it must stay rooted), migration of the existing enroll-root path, and the test plan. Then mail the advisor ''SKETCH READY STORY-164'' and exit. Do not open a PR.'
+  created_at: 2026-10-31T20:19:34.649310557Z
+  modified_at: 2026-10-31T20:19:34.649310557Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
