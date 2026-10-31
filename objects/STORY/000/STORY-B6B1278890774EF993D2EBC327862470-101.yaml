@@ -16,12 +16,12 @@ description: |
   7. Interacts with STORY-HOME-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
 
   Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-HOME-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T13:29:15.888342680Z
+modified_at: 2026-10-31T13:47:49.585210560Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -248,6 +248,20 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a19237-71cb-7c60-9f5c-7573525b0349
+  author: aida-auto-bump
+  timestamp: 2026-10-31T13:47:49.579518423Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a19237-71d1-7cd2-ac19-7a16ee215bf0
+  timestamp: 2026-10-31T13:47:49.585206085Z
+  agent: aida
+  commit_sha: e564a298167291f6bac3ebc7fe842839c1a2285c
+  summary: 'All 7 ACs met (codex AC6 deferred to STORY-HOME-150 per advisor Q5); round-1 findings addressed: matched-handoff injection with stamp check, sh-child fixtures for lease/claim/worktree continuity + live gap lease, 3-in-10min limit, SIGINT->Cancelled+lease release, gap mail once, gen-2 hello on one thread; TTY-only config default; --rotate+--resume refused; one seat resolver. PR CI green at head (merge-hold-gate is the reviewer hold).'
+  review_verdict: approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -260,11 +274,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T11:47:40.154556958Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Rotation loop, freshness matcher, guards, relay-run handle hold and ls/hello labels are sound and CI is green, but the SessionStart hook injects latest.md instead of the matched handoff, and the command-level fixture tests the advisor's gate required (lease continuity, gap liveness, command-level limit, SIGINT stop, mail across the gap) are missing.
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-101 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T12:00:34.179648721Z
+  completed_at: 2026-10-31T13:47:49.579513455Z
+  completion_sha: e564a298167291f6bac3ebc7fe842839c1a2285c
