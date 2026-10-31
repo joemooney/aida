@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T14:34:43.077580434Z
+modified_at: 2026-10-31T16:21:27.893446160Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -71,6 +71,21 @@ comments:
   created_at: 2026-10-31T14:34:43.077580434Z
   modified_at: 2026-10-31T14:34:43.077580434Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a192c4-1ad5-78a2-bbaf-192d73acb959
+  author: joe
+  content: |
+    ## Round 2 rework (all four ruling items, one push)
+
+    1. **One posture helper (MAJOR):** `session::headless_claude_posture(contained_flags)` (and `headless_claude_posture_for(contained)`) is the only source of the headless flags. It returns one `--settings` document with `env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` and a `Monitor` deny (contained or not), then `--disallowed-tools AskUserQuestion Monitor`. Callers: the session.rs fresh and resume builders, `build_burndown_quiet_command`, `burndown_verbose_claude_args_with_containment`, `build_autopilot_intake_command`, the compete arm and judge launch (`compete_cmd::compete_arm_argv`), and Ask-AI (`compete::ask_ai_argv`). Ratchet: `session::tests::every_headless_claude_argv_goes_through_the_posture_helper` scans non-test source. Any function that builds a claude `-p` argv must call the helper. The two compete argv *templates* are allowlisted because every launch goes through `compete_arm_argv`. `bug_2171_2170_contained_builders_tests.rs` now checks the full posture with `session::assert_headless_posture`, uncontained included.
+    2. **Loop-level fake-claude test:** `a_rework_round_parked_on_its_old_pr_head_is_resumed`. The mock forge (`standalone_implementer::TEST_PR`) reports the open PR on the launch head, and the fake claude ends its turn while its fake cargo runs. The session is resumed, and the run ends `no-pr`, leaving 1 uncommitted path.
+    3. **Stall detection from the seat's git:** `headless_background::SeatState` reads the local `HEAD`, `origin`'s branch via `ls-remote`, and the dirty count. A run has shipped when `HEAD` moved past the launch head and `origin` is at it. A shipped PR reports the local pushed head, so a lagging forge head does not matter. Otherwise a dirty tree gives `reason=uncommitted-work` and committed-but-unpushed gives `reason=unpushed-commits`. The forge head is a fallback only when `ls-remote` cannot answer. Unit tests cover both reasons. Fixture tests: `a_rework_round_that_committed_but_did_not_push_is_not_shipped` and `a_pushed_rework_round_is_shipped_while_the_forge_lags`.
+    4. **Drain safety net through the shared path:** the loop is now `headless_background::ResumeLoop`. The standalone launcher and `session::exec_vendor_headless` (the drain's phase-1 Claude implementer, through `drain_lane_with_resume`) both run it. The drain lane counts as done on a punt or hold signal file, or when its seat has pushed. Lane processes carry a new non-refusing `AIDA_HEADLESS_LANE` marker set at spawn, so the drain child does not carry the standalone marker that refuses `pr ship`. Test: `the_drain_implementer_gets_the_same_resume_safety_net`.
+
+    Verification: `make check-ci-fast` passes (36 gates); `check-ci-compile` runs because more than 10 files changed. In this seat sandbox, the contained-launch tests fail on the base commit too, because this seat is not a recorded seat clone. The isolated fixture tests could only run with `TMPDIR` forwarded in a local edit, reverted before commit; with it, all 58 headless_background, standalone_implementer and bug_1686 tests pass.
+  created_at: 2026-10-31T16:21:27.893446160Z
+  modified_at: 2026-10-31T16:21:27.893446160Z
+  session_id: 01a192789152
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1922e-768b-7b43-9bc4-deca919d4df0
   author: joe
