@@ -243,6 +243,19 @@ pub enum MailboxCommand {
         cap: Option<usize>,
     },
 
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+    /// Advisor handshake: a launched non-advisor agent mails the advisor
+    /// role once (handle, role, spec, path) and reports the ack, or `advisor
+    /// unreachable: <reason>` when none arrives in time. For an advisor,
+    /// lists the hellos waiting for an ack; reading them with `aida mailbox
+    /// inbox` acks them
+    Hello {
+        /// Per-turn hook mode: send only on SessionStart, print only a new
+        /// ack or an overdue hello, and stay silent otherwise
+        #[clap(long)]
+        hook: bool,
+    },
+
     /// Operator overview: agents with mail waiting + unread / urgent-unread
     /// counts, most-recent-activity first.
     List {

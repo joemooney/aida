@@ -2242,3 +2242,8 @@ mod seat_clone_mailbox_tests;
 #[cfg(test)]
 #[path = "tests/bug_home_038_seat_publish_tests.rs"]
 mod seat_publish_tests;
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_b6b_100_seat_clone_handshake_tests.rs"]
+mod seat_clone_handshake_tests;

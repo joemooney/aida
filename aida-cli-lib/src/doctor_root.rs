@@ -1775,6 +1775,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["mail-backlog", "mail-backlog-guard", "unread-mail"],
         "mail-backlog",
     ),
+    // STORY-HOME-100: a launched agent's advisor hello with no ack past the
+    // handshake window, naming the mail path that failed.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+    (
+        &["advisor-handshake", "handshake", "advisor-hello"],
+        "advisor-handshake",
+    ),
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     (
