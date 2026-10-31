@@ -30,11 +30,40 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-10-31T22:29:54.449948466Z
+modified_at: 2026-10-31T22:35:23.005015709Z
 req_type: Bug
 tags:
 - area:agents
 - area:registry
+comments:
+- id: 01a1941a-6ffd-7810-974c-c36f7dc5e451
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Root cause found (AC1)
+    The live registry shows the shape: every row has `last_active_at == started_at`, and advisor-10 (registered 20:05Z, after the report) does have a row. A seat is registered exactly once, by its SessionStart hook (`notice_hook_session` -> `touch_session_start_agent`). That write takes the handle-namespace lock with a 250ms budget, and the result is discarded (`if let Ok(entry)`). Under launch contention (an advisor starting lanes, gc, other heartbeats) the write fails and the session goes unregistered for life, because no later hook writes the registry. A recycled-pid row is also overwritten in place, which loses the dead session's history.
+
+    ### Acceptance criteria as tests
+    - **Unit (AC1):** hold the namespace lock and run SessionStart registration: it errors and leaves no row. Then the prompt-hook heartbeat registers the session. Recycled-pid overwrite: a row at `claude-<pid>.toml` whose `pid_start` belongs to another process is archived under a unique name in `retired/` before replacement (session-start, launcher, MCP paths), so names cannot collide destructively across PID reuse.
+    - **Unit (AC2):** delete a live session's row, then run the per-prompt heartbeat: the row is back, with `last_active_at` newer than before. A present row is refreshed, and a wrongly ended live row is un-ended.
+    - **Unit (AC3):** `unreachable_reason` / the queued send line say "no registered advisor" and name `aida doctor check advisor-handshake`, never "no live advisor". With an unexpired, unrevoked advisor seat grant whose `proc:` binding is a live process, the reason says the advisor is live but unregistered.
+    - **Unit (AC4):** `doctor_scan` reports registered advisors (or none), unregistered live-advisor evidence, and each recent hello's state (waiting, acked, unreachable), so the check is never empty.
+    - **Unit (AC5):** a dead row with a refreshed heartbeat is ended at its last heartbeat (not `started_at`) by gc. `mark_agent_ended` already stamps now.
+
+    ### Expected files
+    - `aida-cli-lib/src/agent_registry.rs` (heartbeat, displaced-row archive)
+    - `aida-cli-lib/src/status_awaiting.rs` (prompt hook calls the heartbeat)
+    - `aida-cli-lib/src/advisor_handshake.rs` (presence enum, wording, grant evidence, doctor report)
+    - `aida-cli-lib/src/gate/seat_authority.rs` (list live advisor grants, read-only)
+    - new test file under `aida-cli-lib/src/tests/`
+
+    ### Ambiguities / conflicts as questions
+    - AC4 doctor info rows are DoctorFindings, so `--fail-on-findings` would trip on them. Plan: emit informational rows only when there is something worth saying (an unacked hello, unregistered evidence, or no registered advisor while hellos wait). Is that acceptable?
+  created_at: 2026-10-31T22:35:23.005015709Z
+  modified_at: 2026-10-31T22:35:23.005015709Z
+  session_id: 01a194156847
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-8def-7313-80d3-270615a3923f
   author: joe
