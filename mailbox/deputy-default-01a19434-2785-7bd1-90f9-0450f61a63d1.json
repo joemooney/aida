@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a19434-2785-7bd1-90f9-0450f61a63d1",
+  "thread_id": "deputy-01a19434-2785-7bd1-90f9-0450f61a63d1",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793487820301,
+  "body": "Deputy \"default\" finished job 01a19434-2785-7bd1-90f9-0450f61a63d1: rc 0 (ok).\nCommand: aida add --type story --priority medium --status draft --tags docs,schedule,from-operator --title Background docs sweep: an idle-only scheduled job and an aida docs sweep command, report-only first, then one batched docs PR per run --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/story-docs-sweep.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a19434-2785-7bd1-90f9-0450f61a63d1.out\nRead it with `aida deputy log 01a19434-2785-7bd1-90f9-0450f61a63d1`.\n",
+  "subject": "deputy job 01a19434 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
