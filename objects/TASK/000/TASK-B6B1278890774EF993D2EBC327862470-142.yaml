@@ -6,12 +6,12 @@ description: |-
 
   minor (non-blocking): awaiting_seat_jobs (maintenance_schedule.rs:1910) now puts the operator escalation into EVERY seat's per-turn notice, including headless agent lanes that set AIDA_SESSION_ROLE (implementer/reviewer). The operator route_prompt (mail_backlog.rs:496) is imperative ('wake or relaunch each recipient ... then run aida schedule done mail-backlog-guard-route-operator'), and when the seat has no own job it becomes cron.next, so an agent lane may act on or clear the human's escalation before the human sees it. Spec-compliant per the 17:25 ruling; consider a dedicated escalation row, or restricting to human/operator-terminal sessions.
   Reviewed sha: edd7488ad771af2d6aaf000d80e470af3033b0ac
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T06:27:56.481481791Z
-modified_at: 2026-10-31T07:55:26.994661292Z
+modified_at: 2026-10-31T07:55:31.583291438Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-133
@@ -26,6 +26,15 @@ comments:
   created_at: 2026-10-31T07:55:26.994661292Z
   modified_at: 2026-10-31T07:55:26.994661292Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+history:
+- id: 01a190f4-e77f-7821-83b1-5e17e2fdf403
+  author: joe
+  timestamp: 2026-10-31T07:55:31.583288478Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 0055329071e020e27dc8342cd4479eec6b4a1e87
   branch: main
