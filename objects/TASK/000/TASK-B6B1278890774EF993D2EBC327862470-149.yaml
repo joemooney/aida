@@ -15,12 +15,12 @@ description: |
   6. Anchor the BUG-046 tests to criterion IDs so `aida criteria BUG-HOME-046` reports none untraced; amend the AC5 criterion text to the shipped [ids] seq_width key.
 
   7. Native-vs-agreed collisions (found by the advisor after the 2026-10-31 store apply): `aida doctor` reports 8 groups where a legacy native spec_id equals another spec's agreed_id (BUG-34, STORY-41, STORY-42, TASK-31, TASK-32, ...), all closed specs, while `doctor --fix id-collisions --dry-run` says there are none. Make the fix tool see the same groups doctor reports (one grouping function for both), renumber the NATIVE side (the agreed ID is the shared identity), and leave doctor at 0 groups. Test: a native TASK-31 plus another spec with agreed TASK-31 is one group, and the fix renumbers the native.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T17:30:34.982145104Z
+modified_at: 2026-10-31T17:53:19.223554823Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -98,6 +98,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19318-33fe-7db3-9fc4-d0974fa043cc
+  author: joe
+  timestamp: 2026-10-31T17:53:19.358336756Z
+  session_id: 01a192ca4027
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -106,3 +115,7 @@ filed_at:
   aida_build_sha: d083bdf13d4
   vendor: claude
   session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T17:53:19.223554823Z
+  implemented_by: joe
