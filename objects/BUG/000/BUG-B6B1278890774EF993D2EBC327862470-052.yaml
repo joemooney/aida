@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:05:17.938860854Z
-modified_at: 2026-10-31T19:33:00.465083531Z
+modified_at: 2026-10-31T20:08:45.211061576Z
 req_type: Bug
 tags:
 - area:agents
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-10-31T19:26:47.724178164Z
   modified_at: 2026-10-31T19:26:47.724178164Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19394-319b-7202-994c-d56c5eb2d278
+  author: joe
+  content: 'ADVISOR NOTE 13:10: the previous lane died mid-investigation (idle 33m, uncommitted work in its seat). Resume: inspect the seat''s git status/diff first, keep good work, finish the ACs, open the PR. LIGHT gate.'
+  created_at: 2026-10-31T20:08:45.211061576Z
+  modified_at: 2026-10-31T20:08:45.211061576Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1936d-b8ef-7b80-a114-655fa9d59093
   author: joe
