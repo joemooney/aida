@@ -513,19 +513,31 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
     }
 
     // The store leg, always last and never skipped when a remote exists —
-    // to every hub, after the code branch reached every hub.
-    for hub in &hubs {
+    // to every hub this clone may push the store to, after the code branch
+    // reached every hub. trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let policy = crate::store_local::push_hubs(dir);
+    let (store_hubs, excluded) = store_leg_hubs(&policy, &hubs);
+    for hub in &excluded {
+        println!(
+            "  {} aida-store → {}",
+            "Note:".dimmed(),
+            policy.refusal(hub)
+        );
+    }
+    for hub in &store_hubs {
         if hub == "origin" {
             git_push_in(dir, "origin", &["push", "-u", "origin", "aida-store"])?;
         } else {
             git_push_in(dir, hub, &["push", hub.as_str(), "aida-store"])?;
         }
     }
-    println!(
-        "  {} pushed `aida-store` (the requirements store) to {}",
-        "+".green(),
-        hubs.join(", ")
-    );
+    if !store_hubs.is_empty() {
+        println!(
+            "  {} pushed `aida-store` (the requirements store) to {}",
+            "+".green(),
+            store_hubs.join(", ")
+        );
+    }
 
     // Wire the second hub as a mirror (store fan-out + code-leg hook). The
     // config change is left for init's own end-of-run refresh to settle.
@@ -539,11 +551,13 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
         )?;
     }
 
-    let disagreements = crate::gitlab_project_create::hub_disagreements(
+    let mut disagreements =
+        crate::gitlab_project_create::hub_disagreements(dir, &hubs, &[branch.as_str()]);
+    disagreements.extend(crate::gitlab_project_create::hub_disagreements(
         dir,
-        &hubs,
-        &[branch.as_str(), "aida-store"],
-    );
+        &store_hubs,
+        &["aida-store"],
+    ));
     if !disagreements.is_empty() {
         bail!(
             "the hubs do not agree after publishing:\n  {}\nRun `aida remote status` for the full picture.",
@@ -557,6 +571,40 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
         branch
     );
     Ok(Some(hubs))
+}
+
+/// Split the bootstrap's `hubs` into the ones the store leg pushes to and
+/// the ones this clone's push hubs exclude, keeping the order.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn store_leg_hubs(
+    policy: &crate::store_local::PushHubs,
+    hubs: &[String],
+) -> (Vec<String>, Vec<String>) {
+    hubs.iter().cloned().partition(|h| policy.allows(h))
+}
+
+#[cfg(test)]
+mod store_leg_tests {
+    use super::store_leg_hubs;
+    use crate::store_local::PushHubs;
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn bootstrap_store_leg_skips_hubs_the_clone_excludes() {
+        let hubs = vec!["origin".to_string(), "gitlab".to_string()];
+        let (pushed, skipped) = store_leg_hubs(&PushHubs::Only(vec!["gitlab".into()]), &hubs);
+        assert_eq!(pushed, vec!["gitlab".to_string()]);
+        assert_eq!(skipped, vec!["origin".to_string()]);
+        let (pushed, skipped) = store_leg_hubs(&PushHubs::Unrestricted, &hubs);
+        assert_eq!(pushed, hubs);
+        assert!(skipped.is_empty());
+        let (pushed, skipped) = store_leg_hubs(&PushHubs::Unreadable("bad".into()), &hubs);
+        assert!(
+            pushed.is_empty(),
+            "an unreadable layer pushes the store nowhere"
+        );
+        assert_eq!(skipped, hubs);
+    }
 }
 
 /// How the final `cd` into the new project reaches the calling shell.

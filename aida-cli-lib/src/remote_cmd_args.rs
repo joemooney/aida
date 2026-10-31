@@ -154,4 +154,41 @@ pub enum RemoteCommand {
         #[clap(long)]
         yes: bool,
     },
+
+    /// Show or set whether this clone is the hub bridge: the one clone that
+    /// reaches every hub and runs `remote reconcile --execute` on the
+    /// schedule tick (hourly by default), so a clone that pushes the store
+    /// to one hub only never leaves the hubs diverged. Machine-local
+    /// (`~/.aida/store-local.toml`), never tracked. Identity-bearing content
+    /// stops the run and routes to the advisor. Once the schedule tick is
+    /// installed, the hand-installed `# aida-store-reconcile` crontab entry is
+    /// removed.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    #[clap(group(ArgGroup::new("bridge_mode").args(["enable", "disable"])))]
+    Bridge {
+        /// Mark this clone as the hub bridge.
+        #[clap(long)]
+        enable: bool,
+
+        /// Stop running the bridge reconcile from this clone.
+        #[clap(long)]
+        disable: bool,
+    },
+
+    /// Show or set the remotes this clone may push the spec store to.
+    /// Machine-local (`~/.aida/store-local.toml`). When `origin` is not
+    /// listed, `db sync --push`, `aida push`, auto-push, `remote mirror-sync`
+    /// and `remote reconcile` never push to it; the store goes to the listed
+    /// hubs instead and a hub bridge clone carries it to the rest.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    PushHubs {
+        /// Remote names, e.g. `gitlab`. Without names (or --all), print the
+        /// current setting.
+        #[clap(conflicts_with = "all")]
+        hubs: Vec<String>,
+
+        /// Remove the restriction: every hub may receive the store again.
+        #[clap(long)]
+        all: bool,
+    },
 }
