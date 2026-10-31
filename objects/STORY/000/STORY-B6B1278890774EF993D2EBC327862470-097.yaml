@@ -10,12 +10,12 @@ description: |-
   3. A clone can declare its push hubs (work: gitlab only) so `db sync --push` / mirror-sync never attempt origin from it.
   4. hub-drift-guard stays the escalation for drift the bridge could not union.
   5. The stopgap cron line is removed by the install path.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-30T23:14:27.719672228Z
+modified_at: 2026-10-31T00:19:04.142015265Z
 req_type: Story
 comments:
 - id: 01a18f17-db07-7432-a7dc-61e462d50207
@@ -53,6 +53,20 @@ comments:
   modified_at: 2026-10-30T23:14:27.719672228Z
   session_id: 01a18f14ebc5
   harness_version: 2.1.314 (Claude Code)
+- id: 01a18f51-7a4e-7041-8ee5-7dece8ce07fa
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` ID allocation hit "Read-only file system" in this sandbox; nothing was written)
+
+    1. **kind:design-choice · severity:minor.** The new store-push gate in aida-core (`git_ops::refuse_gated_store_push`, registered in `main_entry`) refuses any aida-store push to a hub this clone's `push_hubs` exclude. The user-facing paths (db sync --push, the aida push store leg, auto-push) redirect to the declared hubs. The direct-to-origin writers in aida-core (schedule_ledger, team, alias, allocation_lineage, the registry writers in git_ops, the store_sync id-allocation push) now get a refusal on a gitlab-only clone, and their commit stays local until the next redirected push. Follow-up: redirect them too, or tie this to a per-clone upstream (STORY-HOME-095). Id allocation matters most.
+    2. **kind:followup-suggestion · severity:minor.** `push_hubs` governs pushes only. The store pull legs (db sync --pull, aida pull) still use origin. After the bridge unions the hubs, the work clone's next redirected push to gitlab is rejected until it pulls the union. Consider a pull hub (default origin, else the first push hub).
+    3. **kind:followup-suggestion · severity:cosmetic.** The separate `aida-server` binary does not register the gate (every `aida` subcommand, including `aida mcp serve`, does). Register it there if aida-server ever pushes the store.
+
+    Branch: story-b6b1278890774ef993d2ebc327862470-097 · Commit: 0da54c6fc67
+  created_at: 2026-10-31T00:17:24.046664219Z
+  modified_at: 2026-10-31T00:17:24.046664219Z
+  session_id: 01a18f14ebc5
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
   author: joe
@@ -70,6 +84,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a18f53-01af-76c2-8ef3-9fcfe62fbc03
+  author: joe
+  timestamp: 2026-10-31T00:19:04.239431516Z
+  session_id: 01a18f14ebc5
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -78,3 +101,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T00:19:04.142015265Z
+  implemented_by: joe
