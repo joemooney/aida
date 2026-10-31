@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T14:42:05.427759909Z
+modified_at: 2026-10-31T14:43:28.189822809Z
 req_type: Bug
 tags:
 - ids
@@ -332,6 +332,12 @@ comments:
   content: 'ADVISOR 06:39: the final-round lane armed a Monitor and ended its turn while the test build ran (headless-rule violation), so it was stopped and resumed. Resumed lane: run cargo in the FOREGROUND in bounded steps (<= 55s per call, re-polling), never use Monitor or run_in_background, never end a turn to wait. Finish the 06:30 ruling, commit and push.'
   created_at: 2026-10-31T13:37:00.526455140Z
   modified_at: 2026-10-31T13:37:00.526455140Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1926a-633d-7041-8481-6f5d52afa137
+  author: joe
+  content: 'ADVISOR RULING 2026-10-31 07:45: PR-3161 round 3 code is VERIFIED; all four ruled gaps and all five ACs are met. ONLY CI lib-1 is red: spec_arg::tests::every_spec_named_argument_in_the_tree_resolves_aliases (bug_015_spec_arg_tests.rs:415) flags the new `doctor --preserve` argument. Fix: add value_parser = crate::spec_arg::spec_id to --preserve (it names a spec). This is a CI-ONLY delta: change nothing else. Gate: cargo test -p aida-cli-lib --lib spec_arg plus make check-ci-fast, then push (no force). The re-review is scoped to that delta.'
+  created_at: 2026-10-31T14:43:28.189822809Z
+  modified_at: 2026-10-31T14:43:28.189822809Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
