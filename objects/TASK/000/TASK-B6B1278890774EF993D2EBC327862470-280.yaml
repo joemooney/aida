@@ -1,0 +1,32 @@
+id: 01a1940c-ad69-7bf3-a8da-4726cbde065b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-280
+title: Publish an explainer of roles, seats, grants, mandates and the deputy on the product website
+description: |
+  ## Why
+  Operator request (2026-10-31): a website explainer for AIDA's identity and permission model, the companion to the air-gapped page (TASK-HOME-277). The site touches this only in a short "Grants and mandates" section on trust.html. Nothing shows how the pieces fit together: role, seat, roster, grant, delegation and child grants, process binding and the session key, mandate, deputy, human-terminal checks, holds and operator-only specs. A draft is being built as a private claude.ai artifact by the product seat for review before this task is implemented.
+
+  ## Acceptance
+  1. New page `docs/showcase/authority.html` (name may change) in the showcase's own style, linked from trust.html's "Grants and mandates" section and library.html, indexed in search-data.js.
+  2. Covers, with diagrams: the difference between what a role shows you and what a grant lets you do; roster as a ceiling vs grant as the active seat; minting a grant at a terminal; child grants and `--delegate-seat` (empty by default, no onward delegation); binding to a process tree and the session key for sandboxed tool calls; expiry and renewal; mandates (time-boxed, human-started, scopes such as ship-held, dispatch and drive; supervised and operator-only specs); the deputy (runs jobs under the operator's grant, aida-only by default, terminal only by explicit entry); what always needs a human at a terminal.
+  3. Every claim matches docs/cli/06-roles-sessions.md and `aida mandate --help` at the published revision. Not-yet-built pieces (deputy command policy, transfer of authority) are marked as planned.
+  4. States the threat model plainly: sessions are separated, not OS users. A same-user process that forges files is out of scope (ADR-66).
+  5. End-user prose only: no internal spec IDs or seat-process jargon beyond the terms the page defines.
+  6. Deployed per docs/showcase/README.md: a gh-pages snapshot from an approved merged revision.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:20:21.225603942Z
+modified_at: 2026-10-31T22:20:21.225603942Z
+req_type: Task
+tags:
+- authority
+- docs
+- website
+filed_at:
+  code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
