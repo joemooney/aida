@@ -1,0 +1,27 @@
+id: 01a19299-0491-7f92-879f-74569f4a3e51
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-150
+title: 'minor (non-blocking): admit_numeric_identity''s agreed-id check (aida-core/src/d…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-046, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): admit_numeric_identity's agreed-id check (aida-core/src/db/git_backend.rs ~1700) reads every object file once per explicit-ID add, including per row in the batch add path; a bulk import becomes O(rows x store), and IDs staged in the same batch are not seen. Use one agreed-id index per batch.
+  Reviewed sha: 36f6cd5264e069bd5ed12bce9cb5626a6ab8b2ec
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T15:34:24.145575034Z
+modified_at: 2026-10-31T15:34:24.145575034Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-046
+- finding-hash:52ca3df3
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-046
+- kind:carried-forward
+filed_at:
+  code_sha: d12cca28a61c8f00c7d30cb4a4cafc7e3566104b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eaabde5c226
+  vendor: claude
