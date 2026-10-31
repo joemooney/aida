@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:00:23.068491024Z
-modified_at: 2026-10-31T22:27:18.578983395Z
+modified_at: 2026-10-31T23:05:13.450731606Z
 req_type: Story
 relationships:
 - rel_type:
@@ -42,6 +42,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF round 3 (15:28, mechanical; all 5 ACs verified at round 2). PR-3175 CI cli-0 is red on every head: the new ''aida mandate renew'' command has no row in docs/cli-format-json-audit.md, so the BUG-1502 exhaustive-audit integration test fails. Add the row in the same format as ''mandate start''/''mandate stop'' (its --format json support status), push. Gate: cargo test -p aida-cli --test <the bug_1502 audit test binary> ; make check-ci-fast. Nothing else.'
   created_at: 2026-10-31T22:27:18.578983395Z
   modified_at: 2026-10-31T22:27:18.578983395Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a19435-c1ea-74f0-b466-f90df3833692
+  author: joe
+  content: 'ADVISOR RULING 16:06 on PR-3175 PASS non-blocking findings (ruled once): BOTH ACCEPTED. watch.rs renewal describe untested: display-only, the renewal state it describes is tested. Stale test name story_1698 a_mandate_cannot_be_extended: cosmetic; it still asserts that start --ttl cannot extend. No follow-up specs.'
+  created_at: 2026-10-31T23:05:13.450731606Z
+  modified_at: 2026-10-31T23:05:13.450731606Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939d-a436-74e1-9fc6-4cf863956a2d
