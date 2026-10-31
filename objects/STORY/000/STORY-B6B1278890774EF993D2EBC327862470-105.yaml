@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T20:54:45.668583511Z
+modified_at: 2026-10-31T20:56:44.555693752Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -145,6 +145,18 @@ comments:
   content: 'ADVISOR BRIEF 13:10 (round 2b, mechanical): PR-3170 head 7a7b799 is red on ONE test: command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:103). Your round-2 CLI help changes moved the help surface. Regenerate the golden the way the test''s failure message says (bless env var), check that the diff covers ONLY the help text your PR intentionally changed, commit, and push to the PR branch. Gate: cargo test -p aida-cli-lib story_1728 plus make check-ci-fast. No other changes. The review is queued after this push.'
   created_at: 2026-10-31T20:08:37.422384727Z
   modified_at: 2026-10-31T20:08:37.422384727Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a193c0-210b-7661-9737-277a780686e2
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF round 3 (13:58), PR-3170 at 994b190. Round 3 authorized past the 2-round cap: both majors are main-path breakage (every task add fails after the runbook; old IDs stop resolving). All four findings are bundled (10-28 rule: no follow-up PRs).
+    1. MAJOR bound counter: retirement apply must raise each type's bound counter to the highest number it assigned (in the same locked write as the renames). Test: a fixture with MORE than 64 renamed specs of one type (e.g. 70), then 'aida add --type task' succeeds and gets the next number.
+    2. MAJOR AC3 aliases: every renamed spec records its old ID as an alias (the existing alias mechanism, not the off-store TSV), so 'aida show <old ID>', commit-trailer resolution and trace lookup all resolve to the new spec. Test: after apply, 'aida show STORY-7-001' (old) shows the renamed spec; a trailer with the old ID resolves.
+    3. MINOR: add a CLI fixture where run_add dispenses from a delegated block (dispense_with_prefix + save_dispensed), asserting the ID and the persisted block state.
+    4. MINOR ordering: apply writes the spec objects (and aliases) FIRST, then counters and blocks.yaml, so a mid-loop failure never lifts the claim gate over half-assigned specs; in run_add a failed delegated save is an ERROR (the add fails), not a warning.
+    Gate (STRICT for this story): cargo test -p aida-cli --test story_105_agreed_and_local_ids ; cargo test -p aida-core story_105 ; make check-ci-fast. Push to the PR branch; the review is queued on push.
+  created_at: 2026-10-31T20:56:44.555693752Z
+  modified_at: 2026-10-31T20:56:44.555693752Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
