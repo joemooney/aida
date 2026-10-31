@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T07:13:27.178685724Z
+modified_at: 2026-10-31T07:13:31.677264923Z
 req_type: Story
 relationships:
 - rel_type:
@@ -112,6 +112,20 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 5 acceptance criteria and all 6 round-2 items are implemented and traced, but CI (lib-0) is red at the head 894a5e3 (run 41178678713, ''Run tests'' step). It was also red at ebad1b8 (run 41174619430), while main is green, so the fixture-identity fix in 6da4df8 did not cure it.. Triage reason: help golden snapshot out of date (CI lib-0)'
   created_at: 2026-10-31T07:13:27.178682860Z
   modified_at: 2026-10-31T07:13:27.178682860Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190ce-7342-7fc1-8bcd-dab5ca34bd2f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-b6b1278890774ef993d2ebc327862470-097):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 894a5e3ce39b
+    Recorded: 2026-10-31T07:08:59.539854845+00:00
+    Findings:
+    1. BLOCKER: CI (lib-0) 'Run tests' fails at 894a5e3 (run 41178678713, job 124471419491) and failed at ebad1b8 (run 41174619430), while main CI is green (41178427262). The failure follows this branch. The round-2 fix in 6da4df8 (a local git identity on the store_local Hubs fixture) was inferred, not read from the log, and did not fix it. Read the failing test name from the job log (gh run view 41178678713 --log-failed, from a seat with blob-storage egress; this reviewer sandbox is denied it too), fix it, and confirm lib-0 is green at the new head. Suspects: the new store_local fixture tests (Hubs::new, the db_sync_push_leg retry, handle_push_command), maintenance_schedule only_a_clone_marked_bridge_gets_the_bridge_jobs / install_retires_the_stopgap_cron_only_on_the_bridge_clone (clone_key on a non-git tempdir), and remote_create story_097_*.
+    2. cosmetic: an unreadable ~/.aida/store-local.toml shows as 'push hubs name no remote configured here' in db_sync_push_leg (db_cmd.rs) and as 'no push hub is configured here' in auto_push_store_best_effort (store_push_pull.rs). These paths drop the TOML parse error, so the operator is not told the layer is malformed (the gate's Refuse path does carry it). The failure is still fail-closed and correct; only the message misleads.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-31T07:13:31.458997710Z
+  modified_at: 2026-10-31T07:13:31.458997710Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
