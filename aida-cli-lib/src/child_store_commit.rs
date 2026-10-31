@@ -279,7 +279,8 @@ impl StatusEntry {
 
 /// New spec objects in `store` that no commit holds yet (untracked or only
 /// staged-added under `objects/`) and that were written at least `min_age`
-/// ago: specs a contained session filed and queued for the host to commit.
+/// ago, waiting for a host commit: a contained session's queued specs, or a
+/// host add whose auto-commit failed or was off.
 /// Returns `(spec_id, age)` sorted by spec ID; an unreadable status is empty.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
 pub(crate) fn queued_spec_objects(

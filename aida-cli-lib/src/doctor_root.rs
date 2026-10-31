@@ -3,8 +3,8 @@
 
 use crate::*;
 
-/// How long a spec a contained session filed may wait for the host to commit
-/// it before `aida doctor` reports it (`store-queued-specs`).
+/// How long an uncommitted new spec (one a contained session filed, or a host
+/// add whose commit did not run) may wait for a host commit before `aida doctor` reports it (`store-queued-specs`).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
 pub(crate) const QUEUED_SPEC_MAX_AGE_MINUTES: u64 = 30;
 
@@ -844,9 +844,10 @@ pub(crate) fn collect_doctor_findings_at(
             safe_heal: false,
         });
     }
-    // A spec a contained session filed waits in the store worktree for the
-    // host to commit it. One still waiting after QUEUED_SPEC_MAX_AGE means no
-    // host commit has run since: name the specs and the drain.
+    // A new spec object nobody has committed waits in the store worktree for
+    // a host commit: one a contained session filed, or a host add whose
+    // auto-commit failed or was off. Still waiting after QUEUED_SPEC_MAX_AGE
+    // means no host commit has run since: name the specs and the drain.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
     let queued = crate::child_store_commit::queued_spec_objects(
         &store_worktree,
@@ -863,7 +864,7 @@ pub(crate) fn collect_doctor_findings_at(
             category: "store-worktree".to_string(),
             id: "store-queued-specs".to_string(),
             summary: format!(
-                "{} spec{} filed by a contained session still waiting for the host to commit (oldest {oldest} min, over {QUEUED_SPEC_MAX_AGE_MINUTES} min): {}",
+                "{} uncommitted new spec{} waiting for a host commit (oldest {oldest} min, over {QUEUED_SPEC_MAX_AGE_MINUTES} min): {}",
                 queued.len(),
                 if queued.len() == 1 { " is" } else { "s are" },
                 ids.join(", ")

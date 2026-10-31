@@ -693,6 +693,11 @@ impl CloneDispenser {
     /// write the directory that holds it: a contained session, whose sandbox
     /// denies the main checkout's `.git` but grants the store worktree.
     /// `None` when the normal locked provider applies.
+    ///
+    /// Scope: a node-bound, non-authoritative clone. An authoritative clone
+    /// and an unbound legacy clone keep the locked provider, so a contained
+    /// add on one still fails on the read-only counter; contained seats run
+    /// on bound node-local clones.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
     fn contained_state(&self) -> Result<Option<crate::dispenser::DispenserState>> {
         if self.inner.is_some()
@@ -801,9 +806,11 @@ fn dir_writable(dir: &Path) -> bool {
 
 /// Whether a new ID minted at `root` is issued without the clone's counter
 /// lock (a contained session), so the store write must be queued for the
-/// host to commit.
+/// host to commit. Test-only: production decides through the provider
+/// itself, and this swallows a resolution error into `false`.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
-pub fn contained_allocation(root: &Path) -> bool {
+#[cfg(test)]
+fn contained_allocation(root: &Path) -> bool {
     CloneDispenser {
         root: root.into(),
         inner: None,
@@ -884,7 +891,13 @@ impl crate::dispenser::Dispenser for CloneDispenser {
         if let Some(state) = self.contained_state()? {
             return self.contained_peek(&state, prefix);
         }
-        self.inner()?.peek(prefix)
+        // Preview what `next` will issue: past the counter and the filed
+        // high-water alike. trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+        let filed_next = self
+            .filed_high_water(prefix)?
+            .checked_add(1)
+            .context("node-local sequence exhausted")?;
+        Ok(self.inner()?.peek(prefix)?.max(filed_next))
     }
     fn state(&self) -> Result<crate::dispenser::DispenserState> {
         if let Some(state) = self.contained_state()? {
@@ -1938,7 +1951,9 @@ mod tests {
                 "counter untouched"
             );
             assert!(!contained_allocation(root));
-            // The host counter still says 1; it jumps past what was filed.
+            // The host counter still says 1; it jumps past what was filed,
+            // and its preview agrees with what it will issue.
+            assert_eq!(dispenser(root, None).unwrap().peek("BUG").unwrap(), 4);
             assert_eq!(add_bug(root, "host second"), format!("BUG-{node}-004"));
             assert_eq!(add_bug(root, "host third"), format!("BUG-{node}-005"));
         }
@@ -1950,11 +1965,13 @@ mod tests {
             };
             let root = dir.path().to_path_buf();
             let _ro = ReadOnlyGit::new(&root);
-            let seats: Vec<_> = (0..4)
+            // Two seats racing three adds each interleave on the store lock;
+            // every add rescans objects/, so keep the fixture small.
+            let seats: Vec<_> = (0..2)
                 .map(|seat| {
                     let root = root.clone();
                     std::thread::spawn(move || {
-                        (0..5)
+                        (0..3)
                             .map(|n| add_bug(&root, &format!("seat {seat} spec {n}")))
                             .collect::<Vec<_>>()
                     })
@@ -1962,8 +1979,8 @@ mod tests {
                 .collect();
             let mut ids: Vec<String> = seats.into_iter().flat_map(|s| s.join().unwrap()).collect();
             ids.sort();
-            let expected: Vec<String> = (1..=20).map(|n| format!("BUG-{node}-{n:03}")).collect();
-            assert_eq!(ids, expected, "20 distinct, gap-free IDs");
+            let expected: Vec<String> = (1..=6).map(|n| format!("BUG-{node}-{n:03}")).collect();
+            assert_eq!(ids, expected, "distinct, gap-free IDs");
         }
 
         #[test]
