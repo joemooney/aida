@@ -2,12 +2,12 @@ id: 01a18e1f-ba3a-7cb2-9b4e-3fc950e21f05
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-130
 title: Publish the product website on GitHub Pages
 description: Operator explicitly requested immediate public GitHub Pages publication on 2026-10-30. Publish only the reviewed merged-main static showcase and its assets, route source/reference links to the public GitHub repository, enable Pages, and verify a live URL. Keep the owner-private Sites preview unchanged. Deployment is separate from the final TASK-HOME-128 author PR and does not merge unreviewed source.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T18:43:26.394246896Z
-modified_at: 2026-10-30T20:22:29.950346479Z
+modified_at: 2026-10-31T00:25:45.926272217Z
 req_type: Task
 tags:
 - docs
@@ -28,6 +28,15 @@ comments:
   content: 'Final live verification: Pages API reports built at gh-pages 11d2cd8c103dbf0882de66ad7b7172b70ae2b683. All 27 deployed static files return HTTP 200/nonempty bodies, including capabilities.html, integrations.html and all four new SVGs. Workflow41121895686 build/report jobs passed; deployment job record was still waiting when inspected, so no claim that the whole Actions run had concluded. Stopped only the local read-only watch; no GitHub job canceled. No source edits or hold/review changes in this continuation. Earlier code PRs3122/3130 still need advisor review; refreshed handoff queued as03f2b210-7280-48d0-bdc0-b610ebb95c78.'
   created_at: 2026-10-30T20:22:29.950346479Z
   modified_at: 2026-10-30T20:22:29.950346479Z
+history:
+- id: 01a18f59-22c6-7801-9f28-42cfb45a8939
+  author: joe
+  timestamp: 2026-10-31T00:25:45.926269347Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: codex/task-home-128-docs-completion
