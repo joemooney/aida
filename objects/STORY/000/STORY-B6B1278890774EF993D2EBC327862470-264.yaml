@@ -1,0 +1,34 @@
+id: 01a19451-747b-7fd2-abc3-c436f3b97361
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-264
+agreed_id: STORY-2228
+title: 'Review PR-3181: [AI:claude] fix(registry): a live seat with no registry row re-registers on its next prompt; "no registered advisor", never "no live advisor" (BUG-B6B1278890774EF993D2EBC327862470-151)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19415`) for branch `bug-b6b1278890774ef993d2ebc327862470-151`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3181>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-151` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-151
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3181` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T23:35:28.635175417Z
+modified_at: 2026-10-31T23:35:28.635175417Z
+req_type: Story
+filed_at:
+  code_sha: 4f33bdec3db7b660a60445af3c879486b5c33977
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 44c7b666325
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
