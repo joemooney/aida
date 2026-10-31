@@ -1538,6 +1538,27 @@ where
 /// clears the due flag, and mirrors the clock locally.
 // trace:STORY-1226 | ai:claude
 pub(crate) fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
+    let seat =
+        crate::queue_role_fallback::session_role_env().map(|s| crate::canonical_role_name(&s));
+    done_as(
+        project_root,
+        job,
+        note,
+        seat.as_deref(),
+        crate::autopilot::current_headless(),
+    )
+}
+
+/// [`done`] with the caller's seat and headless flag explicit. An operator
+/// escalation may only be cleared from a session a human reads.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+fn done_as(
+    project_root: &Path,
+    job: &str,
+    note: Option<&str>,
+    seat: Option<&str>,
+    headless: bool,
+) -> Result<()> {
     let config = load_registry(project_root)?;
     let store = store_root(project_root);
     let task = config
@@ -1545,8 +1566,16 @@ pub(crate) fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result
         .and_then(|c| c.tasks.iter().find(|t| t.name == job))
         .cloned()
         .or_else(|| builtin_routed_seat_task(&store, job));
-    if task.is_none() {
+    let Some(found) = task.as_ref() else {
         anyhow::bail!("no scheduled job named '{job}' (see `aida schedule list`)");
+    };
+    if crate::mail_backlog::is_operator_job(&found.seats)
+        && !crate::mail_backlog::operator_escalation_visible(seat, headless)
+    {
+        anyhow::bail!(
+            "'{job}' is an operator escalation for the human at the terminal; \
+             only the operator terminal or an interactive advisor session can mark it done"
+        );
     }
     let now = Utc::now();
     let by = reporter(task.as_ref());
@@ -2011,11 +2040,21 @@ pub(crate) fn due_seat_jobs(project_root: &Path, seat: Option<&str>) -> Vec<DueJ
 }
 
 /// The due seat jobs `aida awaiting` surfaces: `seat`'s own, plus the
-/// operator escalations (seat `operator`) whatever role the session holds —
-/// they are for the human at the terminal, not for one seat.
+/// operator escalations (seat `operator`) — but only in sessions a human
+/// reads (the operator terminal, interactive advisor). Headless lanes and
+/// doer seats never see them, so they can never become `cron.next` there.
 // trace:TASK-B6B1278890774EF993D2EBC327862470-135 | ai:claude
-pub(crate) fn awaiting_seat_jobs(project_root: &Path, seat: Option<&str>) -> Vec<DueJob> {
+// trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+pub(crate) fn awaiting_seat_jobs(
+    project_root: &Path,
+    seat: Option<&str>,
+    headless: bool,
+) -> Vec<DueJob> {
     let mut due = due_seat_jobs(project_root, seat);
+    if !crate::mail_backlog::operator_escalation_visible(seat, headless) {
+        due.retain(|j| !crate::mail_backlog::is_operator_job(&j.seats));
+        return due;
+    }
     if seat.is_some_and(|s| s != crate::mail_backlog::OPERATOR_SEAT) {
         for job in due_seat_jobs(project_root, Some(crate::mail_backlog::OPERATOR_SEAT)) {
             if !due.iter().any(|d| d.name == job.name) {
@@ -7294,51 +7333,86 @@ enabled = true
             .is_none());
     }
 
-    // Operator escalations reach `aida awaiting` whether or not the session
-    // holds a role; other seats' jobs stay scoped away.
+    // Operator escalations reach `aida awaiting` only in sessions a human
+    // reads — the operator terminal and interactive advisor — never in a
+    // headless lane or a doer seat; other seats' jobs stay scoped away.
     // trace:TASK-B6B1278890774EF993D2EBC327862470-135 | ai:claude
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
     #[test]
-    fn operator_escalations_reach_awaiting_under_any_session_role() {
+    fn operator_escalations_reach_awaiting_only_where_a_human_reads() {
         let tmp = tempfile::tempdir().unwrap();
         let store = store_root(tmp.path());
-        for job in [
-            "mail-backlog-guard-route-operator",
-            "mail-backlog-guard-route-advisor",
-        ] {
+        let op = "mail-backlog-guard-route-operator";
+        let adv = "mail-backlog-guard-route-advisor";
+        for job in [op, adv] {
             schedule_ledger::write_cas(&store, job, |l| l.due_since = Some(Utc::now())).unwrap();
         }
-        let names = |seat: Option<&str>| {
-            let mut names: Vec<String> = awaiting_seat_jobs(tmp.path(), seat)
+        let names = |seat: Option<&str>, headless: bool| {
+            let mut names: Vec<String> = awaiting_seat_jobs(tmp.path(), seat, headless)
                 .into_iter()
                 .map(|j| j.name)
                 .collect();
             names.sort();
             names
         };
-        assert_eq!(
-            names(None),
-            [
-                "mail-backlog-guard-route-advisor",
-                "mail-backlog-guard-route-operator"
-            ]
-        );
-        assert_eq!(
-            names(Some("implementer")),
-            ["mail-backlog-guard-route-operator"]
-        );
-        assert_eq!(
-            names(Some("operator")),
-            ["mail-backlog-guard-route-operator"]
-        );
-        assert_eq!(
-            names(Some("advisor")),
-            [
-                "mail-backlog-guard-route-advisor",
-                "mail-backlog-guard-route-operator"
-            ]
-        );
+        // The operator terminal (no seat, or seat `operator`) sees it.
+        assert_eq!(names(None, false), [adv, op]);
+        assert_eq!(names(Some("operator"), false), [op]);
+        // An interactive advisor sees it alongside its own.
+        assert_eq!(names(Some("advisor"), false), [adv, op]);
+        // Doer seats never see it, attended or not.
+        assert!(names(Some("implementer"), false).is_empty());
+        assert!(names(Some("implementer"), true).is_empty());
+        assert!(names(Some("reviewer"), false).is_empty());
+        // Headless lanes never see it, whatever the seat.
+        assert_eq!(names(Some("advisor"), true), [adv]);
+        assert_eq!(names(None, true), [adv]);
+        assert!(names(Some("operator"), true).is_empty());
         // The seat-scoped delivery read itself is unchanged.
         assert!(due_seat_jobs(tmp.path(), Some("implementer")).is_empty());
+    }
+
+    // A doer seat (or any headless lane) cannot clear the operator
+    // escalation; the operator terminal and an interactive advisor can.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+    #[test]
+    fn schedule_done_refuses_operator_escalation_outside_human_sessions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let op = "mail-backlog-guard-route-operator";
+        let raise = || {
+            schedule_ledger::write_cas(&store, op, |l| l.due_since = Some(Utc::now())).unwrap();
+        };
+        raise();
+        for (seat, headless) in [
+            (Some("implementer"), true),
+            (Some("implementer"), false),
+            (Some("reviewer"), false),
+            (Some("advisor"), true),
+            (None, true),
+        ] {
+            let err = done_as(tmp.path(), op, None, seat, headless).unwrap_err();
+            assert!(err.to_string().contains("operator escalation"), "{err}");
+            assert!(
+                schedule_ledger::load(&store, op)
+                    .unwrap()
+                    .due_since
+                    .is_some(),
+                "{seat:?}/{headless} cleared the escalation"
+            );
+        }
+        for (seat, headless) in [
+            (None, false),
+            (Some("operator"), false),
+            (Some("advisor"), false),
+        ] {
+            raise();
+            done_as(tmp.path(), op, None, seat, headless).unwrap();
+            assert!(schedule_ledger::load(&store, op)
+                .unwrap()
+                .due_since
+                .is_none());
+        }
     }
 }
 
