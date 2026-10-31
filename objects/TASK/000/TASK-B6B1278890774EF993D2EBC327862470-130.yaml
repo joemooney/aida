@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T18:43:26.394246896Z
-modified_at: 2026-10-31T10:53:49.443239411Z
+modified_at: 2026-10-31T10:55:06.383067150Z
 req_type: Task
 tags:
 - docs
@@ -35,6 +35,13 @@ comments:
   modified_at: 2026-10-31T10:53:36.452399895Z
   session_id: 01a191973f63
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19199-508f-7ec2-a02a-47bad5798d6e
+  author: joe
+  content: |
+    ADVISOR 2026-10-31 04:00: DONE. The site is live at https://joemooney.github.io/aida/ (HTTP 200, title "AIDA — Intent in. Evidence out."). GitHub Pages status is built, from source branch gh-pages; deploy run 41121895686 succeeded (build, report-build-status and deploy). The advisor verified the URL from the host because the lane sandbox blocks the domain. Lane note ACCEPTED for now: the site is a hand-pushed gh-pages snapshot and does not rebuild from main. Republishing is a manual step until the operator asks for an automated docs/showcase -> Pages workflow.
+  created_at: 2026-10-31T10:55:06.383067150Z
+  modified_at: 2026-10-31T10:55:06.383067150Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18f59-22c6-7801-9f28-42cfb45a8939
   author: joe
