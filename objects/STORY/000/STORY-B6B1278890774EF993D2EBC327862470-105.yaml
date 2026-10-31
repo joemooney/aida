@@ -26,12 +26,12 @@ description: |
   - Resolution chain: BUG-ggg (agreed) and BUG-1-mmm (alias) both resolve to the spec whose local id is BUG-B6B...-nnn. trace: comments, commit trailers and blocked-by edges that name BUG-1-mmm keep working through the alias. Rewrite edges in the store to the new id; do not rewrite git history.
   - Node 1 is retired after the migration and never allocates again.
   - SKETCH QUESTION for the lane (advisor rules on the sketch): do the 5746 flat pre-node specs (agreed id only, no local id) also get b6b local ids under the "every spec has a local id" rule? Lay out the cost and benefit; the advisor's default is yes, done in the same one-time pass if the alias mechanism is identical.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T16:28:24.653607688Z
+modified_at: 2026-10-31T16:28:28.424146309Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -94,6 +94,12 @@ comments:
   created_at: 2026-10-31T16:28:24.653607688Z
   modified_at: 2026-10-31T16:28:24.653607688Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a192ca-8588-7a11-9fe5-dcc7103bcb4d
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: The spec requires a sketch and advisor signoff before code (architecture-adjacent). The sketch is posted as a comment, and it leaves three forks open: Q1, after the backfill does a bare STORY-NNN resolve agreed-first (AC4), which reverses BUG-HOME-036''s local-twin preference for every backfilled spec? Q2, the advisor''s open question: should the 5746 flat specs also get b6b local ids? Q3, should the implementer enroll the live home primary as root and run the backfill on the live store, or ship tooling plus a dry-run report for the operator?. No triage reason was given.'
+  created_at: 2026-10-31T16:28:28.424142048Z
+  modified_at: 2026-10-31T16:28:28.424142048Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
@@ -132,6 +138,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a192ca-8588-7a11-9fe5-dcbd005d89a9
+  author: joe
+  timestamp: 2026-10-31T16:28:28.424119265Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -140,9 +154,3 @@ filed_at:
   aida_build_sha: f0dfbd03d09
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
-attention_reason:
-  category: design-fork
-  detail: 'The spec requires a sketch and advisor signoff before code (architecture-adjacent). The sketch is posted as a comment, and it leaves three forks open: Q1, after the backfill does a bare STORY-NNN resolve agreed-first (AC4), which reverses BUG-HOME-036''s local-twin preference for every backfilled spec? Q2, the advisor''s open question: should the 5746 flat specs also get b6b local ids? Q3, should the implementer enroll the live home primary as root and run the backfill on the live store, or ship tooling plus a dry-run report for the operator?'
-  lean: Q1 agreed-first with a one-line 'did you mean' hint when a local twin exists; Q2 no (a flat agreed id is already canonical, so render it alone); Q3 ship the tooling and a dry-run mapping, and the operator runs enroll-root plus the backfill apply
-  raised_by: implementer
-  raised_at: 2026-10-31T16:27:46.713725587Z
