@@ -8436,8 +8436,8 @@ Commands:
                hub and runs `remote reconcile --execute` on the schedule tick (hourly by default),
                so a clone that pushes the store to one hub only never leaves the hubs diverged.
                Machine-local (`~/.aida/store-local.toml`), never tracked. Identity-bearing content
-               stops the run and routes to the advisor. Enabling removes the hand-installed `#
-               aida-store-reconcile` crontab entry
+               stops the run and routes to the advisor. Once the schedule tick is installed, the
+               hand-installed `# aida-store-reconcile` crontab entry is removed
   push-hubs    Show or set the remotes this clone may push the spec store to. Machine-local
                (`~/.aida/store-local.toml`). When `origin` is not listed, `db sync --push`, `aida
                push`, auto-push, `remote mirror-sync` and `remote reconcile` never push to it; the
@@ -8733,8 +8733,8 @@ Options:
 Show or set whether this clone is the hub bridge: the one clone that reaches every hub and runs
 `remote reconcile --execute` on the schedule tick (hourly by default), so a clone that pushes the
 store to one hub only never leaves the hubs diverged. Machine-local (`~/.aida/store-local.toml`),
-never tracked. Identity-bearing content stops the run and routes to the advisor. Enabling removes
-the hand-installed `# aida-store-reconcile` crontab entry
+never tracked. Identity-bearing content stops the run and routes to the advisor. Once the schedule
+tick is installed, the hand-installed `# aida-store-reconcile` crontab entry is removed
 
 Usage: aida remote bridge [OPTIONS]
 
@@ -37331,7 +37331,7 @@ Working on aida itself
       "remote",
       "bridge"
     ],
-    "about": "Show or set whether this clone is the hub bridge: the one clone that reaches every hub and runs `remote reconcile --execute` on the schedule tick (hourly by default), so a clone that pushes the store to one hub only never leaves the hubs diverged. Machine-local (`~/.aida/store-local.toml`), never tracked. Identity-bearing content stops the run and routes to the advisor. Enabling removes the hand-installed `# aida-store-reconcile` crontab entry",
+    "about": "Show or set whether this clone is the hub bridge: the one clone that reaches every hub and runs `remote reconcile --execute` on the schedule tick (hourly by default), so a clone that pushes the store to one hub only never leaves the hubs diverged. Machine-local (`~/.aida/store-local.toml`), never tracked. Identity-bearing content stops the run and routes to the advisor. Once the schedule tick is installed, the hand-installed `# aida-store-reconcile` crontab entry is removed",
     "flags": [
       {
         "name": "canonical-ids",
