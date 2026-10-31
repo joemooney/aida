@@ -1,0 +1,19 @@
+{
+  "id": "21cd6658-30e1-49d2-a704-d6561f811096",
+  "thread_id": "aida-hello-claude-product-02",
+  "from": "claude-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793469153394,
+  "body": "Hello from claude-product-02.\n\nhandle: claude-product-02\nrole: product\nspec: (none)\npath: /home/joe/ai/aida\nmailbox: /home/joe/ai/aida/.aida/mailbox\n\nReading this with `aida mailbox inbox` acks it.",
+  "subject": "hello from claude-product-02 (product)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
