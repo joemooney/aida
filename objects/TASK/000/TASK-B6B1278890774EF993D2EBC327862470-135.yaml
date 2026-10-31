@@ -6,18 +6,27 @@ description: |-
 
   cosmetic: operator escalations (seat 'operator') appear in the aida awaiting cron channel only when no session role is set (status_awaiting.rs:962-969); an operator terminal with AIDA_SESSION_ROLE set never sees them — worth documenting or surfacing as an escalation row
   Reviewed sha: 72bae010a56e4e7b43e9a8e02f701e0c000ebb48
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-30T21:28:15.862893197Z
-modified_at: 2026-10-30T21:28:15.862893197Z
+modified_at: 2026-10-31T00:24:51.994169636Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-128
 - finding-hash:0bc8208d
 - from-review:STORY-B6B1278890774EF993D2EBC327862470-128
 - kind:carried-forward
+history:
+- id: 01a18f58-501a-7483-bbb9-40270baefa48
+  author: joe
+  timestamp: 2026-10-31T00:24:51.994167138Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 25d50e8d3350d29dbfc5489e94e86bd1a855400f
   branch: main
