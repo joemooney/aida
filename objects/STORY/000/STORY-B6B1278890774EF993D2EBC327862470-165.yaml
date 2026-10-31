@@ -1,0 +1,29 @@
+id: 01a1936d-5e47-74e2-95dd-d057a2653444
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-165
+title: 'Single-hub mode: agreed IDs need no enrolled root unless the store has more than one writable hub'
+description: |
+  Single-hub mode: short agreed IDs need no root on a store with ONE hub; require an enrolled root only when the store has more than one writable hub. (Proposed by the product seat and the operator, 2026-10-31.)
+  Rationale: most projects have one git server, and push compare-and-swap on its aida-store ref already orders block claims. The root exists for stores spread over hubs that cannot see each other (mainly air-gapped networks).
+  Proposal: single-hub mode by default, with the hub's aida-store ref as the authority (an implicit root pool) and no enrollment. Declaring a second NON-MIRROR hub requires a root, and enroll-root adopts the implicit pool without renumbering. Supersedes part of STORY-095 AC1/AC3. Keeps BUG-2017's intent: a claim never pushed to the hub is not spendable.
+  Acceptance (refined at the sketch):
+  1. A fresh single-hub store mints agreed IDs with no enroll-root; concurrent claims on the hub are ordered by ref CAS (a test with two clones racing).
+  2. Adding a second writable hub, i.e. a remote that receives independent writes, refuses agreed minting until a root is enrolled. A remote that only ever receives copies counts as a mirror.
+  3. enroll-root on a single-hub store adopts the implicit pool and existing blocks with no renumbering (tested).
+  4. doctor reports the mode (single-hub / rooted) and why.
+  NEEDS an architecture sketch and advisor signoff before code.
+  Advisor note on THIS repo (2026-10-31 12:30): GitLab is configured as a mirror_remote, but the WORK clone pushes only to GitLab and a cron reconcile bridges it hourly, so both hubs accept independent writes = TWO hubs. This repo keeps an enrolled root (the STORY-105 runbook's enroll-root stands).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T19:26:20.743397763Z
+modified_at: 2026-10-31T19:26:20.743397763Z
+req_type: Story
+filed_at:
+  code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
