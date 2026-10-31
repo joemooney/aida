@@ -8,12 +8,12 @@ description: |
   1. The contained headless claude settings deny the Monitor tool, and the launcher disables background Bash for headless lanes (deny run_in_background, or the Claude Code setting or env that disables background tasks, whichever the installed CLI honours). Probe and pick one, and pin it with a test on the generated settings/argv.
   2. Safety net: when the headless wrapper sees a `result` event but the session's process group still has live children (or the result text says it is waiting), it resumes the same session once with a fixed continuation prompt ("Your background work has finished or must be run in the foreground now; continue and finish the task."), with a cap of N continuations. Tested with a fake claude that ends its turn while a child runs.
   3. A lane that still ends with uncommitted work in its seat reports `implementer: no-pr reason=uncommitted-work` (not pr-opened with the old head), so the advisor can tell a stall from a finished push.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T19:09:43.404346314Z
+modified_at: 2026-10-31T21:03:51.061377110Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -173,6 +173,20 @@ history:
   session_id: 01a1932fbac3
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a193c6-a30f-7a72-96b9-a79b33e82837
+  author: aida-auto-bump
+  timestamp: 2026-10-31T21:03:51.055570428Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a193c6-a315-7663-af9d-4595461b9287
+  timestamp: 2026-10-31T21:03:51.061372969Z
+  agent: aida
+  commit_sha: 86f67caeb0c9cad0f7c952df302bf0deca11f39a
+  summary: 'Base-only update from main (gh update-branch d14f90cf24d6ae3f88975b4c8903bd03888d7853 -> 19934edc38dec932d4b62bd2fb548d8c60a27d54); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -185,11 +199,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T14:27:27.628169847Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 3 ACs met and traced, and all round-2 items are addressed (lib-0, contracts, AI client posture plus ratchet, banner, drain_resume_lane test, child env), but CI (rest) is red at f6f8c037: the new env line breaks the TASK-1169 ceiling guardrail at session.rs:1653'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-050 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T18:29:26.494169984Z
+  completed_at: 2026-10-31T21:03:51.055565312Z
+  completion_sha: 86f67caeb0c9cad0f7c952df302bf0deca11f39a
