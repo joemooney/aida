@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T17:51:14.649023347Z
+modified_at: 2026-10-31T17:52:26.329853190Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -119,6 +119,20 @@ comments:
   modified_at: 2026-10-31T17:31:10.306419454Z
   session_id: 01a192d33b4e
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19317-64d9-7932-91b0-e9daa827c22b
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 10:55: PR-3170 round 1 is CHANGES REQUESTED. Rework ONE round, with all six items in one push (2026-10-28 rule).
+    1. Post-merge order: the tooling must make the safe order the only order. `aida doctor --fix backfill-agreed` (or the enroll-root path) claims the root's per-type blocks for its own node AFTER the backfill, starting above the highest agreed or backfilled number per type, and refuses to claim before the backfill has run. Put the exact runbook (dry run -> apply -> block claim -> verify that `aida add` mints an agreed ID, not pending) in the PR body. Test: a claim before the backfill is refused; after the backfill, the first block starts above max.
+    2. AC2: a test that merge-gate promotion gives a pending spec its agreed ID.
+    3. Agent-mode (TOON) `aida list` shows the local ID beside the agreed one, with a test.
+    4. doctor_backfill_agreed.rs: a BlockRegistry::load parse error must REFUSE (fail closed), never unwrap_or_default, and never overwrite the ledger. Test with a corrupt blocks.yaml.
+    5. The node-1 retirement I ruled on earlier: BUNDLE it into the same backfill tool. The 412 node-1 specs get new b6b local IDs (keeping their agreed IDs), node 1 is marked retired, and the dry run lists both mappings. The advisor applies it post-merge together with the backfill. No follow-up spec.
+    6. run_add: resolve the delegated block's index inside the lock, on the reloaded copy.
+    Gate: LIGHT plus the CLI fixture for resolution order; make check-ci-compile if >10 files. No force push. Wait for CI to be green before pushing again.
+  created_at: 2026-10-31T17:52:26.329853190Z
+  modified_at: 2026-10-31T17:52:26.329853190Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
