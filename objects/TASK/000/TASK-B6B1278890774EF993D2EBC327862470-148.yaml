@@ -6,18 +6,27 @@ description: |-
 
   cosmetic (non-blocking): AC ac41a887 has no traced test (verified live: aida criteria BUG-HOME-045 -> Untested criteria: none); ledger/tests.rs:765 and bug_1934_keyring_tests.rs:303 trace TASK-144 without a criterion id (listed as unanchored).
   Reviewed sha: da58a6c13b2ff677086b7a0409d83ed9736aca12
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T13:06:42.401385917Z
-modified_at: 2026-10-31T13:06:42.401385917Z
+modified_at: 2026-10-31T15:39:01.590302508Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-144
 - finding-hash:614e6de3
 - from-review:TASK-B6B1278890774EF993D2EBC327862470-144
 - kind:carried-forward
+history:
+- id: 01a1929d-4056-7141-a122-6a372a16b873
+  author: joe
+  timestamp: 2026-10-31T15:39:01.590299517Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
