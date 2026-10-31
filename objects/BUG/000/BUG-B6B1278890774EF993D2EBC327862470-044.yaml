@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T05:57:34.754476607Z
+modified_at: 2026-10-31T05:57:37.422135415Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -50,6 +50,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and acceptance are met (auto-resume on live build work or a waiting-shaped result, capped at 3, no-pr uncommitted=<n>, mock-vendor tests that pass locally), but PR CI is red: lib-0 and lib-1 ''Run tests'' failed at the head while main is green at the parent. Fix CI, and address the background-work detection gaps.. No triage reason was given.'
   created_at: 2026-10-31T05:57:34.754475260Z
   modified_at: 2026-10-31T05:57:34.754475260Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19088-f57d-7a33-be1d-a4f6bc2d88a8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-044):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 04595862982a
+    Recorded: 2026-10-31T05:55:21.131406332+00:00
+    Findings:
+    1. BLOCKER: PR CI is red at 04595862. CI (lib-0) and CI (lib-1) fail in 'Run tests' (run 41171446248, jobs 124450073396 and 124450073533), so 'Require every CI lane' fails too. main is green at the parent f4aac44, and other PRs in the same window are green, so this branch causes it. The reviewer could not fetch the nextest log from its sandbox (blob storage denied). Read the failure output with 'gh run view 41171446248 --log-failed' and fix it. All 14 new/changed BUG-044 tests pass locally, the 3 end-to-end mock-vendor tests included (run as isolated children), so the failure is probably an interaction under nextest or a suite-wide gate test, not these tests' logic.
+    2. headless_background.rs:66-79 BUILD_COMMS includes 'sccache', and is_build_work also accepts any argv[0] containing '/target/'. A session's first cargo can start the sccache server daemon. The daemon inherits AIDA_STANDALONE_IMPLEMENTER=<lease> and outlives the build (default idle timeout 600s; never exits with SCCACHE_IDLE_TIMEOUT=0). live_background_work then keeps reporting work. The linger hold keeps the reaper off, and wait_for_background_work blocks until the daemon idles out or the 45m ceiling passes, on every resume. A long-lived server binary run from a target/ dir has the same problem. Fix: drop sccache, or exclude daemons (e.g. sccache with ppid 1 / --start-server), and add a test with a marked long-lived non-build daemon.
+    3. standalone_implementer.rs hold closure + headless_linger.rs:200-215: if the hold expires at the ceiling while the build still runs, terminate_tree kills the vendor's tree, which includes a background cargo that is its descendant. live_background_work is then empty and held=true, so resume_reason gives HeldForWork. The session is resumed with RESUME_PROMPT, which says 'Your background run has finished (the launcher waited for it)', but the run was actually killed. Either don't resume after a ceiling-expired hold, or use a resume message that says the run was stopped. No test covers either ceiling path (hold expiry, or wait_for_background_work returning false -> 'not resuming').
+    4. standalone_implementer.rs resume loop: while the launcher sits in wait_for_background_work (up to 45m), the slot's recorded log still ends in a final result. The concurrency cap's 'child logged its final result' rule (cap_ignores_a_launcher_whose_child_logged_its_final_result) therefore counts this lane as finished. New launches can take its slot, and this lane then resumes on top of them, going over the cap of 3. Keep the slot counted as live while a resume is pending (e.g. record the resume log path before waiting, or add a waiting marker).
+    5. headless_background.rs:42-56 WAITING_PHRASES ('waiting for', 'waiting on', 'still running') match final messages that have nothing to do with a background run, e.g. 'Stopping: waiting for the advisor to decide X' or 'the dev server is still running'. Such a run is resumed 3 times with a prompt claiming a background run finished. Tighten the phrases to background/build/test context (e.g. require 'build', 'test', 'background' or 'cargo' nearby), and add negative cases for these to the_reported_parking_results_read_as_waiting_and_a_finish_does_not.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-31T05:57:37.277911518Z
+  modified_at: 2026-10-31T05:57:37.277911518Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18e5a-f640-76a3-951a-92b3c103b557
