@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T07:01:36.728043794Z
+modified_at: 2026-10-31T07:04:14.289928052Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -102,6 +102,13 @@ comments:
   created_at: 2026-10-31T07:00:54.631551161Z
   modified_at: 2026-10-31T07:00:54.631551161Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190c5-f2d1-7121-88c9-541e426e1f1d
+  author: joe
+  content: 'Round 3 deferral (PR-3155): the binding advisor ruling (2026-10-31, FINAL, two-round cap) limits this round to the two CI failures (''Nothing else changes in this round''). Deferred to follow-up, not fixed here: (2, minor) cap race window: the slot gets waiting=true only once the reaper hold engages, so acquire_slot_with can hand the slot to a new launch first; mark waiting as soon as live marked build work is seen while the child runs. (3, minor) a SaidWaiting resume with no live build work observed still sends RESUME_PROMPT (''the launcher waited for it''); use a neutral prompt and assert it in a_run_that_keeps_parking_is_resumed_a_bounded_number_of_times. (4, cosmetic) the total wait can reach about 2x the background-wait ceiling (ReapHold ceiling, then a fresh settle ceiling); share one deadline or document the bound in docs/cli/03-work-autonomy.md.'
+  created_at: 2026-10-31T07:04:14.289928052Z
+  modified_at: 2026-10-31T07:04:14.289928052Z
+  session_id: 01a190c38792
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18e5a-f640-76a3-951a-92b3c103b557
   author: joe
