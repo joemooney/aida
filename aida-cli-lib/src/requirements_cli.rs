@@ -3414,6 +3414,19 @@ fn run_add(
                             ),
                             last.title
                         );
+                        // A contained session files the spec into the store
+                        // worktree but cannot write its git history: say the
+                        // ID is final and the commit is queued for the host.
+                        // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+                        if aida_core::git_ops::store_commit_deferred_to_host(store_path) {
+                            println!(
+                                "  {} Queued for the host to commit: this session cannot write the store's git history. The ID is final, and `aida show {}` works here now.",
+                                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                                aida_core::node_alias::display_spec_id(
+                                    last.spec_id.as_deref().unwrap_or("?")
+                                ),
+                            );
+                        }
                         // TASK-647 (ADR-3): note that a requested approved+ status was
                         // held for advisor triage. The spec is filed (as draft); this
                         // is informational, not an error. trace:TASK-647 | ai:claude

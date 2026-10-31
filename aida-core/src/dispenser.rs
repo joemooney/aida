@@ -100,6 +100,20 @@ pub trait Dispenser: Send + Sync {
     /// Increments the counter atomically.
     fn next(&self, object_type: &str) -> Result<u32>;
 
+    /// Dispense the next sequence number that is also greater than `floor`
+    /// (the highest number already filed in the store, which a contained
+    /// session may have minted without advancing this counter). The default
+    /// draws until it passes `floor`; persistent providers jump in one write.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+    fn next_above(&self, object_type: &str, floor: u32) -> Result<u32> {
+        loop {
+            let seq = self.next(object_type)?;
+            if seq > floor {
+                return Ok(seq);
+            }
+        }
+    }
+
     /// Peek at the next sequence number without incrementing.
     fn peek(&self, object_type: &str) -> Result<u32>;
 
@@ -268,6 +282,12 @@ impl FileDispenser {
 #[cfg(feature = "native")]
 impl Dispenser for FileDispenser {
     fn next(&self, object_type: &str) -> Result<u32> {
+        self.next_above(object_type, 0)
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude — one locked
+    // write: the counter becomes max(counter, floor) + 1.
+    fn next_above(&self, object_type: &str, floor: u32) -> Result<u32> {
         // trace:BUG-2017 | ai:codex
         crate::allocation_authority::admit_file_dispenser(&self.path, &self.mode)?;
 
@@ -300,7 +320,8 @@ impl Dispenser for FileDispenser {
                 .sequences
                 .entry(object_type.to_uppercase())
                 .or_insert(0);
-            *counter = counter
+            *counter = (*counter)
+                .max(floor)
                 .checked_add(1)
                 .ok_or_else(|| anyhow::anyhow!("node-local sequence exhausted"))?;
             let value = *counter;
