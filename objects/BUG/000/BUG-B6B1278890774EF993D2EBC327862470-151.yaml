@@ -26,12 +26,12 @@ description: |
   - AC3 (honest wording): when no registered advisor is found, the handshake and hook say "no registered advisor" and name the check to run, never assert "no live advisor". If other evidence shows an advisor (an unexpired advisor seat grant held by a live process), report the advisor as live but unregistered.
   - AC4 (doctor): `aida doctor check advisor-handshake` reports registered advisors, unregistered live advisor evidence, and the hello's state, instead of `total: 0`.
   - AC5 (timestamps): `ended_at` records when the session actually ended, not `started_at`.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-10-31T22:35:23.005015709Z
+modified_at: 2026-10-31T23:33:05.931520584Z
 req_type: Bug
 tags:
 - area:agents
@@ -65,6 +65,20 @@ comments:
   modified_at: 2026-10-31T22:35:23.005015709Z
   session_id: 01a194156847
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1944e-300b-73b3-82a9-eec8c46a7a70
+  author: joe
+  content: |-
+    ## Implementer findings (not filed as draft TASKs: `aida add` cannot allocate IDs from the sandbox, and the MCP file_finding tool was denied)
+
+    1. **bug-spotted · minor:** `agent_registry::tests::recycled_pid_session_start_does_not_inherit_the_earlier_name` and `same_process_new_session_keeps_its_launcher_entry` fail on base 0506fa2 when `AIDA_HANDLE` is set (any agent session): `touch_session_start_agent` reads `HANDLE_ENV` from the real env. They need test_env isolation.
+    2. **deviation · minor (AC5, partial for headless):** the heartbeat runs per UserPromptSubmit. A `claude -p` lane has one prompt, so a lane whose hook row is not the launcher's `claude-<child_pid>` row still gets ended_at about equal to its first prompt. Follow-up: heartbeat from Stop/PostToolUse too, or have the launcher end every row with the child's session id.
+    3. **design-choice · cosmetic:** `aida doctor check advisor-handshake` now always emits informational rows (registered advisors, grants, hello states), so `--fail-on-findings` on that check always exits non-zero. Full `aida doctor` is unchanged (problem rows only).
+
+    Commit c20fb1f3362 on bug-b6b1278890774ef993d2ebc327862470-151.
+  created_at: 2026-10-31T23:31:54.507917512Z
+  modified_at: 2026-10-31T23:31:54.507917512Z
+  session_id: 01a194156847
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-8def-7313-80d3-270615a3923f
   author: joe
@@ -90,6 +104,15 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: BUG-2377
+- id: 01a1944f-4771-7c51-bb92-0ef546096807
+  author: joe
+  timestamp: 2026-10-31T23:33:06.033224971Z
+  session_id: 01a194156847
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -97,3 +120,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 584e95e4505
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T23:33:05.931520584Z
+  implemented_by: joe

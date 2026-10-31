@@ -19,7 +19,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:10.638818101Z
-modified_at: 2026-10-31T23:21:04.043801353Z
+modified_at: 2026-10-31T23:32:28.394844792Z
 req_type: Task
 tags:
 - docs
@@ -47,6 +47,16 @@ comments:
     - Should air-gapped GitLab Pages point source links at the GitLab project instead of github.com? Default stays identical (github) per AC3; `--source-base` override offered, documented as an intentional divergence.
   created_at: 2026-10-31T23:21:04.043801353Z
   modified_at: 2026-10-31T23:21:04.043801353Z
+  session_id: 01a19442f9a2
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a1944e-b46a-77b3-942e-2ef60f4c2701
+  author: joe
+  content: |-
+    ## Operator blocker (AC4): GitLab Pages enablement unverified
+
+    The `pages` job is in place, but this sandbox has no GitLab API access or credentials, so it cannot confirm that the self-hosted instance has Pages enabled. Operator action: set `pages_external_url` in `gitlab.rb`, add wildcard DNS `*.<pages-domain>` (plus wildcard TLS for HTTPS), then run a default-branch pipeline with `PUBLISH_PAGES=true` and check *Deploy > Pages*. Until then the job can run, but nothing is served. Nothing in the repository works around this.
+  created_at: 2026-10-31T23:32:28.394844792Z
+  modified_at: 2026-10-31T23:32:28.394844792Z
   session_id: 01a19442f9a2
   harness_version: 2.1.316 (Claude Code)
 history:
