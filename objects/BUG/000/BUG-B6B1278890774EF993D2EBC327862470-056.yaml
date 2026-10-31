@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:20.408058815Z
-modified_at: 2026-10-31T22:53:55.540733572Z
+modified_at: 2026-10-31T23:02:16.915147973Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -47,6 +47,14 @@ comments:
   modified_at: 2026-10-31T21:40:25.758362389Z
   session_id: 01a193e6837a
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19433-1053-7eb2-aec7-da3aa2cd2352
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF round 2 (16:04), PR-3176. ONE blocking item, deterministic CI lib-1 failure: gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reach_outside_only_through_listed_leaves — 'gate/mandate_traces.rs: aida_core::object_store::relative_object_path' reaches outside gate/ past the listed leaves. Fix the boundary the way the test says: route the call through gate/kernel_deps.rs (preferred: a floor wrapper the kernel calls), or, only if it must stay external, add it to FACADE_EXTERNAL_LEAVES with a one-line reason. Push to the PR branch. Gate: cargo test -p aida-cli-lib story_1888_gate_paths ; cargo test -p aida-cli-lib mandate_traces ; make check-ci-fast.
+    Also ruled once: TASK-276 (readers not literally pinned; delta proof instead) is ACCEPTED: the scoped delta check proves the evidence equals the pinned read for the judged specs, and the reviewer accepted the design. No follow-up spec.
+  created_at: 2026-10-31T23:02:16.915147973Z
+  modified_at: 2026-10-31T23:02:16.915147973Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a193e6-8741-75e1-9ad7-86aacf85c21f
   author: aida-session-start
