@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:05:17.938860854Z
-modified_at: 2026-10-31T20:17:40.200055840Z
+modified_at: 2026-10-31T20:21:09.219542286Z
 req_type: Bug
 tags:
 - area:agents
@@ -51,6 +51,29 @@ comments:
   created_at: 2026-10-31T20:08:45.211061576Z
   modified_at: 2026-10-31T20:08:45.211061576Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a1939f-8be3-71d1-88b8-4393cd13db6c
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (AC1):** grant seat=product delegating {advisor,implementer}, requested=product → refusal contains `role enter product`, not `role enter advisor`, exactly one `role enter`. No grant → says no grant is active and names `aida role enter advisor --delegate-seat <seat>` (keeps standing order 8 in sync).
+    - **Unit (AC2):** same fixture → command carries `--delegate-seat advisor --delegate-seat implementer --delegate-seat product`. Pure helper `widen_delegation_command(parent_seat, delegable, requested)`.
+    - **Unit (AC3):** picker rows: a new `not_delegated` annotation renders `(not delegated: <cmd>)`; resolve_child_role refuses a marked selection immediately after the picker, before any session/resume prompt.
+    - **Existing (AC4):** bug_2002_launch_lease_tests / bug_1808 stay green; preflight still runs before lease/setup.
+
+    ### Expected files
+    - `aida-cli-lib/src/gate/seat_authority.rs` (shared command helper, inner hint)
+    - `aida-cli-lib/src/agent_launch.rs` (preflight message)
+    - `aida-cli-lib/src/role.rs` (picker annotation + selection refusal)
+    - `aida-cli-lib/src/tests/bug_2002_launch_lease_tests.rs` (tests)
+
+    ### Ambiguities / conflicts as questions
+    - None. Roster refusals (grant delegates the seat but roster denies it) get no re-entry command, since re-entering cannot fix them.
+  created_at: 2026-10-31T20:21:09.219542286Z
+  modified_at: 2026-10-31T20:21:09.219542286Z
+  session_id: 01a1939e269d
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1936d-b8ef-7b80-a114-655fa9d59093
   author: joe
