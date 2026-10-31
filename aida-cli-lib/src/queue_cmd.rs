@@ -10333,6 +10333,31 @@ pub(crate) fn reviewer_verdict_anchor_suffix() -> Option<String> {
     ))
 }
 
+/// The standalone reviewer's verdict anchor. Its launcher collects the
+/// verdict from the review worktree it launched (BUG-2149), and a contained
+/// reviewer cannot write the primary checkout, so `aida review record` runs
+/// from `worktree` — never from the root that holds `verdict_file`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn standalone_reviewer_record_anchor(
+    verdict_file: &str,
+    worktree: &std::path::Path,
+) -> String {
+    let root = std::path::Path::new(verdict_file)
+        .ancestors()
+        .nth(3)
+        .map(|p| p.display().to_string())
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| ".".to_string());
+    let tree = worktree.display();
+    format!(
+        "\n\nVerdict anchor (do not relocate): record the verdict with `aida review record`, run \
+         from your review worktree `{tree}` (cd there first if you left it). Do not cd to the \
+         primary checkout `{root}`: a contained reviewer cannot write there, and the launcher \
+         collects the verdict from `{tree}` onto the PR's gate ledger (canonical file \
+         `{verdict_file}`)."
+    )
+}
+
 /// BUG-868: a `--from-pr` reviewer is reviewing implementation that shipped
 /// outside the orchestrator. The owning spec being Done is expected, so the
 /// prompt must keep the session on the PR verdict contract instead of queue
@@ -10393,10 +10418,29 @@ pub(crate) fn reviewer_from_pr_contract_suffix() -> Option<String> {
 }
 
 pub(crate) fn append_reviewer_prompt_suffixes(prompt: &mut String) {
+    append_reviewer_prompt_suffixes_with(prompt, reviewer_verdict_anchor_suffix());
+}
+
+/// [`append_reviewer_prompt_suffixes`] for a standalone reviewer, whose
+/// verdict anchor names its own review worktree as the directory to run
+/// `aida review record` from (see [`standalone_reviewer_record_anchor`]).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn append_standalone_reviewer_prompt_suffixes(
+    prompt: &mut String,
+    worktree: &std::path::Path,
+) {
+    let anchor = std::env::var("AIDA_REVIEW_VERDICT_FILE")
+        .ok()
+        .filter(|vf| !vf.trim().is_empty())
+        .map(|vf| standalone_reviewer_record_anchor(&vf, worktree));
+    append_reviewer_prompt_suffixes_with(prompt, anchor);
+}
+
+fn append_reviewer_prompt_suffixes_with(prompt: &mut String, anchor: Option<String>) {
     if let Some(suffix) = reviewer_from_pr_contract_suffix() {
         prompt.push_str(&suffix);
     }
-    if let Some(suffix) = reviewer_verdict_anchor_suffix() {
+    if let Some(suffix) = anchor {
         prompt.push_str(&suffix);
     }
     if let Ok(context) = std::env::var("AIDA_GRADED_REVIEW_CONTEXT") {
@@ -13332,6 +13376,10 @@ pub(crate) fn handle_queue_work(
             // the prior verdict. Outside a watch launch this is inert.
             // trace:TASK-1993 | ai:claude
             crate::review_watch::reviewer_launch_context(&project_root, *pr)?;
+            // A contained reviewer whose grant key cannot be held is refused
+            // here, before the reset, so the refusal keeps the prior verdict.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+            refuse_unpresentable_contained_reviewer(contained)?;
             clear_standalone_reviewer_verdict(verdict_path);
             // The `/aida-review` skill writes the verdict here — it keys off
             // this env var. Setting it for standalone runs too is what makes
@@ -13339,7 +13387,8 @@ pub(crate) fn handle_queue_work(
             std::env::set_var("AIDA_REVIEW_VERDICT_FILE", verdict_path);
             // BUG-809: same prompt-text anchor for the standalone reviewer —
             // the env var was absent at prompt-derivation time above.
-            append_reviewer_prompt_suffixes(&mut prompt);
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+            append_standalone_reviewer_prompt_suffixes(&mut prompt, &lease.worktree_path);
         }
 
         eprintln!();
@@ -13367,10 +13416,12 @@ pub(crate) fn handle_queue_work(
         // never inherited from the launcher. `None` on every other arm.
         let mut headless_child_grant = None;
         if !no_human {
-            let child_grant = crate::gate::seat_authority::issue_child(
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+            let child_grant = crate::gate::seat_authority::issue_launch_child(
                 &project_root,
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
+                contained,
             )?;
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
@@ -13667,12 +13718,13 @@ pub(crate) fn handle_queue_work(
         );
         return setup_result;
     }
-    // A standalone implementer's outcome (punted, held, no PR) is a result,
-    // not a failed setup to continue by hand. trace:STORY-1662 | ai:claude
-    if setup_result.as_ref().is_err_and(|e| {
-        e.downcast_ref::<crate::standalone_implementer::StandaloneImplementerExit>()
-            .is_none()
-    }) {
+    // A standalone implementer's outcome (punted, held, no PR) or a reviewer
+    // that recorded no verdict is a result, not a failed setup to continue
+    // by hand. trace:STORY-1662 | ai:claude
+    if setup_result
+        .as_ref()
+        .is_err_and(pickup_failure_offers_manual_continuation)
+    {
         eprintln!(
             "{}",
             queue_work_manual_continuation(&plan.anchor_display, guided)
@@ -13806,6 +13858,10 @@ pub(crate) fn run_standalone_reviewer(
 ) -> Result<()> {
     // Watch context only restricts an ordinary attested launch; it cannot
     // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
+    // Every arm below (fresh or resume, headless or interactive) refuses a
+    // contained reviewer whose grant key cannot be held before it spawns.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+    refuse_unpresentable_contained_reviewer(contained)?;
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
     // Keep a recoverable final draft even if a tool refuses the recording.
@@ -13908,10 +13964,12 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let grant = crate::gate::seat_authority::issue_child(
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+                let grant = crate::gate::seat_authority::issue_launch_child(
                     project_root,
                     "reviewer",
                     &crate::current_user_id(None),
+                    contained || session::aida_contained_env()?,
                 )?;
                 (
                     session::spawn_claude_resume_with_grant(
@@ -14168,7 +14226,7 @@ pub(crate) fn run_standalone_reviewer(
         // A collected verdict is on the ledger only: the file may be absent,
         // or a previous round's, so the newer of the two is this review's.
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-        let verdict_json = crate::gate::review_verdict::current_verdict_body_at(verdict_path);
+        let verdict_json = standalone_summary_verdict_body(collected.is_ok(), verdict_path);
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),
@@ -14201,6 +14259,44 @@ pub(crate) fn run_standalone_reviewer(
         std::process::exit(code);
     }
     outcome.map_err(|message| anyhow::Error::new(NoReviewVerdict { message }))
+}
+
+/// The verdict body the standalone summary shows: this run's collected
+/// verdict, or none. A failed collection never falls back to the file or the
+/// ledger, whose newest record is a previous round's (another review's PASS
+/// printed under a review that recorded nothing).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn standalone_summary_verdict_body(
+    collected: bool,
+    verdict_path: &std::path::Path,
+) -> Option<String> {
+    collected
+        .then(|| crate::gate::review_verdict::current_verdict_body_at(verdict_path))
+        .flatten()
+}
+
+/// Refuse a contained standalone reviewer (by flag or inherited
+/// `AIDA_CONTAINED`) whose grant key this launcher could not hold in a
+/// session keyring: its sandboxed `aida review record` could never present
+/// the grant, so the review would be spent for a verdict that is refused.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn refuse_unpresentable_contained_reviewer(contained: bool) -> Result<()> {
+    if contained || session::aida_contained_env()? {
+        crate::gate::seat_authority::preflight_sandboxed_child_key("reviewer")?;
+    }
+    Ok(())
+}
+
+/// Whether a failed pickup should print the manual-continuation hint. A
+/// finished standalone run (implementer outcome, or a reviewer that recorded
+/// no verdict) is a result, not a setup to continue by hand.
+// trace:STORY-1662 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn pickup_failure_offers_manual_continuation(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<crate::standalone_implementer::StandaloneImplementerExit>()
+        .is_none()
+        && err.downcast_ref::<NoReviewVerdict>().is_none()
+        && err.downcast_ref::<ReviewerVendorExit>().is_none()
 }
 
 /// BUG-2187: a reviewer that exited non-zero without a collectable verdict.
@@ -17496,3 +17592,7 @@ pub(crate) fn clear_standalone_reviewer_verdict(path: &std::path::Path) {
     // Clear any stale verdict so the summary cannot read a prior run's.
     let _ = std::fs::remove_file(path);
 }
+
+#[cfg(test)]
+#[path = "tests/bug_home_045_reviewer_verdict_tests.rs"]
+mod bug_home_045_reviewer_verdict_tests;

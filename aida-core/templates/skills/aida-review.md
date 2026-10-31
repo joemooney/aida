@@ -704,7 +704,11 @@ Do not infer metadata for old records or weaken the reconciliation check.
 
 Use the actual covered spec, actual PR number, and exact reviewed head. For
 multiple covered specs, record each as in step 3; `--pr` writes the shared PR
-handshake. The reviewer must run this command before the PR comment:
+handshake. The reviewer must run this command before the PR comment, from the
+directory the prompt's *Verdict anchor* names. For a standalone review that is
+your own review worktree: never `cd` to the primary checkout, which a
+contained reviewer cannot write.
+<!-- trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude -->
 
 ```bash
 aida review record <SPEC-ID> --pr <N> --verdict approved \

@@ -461,3 +461,73 @@ fn doctor_warns_on_ptrace_scope_zero_with_a_grant() {
     assert!(ptrace_scope_finding(true, Some("1")).is_none());
     assert!(ptrace_scope_finding(true, None).is_none());
 }
+
+/// BUG-HOME-045: a contained (sandboxed) worker whose child grant got no
+/// keyring key is refused before launch: its sandboxed `aida review record`
+/// could never present the grant. An unsandboxed worker only warns, and a
+/// structurally unavailable keyring never refuses.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+#[test]
+fn sandboxed_child_without_a_keyring_key_is_refused_before_launch() {
+    let err = crate::grant_keyring::InstallError::new(
+        "cannot hold the previous session keyring",
+        libc::ELOOP,
+    );
+    let refusal =
+        sandboxed_child_key_refusal("reviewer", &err, true, true).expect("a contained refusal");
+    assert!(
+        refusal.contains("cannot launch the contained `reviewer` worker"),
+        "{refusal}"
+    );
+    assert!(
+        refusal.contains("cannot hold the previous session keyring"),
+        "{refusal}"
+    );
+    assert_eq!(
+        sandboxed_child_key_refusal("reviewer", &err, true, false),
+        None
+    );
+    assert_eq!(
+        sandboxed_child_key_refusal("reviewer", &err, false, true),
+        None
+    );
+}
+
+/// BUG-HOME-045 round 2: the launch issuer refuses a CONTAINED child whose
+/// key install failed (with a [`ChildGrantRefused`], which releases the review
+/// lease) and keeps the warn-only proc-only fallback for an uncontained one;
+/// the launch preflight refuses the same condition without minting a grant.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+#[test]
+fn bug_045_contained_launch_child_without_a_keyring_key_is_refused() {
+    if !crate::grant_keyring::available() {
+        eprintln!("SKIP: the session keyring is unavailable here");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    let parent = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &parent);
+
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    let err = issue_launch_child(tmp.path(), "reviewer", SUBJECT, true).unwrap_err();
+    assert!(ChildGrantRefused::is_in(&err), "{err:#}");
+    assert!(
+        format!("{err:#}").contains("cannot launch the contained `reviewer` worker"),
+        "{err:#}"
+    );
+
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    let child = issue_launch_child(tmp.path(), "reviewer", SUBJECT, false).unwrap();
+    assert!(
+        child.binding.iter().all(|b| b.starts_with("proc:")),
+        "{:?}",
+        child.binding
+    );
+
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    let err = preflight_sandboxed_child_key("reviewer").unwrap_err();
+    assert!(ChildGrantRefused::is_in(&err), "{err:#}");
+    // Off the forced failure the probe passes and leaves no key behind.
+    preflight_sandboxed_child_key("reviewer").expect("a holdable key passes the preflight");
+}
