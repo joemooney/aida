@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T11:51:05.919945784Z
+modified_at: 2026-10-31T11:52:07.023324683Z
 req_type: Bug
 tags:
 - ids
@@ -234,6 +234,12 @@ comments:
   modified_at: 2026-10-31T11:51:05.919945784Z
   session_id: 01a191a5be2e
   harness_version: 2.1.316 (Claude Code)
+- id: 01a191cd-826f-7670-bdb4-825fb54a5075
+  author: joe
+  content: 'ADVISOR 2026-10-31 04:55: the round-2 rework lane rotated with everything uncommitted. I saved the work as LOCAL commit 364942e1e08 (''wip: ... amend before push'') on the seat branch; it is not pushed. Next lane: start from the 04:51 implementer handoff above, steps 1-7. Before pushing, fold every change into ONE commit (amend 364942e is fine, since it was never pushed). The title is the PR''s full-canonical-ID subject; no force push to the PR branch. Follow-ups in step 7: put all three in ONE draft task (2026-10-28 rule), not three.'
+  created_at: 2026-10-31T11:52:07.023324683Z
+  modified_at: 2026-10-31T11:52:07.023324683Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
