@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-30T23:18:53.489218752Z
+modified_at: 2026-10-31T00:30:56.507959079Z
 req_type: Bug
 tags:
 - ids
@@ -37,6 +37,13 @@ comments:
        e. `aida list` aligns its ID column to the widest rendered ID.
   created_at: 2026-10-30T23:18:53.489218752Z
   modified_at: 2026-10-30T23:18:53.489218752Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a18f5d-dffb-78a3-b70c-f52fa3a1023c
+  author: joe
+  content: |
+    ADVISOR SEQUENCING 2026-10-30 17:30: this lands before STORY-HOME-105 (agreed IDs from reserved blocks). Put numeric identity and the collision guard in ONE allocator-facing function, so 105 can route block-dispensed IDs through it. The sketch should name that seam.
+  created_at: 2026-10-31T00:30:56.507959079Z
+  modified_at: 2026-10-31T00:30:56.507959079Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
