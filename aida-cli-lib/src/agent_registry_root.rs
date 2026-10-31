@@ -18,6 +18,19 @@ pub(crate) fn ls_handle_cell(name: Option<&str>) -> String {
 pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    agent_ls_in(&project_root, show_all, stale_only, ended_only)
+}
+
+/// [`agent_ls`] for an explicit main-checkout root, so a test never resolves
+/// it from the process cwd.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+pub(crate) fn agent_ls_in(
+    project_root: &std::path::Path,
+    show_all: bool,
+    stale_only: bool,
+    ended_only: bool,
+) -> Result<()> {
+    let project_root = project_root.to_path_buf();
     if !show_all && !stale_only && !ended_only {
         let _ = agent_registry::gc_dead_agents(&project_root, false, None);
     }
@@ -81,6 +94,9 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
     );
     let now = chrono::Utc::now();
     let notes = unobserved_liveness_notes(&agents, observer);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude — an
+    // agent whose advisor hello went unacked says so after its worktree.
+    let handshake = (!ended_only).then(|| crate::advisor_handshake::Census::load(&project_root));
     for agent in agents {
         let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
             now,
@@ -100,10 +116,17 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
         let desc = agent.description.as_deref().unwrap_or("(none)");
         let terminal = agent_registry::terminal_cell(agent.terminal.as_ref(), agent.tty.as_deref());
         // STORY-528: surface paused-availability inline after the worktree.
-        let paused_note = match agent_registry::paused_glyph(&agent) {
+        let mut paused_note = match agent_registry::paused_glyph(&agent) {
             Some(g) => format!("  {g}"),
             None => String::new(),
         };
+        if let Some(census) = &handshake {
+            paused_note.push_str(&crate::advisor_handshake::ls_note(
+                census,
+                agent.name.as_deref(),
+                agent.started_at,
+            ));
+        }
         if ended_only {
             let ended = agent
                 .ended_at

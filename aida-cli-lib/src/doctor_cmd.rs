@@ -160,6 +160,20 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-HOME-100: the advisor handshake reads hello records and
+            // the agent registry only.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::advisor_handshake::DOCTOR_CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::advisor_handshake::DOCTOR_CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // BUG-1934: the seat-grant check reads the grant store and this
             // process's ancestry only. trace:BUG-1934 | ai:claude
             if !all
@@ -1011,6 +1025,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::gate::seat_authority::doctor_scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::advisor_handshake::DOCTOR_CATEGORY,
+    )? {
+        findings.extend(crate::advisor_handshake::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     // STORY-HOME-128: mail backlog (opt-in append path: only when --category
     // is explicitly passed, like lane-liveness). trace:STORY-HOME-128 | ai:claude
@@ -1597,6 +1619,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:BUG-1934 | ai:claude
         crate::gate::seat_authority::DOCTOR_CATEGORY => {
             DoctorReport::from_findings(crate::gate::seat_authority::doctor_scan(&project_root))
+        }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+        crate::advisor_handshake::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::advisor_handshake::doctor_scan(&project_root))
         }
         // Routes like lane-liveness: only the scheduled tick nudges, and a
         // nudged backlog is not a job failure. trace:STORY-HOME-128 | ai:claude

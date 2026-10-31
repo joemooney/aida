@@ -742,6 +742,27 @@ pub(crate) fn handle_mailbox_command(
                         "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
                     )
                 })?;
+                // Reading a hello is the advisor's ack of it.
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+                let shown: Vec<&Message> = inbox.iter().map(|r| &r.message).collect();
+                for handle in crate::advisor_handshake::ack_hellos(
+                    project_root,
+                    store_root,
+                    &shown,
+                    chrono::Utc::now(),
+                ) {
+                    println!(
+                        "  {}",
+                        format!("acked the advisor-handshake hello from {handle}").dimmed()
+                    );
+                }
+            }
+            Ok(())
+        }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+        MailboxCommand::Hello { hook } => {
+            for line in crate::advisor_handshake::run(&home, checkout_root, store_root, *hook)? {
+                println!("{line}");
             }
             Ok(())
         }

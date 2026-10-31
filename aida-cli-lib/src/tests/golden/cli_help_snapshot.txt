@@ -4991,6 +4991,10 @@ Commands:
                  role+user-scoped summary of unread messages, or nothing when the inbox is caught
                  up. Never marks anything seen. The SessionStart / per-turn hook calls this;
                  reading/acking stays the explicit `aida mailbox inbox`
+  hello          Advisor handshake: a launched non-advisor agent mails the advisor role once
+                 (handle, role, spec, path) and reports the ack, or `advisor unreachable: <reason>`
+                 when none arrives in time. For an advisor, lists the hellos waiting for an ack;
+                 reading them with `aida mailbox inbox` acks them
   list           Operator overview: agents with mail waiting + unread / urgent-unread counts,
                  most-recent-activity first
   read           Read one message by id or unique id prefix without changing unread state
@@ -5439,6 +5443,34 @@ Options:
       --cap <CAP>
           Max messages to list before collapsing the rest into "+N more" (default: 5). Keeps the
           per-turn context injection bounded
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox hello
+Advisor handshake: a launched non-advisor agent mails the advisor role once (handle, role, spec,
+path) and reports the ack, or `advisor unreachable: <reason>` when none arrives in time. For an
+advisor, lists the hellos waiting for an ack; reading them with `aida mailbox inbox` acks them
+
+Usage: aida mailbox hello [OPTIONS]
+
+Options:
+      --hook
+          Per-turn hook mode: send only on SessionStart, print only a new ack or an overdue hello,
+          and stay silent otherwise
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -34099,6 +34131,37 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
+      "hello"
+    ],
+    "about": "Advisor handshake: a launched non-advisor agent mails the advisor role once (handle, role, spec, path) and reports the ack, or `advisor unreachable: <reason>` when none arrives in time. For an advisor, lists the hellos waiting for an ack; reading them with `aida mailbox inbox` acks them",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "hook",
+        "takes_value": false,
+        "help": "Per-turn hook mode: send only on SessionStart, print only a new ack or an overdue hello, and stay silent otherwise"
       }
     ],
     "hidden": false
