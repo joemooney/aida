@@ -52,7 +52,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T10:02:32.066650371Z
+modified_at: 2026-10-31T10:28:45.655949409Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -142,6 +142,27 @@ comments:
   modified_at: 2026-10-31T10:02:21.475723909Z
   session_id: 01a19166d7eb
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19181-31d7-7d62-86fb-7685ae746f6a
+  author: joe
+  content: |
+    ADVISOR SIGNOFF 2026-10-31 03:30 on the slice-1 sketch: APPROVED, including §0, the central-risk framing: a job gets a terminal only when the operator authorized its argv at the human TTY. Answers:
+
+    Q1 spool: (a) per-project <main-root>/.aida/deputy/<name>/, 0700, with the owner, mode and nlink checks re-run at every scan.
+
+    Q2 TTY policy moves into slice 1: yes. To keep the away-mode use the operator relies on today, an entry may be an argv PREFIX with a TTL (for example `aida merge-hold clear` for 8h), not only single-use exact argv. The operator sets entries at start (`aida deputy --allow-tty '<prefix>' --ttl 8h`) or later with `aida deputy allow` at the TTY. The start banner and `aida deputy status` list every live entry and its expiry. A TTL entry never outlives the operator's grant.
+
+    Q3 submitter identity: audit data only in slice 1 (accepted). The same-uid boundary is no weaker than today's /tmp loops, and the per-project 0700 spool is stronger. SO_PEERCRED plus submit capabilities are slice 3.
+
+    Q4 orphans: failed, never re-run (accepted).
+
+    Q5 script jobs: argv-form only by default. Allowed executables are `aida` plus explicit paths given at start (`--allow-exec ~/.local/share/aida/ops/serial-ship.sh`). Arbitrary bash bodies need `--allow-scripts`, which the banner shows. Script-form jobs never get a TTY.
+
+    Q6 defence in depth: APPROVED for slice 1 with this signoff. has_integrity_floor_authority() refuses when AIDA_DEPUTY_JOB is set and no consumed or live policy entry matches. Add a test, and mark the gate edit with the required mandate-gate annotation.
+
+    Review: STRICT (authority). Gate: one targeted cargo test run for the deputy modules plus the gate unit, the fixture binaries the PR adds, make check-ci-fast, and make check-ci-compile (it touches >10 files). Manual smoke at review: a real merge-hold clear through a policy-matched pty job. Implementation may start.
+  created_at: 2026-10-31T10:28:45.655949409Z
+  modified_at: 2026-10-31T10:28:45.655949409Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a52-9d72-7b62-969e-89638e367cb5
   author: joe
