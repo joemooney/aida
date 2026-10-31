@@ -52,7 +52,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T10:46:56.458878603Z
+modified_at: 2026-10-31T11:22:36.888282135Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -189,6 +189,12 @@ comments:
   modified_at: 2026-10-31T10:46:56.458878603Z
   session_id: 01a19190567e
   harness_version: 2.1.316 (Claude Code)
+- id: 01a191b2-7fd8-7230-93fb-fd0133d54442
+  author: joe
+  content: 'ADVISOR 2026-10-31 04:24 on the 03:46 implementer approach: APPROVED as written. portable-pty is fine (an existing workspace dep). Idle window: a configurable deputy setting, default 10s with no pty output, reported as ''waiting on a prompt'' in status. It changes status display only, never kills the job; the job''s own timeout still governs. The live merge-hold-clear smoke stays manual at STRICT review, as you planned.'
+  created_at: 2026-10-31T11:22:36.888282135Z
+  modified_at: 2026-10-31T11:22:36.888282135Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a18a52-9d72-7b62-969e-89638e367cb5
   author: joe
