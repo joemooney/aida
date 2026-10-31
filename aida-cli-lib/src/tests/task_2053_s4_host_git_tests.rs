@@ -218,6 +218,7 @@ fn an_unreadable_seat_clone_fails_reentry_and_salvage_closed() {
 
 /// Review round 1, item 3: a seat clone with a submodule (HasSubmodules)
 /// fails agent re-entry and salvage the same way.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-047.ac60d381 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed() {
@@ -270,6 +271,8 @@ fn task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed() {
 /// one is dismissed and its lease released. An untracked `.gitmodules` that
 /// defines no submodule is not evidence either (it is salvaged as a file).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-047.ac3d3c87 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-047.acb6fd87 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
 fn bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
