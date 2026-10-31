@@ -244,6 +244,32 @@ fn a_record_whose_lineage_does_not_add_up_is_ignored() {
     assert!(warnings[0].contains("renewal lineage"), "{warnings:?}");
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+#[test]
+fn a_record_renewed_after_it_expired_is_ignored() {
+    let tmp = tempfile::tempdir().unwrap();
+    let before = started(tmp.path());
+    // Forged: a coherent-looking renewal written after the mandate expired,
+    // which `extend` can never produce.
+    let late = before.expires_at + Duration::hours(1);
+    let mut m = before.clone();
+    m.renewals.push(Renewal {
+        renewed_at: late,
+        renewed_by: "joe".into(),
+        previous_expires_at: before.expires_at,
+        expires_at: late + Duration::hours(8),
+    });
+    m.expires_at = late + Duration::hours(8);
+    write_private(
+        &tmp.path().join(format!("{}.json", m.id)),
+        &serde_json::to_vec_pretty(&m).unwrap(),
+    )
+    .unwrap();
+    let (valid, warnings) = on_disk(tmp.path(), late + Duration::hours(1));
+    assert!(valid.is_empty());
+    assert!(warnings[0].contains("already-expired"), "{warnings:?}");
+}
+
 #[test]
 fn a_stop_after_a_renewal_still_wins() {
     let tmp = tempfile::tempdir().unwrap();

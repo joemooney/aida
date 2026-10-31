@@ -346,6 +346,11 @@ fn renewal_problem(m: &Mandate) -> Option<String> {
         if r.renewed_at < since || r.previous_expires_at != expiry {
             return Some("its renewal lineage is out of order".into());
         }
+        // `extend` only renews an ACTIVE mandate, so a renewal at or after the
+        // expiry it extends cannot be genuine: it would resurrect an expired one.
+        if r.renewed_at >= r.previous_expires_at {
+            return Some("its renewal lineage renews an already-expired mandate".into());
+        }
         let ttl = r.expires_at - r.renewed_at;
         if ttl <= Duration::zero() || ttl > MAX_TTL {
             return Some("a renewal exceeds the 24h cap".into());
