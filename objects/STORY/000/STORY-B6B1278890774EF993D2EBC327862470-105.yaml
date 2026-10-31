@@ -31,12 +31,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-30T05:00:08.892690545Z
+modified_at: 2026-10-31T00:29:30.904508417Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T04:47:58.070452726Z
+comments:
+- id: 01a18f5c-9198-77a2-b79e-dbde1b12274b
+  author: joe
+  content: |
+    ADVISOR SEQUENCING 2026-10-30 17:30: BUG-HOME-046 (numeric ID identity; mint-time collision guard; [ids] seq_width) lands FIRST. This story builds its reserved-block dispensing on 046 identity: block-dispensed IDs go through the same collision guard and render via seq_width. The sketch for this story must name which 046 functions it reuses. Do not start code here until 046 has merged.
+  created_at: 2026-10-31T00:29:30.904508417Z
+  modified_at: 2026-10-31T00:29:30.904508417Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
