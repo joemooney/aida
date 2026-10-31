@@ -15,8 +15,12 @@
 //! `.aida/node.toml` still names another (node `1` on the home store), the
 //! same run renames that node's specs into the bound node's local IDs
 //! (`TASK-1-418` -> `TASK-<bound>-178`), keeping every agreed ID, records the
-//! old ID in each spec's history, and marks the old node retired in
-//! `registry/nodes.toml` so it never allocates again.
+//! old ID in each spec's history and in `registry/retired_ids.toml` (which
+//! every store resolver honours, so `aida show TASK-1-418`, old commit
+//! trailers and `trace:` comments still find the spec), raises the bound
+//! node's counter past every renamed number so the next `aida add` mints
+//! above them, and marks the old node retired in `registry/nodes.toml` so it
+//! never allocates again.
 //!
 //! Blocks: on a bound root the run then claims one block per
 //! auto-allocating type for the bound node (unless it already holds an
@@ -28,8 +32,9 @@
 //! Flat specs (an agreed-form `spec_id` and no local ID) are left alone.
 //!
 //! `--dry-run` prints (and with `--mapping FILE` saves) the plan and writes
-//! nothing. Applying needs `--yes` and the allocation root: in one store
-//! commit, each spec gets its agreed ID (and, on the legacy node, its new
+//! nothing. Applying needs `--yes` and the allocation root. Objects are
+//! written first; any failure part-way restores every file already written.
+//! In one store commit, each spec gets its agreed ID (and, on the legacy node, its new
 //! local ID) plus a history entry, the merge-gate counter is raised, a fully
 //! spent block per type is recorded in `registry/blocks.yaml` so no later
 //! claim or dispense reissues a backfilled number, the root's blocks are
@@ -627,10 +632,74 @@ pub(crate) fn render_tree_mapping(plan: &Plan, reqs: &[Requirement]) -> String {
     out
 }
 
+/// Every file the apply wrote, with its prior bytes (`None`: it did not
+/// exist), so a failure part-way restores the store to where it started.
+#[derive(Default)]
+struct Undo {
+    files: Vec<(PathBuf, Option<Vec<u8>>)>,
+    /// The bound counter's prior text, restored under its dispense lock.
+    counter: Option<String>,
+}
+
+impl Undo {
+    /// Record `path`'s current bytes, once, before the first write to it.
+    fn snapshot(&mut self, path: &Path) -> Result<()> {
+        if self.files.iter().any(|(p, _)| p == path) {
+            return Ok(());
+        }
+        let prior = match std::fs::read(path) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e).with_context(|| format!("read {}", path.display())),
+        };
+        self.files.push((path.to_path_buf(), prior));
+        Ok(())
+    }
+
+    /// Restore every snapshot, newest first; returns what it could not
+    /// restore.
+    fn restore(self, store_root: &Path) -> Vec<String> {
+        let mut failed = Vec::new();
+        if let Some(prior) = &self.counter {
+            if let Err(e) = aida_core::work_binding::restore_counter(store_root, prior) {
+                failed.push(format!("the node counter ({e:#})"));
+            }
+        }
+        let blocks_path = store_root.join("registry/blocks.yaml");
+        for (path, prior) in self.files.into_iter().rev() {
+            let put_back = || -> Result<()> {
+                match &prior {
+                    Some(bytes) => aida_core::write_atomic(&path, bytes)?,
+                    None => {
+                        if let Err(e) = std::fs::remove_file(&path) {
+                            if e.kind() != std::io::ErrorKind::NotFound {
+                                return Err(e.into());
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            };
+            let restored = if path == blocks_path {
+                aida_core::BlockRegistry::with_dispense_lock(&blocks_path, put_back)
+            } else {
+                put_back()
+            };
+            if let Err(e) = restored {
+                failed.push(format!("{} ({e:#})", path.display()));
+            }
+        }
+        failed
+    }
+}
+
 /// Write the plan to the store in one commit. Runs under the store write
 /// lock and re-plans inside it, so a concurrent writer cannot slip a number
-/// in; the block ledger is re-read under its own lock and a parse failure
-/// refuses before anything is written.
+/// in; every registry file is read up front and a parse failure refuses
+/// before anything is written. Objects are written first and the ledger
+/// blocks that lift [`refuse_claim_before_backfill`] near last; a failure
+/// part-way restores every file already written, so a half-applied run
+/// never leaves the claim gate open over half-assigned specs.
 fn apply(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
     aida_core::allocation_authority::require_global(store_root)?;
     aida_core::db::with_store_write_lock(store_root, || {
@@ -639,116 +708,34 @@ fn apply(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
         if plan.is_empty() {
             return Ok((reqs, plan));
         }
-        let blocks_path = store_root.join("registry/blocks.yaml");
-        std::fs::create_dir_all(store_root.join("registry"))?;
-        // Ledger first (fail closed): nothing in objects/ moves unless the
-        // block registry can be read and written whole.
-        let mut ranges: BTreeMap<String, (u32, u32)> = BTreeMap::new();
-        for row in &plan.agreed {
-            let (typ, n) = agreed_parts(&row.agreed).context("unparsable agreed ID")?;
-            let n = u32::try_from(n)?;
-            let e = ranges.entry(typ).or_insert((n, n));
-            e.0 = e.0.min(n);
-            e.1 = e.1.max(n);
-        }
-        let mut counters = load_counters(store_root)?;
-        let ledger_node = plan.claim_node.clone().unwrap_or_else(|| {
-            aida_core::allocation_authority::node(store_root).unwrap_or_else(|_| "root".into())
-        });
-        aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
-            let mut blocks = load_blocks(store_root)?;
-            for (typ, (start, end)) in &ranges {
-                let c = counters.counters.entry(typ.clone()).or_insert(0);
-                *c = (*c).max(*end);
-                blocks.blocks.push(aida_core::node::AgreedIdBlock {
-                    node_id: ledger_node.clone(),
-                    owner: BACKFILL_AUTHOR.to_string(),
-                    hostname: String::new(),
-                    type_prefix: typ.clone(),
-                    range_start: *start,
-                    range_end: *end,
-                    next: end.saturating_add(1),
-                    allocated_at: chrono::Utc::now(),
-                    pool_id: None,
-                });
+        // Read every registry file up front (fail closed) before writing.
+        load_blocks(store_root)?;
+        let counters = load_counters(store_root)?;
+        let nodes = load_nodes(store_root)?;
+        let retired_ids = aida_core::node_alias::RetiredIds::load_strict(store_root)
+            .context("refusing the agreed-ID backfill (nothing was written)")?;
+        let mut undo = Undo::default();
+        let written = write_plan(
+            store_root,
+            &reqs,
+            &plan,
+            counters,
+            nodes,
+            retired_ids,
+            &mut undo,
+        );
+        if let Err(e) = written {
+            let failed = undo.restore(store_root);
+            if failed.is_empty() {
+                return Err(e.context(
+                    "the agreed-ID backfill failed; every file it wrote was restored. Re-run once the cause is fixed",
+                ));
             }
-            for c in &plan.claims {
-                blocks.blocks.push(aida_core::node::AgreedIdBlock {
-                    node_id: plan.claim_node.clone().unwrap_or_default(),
-                    owner: BACKFILL_AUTHOR.to_string(),
-                    hostname: String::new(),
-                    type_prefix: c.type_prefix.clone(),
-                    range_start: c.range_start,
-                    range_end: c.range_end,
-                    next: c.range_start,
-                    allocated_at: chrono::Utc::now(),
-                    pool_id: None,
-                });
-                // The merge gate numbers pending specs from the counter, not
-                // from blocks: keep it above the root's own block.
-                let e = counters.counters.entry(c.type_prefix.clone()).or_insert(0);
-                *e = (*e).max(c.range_end);
-            }
-            blocks.save(&blocks_path)
-        })?;
-        aida_core::write_atomic(
-            &store_root.join("registry/agreed_counters.toml"),
-            toml::to_string_pretty(&counters)?,
-        )?;
-        // Objects: agreed IDs and legacy-node renames, merged per spec.
-        let objects = store_root.join("objects");
-        let by_uuid: BTreeMap<Uuid, &Requirement> = reqs.iter().map(|r| (r.id, r)).collect();
-        let agreed: BTreeMap<Uuid, &BackfillRow> =
-            plan.agreed.iter().map(|r| (r.uuid, r)).collect();
-        let renames: BTreeMap<Uuid, &RenameRow> =
-            plan.renames.iter().map(|r| (r.uuid, r)).collect();
-        let touched: std::collections::BTreeSet<Uuid> =
-            agreed.keys().chain(renames.keys()).copied().collect();
-        let context = aida_core::provenance::WriteContext::capture();
-        for uuid in touched {
-            let prior = *by_uuid.get(&uuid).context("planned spec vanished")?;
-            let mut req = prior.clone();
-            if let Some(row) = agreed.get(&uuid) {
-                req.agreed_id = Some(row.agreed.clone());
-                req.history.push(backfill_history(&row.agreed));
-            }
-            let old_path = match renames.get(&uuid) {
-                Some(row) => {
-                    req.spec_id = Some(row.new.clone());
-                    req.history.push(rename_history(&row.old, &row.new));
-                    Some(aida_core::object_store::object_path(&objects, &row.old)?)
-                }
-                None => None,
-            };
-            aida_core::provenance::stamp_write(&mut req, Some(prior), &context)?;
-            aida_core::object_store::write_object(&objects, &req)?;
-            if let Some(old) = old_path {
-                std::fs::remove_file(&old).with_context(|| format!("remove {}", old.display()))?;
-            }
-        }
-        // Retire the legacy node so it never allocates again.
-        if let (Some(r), true) = (&plan.retire, plan.mark_retired) {
-            let mut nodes = load_nodes(store_root)?;
-            let now = chrono::Utc::now();
-            match nodes
-                .nodes
-                .iter_mut()
-                .find(|n| n.id.eq_ignore_ascii_case(&r.old_node))
-            {
-                Some(n) => n.retired_at = Some(now),
-                None => nodes.nodes.push(aida_core::node::NodeRegistryEntry {
-                    id: r.old_node.clone(),
-                    user_id: 0,
-                    hostname: String::new(),
-                    email: None,
-                    clone_path: None,
-                    name: None,
-                    user: None,
-                    registered: now,
-                    retired_at: Some(now),
-                }),
-            }
-            nodes.save(&nodes_path(store_root))?;
+            return Err(e.context(format!(
+                "the agreed-ID backfill failed and could not restore: {}. Repair those by hand (git -C {} status) before re-running",
+                failed.join(", "),
+                store_root.display()
+            )));
         }
         if aida_core::git_ops::is_git_repo(store_root)
             && !aida_core::git_ops::store_commit_deferred_to_host(store_root)
@@ -757,6 +744,9 @@ fn apply(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
             let mut paths = vec!["registry/agreed_counters.toml", "registry/blocks.yaml"];
             if plan.mark_retired {
                 paths.push("registry/nodes.toml");
+            }
+            if !plan.renames.is_empty() {
+                paths.push(aida_core::node_alias::RETIRED_IDS_TOML_REL);
             }
             aida_core::git_ops::add(store_root, &paths)?;
             aida_core::git_ops::commit(
@@ -771,6 +761,179 @@ fn apply(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
         }
         Ok((reqs, plan))
     })
+}
+
+/// The file writes of [`apply`], each snapshotted into `undo` first.
+fn write_plan(
+    store_root: &Path,
+    reqs: &[Requirement],
+    plan: &Plan,
+    mut counters: aida_core::node::AgreedCounters,
+    mut nodes: aida_core::node::NodeRegistry,
+    mut retired_ids: aida_core::node_alias::RetiredIds,
+    undo: &mut Undo,
+) -> Result<()> {
+    // 1. Objects: agreed IDs and legacy-node renames, merged per spec.
+    let objects = store_root.join("objects");
+    let by_uuid: BTreeMap<Uuid, &Requirement> = reqs.iter().map(|r| (r.id, r)).collect();
+    let agreed: BTreeMap<Uuid, &BackfillRow> = plan.agreed.iter().map(|r| (r.uuid, r)).collect();
+    let renames: BTreeMap<Uuid, &RenameRow> = plan.renames.iter().map(|r| (r.uuid, r)).collect();
+    let touched: std::collections::BTreeSet<Uuid> =
+        agreed.keys().chain(renames.keys()).copied().collect();
+    let context = aida_core::provenance::WriteContext::capture();
+    for uuid in touched {
+        let prior = *by_uuid.get(&uuid).context("planned spec vanished")?;
+        let mut req = prior.clone();
+        if let Some(row) = agreed.get(&uuid) {
+            req.agreed_id = Some(row.agreed.clone());
+            req.history.push(backfill_history(&row.agreed));
+        }
+        let old_path = match renames.get(&uuid) {
+            Some(row) => {
+                req.spec_id = Some(row.new.clone());
+                req.history.push(rename_history(&row.old, &row.new));
+                Some(aida_core::object_store::object_path(&objects, &row.old)?)
+            }
+            None => None,
+        };
+        let new_path = aida_core::object_store::object_path(
+            &objects,
+            req.spec_id
+                .as_deref()
+                .context("planned spec has no spec_id")?,
+        )?;
+        undo.snapshot(&new_path)?;
+        if let Some(old) = &old_path {
+            undo.snapshot(old)?;
+        }
+        aida_core::provenance::stamp_write(&mut req, Some(prior), &context)?;
+        aida_core::object_store::write_object(&objects, &req)?;
+        if let Some(old) = old_path.filter(|old| *old != new_path) {
+            std::fs::remove_file(&old).with_context(|| format!("remove {}", old.display()))?;
+        }
+        fail_point("object")?;
+    }
+
+    std::fs::create_dir_all(store_root.join("registry"))?;
+    if !plan.renames.is_empty() {
+        // 2. Old local IDs stay resolvable: every store resolver honours the
+        // retired-ID record (`node_alias::RetiredIds`).
+        for r in &plan.renames {
+            retired_ids.add(&r.old, &r.new, &r.uuid.to_string());
+        }
+        let path = store_root.join(aida_core::node_alias::RETIRED_IDS_TOML_REL);
+        undo.snapshot(&path)?;
+        aida_core::write_atomic(&path, toml::to_string_pretty(&retired_ids)?)?;
+
+        // 3. The bound node's counter: its next dispense must land above
+        // every renamed number, or `aida add` would mint a renamed spec's ID
+        // and run out of collision skips.
+        let mut high: BTreeMap<String, u32> = BTreeMap::new();
+        for r in &plan.renames {
+            let (typ, _, n) = local_triple(&r.new).context("unparsable renamed local ID")?;
+            let e = high.entry(typ).or_insert(0);
+            *e = (*e).max(u32::try_from(n)?);
+        }
+        undo.counter = Some(aida_core::work_binding::raise_counter(store_root, &high)?);
+    }
+
+    // 4. The block ledger: a fully spent block per backfilled type, then the
+    // root's own blocks. These lift the claim gate, so only the counters and
+    // the node mark come after them.
+    let mut ranges: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+    for row in &plan.agreed {
+        let (typ, n) = agreed_parts(&row.agreed).context("unparsable agreed ID")?;
+        let n = u32::try_from(n)?;
+        let e = ranges.entry(typ).or_insert((n, n));
+        e.0 = e.0.min(n);
+        e.1 = e.1.max(n);
+    }
+    let ledger_node = plan.claim_node.clone().unwrap_or_else(|| {
+        aida_core::allocation_authority::node(store_root).unwrap_or_else(|_| "root".into())
+    });
+    let blocks_path = store_root.join("registry/blocks.yaml");
+    aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
+        let mut blocks = load_blocks(store_root)?;
+        for (typ, (start, end)) in &ranges {
+            let c = counters.counters.entry(typ.clone()).or_insert(0);
+            *c = (*c).max(*end);
+            blocks.blocks.push(aida_core::node::AgreedIdBlock {
+                node_id: ledger_node.clone(),
+                owner: BACKFILL_AUTHOR.to_string(),
+                hostname: String::new(),
+                type_prefix: typ.clone(),
+                range_start: *start,
+                range_end: *end,
+                next: end.saturating_add(1),
+                allocated_at: chrono::Utc::now(),
+                pool_id: None,
+            });
+        }
+        for c in &plan.claims {
+            blocks.blocks.push(aida_core::node::AgreedIdBlock {
+                node_id: plan.claim_node.clone().unwrap_or_default(),
+                owner: BACKFILL_AUTHOR.to_string(),
+                hostname: String::new(),
+                type_prefix: c.type_prefix.clone(),
+                range_start: c.range_start,
+                range_end: c.range_end,
+                next: c.range_start,
+                allocated_at: chrono::Utc::now(),
+                pool_id: None,
+            });
+            // The merge gate numbers pending specs from the counter, not
+            // from blocks: keep it above the root's own block.
+            let e = counters.counters.entry(c.type_prefix.clone()).or_insert(0);
+            *e = (*e).max(c.range_end);
+        }
+        undo.snapshot(&blocks_path)?;
+        blocks.save(&blocks_path)
+    })?;
+    let counters_path = store_root.join("registry/agreed_counters.toml");
+    undo.snapshot(&counters_path)?;
+    aida_core::write_atomic(&counters_path, toml::to_string_pretty(&counters)?)?;
+
+    // 5. Retire the legacy node so it never allocates again.
+    if let (Some(r), true) = (&plan.retire, plan.mark_retired) {
+        let now = chrono::Utc::now();
+        match nodes
+            .nodes
+            .iter_mut()
+            .find(|n| n.id.eq_ignore_ascii_case(&r.old_node))
+        {
+            Some(n) => n.retired_at = Some(now),
+            None => nodes.nodes.push(aida_core::node::NodeRegistryEntry {
+                id: r.old_node.clone(),
+                user_id: 0,
+                hostname: String::new(),
+                email: None,
+                clone_path: None,
+                name: None,
+                user: None,
+                registered: now,
+                retired_at: Some(now),
+            }),
+        }
+        let path = nodes_path(store_root);
+        undo.snapshot(&path)?;
+        nodes.save(&path)?;
+    }
+    fail_point("end")
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test hook: the step name at which [`write_plan`] fails.
+    pub(crate) static FAIL_AT: std::cell::Cell<Option<&'static str>> =
+        const { std::cell::Cell::new(None) };
+}
+
+fn fail_point(_step: &'static str) -> Result<()> {
+    #[cfg(test)]
+    if FAIL_AT.with(|f| f.get()) == Some(_step) {
+        anyhow::bail!("injected backfill failure at {_step}");
+    }
+    Ok(())
 }
 
 pub(crate) fn run(store_root: &Path, opts: &BackfillOptions) -> Result<()> {

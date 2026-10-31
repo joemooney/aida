@@ -3,8 +3,10 @@
 //! block writes a local ID only and shows the agreed ID as pending (show and
 //! the agent list); after `node enroll-root` a block claim is refused until
 //! the agreed-ID backfill has run; the backfill assigns agreed IDs, renames
-//! the legacy node's specs into the bound node and retires it, and claims
-//! the root's blocks above every backfilled number; `aida add` then writes
+//! the legacy node's specs into the bound node and retires it (their old
+//! IDs still resolve, and the bound counter sits above every renamed
+//! number), and claims the root's blocks above every backfilled number; a
+//! non-root clone holding a delegated block dispenses from it; `aida add` then writes
 //! the agreed ID from that block AND the local ID in one object; the merge
 //! gate gives another node's pending spec its agreed ID; and a clone whose
 //! local setting says root while the store records another root refuses
@@ -202,6 +204,15 @@ fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
     legacy.spec_id = Some("STORY-7-001".into());
     legacy.req_type = aida_core::RequirementType::Story;
     aida_core::object_store::write_object(&objects, &legacy).unwrap();
+    // More legacy TASKs than `aida add` may skip (MAX_ALLOCATION_SKIPS):
+    // after the rename the bound counter must sit above all of them.
+    for n in 1..=70u32 {
+        let mut t = aida_core::Requirement::new(format!("legacy task {n}"), "fixture".into());
+        t.spec_id = Some(format!("TASK-7-{n:03}"));
+        t.agreed_id = Some(format!("TASK-{n}"));
+        t.req_type = aida_core::RequirementType::Task;
+        aida_core::object_store::write_object(&objects, &t).unwrap();
+    }
     let mut flat = aida_core::Requirement::new("flat spec".into(), "fixture".into());
     flat.spec_id = Some("STORY-40".into());
     flat.req_type = aida_core::RequirementType::Story;
@@ -301,6 +312,41 @@ fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
         let shown = f.aida_ok(&["show", id]);
         assert!(shown.contains(title), "{id}: {shown}");
     }
+    // The retired node's old local IDs stay permanent aliases (AC3).
+    for (old, title) in [
+        ("STORY-7-001", "legacy node spec"),
+        ("TASK-7-050", "legacy task 50"),
+        ("task-7-70", "legacy task 70"),
+    ] {
+        let shown = f.aida_ok(&["show", old]);
+        assert!(shown.contains(title), "{old}: {shown}");
+    }
+    // 70 renamed TASKs: the bound counter sits above them, so a task add
+    // mints the next free local ID instead of exhausting its skips.
+    let out = f.aida(&[
+        "add",
+        "--type",
+        "task",
+        "--title",
+        "task after rename",
+        "--description",
+        "fixture",
+    ]);
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let task = f.by_title("task after rename");
+    let task_local = task.spec_id.clone().unwrap().to_ascii_uppercase();
+    assert!(
+        task_local.starts_with(&format!("TASK-{node}-")),
+        "{task_local}"
+    );
+    let n: u32 = task_local.rsplit('-').next().unwrap().parse().unwrap();
+    assert!(n > 70, "above every renamed TASK: {task_local}");
+    assert_eq!(task.agreed_id.as_deref(), Some("TASK-71"));
     // The agent list shows the local ID beside the agreed one.
     let listed = f.aida_ok(&["list"]);
     let row = listed
@@ -367,4 +413,91 @@ fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
     );
     assert!(said.contains("records node someone-else"), "{said}");
     assert!(f.objects().iter().all(|r| r.title != "refused"));
+}
+
+/// A non-root clone holding a delegated BUG block (carved from the root's
+/// pool on its upstream) dispenses `aida add` from it instead of
+/// downgrading: the object carries the block's agreed ID and the clone's
+/// local ID, and `blocks.yaml` records the block's advanced `next`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac5e9c08 | ai:claude
+#[test]
+fn story_105_non_root_add_dispenses_from_a_delegated_block() {
+    let f = Fixture::new();
+    let out = f.add("bind the clone");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let node = aida_core::work_binding::load(&f.store)
+        .unwrap()
+        .expect("the first add binds the clone")
+        .node_id;
+    f.git(&[
+        "remote",
+        "add",
+        "gitlab",
+        "https://example.invalid/aida.git",
+    ]);
+    f.aida_ok(&["node", "upstream", "gitlab"]);
+    let registry = f.store.join("registry");
+    fs::create_dir_all(&registry).unwrap();
+    fs::write(registry.join("root.yaml"), "holder_node: R\nepoch: 1\n").unwrap();
+    fs::write(
+        registry.join("pools.yaml"),
+        "pools:\n- pool_id: p-bug\n  type_prefix: BUG\n  range_start: 1\n  range_end: 1000\n  holder_node: R\n  home_ref: gitlab/aida-store\n",
+    )
+    .unwrap();
+    let blocks = registry.join("blocks.yaml");
+    fs::write(
+        &blocks,
+        format!(
+            "blocks:\n- node_id: '{node}'\n  owner: o\n  hostname: h\n  type_prefix: BUG\n  range_start: 101\n  range_end: 200\n  next: 102\n  allocated_at: 2026-10-31T00:00:00Z\n  pool_id: p-bug\n"
+        ),
+    )
+    .unwrap();
+
+    let out = f.aida(&[
+        "add",
+        "--type",
+        "bug",
+        "--title",
+        "delegated bug",
+        "--description",
+        "fixture",
+    ]);
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{said}");
+    let bug = f.by_title("delegated bug");
+    assert_eq!(bug.agreed_id.as_deref(), Some("BUG-102"), "{said}");
+    let local = bug.spec_id.clone().unwrap();
+    assert!(
+        local
+            .to_ascii_uppercase()
+            .starts_with(&format!("BUG-{}-", node.to_ascii_uppercase())),
+        "the clone's own local ID beside the agreed one: {local}"
+    );
+    assert!(
+        said.contains("BUG-102 ("),
+        "agreed first, local beside: {said}"
+    );
+    let ledger = aida_core::BlockRegistry::load(&blocks).unwrap();
+    assert_eq!(ledger.blocks[0].next, 103, "the block's next advanced");
+    // Both IDs open the spec.
+    for id in ["BUG-102", local.as_str()] {
+        let shown = f.aida_ok(&["show", id]);
+        assert!(shown.contains("delegated bug"), "{id}: {shown}");
+    }
+    // A type with no delegated block still downgrades to a local ID only.
+    let out = f.add("story without a block");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(f.by_title("story without a block").agreed_id, None);
 }

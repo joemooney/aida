@@ -60,6 +60,84 @@ pub struct NodeAliasBinding {
 pub struct NodeAliasMap {
     #[serde(default, rename = "binding")]
     pub bindings: Vec<NodeAliasBinding>,
+    /// Retired local IDs (`id_key(old)` -> the spec's current `spec_id`),
+    /// read from [`RETIRED_IDS_TOML_REL`], never written to this file.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[serde(skip)]
+    pub retired_ids: std::collections::BTreeMap<String, String>,
+}
+
+/// `registry/retired_ids.toml`: every local ID a rename retired, mapped to
+/// the spec's new local ID, so an old ID (in a commit trailer, a `trace:`
+/// comment, a doc, or typed by hand) keeps resolving to the same spec. Like
+/// the label map it is an INPUT layer only: append-only, and losing it never
+/// corrupts stored data.
+pub const RETIRED_IDS_TOML_REL: &str = "registry/retired_ids.toml";
+
+/// One retired local ID.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RetiredId {
+    pub old: String,
+    pub new: String,
+    pub uuid: String,
+}
+
+/// The retired-ID record (`registry/retired_ids.toml`).
+///
+/// ```toml
+/// [[retired]]
+/// old = "TASK-1-418"
+/// new = "TASK-B6B1278890774EF993D2EBC327862470-178"
+/// uuid = "…"
+/// ```
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RetiredIds {
+    #[serde(default, rename = "retired")]
+    pub entries: Vec<RetiredId>,
+}
+
+impl RetiredIds {
+    /// Load for a WRITE: a malformed file is an error, so a write never
+    /// drops entries it could not read.
+    #[cfg(feature = "native")]
+    pub fn load_strict(store_root: &Path) -> anyhow::Result<Self> {
+        let path = store_root.join(RETIRED_IDS_TOML_REL);
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(e) => return Err(e.into()),
+        };
+        toml::from_str(&content)
+            .map_err(|e| anyhow::anyhow!("{} is malformed ({e})", path.display()))
+    }
+
+    /// Append `old -> new` unless `old` is already recorded. Returns whether
+    /// the record changed.
+    pub fn add(&mut self, old: &str, new: &str, uuid: &str) -> bool {
+        let key = crate::id_identity::id_key(old);
+        if self
+            .entries
+            .iter()
+            .any(|e| crate::id_identity::id_key(&e.old) == key)
+        {
+            return false;
+        }
+        self.entries.push(RetiredId {
+            old: old.trim().to_string(),
+            new: new.trim().to_string(),
+            uuid: uuid.to_string(),
+        });
+        true
+    }
+
+    /// `id_key(old)` -> new local ID.
+    pub fn index(&self) -> std::collections::BTreeMap<String, String> {
+        self.entries
+            .iter()
+            .map(|e| (crate::id_identity::id_key(&e.old), e.new.clone()))
+            .collect()
+    }
 }
 
 /// Validate and normalize a label: upper-cased, `^[A-Z][A-Z0-9]{1,7}$`, not
@@ -132,7 +210,12 @@ impl NodeAliasMap {
     /// map (display falls back to canonical; alias input is then not found).
     #[cfg(feature = "native")]
     pub fn load(store_root: &Path) -> Self {
-        Self::load_strict(store_root).unwrap_or_default()
+        let mut map = Self::load_strict(store_root).unwrap_or_default();
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+        map.retired_ids = RetiredIds::load_strict(store_root)
+            .unwrap_or_default()
+            .index();
+        map
     }
 
     /// Load for a WRITE: a malformed file is an error, so a write never
@@ -276,6 +359,22 @@ impl NodeAliasMap {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
     // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
     pub fn expand(&self, id: &str) -> Option<String> {
+        self.expand_label(id).or_else(|| self.retired_target(id))
+    }
+
+    /// The current local ID of a spec whose old local ID `id` a rename
+    /// retired (see [`RETIRED_IDS_TOML_REL`]).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    pub fn retired_target(&self, id: &str) -> Option<String> {
+        if self.retired_ids.is_empty() {
+            return None;
+        }
+        self.retired_ids
+            .get(&crate::id_identity::id_key(id))
+            .cloned()
+    }
+
+    fn expand_label(&self, id: &str) -> Option<String> {
         let (prefix, middle, seq) = split_three(id)?;
         let node = self.node_for_label(middle)?;
         let seq = seq

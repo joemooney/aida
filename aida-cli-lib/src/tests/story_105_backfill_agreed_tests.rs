@@ -218,6 +218,86 @@ fn story_105_corrupt_blocks_yaml_refuses_and_leaves_the_ledger() {
     assert_eq!(row.agreed_id, None, "no spec was written");
 }
 
+/// Round 2, finding 4: a failure after files were written restores every
+/// one of them, so no BACKFILL_AUTHOR block lifts the claim gate over
+/// half-assigned specs, and a later run applies cleanly.
+#[test]
+fn story_105_failed_apply_restores_every_written_file() {
+    use aida_core::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
+    backend.save(&aida_core::RequirementsStore::new()).unwrap();
+    for (k, v) in [("user.email", "test@example.com"), ("user.name", "Test")] {
+        let ok = crate::test_git::git_command()
+            .args(["config", k, v])
+            .current_dir(&store)
+            .status()
+            .unwrap();
+        assert!(ok.success());
+    }
+    let objects = store.join("objects");
+    let a = plant(&objects, &format!("STORY-{NODE}-001"), None);
+    let b = plant(&objects, &format!("STORY-{NODE}-002"), None);
+    let yes = BackfillOptions {
+        yes: true,
+        ..Default::default()
+    };
+    for step in ["object", "end"] {
+        FAIL_AT.with(|f| f.set(Some(step)));
+        let err = run(&store, &yes).unwrap_err();
+        FAIL_AT.with(|f| f.set(None));
+        assert!(
+            format!("{err:#}").contains("was restored"),
+            "{step}: {err:#}"
+        );
+        let after = aida_core::object_store::load_all_objects(&objects).unwrap();
+        assert!(
+            after.iter().all(|r| r.agreed_id.is_none()),
+            "{step}: every object restored"
+        );
+        assert!(!store.join("registry/blocks.yaml").exists(), "{step}");
+        assert!(
+            !store.join("registry/agreed_counters.toml").exists(),
+            "{step}"
+        );
+    }
+    run(&store, &yes).unwrap();
+    let after = aida_core::object_store::load_all_objects(&objects).unwrap();
+    for uuid in [a.id, b.id] {
+        let r = after.iter().find(|r| r.id == uuid).unwrap();
+        assert!(r.agreed_id.is_some(), "{r:?}");
+    }
+}
+
+/// Round 2, finding 2: a retired local ID resolves to the renamed spec
+/// through the shared resolution order, and a literal stored ID still wins.
+#[test]
+fn story_105_retired_ids_resolve_to_the_renamed_spec() {
+    let mut retired = aida_core::node_alias::RetiredIds::default();
+    assert!(retired.add("TASK-1-418", &format!("TASK-{NODE}-178"), "u"));
+    assert!(
+        !retired.add("task-1-0418", "TASK-X-1", "u"),
+        "recorded once"
+    );
+    let map = aida_core::node_alias::NodeAliasMap {
+        retired_ids: retired.index(),
+        ..Default::default()
+    };
+    let want = format!("TASK-{NODE}-178");
+    assert_eq!(map.expand("TASK-1-418").as_deref(), Some(want.as_str()));
+    assert_eq!(map.expand("task-1-0418").as_deref(), Some(want.as_str()));
+    assert_eq!(map.expand("TASK-1-419"), None);
+    let _guard = aida_core::node_alias::install_for_thread(map);
+    let hit = aida_core::node_alias::resolve_literal_first_opt("TASK-1-418", |id| {
+        (id == want).then(|| id.to_string())
+    });
+    assert_eq!(hit.as_deref(), Some(want.as_str()));
+    let literal =
+        aida_core::node_alias::resolve_literal_first_opt("TASK-1-418", |id| Some(id.to_string()));
+    assert_eq!(literal.as_deref(), Some("TASK-1-418"), "literal first");
+}
+
 /// Review item 5: the legacy node's specs get the bound node's next free
 /// local IDs per type (above the store's highest and the bound counter),
 /// in old-number order, skipping a number already taken.

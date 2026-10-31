@@ -3413,6 +3413,19 @@ fn run_add(
                                                     } else {
                                                         registry.save(&blocks_path)
                                                     };
+                                                    // A delegated block's number must be
+                                                    // recorded before the spec is written:
+                                                    // unrecorded, admission cannot see it as
+                                                    // spent and a later add reissues it.
+                                                    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                                                    if let (Err(e), true) =
+                                                        (&saved, delegated_idx.is_some())
+                                                    {
+                                                        anyhow::bail!(
+                                                            "could not record {agreed_id} as spent in {}: {e:#}; nothing was filed",
+                                                            blocks_path.display()
+                                                        );
+                                                    }
                                                     if let Err(e) = saved {
                                                         eprintln!(
                                                             "Warning: could not save blocks.yaml: {}",
