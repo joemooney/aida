@@ -5,6 +5,7 @@
 
 pub mod client;
 pub mod evaluator;
+pub mod headless_posture;
 pub mod prompts;
 pub mod responses;
 

@@ -1643,6 +1643,9 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     let mut cmd = Command::new(program);
     cmd.args(args)
         .env("AIDA_HEADLESS", "1")
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude — belt and
+        // braces alongside the `--settings` env: no background tasks.
+        .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
         .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
@@ -2932,38 +2935,14 @@ pub(crate) fn claude_headless_args_for_roots(
     Ok(args)
 }
 
-/// BUG-050: the tools a headless `claude -p` session never gets.
-/// `AskUserQuestion` has no human to answer it (BUG-327). `Monitor` arms a
-/// watch that reports back on a *later* turn, and `-p` has no later turn:
-/// a lane that armed one ended its only turn and hung, its work uncommitted.
+/// BUG-050: THE headless `claude -p` posture lives in `aida-core` (the AI
+/// client takes it too); every headless claude argv builder takes its flags
+/// from [`headless_claude_posture`] or [`headless_claude_posture_for`] (a
+/// ratchet test in this file enforces it across both crates).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-pub(crate) const HEADLESS_DISALLOWED_TOOLS: &[&str] = &["AskUserQuestion", "Monitor"];
-
-/// BUG-050: the Claude Code variable that turns off background tasks: Bash's
-/// `run_in_background`, auto-backgrounding of a long command, and background
-/// subagents. Claude Code 2.1.316 reads it (probed in the binary); set
-/// through the `--settings` document's `env`, so it rides the argv.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-pub(crate) const DISABLE_BACKGROUND_TASKS_ENV: &str = "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS";
-
-/// BUG-050: THE headless `claude -p` posture. Every headless claude argv
-/// builder takes its flags from here, or from [`headless_claude_posture_for`]
-/// (a ratchet test in `session.rs` enforces it). `contained_flags` is the
-/// contained `--settings` pair, or empty for an uncontained launch. Returns
-/// those flags with the no-background posture applied
-/// ([`headless_no_background_settings`]), then `--disallowed-tools` with
-/// [`HEADLESS_DISALLOWED_TOOLS`].
-///
-/// The tool list is variadic on claude's side: the caller must follow these
-/// flags with another `--flag` (or end the argv), never with the prompt
-/// positional, which the list would swallow.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-pub(crate) fn headless_claude_posture(contained_flags: Vec<String>) -> Result<Vec<String>> {
-    let mut flags = headless_no_background_settings(contained_flags)?;
-    flags.push("--disallowed-tools".to_string());
-    flags.extend(HEADLESS_DISALLOWED_TOOLS.iter().map(|t| t.to_string()));
-    Ok(flags)
-}
+pub(crate) use aida_core::ai::headless_posture::{
+    headless_claude_posture, DISABLE_BACKGROUND_TASKS_ENV,
+};
 
 /// [`headless_claude_posture`] for a launch that is `contained` in the
 /// process cwd's boundary ([`claude_contained_flags`]), or not.
@@ -3015,50 +2994,6 @@ pub(crate) fn assert_headless_posture(args: &[String], contained: bool, label: &
         args.get(at + 3).is_none_or(|next| next.starts_with('-')),
         "[{label}] the tool list must be ended by a flag, not the prompt: {args:?}"
     );
-}
-
-/// BUG-050: `flags` (the contained `--settings` flags, or none) with the
-/// headless no-background posture added: the `--settings` document gains
-/// `env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` and a `Monitor` deny rule.
-/// Without contained flags, a `--settings` document carrying only those two
-/// is appended. Headless only: the interactive contained launch builds the
-/// same settings and keeps background tasks, since a human turn follows.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-fn headless_no_background_settings(mut flags: Vec<String>) -> Result<Vec<String>> {
-    let at = match flags.iter().position(|f| f == "--settings") {
-        Some(at) => at,
-        None => {
-            flags.extend(["--settings".to_string(), "{}".to_string()]);
-            flags.len() - 2
-        }
-    };
-    let value = flags
-        .get_mut(at + 1)
-        .ok_or_else(|| anyhow::anyhow!("`--settings` without a value"))?;
-    let mut settings: serde_json::Value =
-        serde_json::from_str(value).context("the `--settings` document is not JSON")?;
-    let obj = settings
-        .as_object_mut()
-        .ok_or_else(|| anyhow::anyhow!("the `--settings` document is not an object"))?;
-    obj.entry("env")
-        .or_insert_with(|| serde_json::json!({}))
-        .as_object_mut()
-        .ok_or_else(|| anyhow::anyhow!("the `--settings` env is not an object"))?
-        .insert(DISABLE_BACKGROUND_TASKS_ENV.to_string(), "1".into());
-    let deny = obj
-        .entry("permissions")
-        .or_insert_with(|| serde_json::json!({}))
-        .as_object_mut()
-        .ok_or_else(|| anyhow::anyhow!("the `--settings` permissions is not an object"))?
-        .entry("deny")
-        .or_insert_with(|| serde_json::json!([]))
-        .as_array_mut()
-        .ok_or_else(|| anyhow::anyhow!("the `--settings` permissions.deny is not a list"))?;
-    if !deny.iter().any(|r| r == "Monitor") {
-        deny.push("Monitor".into());
-    }
-    *value = settings.to_string();
-    Ok(flags)
 }
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
@@ -4412,6 +4347,9 @@ fn build_exec_vendor_headless_command_for(
     child_cmd
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude — belt and
+        // braces alongside the `--settings` env: no background tasks.
+        .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
@@ -4470,10 +4408,7 @@ pub(crate) fn exec_vendor_headless(
     // standalone launch's resume safety net, through the same loop: a lane
     // that parks on its own build is waited for and resumed, bounded.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let lane = lease_id.zip(lane_tree).filter(|_| {
-        vendor == HeadlessVendor::Claude && crate::canonical_role_name(seat) == "implementer"
-    });
-    let result = match lane {
+    let result = match drain_resume_lane(vendor, seat, lease_id, lane_tree) {
         None => run_once(prompt, log_path, false, None),
         Some((lease, (worktree, branch))) => {
             drain_lane_with_resume(lease, worktree, branch, prompt, log_path, |p, l, r, h| {
@@ -4490,6 +4425,22 @@ pub(crate) fn exec_vendor_headless(
     }
     let status = result?;
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// BUG-050: which [`exec_vendor_headless`] launches get the drain resume
+/// loop: a Claude implementer lane that has both a lease and a seat tree.
+/// Everything else (a reviewer or advisor seat, a Codex/Antigravity lane, a
+/// launch with no lease or no lane tree) runs once.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn drain_resume_lane<'a>(
+    vendor: HeadlessVendor,
+    seat: &str,
+    lease_id: Option<&'a str>,
+    lane_tree: Option<(&'a Path, &'a str)>,
+) -> Option<(&'a str, (&'a Path, &'a str))> {
+    lease_id.zip(lane_tree).filter(|_| {
+        vendor == HeadlessVendor::Claude && crate::canonical_role_name(seat) == "implementer"
+    })
 }
 
 /// BUG-050: run the `--auto-complete` drain's phase-1 implementer on `lease`
@@ -4557,7 +4508,9 @@ pub(crate) fn apply_headless_child_seat_env(
     grant_env: &str,
 ) {
     cmd.env("AIDA_SESSION_ROLE", seat)
-        .env(crate::gate::seat_authority::GRANT_ENV, grant_env);
+        .env(crate::gate::seat_authority::GRANT_ENV, grant_env)
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        .env(DISABLE_BACKGROUND_TASKS_ENV, "1");
     scrub_launcher_session_env(cmd);
 }
 
@@ -5390,6 +5343,9 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     cmd.current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude — belt and
+        // braces alongside the `--settings` env: no background tasks.
+        .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
         .env("AIDA_SESSION_ROLE", seat)
         .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: same drive-root anchor as the spawn path — the two launch
@@ -8420,6 +8376,47 @@ mod tests {
         );
     }
 
+    /// BUG-050: only a Claude implementer lane with a lease and a seat tree
+    /// gets the drain resume loop; the queue lane launch wires the lease's
+    /// worktree and branch into it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    #[test]
+    fn only_a_claude_implementer_lane_gets_the_drain_resume_loop() {
+        let tree = Path::new("/seat");
+        let lane = Some((tree, "bug-1"));
+        assert_eq!(
+            drain_resume_lane(HeadlessVendor::Claude, "implementer", Some("L1"), lane),
+            Some(("L1", (tree, "bug-1")))
+        );
+        for (vendor, seat, lease, lane_tree) in [
+            (HeadlessVendor::Claude, "reviewer", Some("L1"), lane),
+            (HeadlessVendor::Claude, "advisor", Some("L1"), lane),
+            (HeadlessVendor::Codex, "implementer", Some("L1"), lane),
+            (HeadlessVendor::Agy, "implementer", Some("L1"), lane),
+            (HeadlessVendor::Claude, "implementer", None, lane),
+            (HeadlessVendor::Claude, "implementer", Some("L1"), None),
+        ] {
+            assert_eq!(
+                drain_resume_lane(vendor, seat, lease, lane_tree),
+                None,
+                "{vendor:?} {seat} {lease:?} {lane_tree:?}"
+            );
+        }
+        // The one production caller passes the lane's seat, not None.
+        let queue =
+            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/queue_cmd.rs"))
+                .unwrap();
+        let call = queue
+            .find("session::exec_vendor_headless(")
+            .expect("queue lane launch");
+        let args = &queue[call..call + queue[call..].find(");").unwrap()];
+        assert!(
+            args.contains("Some(&lease.id)")
+                && args.contains("Some((&lease.worktree_path, &lease.branch))"),
+            "the queue lane must hand its lease and seat tree to the resume loop: {args}"
+        );
+    }
+
     /// BUG-050 ratchet: every non-test function that builds a `claude` argv
     /// with `-p` (print mode: a headless run with no later turn) takes its
     /// flags from [`headless_claude_posture`] or
@@ -8427,12 +8424,17 @@ mod tests {
     /// composes its own flags fails here; route it through the helper.
     /// Functions that pass `-p` to another program (cargo, git, systemd-run,
     /// tmux, ps, agy) and name no claude are not claude argv builders.
+    /// Scans `aida-cli-lib/src` and `aida-core/src`; in `aida-core/src/ai`
+    /// (the AI client, which only ever drives the claude CLI) every `-p`
+    /// counts as a claude builder whether or not it names claude.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     #[test]
     fn every_headless_claude_argv_goes_through_the_posture_helper() {
-        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest.parent().unwrap();
+        let src = workspace;
         let mut files = Vec::new();
-        let mut dirs = vec![src.clone()];
+        let mut dirs = vec![manifest.join("src"), workspace.join("aida-core/src")];
         while let Some(dir) = dirs.pop() {
             for entry in std::fs::read_dir(&dir).unwrap().flatten() {
                 let path = entry.path();
@@ -8456,6 +8458,7 @@ mod tests {
         };
         let mut offenders = Vec::new();
         let mut sites = 0;
+        let mut core_sites = 0;
         for file in files {
             let text = std::fs::read_to_string(&file).unwrap();
             // Production code only: stop at the unit-test module.
@@ -8476,15 +8479,19 @@ mod tests {
                     .filter(|l| !l.trim_start().starts_with("//"))
                     .map(|l| format!("{l}\n"))
                     .collect();
-                if !body.to_ascii_lowercase().contains("claude") {
+                let rel = file.strip_prefix(src).unwrap_or(&file);
+                let ai_client = rel.starts_with("aida-core/src/ai");
+                if !ai_client && !body.to_ascii_lowercase().contains("claude") {
                     continue;
                 }
                 sites += 1;
+                if ai_client {
+                    core_sites += 1;
+                }
                 // Argv templates, never launched as built: every compete arm
                 // and judge launches through `compete_cmd::compete_arm_argv`,
                 // which leads with the posture.
-                let rel = file.strip_prefix(&src).unwrap_or(&file);
-                if rel == std::path::Path::new("compete.rs")
+                if rel == std::path::Path::new("aida-cli-lib/src/compete.rs")
                     && ["fn vendor_adapter(", "fn judge_command("]
                         .iter()
                         .any(|f| lines[start].contains(f))
@@ -8494,7 +8501,7 @@ mod tests {
                 if !body.contains("headless_claude_posture") {
                     offenders.push(format!(
                         "{}:{}: {}",
-                        file.strip_prefix(&src).unwrap_or(&file).display(),
+                        rel.display(),
                         i + 1,
                         lines[start].trim()
                     ));
@@ -8504,6 +8511,10 @@ mod tests {
         assert!(
             sites >= 5,
             "the scan found too few claude -p builders ({sites})"
+        );
+        assert!(
+            core_sites >= 1,
+            "the scan missed the aida-core AI client's claude -p builder"
         );
         assert!(
             offenders.is_empty(),

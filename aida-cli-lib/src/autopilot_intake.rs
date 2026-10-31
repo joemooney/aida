@@ -1030,6 +1030,8 @@ pub(crate) fn build_autopilot_intake_command(
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     command.args(crate::session::headless_claude_posture_for(contained)?);
     command
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        .env(crate::session::DISABLE_BACKGROUND_TASKS_ENV, "1")
         .env("AIDA_SESSION_ROLE", "advisor")
         .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id)
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })

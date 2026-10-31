@@ -132,9 +132,11 @@ round whose PR is still open but which has not pushed is treated like a run
 with no PR: it is resumed if it parked. The `--auto-complete` drain's
 phase-1 Claude implementer gets the same wait-and-resume behavior. Every
 headless `claude -p` launch (queue lanes, burndown, autopilot intake,
-compete arms and judges, Ask-AI) runs without the `Monitor` tool and with
-background tasks turned off (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` in its
-`--settings`), since no later turn ever comes to collect them.
+compete arms and judges, Ask-AI, the AI client) runs without the `Monitor`
+tool and with background tasks turned off
+(`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, set both in the child's
+environment and in the Claude settings document it is launched with), since
+no later turn ever comes to collect them.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude -->
 
 The child must stop once its PR is open. Inside it, `aida pr ship` and
