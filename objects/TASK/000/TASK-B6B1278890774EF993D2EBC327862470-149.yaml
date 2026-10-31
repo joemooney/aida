@@ -1,0 +1,24 @@
+id: 01a19213-43be-7a10-85f9-35415a8c7bcc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-149
+title: 'After the BUG-046 store apply: drop dead digits (API + metadata), numeric sync-guard grouping'
+description: |
+  Follow-ups from the BUG-HOME-046 round-2 rework (PR-3161), bundled as ONE task per the advisor's 04:55 ruling. Do this AFTER PR-3161 merges and the advisor has run the store apply (`aida doctor --fix id-collisions --mapping docs/plans/2026-10-31-id-collision-renumber.tsv --yes`).
+  1. The server REST/gRPC APIs still expose id_config.digits, which no longer has any effect. Remove it from both, and update the API docs and tests.
+  2. Remove `digits: 4` from the store's metadata.yaml (a one-time store edit; single user, no shim).
+  3. Switch the cache sync guard (spec_id_collisions) from text grouping to numeric id_key grouping.
+  Acceptance: none of the three remains; doctor reports 0 id-collision groups; a sync-guard test covers padded twins.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T13:08:18.494911922Z
+modified_at: 2026-10-31T13:08:18.494911922Z
+req_type: Task
+filed_at:
+  code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d083bdf13d4
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
