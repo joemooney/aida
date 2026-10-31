@@ -16,12 +16,12 @@ description: |
 
   ## Out of scope
   GitLab Pages deployment (separate task).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.470798142Z
-modified_at: 2026-10-31T22:38:18.081211191Z
+modified_at: 2026-10-31T23:18:21.400833866Z
 req_type: Task
 tags:
 - air-gap
@@ -67,6 +67,21 @@ comments:
   modified_at: 2026-10-31T22:38:18.081211191Z
   session_id: 01a1941b7369
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19441-45f7-7cf3-ba51-76ebb4894003
+  author: joe
+  content: |-
+    ## Implementer findings (could not be filed as draft TASKs: `aida add` ID allocation fails in this sandbox with a read-only file system)
+
+    1. **kind:deviation · severity:minor:** the private draft artifact could not be read (Claude Docs access denied in the headless session). `docs/air-gapped-development.md` was written from the built behaviour in `docs/cli/10-storage.md` and `docs/multi-hub-sync.md`. It covers the same topics, but the wording and diagrams are new. Worth a pass by someone who can read the draft.
+    2. **kind:followup-suggestion · severity:minor:** AC6 (gh-pages snapshot from an approved merged revision) is a post-merge step: refresh gh-pages per `docs/showcase/README.md` after merge. Revise the page when (a) single-hub mode without a root ships (currently "planned"), (b) the air-gap bundle spike reports (walkthrough steps 4 and 6 say "untested"), and (c) pool grants and upstream block claims ship (steps 3 and 5 say "planned").
+
+    Branch: task-b6b1278890774ef993d2ebc327862470-277 · Commit: 445fb7ee316
+
+    Local gate: all 35 non-cargo fast gates passed, plus the showcase build check and its unit tests. The cargo gate (`Check aida-cli without default features`) could not finish within this sandbox's per-call limit; the change touches no Rust.
+  created_at: 2026-10-31T23:17:48.151670333Z
+  modified_at: 2026-10-31T23:17:48.151670333Z
+  session_id: 01a1941b7369
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-9c9c-7bc2-b372-5391b71b2076
   author: joe
@@ -92,6 +107,15 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: TASK-2603
+- id: 01a19441-c848-7751-a6b6-b1f4f8e73f07
+  author: joe
+  timestamp: 2026-10-31T23:18:21.512947620Z
+  session_id: 01a1941b7369
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -99,3 +123,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 584e95e4505
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T23:18:21.400833866Z
+  implemented_by: joe
