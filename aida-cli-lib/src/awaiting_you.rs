@@ -940,6 +940,9 @@ pub(crate) struct CronChannel {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct MailChannel {
     pub unread: usize,
+    /// Urgent unread mail to this session: its own inbox plus its role's
+    /// (`role_urgent` of these), since role mail is direct mail.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
     pub urgent: usize,
     /// Unread mail in the shared role / agent-type inboxes this session also
     /// reads, EXCLUDING anything already counted in `unread` (a broadcast is
@@ -960,6 +963,8 @@ pub(crate) struct MailChannel {
     pub role_unread: usize,
     /// The role `role_unread` counts, e.g. `advisor`.
     pub role: Option<String>,
+    /// How many of `urgent` are role mail.
+    pub role_urgent: usize,
     /// The newest unread items (own, role and shared), `[request]` first,
     /// capped at [`MAIL_PREVIEW_LINES`], so the notice names who wrote what.
     pub previews: Vec<MailPreview>,
@@ -972,36 +977,19 @@ pub(crate) struct MailChannel {
 }
 
 impl MailChannel {
-    /// Fold in a role channel built apart from this one (the inspected role
-    /// that is not a verified audience key): its count, previews, overdue
-    /// requests and stale notices join this channel's, so the notice names
-    /// that role's mail by sender and subject like any direct mail.
+    /// The urgent mail in the session's own inbox, apart from its role's.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
-    pub(crate) fn absorb_role(&mut self, role: MailChannel) {
-        use aida_core::mailbox::Intent;
-        self.stale_automated += role.stale_automated;
-        if role.role_unread == 0 {
-            return;
-        }
-        self.role_unread += role.role_unread;
-        if self.role.is_none() {
-            self.role = role.role;
-        }
-        let rank = |i: Intent| match i {
-            Intent::Request => 0,
-            Intent::Handoff => 1,
-            Intent::Fyi => 2,
-        };
-        self.previews.extend(role.previews);
-        self.previews.sort_by(|a, b| {
-            rank(a.intent)
-                .cmp(&rank(b.intent))
-                .then_with(|| a.age_secs.cmp(&b.age_secs))
-        });
-        self.previews.truncate(MAIL_PREVIEW_LINES);
-        self.overdue_requests.extend(role.overdue_requests);
-        self.overdue_requests
-            .sort_by(|a, b| b.age_secs.cmp(&a.age_secs));
+    pub(crate) fn own_urgent(&self) -> usize {
+        self.urgent.saturating_sub(self.role_urgent)
+    }
+}
+
+/// ` (N urgent)`, or nothing when none is.
+fn urgent_suffix(n: usize) -> String {
+    if n > 0 {
+        format!(" ({n} urgent)")
+    } else {
+        String::new()
     }
 }
 
@@ -1208,11 +1196,12 @@ pub(crate) fn split_mail_scopes_for_role(
 
     MailChannel {
         unread: own.len(),
-        urgent: own.iter().filter(|m| m.urgent).count(),
+        urgent: own.iter().chain(&role_mail).filter(|m| m.urgent).count(),
         shared_unread: shared_mail.len(),
         shared_scope: (!shared_mail.is_empty()).then(|| shared_ids.join(" + ")),
         partial: false,
         role_unread: role_mail.len(),
+        role_urgent: role_mail.iter().filter(|m| m.urgent).count(),
         role: role.filter(|_| !role_mail.is_empty()).map(str::to_string),
         previews,
         overdue_requests: overdue
@@ -2586,11 +2575,7 @@ impl AwaitingReport {
             if budget == 0 {
                 overflow += 1;
             } else {
-                let urgent = if self.mail.urgent > 0 {
-                    format!(" ({} urgent)", self.mail.urgent)
-                } else {
-                    String::new()
-                };
+                let urgent = urgent_suffix(self.mail.own_urgent());
                 writeln!(
                     w,
                     "  {} {} unread mail{}{} — `{}`",
@@ -2628,10 +2613,11 @@ impl AwaitingReport {
                 let role = self.mail.role.as_deref().unwrap_or("your role");
                 writeln!(
                     w,
-                    "  {} {} unread mail to {} — `{}`",
+                    "  {} {} unread mail to {}{} — `{}`",
                     crate::glyph(crate::glyphs::Glyph::IncomingMail),
                     self.mail.role_unread,
                     role,
+                    urgent_suffix(self.mail.role_urgent),
                     format!("aida mailbox inbox {role}").cyan(),
                 )?;
                 budget -= 1;
@@ -2661,7 +2647,12 @@ impl AwaitingReport {
         // Old automated notices: one line, never counted as new mail.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
         if self.mail.stale_automated > 0 {
-            writeln!(w, "  {}", self.stale_automated_line())?;
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                writeln!(w, "  {}", self.stale_automated_line())?;
+                budget -= 1;
+            }
         }
         // trace:STORY-1843 | ai:claude
         if self.mail.partial {
@@ -3207,11 +3198,7 @@ impl AwaitingReport {
             }
         }
         if self.mail.unread > 0 {
-            let urgent = if self.mail.urgent > 0 {
-                format!(" ({} urgent)", self.mail.urgent)
-            } else {
-                String::new()
-            };
+            let urgent = urgent_suffix(self.mail.own_urgent());
             parts.push(format!(
                 "{}{}",
                 pluralize(self.mail.unread, "mail", "mail"),
@@ -3229,9 +3216,10 @@ impl AwaitingReport {
         }
         if self.mail.role_unread > 0 {
             parts.push(format!(
-                "{} mail to {}",
+                "{} mail to {}{}",
                 self.mail.role_unread,
-                self.mail.role.as_deref().unwrap_or("your role")
+                self.mail.role.as_deref().unwrap_or("your role"),
+                urgent_suffix(self.mail.role_urgent)
             ));
         }
         // trace:BUG-767 | ai:claude
@@ -3843,6 +3831,7 @@ mod tests {
         )
     }
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac637a5f | ai:claude
     #[test]
     fn role_mail_is_direct_not_shared() {
         use aida_core::mailbox::Intent;
@@ -3867,6 +3856,7 @@ mod tests {
         assert!(line.contains("1 shared mail"), "{line}");
     }
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac8c3b1b | ai:claude
     #[test]
     fn previews_put_requests_first_then_newest_capped_at_three() {
         use aida_core::mailbox::Intent;
@@ -3886,6 +3876,7 @@ mod tests {
         );
     }
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac212b9a | ai:claude
     #[test]
     fn old_automated_notices_drop_out_of_counts_into_one_summary() {
         use aida_core::mailbox::Intent;
@@ -3931,6 +3922,7 @@ mod tests {
         }
     }
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac206206 | ai:claude
     #[test]
     fn requests_unread_past_thirty_minutes_escalate_for_the_addressed_seat() {
         use aida_core::mailbox::Intent;

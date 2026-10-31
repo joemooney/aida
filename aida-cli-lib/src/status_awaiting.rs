@@ -519,15 +519,15 @@ pub(crate) fn collect_awaiting_report_inner(
 }
 
 /// Unread mail addressed to `role` that the reader's audience does not
-/// cover, read (to be counted, never shown) over this checkout and the
-/// canonical store with the role's read watermark and its receipts in any
-/// worktree, skipping IDs already counted.
+/// cover, counted (never shown) over this checkout and the canonical store
+/// with the role's read watermark and its receipts in any worktree, skipping
+/// IDs already counted.
 // trace:TASK-1245 trace:STORY-1843 | ai:claude
 fn inspected_role_unread(
     project_root: &std::path::Path,
     role: &str,
     counted: &std::collections::HashSet<&str>,
-) -> Vec<aida_core::mailbox::Message> {
+) -> usize {
     let store_root = project_root.join(".aida-store");
     let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
     let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
@@ -537,8 +537,7 @@ fn inspected_role_unread(
     aida_core::mailbox::unread_for_identities([role], &merged, &evidence.watermarks)
         .into_iter()
         .filter(|m| !counted.contains(m.id.as_str()) && !evidence.receipted(role, m))
-        .cloned()
-        .collect()
+        .count()
 }
 
 /// The unread-mail channel for the session `facts` describe: its own inbox
@@ -631,23 +630,18 @@ pub(crate) fn collect_mail_channel(
     if let Some(role) = inspected_role {
         let counted: std::collections::HashSet<&str> =
             unread.iter().map(|m| m.id.as_str()).collect();
-        // The inspected role's mail is the seat's direct mail too, so it is
-        // split like the audience role's: named by sender and subject, its
-        // unanswered requests overdue, its old automated notices collapsed.
+        // COUNT-ONLY: an inspected role is not recipient authority, so its
+        // mail never reaches a sender, subject or overdue item — only the
+        // verified `role_key` path above names role mail.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
-        let inspected: Vec<aida_core::mailbox::Message> =
-            inspected_role_unread(project_root, &role, &counted)
-                .into_iter()
-                .filter(|m| m.to != aida_core::mailbox::Recipient::Broadcast)
-                .collect();
-        channel.absorb_role(awaiting_you::split_mail_scopes_for_role(
-            "",
-            Some(&role),
-            &[],
-            &inspected,
-            &std::collections::HashMap::new(),
-            now,
-        ));
+        let inspected = inspected_role_unread(project_root, &role, &counted);
+        if inspected > 0 {
+            channel.shared_unread += inspected;
+            channel.shared_scope = Some(match channel.shared_scope.take() {
+                Some(scope) => format!("{scope} + {role}"),
+                None => role,
+            });
+        }
     }
     channel.partial = view.is_partial();
     channel
