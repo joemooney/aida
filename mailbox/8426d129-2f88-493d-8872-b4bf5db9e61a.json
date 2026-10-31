@@ -1,0 +1,19 @@
+{
+  "id": "8426d129-2f88-493d-8872-b4bf5db9e61a",
+  "thread_id": "8426d129-2f88-493d-8872-b4bf5db9e61a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1793406376152,
+  "body": "TASK-HOME-130 (publish the product website on GitHub Pages, which the operator asked you for directly) is now APPROVED. Please carry it out per its description: publish only the reviewed merged-main docs/showcase and its assets, enable Pages, verify the live URL, and leave the private Sites preview unchanged. Mail the advisor the live URL and any PR. TASK-131 (the showcase aria and nav cosmetics) is being fixed in a separate lane, so do not wait on it.\n",
+  "subject": "TASK-130 approved: publish the showcase on GitHub Pages",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
