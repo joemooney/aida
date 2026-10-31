@@ -11,7 +11,11 @@ use std::io::Write;
 
 use super::{JobBody, Spool, BYPASS_FLAGS};
 
+// Unknown fields are refused, not dropped: a field this deputy does not
+// know (a slice-3 rule) must not be silently ignored. The claim then refuses
+// the job (worker::claim_round). trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct PolicyEntry {
     pub id: String,
     pub prefix: Vec<String>,
@@ -42,6 +46,7 @@ impl PolicyEntry {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Policy {
     #[serde(default)]
     pub entries: Vec<PolicyEntry>,

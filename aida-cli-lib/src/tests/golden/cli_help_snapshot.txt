@@ -28135,6 +28135,9 @@ Commands:
   allow   Let a command prefix run on a terminal (at your terminal only)
   deny    Remove a TTY entry by id or prefix (at your terminal only)
   policy  Show the live TTY entries
+  pause   Stop claiming new jobs; running jobs finish
+  resume  Claim jobs again after a pause (at your terminal only)
+  ack     Acknowledge failed jobs so `aida awaiting` stops listing them
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -28182,6 +28185,11 @@ Options:
           is never stopped for it; its --timeout still applies
           
           [default: 10s]
+
+      --keep-after-mandate
+          Keep running after the mandate active at start expires or is stopped. Without it the
+          deputy stops claiming then and exits once its running jobs finish. It always does so when
+          your grant ends
 
   -h, --help
           Print help (see a summary with '-h')
@@ -28443,6 +28451,94 @@ Show the live TTY entries
 Usage: aida deputy policy [OPTIONS]
 
 Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy pause
+Stop claiming new jobs; running jobs finish
+
+Usage: aida deputy pause [OPTIONS]
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy resume
+Claim jobs again after a pause (at your terminal only)
+
+Usage: aida deputy resume [OPTIONS]
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy ack
+Acknowledge failed jobs so `aida awaiting` stops listing them
+
+Usage: aida deputy ack [OPTIONS] [IDS]...
+
+Arguments:
+  [IDS]...
+          The failed job ids to acknowledge
+
+Options:
+      --all
+          Acknowledge every failed job you submitted (every one, outside a session)
+
       --name <NAME>
           Which deputy
           
@@ -57311,7 +57407,7 @@ Working on aida itself
       {
         "name": "keep-after-mandate",
         "takes_value": false,
-        "help": "Keep running after the mandate expires (the mandate tie-in arrives in a later release; accepted now so start lines stay stable)"
+        "help": "Keep running after the mandate active at start expires or is stopped. Without it the deputy stops claiming then and exits once its running jobs finish. It always does so when your grant ends"
       },
       {
         "name": "name",
@@ -57616,6 +57712,104 @@ Working on aida itself
     ],
     "about": "Show the live TTY entries",
     "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "pause"
+    ],
+    "about": "Stop claiming new jobs; running jobs finish",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "resume"
+    ],
+    "about": "Claim jobs again after a pause (at your terminal only)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "ack"
+    ],
+    "about": "Acknowledge failed jobs so `aida awaiting` stops listing them",
+    "flags": [
+      {
+        "name": "all",
+        "takes_value": false,
+        "help": "Acknowledge every failed job you submitted (every one, outside a session)"
+      },
       {
         "name": "canonical-ids",
         "takes_value": false,

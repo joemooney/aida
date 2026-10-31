@@ -1186,6 +1186,20 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // `orphaned_in_progress` above.
     let blocked_seats = collect_blocked_seat_items(project_root);
 
+    // Failed deputy jobs nobody acknowledged: the reading session's own when
+    // it has a session id, all of them in the operator's shell. File reads
+    // only, so cheap on the notice path too.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    let deputy_failed = {
+        let session = std::env::var("AIDA_SESSION_ID")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        crate::deputy::unacked_failed_jobs(
+            &main_worktree_root_from(project_root),
+            session.as_deref(),
+        )
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         recusal_holds,
@@ -1209,6 +1223,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         orphaned_in_progress,
         idle_in_progress,
         blocked_seats,
+        deputy_failed,
         // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
         // headline (render) and per-turn compact line can scope themselves
         // to channels this seat can act on.
