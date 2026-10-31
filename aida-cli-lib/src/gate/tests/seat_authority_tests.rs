@@ -282,7 +282,7 @@ fn headless_child_gets_its_own_grant_or_baseline_or_refusal() {
                 HeadlessChildAuthority::Delegated
             );
             let HeadlessChildGrant::Issued(child) =
-                issue_headless_child(root, seat, SUBJECT).unwrap()
+                issue_headless_child(root, seat, SUBJECT, false).unwrap()
             else {
                 panic!("a delegated {seat} seat must mint a child grant");
             };
@@ -312,7 +312,7 @@ fn headless_child_gets_its_own_grant_or_baseline_or_refusal() {
         let _env = Scoped::apply(&mut env, &[(GRANT_ENV, grant)]);
         // Baseline seats fall back to an ungranted child...
         for seat in BASELINE_SEATS {
-            let got = issue_headless_child(root, seat, SUBJECT).unwrap();
+            let got = issue_headless_child(root, seat, SUBJECT, false).unwrap();
             assert!(
                 matches!(got, HeadlessChildGrant::Baseline { .. }),
                 "{seat} with grant {grant:?}: {got:?}"
@@ -325,7 +325,7 @@ fn headless_child_gets_its_own_grant_or_baseline_or_refusal() {
             if grant.is_some() && seat == "product" {
                 continue; // `product` IS delegated by the narrow grant.
             }
-            issue_headless_child(root, seat, SUBJECT)
+            issue_headless_child(root, seat, SUBJECT, false)
                 .expect_err("a non-baseline seat must fail closed");
             preflight_headless_child(root, seat).expect_err("the preflight agrees with issuance");
         }
