@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-31T00:52:52.821447800Z
+modified_at: 2026-10-31T04:48:07.781945106Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -61,6 +61,13 @@ comments:
     ADVISOR RULING 2026-10-30 17:58 on PR-3130 (2026-10-28 rule: ruled once here). ONE new commit fixes ALL four findings: (1) two-level IDs (FEAT-TYPE-NNN, e.g. AUTH-FR-001) must not become node rows: infer only UUID, numeric or registry-known namespaces (or consult id_config); add an AUTH-FR-001 regression. (2) one role term: use the wording `aida node show` uses per STORY-HOME-098, in list, show, the bug026 test (:617) and the docs. (3) bug026 test (:594) asserts the resolved runner sits under deps/ (as bug_1749_doctor_toon_tests.rs:59-61). (4) remove the discarded try_exists()? at node_inventory.rs:213,230 or comment why. Gate: LIGHT.
   created_at: 2026-10-31T00:52:52.821447800Z
   modified_at: 2026-10-31T00:52:52.821447800Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19049-5665-74b0-8e68-0101e6cb50d3
+  author: joe
+  content: |
+    ADVISOR 21:50: Codex reported "author work complete" at fb17a888 (pre-review head) and released the lease. The 17:58 ruling (four items) is unaddressed at bc35d4a. A Claude implementer lane takes the four items on the existing 3130 branch: new commit, no force-push.
+  created_at: 2026-10-31T04:48:07.781945106Z
+  modified_at: 2026-10-31T04:48:07.781945106Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
