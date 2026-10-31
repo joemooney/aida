@@ -1620,6 +1620,11 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     if contained {
         prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
     }
+    // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
+    // ourselves rather than inheriting whatever the ambient shell carried, so
+    // every headless phase behaves identically whoever launched it.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
     let (program, args) = compose_headless_command(
         vendor,
         prompt,
@@ -1628,11 +1633,6 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
     )?;
-    // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
-    // ourselves rather than inheriting whatever the ambient shell carried, so
-    // every headless phase behaves identically whoever launched it.
-    // trace:TASK-1169 | ai:claude
-    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(
         &headless_worktree_root(),
@@ -5160,6 +5160,10 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
+    // TASK-1169 / ADR-22: the resume path is a headless child too — same
+    // bounded ceiling, so a resumed drain can't diverge from a fresh one.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
     // STORY-612: OS-boundary wrapper. The resume path runs in `cwd` (the
     // original implementer's worktree), so that is the rw bind scope.
     // trace:STORY-612 | ai:claude
@@ -5169,10 +5173,6 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // trace:BUG-1971 | ai:claude
         claude_headless_resume_args_with_posture(prompt, session_id, contained.then_some(cwd))?,
     )?;
-    // TASK-1169 / ADR-22: the resume path is a headless child too — same
-    // bounded ceiling, so a resumed drain can't diverge from a fresh one.
-    // trace:TASK-1169 | ai:claude
-    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
         prepare_contained_mailbox_for_launch(cwd)?;
