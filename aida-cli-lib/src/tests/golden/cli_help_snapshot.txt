@@ -28128,9 +28128,10 @@ Options:
           terminal
 
       --tty-idle <TTY_IDLE>
-          A terminal job silent this long is stopped as waiting on a prompt
+          A terminal job silent this long shows as waiting on a prompt in `aida deputy status`. It
+          is never stopped for it; its --timeout still applies
           
-          [default: 120s]
+          [default: 10s]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -57225,7 +57226,7 @@ Working on aida itself
       {
         "name": "tty-idle",
         "takes_value": true,
-        "help": "A terminal job silent this long is stopped as waiting on a prompt"
+        "help": "A terminal job silent this long shows as waiting on a prompt in `aida deputy status`. It is never stopped for it; its --timeout still applies"
       },
       {
         "name": "workers",

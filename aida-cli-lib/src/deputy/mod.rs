@@ -1,13 +1,21 @@
 //! `aida deputy`: a stand-in for the operator that runs jobs other sessions
 //! submit, under the grant held by the operator's own interactive shell.
 //!
-//! The spool lives in the main checkout at `.aida/deputy/<name>/` (0700, owner
-//! checked at every scan). A submit writes one `incoming/<id>.job` atomically;
-//! the worker claims it by renaming it into `running/`, so two submits never
-//! clobber each other and a job runs once. Each job runs as a child process,
-//! never sourced into the loop. Its output goes to `out/<id>.out`, its result
-//! to `done|failed/<id>.rc.json`, and every step to the append-only
-//! `deputy.ledger`.
+//! The spool lives in the main checkout under `.aida/deputy/` (0700, owner
+//! checked at every scan):
+//!
+//! - `incoming/<name>/` is the ONLY part a contained agent may write (its
+//!   sandbox allowlist names `.aida/deputy/incoming`, nothing else). A submit
+//!   writes one `<id>.job` there atomically; a cancel request is a
+//!   `<id>.cancel` file beside it.
+//! - `<name>/` holds what only the deputy writes: `running/`, `done/`,
+//!   `failed/`, `out/`, the ledger, the TTY policy and the terminal markers.
+//!
+//! The worker claims a job by renaming it into `running/`, so two submits
+//! never clobber each other and a job runs once. Each job runs as a child
+//! process, never sourced into the loop. Its output goes to `out/<id>.out`,
+//! its result to `done|failed/<id>.rc.json`, and every step to the
+//! append-only `deputy.ledger`.
 //!
 //! The central rule: a job gets a terminal only when its argv matches a live
 //! entry in the operator-authored TTY policy. Every other job runs with no
@@ -30,24 +38,49 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Environment a job runs under: its id and the spool it came from. The
-/// integrity floor reads both (see [`job_floor_authorized`]).
-pub(crate) const JOB_ENV: &str = "AIDA_DEPUTY_JOB";
-pub(crate) const SPOOL_ENV: &str = "AIDA_DEPUTY_SPOOL";
+/// integrity floor reads both (`gate::kernel_deps::deputy_job_floor_authorized`).
+pub(crate) const JOB_ENV: &str = crate::gate::kernel_deps::DEPUTY_JOB_ENV;
+pub(crate) const SPOOL_ENV: &str = crate::gate::kernel_deps::DEPUTY_SPOOL_ENV;
 pub(crate) const REQUESTER_ENV: &str = "AIDA_DEPUTY_REQUESTER";
 /// Set as a per-command prefix by the `aida()` shell function only, so a bare
 /// binary run (no function) is told to start the deputy from the shell.
 pub(crate) const VIA_WRAPPER_ENV: &str = "AIDA_DEPUTY_VIA_WRAPPER";
+/// The capability the `aida()` shell function advertises in
+/// `AIDA_SHELL_WRAPPER` once it routes `aida deputy` (an older function does
+/// not, and gets the update hint).
+pub(crate) const WRAPPER_CAP: &str = "deputy";
 
 pub(crate) const DEFAULT_NAME: &str = "default";
 pub(crate) const STATES: [&str; 4] = ["incoming", "running", "done", "failed"];
 
 /// The flags that bypass a gate. A job carrying one never gets a terminal.
-pub(crate) const BYPASS_FLAGS: [&str; 4] = ["--force", "--no-verify", "--admin", "--yes-i-know"];
+pub(crate) const BYPASS_FLAGS: [&str; 5] = [
+    "--force",
+    "--no-verify",
+    "--admin",
+    "--yes-i-know",
+    "--override-stale-approval",
+];
 
-/// One deputy's spool directory.
+/// The directory under a main checkout that holds every deputy spool.
+pub(crate) fn deputy_base(main_root: &Path) -> PathBuf {
+    main_root.join(".aida").join("deputy")
+}
+
+/// The submit side of every deputy under a main checkout: the one directory a
+/// contained session may write.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_incoming_base(main_root: &Path) -> PathBuf {
+    deputy_base(main_root).join("incoming")
+}
+
+/// One deputy's spool.
 #[derive(Debug, Clone)]
 pub(crate) struct Spool {
+    /// `<base>/<name>`: everything only the deputy writes.
     pub root: PathBuf,
+    /// `<base>/incoming/<name>`: where submits and cancel requests land.
+    pub incoming: PathBuf,
 }
 
 /// Who submitted a job. Audit data, not authority: a same-uid process can
@@ -110,28 +143,36 @@ pub(crate) struct JobResult {
     pub rc: i32,
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: DateTime<Utc>,
-    /// `ok`, `exit`, `timeout`, `needs-operator`, `cancelled`, `orphaned`,
-    /// or `refused:<why>`.
+    /// `ok`, `exit`, `timeout`, `cancelled`, `orphaned`, or `refused:<why>`.
     pub reason: String,
     pub tty: bool,
     pub policy_entry: Option<String>,
     pub output: PathBuf,
 }
 
+/// Written by the worker at `running/<id>.waiting` while a terminal job has
+/// printed nothing for the idle window. Display only: the job keeps running
+/// until it ends or its own timeout stops it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub(crate) struct WaitingMarker {
+    pub since: DateTime<Utc>,
+    pub idle_secs: u64,
+}
+
 /// rc for a timed-out job (as `timeout(1)`).
 pub(crate) const RC_TIMEOUT: i32 = 124;
-/// rc for a terminal job that sat waiting on a prompt.
-pub(crate) const RC_NEEDS_OPERATOR: i32 = 125;
 /// rc for a job refused before it ran.
 pub(crate) const RC_REFUSED: i32 = 126;
 /// rc for a cancelled or orphaned job.
 pub(crate) const RC_CANCELLED: i32 = 130;
 
-/// The spool root for deputy `name` under the main checkout.
+/// The spool for deputy `name` under the main checkout.
 pub(crate) fn spool_for(main_root: &Path, name: &str) -> Result<Spool> {
     validate_name(name)?;
+    let base = deputy_base(main_root);
     Ok(Spool {
-        root: main_root.join(".aida").join("deputy").join(name),
+        root: base.join(name),
+        incoming: base.join("incoming").join(name),
     })
 }
 
@@ -145,11 +186,12 @@ pub(crate) fn current_spool(name: &str) -> Result<Spool> {
 fn validate_name(name: &str) -> Result<()> {
     let ok = !name.is_empty()
         && name.len() <= 40
+        && name != "incoming"
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
     if !ok {
-        bail!("deputy name must be 1-40 letters, digits, '-' or '_' (got {name:?})");
+        bail!("deputy name must be 1-40 letters, digits, '-' or '_', and not `incoming` (got {name:?})");
     }
     Ok(())
 }
@@ -165,7 +207,11 @@ pub(crate) fn validate_id(id: &str) -> Result<()> {
 
 impl Spool {
     pub(crate) fn dir(&self, state: &str) -> PathBuf {
-        self.root.join(state)
+        if state == "incoming" {
+            self.incoming.clone()
+        } else {
+            self.root.join(state)
+        }
     }
     pub(crate) fn out_dir(&self) -> PathBuf {
         self.root.join("out")
@@ -190,22 +236,33 @@ impl Spool {
     }
     /// Present while a job runs on a terminal the policy authorized.
     pub(crate) fn tty_marker_path(&self, id: &str) -> PathBuf {
-        self.dir("running").join(format!("{id}.tty"))
+        crate::gate::kernel_deps::deputy_tty_marker_path(&self.root, id)
     }
-    pub(crate) fn cancel_marker_path(&self, id: &str) -> PathBuf {
-        self.dir("running").join(format!("{id}.cancel"))
+    /// A cancel request: written on the submit side, honoured by the worker.
+    pub(crate) fn cancel_request_path(&self, id: &str) -> PathBuf {
+        self.incoming.join(format!("{id}.cancel"))
+    }
+    /// Present while a terminal job looks to be waiting on a prompt.
+    pub(crate) fn waiting_marker_path(&self, id: &str) -> PathBuf {
+        self.dir("running").join(format!("{id}.waiting"))
+    }
+
+    fn private_dirs(&self) -> Vec<PathBuf> {
+        let mut dirs = vec![self.root.clone()];
+        if let Some(base) = self.incoming.parent() {
+            dirs.push(base.to_path_buf());
+        }
+        dirs.push(self.incoming.clone());
+        for state in ["running", "done", "failed"] {
+            dirs.push(self.dir(state));
+        }
+        dirs.push(self.out_dir());
+        dirs
     }
 
     /// Create the spool tree, 0700, and check it.
     pub(crate) fn ensure(&self) -> Result<()> {
-        for d in [
-            self.root.clone(),
-            self.dir("incoming"),
-            self.dir("running"),
-            self.dir("done"),
-            self.dir("failed"),
-            self.out_dir(),
-        ] {
+        for d in self.private_dirs() {
             create_private_dir(&d)?;
         }
         self.check_owned()
@@ -213,34 +270,32 @@ impl Spool {
 
     /// Refuse a spool directory not owned by us or open to group/others.
     pub(crate) fn check_owned(&self) -> Result<()> {
-        for d in [
-            self.root.clone(),
-            self.dir("incoming"),
-            self.dir("running"),
-            self.dir("done"),
-            self.dir("failed"),
-            self.out_dir(),
-        ] {
+        for d in self.private_dirs() {
             check_private_dir(&d)?;
         }
         Ok(())
     }
 
-    /// Write `rec` as `incoming/<id>.job`: 0600, `create_new` on a dot-tmp,
-    /// then a rename, so a half-written job is never visible and an existing
-    /// job is never overwritten.
-    pub(crate) fn submit(&self, rec: &JobRecord) -> Result<PathBuf> {
-        validate_id(&rec.id)?;
-        let incoming = self.dir("incoming");
-        if !incoming.is_dir() {
+    fn check_incoming(&self) -> Result<()> {
+        if !self.incoming.is_dir() {
             bail!(
-                "no deputy spool at {} — the operator starts one with `aida deputy` in their terminal",
+                "no deputy is set up at {} — the operator starts one with `aida deputy` in their terminal",
                 self.root.display()
             );
         }
-        check_private_dir(&self.root)?;
-        check_private_dir(&incoming)?;
-        let tmp = incoming.join(format!(".{}.tmp", rec.id));
+        if let Some(base) = self.incoming.parent() {
+            check_private_dir(base)?;
+        }
+        check_private_dir(&self.incoming)
+    }
+
+    /// Write `rec` as `incoming/<name>/<id>.job`: 0600, `create_new` on a
+    /// dot-tmp, then a rename, so a half-written job is never visible and an
+    /// existing job is never overwritten. Touches nothing outside `incoming/`.
+    pub(crate) fn submit(&self, rec: &JobRecord) -> Result<PathBuf> {
+        validate_id(&rec.id)?;
+        self.check_incoming()?;
+        let tmp = self.incoming.join(format!(".{}.tmp", rec.id));
         let dest = self.job_path("incoming", &rec.id);
         write_private_new(&tmp, &serde_json::to_vec_pretty(rec)?)?;
         if dest.exists() {
@@ -251,7 +306,24 @@ impl Spool {
         Ok(dest)
     }
 
-    /// Where job `id` is now, with its record.
+    /// Ask the worker to cancel job `id`, queued or running. Like a submit it
+    /// writes only under `incoming/`.
+    pub(crate) fn request_cancel(&self, id: &str) -> Result<()> {
+        validate_id(id)?;
+        self.check_incoming()?;
+        match write_private_new(&self.cancel_request_path(id), b"cancel\n") {
+            Ok(()) => Ok(()),
+            Err(_) if self.cancel_request_path(id).is_file() => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn cancel_requested(&self, id: &str) -> bool {
+        std::fs::symlink_metadata(self.cancel_request_path(id))
+            .is_ok_and(|md| md.file_type().is_file())
+    }
+
+    /// Where job `id` is now.
     pub(crate) fn locate(&self, id: &str) -> Result<Option<(&'static str, PathBuf)>> {
         validate_id(id)?;
         for state in STATES {
@@ -274,7 +346,13 @@ impl Spool {
         None
     }
 
-    /// `incoming/*.job` ids, oldest first (UUIDv7 sorts by time).
+    /// The waiting-on-a-prompt marker of a running terminal job, if any.
+    pub(crate) fn waiting(&self, id: &str) -> Option<WaitingMarker> {
+        let bytes = std::fs::read(self.waiting_marker_path(id)).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    /// `<state>/*.job` ids, oldest first (UUIDv7 sorts by time).
     pub(crate) fn list_ids(&self, state: &str) -> Vec<String> {
         let mut ids: Vec<String> = std::fs::read_dir(self.dir(state))
             .into_iter()
@@ -289,6 +367,21 @@ impl Spool {
             .collect();
         ids.sort();
         ids
+    }
+
+    /// Ids with a cancel request on file.
+    pub(crate) fn cancel_request_ids(&self) -> Vec<String> {
+        std::fs::read_dir(&self.incoming)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().into_string().ok()?;
+                let id = name.strip_suffix(".cancel")?;
+                validate_id(id).ok()?;
+                Some(id.to_string())
+            })
+            .collect()
     }
 
     /// Append one ledger row in a single `O_APPEND` write.
@@ -324,7 +417,7 @@ impl Spool {
 pub(crate) struct LedgerRow {
     pub ts: DateTime<Utc>,
     pub job: String,
-    /// `submitted|claimed|refused|started|finished|cancelled|orphaned|policy`.
+    /// `claimed|refused|started|waiting|finished|cancelled|orphaned|policy`.
     pub event: String,
     pub deputy: String,
     pub requester: Option<Requester>,
@@ -391,7 +484,7 @@ pub(crate) fn check_private_dir(d: &Path) -> Result<()> {
     Ok(())
 }
 
-fn write_private_new(p: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_private_new(p: &Path, bytes: &[u8]) -> Result<()> {
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create_new(true);
     #[cfg(unix)]
@@ -493,69 +586,9 @@ pub(crate) fn current_requester(spec: Option<String>) -> Requester {
     r
 }
 
-/// The marker a terminal job's floor check reads.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct TtyMarker {
-    pub job: String,
-    pub entry: String,
-    pub expires_at: DateTime<Utc>,
-}
-
-/// Q6 defence in depth for the integrity floor: under a deputy job
-/// (`AIDA_DEPUTY_JOB` set), the floor holds only while the deputy's own marker
-/// says the policy authorized this job a terminal. A job that finds a terminal
-/// some other way (`script(1)`, a pty helper) is refused. Outside a deputy job
-/// this is always true.
-// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
-pub(crate) fn job_floor_authorized() -> bool {
-    let job = std::env::var(JOB_ENV).ok();
-    let spool = std::env::var(SPOOL_ENV).ok();
-    job_floor_authorized_from(job.as_deref(), spool.as_deref(), Utc::now())
-}
-
-pub(crate) fn job_floor_authorized_from(
-    job: Option<&str>,
-    spool: Option<&str>,
-    now: DateTime<Utc>,
-) -> bool {
-    let Some(job) = job.filter(|j| !j.is_empty()) else {
-        return true;
-    };
-    let Some(spool) = spool.filter(|s| !s.is_empty()) else {
-        return false;
-    };
-    if validate_id(job).is_err() {
-        return false;
-    }
-    let spool = Spool {
-        root: PathBuf::from(spool),
-    };
-    if check_private_dir(&spool.root).is_err() || check_private_dir(&spool.dir("running")).is_err()
-    {
-        return false;
-    }
-    let marker = spool.tty_marker_path(job);
-    let Ok(md) = std::fs::symlink_metadata(&marker) else {
-        return false;
-    };
-    if !md.file_type().is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        if md.uid() != current_uid() || md.mode() & 0o022 != 0 {
-            return false;
-        }
-    }
-    let Ok(bytes) = std::fs::read(&marker) else {
-        return false;
-    };
-    match serde_json::from_slice::<TtyMarker>(&bytes) {
-        Ok(m) => m.job == job && m.expires_at > now,
-        Err(_) => false,
-    }
-}
+/// The marker a terminal job's floor check reads; its shape lives on the
+/// gate floor, which is what reads it.
+pub(crate) type TtyMarker = crate::gate::kernel_deps::DeputyTtyMarker;
 
 pub(crate) fn write_tty_marker(spool: &Spool, marker: &TtyMarker) -> Result<()> {
     let p = spool.tty_marker_path(&marker.job);

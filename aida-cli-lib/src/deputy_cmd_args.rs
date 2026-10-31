@@ -51,8 +51,10 @@ pub(crate) struct DeputyStartArgs {
     /// never get a terminal.
     #[arg(long)]
     pub allow_scripts: bool,
-    /// A terminal job silent this long is stopped as waiting on a prompt.
-    #[arg(long, default_value = "120s")]
+    /// A terminal job silent this long shows as waiting on a prompt in
+    /// `aida deputy status`. It is never stopped for it; its --timeout
+    /// still applies.
+    #[arg(long, default_value = "10s")]
     pub tty_idle: String,
     /// Keep running after the mandate expires (the mandate tie-in arrives in
     /// a later release; accepted now so start lines stay stable).
@@ -102,7 +104,7 @@ pub(crate) struct DeputySubmitArgs {
     #[arg(long, default_value = "30m")]
     pub timeout: String,
     /// The spec this job is for (recorded in the ledger).
-    #[arg(long, value_name = "SPEC-ID")]
+    #[arg(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
     /// Run this file's contents as a bash script (needs a deputy started with
     /// --allow-scripts).

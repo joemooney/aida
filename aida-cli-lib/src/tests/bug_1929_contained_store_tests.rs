@@ -347,6 +347,9 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     }
     // trace:BUG-2218 | ai:codex
     expected.push(format!("/{}", main.join(".aida/mailbox").display()));
+    // The deputy's submit side only, never `.aida/deputy` itself.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    expected.push(format!("/{}", main.join(".aida/deputy/incoming").display()));
     assert_eq!(allow_write(&settings), expected, "{json}");
     assert_eq!(
         deny_write(&settings),
@@ -1905,6 +1908,64 @@ fn bug_2218_sandbox_mailbox_is_writable_but_sensitive_state_is_not() {
             .len(),
         1
     );
+}
+
+/// A contained seat may submit to (and cancel through) the deputy's
+/// `incoming/` directory, and may write nothing else under `.aida/deputy`:
+/// not `running/`, results, the ledger, the TTY policy or terminal markers.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+#[cfg(unix)]
+#[test]
+fn deputy_sandbox_allows_submit_only() {
+    let (_tmp, main) = main_fixture();
+    let worktree = main.parent().unwrap().join("worker");
+    std::fs::create_dir_all(&worktree).unwrap();
+    crate::contained_boundary::prepare_deputy_incoming(&main).unwrap();
+    let mut paths = contained_store_write_paths(&main);
+    paths.extend(contained_mailbox_write_paths(&main).unwrap());
+    paths.extend(crate::contained_boundary::contained_deputy_write_paths(&main).unwrap());
+    let settings: serde_json::Value =
+        serde_json::from_str(&crate::session::contained_settings_json_with_store(
+            &[],
+            false,
+            &contained_write_roots(&worktree),
+            &paths,
+        ))
+        .unwrap();
+    let main = std::fs::canonicalize(&main).unwrap();
+    let spool = crate::deputy::spool_for(&main, "default").unwrap();
+    spool.ensure().unwrap();
+    let id = crate::deputy::new_job_id();
+    for p in [
+        spool.job_path("incoming", &id),
+        spool.cancel_request_path(&id),
+    ] {
+        assert!(sandbox_may_write(&settings, &p), "{}", p.display());
+    }
+    for p in [
+        spool.job_path("running", &id),
+        spool.tty_marker_path(&id),
+        spool.waiting_marker_path(&id),
+        spool.result_path("done", &id),
+        spool.result_path("failed", &id),
+        spool.out_path(&id),
+        spool.policy_path(),
+        spool.ledger_path(),
+        main.join(".aida/deputy/x"),
+    ] {
+        assert!(!sandbox_may_write(&settings, &p), "{}", p.display());
+    }
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+#[cfg(unix)]
+#[test]
+fn deputy_sandbox_never_grants_a_symlink_target() {
+    let (_tmp, main) = main_fixture();
+    let sensitive = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(sensitive.path(), main.join(".aida/deputy")).unwrap();
+    assert!(crate::contained_boundary::contained_deputy_write_paths(&main).is_err());
+    assert!(crate::session::os_wrap_rw_paths(&main).is_err());
 }
 
 // trace:BUG-2218 | ai:codex

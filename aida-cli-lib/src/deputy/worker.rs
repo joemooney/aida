@@ -20,10 +20,14 @@ use std::time::{Duration, Instant};
 
 use super::policy::{self, TtyDecision};
 use super::{
-    read_job_file, write_tty_marker, JobBody, JobRecord, JobResult, LedgerRow, Spool, TtyMarker,
-    JOB_ENV, RC_CANCELLED, RC_NEEDS_OPERATOR, RC_REFUSED, RC_TIMEOUT, REQUESTER_ENV, SPOOL_ENV,
-    VIA_WRAPPER_ENV,
+    read_job_file, write_private_new, write_tty_marker, JobBody, JobRecord, JobResult, LedgerRow,
+    Spool, TtyMarker, WaitingMarker, JOB_ENV, RC_CANCELLED, RC_REFUSED, RC_TIMEOUT, REQUESTER_ENV,
+    SPOOL_ENV, VIA_WRAPPER_ENV,
 };
+
+/// The default idle window: a terminal job silent this long shows as waiting
+/// on a prompt (display only; it is never stopped for it).
+pub(crate) const DEFAULT_TTY_IDLE: Duration = Duration::from_secs(10);
 
 /// Whether the operator's grant still holds.
 #[derive(Debug, Clone, PartialEq)]
@@ -41,7 +45,8 @@ pub(crate) struct WorkerConfig {
     /// Canonical paths of executables other than `aida` that argv jobs may run.
     pub allow_exec: Vec<PathBuf>,
     pub allow_scripts: bool,
-    /// A terminal job silent this long is treated as waiting on a prompt.
+    /// A terminal job silent this long shows as waiting on a prompt in
+    /// `aida deputy status`. Display only: the job's own timeout governs.
     pub tty_idle: Duration,
     pub poll: Duration,
     pub grant: GrantProbe,
@@ -113,10 +118,85 @@ pub(crate) fn recover_orphans(spool: &Spool, name: &str) -> Result<usize> {
         row.reason = Some(res.reason.clone());
         spool.ledger(&row)?;
         std::fs::rename(spool.job_path("running", id), spool.job_path("failed", id))?;
-        let _ = std::fs::remove_file(spool.tty_marker_path(id));
-        let _ = std::fs::remove_file(spool.cancel_marker_path(id));
+        clear_job_markers(spool, id);
     }
     Ok(ids.len())
+}
+
+/// Remove a job's terminal, waiting and cancel markers once it has left
+/// `running/` (or never will reach it).
+fn clear_job_markers(spool: &Spool, id: &str) {
+    let _ = std::fs::remove_file(spool.tty_marker_path(id));
+    let _ = std::fs::remove_file(spool.waiting_marker_path(id));
+    let _ = std::fs::remove_file(spool.cancel_request_path(id));
+}
+
+/// Honour cancel requests for jobs still queued, and drop requests for jobs
+/// that are neither queued nor running (already finished, or unknown).
+/// Running jobs are cancelled by their own wait loop.
+fn sweep_cancel_requests(spool: &Spool, cfg: &WorkerConfig, active: &Arc<Mutex<Active>>) {
+    for id in spool.cancel_request_ids() {
+        let queued = spool.job_path("incoming", &id);
+        if queued.exists() {
+            let rec = read_job_file(&queued, &id).ok();
+            let res = JobResult {
+                id: id.clone(),
+                rc: RC_CANCELLED,
+                started_at: None,
+                finished_at: Utc::now(),
+                reason: "cancelled before it ran".into(),
+                tty: false,
+                policy_entry: None,
+                output: spool.out_path(&id),
+            };
+            if std::fs::rename(&queued, spool.job_path("failed", &id)).is_ok() {
+                let _ = spool.write_result("failed", &res);
+                let mut row = LedgerRow::new(&cfg.name, &id, "cancelled");
+                row.requester = rec.map(|r| r.requester);
+                row.rc = Some(res.rc);
+                row.reason = Some(res.reason);
+                let _ = spool.ledger(&row);
+                bump_handled(active);
+            }
+            let _ = std::fs::remove_file(spool.cancel_request_path(&id));
+        } else if !spool.job_path("running", &id).exists() {
+            let _ = std::fs::remove_file(spool.cancel_request_path(&id));
+        }
+    }
+}
+
+/// The terminal a claimed job gets, if any. A single-use entry fails CLOSED:
+/// unless its use is recorded in the saved policy first, the job runs with no
+/// terminal and the entry stays unused.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn claim_terminal(
+    spool: &Spool,
+    cfg_name: &str,
+    id: &str,
+    decision: TtyDecision,
+    now: DateTime<Utc>,
+) -> Option<(String, DateTime<Utc>)> {
+    let TtyDecision::Tty {
+        entry,
+        expires_at,
+        single_use,
+    } = decision
+    else {
+        return None;
+    };
+    if single_use {
+        if let Err(e) = policy::consume_single_use(spool, &entry, id, now) {
+            eprintln!(
+                "deputy {cfg_name}: job {id} runs without a terminal: could not use single-use TTY entry {entry}: {e:#}"
+            );
+            let mut row = LedgerRow::new(cfg_name, id, "policy");
+            row.policy_entry = Some(entry);
+            row.reason = Some(format!("single-use entry not used, no terminal: {e:#}"));
+            let _ = spool.ledger(&row);
+            return None;
+        }
+    }
+    Some((entry, expires_at))
 }
 
 /// Run the claim loop until `stop` is set (or `max_jobs` is reached).
@@ -175,6 +255,7 @@ fn claim_round(
     grant_expires_at: Option<DateTime<Utc>>,
     handles: &mut Vec<std::thread::JoinHandle<()>>,
 ) {
+    sweep_cancel_requests(spool, cfg, active);
     for id in spool.list_ids("incoming") {
         let worker_idx = {
             let a = active.lock().unwrap_or_else(|p| p.into_inner());
@@ -241,15 +322,7 @@ fn claim_round(
                 bump_handled(active);
                 continue;
             }
-            TtyDecision::NoTty => None,
-            TtyDecision::Tty { entry, expires_at } => {
-                if let Ok(mut p) = policy::load(spool) {
-                    if p.consume(&entry, &id, now) {
-                        let _ = policy::save(spool, &p);
-                    }
-                }
-                Some((entry, expires_at))
-            }
+            decision => claim_terminal(spool, &cfg.name, &id, decision, now),
         };
         {
             let mut a = active.lock().unwrap_or_else(|p| p.into_inner());
@@ -544,6 +617,7 @@ pub(crate) fn run_job(
         Ok(mut child) => {
             let begun = Instant::now();
             let timeout = Duration::from_secs(rec.timeout_secs.max(1));
+            let mut waiting = false;
             let status = loop {
                 match child.try_wait() {
                     Ok(Some(status)) => break Some(status),
@@ -556,20 +630,20 @@ pub(crate) fn run_job(
                     break None;
                 }
                 if tty.is_some() {
+                    // Display only (advisor ruling 04:24): a silent terminal
+                    // job is shown as waiting on a prompt, never stopped for
+                    // it. Its own timeout still governs.
                     let idle_ms = now_ms() - last_output.load(Ordering::SeqCst);
-                    if idle_ms > cfg.tty_idle.as_millis() as i64 {
-                        kill_group(&mut child);
-                        forced = Some((
-                            RC_NEEDS_OPERATOR,
-                            format!(
-                                "needs-operator: no output for {}s on the terminal, so it is probably waiting on a prompt",
-                                cfg.tty_idle.as_secs()
-                            ),
-                        ));
-                        break None;
+                    let idle = idle_ms > cfg.tty_idle.as_millis() as i64;
+                    if idle && !waiting {
+                        mark_waiting(spool, cfg, rec, worker_idx);
+                        waiting = true;
+                    } else if !idle && waiting {
+                        let _ = std::fs::remove_file(spool.waiting_marker_path(&rec.id));
+                        waiting = false;
                     }
                 }
-                if spool.cancel_marker_path(&rec.id).exists() {
+                if spool.cancel_requested(&rec.id) {
                     kill_group(&mut child);
                     forced = Some((RC_CANCELLED, "cancelled".into()));
                     break None;
@@ -604,8 +678,6 @@ pub(crate) fn run_job(
     if let Some((_, why)) = &forced {
         let _ = writeln!(out, "\n[deputy] {why}");
     }
-    let _ = std::fs::remove_file(spool.tty_marker_path(&rec.id));
-    let _ = std::fs::remove_file(spool.cancel_marker_path(&rec.id));
     let res = JobResult {
         id: rec.id.clone(),
         rc,
@@ -633,7 +705,31 @@ pub(crate) fn run_job(
         spool.job_path("running", &rec.id),
         spool.job_path(state, &rec.id),
     )?;
+    clear_job_markers(spool, &rec.id);
     Ok(res)
+}
+
+/// Record that a terminal job has gone quiet: a `running/<id>.waiting` marker
+/// for `aida deputy status`, and one ledger row.
+fn mark_waiting(spool: &Spool, cfg: &WorkerConfig, rec: &JobRecord, worker_idx: usize) {
+    let marker = WaitingMarker {
+        since: Utc::now(),
+        idle_secs: cfg.tty_idle.as_secs(),
+    };
+    let path = spool.waiting_marker_path(&rec.id);
+    let _ = std::fs::remove_file(&path);
+    if let Ok(bytes) = serde_json::to_vec(&marker) {
+        let _ = write_private_new(&path, &bytes);
+    }
+    let mut row = LedgerRow::new(&cfg.name, &rec.id, "waiting");
+    row.requester = Some(rec.requester.clone());
+    row.worker = Some(worker_idx);
+    row.tty = Some(true);
+    row.reason = Some(format!(
+        "waiting on a prompt: no terminal output for {}s",
+        cfg.tty_idle.as_secs()
+    ));
+    let _ = spool.ledger(&row);
 }
 
 fn exit_code(status: std::process::ExitStatus) -> i32 {

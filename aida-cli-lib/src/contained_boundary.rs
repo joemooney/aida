@@ -172,6 +172,50 @@ pub(crate) fn contained_mailbox_write_paths(main: &Path) -> anyhow::Result<Vec<P
     Ok(vec![mailbox])
 }
 
+/// The submit side of `aida deputy` alone: `<main>/.aida/deputy/incoming`,
+/// where `aida deputy submit` and `cancel` write. Never the enclosing
+/// `.aida/deputy` (the running jobs, results, ledger, TTY policy and terminal
+/// markers stay unwritable to a contained session). Refuse a symlinked state,
+/// deputy or incoming directory rather than binding its target.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn contained_deputy_write_paths(main: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let main = std::fs::canonicalize(main)?;
+    let incoming = crate::deputy::deputy_incoming_base(&main);
+    let state = main.join(".aida");
+    for path in [
+        state.as_path(),
+        &crate::deputy::deputy_base(&main),
+        &incoming,
+    ] {
+        if let Ok(meta) = std::fs::symlink_metadata(path) {
+            anyhow::ensure!(
+                !meta.file_type().is_symlink(),
+                "refusing sandbox deputy path {}: symbolic link",
+                path.display()
+            );
+        }
+    }
+    anyhow::ensure!(
+        root_rule_path(&incoming).is_some(),
+        "cannot express sandbox deputy path {}",
+        incoming.display()
+    );
+    Ok(vec![incoming])
+}
+
+/// Create the deputy submit directory (0700) at launch, so the sandbox can
+/// bind it (a path missing at launch is skipped).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn prepare_deputy_incoming(main: &Path) -> anyhow::Result<()> {
+    for incoming in contained_deputy_write_paths(main)? {
+        if let Some(base) = incoming.parent() {
+            crate::deputy::create_private_dir(base)?;
+        }
+        crate::deputy::create_private_dir(&incoming)?;
+    }
+    Ok(())
+}
+
 /// Prime the exact directory at launch, after the path calculation validated it.
 // trace:BUG-2218 TASK-2328 | ai:codex
 pub(crate) fn prepare_mailbox(main: &Path) -> anyhow::Result<()> {

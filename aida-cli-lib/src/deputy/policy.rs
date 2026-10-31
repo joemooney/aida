@@ -56,6 +56,9 @@ pub(crate) enum TtyDecision {
     Tty {
         entry: String,
         expires_at: DateTime<Utc>,
+        /// The entry is used up by this job; the claim must record that
+        /// before the job may have the terminal ([`consume_single_use`]).
+        single_use: bool,
     },
     /// A policy entry matched but the argv carries a gate-bypass flag.
     RefuseBypass(String),
@@ -94,14 +97,15 @@ impl Policy {
         TtyDecision::Tty {
             entry: entry.id.clone(),
             expires_at,
+            single_use: entry.single_use,
         }
     }
 
-    /// Mark a single-use entry consumed by `job`. Returns whether anything
-    /// changed.
+    /// Mark a live single-use entry consumed by `job`. Returns whether
+    /// anything changed.
     pub(crate) fn consume(&mut self, entry: &str, job: &str, now: DateTime<Utc>) -> bool {
         match self.entries.iter_mut().find(|e| e.id == entry) {
-            Some(e) if e.single_use && e.consumed_at.is_none() => {
+            Some(e) if e.single_use && e.live(now) => {
                 e.consumed_at = Some(now);
                 e.consumed_by = Some(job.to_string());
                 true
@@ -169,6 +173,24 @@ pub(crate) fn is_bypass_flag(arg: &str) -> bool {
 /// Split a prefix the operator typed (`aida merge-hold clear`) into argv.
 pub(crate) fn parse_prefix(raw: &str) -> Vec<String> {
     raw.split_whitespace().map(str::to_string).collect()
+}
+
+/// Use up single-use entry `entry` for `job`, failing CLOSED: the policy is
+/// reloaded, the entry must still be live and unused, and the consumed state
+/// must be saved. Any failure means the job gets no terminal and the entry
+/// stays unused (it was never recorded as consumed).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn consume_single_use(
+    spool: &Spool,
+    entry: &str,
+    job: &str,
+    now: DateTime<Utc>,
+) -> Result<()> {
+    let mut p = load(spool).context("reload the TTY policy")?;
+    if !p.consume(entry, job, now) {
+        bail!("single-use TTY entry {entry} is no longer live");
+    }
+    save(spool, &p).context("record the single-use TTY entry as used")
 }
 
 pub(crate) fn load(spool: &Spool) -> Result<Policy> {

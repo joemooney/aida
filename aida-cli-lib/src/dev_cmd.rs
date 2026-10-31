@@ -1637,7 +1637,7 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # `zsh-localopts` says the wrapper scopes options with `setopt localoptions`
 # under zsh rather than bare `local -` (which leaked every parameter/API key).
 # (trace:BUG-2005)
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file,zsh-localopts'
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file,zsh-localopts,deputy'
 
 aida() {
     # trace:BUG-1811 | ai:antigravity
