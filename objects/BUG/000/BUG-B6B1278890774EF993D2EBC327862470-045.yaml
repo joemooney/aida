@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:12:51.682698239Z
-modified_at: 2026-10-31T05:59:31.147981968Z
+modified_at: 2026-10-31T06:01:31.416093193Z
 req_type: Bug
 tags:
 - headless
@@ -29,6 +29,28 @@ comments:
   created_at: 2026-10-30T23:29:01.677074962Z
   modified_at: 2026-10-30T23:29:01.677074962Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a1908c-8818-7580-af4f-943ed5ea67b7
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (contained path):** a contained reviewer's grant must be presentable from its sandbox. Root cause (advisor comment): the launcher could not put the child key in a session keyring, so the grant was process-bound only and every sandboxed `aida review record` was refused. Fix: a contained reviewer launch whose child grant cannot get a keyring key is refused before the reviewer runs (wrapped in ChildGrantRefused so the PR-N lease is released). Test: `sandboxed_child_key_refusal` returns a refusal for contained+keyring-available+install-failed, None when uncontained or keyring structurally unavailable. Existing worktree collection (BUG-2149) remains the route for the verdict file the reviewer writes in its own tree.
+    - **Unit (no-verdict output):** the launcher summary passes no verdict body when collection failed, so a previous round's ledger PASS cannot render. Test: `standalone_summary_verdict_body` returns None on a failed collection even when the ledger holds a PASS for the PR, and `format_reviewer_summary` output for that case has no `PASS`/`approve` line. The stray "Pickup setup exists; manual continuation" line is skipped for NoReviewVerdict / ReviewerVendorExit outcomes (unit test on the predicate).
+    - **Unit (brief cwd):** the standalone reviewer prompt's verdict anchor names the review worktree as the cwd for `aida review record` and tells it not to cd to the primary checkout. Test on the pure suffix builder.
+
+    ### Expected files
+    - `aida-cli-lib/src/gate/seat_authority.rs` (+ keyring tests)
+    - `aida-cli-lib/src/session.rs` (reviewer spawn uses the sandboxed issue)
+    - `aida-cli-lib/src/queue_cmd.rs` (summary body, continuation predicate, prompt anchor)
+    - tests next to the above
+
+    ### Ambiguities / conflicts as questions
+    - Off Linux (keyring structurally unavailable) contained reviewers keep today's behaviour (no refusal) — refusing there would block every review on that platform. OK?
+  created_at: 2026-10-31T06:01:31.416093193Z
+  modified_at: 2026-10-31T06:01:31.416093193Z
+  session_id: 01a1908aac6f
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18f58-daa8-7f32-873d-a1a24562719c
   author: joe
