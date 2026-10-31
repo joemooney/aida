@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T11:25:01.932347187Z
+modified_at: 2026-10-31T11:26:47.434240768Z
 req_type: Bug
 tags:
 - ids
@@ -27,6 +27,21 @@ relationships:
   target_id: 01a191a8-f19b-77b1-92fc-dda6a7f1ea6b
   created_at: 2026-10-31T11:12:22.674930874Z
   created_by: joe
+comments:
+- id: 01a191b6-528a-7680-91b4-a0d48b5ff75f
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 04:28: PR-3162 round 1 is CHANGES REQUESTED (verdict at deca837139cc). Rework ONE round, with all four items in one push.
+
+    1. CI lib-1 red. Failing test: output_format::node_alias_display_ratchet_tests::unmigrated_display_id_print_sites_only_go_down ("173 unmarked .display_id() calls (baseline 172)"). Cause: the new fn display() in aida-cli-lib/src/trailer_coverage.rs falls back to req.display_id() on a human-output path. Fix: make display() return req.friendly_id() (that is exactly display_spec_id(display_id())). Keep the spec_id-first branch only if you can show spec_id must beat agreed_id there. Do NOT raise the baseline, and do not mark the line // canonical-id, because the string reaches users.
+    2. AC1, approval recording: `aida review record` for PR N must run the same coverage check. Filter the gate's ID lists through it, and refuse an uncovered trailer ID with a message naming both IDs (the trailer ID and the claimed spec). Use one helper shared with the completion path, not a second copy.
+    3. AC3: add the record-refusal test for the incident case: claimed TASK-<node>-138, title says (TASK-139), legacy TASK-139 exists. `review record` refuses, nothing is recorded, nothing completes.
+    4. AC2, other completion paths: if the auto-bump or rebase path completes specs from trailers, route it through the same helper and add one test each. If a path cannot complete a spec, say so in the PR body with a file:line citation, and that closes AC2 for that path. Do not narrow the spec.
+
+    Gate: LIGHT. One targeted cargo test (aida-cli-lib with filter trailer_coverage plus node_alias_display_ratchet), then make check-ci-fast, then push (no force). Title keeps the full canonical ID trailer.
+  created_at: 2026-10-31T11:26:47.434240768Z
+  modified_at: 2026-10-31T11:26:47.434240768Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19166-4eb3-7172-8f0a-f2ff30b1fe9b
   author: aida-session-start
