@@ -1,0 +1,28 @@
+id: 01a1918f-aa90-7860-b8e3-2c10bb16f7be
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-145
+title: 'minor: preflight_sandboxed_child_key returns a plain bail (not ChildGrantRefuse…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-045, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: preflight_sandboxed_child_key returns a plain bail (not ChildGrantRefused) on key-quota exhaustion, so that refusal does not get the lease-release handling the ELOOP refusal gets.
+  Reviewed sha: c1ab08efe4d73b686cda1c9d3e75ef2cf5ed7337
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T10:44:34.064183568Z
+modified_at: 2026-10-31T10:44:34.064183568Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-045
+- finding-hash:f0685b28
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-045
+- kind:carried-forward
+filed_at:
+  code_sha: 273549a2d9d738b1846028776855309da26a2ef7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 361910ec4a0
+  vendor: claude
+  session: 510d8c08-7912-4189-943d-65d110c7abc2
