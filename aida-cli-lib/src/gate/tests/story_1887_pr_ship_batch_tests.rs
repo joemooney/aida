@@ -630,6 +630,7 @@ fn task_2156_known_ids_include_a_title_only_spec_id() {
         tmp.path(),
         "claude/story-1887",
         Some("feat(pr): ship-batch (TASK-9901)"),
+        None,
     );
     assert!(ids.contains(&"TASK-9901".to_string()), "{ids:?}");
     assert!(ids.contains(&"STORY-1887".to_string()), "{ids:?}");

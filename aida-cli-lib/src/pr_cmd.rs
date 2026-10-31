@@ -1814,6 +1814,15 @@ pub(crate) fn pr_gate_subject(
              every recorded author is treated as one of its authors"
         ),
     }
+    // BUG-HOME-048: the commit-subject trailers pass the PR's coverage, so a
+    // verdict is never looked up under a foreign bare id.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let ids = crate::gate::trailer_coverage::covered_gate_ids(
+        main_worktree,
+        branch.as_deref().unwrap_or(""),
+        Some(pr),
+        ids,
+    );
     refs_ids.extend(ids.iter().cloned());
     (
         normalized_spec_ids(&ids),
@@ -1827,11 +1836,17 @@ pub(crate) fn pr_gate_subject(
 /// records for the local range, then every ID in the branch and the title.
 /// `aida pr ship-batch` waits on the same set, so its "approved at head"
 /// cannot drift from what ship accepts.
+///
+/// BUG-HOME-048: the whole list passes the PR's trailer coverage, so a
+/// foreign bare id (`TASK-139`) is neither demanded nor accepted. The mandate
+/// cover and the pre-merge approval gate use this same set.
 // trace:STORY-1887 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 pub(crate) fn ship_gate_known_ids(
     project_root: &std::path::Path,
     branch: &str,
     title: Option<&str>,
+    pr: Option<u64>,
 ) -> Vec<String> {
     let mut ids: Vec<String> = ship_gate_spec_records(project_root)
         .into_iter()
@@ -1841,7 +1856,7 @@ pub(crate) fn ship_gate_known_ids(
     if let Some(title) = title {
         ids.extend(pr_ship::extract_spec_ids_from_text(title));
     }
-    ids
+    crate::gate::trailer_coverage::covered_gate_ids(project_root, branch, pr, ids)
 }
 
 /// BUG-2184: what is left of `--wait SECS` for the CI wait: the time since the
@@ -1962,7 +1977,12 @@ fn ship_preflight_gates(
             change.id
         )));
     }
-    let ids = ship_gate_known_ids(project_root, &change.branch, change.title.as_deref());
+    let ids = ship_gate_known_ids(
+        project_root,
+        &change.branch,
+        change.title.as_deref(),
+        Some(change.id),
+    );
     // BUG-1918: authors resolved from what the forge says the PR ships, not
     // only the local range (empty when shipping from main).
     let (candidates, policy) = merge_approval_inputs(
@@ -2603,16 +2623,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // fresh here, again under the merge lease, and once more immediately
     // before the merge call. trace:STORY-1698 | ai:claude
     let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
+    // BUG-HOME-048: the same coverage-filtered set as the preflight gate.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     let mandate_ids = || {
-        let mut ids: Vec<String> = ship_gate_spec_records(&project_root)
-            .into_iter()
-            .map(|(id, _, _)| id)
-            .collect();
-        ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
-        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
-            ids.extend(pr_ship::extract_spec_ids_from_text(title));
-        }
-        ids
+        ship_gate_known_ids(
+            &project_root,
+            &ship_branch,
+            target_change.as_ref().and_then(|c| c.title.as_deref()),
+            Some(pr_number),
+        )
     };
     let mandate_cover_now = || {
         if pr_number == 0 || already_merged || floor_authority {
@@ -3028,14 +3047,14 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // lease, immediately before the merge (and before any merge-hold is
         // released), so the head it compares is the one about to land. ----
         // trace:TASK-1448 | ai:claude
-        let mut gate_spec_ids: Vec<String> = ship_gate_spec_records(&project_root)
-            .into_iter()
-            .map(|(id, _, _)| id)
-            .collect();
-        gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
-        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
-            gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(title));
-        }
+        // BUG-HOME-048: title ids pass the PR's trailer coverage.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        let gate_spec_ids = ship_gate_known_ids(
+            &project_root,
+            &ship_branch,
+            target_change.as_ref().and_then(|c| c.title.as_deref()),
+            Some(pr_number),
+        );
         let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
         merged_head_sha = head_sha.clone();
         // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
@@ -3192,18 +3211,51 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         } else {
             None
         };
-        let sanitized_squash_body = ship_squash_body(
-            merge_method,
-            declares_non_completing,
-            sanitized_squash_body,
-            || {
-                crate::identity_gate::squash_commit_messages_body(
-                    &project_root,
-                    &retarget_base,
-                    head_sha.as_deref().unwrap_or(&ship_branch),
+        // BUG-HOME-048: the trailer check, for every merge method and fail
+        // closed. A rebase or merge lands the branch commits verbatim and the
+        // pull-side auto-bump completes every trailer on them, so one whose
+        // trailer the PR does not cover is refused here. A squash gets an
+        // explicit body — never the forge's own copy of the branch commit
+        // messages — with every uncovered trailer kept only as a reference.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        let ship_head = head_sha.as_deref().unwrap_or(&ship_branch).to_string();
+        let checked_squash_body = crate::gate::trailer_coverage::ship_trailer_check(
+            Storage::new(main_worktree.join(".aida-store")).load(),
+            |store| {
+                crate::gate::trailer_coverage::pr_trailer_coverage(
+                    &main_worktree,
+                    store,
+                    &ship_branch,
+                    Some(pr_number),
                 )
             },
+            merge_method,
+            pr_number,
+            || {
+                crate::trailer_coverage::branch_commit_messages(
+                    &project_root,
+                    &format!("origin/{retarget_base}"),
+                    &ship_head,
+                )
+                .or_else(|_| {
+                    crate::trailer_coverage::branch_commit_messages(
+                        &project_root,
+                        &retarget_base,
+                        &ship_head,
+                    )
+                })
+            },
+            || match sanitized_squash_body {
+                Some(body) => Ok(body),
+                None => crate::identity_gate::squash_commit_messages_body(
+                    &project_root,
+                    &retarget_base,
+                    &ship_head,
+                ),
+            },
         )?;
+        let sanitized_squash_body =
+            ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -3754,8 +3806,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let spec_ids = Storage::new(main_worktree.join(".aida-store"))
             .load()
             .map(|store| {
+                let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
+                    &main_worktree,
+                    &store,
+                    &branch,
+                    Some(pr_number),
+                );
                 ship_completion_trailer_for_method(
                     &store,
+                    coverage.as_ref(),
                     merge_method,
                     final_slice,
                     &pr_meta.title,
@@ -3834,8 +3893,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 Storage::new(main_worktree.join(".aida-store"))
                     .load()
                     .map(|store| {
+                        let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
+                            &main_worktree,
+                            &store,
+                            merged_branch,
+                            Some(pr_number),
+                        );
                         ship_completion_trailer_for_method(
                             &store,
+                            coverage.as_ref(),
                             merge_method,
                             final_slice,
                             &title,
@@ -4740,13 +4806,18 @@ pub(crate) fn derive_pr_ship_squash_subject_from_message(
     // trace:BUG-1957 | ai:claude
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
-    let (normalized, trailer) = pr_ship::derive_squash_subject_with_trailer(
+    // BUG-HOME-048: a title trailer completes only a spec this PR covers.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let coverage =
+        crate::gate::trailer_coverage::pr_trailer_coverage(project_root, &store, branch, pr.number);
+    let refusals = std::cell::RefCell::new(Vec::new());
+    let (normalized, mut trailer) = pr_ship::derive_squash_subject_with_trailer(
         &pr.title,
         branch,
         &pr.body,
         commit_msg,
         no_complete,
-        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| crate::gate::trailer_coverage::admits(&store, coverage.as_ref(), id, &refusals),
         |id| pr_ship::spec_completion_hold_reason(&store, id),
     )
     .unwrap_or_else(|| {
@@ -4759,6 +4830,7 @@ pub(crate) fn derive_pr_ship_squash_subject_from_message(
             },
         )
     });
+    trailer.notes.extend(refusals.into_inner());
     // BUG-1997: never return None when spec IDs are withheld (via --no-complete,
     // a PR-body marker, or closure hold, or when the PR title carried an ID that
     // was stripped). Otherwise, gh pr merge defaults to the PR title on multi-commit
@@ -4815,8 +4887,11 @@ pub(crate) fn derive_pr_ship_subject_for_method_from(
     }
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
+    let coverage =
+        crate::gate::trailer_coverage::pr_trailer_coverage(project_root, &store, branch, pr.number);
     let trailer = ship_completion_trailer_for_method(
         &store,
+        coverage.as_ref(),
         method,
         final_slice,
         &pr.title,
@@ -4888,6 +4963,7 @@ pub(crate) fn pr_ship_dry_run_output_for_method(
 // trace:BUG-1919 | ai:claude
 pub(crate) fn ship_completion_trailer(
     store: &aida_core::RequirementsStore,
+    coverage: Option<&crate::gate::trailer_coverage::TrailerCoverage>,
     pr_title: &str,
     branch: &str,
     pr_body: &str,
@@ -4895,6 +4971,7 @@ pub(crate) fn ship_completion_trailer(
 ) -> pr_ship::SquashTrailer {
     ship_completion_trailer_for_method(
         store,
+        coverage,
         crate::forge::MergeMethod::Squash,
         false,
         pr_title,
@@ -4908,8 +4985,14 @@ pub(crate) fn ship_completion_trailer(
 /// Rebase merges suppress spec completion unless `final_slice` (`--final-slice`
 /// / `--complete-spec`) is set.
 // trace:STORY-1663 | ai:antigravity
+///
+/// BUG-HOME-048: with `coverage` known, a title trailer that resolves to a
+/// spec the PR does not cover is withheld, and the refusal names both ids.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn ship_completion_trailer_for_method(
     store: &aida_core::RequirementsStore,
+    coverage: Option<&crate::gate::trailer_coverage::TrailerCoverage>,
     method: crate::forge::MergeMethod,
     final_slice: bool,
     pr_title: &str,
@@ -4917,16 +5000,19 @@ pub(crate) fn ship_completion_trailer_for_method(
     pr_body: &str,
     no_complete: bool,
 ) -> pr_ship::SquashTrailer {
-    pr_ship::derive_ship_trailer_for_method(
+    let refusals = std::cell::RefCell::new(Vec::new());
+    let mut trailer = pr_ship::derive_ship_trailer_for_method(
         method,
         final_slice,
         pr_title,
         branch,
         pr_body,
         no_complete,
-        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| crate::gate::trailer_coverage::admits(store, coverage, id, &refusals),
         |id| pr_ship::spec_completion_hold_reason(store, id),
-    )
+    );
+    trailer.notes.extend(refusals.into_inner());
+    trailer
 }
 
 /// TASK-1765: `body` with an `aida: no-complete` declaration line appended,
@@ -4943,31 +5029,33 @@ pub(crate) fn non_completing_squash_body(body: &str) -> String {
     }
 }
 
-/// The squash body `aida pr ship` hands the forge. A non-completing squash
-/// ship carries the `aida: no-complete` declaration, appended to the
-/// identity gate's sanitized body or, when the gate left the body to the
-/// forge, to the branch's commit messages (`commit_messages`).
+/// The squash body `aida pr ship` hands the forge: `body` (built by
+/// [`crate::gate::trailer_coverage::ship_trailer_check`] for every squash
+/// ship, never left to the forge) carrying, on a non-completing ship, the
+/// `aida: no-complete` declaration. Other merge methods pass no body.
 ///
-/// TASK-2116 trade-off: an explicit body replaces the forge's default one,
-/// so GitHub no longer derives `Co-authored-by:` trailers from the other
-/// commit authors for that merge. Trailers already written in commit
-/// messages are kept. A non-completing ship accepts this so the declaration
-/// reaches main; an ordinary ship leaves the body to the forge.
+/// TASK-2116 / BUG-HOME-048 trade-off: an explicit body replaces the
+/// forge's default one, so GitHub no longer derives `Co-authored-by:`
+/// trailers from the other commit authors. Trailers already written in
+/// commit messages are kept. Every squash ship accepts this: the forge's
+/// default body copies each branch commit message verbatim, and the
+/// pull-side scan would complete any uncovered trailer it found there.
 // trace:TASK-1951 trace:TASK-1765 trace:TASK-2116 trace:TASK-2117 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 pub(crate) fn ship_squash_body(
     method: crate::forge::MergeMethod,
     declares_non_completing: bool,
-    sanitized: Option<String>,
-    commit_messages: impl FnOnce() -> Result<String>,
-) -> Result<Option<String>> {
-    if method != crate::forge::MergeMethod::Squash || !declares_non_completing {
-        return Ok(sanitized);
+    body: Option<String>,
+) -> Option<String> {
+    if method != crate::forge::MergeMethod::Squash {
+        return None;
     }
-    let body = match sanitized {
-        Some(body) => body,
-        None => commit_messages()?,
-    };
-    Ok(Some(non_completing_squash_body(&body)))
+    let body = body?;
+    Some(if declares_non_completing {
+        non_completing_squash_body(&body)
+    } else {
+        body
+    })
 }
 
 /// STORY-1663: optional slice-stack verifier hook before rebase merge.
@@ -6193,6 +6281,10 @@ mod task_1915_mandate_ship_failure_ledger_tests;
 pub(crate) struct PrShipMetadata {
     pub(crate) title: String,
     pub(crate) body: String,
+    /// The PR number, when known: selects the review story whose `## Covers`
+    /// count toward the trailer coverage check.
+    /// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    pub(crate) number: Option<u64>,
 }
 
 pub(crate) fn fetch_pr_ship_metadata_via_gh(
@@ -6232,6 +6324,7 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
+        number: Some(n),
     })
 }
 
@@ -8913,16 +9006,13 @@ mod story_1663_rebase_ship_tests {
         // left it to the forge; an ordinary ship leaves it to the forge.
         // trace:TASK-1951 trace:TASK-2117 | ai:claude
         use crate::forge::MergeMethod;
-        let squash = |declares, sanitized: Option<&str>| {
-            ship_squash_body(
-                MergeMethod::Squash,
-                declares,
-                sanitized.map(str::to_string),
-                || Ok("* fix: one (Refs TASK-9)".to_string()),
-            )
-            .unwrap()
+        let squash = |declares, body: &str| {
+            ship_squash_body(MergeMethod::Squash, declares, Some(body.to_string()))
         };
-        for body in [squash(true, None), squash(true, Some("* sanitized"))] {
+        for body in [
+            squash(true, "* fix: one (Refs TASK-9)"),
+            squash(true, "* sanitized"),
+        ] {
             let opts = crate::forge::MergeOptions {
                 method: MergeMethod::Squash,
                 squash_subject: None,
@@ -8937,13 +9027,10 @@ mod story_1663_rebase_ship_tests {
                 .expect("--body passed");
             assert!(argv[at + 1].ends_with("\n\naida: no-complete"), "{argv:?}");
         }
+        // BUG-HOME-048: an ordinary squash ship passes its explicit body too.
+        assert_eq!(squash(false, "* a"), Some("* a".to_string()));
         assert_eq!(
-            squash(false, None),
-            None,
-            "an ordinary ship leaves the body to the forge"
-        );
-        assert_eq!(
-            ship_squash_body(MergeMethod::Rebase, true, None, || unreachable!()).unwrap(),
+            ship_squash_body(MergeMethod::Rebase, true, Some("* a".into())),
             None
         );
     }
@@ -9194,6 +9281,7 @@ mod story_1663_rebase_ship_tests {
         // so the owning spec's status stays unchanged.
         let default_rebase_trailer = ship_completion_trailer_for_method(
             &store,
+            None,
             crate::forge::MergeMethod::Rebase,
             false,
             "[1/3] feat(ship): slice one (STORY-1663)",
@@ -9218,6 +9306,7 @@ mod story_1663_rebase_ship_tests {
         // owning spec ID so `complete_rebase_final_slice_specs` transitions it to Completed.
         let final_slice_trailer = ship_completion_trailer_for_method(
             &store,
+            None,
             crate::forge::MergeMethod::Rebase,
             true,
             "[3/3] feat(ship): slice three (STORY-1663)",
