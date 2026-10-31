@@ -2,12 +2,12 @@ id: 01a18e1f-ba3a-7cb2-9b4e-3fc950e21f05
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-130
 title: Publish the product website on GitHub Pages
 description: Operator explicitly requested immediate public GitHub Pages publication on 2026-10-30. Publish only the reviewed merged-main static showcase and its assets, route source/reference links to the public GitHub repository, enable Pages, and verify a live URL. Keep the owner-private Sites preview unchanged. Deployment is separate from the final TASK-HOME-128 author PR and does not merge unreviewed source.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T18:43:26.394246896Z
-modified_at: 2026-10-31T10:52:51.909428527Z
+modified_at: 2026-10-31T10:53:49.443239411Z
 req_type: Task
 tags:
 - docs
@@ -28,6 +28,13 @@ comments:
   content: 'Final live verification: Pages API reports built at gh-pages 11d2cd8c103dbf0882de66ad7b7172b70ae2b683. All 27 deployed static files return HTTP 200/nonempty bodies, including capabilities.html, integrations.html and all four new SVGs. Workflow41121895686 build/report jobs passed; deployment job record was still waiting when inspected, so no claim that the whole Actions run had concluded. Stopped only the local read-only watch; no GitHub job canceled. No source edits or hold/review changes in this continuation. Earlier code PRs3122/3130 still need advisor review; refreshed handoff queued as03f2b210-7280-48d0-bdc0-b610ebb95c78.'
   created_at: 2026-10-30T20:22:29.950346479Z
   modified_at: 2026-10-30T20:22:29.950346479Z
+- id: 01a19197-f144-76e0-8631-e890f2652dfa
+  author: joe
+  content: 'Closing verification (2026-10-31): Pages API status=built, source gh-pages:/, html_url https://joemooney.github.io/aida/, latest build commit 11d2cd8c103dbf0882de66ad7b7172b70ae2b683 (2026-10-30T20:21:26Z). Workflow run 41121895686 now completed=success for build, report-build-status and deploy (the deploy job that was still waiting at the previous check concluded). No source changes; no PR needed (branch has 0 commits ahead of main). Direct HTTP fetch of the live URL was not possible from this sandbox.'
+  created_at: 2026-10-31T10:53:36.452399895Z
+  modified_at: 2026-10-31T10:53:36.452399895Z
+  session_id: 01a191973f63
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18f59-22c6-7801-9f28-42cfb45a8939
   author: joe
@@ -45,6 +52,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19198-245c-72f2-a79f-c2e46590cb9f
+  author: joe
+  timestamp: 2026-10-31T10:53:49.532456088Z
+  session_id: 01a191973f63
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: codex/task-home-128-docs-completion
@@ -52,3 +68,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 18019938e1b
   vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T10:53:49.443239411Z
+  implemented_by: joe
