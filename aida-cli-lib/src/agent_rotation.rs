@@ -40,17 +40,38 @@ pub(crate) fn supervisor_seat(role: Option<&str>, agent_type: &str) -> String {
         .unwrap_or_else(|| agent_type.to_string())
 }
 
-/// PURE: whether a launch is supervised. Claude only in this slice; an
-/// explicit `--rotate` always is, while `[agents.claude] rotate = true` only
-/// applies when stdin is a terminal, so a scripted or piped launch never
-/// relaunches unless it asked to.
+/// PURE: whether `agent_type` can be supervised across rotations.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+pub(crate) fn rotation_supported(agent_type: &str) -> bool {
+    matches!(agent_type, "claude" | "codex")
+}
+
+/// PURE: whether a launch is supervised. Claude and Codex only; an explicit
+/// `--rotate` always is, while `[agents.<vendor>] rotate = true` only applies
+/// when stdin is a terminal, so a scripted or piped launch never relaunches
+/// unless it asked to.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
 pub(crate) fn rotation_enabled(
     agent_type: &str,
     explicit: bool,
     config_default: bool,
     stdin_is_tty: bool,
 ) -> bool {
-    agent_type == "claude" && (explicit || (config_default && stdin_is_tty))
+    rotation_supported(agent_type) && (explicit || (config_default && stdin_is_tty))
+}
+
+/// PURE: the native session id a generation's handoff must carry. Claude's
+/// is seeded at launch; Codex's thread id is known only after startup, when
+/// its SessionStart hook records it on the generation's registry row
+/// (`learned`). With neither, freshness falls back to `ts >= spawn` plus the
+/// handle match.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+pub(crate) fn generation_session_id(seeded: Option<&str>, learned: Option<&str>) -> Option<String> {
+    seeded
+        .or(learned)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
 }
 
 /// PURE: a launch that resumes a session (`--resume`). An explicit
@@ -112,7 +133,9 @@ pub(crate) struct HandoffRecord {
 pub(crate) struct GenerationRun<'a> {
     pub seat: &'a str,
     pub handle: &'a str,
-    /// The native session id the launcher seeded, when the vendor takes one.
+    /// The generation's native session id: seeded by the launcher (Claude),
+    /// or the thread the child's hook recorded (Codex); see
+    /// [`generation_session_id`].
     pub native_session_id: Option<&'a str>,
     pub spawned_at: DateTime<Utc>,
 }
@@ -483,6 +506,16 @@ pub(crate) fn ls_rotation_note(status: Option<&RotationStatus>, now: DateTime<Ut
         ),
         None => String::new(),
     }
+}
+
+/// Serializes command-level supervisor tests: a supervisor forwards a
+/// SIGINT the test process receives to its child, so one test's Ctrl-C
+/// would kill another test's running generation.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+#[cfg(test)]
+pub(crate) fn supervisor_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 #[cfg(test)]
