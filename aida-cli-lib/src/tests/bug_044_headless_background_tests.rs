@@ -285,6 +285,7 @@ fn a_no_pr_report_names_the_uncommitted_paths() {
 /// seat the round is a stall, reported `no-pr reason=uncommitted-work`, not
 /// `pr-opened` with the old head.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9d20b3 | ai:claude
 #[test]
 fn a_rework_round_left_uncommitted_on_the_old_pr_head_is_a_stall() {
     let pr = |head: Option<&str>| si::Outcome::PrOpened {
@@ -322,6 +323,7 @@ fn a_rework_round_left_uncommitted_on_the_old_pr_head_is_a_stall() {
 /// BUG-050: the continuation a parked lane is resumed with opens with the
 /// fixed instruction.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9cf711 | ai:claude
 #[test]
 fn the_resume_prompt_opens_with_the_fixed_continuation() {
     assert!(RESUME_PROMPT.starts_with(
@@ -527,6 +529,7 @@ impl Fixture {
 /// The launcher waits for the build, then resumes the same session, which
 /// finishes (here by holding its PR).
 #[cfg(target_os = "linux")]
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9cf711 | ai:claude
 #[test]
 fn a_run_parked_on_its_own_build_is_waited_for_and_resumed() {
     if crate::test_env::run_path_isolated_test() {

@@ -8260,6 +8260,7 @@ mod tests {
     /// background tasks, and a contained one also denies `Monitor`. The
     /// interactive contained flags keep background tasks: a human turn follows.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac265abc | ai:claude
     #[test]
     fn headless_argv_disables_monitor_and_background_tasks() {
         let dir = std::env::temp_dir();
