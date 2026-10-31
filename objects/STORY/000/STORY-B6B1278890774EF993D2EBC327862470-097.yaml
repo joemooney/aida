@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T06:14:46.286575341Z
+modified_at: 2026-10-31T06:56:33.269829354Z
 req_type: Story
 relationships:
 - rel_type:
@@ -87,6 +87,13 @@ comments:
   created_at: 2026-10-31T06:14:46.286575341Z
   modified_at: 2026-10-31T06:14:46.286575341Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190be-e9f5-7a01-a760-92bbea9096e9
+  author: joe
+  content: 'Round 2 fixes at 6da4df8 (one commit, all 6 items). (1) lib-0: this sandbox can''t download the CI job log (blob storage denied), so the failing test is inferred, not read from the log. The store_local Hubs fixture''s store clone had no git identity, and CI has no global one, so the auto-push commit and the retry rebase would fail there; the fixture now sets a local identity. Confirm on the lib-0 run. (2) the first push hub gates the rest (git_ops + store_local, tested). (3) db_sync_push_leg has one push/rebase/retry path; a rejected gitlab push is retried (tested). (4) store pulls are documented as reading the first push hub (fn doc + multi-hub-sync.md, tested). (5) mirror-push doc corrected. (6) tests for the bootstrap store-leg filter and the install-path stopgap retirement. make check-ci-fast passes; touched lib modules pass locally except 2 remote_create gitlab_token tests, which need a writable HOME and fail on this sandbox only.'
+  created_at: 2026-10-31T06:56:33.269829354Z
+  modified_at: 2026-10-31T06:56:33.269829354Z
+  session_id: 01a190a577d5
+  harness_version: 2.1.314 (Claude Code)
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
   author: joe
