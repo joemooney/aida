@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:12:51.682698239Z
-modified_at: 2026-10-31T09:07:29.997603461Z
+modified_at: 2026-10-31T10:25:31.519659144Z
 req_type: Bug
 tags:
 - headless
@@ -70,6 +70,13 @@ comments:
     ADVISOR RULING 2026-10-31 02:10 on PR-3157 round 2 (FINAL; two-round cap). The delta review confirmed all round-1 items. Only CI blocks; the advisor read the log (run 41184809218, lib-1): queue_cmd::headless_hint_tests::headless_env_launches_route_through_shared_argv_builders panics: "session.rs: AIDA_HEADLESS claude launch at line 1645 does not use a shared headless argv builder". Route that launch through the shared headless argv builder (as BUG-044 did with compose_headless_command_for); do not weaken the ratchet. Nothing else changes. Gate: that one test plus the bug_045 filter, plus make check-ci-fast.
   created_at: 2026-10-31T09:07:29.997603461Z
   modified_at: 2026-10-31T09:07:29.997603461Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a1917e-3b7f-7303-9f57-94a8c428678f
+  author: joe
+  content: |
+    ADVISOR 03:18 (2026-10-28 rule): the final-round review notes are ACCEPTED. (a) The unused issue_sandboxed_child is dead code; it is harmless and goes in a later cleanup pass. (b) The fresh queue-work arm minting through issue_headless_child is covered by the launcher preflight that refuses unrecordable reviewers, which is the behaviour this spec required. (c) The missing AC-id traces are cosmetic; the tests are named for their criteria. The two-round cap holds: no further round.
+  created_at: 2026-10-31T10:25:31.519659144Z
+  modified_at: 2026-10-31T10:25:31.519659144Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18f58-daa8-7f32-873d-a1a24562719c
