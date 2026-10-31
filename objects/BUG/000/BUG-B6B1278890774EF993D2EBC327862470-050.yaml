@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T13:46:56.746175340Z
+modified_at: 2026-10-31T14:24:20.618109938Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -40,6 +40,18 @@ comments:
     - Should a stale PR on a clean seat stay `pr-opened`? Chosen: yes, because that round had nothing to change.
   created_at: 2026-10-31T13:46:56.746175340Z
   modified_at: 2026-10-31T13:46:56.746175340Z
+  session_id: 01a192318a61
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19258-e08a-70a1-bde0-0dec410d8143
+  author: joe
+  content: |-
+    ## Implementer findings (not filed as draft TASKs: `aida add` hit a read-only filesystem in the seat sandbox, and the MCP file_finding tool is denied in dontAsk mode)
+
+    1. **followup-suggestion (minor):** the resume safety net for a parked lane (`headless_background::resume_reason`) is wired only into the standalone implementer launcher. The `--auto-complete` drain's own phase-1 implementer has no equivalent backstop. The argv change in this bug lowers how often a lane parks on every path.
+    2. **design-choice (minor):** background tasks are turned off through `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` in the headless `--settings` env. The process env was not used: there are 5 headless spawn sites but only 2 argv builders. Uncontained lanes now get a `--settings` document holding only that env. I confirmed the variable exists in the Claude Code 2.1.316 binary, but did not confirm with a live run that the settings env reaches the background-task check. If it does not, also set it on the child Command next to `AIDA_HEADLESS=1`.
+    3. **design-choice (minor):** a PR still on its launch head, on a clean seat, stays `pr-opened`, because that round had nothing to change. With uncommitted paths it reports `no-pr reason=uncommitted-work`.
+  created_at: 2026-10-31T14:24:20.618109938Z
+  modified_at: 2026-10-31T14:24:20.618109938Z
   session_id: 01a192318a61
   harness_version: 2.1.316 (Claude Code)
 history:
