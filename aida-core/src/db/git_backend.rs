@@ -612,12 +612,23 @@ impl GitBackend {
                 return Ok(Some(req.id));
             }
         }
+        self.agreed_id_holder(id, None)
+    }
+
+    /// The UUID of a requirement whose `agreed_id` names `id`'s number under
+    /// any padding. `skip_stem` excludes the object filed under exactly that
+    /// literal id (the file a same-literal re-import replaces).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    fn agreed_id_holder(&self, id: &str, skip_stem: Option<&str>) -> Result<Option<uuid::Uuid>> {
         if crate::id_identity::IdKey::parse(id).is_none() {
             return Ok(None);
         }
-        // The agreed-id half: only a file whose `agreed_id:` line names the
-        // same number is parsed, so a miss costs one text read per object.
-        for (_name, path) in object_store::list_objects(&self.objects_root)? {
+        // Only a file whose `agreed_id:` line names the same number is
+        // parsed, so a miss costs one text read per object.
+        for (name, path) in object_store::list_objects(&self.objects_root)? {
+            if skip_stem.is_some_and(|s| name.eq_ignore_ascii_case(s)) {
+                continue;
+            }
             let Ok(text) = crate::read_atomic(&path) else {
                 continue;
             };
@@ -1689,7 +1700,10 @@ impl GitBackend {
                     return Ok(Some(other.id));
                 }
             }
-            Ok(None)
+            // The agreed-id half (AC2: spec_id OR agreed_id holds a number):
+            // an explicit id on the authoritative clone is refused while
+            // another spec carries it as its agreed id.
+            self.agreed_id_holder(i, Some(i.trim()))
         };
         crate::id_identity::admit_new_id(id, &twin_holder, req.id)
     }
@@ -4355,6 +4369,51 @@ mod tests {
         assert!(err
             .downcast_ref::<crate::id_identity::IdTakenError>()
             .is_some());
+    }
+
+    /// AC2 through the real add path on the AUTHORITATIVE clone: an explicit
+    /// caller-supplied `TASK-0035` is refused while another spec holds agreed
+    /// id `TASK-35`; nothing is written. A same-literal re-add of an object
+    /// whose agreed id is its own spec id still replaces that one file.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_add_refuses_an_explicit_id_held_as_another_specs_agreed_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        assert!(
+            crate::allocation_authority::resolve(&backend.root)
+                .unwrap()
+                .authoritative,
+            "fixture must be the authoritative clone"
+        );
+        let mut holder = Requirement::new("agreed holder".into(), String::new());
+        holder.spec_id = Some("TASK-7-001".into());
+        holder.agreed_id = Some("TASK-35".into());
+        object_store::write_object(&backend.objects_root, &holder).unwrap();
+
+        let mut explicit = Requirement::new("explicit".into(), String::new());
+        explicit.spec_id = Some("TASK-0035".into());
+        let err = backend.add_requirement(explicit).unwrap_err();
+        assert!(
+            err.downcast_ref::<crate::id_identity::IdTakenError>()
+                .is_some(),
+            "{err:#}"
+        );
+        assert!(
+            object_store::numeric_twin_stems(&backend.objects_root, "TASK-35")
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut own = Requirement::new("own agreed".into(), String::new());
+        own.spec_id = Some("TASK-36".into());
+        own.agreed_id = Some("TASK-36".into());
+        object_store::write_object(&backend.objects_root, &own).unwrap();
+        let mut reimport = Requirement::new("re-import".into(), String::new());
+        reimport.spec_id = Some("TASK-36".into());
+        reimport.agreed_id = Some("TASK-36".into());
+        backend.add_requirement(reimport).unwrap();
     }
 
     /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit

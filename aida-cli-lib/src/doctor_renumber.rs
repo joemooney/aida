@@ -46,7 +46,17 @@ pub(crate) struct FixOptions {
     pub yes: bool,
     pub mapping: Option<PathBuf>,
     pub tree_only: bool,
+    /// Spec IDs whose own text the store apply leaves as written (the spec
+    /// that owns the migration records the old -> new table in its comments).
+    /// Empty means [`DEFAULT_PRESERVE`].
+    pub preserve: Vec<String>,
 }
+
+/// The spec that owns the leading-zero migration (`BUG-HOME-046` on its home
+/// node): its mapping table and keep/renumber lists must survive the apply.
+/// Absent from other stores, where the default preserves nothing.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+pub(crate) const DEFAULT_PRESERVE: &str = "BUG-B6B1278890774EF993D2EBC327862470-046";
 
 fn id_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '$'
@@ -264,16 +274,25 @@ fn comment_start(line: &str) -> Option<usize> {
     line.find("//")
 }
 
-/// Rewrite one tracked file's text: whole-file for Markdown, and for every
-/// other file only `trace:` lines and the comment part of each line. Code
-/// and string literals stay (they may be fixtures), so a lookup literal in
-/// code keeps resolving numerically to the survivor.
+/// Whether `path` is prose rewritten whole-file: any Markdown file, and
+/// every text file under `docs/` (plans, TSV/CSV/YAML data, notes), whose
+/// ID mentions are all references, never code fixtures.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+pub(crate) fn is_prose_path(path: &str) -> bool {
+    path.ends_with(".md") || path.starts_with("docs/")
+}
+
+/// Rewrite one tracked file's text: whole-file for prose
+/// ([`is_prose_path`]), and for every other file only `trace:` lines and the
+/// comment part of each line. Code and string literals stay (they may be
+/// fixtures), so a lookup literal in code keeps resolving numerically to the
+/// survivor.
 pub(crate) fn rewrite_tracked_text(
     path: &str,
     text: &str,
     map: &[(String, String)],
 ) -> (String, usize) {
-    if path.ends_with(".md") {
+    if is_prose_path(path) {
         return rewrite_all(text, map);
     }
     let mut total = 0;
@@ -484,10 +503,12 @@ pub(crate) fn renumber_history(old: &str, new: &str, shas: &[String]) -> History
 }
 
 /// Build the renamed rows and the rewritten referrers for `mapping`
-/// (`uuid -> (old literal, new id, commit shas)`).
+/// (`uuid -> (old literal, new id, commit shas)`). Requirements in
+/// `preserve` keep their title, description and comments as written.
 pub(crate) fn build_rewrites(
     reqs: &[Requirement],
     mapping: &BTreeMap<Uuid, (String, String, Vec<String>)>,
+    preserve: &HashSet<Uuid>,
 ) -> (Vec<(String, Requirement)>, Vec<Requirement>) {
     let map: Vec<(String, String)> = mapping
         .values()
@@ -497,7 +518,11 @@ pub(crate) fn build_rewrites(
     let mut referrers = Vec::new();
     for r in reqs {
         let mut row = r.clone();
-        let changed = rewrite_requirement_text(&mut row, &map);
+        let changed = if preserve.contains(&r.id) {
+            0
+        } else {
+            rewrite_requirement_text(&mut row, &map)
+        };
         if let Some((old, new, shas)) = mapping.get(&r.id) {
             row.spec_id = Some(new.clone());
             if row
@@ -559,6 +584,34 @@ fn print_files(files: &[(String, usize)]) {
     for (f, n) in files {
         println!("  {f}: {n}");
     }
+}
+
+/// UUIDs of the `--preserve` specs (spec or agreed ID, any padding, node
+/// labels expanded). A spec named explicitly that is not in the store is an
+/// error; the [`DEFAULT_PRESERVE`] default may be absent.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+pub(crate) fn preserved_uuids(reqs: &[Requirement], ids: &[String]) -> Result<HashSet<Uuid>> {
+    let defaults = [DEFAULT_PRESERVE.to_string()];
+    let explicit = !ids.is_empty();
+    let ids = if explicit { ids } else { &defaults[..] };
+    let mut out = HashSet::new();
+    for id in ids {
+        let want = aida_core::node_alias::expand_or_keep(id);
+        let names = |r: &Requirement| {
+            [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| aida_core::id_identity::same_id(s, &want))
+        };
+        match reqs.iter().find(|r| names(r)) {
+            Some(r) => {
+                out.insert(r.id);
+            }
+            None if explicit => anyhow::bail!("--preserve {id}: no such spec in the store"),
+            None => {}
+        }
+    }
+    Ok(out)
 }
 
 /// Entry point for `aida doctor --fix id-collisions`.
@@ -673,7 +726,8 @@ pub(crate) fn run(project_root: &Path, store_root: &Path, opts: &FixOptions) -> 
             )
         })
         .collect();
-    let (renames, referrers) = build_rewrites(&reqs, &mapping);
+    let preserve = preserved_uuids(&reqs, &opts.preserve)?;
+    let (renames, referrers) = build_rewrites(&reqs, &mapping, &preserve);
     if opts.dry_run {
         for p in &problems {
             println!("  warning: {p}");

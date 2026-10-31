@@ -15649,6 +15649,14 @@ pub(crate) struct DoctorArgs {
     #[clap(long, requires = "mapping")]
     pub tree_only: bool,
 
+    /// With --fix id-collisions: leave this spec's own text (title,
+    /// description, comments) as written when applying to the store, e.g. the
+    /// spec recording the migration's old -> new table. Repeatable. Defaults
+    /// to the spec that owns the leading-zero migration, when present.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[clap(long, value_name = "SPEC", requires = "fix")]
+    pub preserve: Vec<String>,
+
     /// Run a store-wide semantic contradiction sweep combining mechanical joins
     /// in Rust with Jev System One semantic choice queries.
     // trace:STORY-1426 | ai:antigravity
@@ -15693,6 +15701,7 @@ fn run_doctor(
         dry_run,
         mapping,
         tree_only,
+        preserve,
         contradictions,
         contradictions_limit,
         contradictions_offset,
@@ -15708,6 +15717,7 @@ fn run_doctor(
             yes: *yes,
             mapping: mapping.clone(),
             tree_only: *tree_only,
+            preserve: preserve.clone(),
         });
     }
     // STORY-665: `aida doctor --fix-sandbox` is a guided printer for bringing

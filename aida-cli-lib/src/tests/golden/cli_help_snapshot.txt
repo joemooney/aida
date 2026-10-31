@@ -11838,6 +11838,11 @@ Options:
           With --fix id-collisions --mapping: rewrite only this checkout's tracked files (docs,
           changelog, code comments), not the store
 
+      --preserve <SPEC>
+          With --fix id-collisions: leave this spec's own text (title, description, comments) as
+          written when applying to the store, e.g. the spec recording the migration's old -> new
+          table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present
+
       --contradictions
           Run a store-wide semantic contradiction sweep combining mechanical joins in Rust with Jev
           System One semantic choice queries
@@ -40474,6 +40479,11 @@ Working on aida itself
         "name": "mapping",
         "takes_value": true,
         "help": "With --fix id-collisions: the old -> new mapping file. With --dry-run a missing file is created from the plan; otherwise the file's mapping is applied exactly as written"
+      },
+      {
+        "name": "preserve",
+        "takes_value": true,
+        "help": "With --fix id-collisions: leave this spec's own text (title, description, comments) as written when applying to the store, e.g. the spec recording the migration's old -> new table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present"
       },
       {
         "name": "since",

@@ -56,6 +56,66 @@ fn tracked_rewrite_touches_docs_and_comments_only() {
     assert_eq!(out, "- fixed TASK-HOME-001, see [it](task-0042.md)\n");
 }
 
+/// Every text file under `docs/` is prose: a plan TSV is rewritten whole
+/// (exact token, case preserved); the same line outside `docs/` is code.
+#[test]
+fn tracked_rewrite_treats_every_docs_text_file_as_prose() {
+    let map = vec![("TASK-0042".to_string(), "TASK-HOME-001".to_string())];
+    let tsv = "TASK-0042\tdrop\tsee TASK-00420 and task-0042\n";
+    for path in [
+        "docs/plans/2026-10-19-backlog-triage.tsv",
+        "docs/data/x.csv",
+        "docs/notes.txt",
+        "docs/a/b.yaml",
+    ] {
+        let (out, n) = rewrite_tracked_text(path, tsv, &map);
+        assert_eq!(n, 1, "{path}");
+        assert_eq!(
+            out, "TASK-HOME-001\tdrop\tsee TASK-00420 and task-0042\n",
+            "{path}"
+        );
+    }
+    assert_eq!(rewrite_tracked_text("src/plan.tsv", tsv, &map).1, 0);
+}
+
+/// The migration owner's text survives the store apply; other referrers are
+/// rewritten. An explicitly named spec missing from the store is refused; the
+/// default owner may be absent.
+#[test]
+fn build_rewrites_leaves_preserved_specs_text_as_written() {
+    let mut a = Requirement::new("padded".into(), String::new());
+    a.spec_id = Some("TASK-0042".into());
+    let table = "| TASK-0042 | TASK-HOME-001 |";
+    let mut owner = Requirement::new("owner".into(), table.into());
+    owner.spec_id = Some("BUG-7".into());
+    owner
+        .comments
+        .push(Comment::new("advisor".into(), table.into()));
+    let mut c = Requirement::new("referrer".into(), "see TASK-0042".into());
+    c.spec_id = Some("TASK-9".into());
+    let reqs = vec![a.clone(), owner.clone(), c];
+    let mut mapping = BTreeMap::new();
+    mapping.insert(
+        a.id,
+        ("TASK-0042".to_string(), "TASK-HOME-001".to_string(), vec![]),
+    );
+    let preserve = preserved_uuids(&reqs, &["bug-007".to_string()]).unwrap();
+    assert_eq!(preserve, HashSet::from([owner.id]));
+    let (renames, referrers) = build_rewrites(&reqs, &mapping, &preserve);
+    assert_eq!(renames.len(), 1);
+    assert_eq!(referrers.len(), 1, "the owner is not a referrer");
+    assert_eq!(referrers[0].description, "see TASK-HOME-001");
+
+    assert!(preserved_uuids(&reqs, &["BUG-8".to_string()]).is_err());
+    assert!(preserved_uuids(&reqs, &[]).unwrap().is_empty());
+    let mut home = owner.clone();
+    home.spec_id = Some(DEFAULT_PRESERVE.into());
+    assert_eq!(
+        preserved_uuids(&[home.clone()], &[]).unwrap(),
+        HashSet::from([home.id])
+    );
+}
+
 #[test]
 fn mapping_round_trips_and_rejects_garbage() {
     let rows = vec![MappingRow {
@@ -115,7 +175,7 @@ fn build_rewrites_renames_records_history_and_rewrites_referrers() {
             vec!["abc".to_string()],
         ),
     );
-    let (renames, referrers) = build_rewrites(&reqs, &mapping);
+    let (renames, referrers) = build_rewrites(&reqs, &mapping, &HashSet::new());
     assert_eq!(renames.len(), 1);
     let (old, row) = &renames[0];
     assert_eq!(old, "TASK-0042");
@@ -173,13 +233,15 @@ fn fix_id_collisions_end_to_end() {
     .unwrap();
     std::fs::write(
         root.join("CHANGELOG.md"),
-        // The plain twin has more references (4 here vs 3 for the padded
-        // one: trace comment, changelog, store referrer), so the selection
-        // rule renumbers the padded twin.
+        // The plain twin has more references (6 here vs 5 for the padded
+        // one: trace comment, changelog, docs TSV, store referrer, owner
+        // table), so the selection rule renumbers the padded twin.
         "- TASK-0042 padded fix\n- TASK-42 plain fix\n- TASK-42 again, see [n](task-0042.md)\n\
-         - TASK-42 follow-up\n- TASK-42 cleanup\n",
+         - TASK-42 follow-up\n- TASK-42 cleanup\n- TASK-42 docs\n- TASK-42 release\n",
     )
     .unwrap();
+    std::fs::create_dir_all(root.join("docs/plans")).unwrap();
+    std::fs::write(root.join("docs/plans/triage.tsv"), "TASK-0042\tdrop\n").unwrap();
     git(&root, &["add", "."]);
     git(&root, &["commit", "-q", "-m", "init"]);
 
@@ -190,6 +252,8 @@ fn fix_id_collisions_end_to_end() {
     let padded = plant(&objects, "TASK-0042", "padded twin", "");
     let plain = plant(&objects, "TASK-42", "plain", "");
     let referrer = plant(&objects, "TASK-9", "referrer", "blocked on TASK-0042");
+    // The migration owner records the old -> new table; --preserve keeps it.
+    let owner = plant(&objects, "TASK-7", "owner", "| TASK-0042 | renumbered |");
     let before = aida_core::object_store::load_all_objects(&objects).unwrap();
     assert_eq!(collision_groups(&before).len(), 1);
 
@@ -199,6 +263,7 @@ fn fix_id_collisions_end_to_end() {
         yes,
         mapping: Some(mapping.clone()),
         tree_only,
+        preserve: vec!["TASK-007".into()],
     };
     // Applying without --yes or --dry-run refuses.
     assert!(run(
@@ -241,6 +306,10 @@ fn fix_id_collisions_end_to_end() {
     let log = std::fs::read_to_string(root.join("CHANGELOG.md")).unwrap();
     assert!(log.starts_with(&format!("- {new} padded fix\n- TASK-42 plain fix")));
     assert!(log.contains("[n](task-0042.md)"), "{log}");
+    assert_eq!(
+        std::fs::read_to_string(root.join("docs/plans/triage.tsv")).unwrap(),
+        format!("{new}\tdrop\n")
+    );
     assert!(aida_core::object_store::object_exists(&objects, "TASK-0042").unwrap());
 
     // 3. Store apply with the same mapping.
@@ -266,6 +335,8 @@ fn fix_id_collisions_end_to_end() {
     assert_eq!(kept.spec_id.as_deref(), Some("TASK-42"));
     let rewritten = after.iter().find(|r| r.id == referrer.id).unwrap();
     assert_eq!(rewritten.description, format!("blocked on {new}"));
+    let preserved = after.iter().find(|r| r.id == owner.id).unwrap();
+    assert_eq!(preserved.description, "| TASK-0042 | renumbered |");
     // Every padding of the kept number resolves to the survivor now.
     for id in ["TASK-42", "TASK-0042", "TASK-042"] {
         assert_eq!(
