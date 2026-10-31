@@ -1950,6 +1950,44 @@ pub(crate) fn issue_sandboxed_child(
     issue_child_for(project_root, requested_seat, child_subject, true)
 }
 
+/// The child grant for a launched worker: [`issue_sandboxed_child`] when its
+/// tool calls run contained, else [`issue_child`]. Every launch path that
+/// knows its containment (fresh or resumed, headless or interactive) mints
+/// through here, so none can hand a contained worker an unpresentable grant.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn issue_launch_child(
+    project_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+    contained: bool,
+) -> Result<SeatGrant> {
+    issue_child_for(project_root, requested_seat, child_subject, contained)
+}
+
+/// Refuse a contained `seat` launch whose grant key this launcher could not
+/// put in a session keyring, BEFORE the launch spends anything (a review, or
+/// the reset of the prior round's verdict). Probes with a throwaway key that
+/// is invalidated at once; the real issue re-checks the same condition.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn preflight_sandboxed_child_key(seat: &str) -> Result<()> {
+    let probe = format!("probe-{}", Uuid::new_v4());
+    match crate::grant_keyring::install(&probe, new_key_secret().as_bytes(), 1) {
+        Ok(()) => {
+            crate::grant_keyring::invalidate(&probe);
+            Ok(())
+        }
+        Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(seat, &e)),
+        Err(e) => {
+            match sandboxed_child_key_refusal(seat, &e, crate::grant_keyring::available(), true) {
+                Some(refusal) => Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
+                    refusal
+                )))),
+                None => Ok(()),
+            }
+        }
+    }
+}
+
 fn issue_child_for(
     project_root: &Path,
     requested_seat: &str,

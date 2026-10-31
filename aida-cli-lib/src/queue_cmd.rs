@@ -13376,6 +13376,10 @@ pub(crate) fn handle_queue_work(
             // the prior verdict. Outside a watch launch this is inert.
             // trace:TASK-1993 | ai:claude
             crate::review_watch::reviewer_launch_context(&project_root, *pr)?;
+            // A contained reviewer whose grant key cannot be held is refused
+            // here, before the reset, so the refusal keeps the prior verdict.
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+            refuse_unpresentable_contained_reviewer(contained)?;
             clear_standalone_reviewer_verdict(verdict_path);
             // The `/aida-review` skill writes the verdict here — it keys off
             // this env var. Setting it for standalone runs too is what makes
@@ -13412,10 +13416,12 @@ pub(crate) fn handle_queue_work(
         // never inherited from the launcher. `None` on every other arm.
         let mut headless_child_grant = None;
         if !no_human {
-            let child_grant = crate::gate::seat_authority::issue_child(
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+            let child_grant = crate::gate::seat_authority::issue_launch_child(
                 &project_root,
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
+                contained,
             )?;
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
@@ -13852,6 +13858,10 @@ pub(crate) fn run_standalone_reviewer(
 ) -> Result<()> {
     // Watch context only restricts an ordinary attested launch; it cannot
     // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
+    // Every arm below (fresh or resume, headless or interactive) refuses a
+    // contained reviewer whose grant key cannot be held before it spawns.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+    refuse_unpresentable_contained_reviewer(contained)?;
     let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
     let prompt = watch_prompt.as_deref().unwrap_or(prompt);
     // Keep a recoverable final draft even if a tool refuses the recording.
@@ -13954,10 +13964,12 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let grant = crate::gate::seat_authority::issue_child(
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+                let grant = crate::gate::seat_authority::issue_launch_child(
                     project_root,
                     "reviewer",
                     &crate::current_user_id(None),
+                    contained || session::aida_contained_env()?,
                 )?;
                 (
                     session::spawn_claude_resume_with_grant(
@@ -14261,6 +14273,18 @@ pub(crate) fn standalone_summary_verdict_body(
     collected
         .then(|| crate::gate::review_verdict::current_verdict_body_at(verdict_path))
         .flatten()
+}
+
+/// Refuse a contained standalone reviewer (by flag or inherited
+/// `AIDA_CONTAINED`) whose grant key this launcher could not hold in a
+/// session keyring: its sandboxed `aida review record` could never present
+/// the grant, so the review would be spent for a verdict that is refused.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn refuse_unpresentable_contained_reviewer(contained: bool) -> Result<()> {
+    if contained || session::aida_contained_env()? {
+        crate::gate::seat_authority::preflight_sandboxed_child_key("reviewer")?;
+    }
+    Ok(())
 }
 
 /// Whether a failed pickup should print the manual-continuation hint. A

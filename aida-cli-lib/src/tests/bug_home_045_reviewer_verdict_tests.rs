@@ -10,8 +10,13 @@
 //!   * the standalone reviewer's verdict anchor names its review worktree as
 //!     the directory for `aida review record`, never the primary checkout.
 //!
-//! The contained-launch refusal is covered beside the keyring tests
-//! (`gate/tests/bug_1934_keyring_tests.rs`).
+//!   * a contained reviewer whose grant key the launcher cannot hold in a
+//!     session keyring is refused by the launcher before any reviewer runs,
+//!     on the fresh and the resume launch alike, and before the prior
+//!     round's verdict file is reset;
+//!   * every launch path mints its child grant through the containment-aware
+//!     issuer (the issuer itself is covered beside the keyring tests,
+//!     `gate/tests/bug_1934_keyring_tests.rs`).
 //!
 //! trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
 use super::*;
@@ -119,4 +124,153 @@ fn standalone_prompt_carries_the_worktree_anchor_only() {
         "exactly one anchor: {prompt}"
     );
     assert!(!prompt.contains("run it from `/home/u/proj`"), "{prompt}");
+}
+
+/// Run the REAL standalone reviewer launcher, contained, with this thread's
+/// next keyring install forced to fail the way a launcher inside another
+/// agent's sandbox does (`ELOOP`: it cannot hold the previous session
+/// keyring). The mock reviewer would leave a marker if it ever ran.
+#[cfg(unix)]
+fn contained_launch_without_a_keyring_key(launch: QueueWorkLaunch, no_human: bool) {
+    if !crate::grant_keyring::available() {
+        eprintln!("SKIP: the session keyring is unavailable here");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("project");
+    let worktree = tmp.path().join("review-worktree");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::create_dir_all(&worktree).unwrap();
+    let verdict_path = prior_round_verdict(&project, 3157);
+    let marker = tmp.path().join("reviewer-ran");
+    let mock = tmp.path().join("mock-reviewer.sh");
+    crate::test_exec::write_executable(
+        &mock,
+        &format!("#!/bin/sh\ntouch '{}'\nexit 0\n", marker.display()),
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+        ("AIDA_CONTAINED", None),
+    ]);
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    let result = run_standalone_reviewer(
+        &project,
+        3157,
+        launch,
+        "/aida-review --pr 3157",
+        None,
+        "PR-3157",
+        "pr-3157",
+        "reviewer",
+        &worktree,
+        no_human,
+        true,
+        &verdict_path,
+        true,
+        session::HeadlessVendor::Claude,
+    );
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(None));
+    let err = result.expect_err("a contained reviewer without a keyring key must be refused");
+    assert!(
+        crate::gate::seat_authority::ChildGrantRefused::is_in(&err),
+        "the refusal is a child-grant refusal (it releases the review lease): {err:#}"
+    );
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("cannot launch the contained `reviewer` worker"),
+        "{msg}"
+    );
+    assert!(!marker.exists(), "the reviewer ran before the refusal");
+    assert_eq!(
+        std::fs::read_to_string(&verdict_path).unwrap(),
+        PRIOR_APPROVAL,
+        "a refused launch keeps the prior round's verdict"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bug_045_contained_fresh_headless_launch_is_refused_before_the_review() {
+    contained_launch_without_a_keyring_key(
+        QueueWorkLaunch::Fresh("019e0000-0000-7000-8000-000000003157".to_string()),
+        true,
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bug_045_contained_fresh_interactive_launch_is_refused_before_the_review() {
+    contained_launch_without_a_keyring_key(
+        QueueWorkLaunch::Fresh("019e0000-0000-7000-8000-000000003158".to_string()),
+        false,
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bug_045_contained_headless_resume_is_refused_before_the_review() {
+    contained_launch_without_a_keyring_key(
+        QueueWorkLaunch::Resume("019e0000-0000-7000-8000-000000003159".to_string()),
+        true,
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bug_045_contained_interactive_resume_is_refused_before_the_review() {
+    contained_launch_without_a_keyring_key(
+        QueueWorkLaunch::Resume("019e0000-0000-7000-8000-000000003160".to_string()),
+        false,
+    );
+}
+
+/// An uncontained launcher is not probed: the forced keyring failure is still
+/// pending afterwards, so an uncontained reviewer keeps today's warn-only
+/// proc-only fallback.
+#[test]
+fn bug_045_uncontained_reviewer_is_not_probed() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    refuse_unpresentable_contained_reviewer(false).expect("uncontained is never refused here");
+    let pending = crate::grant_keyring::FORCE_INSTALL_ERRNO.with(std::cell::Cell::take);
+    assert_eq!(pending, Some(libc::ELOOP));
+}
+
+/// The refusal runs before `handle_queue_work` resets the PR's verdict file,
+/// so a refused contained launch keeps the prior round's verdict.
+#[test]
+fn bug_045_contained_refusal_precedes_the_verdict_reset() {
+    let source = include_str!("../queue_cmd.rs");
+    let refuse = source
+        .find("refuse_unpresentable_contained_reviewer(contained)?;")
+        .expect("contained refusal in handle_queue_work");
+    let clear = source
+        .find("clear_standalone_reviewer_verdict(verdict_path);")
+        .expect("verdict reset in handle_queue_work");
+    assert!(refuse < clear, "the verdict is reset before the refusal");
+}
+
+/// Every launch path mints its child grant through the containment-aware
+/// issuer, so a fresh, resumed, headless, interactive or role launch cannot
+/// hand a contained worker a grant its sandbox could not present. A revert of
+/// any launch site to the bare issuer fails here.
+#[test]
+fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
+    for (file, source) in [
+        ("session.rs", include_str!("../session.rs")),
+        ("queue_cmd.rs", include_str!("../queue_cmd.rs")),
+        ("agent_launch.rs", include_str!("../agent_launch.rs")),
+    ] {
+        assert!(
+            !source.contains("seat_authority::issue_child("),
+            "{file} mints a launch child grant without its containment"
+        );
+    }
+    let session = include_str!("../session.rs");
+    assert!(
+        session
+            .matches("seat_authority::issue_launch_child(")
+            .count()
+            >= 3
+    );
 }
