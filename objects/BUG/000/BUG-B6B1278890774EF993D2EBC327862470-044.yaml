@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T07:00:43.781062854Z
+modified_at: 2026-10-31T07:00:54.751304660Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -85,6 +85,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All five round-1 code findings are fixed and tested (build-work-only detection excluding sccache/target servers, TERMINATED prompt on both ceiling paths, waiting slot keeps cap, build-word-gated phrases), but PR CI is red again: lib-0 and lib-1 fail ''Run tests'' at f88a6e9 while main and peer PRs are green.. No triage reason was given.'
   created_at: 2026-10-31T07:00:43.781061462Z
   modified_at: 2026-10-31T07:00:43.781061462Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190c2-e6e7-7b41-98b2-1ab854331d72
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-044):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f88a6e975595
+    Recorded: 2026-10-31T06:56:02.607883037+00:00
+    Findings:
+    1. BLOCKER: PR CI is still red at f88a6e97. CI run 41176742115: lib-0 (job 124465757143) and lib-1 (job 124465757138) fail in 'Run tests', the same two lanes as round 1. main (runs at 06:16Z and 06:35Z) and peer PRs (bug-045, task-141, bug-026-work) are green in the same window, so this branch causes it. The round-2 CI change (the mock vendor waits for cargo to exec, the hold test follows a file) was a guess. Read the real failure with 'gh run view 41176742115 --log-failed' (or --job 124465757143 --log) before changing anything. The reviewer sandbox cannot reach the log/artifact blob storage, and a local nextest repro fails for sandbox reasons (read-only hermetic HOME). If the lane cannot read the log either, ask the advisor/operator for the failing test names. Suspects: the 3 end-to-end mock-vendor tests in bug_044_headless_background_tests.rs, the two linux linger-hold tests in headless_linger.rs, and the existing story_1662 end-to-end tests, which now pass through the hold closure, lease_worktree() and uncommitted_paths() (host_git_command).
+    2. minor: cap race window. standalone_implementer.rs run loop: the slot gets waiting=true only when the reaper hold first engages, which happens after the vendor's final result plus result_grace (30s default), or after classify()+lookup_pr() once the vendor exits. In that window the slot's log ends in a final result with waiting=false, so acquire_slot_with does not count the lane, and a new launch can take the slot before this lane resumes. Close it, e.g. mark waiting as soon as live build work is seen while the child runs, or count a slot whose lease has live marked build work.
+    3. minor: a SaidWaiting resume with no live build work ever observed (settle returns Finished at once) still sends RESUME_PROMPT, which claims 'Your background run has finished (the launcher waited for it)'. The launcher waited for nothing. Use a neutral prompt for SaidWaiting when no work was seen (e.g. 'no background run of yours is still going; check its output or rerun it in the foreground'), and assert it in a_run_that_keeps_parking_is_resumed_a_bounded_number_of_times.
+    4. cosmetic: the total wait can reach about 2x the ceiling. ReapHold's ceiling runs while the vendor lingers, then settle_background_work starts a fresh full ceiling if the vendor exits while held but the build is still live. docs/cli/03-work-autonomy.md says the launcher waits 'up to the background-wait ceiling'. Either share one deadline across the hold and the settle, or document the bound.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-31T07:00:54.631551161Z
+  modified_at: 2026-10-31T07:00:54.631551161Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18e5a-f640-76a3-951a-92b3c103b557
