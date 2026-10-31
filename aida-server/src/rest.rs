@@ -3643,12 +3643,6 @@ async fn update_id_config(
     State(state): State<Arc<ServerState>>,
     Json(body): Json<models::IdConfiguration>,
 ) -> Result<Json<models::IdConfiguration>, (StatusCode, Json<ApiError>)> {
-    if body.digits < 1 || body.digits > 6 {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "Digits must be between 1 and 6",
-        ));
-    }
     let mut store = state.store.write().await;
     store.id_config = body;
     let updated = store.id_config.clone();
@@ -4872,5 +4866,48 @@ mod bug_1612_save_conflict_tests {
             "the requirement needs a design review"
         );
         assert_eq!(on_disk.comments[0].author, "bob");
+    }
+}
+
+#[cfg(test)]
+mod id_config_endpoint_tests {
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+    use super::*;
+    use aida_core::db::create_backend;
+    use aida_core::RequirementsStore;
+
+    /// The REST and gRPC id-config surfaces no longer carry the dead
+    /// `digits` knob: GET omits it, a PUT that still sends it is accepted
+    /// (the key is ignored), and the gRPC message has no such field.
+    #[tokio::test]
+    async fn id_config_api_has_no_digits() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = create_backend(&dir.path().join("store.yaml"), None).expect("yaml backend");
+        backend.save(&RequirementsStore::new()).expect("save store");
+        let state = Arc::new(ServerState::new(backend).expect("server state"));
+
+        let Ok(Json(got)) = get_id_config(State(state.clone())).await else {
+            panic!("GET id-config errored");
+        };
+        let json = serde_json::to_value(&got).unwrap();
+        assert!(
+            json.get("digits").is_none(),
+            "GET still exposes digits: {json}"
+        );
+
+        let mut body = json.clone();
+        body["digits"] = serde_json::json!(9);
+        let body: models::IdConfiguration = serde_json::from_value(body).unwrap();
+        let Ok(Json(put)) = update_id_config(State(state), Json(body)).await else {
+            panic!("PUT id-config with a stray digits key errored");
+        };
+        let put = serde_json::to_value(&put).unwrap();
+        assert!(put.get("digits").is_none(), "PUT echoes digits: {put}");
+
+        let proto = serde_json::to_value(crate::convert::id_config_to_proto(&got)).unwrap();
+        assert!(
+            proto.get("digits").is_none(),
+            "gRPC message has digits: {proto}"
+        );
     }
 }

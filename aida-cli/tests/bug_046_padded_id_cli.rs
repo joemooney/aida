@@ -189,6 +189,7 @@ fn mixed_fixture() -> (Fx, String, String) {
     (fx, padded, plain)
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
 #[test]
 fn show_finds_a_spec_under_any_padding() {
     let (fx, padded, plain) = mixed_fixture();
@@ -207,6 +208,7 @@ fn show_finds_a_spec_under_any_padding() {
     assert!(json.contains(&padded), "{json}");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
 #[test]
 fn edit_comment_and_link_write_the_stored_object_under_any_padding() {
     let (fx, _padded, plain) = mixed_fixture();
@@ -231,6 +233,7 @@ fn edit_comment_and_link_write_the_stored_object_under_any_padding() {
     fx.assert_no_twin_files(&["TASK-0001", "TASK-2"]);
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
 #[test]
 fn trace_comment_under_another_padding_links_the_spec() {
     let (fx, _padded, _plain) = mixed_fixture();
@@ -248,6 +251,7 @@ fn trace_comment_under_another_padding_links_the_spec() {
     fx.assert_no_twin_files(&["TASK-0001", "TASK-2"]);
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
 #[test]
 fn commit_trailer_under_another_padding_completes_the_spec_at_merge() {
     let fx = Fx::new();

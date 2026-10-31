@@ -2424,19 +2424,13 @@ pub struct IdConfiguration {
     /// Numbering strategy
     #[serde(default)]
     pub numbering: NumberingStrategy,
-    /// Legacy digit count. It no longer drives minting or display: `[ids]
-    /// seq_width` in `.aida/config.toml` does (`aida config digits N` writes
-    /// that). Kept only so existing metadata.yaml files still parse.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-    #[serde(default = "default_id_digits")]
-    pub digits: u8,
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude — the dead
+    // `digits` knob is gone: `[ids] seq_width` in `.aida/config.toml` pads
+    // minted IDs. An old metadata.yaml `digits:` key is ignored on read and
+    // dropped on the next write.
     /// Configured requirement types
     #[serde(default = "default_requirement_types")]
     pub requirement_types: Vec<RequirementTypeDefinition>,
-}
-
-fn default_id_digits() -> u8 {
-    3
 }
 
 impl Default for IdConfiguration {
@@ -2444,7 +2438,6 @@ impl Default for IdConfiguration {
         Self {
             format: IdFormat::default(),
             numbering: NumberingStrategy::default(),
-            digits: 3,
             requirement_types: default_requirement_types(),
         }
     }
@@ -2477,11 +2470,6 @@ impl IdConfiguration {
     pub fn get_type_by_prefix(&self, prefix: &str) -> Option<&RequirementTypeDefinition> {
         let upper = prefix.to_uppercase();
         self.requirement_types.iter().find(|t| t.prefix == upper)
-    }
-
-    /// Format a number with the configured digit width
-    pub fn format_number(&self, num: u32) -> String {
-        format!("{:0>width$}", num, width = self.digits as usize)
     }
 }
 
@@ -6554,7 +6542,7 @@ impl RequirementsStore {
         type_prefix: Option<&str>,
     ) -> String {
         // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids]
-        // seq_width` governs minting; `id_config.digits` no longer does (its
+        // seq_width` governs minting (the removed `id_config.digits` knob's
         // `digits: 4` minted the TASK-04xx twins of unpadded TASK-4xx).
         let digits = crate::id_identity::installed_widths().mint_width();
 
@@ -6904,7 +6892,6 @@ impl RequirementsStore {
         &self,
         new_format: &IdFormat,
         new_numbering: &NumberingStrategy,
-        new_digits: u8,
     ) -> IdConfigValidation {
         let mut result = IdConfigValidation {
             valid: true,
@@ -6917,24 +6904,9 @@ impl RequirementsStore {
         // Check if anything actually changed
         let format_changed = &self.id_config.format != new_format;
         let numbering_changed = &self.id_config.numbering != new_numbering;
-        let digits_changed = self.id_config.digits != new_digits;
 
-        if !format_changed && !numbering_changed && !digits_changed {
+        if !format_changed && !numbering_changed {
             result.can_migrate = false;
-            return result;
-        }
-
-        // Find the maximum number of digits currently in use
-        let max_digits_in_use = self.get_max_digits_in_use();
-
-        // Validate digit reduction
-        if new_digits < max_digits_in_use {
-            result.valid = false;
-            result.can_migrate = false;
-            result.error = Some(format!(
-                "Cannot reduce digits to {} - existing requirements use up to {} digits",
-                new_digits, max_digits_in_use
-            ));
             return result;
         }
 
@@ -6967,61 +6939,28 @@ impl RequirementsStore {
                     result.affected_count
                 ));
             }
-        } else if numbering_changed || digits_changed {
-            // For numbering/digit changes only, count affected
+        } else if numbering_changed {
+            // For numbering changes only, count affected
             result.affected_count = self
                 .requirements
                 .iter()
                 .filter(|r| r.spec_id.is_some())
                 .count();
-
-            if digits_changed && result.affected_count > 0 {
-                result.warning = Some(format!(
-                    "{} requirement(s) will have their ID numbers reformatted.",
-                    result.affected_count
-                ));
-            }
         }
 
         result
     }
 
-    /// Get the maximum number of digits currently used in requirement IDs
-    pub fn get_max_digits_in_use(&self) -> u8 {
-        let mut max_digits: u8 = 0;
-
-        for req in &self.requirements {
-            if let Some(spec_id) = &req.spec_id {
-                // Extract the numeric portion from the ID
-                // Formats: "PREFIX-NNN" or "FEATURE-TYPE-NNN"
-                let parts: Vec<&str> = spec_id.split('-').collect();
-                if let Some(last) = parts.last() {
-                    // Check if it's numeric
-                    if last.chars().all(|c| c.is_ascii_digit()) {
-                        let digits = last.len() as u8;
-                        if digits > max_digits {
-                            max_digits = digits;
-                        }
-                    }
-                }
-            }
-        }
-
-        max_digits
-    }
-
-    /// Migrate requirement IDs to new format/numbering/digits configuration
+    /// Migrate requirement IDs to a new format/numbering configuration
     /// Returns the number of requirements migrated
     pub fn migrate_ids_to_config(
         &mut self,
         new_format: IdFormat,
         new_numbering: NumberingStrategy,
-        new_digits: u8,
     ) -> usize {
         // Update the configuration first
         self.id_config.format = new_format;
         self.id_config.numbering = new_numbering;
-        self.id_config.digits = new_digits;
 
         // Reset counters for fresh numbering (an explicit reset a save
         // honours). trace:BUG-1641 | ai:claude
@@ -8034,6 +7973,7 @@ mod tests {
     /// AC1: leading zeros are insignificant; an exact-text match wins over a
     /// padded twin, and a write refuses the ambiguity.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
     #[test]
     fn bug_046_lookup_is_numeric() {
         let mut padded = Requirement::new("padded".into(), "d".into());
@@ -8071,6 +8011,7 @@ mod tests {
     /// padding still resolves, rendering follows the width, and minting pads
     /// new numbers to it.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.acbed48e | ai:claude
     #[test]
     fn bug_046_seq_width_flip_on_mixed_padding_store() {
         use crate::id_identity::{install_widths_for_thread, IdWidths};

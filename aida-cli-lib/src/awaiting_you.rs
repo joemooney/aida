@@ -168,6 +168,12 @@ pub(crate) struct AwaitingReport {
     /// there is exactly one Blocked classifier).
     // trace:TASK-1454 | ai:claude
     pub blocked_seats: Vec<BlockedSeatItem>,
+    /// Failed `aida deputy` jobs the requester has not acknowledged
+    /// (`aida deputy ack`). Scoped to the reading session's own jobs when it
+    /// has a session id; every one in the operator's shell. File reads only,
+    /// so it rides the per-turn notice.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    pub deputy_failed: Vec<crate::deputy::FailedJob>,
     /// BUG-1530: the reading seat's session role (`AIDA_SESSION_ROLE` / the
     /// role file), as the caller already resolves it for every other
     /// role-scoped surface. Drives which channels the headline (`render`)
@@ -1430,6 +1436,24 @@ pub(crate) fn blocked_seat_toon_rows(items: &[BlockedSeatItem]) -> Vec<Vec<Strin
         .collect()
 }
 
+/// TOON rows for agent-mode `deputy_failed`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn deputy_failed_toon_rows(items: &[crate::deputy::FailedJob]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|j| {
+            vec![
+                j.id.clone(),
+                j.deputy.clone(),
+                j.requester_session.clone().unwrap_or_else(|| "-".into()),
+                j.rc.to_string(),
+                j.reason.clone(),
+                j.output.display().to_string(),
+            ]
+        })
+        .collect()
+}
+
 /// BUG-1739: TOON rows for agent-mode `pr_attribution_disagreements`.
 // trace:BUG-1739 | ai:claude
 pub(crate) fn pr_attribution_toon_rows(
@@ -1912,6 +1936,8 @@ impl AwaitingReport {
             ),
             // trace:TASK-1454 | ai:claude
             ("blocked_seats", self.blocked_seats.len()),
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+            ("deputy_failed", self.deputy_failed.len()),
         ]
     }
 
@@ -2183,6 +2209,16 @@ impl AwaitingReport {
                 &blocked_seat_toon_rows(&self.blocked_seats),
             )
         );
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "deputy_failed",
+                &["job", "deputy", "requester", "rc", "reason", "log"],
+                &deputy_failed_toon_rows(&self.deputy_failed),
+            )
+        );
         let _ = writeln!(
             out,
             "{}",
@@ -2307,6 +2343,30 @@ impl AwaitingReport {
                 tool,
                 item.since_label,
                 "aida ps".cyan(),
+            )?;
+            budget -= 1;
+        }
+        // A deputy job submitted on your behalf failed: rc, who asked, and
+        // where its log is, until it is acknowledged.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+        for job in &self.deputy_failed {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            let short: String = job.id.chars().take(8).collect();
+            writeln!(
+                w,
+                "  {} deputy job {} failed: rc {} ({}) — requested by {} — log {} — `{}`",
+                crate::glyph(crate::glyphs::Glyph::Blocked).red(),
+                short.bold(),
+                job.rc,
+                job.reason,
+                job.requester_session
+                    .as_deref()
+                    .unwrap_or("an unknown session"),
+                job.output.display(),
+                format!("aida deputy ack {}", job.id).cyan(),
             )?;
             budget -= 1;
         }
@@ -3085,6 +3145,15 @@ impl AwaitingReport {
                 "tool": b.tool,
                 "since_label": b.since_label,
             })).collect::<Vec<_>>(),
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+            "deputy_failed": self.deputy_failed.iter().map(|j| serde_json::json!({
+                "job": j.id,
+                "deputy": j.deputy,
+                "requester_session": j.requester_session,
+                "rc": j.rc,
+                "reason": j.reason,
+                "log": j.output,
+            })).collect::<Vec<_>>(),
         })
     }
 
@@ -3155,6 +3224,14 @@ impl AwaitingReport {
                 self.blocked_seats.len(),
                 "BLOCKED seat",
                 "BLOCKED seats",
+            ));
+        }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+        if !self.deputy_failed.is_empty() {
+            parts.push(pluralize(
+                self.deputy_failed.len(),
+                "failed deputy job",
+                "failed deputy jobs",
             ));
         }
         if !self.mergeable_prs.is_empty() {
@@ -5788,6 +5865,17 @@ mod tests {
                     spec: Some("BUG-10".into()),
                     tool: Some("Bash".into()),
                     since_label: "5m".into(),
+                })
+            }),
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+            ("deputy_failed", |r| {
+                r.deputy_failed.push(crate::deputy::FailedJob {
+                    deputy: "default".into(),
+                    id: "0190f0aa-0000-7000-8000-000000000001".into(),
+                    requester_session: Some("sess-1".into()),
+                    rc: 3,
+                    reason: "exit".into(),
+                    output: "spool/out/x.out".into(),
                 })
             }),
         ]
