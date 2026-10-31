@@ -1,0 +1,33 @@
+id: 01a193b7-e1b3-79d3-9c0b-506e7907c00a
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-169
+title: 'Review PR-3174: [AI:claude] fix(agent-new): delegation refusal names the parent''s own seat and keeps its delegations; picker marks undelegable seats (BUG-B6B1278890774EF993D2EBC327862470-052)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1939e`) for branch `bug-b6b1278890774ef993d2ebc327862470-052`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3174>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-052` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-052
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3174` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T20:47:44.051478269Z
+modified_at: 2026-10-31T20:47:44.051478269Z
+req_type: Story
+filed_at:
+  code_sha: a4a6e2a6d182df7805362e00c9393fec18752684
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 271e42d3680
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
