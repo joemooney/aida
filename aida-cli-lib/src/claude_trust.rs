@@ -10,25 +10,32 @@
 //!
 //! This module writes exactly one entry, `projects["<seat>"]`, with
 //! `hasTrustDialogAccepted = true` and `"aida"` in `enabledMcpjsonServers`,
-//! and removes it again when the seat is torn down so the file does not grow
-//! without bound. Every other key in the file is left as it was.
+//! for the one directory a claude lane is spawned in, at the spawn. Growth is
+//! bounded by design rather than by wiring every teardown path: every write
+//! also prunes the `projects` entries directly under the worktrees root whose
+//! directory no longer exists, so a tree torn down by any path loses its
+//! entry at the next write. Dismissal removes the entry at once as a fast
+//! path. Entries outside the worktrees root, and every other key, keep their
+//! values (serde_json re-sorts object keys; Claude Code does not depend on
+//! key order).
 //!
 //! Guard rails:
-//! - opt-in: `[worktree_pool] trust_seat_worktrees = true` in
-//!   `.aida/config.toml`, or `AIDA_TRUST_SEAT_WORKTREES=1|0` to turn it on or
-//!   off on one host (the variable wins);
-//! - only a directory directly inside the configured worktrees root (never
-//!   the main checkout, never anything else);
-//! - the read-modify-write runs under `~/.claude.json.lock` (the lock
-//!   directory Claude Code's own writer uses) and replaces the file with an
-//!   atomic rename that keeps its permissions. An unparseable file is never
-//!   overwritten.
+//! - opt-in: `[worktree_pool] trust_seat_worktrees = true` in the default
+//!   branch's committed `.aida/config.toml` (never the branch-local copy), or
+//!   `AIDA_TRUST_SEAT_WORKTREES=1|0` to turn it on or off on one host (the
+//!   variable wins);
+//! - only an existing directory directly inside the configured worktrees
+//!   root (never the main checkout, never anything else);
+//! - the read-modify-write runs under an OS advisory lock (`flock`) on the
+//!   sidecar `~/.claude.json.aida.lock`, waited on with a timeout, so two AIDA
+//!   writers never edit at once; the file is replaced with an atomic rename
+//!   that keeps its permissions. An unparseable file is never overwritten.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
 
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 /// The `.aida/config.toml` key (under `[worktree_pool]`) that turns the write on.
 pub(crate) const CONFIG_KEY: &str = "trust_seat_worktrees";
@@ -38,9 +45,8 @@ pub(crate) const ENV_OVERRIDE: &str = "AIDA_TRUST_SEAT_WORKTREES";
 const MCP_SERVER: &str = "aida";
 /// How long to wait for the `~/.claude.json` lock before giving up.
 const LOCK_WAIT: Duration = Duration::from_secs(5);
-/// A lock directory older than this is a crashed writer's (the same rule as
-/// the `proper-lockfile` convention Claude Code uses).
-const LOCK_STALE: Duration = Duration::from_secs(10);
+/// The sidecar file AIDA's writers `flock` (inside the home directory).
+pub(crate) const LOCK_FILE: &str = ".claude.json.aida.lock";
 
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -49,16 +55,18 @@ static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 pub(crate) enum TrustWrite {
     /// The entry was added or completed.
     Written(PathBuf),
-    /// The entry already carried both fields; the file was not rewritten.
+    /// The entry already carried both fields; the file was not rewritten
+    /// (unless stale entries were pruned).
     AlreadyTrusted(PathBuf),
     /// The opt-in is off for this project / host.
     Disabled,
-    /// The path is not a seat under the worktrees root.
+    /// The path is not an existing seat under the worktrees root.
     Refused(String),
 }
 
 /// Is the write on? The host override wins over the project config; the
 /// default is off.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
 pub(crate) fn trust_enabled(main: &Path) -> bool {
     std::env::var_os(ENV_OVERRIDE)
         .and_then(|raw| parse_override(&raw.to_string_lossy()))
@@ -75,8 +83,14 @@ pub(crate) fn parse_override(raw: &str) -> Option<bool> {
     }
 }
 
+/// The project opt-in, read from the TRUSTED default-branch copy of the
+/// config (BUG-1723): trusting a tree makes Claude Code honour that tree's own
+/// `.claude/settings.json` allow-list, so a branch must not be able to switch
+/// the write on for itself. Local refs only (this runs on every launch);
+/// fail-closed (off) when no default branch or config resolves.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
 fn config_enabled(main: &Path) -> bool {
-    let Ok(body) = std::fs::read_to_string(main.join(".aida").join("config.toml")) else {
+    let Some(body) = crate::trusted_config::read_trusted_config_toml_local(main) else {
         return false;
     };
     let Ok(value) = toml::from_str::<toml::Value>(&body) else {
@@ -111,6 +125,8 @@ fn canonical_or_lexical(path: &Path) -> PathBuf {
 
 /// The `projects` key for `seat`, or why it is refused: the seat must sit
 /// directly inside the worktrees root and must not be the main checkout.
+/// (Existence is checked on the write side only: a dismissal runs after the
+/// directory is gone.)
 pub(crate) fn seat_trust_key(main: &Path, seat: &Path) -> Result<PathBuf, String> {
     let root = worktrees_root(main);
     let seat = canonical_or_lexical(seat);
@@ -137,9 +153,12 @@ fn main_for_seat(seat: &Path) -> PathBuf {
     crate::agent_launch_project_root_from(seat)
 }
 
-/// Pre-trust `seat` in the operator's `~/.claude.json`. Best-effort: a
-/// failure is returned, and the caller warns and launches anyway (the lane
-/// is then no worse off than before).
+/// Pre-trust `seat` — the directory a claude lane is about to be spawned in —
+/// in the operator's `~/.claude.json`. Called only at the spawn points (the
+/// headless launcher and `agent new --bg`). Best-effort: a failure is
+/// returned, and the caller warns and launches anyway (the lane is then no
+/// worse off than before).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.acaf7e35 | ai:claude
 pub(crate) fn ensure_seat_trusted(seat: &Path) -> Result<TrustWrite> {
     let Some(home) = crate::home_dir() else {
         bail!("no home directory, so ~/.claude.json cannot be located");
@@ -149,6 +168,7 @@ pub(crate) fn ensure_seat_trusted(seat: &Path) -> Result<TrustWrite> {
 
 /// [`ensure_seat_trusted`] with the home and main checkout given — the
 /// testable core.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.acaf7e35 | ai:claude
 pub(crate) fn ensure_seat_trusted_in(home: &Path, main: &Path, seat: &Path) -> Result<TrustWrite> {
     if !trust_enabled(main) {
         return Ok(TrustWrite::Disabled);
@@ -157,8 +177,14 @@ pub(crate) fn ensure_seat_trusted_in(home: &Path, main: &Path, seat: &Path) -> R
         Ok(key) => key,
         Err(why) => return Ok(TrustWrite::Refused(why)),
     };
+    if !key.is_dir() {
+        return Ok(TrustWrite::Refused(format!(
+            "{} is not an existing directory a lane is spawned in",
+            key.display()
+        )));
+    }
     let key_str = key.to_string_lossy().into_owned();
-    let changed = edit_claude_json(home, |root| {
+    let changed = edit_claude_json(home, main, |root| {
         let projects = root
             .entry("projects")
             .or_insert_with(|| serde_json::Value::Object(Default::default()));
@@ -196,10 +222,12 @@ pub(crate) fn ensure_seat_trusted_in(home: &Path, main: &Path, seat: &Path) -> R
     })
 }
 
-/// Remove `seat`'s entry when the seat is torn down. Runs whether or not the
-/// opt-in is on (an entry written while it was on must not outlive the seat),
-/// but only for a path inside the worktrees root. Returns whether an entry was
+/// Remove `seat`'s entry when the seat is torn down — the fast path; the
+/// prune on every write is what bounds growth. Runs whether or not the opt-in
+/// is on (an entry written while it was on must not outlive the seat), but
+/// only for a path inside the worktrees root. Returns whether an entry was
 /// removed; errors are swallowed by the caller (teardown must not fail on it).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
 pub(crate) fn remove_seat_trust(main: &Path, seat: &Path) -> Result<bool> {
     let Some(home) = crate::home_dir() else {
         return Ok(false);
@@ -216,7 +244,7 @@ pub(crate) fn remove_seat_trust_in(home: &Path, main: &Path, seat: &Path) -> Res
         return Ok(false);
     }
     let key_str = key.to_string_lossy().into_owned();
-    edit_claude_json(home, |root| {
+    edit_claude_json(home, main, |root| {
         Ok(root
             .get_mut("projects")
             .and_then(serde_json::Value::as_object_mut)
@@ -224,8 +252,10 @@ pub(crate) fn remove_seat_trust_in(home: &Path, main: &Path, seat: &Path) -> Res
     })
 }
 
-/// `projects` keys that are seats of `main` (directly inside its worktrees
-/// root) whose directory no longer exists — what doctor reports.
+/// `projects` keys directly inside `main`'s worktrees root (seat clones, spec
+/// worktrees, reviewer and compete worktrees alike) whose directory no longer
+/// exists — what doctor reports and what every write prunes.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
 pub(crate) fn stale_seat_entries(home: &Path, main: &Path) -> Vec<PathBuf> {
     let Ok(body) = std::fs::read_to_string(home.join(".claude.json")) else {
         return Vec::new();
@@ -234,7 +264,6 @@ pub(crate) fn stale_seat_entries(home: &Path, main: &Path) -> Vec<PathBuf> {
         return Vec::new();
     };
     let root = worktrees_root(main);
-    let prefix = aida_core::seat_clone_detect::CLONE_DIR_PREFIX;
     value
         .get("projects")
         .and_then(serde_json::Value::as_object)
@@ -242,25 +271,44 @@ pub(crate) fn stale_seat_entries(home: &Path, main: &Path) -> Vec<PathBuf> {
             projects
                 .keys()
                 .map(PathBuf::from)
-                .filter(|p| {
-                    p.parent() == Some(root.as_path())
-                        && p.file_name()
-                            .is_some_and(|n| n.to_string_lossy().starts_with(prefix))
-                        && !p.exists()
-                })
+                .filter(|p| is_stale_under(p, &root))
                 .collect()
         })
         .unwrap_or_default()
 }
 
+/// A `projects` key directly inside the worktrees `root` whose directory is
+/// gone. Anything else (outside the root, nested, live) is never touched.
+fn is_stale_under(key: &Path, root: &Path) -> bool {
+    key.parent() == Some(root) && !key.exists()
+}
+
+/// Drop every stale entry under the worktrees `root`; returns how many.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
+fn prune_stale(file: &mut serde_json::Map<String, serde_json::Value>, root: &Path) -> usize {
+    let Some(projects) = file
+        .get_mut("projects")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return 0;
+    };
+    let before = projects.len();
+    projects.retain(|key, _| !is_stale_under(Path::new(key), root));
+    before - projects.len()
+}
+
 /// Locked read-modify-write of `<home>/.claude.json`. `edit` returns whether
-/// it changed anything; the file is rewritten only then.
+/// it changed anything; every write also prunes the stale entries under
+/// `main`'s worktrees root. The file is rewritten only when either changed
+/// something. Returns `edit`'s answer.
 fn edit_claude_json(
     home: &Path,
+    main: &Path,
     edit: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>) -> Result<bool>,
 ) -> Result<bool> {
     let path = home.join(".claude.json");
-    let _lock = LockDir::acquire(&home.join(".claude.json.lock"))?;
+    let wt_root = worktrees_root(main);
+    let _lock = ClaudeJsonLock::acquire(home, LOCK_WAIT)?;
     let (mut value, mode) = match std::fs::read_to_string(&path) {
         Ok(body) => {
             let value: serde_json::Value = serde_json::from_str(&body).with_context(|| {
@@ -282,12 +330,14 @@ fn edit_claude_json(
             path.display()
         );
     };
-    if !edit(root)? {
+    let changed = edit(root)?;
+    let pruned = prune_stale(root, &wt_root);
+    if !changed && pruned == 0 {
         return Ok(false);
     }
     let body = serde_json::to_string_pretty(&value)?;
     write_replacing(&path, body.as_bytes(), mode)?;
-    Ok(true)
+    Ok(changed)
 }
 
 #[cfg(unix)]
@@ -331,46 +381,48 @@ fn write_replacing(path: &Path, body: &[u8], mode: Option<u32>) -> Result<()> {
     result
 }
 
-/// A `mkdir` lock: creating the directory is the atomic acquire; dropping
-/// removes it.
-struct LockDir(PathBuf);
+/// An exclusive `flock` on the sidecar [`LOCK_FILE`], held until drop. The
+/// kernel releases it when the holder dies, so there is no stale lock to
+/// break (and so no break race). The sidecar file stays in place: deleting a
+/// lock file another writer has open would let two writers each hold "the"
+/// lock.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.acaf7e35 | ai:claude
+pub(crate) struct ClaudeJsonLock(std::fs::File);
 
-impl LockDir {
-    fn acquire(path: &Path) -> Result<Self> {
-        let deadline = Instant::now() + LOCK_WAIT;
+impl ClaudeJsonLock {
+    /// Take the lock in `home`, waiting at most `wait`.
+    pub(crate) fn acquire(home: &Path, wait: Duration) -> Result<Self> {
+        use fs2::FileExt;
+        let path = home.join(LOCK_FILE);
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .with_context(|| format!("open lock {}", path.display()))?;
+        let deadline = Instant::now() + wait;
         loop {
-            match std::fs::create_dir(path) {
-                Ok(()) => return Ok(Self(path.to_path_buf())),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if lock_is_stale(path) {
-                        let _ = std::fs::remove_dir(path);
-                        continue;
-                    }
+            match FileExt::try_lock_exclusive(&file) {
+                Ok(()) => return Ok(Self(file)),
+                Err(e) if e.kind() == fs2::lock_contended_error().kind() => {
                     if Instant::now() >= deadline {
                         bail!(
                             "{} is held by another writer; ~/.claude.json was not changed",
                             path.display()
                         );
                     }
-                    std::thread::sleep(Duration::from_millis(50));
+                    std::thread::sleep(Duration::from_millis(25));
                 }
-                Err(e) => return Err(e).with_context(|| format!("create lock {}", path.display())),
+                Err(e) => return Err(e).with_context(|| format!("lock {}", path.display())),
             }
         }
     }
 }
 
-fn lock_is_stale(path: &Path) -> bool {
-    std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| SystemTime::now().duration_since(t).ok())
-        .is_some_and(|age| age > LOCK_STALE)
-}
-
-impl Drop for LockDir {
+impl Drop for ClaudeJsonLock {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir(&self.0);
+        let _ = fs2::FileExt::unlock(&self.0);
     }
 }
 

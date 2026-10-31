@@ -3099,11 +3099,24 @@ fn seat_trust_findings(
     enabled: bool,
     stale: &[std::path::PathBuf],
 ) {
-    if !enabled {
-        for finding in findings
-            .iter_mut()
-            .filter(|f| f.id == "worktree-folder-trust")
-        {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    for finding in findings
+        .iter_mut()
+        .filter(|f| f.id == "worktree-folder-trust")
+    {
+        if enabled {
+            // On: the headless half of the problem is solved per seat, so the
+            // finding says so instead of claiming lanes lose the allow-list.
+            finding.summary.push_str(&format!(
+                "; per-seat pre-trust is on (`[worktree_pool] {}`), so each headless claude \
+                 lane is trusted in ~/.claude.json before it starts and keeps the project's \
+                 permissions.allow list",
+                crate::claude_trust::CONFIG_KEY,
+            ));
+        } else {
+            finding.summary.push_str(
+                ", and a headless lane there ignores the project's permissions.allow list",
+            );
             finding.action.push_str(&format!(
                 "; or set `[worktree_pool] {} = true` in .aida/config.toml (or {}=1 on this \
                  host) so AIDA trusts each seat in ~/.claude.json before it launches claude there",
@@ -3117,15 +3130,20 @@ fn seat_trust_findings(
             category: "agent-launch".to_string(),
             id: "worktree-seat-trust-stale".to_string(),
             summary: format!(
-                "~/.claude.json holds {} Claude Code trust entr{} for seats that no longer exist \
-                 (e.g. {})",
+                "~/.claude.json holds {} Claude Code trust entr{} for worktrees that no longer \
+                 exist (e.g. {})",
                 stale.len(),
                 if stale.len() == 1 { "y" } else { "ies" },
                 stale[0].display()
             ),
-            action: "remove those `projects` entries from ~/.claude.json; seats dismissed from \
-                     now on remove their own entry"
-                .to_string(),
+            action: if enabled {
+                "the next seat launch prunes them automatically; or remove those `projects` \
+                 entries from ~/.claude.json by hand"
+            } else {
+                "remove those `projects` entries from ~/.claude.json (the next `aida worktree \
+                 dismiss` also prunes them)"
+            }
+            .to_string(),
             safe_heal: false,
         });
     }
@@ -3299,8 +3317,7 @@ fn worktree_trust_findings(
         summary: format!(
             "worktrees are created under {}, which has no Claude Code folder-trust record — an \
              interactive `aida agent new claude --spec <ID>` there stops on a folder-trust \
-             modal instead of starting work, and a headless lane there ignores the project's \
-             permissions.allow list",
+             modal instead of starting work",
             parent.display()
         ),
         action,
@@ -3318,22 +3335,32 @@ mod bug_b6b_049_seat_trust_doctor_tests {
         worktree_trust_findings(Path::new("/home/op/wt"), true, Some(&[]), None)
     }
 
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
     #[test]
     fn off_names_the_opt_in_key_in_the_untrusted_finding() {
         let mut findings = untrusted();
         seat_trust_findings(&mut findings, false, &[]);
         assert_eq!(findings.len(), 1);
         assert!(findings[0].action.contains("trust_seat_worktrees = true"));
-        assert!(findings[0].summary.contains("permissions.allow"));
+        assert!(findings[0]
+            .summary
+            .contains("a headless lane there ignores the project's permissions.allow list"));
     }
 
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
     #[test]
-    fn on_adds_nothing_unless_entries_are_stale() {
+    fn on_reports_pre_trust_as_on_and_drops_the_headless_claim() {
         let mut findings = untrusted();
         seat_trust_findings(&mut findings, true, &[]);
         assert_eq!(findings.len(), 1);
-        assert!(!findings[0].action.contains("trust_seat_worktrees"));
+        assert!(!findings[0].action.contains("trust_seat_worktrees = true"));
+        assert!(findings[0].summary.contains("per-seat pre-trust is on"));
+        assert!(!findings[0].summary.contains("ignores the project's"));
+    }
 
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    #[test]
+    fn stale_entries_are_reported() {
         let mut findings = Vec::new();
         seat_trust_findings(
             &mut findings,
@@ -3343,6 +3370,7 @@ mod bug_b6b_049_seat_trust_doctor_tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].id, "worktree-seat-trust-stale");
         assert!(findings[0].summary.contains("1 Claude Code trust entry"));
+        assert!(findings[0].action.contains("prunes them automatically"));
         assert!(!findings[0].safe_heal);
     }
 }

@@ -441,11 +441,14 @@ enabled = true
 [worktree_pool]
 worktree_parent = "../aida-worktrees"
 # BUG-049: pre-trust each seat worktree in ~/.claude.json before a lane's
-# claude starts there (and drop the entry when the seat is dismissed). A fresh
+# claude starts there. Every write also prunes the entries of trees under the
+# worktrees root that no longer exist, and dismissal drops the entry at once,
+# so ~/.claude.json stays bounded. A fresh
 # seat is otherwise untrusted, Claude Code ignores .claude/settings.json's
 # permissions.allow, and the lane's Bash calls are denied. The operator
-# authorized trusting aida-worktrees/* seats on 2026-10-25. Override on one
-# host with AIDA_TRUST_SEAT_WORKTREES=0|1.
+# authorized trusting aida-worktrees/* seats on 2026-10-25. Read from the
+# default branch's committed copy only (BUG-1723: a branch cannot switch it on
+# for itself). Override on one host with AIDA_TRUST_SEAT_WORKTREES=0|1.
 # trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
 trust_seat_worktrees = true
 
