@@ -16,12 +16,40 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:01:23.418689366Z
-modified_at: 2026-10-31T05:03:50.426534266Z
+modified_at: 2026-10-31T05:08:57.259121014Z
 req_type: Task
 tags:
 - ci
 - fasttrack
 - gitlab
+comments:
+- id: 01a19058-45ad-7ea1-a012-4da2ab7b18a0
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Fixture/lint:** existing .gitlab-ci.yml lints/tests in check-ci-fast (grep for gitlab-ci consumers) prove the file still parses; YAML parse check of rules.
+    - **No automated test:** rules (MR / schedule+default branch / web) and interruptible flags — verified by reading the diff; GitLab evaluates at runtime.
+    - **No automated test:** docs/gitlab-ci-runner.md nightly + schedule setup step — doc review.
+
+    ### Expected files
+    - `.gitlab-ci.yml`
+    - `docs/gitlab-ci-runner.md`
+
+    ### Ambiguities / conflicts as questions
+    - verify/test do not currently run for tags; "for tags where they already do" read as: no tag rule added (unchanged).
+  created_at: 2026-10-31T05:04:26.541890521Z
+  modified_at: 2026-10-31T05:04:26.541890521Z
+  session_id: 01a19057b32b
+  harness_version: 2.1.314 (Claude Code)
+- id: 01a1905c-672b-7dd3-82b9-cbaba2278be4
+  author: joe
+  content: |
+    ADVISOR 22:10: the GitLab schedule ALREADY EXISTS (operator-requested, created via glab as joe): ai/aida schedule ID 1, ref main, cron "0 3 * * *" America/Phoenix, active. AC4 docs should describe it as existing (how to view or edit it: `GITLAB_HOST=gitlab.joemooney.com glab schedule list -R ai/aida`) rather than as a step still to take.
+  created_at: 2026-10-31T05:08:57.259121014Z
+  modified_at: 2026-10-31T05:08:57.259121014Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a19057-b89a-7fd3-b8b4-93f755ff8235
   author: aida-session-start
@@ -31,6 +59,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19058-1035-7963-a11e-79cc67238edd
+  author: joe
+  timestamp: 2026-10-31T05:04:12.853134503Z
+  session_id: 01a19057b32b
+  harness_version: 2.1.314 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
   branch: main
