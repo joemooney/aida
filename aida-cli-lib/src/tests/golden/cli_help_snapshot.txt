@@ -6895,7 +6895,7 @@ Options:
 Fire-fighting mandate: a human-minted, time-boxed grant that lets the advisor seat ship held PRs
 with an attested, independent approval.
 
-`start` and `stop` need a human at an interactive terminal; `status` is open to anyone.
+`start`, `renew` and `stop` need a human at an interactive terminal; `status` is open to anyone.
 Operator-only specs always stay human-only.
 
 Usage: aida mandate [OPTIONS] <COMMAND>
@@ -6905,6 +6905,8 @@ Commands:
           independent approval and green CI. Start and stop require a human at an interactive
           terminal; a same-uid process that forges files in the AIDA home is outside the threat
           model (the same as session grants)
+  renew   Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to
+          be retyped. Grants that name the mandate stay valid. Human at an interactive terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -6951,8 +6953,8 @@ Options:
           With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
-          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). A mandate cannot be
-          extended; stop it and start another
+          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with
+          `aida mandate renew`
 
       --reason <REASON>
           Why the mandate exists, recorded with it
@@ -6960,6 +6962,33 @@ Options:
       --include-supervised
           Also cover sensitive specs (security, containment, authority, guided, keystone).
           Operator-only specs are never covered
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mandate renew
+Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to be
+retyped. Grants that name the mandate stay valid. Human at an interactive terminal only
+
+Usage: aida mandate renew [OPTIONS]
+
+Options:
+      --for <DURATION>
+          How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
+          at most 24h)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -36089,7 +36118,38 @@ Working on aida itself
       {
         "name": "ttl",
         "takes_value": true,
-        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). A mandate cannot be extended; stop it and start another"
+        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with `aida mandate renew`"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mandate",
+      "renew"
+    ],
+    "about": "Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to be retyped. Grants that name the mandate stay valid. Human at an interactive terminal only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "for",
+        "takes_value": true,
+        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false

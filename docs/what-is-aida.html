@@ -716,9 +716,9 @@ td code { font-size: 0.84em; }
 </thead>
 <tbody>
 <tr>
-<td><strong>Mandates.</strong> A time-boxed grant (8 hours by default, at most 24) that lets the advisor seat ship held PRs, with an independent approval and green CI still required. <code>--drive</code> widens it to sketch signoff, dispatching fixers and a 15-minute drive tick. Starting and stopping a mandate are refused unless the process has an interactive terminal and is not an AIDA-launched agent session. A mandate cannot be extended: you stop it and start another.</td>
+<td><strong>Mandates.</strong> A time-boxed grant (8 hours by default, at most 24) that lets the advisor seat ship held PRs, with an independent approval and green CI still required. <code>--drive</code> widens it to sketch signoff, dispatching fixers and a 15-minute drive tick. Starting and stopping a mandate are refused unless the process has an interactive terminal and is not an AIDA-launched agent session. <code>aida mandate renew</code> extends the active one in place without retyping its flags.</td>
 <td>You are leaving and want agents to keep shipping reviewed work while you are away.</td>
-<td><code>aida mandate start --ship-held</code>, <code>--include-supervised</code>, <code>--scope dispatch</code>, <code>--drive</code>, <code>--ttl</code>, <code>aida mandate stop</code>, <code>aida mandate status</code></td>
+<td><code>aida mandate start --ship-held</code>, <code>--include-supervised</code>, <code>--scope dispatch</code>, <code>--drive</code>, <code>--ttl</code>, <code>aida mandate renew</code>, <code>aida mandate stop</code>, <code>aida mandate status</code></td>
 </tr>
 <tr>
 <td><strong>Typed dispatch requests.</strong> A sandboxed advisor queues a typed request: drive a PR to merge (<code>flow</code>), review a PR (<code>review</code>), take over a PR (<code>take</code>), start an implementer lane (<code>impl</code>), or train PRs (<code>train</code>). An executor outside the sandbox runs it: <code>aida dispatch tick</code> handles <code>take</code> and <code>impl</code>, and <code>aida dispatch serve</code>, started from a human advisor terminal, handles all five. Requests are validated and de-duplicated when queued, and authority is re-checked from disk at every checkpoint after a wait and before each side effect.</td>

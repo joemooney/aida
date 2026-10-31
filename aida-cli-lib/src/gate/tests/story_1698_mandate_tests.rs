@@ -41,6 +41,7 @@ fn active(include_supervised: bool) -> Mandate {
         revoked_by: None,
         scopes: Default::default(),
         kind: None,
+        renewals: Vec::new(),
     }
 }
 
@@ -276,7 +277,7 @@ fn ttl_is_capped_at_24h_and_a_mandate_cannot_be_extended() {
         now(),
     )
     .unwrap_err();
-    assert!(err.to_string().contains("cannot be extended"), "{err}");
+    assert!(err.to_string().contains("aida mandate renew"), "{err}");
 }
 
 // ── Acceptance: the advisor ships under an active mandate ──────────────────
