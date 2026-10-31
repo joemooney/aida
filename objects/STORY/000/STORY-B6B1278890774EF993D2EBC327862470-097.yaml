@@ -10,12 +10,12 @@ description: |-
   3. A clone can declare its push hubs (work: gitlab only) so `db sync --push` / mirror-sync never attempt origin from it.
   4. hub-drift-guard stays the escalation for drift the bridge could not union.
   5. The stopgap cron line is removed by the install path.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T07:13:22.682430237Z
+modified_at: 2026-10-31T07:13:27.178685724Z
 req_type: Story
 relationships:
 - rel_type:
@@ -107,6 +107,12 @@ comments:
   created_at: 2026-10-31T07:13:22.531218956Z
   modified_at: 2026-10-31T07:13:22.531218956Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190ce-628a-7121-a5a6-eca62373f64a
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 5 acceptance criteria and all 6 round-2 items are implemented and traced, but CI (lib-0) is red at the head 894a5e3 (run 41178678713, ''Run tests'' step). It was also red at ebad1b8 (run 41174619430), while main is green, so the fixture-identity fix in 6da4df8 did not cure it.. Triage reason: help golden snapshot out of date (CI lib-0)'
+  created_at: 2026-10-31T07:13:27.178682860Z
+  modified_at: 2026-10-31T07:13:27.178682860Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
   author: joe
@@ -158,6 +164,14 @@ history:
   session_id: 01a190c28e7c
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a190ce-628a-7121-a5a6-ec9b13d93e3a
+  author: joe
+  timestamp: 2026-10-31T07:13:27.178668178Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -170,11 +184,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T00:19:04.142015265Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: All 5 acceptance criteria and all 6 round-2 items are implemented and traced, but CI (lib-0) is red at the head 894a5e3 (run 41178678713, 'Run tests' step). It was also red at ebad1b8 (run 41174619430), while main is green, so the fixture-identity fix in 6da4df8 did not cure it.
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-097 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T07:08:59.634431206Z
