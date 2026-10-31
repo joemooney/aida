@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T18:29:26.494169984Z
+modified_at: 2026-10-31T18:31:06.301375670Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -97,6 +97,12 @@ comments:
     Gate: LIGHT (targeted contained_boundary, session and burndown tests) plus make check-ci-fast. No force push.
   created_at: 2026-10-31T17:01:27.189698956Z
   modified_at: 2026-10-31T17:01:27.189698956Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1933a-cb3d-7642-9c09-ef7d44def261
+  author: joe
+  content: 'ADVISOR RULING 2026-10-31 11:33: PR-3166 round 3 has all ACs and all round-2 items verified. ONLY CI (rest) is red (job 124618050157): aida-cli-lib::task1169_launcher_sets_ceiling_guardrail every_headless_spawn_site_sets_the_background_wait_ceiling. The new child-env line at session.rs:1653 is seen as a headless spawn site that does not set the TASK-1169 background-wait ceiling. CI-ONLY delta: set CLAUDE_CODE_DISABLE_BACKGROUND_TASKS through the same shared helper that applies the TASK-1169 ceiling (one place that sets the env for every headless child), so the guardrail sees the ceiling at that site. Do not add an exemption to the guardrail. Gate: cargo test -p aida-cli-lib --test task1169_launcher_sets_ceiling_guardrail plus make check-ci-fast. No force push.'
+  created_at: 2026-10-31T18:31:06.301375670Z
+  modified_at: 2026-10-31T18:31:06.301375670Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a1922e-768b-7b43-9bc4-deca919d4df0
