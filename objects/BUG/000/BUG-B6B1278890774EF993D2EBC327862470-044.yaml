@@ -2,12 +2,12 @@ id: 01a18e5a-cf58-7ce1-89b7-8ccd68829290
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-044
 title: Headless implementer lanes end their turn while their own background test runs are still going, so the lane exits with no push and needs a manual --resume
 description: '2026-10-30: BUG-041 (lane 041c, result ''Waiting on the aida-core test build.''), BUG-038 (lane 038d, result ''Both runs are in the background; I''ll pick up results when they finish.'') and BUG-040 each needed a manual --resume; 041c had 12 modified files uncommitted at exit. The HEADLESS WAITING RULE in the prompt does not prevent it. Fix in the launcher, not the prompt: when the vendor returns a final result while the seat still has live child processes (cargo/rustc/test binaries started by the session) or the result text matches a waiting-on-background pattern, auto-resume the same session (bounded, e.g. 3 times) with a ''your background run finished; continue'' message once those children exit, instead of reporting no-pr. Also: when no-pr is reported and the seat has uncommitted changes, say so in the implementer: line. Tests with a mock vendor.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T07:04:14.289928052Z
+modified_at: 2026-10-31T08:13:13.485004467Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -185,6 +185,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19105-1b28-74d2-a192-ae51bbca939b
+  author: aida-auto-bump
+  timestamp: 2026-10-31T08:13:13.384254216Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19105-1b8c-7c10-85da-d5dd8b40f1b8
+  timestamp: 2026-10-31T08:13:13.484999706Z
+  agent: aida
+  commit_sha: bfeb79ddeb6ac8e749d42939db523d44791a9e1c
+  summary: 'Round 3: both round-2 CI blockers fixed (resume launch routes through shared builder compose_headless_command_for, BUG-342 ratchet intact; daemon-linger test uses an injected snapshot via build_work_among). All BUG-044 acceptance met; every CI lane green at ecc01505. Deferred minor items 2-4 filed as findings per the advisor''s final ruling.'
+  review_verdict: approved
 filed_at:
   code_sha: 8fd81b90a87f7104e4274fd16cd057657c25611b
   branch: main
@@ -193,3 +207,7 @@ filed_at:
   aida_build_sha: 79ed6f56bf8
   vendor: claude
   session: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-31T08:13:13.384248853Z
+  completion_sha: bfeb79ddeb6ac8e749d42939db523d44791a9e1c
