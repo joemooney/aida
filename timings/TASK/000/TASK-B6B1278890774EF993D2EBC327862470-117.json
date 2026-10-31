@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-117",
+  "publishes": [
+    {
+      "at": "2026-10-31T00:07:46.255938774Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T00:32:07.775973314Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-117",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-30T01:13:28.598399059Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-117",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-30T01:19:23.370266599Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-117",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-117",
+        "branch": "task-b6b1278890774ef993d2ebc327862470-117-work",
+        "first_seen": "2026-10-30T01:19:23.370188358+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-30T15:12:37.552215549Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-117",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-31T00:07:07.631086720Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-117",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T00:07:21.443894128Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-117",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3122
+      }
+    },
+    {
+      "ts": "2026-10-31T00:07:46.116823853Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-117",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2f299376ba7a2634bd17a64937351ea2ac93fdac",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
