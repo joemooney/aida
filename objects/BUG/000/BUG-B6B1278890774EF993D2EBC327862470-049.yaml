@@ -14,13 +14,21 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:22:58.265909250Z
-modified_at: 2026-10-31T14:29:53.106222212Z
+modified_at: 2026-10-31T14:32:47.238081488Z
 req_type: Bug
 relationships:
 - rel_type: Parent
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-31T12:23:33.071789278Z
   created_by: joe
+comments:
+- id: 01a19260-9b86-7bf3-8d86-c0d44a026a2d
+  author: joe
+  content: "## Implementer approach\n\n### Acceptance criteria as tests\n- **Unit (fixture HOME):** `claude_trust` tests — launching a seat (ensure_seat_trusted_in) writes projects[<seat>].hasTrustDialogAccepted=true + enabledMcpjsonServers [\"aida\"], preserves every other entry/top-level key, is idempotent, and leaves no temp/lock litter (AC1).\n- **Unit:** a path outside the configured worktrees root (main checkout, sibling dir, nested path) is refused and ~/.claude.json is untouched (AC1, AC4).\n- **Unit:** opt-in key `[worktree_pool] trust_seat_worktrees` (default off; on in this repo's config) with `AIDA_TRUST_SEAT_WORKTREES` host override; disabled = no write (AC2).\n- **Unit:** remove_seat_trust_in deletes only that seat entry (AC3); doctor reports stale seat-trust entries / mentions the key (AC2).\n- **Command-level wiring:** headless compose (vendor claude only) and `agent new claude --bg` call ensure before spawn; seat_clone destroy + worktree dismiss call removal.\n\n### Expected files\n- `aida-cli-lib/src/claude_trust.rs` (new) + `lib.rs` mod\n- `aida-cli-lib/src/session.rs` (compose_headless_command)\n- `aida-cli-lib/src/agent_launch.rs` (bg dispatch)\n- `aida-cli-lib/src/seat_clone.rs`, `worktree_dismiss.rs` (removal)\n- `aida-cli-lib/src/doctor_cmd.rs`, `doctor_root.rs` comment\n- `.aida/config.toml` (enable for this repo)\n\n### Ambiguities / conflicts as questions\n- \"Per host\" opt-in: resolved as repo config key + env override (host-local). \n- Lock: mkdir `~/.claude.json.lock` (the proper-lockfile convention) with stale-break, then atomic rename; serde_json has no preserve_order so key order of ~/.claude.json may be re-sorted (values untouched)."
+  created_at: 2026-10-31T14:32:47.238081488Z
+  modified_at: 2026-10-31T14:32:47.238081488Z
+  session_id: 01a1925def67
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a191e9-ed3f-7cc0-a193-eb4bb70fd0eb
   author: joe

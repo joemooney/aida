@@ -8,12 +8,12 @@ description: |
   1. The contained headless claude settings deny the Monitor tool, and the launcher disables background Bash for headless lanes (deny run_in_background, or the Claude Code setting or env that disables background tasks, whichever the installed CLI honours). Probe and pick one, and pin it with a test on the generated settings/argv.
   2. Safety net: when the headless wrapper sees a `result` event but the session's process group still has live children (or the result text says it is waiting), it resumes the same session once with a fixed continuation prompt ("Your background work has finished or must be run in the foreground now; continue and finish the task."), with a cap of N continuations. Tested with a fake claude that ends its turn while a child runs.
   3. A lane that still ends with uncommitted work in its seat reports `implementer: no-pr reason=uncommitted-work` (not pr-opened with the old head), so the advisor can tell a stall from a finished push.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T14:29:02.959944595Z
+modified_at: 2026-10-31T14:33:17.613841239Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -95,6 +95,15 @@ history:
   timestamp: 2026-10-31T14:29:04.678371588Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a19261-122d-7773-81c1-bd294ea9304e
+  author: aida-orchestrator
+  timestamp: 2026-10-31T14:33:17.613859853Z
+  session_id: 01a1925edb39
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -107,3 +116,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T14:27:27.628169847Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'AC1 partial: Monitor deny + CLAUDE_CODE_DISABLE_BACKGROUND_TASKS reach only the session.rs headless builders; burndown and autopilot-intake headless claude -p lanes still get Monitor and background tasks. AC2 and AC3 are met for the standalone implementer, with the gaps listed below. CI was pending at the reviewed head. AC status: ac265abc PARTIAL (session::tests::headless_argv_disables_monitor_and_background_tasks covers only fresh/resume x contained/uncontained in session.rs); ac9cf711 verified for the standalone implementer by the a_run_parked_on_its_own_build_is_waited_for_and_resumed fixture and the_resume_prompt_opens_with_the_fixed_continuation; ac9d20b3 verified at unit level by a_rework_round_left_uncommitted_on_the_old_pr_head_is_a_stall.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-050 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-31T14:33:17.613841239Z
