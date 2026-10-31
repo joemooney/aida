@@ -134,8 +134,8 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     // hooks; host git never runs there. Same fixed refusal process as below.
     // trace:BUG-2169 | ai:claude
     if let Some(clone_root) = crate::seat_clone_detect::seat_clone_root(cwd) {
-        // BUG-HOME-038: the seat itself, proven contained by capability and
-        // in the clone of its own session lease, may run git there, with
+        // BUG-HOME-038: the seat itself, proven contained by capability in a
+        // host-leased clone it alone can write (TASK-139), may run git there, with
         // hooks, fsmonitor and every config file but the clone's own off.
         // trace:BUG-HOME-038 | ai:claude
         if crate::seat_clone_detect::contained_in_clone(&clone_root) {
