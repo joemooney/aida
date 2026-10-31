@@ -1,0 +1,32 @@
+id: 01a18f60-9b78-7a81-a484-92ac47b1b4cd
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-142
+title: 'Review PR-3152: [AI:claude] feat(remote): machine-local hub bridge reconciles gitlab-only store pushes onto every hub (STORY-B6B1278890774EF993D2EBC327862470-097)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a18f14`) for branch `story-b6b1278890774ef993d2ebc327862470-097`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3152>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-097` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-097
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3152` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T00:33:55.576573257Z
+modified_at: 2026-10-31T00:33:55.576573257Z
+req_type: Story
+filed_at:
+  code_sha: 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cdbecda7678
+  vendor: claude
