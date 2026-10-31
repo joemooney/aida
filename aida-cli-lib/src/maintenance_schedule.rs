@@ -1432,17 +1432,17 @@ where
 // trace:STORY-1226 | ai:claude
 pub(crate) fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
     let config = load_registry(project_root)?;
+    let store = store_root(project_root);
     let task = config
         .as_ref()
         .and_then(|c| c.tasks.iter().find(|t| t.name == job))
         .cloned()
-        .or_else(|| builtin_routed_seat_task(job));
+        .or_else(|| builtin_routed_seat_task(&store, job));
     if task.is_none() {
         anyhow::bail!("no scheduled job named '{job}' (see `aida schedule list`)");
     }
     let now = Utc::now();
     let by = reporter(task.as_ref());
-    let store = store_root(project_root);
     schedule_ledger::write_cas(&store, job, |l| {
         l.last_run = Some(now);
         l.last_by = Some(by.clone());
@@ -1780,13 +1780,15 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
 /// routes findings to, built from its single prompt table so they appear in
 /// `due` / `done` with no config entry.
 // trace:STORY-1688 | ai:claude
-fn builtin_routed_seat_task(name: &str) -> Option<Task> {
+fn builtin_routed_seat_task(store: &Path, name: &str) -> Option<Task> {
     // STORY-HOME-128: `mail-backlog-guard-route-<seat>` routes to whatever
-    // seat the overdue mail was addressed to. trace:STORY-HOME-128 | ai:claude
+    // seat the overdue mail was addressed to — only a route the guard raised
+    // (TASK-134). trace:STORY-HOME-128 | ai:claude
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-134 | ai:claude
     let (seat, prompt) = match crate::lane_liveness::route_for_job(name) {
         Some(route) => (route.seat.to_string(), route.prompt.to_string()),
         None => {
-            let seat = crate::mail_backlog::seat_for_job(name)?;
+            let seat = crate::mail_backlog::known_route_seat(store, name)?;
             (seat.to_string(), crate::mail_backlog::route_prompt(seat))
         }
     };
@@ -1821,7 +1823,8 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
     let Ok(config) = load_registry(project_root) else {
         return Vec::new();
     };
-    let ledgers = schedule_ledger::load_all(&store_root(project_root));
+    let store = store_root(project_root);
+    let ledgers = schedule_ledger::load_all(&store);
     let mut tasks = config.map(|c| c.tasks).unwrap_or_default();
     // trace:STORY-1688 | ai:claude
     // trace:STORY-HOME-128 | ai:claude
@@ -1842,7 +1845,7 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
             .is_some()
             && !tasks.iter().any(|t| t.name == builtin_name)
         {
-            if let Some(task) = builtin_routed_seat_task(&builtin_name) {
+            if let Some(task) = builtin_routed_seat_task(&store, &builtin_name) {
                 tasks.push(task);
             }
         }
@@ -1898,6 +1901,22 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
 // trace:STORY-1226 | ai:claude
 pub(crate) fn due_seat_jobs(project_root: &Path, seat: Option<&str>) -> Vec<DueJob> {
     collect_due(project_root, seat, false)
+}
+
+/// The due seat jobs `aida awaiting` surfaces: `seat`'s own, plus the
+/// operator escalations (seat `operator`) whatever role the session holds —
+/// they are for the human at the terminal, not for one seat.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-135 | ai:claude
+pub(crate) fn awaiting_seat_jobs(project_root: &Path, seat: Option<&str>) -> Vec<DueJob> {
+    let mut due = due_seat_jobs(project_root, seat);
+    if seat.is_some_and(|s| s != crate::mail_backlog::OPERATOR_SEAT) {
+        for job in due_seat_jobs(project_root, Some(crate::mail_backlog::OPERATOR_SEAT)) {
+            if !due.iter().any(|d| d.name == job.name) {
+                due.push(job);
+            }
+        }
+    }
+    due
 }
 
 /// The `DUE JOBS` block prepended to a seat's pickup prompt / launch
@@ -6889,7 +6908,7 @@ enabled = true
 
         for route in crate::lane_liveness::ROUTES {
             let name = crate::lane_liveness::route_job_name(route.seat);
-            let task = builtin_routed_seat_task(&name).unwrap();
+            let task = builtin_routed_seat_task(Path::new("."), &name).unwrap();
             assert_eq!(task.kind, JobKind::Seat);
             assert_eq!(task.seats, [route.seat]);
             assert!(
@@ -6900,8 +6919,8 @@ enabled = true
             assert_eq!(task.on[0].kind, "CronJobFired");
             assert_eq!(task.on[0].job.as_deref(), Some(name.as_str()));
         }
-        assert!(builtin_routed_seat_task("lane-liveness-merge").is_none());
-        assert!(builtin_routed_seat_task("lane-liveness-operator").is_none());
+        assert!(builtin_routed_seat_task(Path::new("."), "lane-liveness-merge").is_none());
+        assert!(builtin_routed_seat_task(Path::new("."), "lane-liveness-operator").is_none());
 
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let config = load_config(repo).unwrap().unwrap();
@@ -6929,6 +6948,82 @@ enabled = true
             .on
             .iter()
             .all(|e| e.job.as_deref() != Some("lane-liveness"))));
+    }
+
+    // A typo'd mail-backlog route name is not a job: `done` refuses it and
+    // writes no ledger. Routes the guard raised (ledger present) and the
+    // operator escalation are jobs.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-134 | ai:claude
+    #[test]
+    fn mail_backlog_route_jobs_are_only_routes_the_guard_raised() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let typo = "mail-backlog-guard-route-typo";
+        let err = done(tmp.path(), typo, None).unwrap_err();
+        assert!(err.to_string().contains("no scheduled job named"), "{err}");
+        assert!(
+            schedule_ledger::load(&store, typo).is_none(),
+            "stray ledger"
+        );
+
+        assert!(builtin_routed_seat_task(&store, "mail-backlog-guard-route-operator").is_some());
+        let advisor = "mail-backlog-guard-route-advisor";
+        assert!(builtin_routed_seat_task(&store, advisor).is_none());
+        schedule_ledger::write_cas(&store, advisor, |l| l.due_since = Some(Utc::now())).unwrap();
+        let task = builtin_routed_seat_task(&store, advisor).unwrap();
+        assert_eq!(task.seats, ["advisor"]);
+        done(tmp.path(), advisor, None).unwrap();
+        assert!(schedule_ledger::load(&store, advisor)
+            .unwrap()
+            .due_since
+            .is_none());
+    }
+
+    // Operator escalations reach `aida awaiting` whether or not the session
+    // holds a role; other seats' jobs stay scoped away.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-135 | ai:claude
+    #[test]
+    fn operator_escalations_reach_awaiting_under_any_session_role() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        for job in [
+            "mail-backlog-guard-route-operator",
+            "mail-backlog-guard-route-advisor",
+        ] {
+            schedule_ledger::write_cas(&store, job, |l| l.due_since = Some(Utc::now())).unwrap();
+        }
+        let names = |seat: Option<&str>| {
+            let mut names: Vec<String> = awaiting_seat_jobs(tmp.path(), seat)
+                .into_iter()
+                .map(|j| j.name)
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(
+            names(None),
+            [
+                "mail-backlog-guard-route-advisor",
+                "mail-backlog-guard-route-operator"
+            ]
+        );
+        assert_eq!(
+            names(Some("implementer")),
+            ["mail-backlog-guard-route-operator"]
+        );
+        assert_eq!(
+            names(Some("operator")),
+            ["mail-backlog-guard-route-operator"]
+        );
+        assert_eq!(
+            names(Some("advisor")),
+            [
+                "mail-backlog-guard-route-advisor",
+                "mail-backlog-guard-route-operator"
+            ]
+        );
+        // The seat-scoped delivery read itself is unchanged.
+        assert!(due_seat_jobs(tmp.path(), Some("implementer")).is_empty());
     }
 }
 

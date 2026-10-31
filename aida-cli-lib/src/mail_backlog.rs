@@ -478,6 +478,17 @@ pub(crate) fn seat_for_job(job: &str) -> Option<&str> {
     job.strip_prefix(ROUTE_JOB_PREFIX).filter(|s| !s.is_empty())
 }
 
+/// The seat of a route job the guard actually raised: the operator
+/// escalation, or a seat whose route ledger is in the store (`route_seat`
+/// writes it before the job can surface anywhere). Any other
+/// `<prefix><x>` name — a typo — is not a job.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-134 | ai:claude
+pub(crate) fn known_route_seat<'a>(store_root: &Path, job: &'a str) -> Option<&'a str> {
+    let seat = seat_for_job(job)?;
+    (seat == OPERATOR_SEAT || schedule_ledger::ledger_path(store_root, job).is_file())
+        .then_some(seat)
+}
+
 /// The prompt the routed seat job carries.
 pub(crate) fn route_prompt(seat: &str) -> String {
     let job = route_job_name(seat);
@@ -639,6 +650,130 @@ mod tests {
         assert_eq!(seat_for_job("mail-backlog-guard"), None);
         assert!(
             route_prompt("advisor").contains("aida schedule done mail-backlog-guard-route-advisor")
+        );
+    }
+
+    fn backlog_item(id: &str, wake: Wake) -> Backlog {
+        Backlog {
+            id: id.to_string(),
+            recipient: "someone".to_string(),
+            from: "advisor".to_string(),
+            kind: "request",
+            age: Duration::minutes(45),
+            subject: format!("subject {id}"),
+            wake,
+        }
+    }
+
+    // The route_backlog I/O layer: a landed nudge is recorded in
+    // nudged.json once and not repeated inside the re-nudge interval; a
+    // failed nudge is not recorded, so the next tick retries it; records for
+    // mail that left the backlog are dropped.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-133 | ai:claude
+    #[test]
+    fn route_backlog_records_landed_nudges_retries_failures_and_drops_cleared_mail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = root.join(".aida-store");
+        let policy = Policy::default();
+        let t0 = now();
+        let seat = backlog_item("advisor:m1", Wake::Seat("advisor".into()));
+        let mail = backlog_item("codex-agent-04:m2", Wake::Mail("codex-agent-04".into()));
+
+        // Tick 1: both land, both are recorded, the seat job is due.
+        route_backlog(root, &store, &[seat.clone(), mail.clone()], &policy, t0);
+        let nudged = load_nudged(root);
+        assert_eq!(nudged.get("advisor:m1"), Some(&t0));
+        assert_eq!(nudged.get("codex-agent-04:m2"), Some(&t0));
+        let ledger = schedule_ledger::load(&store, &route_job_name("advisor")).unwrap();
+        assert_eq!(ledger.due_since, Some(t0));
+        assert!(ledger.note.unwrap().contains("subject advisor:m1"));
+        let reminders: Vec<Message> = crate::mailbox_store::read_local_messages(root)
+            .unwrap()
+            .into_iter()
+            .filter(|m| m.from == REMINDER_SENDER)
+            .collect();
+        assert_eq!(reminders.len(), 1, "one nudge");
+        assert_eq!(reminders[0].to, Recipient::Agent("codex-agent-04".into()));
+
+        // Tick 2, inside the re-nudge interval: no second reminder, records kept.
+        route_backlog(
+            root,
+            &store,
+            &[seat.clone(), mail.clone()],
+            &policy,
+            t0 + Duration::minutes(10),
+        );
+        assert_eq!(load_nudged(root), nudged);
+        let reminders = crate::mailbox_store::read_local_messages(root)
+            .unwrap()
+            .into_iter()
+            .filter(|m| m.from == REMINDER_SENDER)
+            .count();
+        assert_eq!(reminders, 1, "still one nudge");
+
+        // Tick 3: the mail was read (gone from the backlog) and a new operator
+        // escalation fails to land (the store is unwritable).
+        let broken_store = root.join("not-a-store");
+        std::fs::write(&broken_store, "file, not a directory").unwrap();
+        let operator = backlog_item("ghost:m3", Wake::Operator);
+        let t3 = t0 + Duration::minutes(20);
+        route_backlog(
+            root,
+            &broken_store,
+            &[seat.clone(), operator.clone()],
+            &policy,
+            t3,
+        );
+        let nudged = load_nudged(root);
+        assert!(
+            !nudged.contains_key("codex-agent-04:m2"),
+            "read mail dropped"
+        );
+        assert!(
+            !nudged.contains_key("ghost:m3"),
+            "failed nudge not recorded"
+        );
+        assert_eq!(nudged.get("advisor:m1"), Some(&t0));
+
+        // Tick 4: the store is writable again; the failed nudge retries and lands.
+        let t4 = t0 + Duration::minutes(25);
+        route_backlog(root, &store, &[seat, operator], &policy, t4);
+        let nudged = load_nudged(root);
+        assert_eq!(nudged.get("ghost:m3"), Some(&t4));
+        assert_eq!(nudged.get("advisor:m1"), Some(&t0), "not re-nudged early");
+        assert!(
+            schedule_ledger::load(&store, &route_job_name(OPERATOR_SEAT))
+                .and_then(|l| l.due_since)
+                .is_some()
+        );
+
+        // Everything cleared: every record is dropped.
+        route_backlog(root, &store, &[], &policy, t4);
+        assert!(load_nudged(root).is_empty());
+    }
+
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-134 | ai:claude
+    #[test]
+    fn known_route_seat_requires_a_raised_route_or_the_operator() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path();
+        assert_eq!(
+            known_route_seat(store, "mail-backlog-guard-route-operator"),
+            Some(OPERATOR_SEAT)
+        );
+        assert_eq!(
+            known_route_seat(store, "mail-backlog-guard-route-typo"),
+            None
+        );
+        assert_eq!(known_route_seat(store, "lane-liveness-advisor"), None);
+        schedule_ledger::write_cas(store, "mail-backlog-guard-route-typo", |l| {
+            l.due_since = Some(now())
+        })
+        .unwrap();
+        assert_eq!(
+            known_route_seat(store, "mail-backlog-guard-route-typo"),
+            Some("typo")
         );
     }
 }
