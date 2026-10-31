@@ -8,17 +8,26 @@ description: |-
   2. The suggested fix 'aida node acquire --id b6b1278890774ef993d2ebc327862470 --force' refuses: 'Node id ... is taken' (b6b exists as the HOME native/alias node in node_aliases.toml and 'aida node list' marks it current+root), while verify says it is unregistered. Two registries disagree.
   3. 'aida node show' on this clone still says 'Node 1 ... Active on this clone: yes (.aida/node.toml matches)' although node 1 is now retired; sessions keep writing 'claim lease ... (node 1)' commits.
   Expected: enroll-root (or the backfill) registers the root's native node in nodes.toml (or the claims check/verify accept an alias-registered native node as registered, one definition used everywhere), and the retirement re-points this clone's .aida/node.toml identity to the root node. Acceptance: (1) after the runbook, 'aida db block verify' is clean and 'aida remote reconcile --execute' pushes to both hubs; (2) 'aida node show' reports the root node as this clone's identity; new lease/commit stamps use it; (3) one-time repair for THIS store via 'aida doctor --fix' (dry-run first) that the advisor runs; (4) CLI fixture: enroll-root + backfill + retire on a clone whose native node exists only as an alias, then verify + a sync to a second bare hub both succeed. Backup of the pre-runbook store: branch aida-store-backup-20261031-1555 (6999fae). Old node.toml saved at ~/.local/share/aida/ops/node.toml.node1.bak.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-10-31T23:00:22.284758314Z
+modified_at: 2026-10-31T23:10:10.219149456Z
 req_type: Bug
 tags:
 - epic-home-003
 - ids
 - store-sync
+history:
+- id: 01a1943a-492b-7f72-9377-cfc786176bec
+  author: aida-session-start
+  timestamp: 2026-10-31T23:10:10.219147399Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
   branch: main
