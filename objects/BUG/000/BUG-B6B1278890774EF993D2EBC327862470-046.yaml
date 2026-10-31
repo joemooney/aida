@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T11:02:29.761091449Z
+modified_at: 2026-10-31T11:04:32.882550711Z
 req_type: Bug
 tags:
 - ids
@@ -168,6 +168,38 @@ comments:
   modified_at: 2026-10-31T10:44:02.474129419Z
   session_id: 01a191485f3f
   harness_version: 2.1.316 (Claude Code)
+- id: 01a191a1-f572-7de1-840c-2f8185229d07
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-31 04:08 on PR-3161 round 1 (2026-10-28 rule: ruled once). ONE new commit (no force-push) fixes ALL of the following.
+
+    MIGRATION (AC3). Do not write the canonical store before approval. In this PR:
+    (a) run `aida doctor --fix id-collisions --dry-run` and post its full old -> new mapping as a PR comment AND as a comment on this spec;
+    (b) commit the code-trace, CHANGELOG and docs rewrites for that mapping on this branch;
+    (c) add an end-to-end fixture test of the tool.
+    The advisor runs the real store apply immediately after merge, with the same mapping, and doctor must then report zero groups.
+
+    AC1: command-level tests for show, edit, comment add, link and trailer completion across paddings.
+
+    AC2: id_holder must consider agreed_id, as its doc and the sketch say. Add a merge-gate promotion twin test.
+
+    AC5: minting must stop using id_config.digits. `digits: 4` in this store is the ROOT CAUSE of the twins. Migrate digits -> [ids] seq_width once (single-user surgery, no shim) and set this store to 0. JSON spec_id output, the ID `aida add` prints and suggested trailers/trace comments all render through the width setting. Add the mixed-padding flip test (0 -> 4 -> 0).
+
+    CI, from the advisor's read of the logs:
+    - contracts: remove the internal spec IDs leaked at docs/cli/07-project-setup.md:334 and :342.
+    - cli-0: bug_1502_format_json_audit (:479) needs audit rows for the new or changed commands (doctor --fix id-collisions and any new flags).
+    - lib-1: bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy (:50) needs the new [ids] keys inventoried with a policy.
+
+    OTHER:
+    - reattach the three doc comments displaced by the inserted tests (init_cmd.rs, git_backend.rs, models.rs);
+    - fix the split doctor bullet list in the docs;
+    - the tree rewrite must preserve case (lowercase links such as task-418.md must keep working);
+    - the cache uses the approved indexed key columns, not a LIKE scan.
+
+    Gate: as the 02:35 signoff (targeted tests plus the new CLI fixture binaries, make check-ci-compile, make check-ci-fast).
+  created_at: 2026-10-31T11:04:32.882550711Z
+  modified_at: 2026-10-31T11:04:32.882550711Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
