@@ -143,6 +143,12 @@ fn phase_driver_ci_fix_command_applies_implementer_grant_and_scrubs_purpose() {
         "CI-fix child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(get_cmd_env(&cmd, "AIDA_HEADLESS"), Some(Some("1")));
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    assert_eq!(
+        get_cmd_env(&cmd, crate::session::DISABLE_BACKGROUND_TASKS_ENV),
+        Some(Some("1")),
+        "CI-fix child must run with background tasks disabled"
+    );
 }
 
 #[test]
@@ -173,6 +179,13 @@ fn phase_driver_advisor_command_scrubs_purpose() {
         "advisor consult child must have AIDA_SESSION_PURPOSE scrubbed"
     );
     assert_eq!(get_cmd_env(&cmd, "AIDA_HEADLESS"), Some(Some("1")));
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    assert_eq!(
+        get_cmd_env(&cmd, crate::session::DISABLE_BACKGROUND_TASKS_ENV),
+        Some(Some("1")),
+        "advisor consult child must run with background tasks disabled"
+    );
+    assert_eq!(get_cmd_env(&cmd, "CEILING_KEY"), Some(Some("100")));
 }
 
 #[test]

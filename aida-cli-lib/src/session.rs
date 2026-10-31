@@ -1651,9 +1651,6 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     let mut cmd = Command::new(program);
     cmd.args(args)
         .env("AIDA_HEADLESS", "1")
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude — belt and
-        // braces alongside the `--settings` env: no background tasks.
-        .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
         .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
@@ -1663,7 +1660,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         // BUG-806: phase agents hold the drive's own binary, not whatever the
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
-        .env(ceiling_key, ceiling_value);
+        .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
     // trace:BUG-2187 | ai:codex
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
@@ -4369,15 +4366,12 @@ fn build_exec_vendor_headless_command_for(
     child_cmd
         .args(args)
         .env("AIDA_HEADLESS", "1")
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude — belt and
-        // braces alongside the `--settings` env: no background tasks.
-        .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         // BUG-806: same PATH rule as the spawn path.
         .env("PATH", drive_path_env().unwrap_or_default())
-        .env(ceiling_key, ceiling_value);
+        .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
     // BUG-2139: the child's seat authority is ALWAYS set explicitly — the
     // grant minted for this launch, or `""` for a baseline child — never
     // inherited from the launcher, whose grant may carry delegable seats.
@@ -4530,9 +4524,7 @@ pub(crate) fn apply_headless_child_seat_env(
     grant_env: &str,
 ) {
     cmd.env("AIDA_SESSION_ROLE", seat)
-        .env(crate::gate::seat_authority::GRANT_ENV, grant_env)
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-        .env(DISABLE_BACKGROUND_TASKS_ENV, "1");
+        .env(crate::gate::seat_authority::GRANT_ENV, grant_env);
     scrub_launcher_session_env(cmd);
 }
 
@@ -5365,15 +5357,12 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     cmd.current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude — belt and
-        // braces alongside the `--settings` env: no background tasks.
-        .env(DISABLE_BACKGROUND_TASKS_ENV, "1")
         .env("AIDA_SESSION_ROLE", seat)
         .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
-        .env(ceiling_key, ceiling_value);
+        .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
     // A resume launches Claude even when the launcher is another harness.
     // trace:BUG-2187 | ai:codex
     // trace:STORY-1843 | ai:codex

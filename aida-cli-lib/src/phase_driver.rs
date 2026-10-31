@@ -2371,7 +2371,7 @@ pub(crate) fn build_phase_driver_advisor_command(
         .env(punt::REQUEST_FILE_ENV, request_path)
         .env(punt::RESPONSE_FILE_ENV, response_path)
         .env("AIDA_SESSION_ROLE", "advisor")
-        .env(ceiling_key, ceiling_value);
+        .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::scrub_launcher_session_env(&mut cmd);
     if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");

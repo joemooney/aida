@@ -253,6 +253,24 @@ pub(crate) fn bg_wait_ceiling_env(
     )
 }
 
+/// BUG-050 + TASK-1169: THE env pair every headless child gets — the bounded
+/// background-wait ceiling (from [`bg_wait_ceiling_env`]) and the
+/// no-background-tasks switch, which backs up the `--settings` env in the
+/// headless posture. Spawn sites apply it as one `.envs(...)` call so neither
+/// half can be left out (a guardrail in `task1169_launcher_sets_ceiling_guardrail`
+/// checks every headless spawn chain).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:TASK-1169 | ai:claude
+pub(crate) fn headless_wait_envs<'a>(
+    ceiling_key: &'a str,
+    ceiling_value: &'a str,
+) -> [(&'a str, &'a str); 2] {
+    [
+        (ceiling_key, ceiling_value),
+        (crate::session::DISABLE_BACKGROUND_TASKS_ENV, "1"),
+    ]
+}
+
 #[cfg(test)]
 #[path = "tests/burndown_run_tests.rs"]
 mod burndown_run_tests;
@@ -2214,7 +2232,7 @@ pub(crate) fn build_burndown_quiet_command(
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     cmd.args(crate::session::headless_claude_posture_for(contained)?);
     cmd.env("AIDA_BURNDOWN_LOCK_HELD", "1")
-        .env(ceiling_key, ceiling_value);
+        .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -2240,7 +2258,7 @@ pub(crate) fn build_burndown_verbose_command(
         prompt, mode, contained,
     )?)
     .env("AIDA_BURNDOWN_LOCK_HELD", "1")
-    .env(ceiling_key, ceiling_value);
+    .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", child_grant_id);
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
