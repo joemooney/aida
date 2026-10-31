@@ -1,0 +1,28 @@
+id: 01a190a4-b7c1-7113-9136-8c024301ab73
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-142
+title: 'minor (non-blocking): awaiting_seat_jobs (maintenance_schedule.rs:1910) now put…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-133, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): awaiting_seat_jobs (maintenance_schedule.rs:1910) now puts the operator escalation into EVERY seat's per-turn notice, including headless agent lanes that set AIDA_SESSION_ROLE (implementer/reviewer). The operator route_prompt (mail_backlog.rs:496) is imperative ('wake or relaunch each recipient ... then run aida schedule done mail-backlog-guard-route-operator'), and when the seat has no own job it becomes cron.next, so an agent lane may act on or clear the human's escalation before the human sees it. Spec-compliant per the 17:25 ruling; consider a dedicated escalation row, or restricting to human/operator-terminal sessions.
+  Reviewed sha: edd7488ad771af2d6aaf000d80e470af3033b0ac
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T06:27:56.481481791Z
+modified_at: 2026-10-31T06:27:56.481481791Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-133
+- finding-hash:68cabda8
+- from-review:TASK-B6B1278890774EF993D2EBC327862470-133
+- kind:carried-forward
+filed_at:
+  code_sha: 0055329071e020e27dc8342cd4479eec6b4a1e87
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f4aac4402f3
+  vendor: claude
+  session: 510d8c08-7912-4189-943d-65d110c7abc2
