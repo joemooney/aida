@@ -1,0 +1,44 @@
+id: 01a19409-83f8-72d1-b1ad-59c81df28b06
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-151
+title: 'Live advisor reported as ''no live advisor'': its session has no registry entry, and liveness trusts only the registry'
+description: |
+  ## Observed (2026-10-31, product seat claude-product-02)
+  An advisor was live the whole time, but every AIDA surface said there was none:
+  - The per-prompt hook printed "advisor unreachable: no live advisor; the hello is queued in .aida/mailbox" on every turn.
+  - `aida agent list` (and `--all`) showed no advisor row newer than 20 days.
+  - `aida doctor check advisor-handshake` reported nothing useful (`total: 0` plus a bwrap note).
+
+  The live advisor is Claude session `9b4a9d0a-69b7-4ebd-9bee-314b36573de5`. It started 2026-10-31T11:11Z with "SessionStart:startup hook success: AIDA · role: advisor", was still writing its transcript at 19:26Z, and launched reviewer lanes as late as 19:04Z (claude-reviewer-724). No file in `.aida/agents/*.toml` carries that `claude_session_id`. The newest advisor entry is claude-advisor-08 (claude-3637641, session 32b60b73), which ended 2026-10-30.
+
+  `advisor_handshake.rs` counts an advisor as live only if `agent_registry::load_live_entries` returns an entry with role advisor, so a missing entry reads as "no live advisor".
+
+  Related oddities seen in the same registry:
+  - Every entry's `last_active_at` equals its `started_at`, so the heartbeat never refreshes.
+  - Every ended entry's `ended_at` also equals `started_at` (e.g. claude-reviewer-724: all three timestamps 19:04:50.505Z).
+  - Entry files are named `claude-<pid>.toml`, so a later process that reuses the PID would overwrite an earlier entry. This is unconfirmed as the cause here.
+
+  Root cause not established: was the entry never written, deleted by a GC/prune or a child's session end, or overwritten?
+
+  ## Acceptance
+  - AC1 (root cause): reproduce how a live seat ends up with no registry entry, and fix it. Test for the cause found (e.g. a child lane's session end or a registry prune never removes or overwrites another session's entry; entry file names cannot collide across PID reuse).
+  - AC2 (self-heal): the per-prompt hook re-registers the current session if its own entry is missing, and refreshes `last_active_at`. Test: delete a live session's entry, run the prompt hook, and the entry is back with a newer `last_active_at`.
+  - AC3 (honest wording): when no registered advisor is found, the handshake and hook say "no registered advisor" and name the check to run, never assert "no live advisor". If other evidence shows an advisor (an unexpired advisor seat grant held by a live process), report the advisor as live but unregistered.
+  - AC4 (doctor): `aida doctor check advisor-handshake` reports registered advisors, unregistered live advisor evidence, and the hello's state, instead of `total: 0`.
+  - AC5 (timestamps): `ended_at` records when the session actually ended, not `started_at`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:16:54.008855195Z
+modified_at: 2026-10-31T22:16:54.008855195Z
+req_type: Bug
+tags:
+- area:agents
+- area:registry
+filed_at:
+  code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
