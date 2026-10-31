@@ -118,6 +118,20 @@ fn run_deputy(
         Some(DeputyCommand::Allow(a)) => allow(&a),
         Some(DeputyCommand::Deny(a)) => deny(&a),
         Some(DeputyCommand::Policy(a)) => show_policy(&deputy::current_spool(&a.name)?),
+        Some(DeputyCommand::Pause(a)) => pause(&deputy::current_spool(&a.name)?, &mut out),
+        Some(DeputyCommand::Resume(a)) => resume_checked(
+            &deputy::current_spool(&a.name)?,
+            ambient_refusal(false),
+            &mut out,
+        ),
+        Some(DeputyCommand::Ack(a)) => {
+            let main = crate::worktree_gc::find_main_worktree_root()
+                .context("aida deputy needs a git checkout")?;
+            let session = std::env::var("AIDA_SESSION_ID")
+                .ok()
+                .filter(|s| !s.trim().is_empty());
+            ack(&main, &a, session.as_deref(), &mut out)
+        }
     }
 }
 
@@ -203,6 +217,10 @@ fn start(a: &DeputyStartArgs) -> Result<()> {
     eprintln!(
         "  idle:  a terminal job silent for {tty_idle}s shows as waiting on a prompt (it keeps running until its --timeout)"
     );
+    let mandate = mandate_probe(a.keep_after_mandate, now);
+    if spool.paused().is_some() {
+        eprintln!("  PAUSED: claiming no jobs until `aida deputy resume`");
+    }
     eprintln!(
         "  Sessions submit with `aida deputy submit -- <command…>`. Ctrl-C stops the deputy."
     );
@@ -237,11 +255,178 @@ fn start(a: &DeputyStartArgs) -> Result<()> {
         tty_idle: Duration::from_secs(tty_idle),
         poll: Duration::from_millis(500),
         grant: probe,
+        mandate,
+        mail_root: Some(main.clone()),
         max_jobs: None,
         aida_program: crate::resolve_aida_exe(),
     };
     let stop = std::sync::atomic::AtomicBool::new(false);
     deputy::worker::run(&spool, &cfg, &stop)?;
+    Ok(())
+}
+
+/// The mandate tie-in: with a mandate active at start (and no
+/// `--keep-after-mandate`), the probe reports once no mandate is active any
+/// more, re-reading the mandate records at most every 10s (an expiry is seen
+/// at once: it compares the clock). Prints the banner line.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+#[cfg(unix)]
+fn mandate_probe(
+    keep_after_mandate: bool,
+    now: chrono::DateTime<Utc>,
+) -> deputy::worker::MandateProbe {
+    mandate_probe_with(
+        keep_after_mandate,
+        now,
+        std::sync::Arc::new(crate::gate::mandate::current_state),
+    )
+}
+
+/// What [`mandate_probe`] reads the mandate records with; a test injects one.
+pub(crate) type MandateStateFn =
+    std::sync::Arc<dyn Fn() -> crate::gate::mandate::MandateState + Send + Sync>;
+
+/// [`mandate_probe`] over an injected mandate reader.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+#[cfg(unix)]
+pub(crate) fn mandate_probe_with(
+    keep_after_mandate: bool,
+    now: chrono::DateTime<Utc>,
+    current_state: MandateStateFn,
+) -> deputy::worker::MandateProbe {
+    use crate::gate::mandate::MandateState;
+    use std::sync::{Arc, Mutex};
+    let MandateState::Active(m) = current_state() else {
+        eprintln!("  mandate: none active; the deputy runs until your grant ends or Ctrl-C");
+        return deputy::worker::no_mandate_stop();
+    };
+    let left = crate::gate::seat_authority::format_remaining(m.expires_at - now);
+    if keep_after_mandate {
+        eprintln!("  mandate: {left} left; --keep-after-mandate keeps the deputy running after it");
+        return deputy::worker::no_mandate_stop();
+    }
+    eprintln!("  mandate: {left} left; the deputy stops claiming then (--keep-after-mandate keeps it running)");
+    let expires_at = m.expires_at;
+    let cache: Arc<Mutex<Option<(std::time::Instant, bool)>>> = Arc::new(Mutex::new(None));
+    Arc::new(move || {
+        if Utc::now() >= expires_at {
+            return Some(format!(
+                "the mandate expired at {}",
+                expires_at.to_rfc3339()
+            ));
+        }
+        let mut c = cache.lock().unwrap_or_else(|p| p.into_inner());
+        let active = match c.as_ref() {
+            Some((at, active)) if at.elapsed() < Duration::from_secs(10) => *active,
+            _ => {
+                let active = matches!(current_state(), MandateState::Active(_));
+                *c = Some((std::time::Instant::now(), active));
+                active
+            }
+        };
+        (!active).then(|| "the mandate it started under was stopped".to_string())
+    })
+}
+
+/// `aida deputy pause`: no terminal needed, since pausing only takes
+/// authority away. The deputy notices at its next scan.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn pause(spool: &Spool, out: &mut dyn Write) -> Result<()> {
+    if !spool.root.is_dir() {
+        bail!("no deputy is set up at {}", spool.root.display());
+    }
+    let by = std::env::var("AIDA_SESSION_ID")
+        .ok()
+        .or_else(|| std::env::var("USER").ok());
+    if spool.pause(by)? {
+        writeln!(out, "deputy paused: it claims no new jobs; running jobs finish. Resume at your terminal with `aida deputy resume`.")?;
+    } else {
+        writeln!(out, "deputy already paused")?;
+    }
+    Ok(())
+}
+
+/// `aida deputy resume` as dispatched: resuming hands claim authority back,
+/// so it refuses (leaving the pause marker in place) unless `refusal` (the
+/// human-terminal check) is `None`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn resume_checked(
+    spool: &Spool,
+    refusal: Option<String>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    if let Some(why) = refusal {
+        bail!("aida deputy resume refuses: {why}");
+    }
+    resume(spool, out)
+}
+
+/// `aida deputy resume`: the caller checked for a human terminal.
+pub(crate) fn resume(spool: &Spool, out: &mut dyn Write) -> Result<()> {
+    if spool.resume()? {
+        writeln!(out, "deputy resumed: it claims jobs again at its next scan")?;
+    } else {
+        writeln!(out, "deputy was not paused")?;
+    }
+    Ok(())
+}
+
+/// `aida deputy ack`: acknowledge failed jobs. `--all` takes every failed
+/// job `session` submitted (every one when there is no session). Inside a
+/// session, an explicit id another session submitted is refused, so one
+/// session cannot silence another's failure (or the operator's view of it);
+/// the operator's own shell (no session) may acknowledge any.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn ack(
+    main: &std::path::Path,
+    a: &DeputyAckArgs,
+    session: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let spool = deputy::spool_for(main, &a.name)?;
+    let ids: Vec<String> = if a.all {
+        deputy::unacked_failed_jobs(main, session)
+            .into_iter()
+            .filter(|j| j.deputy == a.name)
+            .map(|j| j.id)
+            .collect()
+    } else {
+        a.ids.clone()
+    };
+    let mut refused = 0usize;
+    for id in &ids {
+        match spool.locate(id)? {
+            Some(("failed", _)) => {
+                if let Some(me) = session {
+                    let owner = std::fs::read(spool.job_path("failed", id))
+                        .ok()
+                        .and_then(|b| serde_json::from_slice::<JobRecord>(&b).ok())
+                        .and_then(|r| r.requester.session_id);
+                    if owner.as_deref() != Some(me) {
+                        writeln!(
+                            out,
+                            "job {id}: submitted by {}, not this session; not acknowledged (the operator's shell can)",
+                            owner.as_deref().unwrap_or("an unknown session")
+                        )?;
+                        refused += 1;
+                        continue;
+                    }
+                }
+                spool.acknowledge(id)?;
+                writeln!(out, "job {id}: acknowledged")?;
+            }
+            Some((state, _)) => {
+                writeln!(out, "job {id}: {state}, not failed; nothing to acknowledge")?
+            }
+            None => bail!("no job {id} in deputy {:?}", a.name),
+        }
+    }
+    if ids.is_empty() {
+        writeln!(out, "no failed jobs to acknowledge")?;
+    }
+    if refused > 0 {
+        bail!("{refused} job(s) belong to another session and were not acknowledged");
+    }
     Ok(())
 }
 
@@ -305,6 +490,8 @@ pub(crate) fn submit(
         timeout_secs,
         sha256: body.digest(),
         body,
+        delegation: None,
+        extra: Default::default(),
     };
     spool.submit(&rec)?;
     writeln!(out, "{}", rec.id)?;
@@ -403,6 +590,17 @@ pub(crate) fn status(spool: &Spool, a: &DeputyIdArgs, out: &mut dyn Write) -> Re
     }
     if let Some(r) = spool.read_result(&a.id) {
         writeln!(out, "  rc:        {} ({})", r.rc, r.reason)?;
+        if state == "failed" {
+            writeln!(
+                out,
+                "  ack:       {}",
+                if spool.acknowledged(&a.id) {
+                    "acknowledged".to_string()
+                } else {
+                    format!("listed in `aida awaiting` until `aida deputy ack {}`", a.id)
+                }
+            )?;
+        }
         writeln!(out, "  terminal:  {}", if r.tty { "yes" } else { "no" })?;
         writeln!(out, "  output:    {}", r.output.display())?;
     } else if state == "running" {
@@ -471,6 +669,14 @@ pub(crate) fn list(spool: &Spool, a: &DeputyListArgs, out: &mut dyn Write) -> Re
             a.name
         )?;
         return Ok(());
+    }
+    if let Some(p) = spool.paused() {
+        writeln!(
+            out,
+            "PAUSED{}: claiming no new jobs (`aida deputy resume` at the operator's terminal)",
+            p.at.map(|t| format!(" since {}", t.format("%H:%M:%S UTC")))
+                .unwrap_or_default()
+        )?;
     }
     let states: Vec<&str> = match &a.state {
         Some(s) if deputy::STATES.contains(&s.as_str()) => vec![s.as_str()],
