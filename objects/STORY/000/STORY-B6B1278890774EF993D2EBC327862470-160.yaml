@@ -1,0 +1,33 @@
+id: 01a192b7-7115-7c91-9bc4-3bb5ae24c10f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-160
+title: 'Review PR-3169: [AI:claude] fix(session-end): seat-clone refusal names every item; an ancestor of origin''s branch counts as pushed (BUG-B6B1278890774EF993D2EBC327862470-051)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1928d`) for branch `bug-b6b1278890774ef993d2ebc327862470-051`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3169>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-051` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-051
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3169` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T16:07:38.005166144Z
+modified_at: 2026-10-31T16:07:38.005166144Z
+req_type: Story
+filed_at:
+  code_sha: c611187664254175736d3361213f6e53ba3dd9ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d12cca28a61
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
