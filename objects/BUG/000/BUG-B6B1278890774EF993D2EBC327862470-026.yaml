@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-31T04:49:43.054503208Z
+modified_at: 2026-10-31T04:49:52.209577485Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -74,6 +74,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Inventory union, labels, roles, current marker and read-only behaviour are met and tested; but spec-ID namespace inference turns two-level IDs (FEAT-TYPE-NNN) into fake node rows, and list/show role wording disagree. CI green at prior head fb17a888 (run 41145841900); current head bc35d4a (main-only delta) CI run 41149654192 still queued.. No triage reason was given.'
   created_at: 2026-10-31T04:49:43.054498881Z
   modified_at: 2026-10-31T04:49:43.054498881Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a1904a-edf6-7382-aecc-6b38bb303cb3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-026):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bc35d4a3de5c
+    Recorded: 2026-10-31T00:33:57.363766621+00:00
+    Findings:
+    1. correctness: aida-cli-lib/src/node_inventory.rs:178-190 namespace() takes the middle of any valid PREFIX-MIDDLE-SEQ id as a node namespace. aida-core/src/models.rs:6587-6624 IdFormat::TwoLevel generates FEAT-TYPE-NNN ids (e.g. AUTH-FR-001, GEN-REQ-001), which valid_spec_id_format accepts, so a TwoLevel store lists fake nodes 'FR', 'REQ', etc. — violating 'one row per known node'. Fix: consult the store's id_config format (skip inference or take the right segment for TwoLevel), or only infer namespaces that are UUIDs/numeric/already registry-known; add a regression with an AUTH-FR-001 object asserting no 'FR' row.
+    2. minor wording: list's role column prints 'worker' / 'worker (recorded root)' (node_inventory.rs:281-287, docs/cli/07-project-setup.md:254, help text) while STORY-HOME-098's rewording used by 'aida node show' prints 'work node' (node_cmd.rs:766). Acceptance says the role wording follows STORY-098; use one term on both surfaces and update the test at bug026_node_inventory_tests.rs:617 and the docs line.
+    3. minor test robustness: bug026_node_inventory_tests.rs:594 spawns crate::resolve_aida_exe() expecting the libtest runner, but an honored AIDA_BIN override redirects the resolver to a real aida binary, which then receives libtest args (--ignored --exact ...) and fails confusingly. Mirror the precedent guard in bug_1749_doctor_toon_tests.rs:59-61 (assert the runner's parent dir is 'deps') before spawning.
+    4. cosmetic: node_inventory.rs:213 and :230 'registry.try_exists()?;' / 'blocks.try_exists()?;' discard the bool; if the intent is to surface permission errors before load, say so in a comment, otherwise drop them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-31T04:49:52.118794210Z
+  modified_at: 2026-10-31T04:49:52.118794210Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
