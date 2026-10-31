@@ -47,12 +47,12 @@ description: |
   - Every privileged act is logged with the job id, the submitting seat and the outcome, and the job's output is still captured (via tee or a pty transcript), not redirected away from the TTY.
   - The submitter gets each job's result back (exit code plus a log path), replacing the /tmp/aida_runme*.sh plus log-tail convention.
   - Jobs that wait on a prompt time out with a clear "needs the operator" notice instead of hanging the queue.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T16:24:06.402216172Z
+modified_at: 2026-10-31T16:51:07.890837995Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -339,6 +339,20 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a192df-43ed-7112-8a44-1a874bd93a08
+  author: aida-auto-bump
+  timestamp: 2026-10-31T16:51:07.885107032Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a192df-43f2-7191-852e-d2957d01cd47
+  timestamp: 2026-10-31T16:51:07.890833427Z
+  agent: aida
+  commit_sha: 796646253353707591b7394e6e9a47db3d634a5c
+  summary: 'Round 3 STRICT: the round-2 non-blocker is fixed in 5e979408 (claim refuses a reused job id: id_in_use pre-check, no-replace link-and-unlink claim, duplicate filed beside the real record with no result file, cancel sweep skips reused ids; the TTY marker is bound to running/<id>.job by dev and inode and fails closed). Tests: a_duplicate_of_a_running_id_is_refused_and_its_marker_survives, a_duplicate_of_a_done_id_is_refused, a_marker_for_job_a_never_authorizes_job_b. CI green on all 7 shards plus Build at head. AC1-AC4 and the AC5 ledger half are verified by tests; the AC5 awaiting half is deferred to STORY-HOME-155 per the advisor; AC6 is later hardening. Non-blocking nits: refuse_duplicate''s ledger row omits the requester and ignores a rename failure, so a stuck forgery is re-refused every round. MERGE STILL ESCALATED TO HUMAN: the operator''s manual smoke test (a real merge-hold clear through a policy-matched pty job) is outstanding.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -351,3 +365,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T11:57:29.189179163Z
   implemented_by: joe
+  completed_at: 2026-10-31T16:51:07.885101041Z
+  completion_sha: 796646253353707591b7394e6e9a47db3d634a5c
