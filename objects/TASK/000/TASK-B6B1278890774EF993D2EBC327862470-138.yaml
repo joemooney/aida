@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T00:54:47.103116093Z
-modified_at: 2026-10-31T09:28:20.873763029Z
+modified_at: 2026-10-31T09:28:28.025635964Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-038
@@ -39,6 +39,13 @@ comments:
     ADVISOR RULING 2026-10-31 01:00 (2026-10-28 rule: ruled once). This task carries TASK-138, 139 and 140 (all ship --from-seat) in ONE PR: (1) TASK-138: delete refs/aida/seat-import/<branch> when run_from refuses after import, plus a prune of stale quarantine refs older than a day on every --from-seat run; test both. (2) TASK-139: own-clone identity must come from the host-written lease or registry record for that clone path, not from AIDA_SESSION_ID or CLAUDE_CODE_SESSION_ID (env the seat controls); a seat naming a sibling session id must fail the own-clone check; test it. (3) TASK-140: --no-merge conflicts with --from-seat (clap conflicts_with), with a parse test. Gate: LIGHT (one targeted cargo test -p aida-cli-lib with the ship_from_seat / seat_clone_detect filters, plus make check-ci-fast).
   created_at: 2026-10-31T07:54:53.555200692Z
   modified_at: 2026-10-31T07:54:53.555200692Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19149-fe79-7ca0-8797-793348e8cfa1
+  author: joe
+  content: |
+    ADVISOR 2026-10-31 02:45: completed by hand. PR-3159 merged at 988a7ae5ea (approved at head, CI green), but its title trailer used the bare legacy IDs (TASK-138 ...), so merge-time completion missed this spec and hit legacy TASK-139 (reverted).
+  created_at: 2026-10-31T09:28:28.025635964Z
+  modified_at: 2026-10-31T09:28:28.025635964Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a190f4-61b9-7070-b978-d613de173f95
