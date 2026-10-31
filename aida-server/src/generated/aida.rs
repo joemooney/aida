@@ -205,8 +205,6 @@ pub struct IdConfiguration {
     pub format: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub numbering: ::prost::alloc::string::String,
-    #[prost(int32, tag = "3")]
-    pub digits: i32,
 }
 /// User definition
 #[derive(serde::Serialize, serde::Deserialize)]

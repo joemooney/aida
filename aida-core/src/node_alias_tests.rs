@@ -204,6 +204,7 @@ fn node_alias_text_parsers_keep_a_stored_literal_id() {
     assert_eq!(expand_or_keep("TASK-095"), "TASK-095");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
 #[test]
 fn node_alias_stored_spec_ids_cover_spec_id_and_agreed_id() {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude

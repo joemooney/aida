@@ -941,8 +941,10 @@ pub(crate) fn find_spec_id_collisions(store: &RequirementsStore) -> Vec<SpecIdCo
         let Some(spec_id) = req.spec_id.as_deref() else {
             continue;
         };
+        // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude — numeric
+        // identity, the same key the cache-backed scan groups by.
         by_spec
-            .entry(spec_id.to_ascii_uppercase())
+            .entry(aida_core::id_identity::id_key(spec_id))
             .or_default()
             .push(SpecIdClaimant {
                 uuid: req.id,

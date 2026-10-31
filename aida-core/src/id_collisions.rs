@@ -299,6 +299,7 @@ mod tests {
 
     /// AC4: ids that differ only by leading zeros collide (BUG-HOME-046).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac828007 | ai:claude
     #[test]
     fn padded_twins_are_one_collision_group() {
         let rows = [

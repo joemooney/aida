@@ -350,7 +350,6 @@ pub fn id_config_to_proto(config: &IdConfiguration) -> proto::IdConfiguration {
             NumberingStrategy::PerPrefix => "per_prefix".to_string(),
             NumberingStrategy::PerFeatureType => "per_feature_type".to_string(),
         },
-        digits: config.digits as i32,
     }
 }
 

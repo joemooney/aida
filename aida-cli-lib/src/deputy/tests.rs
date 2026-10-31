@@ -29,6 +29,8 @@ fn job(body: JobBody, serial: Option<&str>, timeout_secs: u64) -> JobRecord {
         timeout_secs,
         sha256: body.digest(),
         body,
+        delegation: None,
+        extra: Default::default(),
     }
 }
 
@@ -687,6 +689,8 @@ mod worker_fixtures {
             grant: Arc::new(|| GrantState::Valid {
                 expires_at: Some(Utc::now() + CDuration::hours(1)),
             }),
+            mandate: worker::no_mandate_stop(),
+            mail_root: None,
             max_jobs: Some(max_jobs),
             aida_program: "bash".into(),
         }
@@ -1335,6 +1339,636 @@ mod worker_fixtures {
                 .unwrap_err()
                 .to_string();
             assert!(err.contains("aida deputy"), "{err}");
+        }
+    }
+
+    // ── slice 2: awaiting, mail, pause, stop at grant/mandate end, hooks ────
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    mod slice2 {
+        use super::*;
+        use crate::deputy_cmd::{self, DeputyArgs, DeputyCommand};
+        use clap::Parser;
+
+        fn parse(args: &[&str]) -> DeputyCommand {
+            DeputyArgs::try_parse_from(std::iter::once("deputy").chain(args.iter().copied()))
+                .unwrap()
+                .command
+                .unwrap()
+        }
+
+        use crate::deputy_cmd::HumanTerminal;
+
+        /// A person at their own terminal: every TTY, no agent, no drain.
+        fn human() -> HumanTerminal {
+            HumanTerminal {
+                ttys: [true; 3],
+                agent: false,
+                headless: false,
+                in_deputy_job: false,
+                via_wrapper: true,
+                wrapper_marker: None,
+            }
+        }
+
+        fn job_for(body: JobBody, session: &str) -> JobRecord {
+            let mut j = job(body, None, 30);
+            j.requester = requester(session);
+            j
+        }
+
+        fn ledger_has(spool: &Spool, event: &str, needle: &str) -> bool {
+            std::fs::read_to_string(spool.ledger_path())
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|l| serde_json::from_str::<LedgerRow>(l).ok())
+                .any(|r| {
+                    r.event == event
+                        && (needle.is_empty() || r.reason.as_deref().unwrap_or("").contains(needle))
+                })
+        }
+
+        fn wait_until(what: &str, mut f: impl FnMut() -> bool) {
+            for _ in 0..200 {
+                if f() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            panic!("timed out waiting for {what}");
+        }
+
+        // AC1: failed jobs are listed (id, requester session, rc, log path)
+        // until acknowledged; a session sees only its own.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac85effd | ai:claude
+        #[test]
+        fn failed_jobs_list_until_acknowledged() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let a = job_for(sh("exit 3"), "sess-a");
+            let ok = job_for(sh("true"), "sess-a");
+            let b = job_for(sh("exit 4"), "sess-b");
+            for j in [&a, &ok, &b] {
+                spool.submit(j).unwrap();
+            }
+            run(&spool, &cfg(3));
+
+            let mine = unacked_failed_jobs(dir.path(), Some("sess-a"));
+            assert_eq!(mine.len(), 1, "{mine:?}");
+            assert_eq!(mine[0].id, a.id);
+            assert_eq!(mine[0].rc, 3);
+            assert_eq!(mine[0].deputy, "test");
+            assert_eq!(mine[0].requester_session.as_deref(), Some("sess-a"));
+            assert_eq!(mine[0].output, spool.out_path(&a.id));
+            assert_eq!(unacked_failed_jobs(dir.path(), None).len(), 2);
+
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", &a.id]) else {
+                panic!("not an ack")
+            };
+            let mut buf = Vec::new();
+            deputy_cmd::ack(dir.path(), &args, Some("sess-a"), &mut buf).unwrap();
+            assert!(String::from_utf8(buf).unwrap().contains("acknowledged"));
+            assert!(unacked_failed_jobs(dir.path(), Some("sess-a")).is_empty());
+            assert_eq!(unacked_failed_jobs(dir.path(), None).len(), 1);
+
+            // A done job has nothing to acknowledge.
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", &ok.id]) else {
+                panic!("not an ack")
+            };
+            let mut buf = Vec::new();
+            deputy_cmd::ack(dir.path(), &args, None, &mut buf).unwrap();
+            assert!(String::from_utf8(buf).unwrap().contains("not failed"));
+
+            // --all takes only the reading session's failures.
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", "--all"]) else {
+                panic!("not an ack")
+            };
+            deputy_cmd::ack(dir.path(), &args, Some("sess-b"), &mut Vec::new()).unwrap();
+            assert!(unacked_failed_jobs(dir.path(), None).is_empty());
+        }
+
+        // AC1: inside a session, an explicit id another session submitted
+        // is not acknowledged; the operator's shell (no session) can.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac85effd | ai:claude
+        #[test]
+        fn a_session_cannot_ack_another_sessions_failure() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let b = job_for(sh("exit 4"), "sess-b");
+            spool.submit(&b).unwrap();
+            run(&spool, &cfg(1));
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", &b.id]) else {
+                panic!("not an ack")
+            };
+            let mut buf = Vec::new();
+            let err = deputy_cmd::ack(dir.path(), &args, Some("sess-a"), &mut buf).unwrap_err();
+            assert!(err.to_string().contains("another session"), "{err}");
+            assert!(
+                String::from_utf8(buf)
+                    .unwrap()
+                    .contains("submitted by sess-b"),
+                "the refusal names the owner"
+            );
+            assert_eq!(
+                unacked_failed_jobs(dir.path(), None).len(),
+                1,
+                "still listed"
+            );
+            assert_eq!(unacked_failed_jobs(dir.path(), Some("sess-b")).len(), 1);
+
+            deputy_cmd::ack(dir.path(), &args, Some("sess-b"), &mut Vec::new()).unwrap();
+            assert!(unacked_failed_jobs(dir.path(), None).is_empty());
+
+            // The operator's shell may acknowledge anyone's.
+            let c = job_for(sh("exit 5"), "sess-c");
+            spool.submit(&c).unwrap();
+            run(&spool, &cfg(1));
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", &c.id]) else {
+                panic!("not an ack")
+            };
+            deputy_cmd::ack(dir.path(), &args, None, &mut Vec::new()).unwrap();
+            assert!(unacked_failed_jobs(dir.path(), None).is_empty());
+        }
+
+        // AC1: the awaiting report renders the channel in every view.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac85effd | ai:claude
+        #[test]
+        fn awaiting_lists_a_failed_deputy_job() {
+            let report = crate::awaiting_you::AwaitingReport {
+                deputy_failed: vec![FailedJob {
+                    deputy: "default".into(),
+                    id: "0190f0aa-0000-7000-8000-00000000abcd".into(),
+                    requester_session: Some("sess-a".into()),
+                    rc: 3,
+                    reason: "exit".into(),
+                    output: "/x/out/j.out".into(),
+                }],
+                ..Default::default()
+            };
+            let json = report.to_json().to_string();
+            assert!(
+                json.contains("\"rc\":3")
+                    && json.contains("sess-a")
+                    && json.contains("/x/out/j.out"),
+                "{json}"
+            );
+            let agent = report.render_agent_view();
+            assert!(
+                agent.contains("deputy_failed") && agent.contains("/x/out/j.out"),
+                "{agent}"
+            );
+            let mut human = Vec::new();
+            report.render(true, &mut human).unwrap();
+            let human = String::from_utf8(human).unwrap();
+            assert!(
+                human.contains("rc 3")
+                    && human.contains("sess-a")
+                    && human.contains("aida deputy ack"),
+                "{human}"
+            );
+        }
+
+        // AC2: every finished job mails its requester rc and log path.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac12a1ab | ai:claude
+        #[test]
+        fn a_finished_job_mails_its_requester() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let mut ok = job_for(sh("true"), "sess-a");
+            ok.requester.mail_to = Some("lane-x".into());
+            let mut bad = job_for(sh("exit 3"), "sess-a");
+            bad.requester.mail_to = Some("lane-x".into());
+            let mut anon = job_for(sh("true"), "sess-c");
+            anon.requester.role = None;
+            for j in [&ok, &bad, &anon] {
+                spool.submit(j).unwrap();
+            }
+            let mut c = cfg(3);
+            c.mail_root = Some(dir.path().to_path_buf());
+            run(&spool, &c);
+
+            let msgs = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
+            assert_eq!(msgs.len(), 2, "{msgs:?}");
+            for (j, rc) in [(&ok, 0), (&bad, 3)] {
+                let m = msgs
+                    .iter()
+                    .find(|m| m.body.contains(&j.id))
+                    .unwrap_or_else(|| panic!("no mail for {}", j.id));
+                assert!(
+                    matches!(&m.to, aida_core::mailbox::Recipient::Agent(to) if to == "lane-x"),
+                    "{:?}",
+                    m.to
+                );
+                assert!(m.body.contains(&format!("rc {rc}")), "{}", m.body);
+                assert!(
+                    m.body
+                        .contains(&spool.out_path(&j.id).display().to_string()),
+                    "{}",
+                    m.body
+                );
+                assert_eq!(m.body.contains("aida deputy ack"), rc != 0, "{}", m.body);
+            }
+            assert!(ledger_has(&spool, "mailed", "no requester mail identity"));
+        }
+
+        // AC3: a paused deputy claims nothing; the running job finishes.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acd360f8 | ai:claude
+        #[test]
+        fn a_paused_deputy_claims_nothing_and_running_jobs_finish() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let a = job(sh("sleep 1"), None, 30);
+            spool.submit(&a).unwrap();
+            let s = spool.clone();
+            let worker = std::thread::spawn(move || run(&s, &cfg(2)));
+            wait_until("job a running", || {
+                spool.job_path("running", &a.id).exists()
+            });
+
+            let mut buf = Vec::new();
+            deputy_cmd::pause(&spool, &mut buf).unwrap();
+            assert!(String::from_utf8(buf).unwrap().contains("paused"));
+            let b = job(sh("true"), None, 30);
+            spool.submit(&b).unwrap();
+            wait_until("job a done", || spool.job_path("done", &a.id).exists());
+            std::thread::sleep(Duration::from_millis(500));
+            assert!(
+                spool.job_path("incoming", &b.id).exists(),
+                "a paused deputy claimed a job"
+            );
+            let mut listing = Vec::new();
+            deputy_cmd::list(
+                &spool,
+                &crate::deputy_cmd::DeputyListArgs {
+                    name: "test".into(),
+                    state: None,
+                    limit: 5,
+                },
+                &mut listing,
+            )
+            .unwrap();
+            assert!(String::from_utf8(listing).unwrap().contains("PAUSED"));
+
+            deputy_cmd::resume(&spool, &mut Vec::new()).unwrap();
+            worker.join().unwrap();
+            assert!(spool.job_path("done", &b.id).exists());
+            assert!(ledger_has(&spool, "paused", ""));
+            assert!(ledger_has(&spool, "resumed", ""));
+        }
+
+        // AC3: resume hands claim authority back, so without a human
+        // terminal (a non-TTY or contained caller) it refuses and the pause
+        // marker stays.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acd360f8 | ai:claude
+        #[test]
+        fn resume_refuses_without_a_human_terminal_and_stays_paused() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            deputy_cmd::pause(&spool, &mut Vec::new()).unwrap();
+            for ctx in [
+                HumanTerminal {
+                    ttys: [false; 3],
+                    ..human()
+                },
+                HumanTerminal {
+                    agent: true,
+                    ..human()
+                },
+                HumanTerminal {
+                    headless: true,
+                    ..human()
+                },
+            ] {
+                let refusal = ctx.refusal(false);
+                assert!(refusal.is_some(), "{ctx:?} should be refused");
+                let mut buf = Vec::new();
+                let err = deputy_cmd::resume_checked(&spool, refusal, &mut buf).unwrap_err();
+                assert!(err.to_string().contains("resume refuses"), "{err}");
+                assert!(buf.is_empty());
+                assert!(spool.paused().is_some(), "the pause marker was removed");
+            }
+            let mut buf = Vec::new();
+            deputy_cmd::resume_checked(&spool, human().refusal(false), &mut buf).unwrap();
+            assert!(String::from_utf8(buf).unwrap().contains("resumed"));
+            assert!(spool.paused().is_none());
+        }
+
+        // AC3/AC4: resuming a deputy whose grant expired while it was paused
+        // gives it nothing to claim under: it stops instead.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acd360f8 | ai:claude
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn a_resumed_deputy_whose_grant_expired_claims_nothing() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            deputy_cmd::pause(&spool, &mut Vec::new()).unwrap();
+            let a = job(sh("true"), None, 30);
+            spool.submit(&a).unwrap();
+            let mut c = cfg(0);
+            c.max_jobs = None;
+            let expires = Utc::now() + CDuration::milliseconds(600);
+            c.grant = Arc::new(move || GrantState::Valid {
+                expires_at: Some(expires),
+            });
+            let s = spool.clone();
+            let worker = std::thread::spawn(move || run(&s, &c));
+            wait_until("grant expiry", || Utc::now() > expires);
+            deputy_cmd::resume(&spool, &mut Vec::new()).unwrap();
+            wait_until("deputy exit", || worker.is_finished());
+            worker.join().unwrap();
+            assert!(
+                spool.job_path("incoming", &a.id).exists(),
+                "a resumed deputy claimed under an expired grant"
+            );
+            assert!(ledger_has(&spool, "stopped", "grant expired"));
+        }
+
+        // A pause marker that cannot be parsed still pauses (fails closed).
+        #[test]
+        fn an_unreadable_pause_marker_still_pauses() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            std::fs::write(spool.paused_path(), b"not json").unwrap();
+            assert!(spool.paused().is_some());
+            assert!(spool.resume().unwrap());
+            assert!(spool.paused().is_none());
+        }
+
+        fn mandate(expires_in_ms: i64) -> crate::gate::mandate::Mandate {
+            let now = Utc::now();
+            serde_json::from_value(serde_json::json!({
+                "id": "m-test",
+                "principal": "joe",
+                "seat": "mandate",
+                "scope": "ship-held",
+                "issued_at": now,
+                "expires_at": now + CDuration::milliseconds(expires_in_ms),
+            }))
+            .unwrap()
+        }
+
+        // AC4: the real mandate tie-in, over an injected mandate reader.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn mandate_probe_stops_at_expiry_or_stop_unless_kept() {
+            use crate::deputy_cmd::mandate_probe_with;
+            use crate::gate::mandate::MandateState;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+
+            // No mandate at start: never stops for one.
+            let p = mandate_probe_with(false, Utc::now(), Arc::new(|| MandateState::None));
+            assert_eq!(p(), None);
+
+            // --keep-after-mandate: never stops for the mandate, even past
+            // its expiry.
+            let p = mandate_probe_with(
+                true,
+                Utc::now(),
+                Arc::new(|| MandateState::Active(mandate(100))),
+            );
+            assert_eq!(p(), None);
+            std::thread::sleep(Duration::from_millis(150));
+            assert_eq!(p(), None);
+
+            // Active at start, expiring: stops once the clock passes it,
+            // without re-reading the records.
+            let p = mandate_probe_with(
+                false,
+                Utc::now(),
+                Arc::new({
+                    let m = mandate(300);
+                    move || MandateState::Active(m.clone())
+                }),
+            );
+            assert_eq!(p(), None);
+            std::thread::sleep(Duration::from_millis(400));
+            let why = p().expect("an expired mandate stops the deputy");
+            assert!(why.contains("mandate expired"), "{why}");
+
+            // Active at start, then stopped: the next read reports it.
+            let reads = Arc::new(AtomicUsize::new(0));
+            let r2 = Arc::clone(&reads);
+            let m = mandate(60_000);
+            let p = mandate_probe_with(
+                false,
+                Utc::now(),
+                Arc::new(move || {
+                    if r2.fetch_add(1, Ordering::SeqCst) == 0 {
+                        MandateState::Active(m.clone())
+                    } else {
+                        MandateState::Stopped(m.clone())
+                    }
+                }),
+            );
+            let why = p().expect("a stopped mandate stops the deputy");
+            assert!(why.contains("was stopped"), "{why}");
+            // Cached: the next call within 10s does not re-read.
+            assert!(p().is_some());
+            assert_eq!(reads.load(Ordering::SeqCst), 2);
+        }
+
+        // AC4: a short-TTL grant: the running job finishes, nothing more is
+        // claimed, and the deputy exits by itself with a `stopped` row.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn a_short_ttl_grant_stops_the_deputy() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let a = job(sh("sleep 2"), None, 30);
+            spool.submit(&a).unwrap();
+            let mut c = cfg(0);
+            c.max_jobs = None; // only the grant can end this run
+            let expires = Utc::now() + CDuration::milliseconds(1200);
+            c.grant = Arc::new(move || GrantState::Valid {
+                expires_at: Some(expires),
+            });
+            let s = spool.clone();
+            let worker = std::thread::spawn(move || run(&s, &c));
+            wait_until("job a running", || {
+                spool.job_path("running", &a.id).exists()
+            });
+            wait_until("grant expiry", || Utc::now() > expires);
+            let b = job(sh("true"), None, 30);
+            spool.submit(&b).unwrap();
+            wait_until("deputy exit", || worker.is_finished());
+            worker.join().unwrap();
+            assert!(
+                spool.job_path("done", &a.id).exists(),
+                "the running job finished"
+            );
+            assert!(
+                spool.job_path("incoming", &b.id).exists(),
+                "a job was claimed after the grant expired"
+            );
+            assert!(ledger_has(&spool, "stopped", "grant expired"));
+        }
+
+        // AC4: an invalid grant also ends the run (slice 1 idled instead).
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn an_invalid_grant_exits_without_claiming() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let a = job(sh("true"), None, 30);
+            spool.submit(&a).unwrap();
+            let mut c = cfg(0);
+            c.max_jobs = None;
+            c.grant = Arc::new(|| GrantState::Invalid("revoked".into()));
+            run(&spool, &c);
+            assert!(spool.job_path("incoming", &a.id).exists());
+            assert!(ledger_has(&spool, "stopped", "revoked"));
+        }
+
+        // AC4: the mandate's end stops claiming the same way.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn a_mandate_end_stops_the_deputy() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let a = job(sh("sleep 1"), None, 30);
+            spool.submit(&a).unwrap();
+            let ended = Arc::new(AtomicBool::new(false));
+            let e2 = Arc::clone(&ended);
+            let mut c = cfg(0);
+            c.max_jobs = None;
+            c.mandate = Arc::new(move || {
+                e2.load(std::sync::atomic::Ordering::SeqCst)
+                    .then(|| "the mandate expired".to_string())
+            });
+            let s = spool.clone();
+            let worker = std::thread::spawn(move || run(&s, &c));
+            wait_until("job a running", || {
+                spool.job_path("running", &a.id).exists()
+            });
+            ended.store(true, std::sync::atomic::Ordering::SeqCst);
+            let b = job(sh("true"), None, 30);
+            spool.submit(&b).unwrap();
+            wait_until("deputy exit", || worker.is_finished());
+            worker.join().unwrap();
+            assert!(spool.job_path("done", &a.id).exists());
+            assert!(spool.job_path("incoming", &b.id).exists());
+            assert!(ledger_has(&spool, "stopped", "mandate expired"));
+        }
+
+        // AC5: any field outside the allow-list (top level or requester) is
+        // refused, never dropped: a capability under an unknown name fails
+        // closed, both at the hook and through the worker.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acdce2cd | ai:claude
+        #[test]
+        fn unknown_job_fields_are_refused_not_dropped() {
+            use crate::deputy::hooks::{self, HookVerdict};
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+
+            // Round-trips through the on-disk form, so the parser keeps it.
+            let mut j = job(sh("true"), None, 30);
+            j.extra
+                .insert("capability".into(), serde_json::json!({"token": "x"}));
+            let back: JobRecord = serde_json::from_slice(&serde_json::to_vec(&j).unwrap()).unwrap();
+            assert_eq!(hooks::unknown_field_names(&back), vec!["capability"]);
+            assert!(
+                matches!(hooks::check(&spool, &back), HookVerdict::Refuse(r) if r.starts_with("refused:unknown-field capability"))
+            );
+            let mut r = job(sh("true"), None, 30);
+            r.requester
+                .extra
+                .insert("tty_policy".into(), serde_json::json!("allow"));
+            assert!(
+                matches!(hooks::unknown_fields(&r), HookVerdict::Refuse(why) if why.contains("requester.tty_policy"))
+            );
+            assert_eq!(
+                hooks::unknown_fields(&job(sh("true"), None, 30)),
+                HookVerdict::Pass
+            );
+
+            let mut top = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-top\""), None, 30);
+            top.extra.insert("grant".into(), serde_json::json!("abc"));
+            let mut nested = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-nested\""), None, 30);
+            nested
+                .requester
+                .extra
+                .insert("capability".into(), serde_json::json!("abc"));
+            spool.submit(&top).unwrap();
+            spool.submit(&nested).unwrap();
+            run(&spool, &cfg(2));
+            for (j, field) in [(&top, "grant"), (&nested, "requester.capability")] {
+                let res = spool.read_result(&j.id).unwrap();
+                assert!(
+                    res.reason
+                        .starts_with(&format!("refused:unknown-field {field}")),
+                    "{}",
+                    res.reason
+                );
+            }
+            assert!(!spool.root.join("ran-top").exists());
+            assert!(!spool.root.join("ran-nested").exists());
+        }
+
+        // AC5: the slice-3 hooks refuse what they cannot judge.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acdce2cd | ai:claude
+        #[test]
+        fn slice3_hooks_refuse_instead_of_failing_open() {
+            use crate::deputy::hooks::{self, HookVerdict};
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let plain = job(sh("true"), None, 30);
+            assert_eq!(hooks::check(&spool, &plain), HookVerdict::Pass);
+            let mut delegated = job(sh("true"), None, 30);
+            delegated.delegation = Some(serde_json::json!({"grant": "abc"}));
+            assert!(
+                matches!(hooks::submitter_delegation(&delegated), HookVerdict::Refuse(r) if r.starts_with("refused:delegation-unverifiable"))
+            );
+            std::fs::write(spool.command_policy_path(), b"{}").unwrap();
+            assert!(
+                matches!(hooks::check(&spool, &plain), HookVerdict::Refuse(r) if r.starts_with("refused:command-policy-unsupported"))
+            );
+        }
+
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acdce2cd | ai:claude
+        #[test]
+        fn the_worker_refuses_delegated_jobs_command_policies_and_unknown_policy_rules() {
+            use std::os::unix::fs::PermissionsExt;
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let mut delegated = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-1\""), None, 30);
+            delegated.delegation = Some(serde_json::json!({"cap": "x"}));
+            spool.submit(&delegated).unwrap();
+            run(&spool, &cfg(1));
+            let r = spool.read_result(&delegated.id).unwrap();
+            assert!(
+                r.reason.starts_with("refused:delegation-unverifiable"),
+                "{}",
+                r.reason
+            );
+
+            // A policy carrying a rule this deputy does not know.
+            let p = spool.policy_path();
+            std::fs::write(&p, br#"{"entries": [], "deny": ["aida pr ship"]}"#).unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+            let j = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-2\""), None, 30);
+            spool.submit(&j).unwrap();
+            run(&spool, &cfg(1));
+            let r = spool.read_result(&j.id).unwrap();
+            assert!(
+                r.reason.starts_with("refused:policy-unreadable"),
+                "{}",
+                r.reason
+            );
+            std::fs::remove_file(&p).unwrap();
+
+            // A command policy file this deputy cannot enforce.
+            std::fs::write(spool.command_policy_path(), b"aida status\n").unwrap();
+            let k = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-3\""), None, 30);
+            spool.submit(&k).unwrap();
+            run(&spool, &cfg(1));
+            let r = spool.read_result(&k.id).unwrap();
+            assert!(
+                r.reason.starts_with("refused:command-policy-unsupported"),
+                "{}",
+                r.reason
+            );
+            for n in 1..=3 {
+                assert!(!spool.root.join(format!("ran-{n}")).exists(), "job {n} ran");
+            }
         }
     }
 }

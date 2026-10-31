@@ -2850,9 +2850,11 @@ impl Cache {
         spec_id_for_uuid_on(&conn, id)
     }
 
-    /// Cache-backed spec-id collision scan: every `(spec_id, uuid, title)` row
-    /// whose upper-cased `spec_id` is claimed by more than one distinct uuid.
-    /// Empty when the store is collision-free.
+    /// Cache-backed spec-id collision scan: every `(id key, uuid, title)` row
+    /// whose `spec_id` NUMERIC identity (the indexed `id_key` column, so
+    /// `TASK-0042` and `TASK-42` are one id) is claimed by more than one
+    /// distinct uuid. The first field is the shared id key. Empty when the
+    /// store is collision-free.
     ///
     /// Replaces the O(n) full-store `GitBackend::load()` scan on the `aida add`
     /// hot path (BUG-701) with a single indexed SQL group-by: the cache already
@@ -2865,13 +2867,17 @@ impl Cache {
     pub fn spec_id_collisions(&self) -> Result<Vec<(String, Uuid, String)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT UPPER(spec_id) AS sid, id, title \
+            // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude —
+            // group by numeric identity (`id_key`); a row cached before the
+            // column existed falls back to its upper-cased text.
+            "SELECT COALESCE(id_key, UPPER(spec_id)) AS sid, id, title \
              FROM requirements_cache \
              WHERE spec_id IS NOT NULL AND spec_id != '' \
-               AND UPPER(spec_id) IN ( \
-                   SELECT UPPER(spec_id) FROM requirements_cache \
+               AND COALESCE(id_key, UPPER(spec_id)) IN ( \
+                   SELECT COALESCE(id_key, UPPER(spec_id)) FROM requirements_cache \
                    WHERE spec_id IS NOT NULL AND spec_id != '' \
-                   GROUP BY UPPER(spec_id) HAVING COUNT(DISTINCT id) > 1 \
+                   GROUP BY COALESCE(id_key, UPPER(spec_id)) \
+                   HAVING COUNT(DISTINCT id) > 1 \
                ) \
              ORDER BY sid, id",
         )?;
@@ -7136,6 +7142,7 @@ mod tests {
     /// BUG-HOME-046: a v15 cache (no key columns) is migrated by the v16
     /// bump, and the new columns are present afterwards.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
     #[test]
     fn bug_046_schema_bump_adds_indexed_id_key_columns() {
         let dir = tempdir().unwrap();
@@ -7189,6 +7196,7 @@ mod tests {
     /// for the native spec_id and for an agreed_id — and the store-wide
     /// collision scan groups padded twins.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
     #[test]
     fn bug_046_id_lookups_ignore_leading_zeros() {
         let dir = tempdir().unwrap();
@@ -7232,6 +7240,7 @@ mod tests {
     /// A row upserted by an older binary into a shared newer-schema cache has
     /// NULL key columns; the literal arm still resolves it.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
     #[test]
     fn bug_046_row_without_keys_still_resolves_literally() {
         let dir = tempdir().unwrap();
@@ -7298,6 +7307,30 @@ mod tests {
         let rows = cache.spec_id_collisions().unwrap();
         assert_eq!(rows.len(), 2);
         assert!(rows.iter().all(|(s, _, _)| s == "FR-1")); // normalized upper
+    }
+
+    /// The sync guard groups by numeric identity: padded twins (`TASK-0042`
+    /// / `TASK-42`) under different uuids are ONE collision, keyed by the
+    /// shared id key; `TASK-420` stays unique.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+    #[test]
+    fn spec_id_collisions_groups_padded_twins_numerically() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let padded = sample_req("TASK-0042", "padded");
+        let plain = sample_req("task-42", "plain");
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([
+            padded.clone(),
+            plain.clone(),
+            sample_req("TASK-420", "other"),
+        ]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let rows = cache.spec_id_collisions().unwrap();
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert!(rows.iter().all(|(s, _, _)| s == "TASK-42"), "{rows:?}");
+        let uuids: std::collections::BTreeSet<_> = rows.iter().map(|(_, u, _)| *u).collect();
+        assert_eq!(uuids, [padded.id, plain.id].into_iter().collect());
     }
 
     // TASK-955: a 3-level hierarchy (epic -> story -> task) where --parent shows

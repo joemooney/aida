@@ -677,6 +677,7 @@ mod list_title_width_tests {
     /// one, a node-local id longer than the historical 14-char column) every
     /// row's Type, Status and Title cells start where the header's do.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.acbed48e | ai:claude
     #[test]
     fn list_columns_align_with_mixed_length_ids_at_seq_width_0_and_4() {
         let node_local = "TASK-0123456789abcdef0123456789abcdef-001";
