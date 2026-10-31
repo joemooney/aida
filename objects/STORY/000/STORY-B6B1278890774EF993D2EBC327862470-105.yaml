@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T19:30:40.926771605Z
+modified_at: 2026-10-31T20:08:37.422384727Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -140,6 +140,12 @@ comments:
   modified_at: 2026-10-31T19:30:40.926771605Z
   session_id: 01a19329796c
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19394-132e-76f1-96a6-7a05197bc31c
+  author: joe
+  content: 'ADVISOR BRIEF 13:10 (round 2b, mechanical): PR-3170 head 7a7b799 is red on ONE test: command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:103). Your round-2 CLI help changes moved the help surface. Regenerate the golden the way the test''s failure message says (bless env var), check that the diff covers ONLY the help text your PR intentionally changed, commit, and push to the PR branch. Gate: cargo test -p aida-cli-lib story_1728 plus make check-ci-fast. No other changes. The review is queued after this push.'
+  created_at: 2026-10-31T20:08:37.422384727Z
+  modified_at: 2026-10-31T20:08:37.422384727Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
