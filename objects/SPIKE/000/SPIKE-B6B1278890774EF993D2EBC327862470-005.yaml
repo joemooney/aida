@@ -5,13 +5,22 @@ description: |
   Spike (proposed by the product seat, 2026-10-31): can a pool grant cross an air gap in a git bundle and be spent on the inside hub?
   Questions: (1) The docs say "a block that only appears in an imported store is never spendable". Does a bundle-delivered grant count as imported, and what should make it spendable (a signed grant? a home_ref on the inside hub?). (2) Racing claims on the inside hub. (3) Pool exhaustion inside the gap. (4) Bringing claims back out, and reconciling them with the outside hub without conflicts. (5) Lineage depth: today only the immediate parent pool's home_ref is checked.
   Output: a written findings doc under docs/plans/ with a recommended design, plus a throwaway fixture that reproduces each case. No production code.
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:26:27.680411597Z
-modified_at: 2026-10-31T19:26:27.680411597Z
+modified_at: 2026-10-31T20:18:30.140211349Z
 req_type: Spike
+history:
+- id: 01a1939d-1e7c-7c02-bac9-9b44fb6cc797
+  author: joe
+  timestamp: 2026-10-31T20:18:30.140208795Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
