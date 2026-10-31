@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T07:13:31.677264923Z
+modified_at: 2026-10-31T07:14:44.583614257Z
 req_type: Story
 relationships:
 - rel_type:
@@ -126,6 +126,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-31T07:13:31.458997710Z
   modified_at: 2026-10-31T07:13:31.458997710Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190cf-9027-79c0-a94b-9607543bd55e
+  author: joe
+  content: 'Advisor ruling: PR-3152 final round, CI-only: CI lib-0 fails ONLY command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/golden/cli_help_snapshot.txt differs at line 8439, the new remote bridge help text). Regenerate the golden help snapshot with the project bless procedure (see the test for its update env var), check the diff is ONLY the new remote bridge / push-hubs help, commit, push. Change nothing else. Gate: run that one test plus make check-ci-fast.'
+  created_at: 2026-10-31T07:14:44.391351462Z
+  modified_at: 2026-10-31T07:14:44.391351462Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
