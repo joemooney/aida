@@ -1510,6 +1510,33 @@ pub(crate) fn compose_headless_command(
     )
 }
 
+/// BUG-044: [`compose_headless_command`], with `resume` rewriting the
+/// composed `--session-id <id>` to `--resume <id>` (Claude only) so a resume
+/// keeps the launch's posture, model and wrapper. One shared builder, so the
+/// BUG-342 ratchet sees every headless launch route through it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn compose_headless_command_for(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    resume: bool,
+) -> Result<(String, Vec<String>)> {
+    let (program, args) =
+        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
+    if !resume {
+        return Ok((program, args));
+    }
+    anyhow::ensure!(
+        vendor == HeadlessVendor::Claude,
+        "only a claude session can be resumed headless, not {}",
+        vendor.as_str()
+    );
+    Ok((program, resume_session_args(args, session_id)?))
+}
+
 /// STORY-683: spawn (not exec) a headless run of `vendor`'s CLI and wait,
 /// returning the exit status. The vendor-neutral generalization of
 /// [`spawn_claude_headless`]: it builds the right argv per vendor
@@ -4238,17 +4265,7 @@ fn build_exec_vendor_headless_command_for(
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
     let (program, args) =
-        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
-    let args = if resume {
-        anyhow::ensure!(
-            vendor == HeadlessVendor::Claude,
-            "only a claude session can be resumed headless, not {}",
-            vendor.as_str()
-        );
-        resume_session_args(args, session_id)?
-    } else {
-        args
-    };
+        compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude

@@ -63,31 +63,30 @@ fn build_work_is_compilers_and_target_binaries_not_servers_or_shells() {
 }
 
 /// A lingering sccache-like daemon carrying the lane's marker is not live
-/// background work: the lane is not held for it.
-#[cfg(target_os = "linux")]
+/// background work: the lane is not held for it. The process snapshot is
+/// injected, so the decision does not depend on the host's process table.
 #[test]
 fn a_lingering_marked_daemon_does_not_hold_the_lane() {
-    let dir = tempfile::tempdir().unwrap();
-    let daemon = dir.path().join("sccache");
-    std::fs::copy("/bin/sleep", &daemon).unwrap();
-    let mut child = std::process::Command::new(&daemon)
-        .arg("30")
-        .env(si::MARKER_ENV, "b044daemon01")
-        .spawn()
-        .unwrap();
-    let marked = marked_processes(si::MARKER_ENV, "b044daemon01");
-    let live = live_background_work("b044daemon01");
-    let _ = child.kill();
-    let _ = child.wait();
-    assert!(
-        marked
-            .iter()
-            .any(|p| p.pid == child.id() && p.comm == "sccache"),
-        "{marked:?}"
-    );
+    let proc_ = |pid: u32, comm: &str, exe: &str| MarkedProcess {
+        pid,
+        comm: comm.to_string(),
+        exe: exe.to_string(),
+    };
+    let daemons = vec![
+        proc_(101, "sccache", "/home/u/.cargo/bin/sccache"),
+        proc_(102, "aida-server", "/repo/target/debug/aida-server"),
+    ];
+    let live = build_work_among(daemons.clone());
     assert!(live.is_empty(), "the daemon held the lane: {live:?}");
     let hold = ReapHold::new(std::time::Duration::from_secs(60));
     assert!(!hold.check(!live.is_empty()));
+    assert!(!hold.held());
+
+    // The same snapshot plus a real compile does hold it, for the compile only.
+    let mut busy = daemons;
+    busy.push(proc_(103, "rustc", "/home/u/.rustup/bin/rustc"));
+    let live = build_work_among(busy);
+    assert_eq!(live.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![103]);
 }
 
 #[test]

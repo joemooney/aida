@@ -174,7 +174,20 @@ pub(crate) fn marked_processes(marker_env: &str, value: &str) -> Vec<MarkedProce
 /// The build or test processes the standalone implementer on lease
 /// `lease_id` still has running.
 pub(crate) fn live_background_work(lease_id: &str) -> Vec<MarkedProcess> {
-    marked_processes(crate::standalone_implementer::MARKER_ENV, lease_id)
+    build_work_among(marked_processes(
+        crate::standalone_implementer::MARKER_ENV,
+        lease_id,
+    ))
+}
+
+/// The build or test work in a snapshot of marked processes: a lingering
+/// daemon (sccache, a server) that inherited the marker is dropped. Pure, so
+/// the decision is tested on an injected snapshot, not the host's `/proc`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn build_work_among(
+    snapshot: impl IntoIterator<Item = MarkedProcess>,
+) -> Vec<MarkedProcess> {
+    snapshot
         .into_iter()
         .filter(|p| is_build_work(&p.comm, &p.exe))
         .collect()
