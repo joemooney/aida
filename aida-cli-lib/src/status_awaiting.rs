@@ -1275,6 +1275,23 @@ pub(crate) fn notice_hook_session(
             // unverified mail readers. trace:STORY-1843 | ai:claude
             let _ = agent_registry::gc_dead_agents(&project_root, false, None);
         }
+    } else if session_id.is_some() {
+        // Every later prompt refreshes the session's row, and registers it
+        // again when its row is missing. Fail-open: a hook never blocks on it.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+        if let Some(worktree_root) = cwd.and_then(|cwd| find_aida_project_root_from(cwd).ok()) {
+            let project_root = main_worktree_root_from(&worktree_root);
+            let binary = agent_registry::AgentBinaryIdentity::new(
+                env!("CARGO_PKG_VERSION").to_string(),
+                env!("AIDA_BUILD_GIT_SHA").to_string(),
+            );
+            let _ = agent_registry::heartbeat_session_agent(
+                &project_root,
+                &worktree_root,
+                session_id.as_deref(),
+                &binary,
+            );
+        }
     }
     (session_id, is_session_start)
 }
@@ -3990,6 +4007,13 @@ mod task_2253_agy_session_start_gc_tests {
         let payload = r#"{"conversationId":"agy-live-conv"}"#;
         let (_, start) = notice_hook_session(payload, None, Some(&proj));
         assert!(!start);
-        assert!(load_entries(&proj)[0].1.ended_at.is_none());
+        // A prompt-turn heartbeat may register the test's own agent client
+        // beside it; the dead agy row is the one that must stay un-ended.
+        let dead_id = format!("antigravity-{}", u32::MAX - 1);
+        let dead = load_entries(&proj)
+            .into_iter()
+            .find(|(_, e)| e.id == dead_id)
+            .expect("dead agy row");
+        assert!(dead.1.ended_at.is_none());
     }
 }

@@ -152,6 +152,102 @@ fn update_grant(
     bail!("session grant {id} kept changing under concurrent writers; the update was not applied")
 }
 
+/// An unexpired, unrevoked grant for a seat, with the processes it is bound
+/// to and whether each is alive as this process sees it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HeldGrant {
+    pub id: String,
+    pub seat: String,
+    pub expires_at: DateTime<Utc>,
+    /// `(pid, alive)` per `proc:`/`sid:` binding token.
+    pub holders: Vec<(u32, bool)>,
+}
+
+impl HeldGrant {
+    /// The first bound process that is alive, if any.
+    pub(crate) fn live_holder(&self) -> Option<u32> {
+        self.holders
+            .iter()
+            .find(|(_, alive)| *alive)
+            .map(|(p, _)| *p)
+    }
+}
+
+/// PURE: the pid and start identity of a `proc:`/`sid:` binding token.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn binding_process(token: &str) -> Option<(u32, &str)> {
+    let rest = token
+        .strip_prefix("proc:")
+        .or_else(|| token.strip_prefix("sid:"))?;
+    let (pid, start) = rest.split_once('@')?;
+    Some((pid.parse().ok()?, start))
+}
+
+/// Read-only: every unexpired, unrevoked grant in `dir` for `seat`, its
+/// bound processes probed with `alive(pid, start)`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn held_grants_in(
+    dir: &Path,
+    seat: &str,
+    now: DateTime<Utc>,
+    alive: impl Fn(u32, &str) -> bool,
+) -> Vec<HeldGrant> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<HeldGrant> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().and_then(|e| e.to_str()) == Some("json")
+                && !p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with('.'))
+        })
+        .filter_map(|p| std::fs::read(p).ok())
+        .filter_map(|bytes| serde_json::from_slice::<SeatGrant>(&bytes).ok())
+        .filter(|g| {
+            crate::canonical_role_name(&g.seat) == crate::canonical_role_name(seat)
+                && g.revoked_at.is_none()
+                && g.expires_at > now
+        })
+        .map(|g| HeldGrant {
+            holders: g
+                .binding
+                .iter()
+                .filter_map(|t| binding_process(t))
+                .map(|(pid, start)| (pid, alive(pid, start)))
+                .collect(),
+            id: g.id,
+            seat: g.seat,
+            expires_at: g.expires_at,
+        })
+        .collect();
+    out.sort_by(|a, b| b.expires_at.cmp(&a.expires_at));
+    out
+}
+
+/// [`held_grants_in`] over this user's grant store, probing each bound
+/// process's start identity.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn held_grants(seat: &str, now: DateTime<Utc>) -> Vec<HeldGrant> {
+    let Ok(dir) = grant_dir() else {
+        return Vec::new();
+    };
+    held_grants_in(&dir, seat, now, |pid, start| {
+        aida_core::liveness::process_identity_matches_strict(pid, start)
+    })
+}
+
+/// Whether this process runs in a PID namespace other than the host's, so
+/// a host process it probes reads as gone.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn probes_from_foreign_namespace() -> bool {
+    in_foreign_pid_namespace()
+}
+
 /// BUG-1934: `session-grant-locks/`, beside the grant store.
 // trace:BUG-1934 | ai:claude
 fn grant_lock_dir() -> Result<PathBuf> {

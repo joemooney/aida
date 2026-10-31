@@ -180,7 +180,12 @@ fn the_ack_id_is_stable_per_hello_and_a_valid_uuid() {
 fn a_hello_inside_the_window_is_waiting() {
     let policy = Policy::default();
     assert_eq!(
-        state(&record(HomeKind::SeatPrimary, 9), true, &policy, now()),
+        state(
+            &record(HomeKind::SeatPrimary, 9),
+            || AdvisorPresence::Registered,
+            &policy,
+            now()
+        ),
         State::Waiting
     );
 }
@@ -191,7 +196,7 @@ fn an_acked_hello_reports_who_acked_it() {
     rec.acked_at = Some(t(25));
     rec.acked_by = Some("claude-advisor-1".into());
     assert_eq!(
-        state(&rec, false, &Policy::default(), now()),
+        state(&rec, || AdvisorPresence::Unknown, &Policy::default(), now()),
         State::Acked {
             by: Some("claude-advisor-1".into())
         }
@@ -203,26 +208,38 @@ fn an_acked_hello_reports_who_acked_it() {
 #[test]
 fn past_the_window_the_reason_names_the_mail_path() {
     let policy = Policy::default();
-    let State::Unreachable(no_advisor) =
-        state(&record(HomeKind::SeatPrimary, 11), false, &policy, now())
-    else {
+    let State::Unreachable(no_advisor) = state(
+        &record(HomeKind::SeatPrimary, 11),
+        || AdvisorPresence::Unknown,
+        &policy,
+        now(),
+    ) else {
         panic!("expected unreachable");
     };
-    assert!(no_advisor.starts_with("no live advisor"), "{no_advisor}");
+    assert!(
+        no_advisor.starts_with("no registered advisor"),
+        "{no_advisor}"
+    );
     assert!(
         no_advisor.contains("/work/aida/.aida/mailbox"),
         "{no_advisor}"
     );
 
-    let State::Unreachable(silent) = state(&record(HomeKind::Checkout, 11), true, &policy, now())
-    else {
+    let State::Unreachable(silent) = state(
+        &record(HomeKind::Checkout, 11),
+        || AdvisorPresence::Registered,
+        &policy,
+        now(),
+    ) else {
         panic!("expected unreachable");
     };
     assert!(silent.contains("has not acked within 10m"), "{silent}");
 
     let mut stranded = record(HomeKind::UnverifiedClone, 11);
     stranded.mailbox = "/work/aida-seat-x/.aida/mailbox".into();
-    let State::Unreachable(clone) = state(&stranded, true, &policy, now()) else {
+    let State::Unreachable(clone) =
+        state(&stranded, || AdvisorPresence::Registered, &policy, now())
+    else {
         panic!("expected unreachable");
     };
     assert!(clone.contains("seat clone's local mailbox"), "{clone}");
@@ -280,9 +297,9 @@ fn the_agent_announces_an_ack_once_and_an_overdue_hello_every_turn() {
     rec.ack_reported = true;
     assert_eq!(agent_line(&rec, &acked), None);
     assert_eq!(agent_line(&rec, &State::Waiting), None);
-    let overdue = agent_line(&rec, &State::Unreachable("no live advisor".into())).unwrap();
+    let overdue = agent_line(&rec, &State::Unreachable("no registered advisor".into())).unwrap();
     assert!(
-        overdue.starts_with("advisor unreachable: no live advisor"),
+        overdue.starts_with("advisor unreachable: no registered advisor"),
         "{overdue}"
     );
 }
@@ -292,7 +309,11 @@ fn the_agent_announces_an_ack_once_and_an_overdue_hello_every_turn() {
 fn the_doctor_finding_names_the_failed_mail_path() {
     let mut rec = record(HomeKind::UnverifiedClone, 12);
     rec.mailbox = "/work/aida-seat-x/.aida/mailbox".into();
-    let reason = unreachable_reason(&rec, true, &Policy::default());
+    let reason = unreachable_reason(
+        &rec,
+        &crate::advisor_handshake::AdvisorPresence::Registered,
+        &Policy::default(),
+    );
     let f = finding(&rec, &reason, now());
     assert_eq!(f.category, DOCTOR_CATEGORY);
     assert_eq!(f.id, "advisor-handshake:claude-implementer-229");
@@ -340,7 +361,7 @@ fn a_record_round_trips_and_ls_flags_only_an_overdue_hello() {
     save_record(dir.path(), &record(HomeKind::SeatPrimary, 15)).unwrap();
     let note = ls_note(&census, Some(HANDLE), started);
     assert!(
-        note.contains("⚠ advisor unreachable: no live advisor"),
+        note.contains("⚠ advisor unreachable: no registered advisor"),
         "{note}"
     );
     assert_eq!(ls_note(&census, None, started), "");
@@ -474,7 +495,7 @@ fn agent_ls_and_doctor_report_an_overdue_hello_and_its_mailbox() {
                 .next()
                 .unwrap();
             assert!(
-                body.contains("advisor unreachable") && body.contains("no live advisor"),
+                body.contains("advisor unreachable") && body.contains("no registered advisor"),
                 "{section}: {body}"
             );
             assert!(body.contains(".aida/mailbox"), "{section}: {body}");

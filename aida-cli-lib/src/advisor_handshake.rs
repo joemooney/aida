@@ -4,8 +4,8 @@
 //!
 //! - **Hello.** On SessionStart, a session `aida agent new` launched with its
 //!   own handle, whose role is not advisor, mails the `advisor` role once, naming its handle, role, spec and
-//!   worktree/clone path. With no live advisor the send is queued for the role
-//!   (durable) and the agent is told so.
+//!   worktree/clone path. With no registered advisor the send is queued for
+//!   the role (durable) and the agent is told so.
 //! - **Ack.** An advisor's per-turn notice lists unacknowledged hellos;
 //!   reading them with `aida mailbox inbox` (or MCP `read_inbox` with
 //!   `mark_seen`) acks each one with a reply to the sender's handle.
@@ -218,10 +218,72 @@ pub(crate) fn ack_id(hello_id: &str) -> String {
         .to_string()
 }
 
-/// PURE: the hello's state at `now`, given whether an advisor is live now.
+/// What this process can tell about the advisor seat. The agent registry is
+/// one witness, not the only one: a live advisor whose registry row is
+/// missing still holds its seat grant, so "no registered advisor" is never
+/// reported as "no live advisor".
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AdvisorPresence {
+    /// A live registry row carries the advisor role.
+    Registered,
+    /// No registry row, but other evidence shows a live advisor; the string
+    /// names it (a seat grant held by a live process, a recent advisor turn).
+    Unregistered(String),
+    /// No registered advisor and no other evidence of one.
+    Unknown,
+}
+
+/// The advisor's presence as `live` (the live registry rows) and the
+/// advisor seat grants show it. Grants are read only when no row is found.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn advisor_presence(
+    project_root: &Path,
+    live: &[AgentRegistryEntry],
+    now: DateTime<Utc>,
+) -> AdvisorPresence {
+    if !live_advisors(live).is_empty() {
+        return AdvisorPresence::Registered;
+    }
+    let grants = crate::gate::seat_authority::held_grants(ADVISOR_ROLE, now);
+    let recent_turn = crate::mandate_drive::advisor_live(project_root, now);
+    presence_from(live, &grants, recent_turn)
+}
+
+/// PURE core of [`advisor_presence`]: `recent_turn` is whether an advisor
+/// grant's per-turn notice ran recently.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn presence_from(
+    live: &[AgentRegistryEntry],
+    grants: &[crate::gate::seat_authority::HeldGrant],
+    recent_turn: bool,
+) -> AdvisorPresence {
+    if !live_advisors(live).is_empty() {
+        return AdvisorPresence::Registered;
+    }
+    if let Some((grant, pid)) = grants
+        .iter()
+        .find_map(|g| g.live_holder().map(|pid| (g, pid)))
+    {
+        let prefix: String = grant.id.chars().take(8).collect();
+        return AdvisorPresence::Unregistered(format!(
+            "pid {pid} holds advisor seat grant {prefix} until {}",
+            grant.expires_at.format("%Y-%m-%dT%H:%MZ")
+        ));
+    }
+    if recent_turn {
+        return AdvisorPresence::Unregistered(
+            "an advisor seat grant ran a turn within the last 30 minutes".to_string(),
+        );
+    }
+    AdvisorPresence::Unknown
+}
+
+/// The hello's state at `now`. `presence` is asked only when the hello is
+/// past its window unacked, so a quiet per-turn hook reads no grants.
 pub(crate) fn state(
     rec: &HelloRecord,
-    advisor_live_now: bool,
+    presence: impl FnOnce() -> AdvisorPresence,
     policy: &Policy,
     now: DateTime<Utc>,
 ) -> State {
@@ -233,13 +295,13 @@ pub(crate) fn state(
     if now - rec.sent_at < policy.window {
         return State::Waiting;
     }
-    State::Unreachable(unreachable_reason(rec, advisor_live_now, policy))
+    State::Unreachable(unreachable_reason(rec, &presence(), policy))
 }
 
 /// PURE: why no ack arrived, naming the mailbox path the hello used.
 pub(crate) fn unreachable_reason(
     rec: &HelloRecord,
-    advisor_live_now: bool,
+    presence: &AdvisorPresence,
     policy: &Policy,
 ) -> String {
     if rec.home == HomeKind::UnverifiedClone {
@@ -248,8 +310,21 @@ pub(crate) fn unreachable_reason(
             rec.mailbox
         );
     }
-    if !advisor_live_now {
-        return format!("no live advisor; the hello is queued in {}", rec.mailbox);
+    match presence {
+        AdvisorPresence::Unknown => {
+            return format!(
+                "no registered advisor (no advisor row for a running process in the agent registry); the hello is queued in {}",
+                rec.mailbox
+            )
+        }
+        AdvisorPresence::Unregistered(evidence) => {
+            return format!(
+                "an advisor is live but unregistered ({evidence}); it has not acked within {}m and the hello is queued in {}",
+                policy.window.num_minutes(),
+                rec.mailbox
+            )
+        }
+        AdvisorPresence::Registered => {}
     }
     format!(
         "the live advisor has not acked within {}m; the hello is in {}",
@@ -690,8 +765,9 @@ fn send_line(outcome: &SendOutcome, live: &[AgentRegistryEntry]) -> Option<Strin
                 rec.mailbox
             ))
         }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
         SendOutcome::Queued(rec) => Some(format!(
-            "Advisor handshake: no live advisor; hello queued ({}).",
+            "Advisor handshake: no registered advisor; hello queued ({}). Check: `aida doctor check {DOCTOR_CATEGORY}`.",
             rec.mailbox
         )),
         SendOutcome::AlreadySent(_) => None,
@@ -797,7 +873,7 @@ pub(crate) fn run(
             rec.acked_by = Some(ack.from);
         }
     }
-    let st = state(&rec, !live_advisors(&live).is_empty(), &policy, now);
+    let st = state(&rec, || advisor_presence(&main, &live, now), &policy, now);
     if let Some(line) = agent_line(&rec, &st) {
         lines.push(line);
     } else if !hook && st == State::Waiting {
@@ -827,6 +903,7 @@ pub(crate) struct Census {
     roots: Vec<PathBuf>,
     policy: Policy,
     now: DateTime<Utc>,
+    presence: std::cell::OnceCell<AdvisorPresence>,
 }
 
 impl Census {
@@ -844,7 +921,16 @@ impl Census {
             live,
             policy,
             now,
+            presence: std::cell::OnceCell::new(),
         }
+    }
+
+    /// The advisor's presence, read once per census.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+    pub(crate) fn presence(&self) -> AdvisorPresence {
+        self.presence
+            .get_or_init(|| advisor_presence(&self.main, &self.live, self.now))
+            .clone()
     }
 
     pub(crate) fn load(project_root: &Path) -> Self {
@@ -883,8 +969,7 @@ impl Census {
         {
             return None;
         }
-        let advisor_live = !live_advisors(&self.live).is_empty();
-        match state(&rec, advisor_live, &self.policy, self.now) {
+        match state(&rec, || self.presence(), &self.policy, self.now) {
             State::Unreachable(reason) => Some((rec, reason)),
             _ => None,
         }
@@ -910,6 +995,148 @@ pub(crate) fn doctor_scan(project_root: &Path) -> Vec<DoctorFinding> {
         .filter_map(|e| census.unreachable(e.name.as_deref(), e.started_at))
         .map(|(rec, reason)| finding(&rec, &reason, census.now))
         .collect()
+}
+
+/// `aida doctor check advisor-handshake`: the problem findings of
+/// [`doctor_scan`] plus what they were judged from, so the check never
+/// comes back empty while an agent's notice says the advisor is missing:
+/// the registered advisors, the advisor seat grants (live but unregistered
+/// evidence), and each recent hello's state.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn doctor_report(project_root: &Path) -> Vec<DoctorFinding> {
+    let census = Census::load(project_root);
+    let grants = crate::gate::seat_authority::held_grants(ADVISOR_ROLE, census.now);
+    let recent_turn = crate::mandate_drive::advisor_live(project_root, census.now);
+    let foreign = crate::gate::seat_authority::probes_from_foreign_namespace();
+    let mut out = report_findings(&census, &grants, recent_turn, foreign);
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out
+}
+
+/// [`doctor_report`] over an explicit census and grant set.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn report_findings(
+    census: &Census,
+    grants: &[crate::gate::seat_authority::HeldGrant],
+    recent_turn: bool,
+    foreign_namespace: bool,
+) -> Vec<DoctorFinding> {
+    let row = |id: &str, summary: String, action: String| DoctorFinding {
+        category: DOCTOR_CATEGORY.into(),
+        id: format!("{DOCTOR_CATEGORY}:{id}"),
+        summary,
+        action,
+        safe_heal: false,
+    };
+    let mut out = Vec::new();
+    let presence = presence_from(&census.live, grants, recent_turn);
+    let registered: Vec<String> = live_advisors(&census.live)
+        .iter()
+        .map(|e| format!("{} ({})", crate::mail_backlog::handle(e), e.id))
+        .collect();
+    out.push(if registered.is_empty() {
+        row(
+            "registered-advisors",
+            "registered advisors: none (no advisor row for a running process in .aida/agents)".into(),
+            "A live advisor registers itself on its next prompt. If one is running, have it submit a prompt, then re-run this check.".into(),
+        )
+    } else {
+        row(
+            "registered-advisors",
+            format!("registered advisors: {}", registered.join(", ")),
+            "None needed.".into(),
+        )
+    });
+    if registered.is_empty() {
+        for g in grants {
+            let prefix: String = g.id.chars().take(8).collect();
+            let holders = if g.holders.is_empty() {
+                "bound to no process".to_string()
+            } else {
+                g.holders
+                    .iter()
+                    .map(|(pid, alive)| match (alive, foreign_namespace) {
+                        (true, _) => format!("pid {pid} live"),
+                        (false, true) => {
+                            format!("pid {pid} not observable from this sandbox")
+                        }
+                        (false, false) => format!("pid {pid} not running"),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            out.push(row(
+                &format!("grant:{prefix}"),
+                format!(
+                    "advisor seat grant {prefix} (expires {}): {holders}",
+                    g.expires_at.format("%Y-%m-%dT%H:%MZ")
+                ),
+                "A live holder is an advisor with no registry row; its next prompt registers it."
+                    .into(),
+            ));
+        }
+        if let AdvisorPresence::Unregistered(evidence) = &presence {
+            out.push(row(
+                "unregistered-advisor",
+                format!("an advisor is live but unregistered: {evidence}"),
+                "Have the advisor submit a prompt (its per-prompt hook registers it), then re-run this check.".into(),
+            ));
+        } else if foreign_namespace && !grants.is_empty() {
+            out.push(row(
+                "unregistered-advisor",
+                "grant holders cannot be probed from this sandbox; run this check from a host terminal to see whether one is live".into(),
+                "Run `aida doctor check advisor-handshake` outside the sandbox.".into(),
+            ));
+        }
+    }
+    let problems: Vec<DoctorFinding> = census
+        .live
+        .iter()
+        .filter_map(|e| census.unreachable(e.name.as_deref(), e.started_at))
+        .map(|(rec, reason)| finding(&rec, &reason, census.now))
+        .collect();
+    let horizon = Duration::hours(ADVISOR_NOTICE_HORIZON_HOURS);
+    for rec in all_records(&census.roots)
+        .into_iter()
+        .filter(|r| census.now - r.sent_at < horizon)
+    {
+        let id = format!("{DOCTOR_CATEGORY}:{}", rec.handle);
+        if problems.iter().any(|p| p.id == id) {
+            continue;
+        }
+        let mut rec = rec;
+        if rec.acked_at.is_none() {
+            let root = PathBuf::from(&rec.path);
+            if let Some(ack) = find_ack(
+                &rec,
+                &ack_dirs(&root, &census.main, &census.store_root, &census.live),
+            ) {
+                rec.acked_at = Some(census.now);
+                rec.acked_by = Some(ack.from);
+            }
+        }
+        let what = match state(&rec, || presence.clone(), &census.policy, census.now) {
+            State::Acked { by } => format!("acked by {}", by.as_deref().unwrap_or("the advisor")),
+            State::Waiting => format!(
+                "waiting {} for the ack",
+                crate::mail_backlog::format_age(census.now - rec.sent_at)
+            ),
+            State::Unreachable(reason) => format!("unacked: {reason}"),
+        };
+        out.push(row(
+            &format!("hello:{}", rec.handle),
+            format!(
+                "hello from {} ({} · {}), sent {} ago: {what}",
+                handle_label(&rec.handle, rec.rotation.as_ref()),
+                rec.role,
+                rec.spec.as_deref().unwrap_or("no spec"),
+                crate::mail_backlog::format_age(census.now - rec.sent_at)
+            ),
+            format!("The hello is in {}.", rec.mailbox),
+        ));
+    }
+    out.extend(problems);
+    out
 }
 
 /// PURE: the doctor finding for an unacked hello.

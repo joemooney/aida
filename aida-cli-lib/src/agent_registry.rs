@@ -704,42 +704,55 @@ pub(crate) fn touch_mcp_agent(
         .map(|(path, _)| path.clone())
         .unwrap_or_else(|| registry_path(project_root, &id));
 
-    let mut entry = existing_launcher
-        .map(|(_, entry)| entry)
-        .or_else(|| {
-            std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
-        })
-        .unwrap_or_else(|| AgentRegistryEntry {
-            id: id.clone(),
-            agent_type: agent_type.clone(),
-            pid,
-            pid_start: crate::process_probe::process_start_identity(pid),
-            pid_namespace: current_pid_namespace(),
-            name: None,
-            description: None,
-            tty: current_tty(),
-            terminal: current_terminal_identity(),
-            started_at: now,
-            last_active_at: now,
-            role: None,
-            current_spec: None,
-            worktree_path: project_root.to_path_buf(),
-            source: "mcp".to_string(),
-            binary_version: None,
-            build_sha: None,
-            availability: Availability::Available,
-            paused_since: None,
-            paused_reason: None,
-            expected_back: None,
-            native_session_id: None,
-            claude_session_id: None,
-            ended_at: None,
-            spec_status_at_end: None,
-            mail_wake: None,
-            resumed_from: None,
-        });
+    // A row a recycled pid left belongs to a dead process: retire it, never
+    // inherit its identity. trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+    let current_start = crate::process_probe::process_start_identity(pid);
+    let own_row = match existing_launcher {
+        Some((_, entry)) => Some(entry),
+        None => match std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        {
+            Some(old)
+                if old.pid_start.is_some()
+                    && current_start.is_some()
+                    && old.pid_start != current_start =>
+            {
+                retire_displaced_entry(project_root, &old)?;
+                None
+            }
+            other => other,
+        },
+    };
+    let mut entry = own_row.unwrap_or_else(|| AgentRegistryEntry {
+        id: id.clone(),
+        agent_type: agent_type.clone(),
+        pid,
+        pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
+        name: None,
+        description: None,
+        tty: current_tty(),
+        terminal: current_terminal_identity(),
+        started_at: now,
+        last_active_at: now,
+        role: None,
+        current_spec: None,
+        worktree_path: project_root.to_path_buf(),
+        source: "mcp".to_string(),
+        binary_version: None,
+        build_sha: None,
+        availability: Availability::Available,
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
+        ended_at: None,
+        spec_status_at_end: None,
+        mail_wake: None,
+        resumed_from: None,
+    });
 
     if entry.source != "agent-launcher" {
         entry.id = id;
@@ -819,10 +832,22 @@ pub(crate) fn touch_session_start_agent(
     session_id: Option<&str>,
     binary: &AgentBinaryIdentity,
 ) -> Result<AgentRegistryEntry> {
-    let now = Utc::now();
     let hook_pid = std::process::id();
+    let pid = session_start_agent_pid(hook_pid, &detect_agent_type()).unwrap_or(hook_pid);
+    touch_session_start_agent_for(project_root, worktree_root, session_id, binary, pid)
+}
+
+/// [`touch_session_start_agent`] for the agent process `pid`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+fn touch_session_start_agent_for(
+    project_root: &Path,
+    worktree_root: &Path,
+    session_id: Option<&str>,
+    binary: &AgentBinaryIdentity,
+    pid: u32,
+) -> Result<AgentRegistryEntry> {
+    let now = Utc::now();
     let agent_type = detect_agent_type();
-    let pid = session_start_agent_pid(hook_pid, &agent_type).unwrap_or(hook_pid);
     let id = agent_id(&agent_type, pid);
     let path = registry_path(project_root, &id);
     let session_id = session_id.filter(|s| !s.trim().is_empty());
@@ -843,22 +868,23 @@ pub(crate) fn touch_session_start_agent(
     let read_row = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
+    // A recycled pid's entry belongs to another process: keep it only
+    // while its recorded start identity is this process's. A live
+    // process that starts a new session (`/clear`, a new conversation)
+    // keeps its launcher entry. Without a recorded start, fall back to
+    // the session id. trace:TASK-1955 | ai:claude (BUG-2167)
+    let same_process =
+        |old: &AgentRegistryEntry| match (old.pid_start.as_deref(), current_start.as_deref()) {
+            (Some(recorded), Some(current)) => recorded == current,
+            _ => match (session_id, old.claude_session_id.as_deref()) {
+                (Some(new), Some(old)) => new == old,
+                _ => true,
+            },
+        };
+    let displaced = read_row.as_ref().filter(|old| !same_process(old)).cloned();
     let mut entry = read_row
         .clone()
-        // A recycled pid's entry belongs to another process: keep it only
-        // while its recorded start identity is this process's. A live
-        // process that starts a new session (`/clear`, a new conversation)
-        // keeps its launcher entry. Without a recorded start, fall back to
-        // the session id. trace:TASK-1955 | ai:claude (BUG-2167)
-        .filter(
-            |old| match (old.pid_start.as_deref(), current_start.as_deref()) {
-                (Some(recorded), Some(current)) => recorded == current,
-                _ => match (session_id, old.claude_session_id.as_deref()) {
-                    (Some(new), Some(old)) => new == old,
-                    _ => true,
-                },
-            },
-        )
+        .filter(same_process)
         .unwrap_or_else(|| AgentRegistryEntry {
             id: id.clone(),
             agent_type: agent_type.clone(),
@@ -897,6 +923,10 @@ pub(crate) fn touch_session_start_agent(
     }
     entry.pid = pid;
     entry.last_active_at = now;
+    // A hook runs inside this session, so it is live whatever an earlier
+    // gc concluded. trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+    entry.ended_at = None;
+    entry.spec_status_at_end = None;
     if let Some(lease) = &linked {
         // The launch's own name wins over the spare's env and over a name a
         // same-start entry already carried; a hook firing after the link has
@@ -936,8 +966,109 @@ pub(crate) fn touch_session_start_agent(
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
     carry_concurrent_launcher_write(&mut entry, read_row.as_ref(), disk.as_ref());
+    if let Some(old) = &displaced {
+        retire_displaced_entry(project_root, old)?;
+    }
     write_entry_locked(project_root, &entry)?;
     Ok(entry)
+}
+
+/// What [`heartbeat_session_agent`] did.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Heartbeat {
+    /// The session's own row was there; its `last_active_at` is now.
+    Refreshed,
+    /// The session had no row of its own (a missed SessionStart write, a
+    /// row removed or replaced since): it is registered again.
+    Reregistered,
+    /// No agent client is an ancestor of this hook, so there is no seat
+    /// process to record.
+    NoAgentProcess,
+}
+
+/// The per-prompt registry heartbeat: refresh this session's row, or
+/// register the session again when its row is missing, ended, or belongs to
+/// another process or session. SessionStart is the only other writer, and
+/// it fails open on a contended lock, so without this a seat that missed
+/// that one write stays unregistered (reported "no advisor") for its whole
+/// life, and every row's heartbeat stays at its start.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn heartbeat_session_agent(
+    project_root: &Path,
+    worktree_root: &Path,
+    session_id: Option<&str>,
+    binary: &AgentBinaryIdentity,
+) -> Result<Heartbeat> {
+    let Some(pid) = session_start_agent_pid(std::process::id(), &detect_agent_type()) else {
+        return Ok(Heartbeat::NoAgentProcess);
+    };
+    heartbeat_session_agent_for(project_root, worktree_root, session_id, binary, pid)
+}
+
+/// [`heartbeat_session_agent`] for the agent process `pid`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn heartbeat_session_agent_for(
+    project_root: &Path,
+    worktree_root: &Path,
+    session_id: Option<&str>,
+    binary: &AgentBinaryIdentity,
+    pid: u32,
+) -> Result<Heartbeat> {
+    let session_id = session_id.map(str::trim).filter(|s| !s.is_empty());
+    let path = registry_path(project_root, &agent_id(&detect_agent_type(), pid));
+    let current_start = crate::process_probe::process_start_identity(pid);
+    let own = |row: &AgentRegistryEntry| {
+        row.ended_at.is_none()
+            && row.pid == pid
+            && row.pid_start.is_some()
+            && row.pid_start == current_start
+            && match (session_id, row.claude_session_id.as_deref()) {
+                (Some(sid), Some(recorded)) => sid == recorded,
+                (Some(_), None) => false,
+                (None, _) => true,
+            }
+    };
+    let read = |path: &Path| {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+    };
+    if read(&path).is_some_and(|row| own(&row)) {
+        let lock = crate::agent_handle::lock_namespace(project_root)?;
+        // Re-read under the lock so a concurrent launcher or hook write is
+        // refreshed, not clobbered.
+        if let Some(mut row) = read(&path).filter(|row| own(row)) {
+            row.last_active_at = Utc::now();
+            write_entry_locked(project_root, &row)?;
+            return Ok(Heartbeat::Refreshed);
+        }
+        drop(lock);
+    }
+    touch_session_start_agent_for(project_root, worktree_root, session_id, binary, pid)?;
+    Ok(Heartbeat::Reregistered)
+}
+
+/// Keep the row an earlier, now-dead process left at a recycled pid's path
+/// before a new process's row replaces it: it moves to `retired/` under a
+/// name and id unique to that process's start, ended at its last heartbeat.
+/// A row name is per pid, so without this a reused pid erases the earlier
+/// session's history.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+fn retire_displaced_entry(project_root: &Path, old: &AgentRegistryEntry) -> Result<()> {
+    let mut row = old.clone();
+    row.id = format!("{}-{}", old.id, old.started_at.format("%Y%m%dT%H%M%S%.3fZ"));
+    if row.ended_at.is_none() {
+        row.ended_at = Some(old.last_active_at);
+        crate::mail_wake::retire(&mut row);
+    }
+    let dir = agents_dir(project_root).join("retired");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating agent registry dir {}", dir.display()))?;
+    let path = dir.join(format!("{}.toml", row.id));
+    let body = toml::to_string_pretty(&row).context("serialising agent registry entry")?;
+    aida_core::write_atomic(&path, body.as_bytes())
+        .with_context(|| format!("writing agent registry entry {}", path.display()))
 }
 
 /// BUG-2167: after `aida agent new --bg` links its lease to the Claude
@@ -1039,11 +1170,18 @@ pub(crate) fn register_spawned_agent(
     // session id (the Codex thread) and the handle it recorded for this same
     // process. Read under the lock this write holds, so no hook write lands
     // in between. trace:STORY-HOME-096 | ai:claude
-    let hook_row =
+    let disk_row =
         std::fs::read_to_string(registry_path(project_root, &agent_id(&agent_type, pid)))
             .ok()
-            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
-            .filter(|old| old.pid_start.is_some() && old.pid_start == pid_start);
+            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok());
+    let (hook_row, displaced) = match disk_row {
+        Some(old) if old.pid_start.is_some() && old.pid_start == pid_start => (Some(old), None),
+        other => (None, other),
+    };
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+    if let Some(old) = &displaced {
+        retire_displaced_entry(project_root, old)?;
+    }
     let hook_session_id = hook_row
         .as_ref()
         .and_then(|old| old.claude_session_id.clone());
@@ -5005,3 +5143,7 @@ source = "mcp"
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_b6b_151_registry_heartbeat_tests.rs"]
+mod bug_151_heartbeat_tests;

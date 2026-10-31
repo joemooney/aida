@@ -269,7 +269,7 @@ fn the_hook_reports_queued_then_unreachable_then_the_ack() {
     assert!(
         start
             .iter()
-            .any(|l| l.contains("no live advisor; hello queued")),
+            .any(|l| l.contains("no registered advisor; hello queued")),
         "{start:?}"
     );
     // Inside the window the hook stays quiet.
@@ -282,7 +282,7 @@ fn the_hook_reports_queued_then_unreachable_then_the_ack() {
     let overdue = run_hook(None);
     assert_eq!(overdue.len(), 1, "{overdue:?}");
     assert!(
-        overdue[0].starts_with("advisor unreachable: no live advisor"),
+        overdue[0].starts_with("advisor unreachable: no registered advisor"),
         "{overdue:?}"
     );
     let census = crate::advisor_handshake::Census::new(
@@ -368,7 +368,7 @@ fn an_unverified_clone_hello_stays_local_and_names_that_path() {
     );
     let reason = crate::advisor_handshake::unreachable_reason(
         &rec,
-        true,
+        &crate::advisor_handshake::AdvisorPresence::Registered,
         &crate::advisor_handshake::Policy::default(),
     );
     assert!(reason.contains("seat clone's local mailbox"), "{reason}");
