@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1940c-ac35-7141-a10d-2b7f2483e8aa",
+  "thread_id": "deputy-01a1940c-ac35-7141-a10d-2b7f2483e8aa",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793485227498,
+  "body": "Deputy \"default\" finished job 01a1940c-ac35-7141-a10d-2b7f2483e8aa: rc 0 (ok).\nCommand: aida add --type task --priority medium --status draft --tags docs,website,authority --title Publish an explainer of roles, seats, grants, mandates and the deputy on the product website --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/task-site-authority.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1940c-ac35-7141-a10d-2b7f2483e8aa.out\nRead it with `aida deputy log 01a1940c-ac35-7141-a10d-2b7f2483e8aa`.\n",
+  "subject": "deputy job 01a1940c done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
