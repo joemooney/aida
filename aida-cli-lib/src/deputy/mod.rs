@@ -101,9 +101,20 @@ pub(crate) struct Requester {
     pub pid: u32,
     /// The mail identity the submitter sends as, recorded at submit so the
     /// deputy can mail it the result. Absent on jobs from older submits.
+    ///
+    /// Submitter-controlled like the rest of this struct: a submitter can
+    /// point the result mail at any recipient (operator, advisor). The mail
+    /// is genuinely from the deputy, but its body (the command summary, rc,
+    /// output path) only reports what the job record said and what the job
+    /// did; a recipient must not read it as an endorsement of the request.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mail_to: Option<String>,
+    /// Any field this deputy does not know. Kept (not dropped) so the claim
+    /// hook can refuse it: an unknown field may be a slice-3 capability or
+    /// policy this deputy cannot honour ([`hooks::unknown_fields`]).
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -147,6 +158,12 @@ pub(crate) struct JobRecord {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegation: Option<serde_json::Value>,
+    /// Every top-level field outside the ones above. The fields above are the
+    /// allow-list: anything else (`capability`, `grant`, a tty policy, …) is
+    /// refused at claim ([`hooks::unknown_fields`]), never silently dropped.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// A finished job's result.

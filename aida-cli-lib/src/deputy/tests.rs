@@ -30,6 +30,7 @@ fn job(body: JobBody, serial: Option<&str>, timeout_secs: u64) -> JobRecord {
         sha256: body.digest(),
         body,
         delegation: None,
+        extra: Default::default(),
     }
 }
 
@@ -1355,6 +1356,20 @@ mod worker_fixtures {
                 .unwrap()
         }
 
+        use crate::deputy_cmd::HumanTerminal;
+
+        /// A person at their own terminal: every TTY, no agent, no drain.
+        fn human() -> HumanTerminal {
+            HumanTerminal {
+                ttys: [true; 3],
+                agent: false,
+                headless: false,
+                in_deputy_job: false,
+                via_wrapper: true,
+                wrapper_marker: None,
+            }
+        }
+
         fn job_for(body: JobBody, session: &str) -> JobRecord {
             let mut j = job(body, None, 30);
             j.requester = requester(session);
@@ -1384,6 +1399,7 @@ mod worker_fixtures {
 
         // AC1: failed jobs are listed (id, requester session, rc, log path)
         // until acknowledged; a session sees only its own.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac85effd | ai:claude
         #[test]
         fn failed_jobs_list_until_acknowledged() {
             let dir = tempfile::tempdir().unwrap();
@@ -1430,7 +1446,51 @@ mod worker_fixtures {
             assert!(unacked_failed_jobs(dir.path(), None).is_empty());
         }
 
+        // AC1: inside a session, an explicit id another session submitted
+        // is not acknowledged; the operator's shell (no session) can.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac85effd | ai:claude
+        #[test]
+        fn a_session_cannot_ack_another_sessions_failure() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            let b = job_for(sh("exit 4"), "sess-b");
+            spool.submit(&b).unwrap();
+            run(&spool, &cfg(1));
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", &b.id]) else {
+                panic!("not an ack")
+            };
+            let mut buf = Vec::new();
+            let err = deputy_cmd::ack(dir.path(), &args, Some("sess-a"), &mut buf).unwrap_err();
+            assert!(err.to_string().contains("another session"), "{err}");
+            assert!(
+                String::from_utf8(buf)
+                    .unwrap()
+                    .contains("submitted by sess-b"),
+                "the refusal names the owner"
+            );
+            assert_eq!(
+                unacked_failed_jobs(dir.path(), None).len(),
+                1,
+                "still listed"
+            );
+            assert_eq!(unacked_failed_jobs(dir.path(), Some("sess-b")).len(), 1);
+
+            deputy_cmd::ack(dir.path(), &args, Some("sess-b"), &mut Vec::new()).unwrap();
+            assert!(unacked_failed_jobs(dir.path(), None).is_empty());
+
+            // The operator's shell may acknowledge anyone's.
+            let c = job_for(sh("exit 5"), "sess-c");
+            spool.submit(&c).unwrap();
+            run(&spool, &cfg(1));
+            let DeputyCommand::Ack(args) = parse(&["ack", "--name", "test", &c.id]) else {
+                panic!("not an ack")
+            };
+            deputy_cmd::ack(dir.path(), &args, None, &mut Vec::new()).unwrap();
+            assert!(unacked_failed_jobs(dir.path(), None).is_empty());
+        }
+
         // AC1: the awaiting report renders the channel in every view.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac85effd | ai:claude
         #[test]
         fn awaiting_lists_a_failed_deputy_job() {
             let report = crate::awaiting_you::AwaitingReport {
@@ -1468,6 +1528,7 @@ mod worker_fixtures {
         }
 
         // AC2: every finished job mails its requester rc and log path.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac12a1ab | ai:claude
         #[test]
         fn a_finished_job_mails_its_requester() {
             let dir = tempfile::tempdir().unwrap();
@@ -1510,6 +1571,7 @@ mod worker_fixtures {
         }
 
         // AC3: a paused deputy claims nothing; the running job finishes.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acd360f8 | ai:claude
         #[test]
         fn a_paused_deputy_claims_nothing_and_running_jobs_finish() {
             let dir = tempfile::tempdir().unwrap();
@@ -1553,6 +1615,73 @@ mod worker_fixtures {
             assert!(ledger_has(&spool, "resumed", ""));
         }
 
+        // AC3: resume hands claim authority back, so without a human
+        // terminal (a non-TTY or contained caller) it refuses and the pause
+        // marker stays.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acd360f8 | ai:claude
+        #[test]
+        fn resume_refuses_without_a_human_terminal_and_stays_paused() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            deputy_cmd::pause(&spool, &mut Vec::new()).unwrap();
+            for ctx in [
+                HumanTerminal {
+                    ttys: [false; 3],
+                    ..human()
+                },
+                HumanTerminal {
+                    agent: true,
+                    ..human()
+                },
+                HumanTerminal {
+                    headless: true,
+                    ..human()
+                },
+            ] {
+                let refusal = ctx.refusal(false);
+                assert!(refusal.is_some(), "{ctx:?} should be refused");
+                let mut buf = Vec::new();
+                let err = deputy_cmd::resume_checked(&spool, refusal, &mut buf).unwrap_err();
+                assert!(err.to_string().contains("resume refuses"), "{err}");
+                assert!(buf.is_empty());
+                assert!(spool.paused().is_some(), "the pause marker was removed");
+            }
+            let mut buf = Vec::new();
+            deputy_cmd::resume_checked(&spool, human().refusal(false), &mut buf).unwrap();
+            assert!(String::from_utf8(buf).unwrap().contains("resumed"));
+            assert!(spool.paused().is_none());
+        }
+
+        // AC3/AC4: resuming a deputy whose grant expired while it was paused
+        // gives it nothing to claim under: it stops instead.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acd360f8 | ai:claude
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn a_resumed_deputy_whose_grant_expired_claims_nothing() {
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+            deputy_cmd::pause(&spool, &mut Vec::new()).unwrap();
+            let a = job(sh("true"), None, 30);
+            spool.submit(&a).unwrap();
+            let mut c = cfg(0);
+            c.max_jobs = None;
+            let expires = Utc::now() + CDuration::milliseconds(600);
+            c.grant = Arc::new(move || GrantState::Valid {
+                expires_at: Some(expires),
+            });
+            let s = spool.clone();
+            let worker = std::thread::spawn(move || run(&s, &c));
+            wait_until("grant expiry", || Utc::now() > expires);
+            deputy_cmd::resume(&spool, &mut Vec::new()).unwrap();
+            wait_until("deputy exit", || worker.is_finished());
+            worker.join().unwrap();
+            assert!(
+                spool.job_path("incoming", &a.id).exists(),
+                "a resumed deputy claimed under an expired grant"
+            );
+            assert!(ledger_has(&spool, "stopped", "grant expired"));
+        }
+
         // A pause marker that cannot be parsed still pauses (fails closed).
         #[test]
         fn an_unreadable_pause_marker_still_pauses() {
@@ -1564,8 +1693,82 @@ mod worker_fixtures {
             assert!(spool.paused().is_none());
         }
 
+        fn mandate(expires_in_ms: i64) -> crate::gate::mandate::Mandate {
+            let now = Utc::now();
+            serde_json::from_value(serde_json::json!({
+                "id": "m-test",
+                "principal": "joe",
+                "seat": "mandate",
+                "scope": "ship-held",
+                "issued_at": now,
+                "expires_at": now + CDuration::milliseconds(expires_in_ms),
+            }))
+            .unwrap()
+        }
+
+        // AC4: the real mandate tie-in, over an injected mandate reader.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
+        #[test]
+        fn mandate_probe_stops_at_expiry_or_stop_unless_kept() {
+            use crate::deputy_cmd::mandate_probe_with;
+            use crate::gate::mandate::MandateState;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+
+            // No mandate at start: never stops for one.
+            let p = mandate_probe_with(false, Utc::now(), Arc::new(|| MandateState::None));
+            assert_eq!(p(), None);
+
+            // --keep-after-mandate: never stops for the mandate, even past
+            // its expiry.
+            let p = mandate_probe_with(
+                true,
+                Utc::now(),
+                Arc::new(|| MandateState::Active(mandate(100))),
+            );
+            assert_eq!(p(), None);
+            std::thread::sleep(Duration::from_millis(150));
+            assert_eq!(p(), None);
+
+            // Active at start, expiring: stops once the clock passes it,
+            // without re-reading the records.
+            let p = mandate_probe_with(
+                false,
+                Utc::now(),
+                Arc::new({
+                    let m = mandate(300);
+                    move || MandateState::Active(m.clone())
+                }),
+            );
+            assert_eq!(p(), None);
+            std::thread::sleep(Duration::from_millis(400));
+            let why = p().expect("an expired mandate stops the deputy");
+            assert!(why.contains("mandate expired"), "{why}");
+
+            // Active at start, then stopped: the next read reports it.
+            let reads = Arc::new(AtomicUsize::new(0));
+            let r2 = Arc::clone(&reads);
+            let m = mandate(60_000);
+            let p = mandate_probe_with(
+                false,
+                Utc::now(),
+                Arc::new(move || {
+                    if r2.fetch_add(1, Ordering::SeqCst) == 0 {
+                        MandateState::Active(m.clone())
+                    } else {
+                        MandateState::Stopped(m.clone())
+                    }
+                }),
+            );
+            let why = p().expect("a stopped mandate stops the deputy");
+            assert!(why.contains("was stopped"), "{why}");
+            // Cached: the next call within 10s does not re-read.
+            assert!(p().is_some());
+            assert_eq!(reads.load(Ordering::SeqCst), 2);
+        }
+
         // AC4: a short-TTL grant: the running job finishes, nothing more is
         // claimed, and the deputy exits by itself with a `stopped` row.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
         #[test]
         fn a_short_ttl_grant_stops_the_deputy() {
             let dir = tempfile::tempdir().unwrap();
@@ -1600,6 +1803,7 @@ mod worker_fixtures {
         }
 
         // AC4: an invalid grant also ends the run (slice 1 idled instead).
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
         #[test]
         fn an_invalid_grant_exits_without_claiming() {
             let dir = tempfile::tempdir().unwrap();
@@ -1615,6 +1819,7 @@ mod worker_fixtures {
         }
 
         // AC4: the mandate's end stops claiming the same way.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.ac65c866 | ai:claude
         #[test]
         fn a_mandate_end_stops_the_deputy() {
             let dir = tempfile::tempdir().unwrap();
@@ -1644,7 +1849,62 @@ mod worker_fixtures {
             assert!(ledger_has(&spool, "stopped", "mandate expired"));
         }
 
+        // AC5: any field outside the allow-list (top level or requester) is
+        // refused, never dropped: a capability under an unknown name fails
+        // closed, both at the hook and through the worker.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acdce2cd | ai:claude
+        #[test]
+        fn unknown_job_fields_are_refused_not_dropped() {
+            use crate::deputy::hooks::{self, HookVerdict};
+            let dir = tempfile::tempdir().unwrap();
+            let spool = spool_in(&dir);
+
+            // Round-trips through the on-disk form, so the parser keeps it.
+            let mut j = job(sh("true"), None, 30);
+            j.extra
+                .insert("capability".into(), serde_json::json!({"token": "x"}));
+            let back: JobRecord = serde_json::from_slice(&serde_json::to_vec(&j).unwrap()).unwrap();
+            assert_eq!(hooks::unknown_field_names(&back), vec!["capability"]);
+            assert!(
+                matches!(hooks::check(&spool, &back), HookVerdict::Refuse(r) if r.starts_with("refused:unknown-field capability"))
+            );
+            let mut r = job(sh("true"), None, 30);
+            r.requester
+                .extra
+                .insert("tty_policy".into(), serde_json::json!("allow"));
+            assert!(
+                matches!(hooks::unknown_fields(&r), HookVerdict::Refuse(why) if why.contains("requester.tty_policy"))
+            );
+            assert_eq!(
+                hooks::unknown_fields(&job(sh("true"), None, 30)),
+                HookVerdict::Pass
+            );
+
+            let mut top = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-top\""), None, 30);
+            top.extra.insert("grant".into(), serde_json::json!("abc"));
+            let mut nested = job(sh("touch \"$AIDA_DEPUTY_SPOOL/ran-nested\""), None, 30);
+            nested
+                .requester
+                .extra
+                .insert("capability".into(), serde_json::json!("abc"));
+            spool.submit(&top).unwrap();
+            spool.submit(&nested).unwrap();
+            run(&spool, &cfg(2));
+            for (j, field) in [(&top, "grant"), (&nested, "requester.capability")] {
+                let res = spool.read_result(&j.id).unwrap();
+                assert!(
+                    res.reason
+                        .starts_with(&format!("refused:unknown-field {field}")),
+                    "{}",
+                    res.reason
+                );
+            }
+            assert!(!spool.root.join("ran-top").exists());
+            assert!(!spool.root.join("ran-nested").exists());
+        }
+
         // AC5: the slice-3 hooks refuse what they cannot judge.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acdce2cd | ai:claude
         #[test]
         fn slice3_hooks_refuse_instead_of_failing_open() {
             use crate::deputy::hooks::{self, HookVerdict};
@@ -1663,6 +1923,7 @@ mod worker_fixtures {
             );
         }
 
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155.acdce2cd | ai:claude
         #[test]
         fn the_worker_refuses_delegated_jobs_command_policies_and_unknown_policy_rules() {
             use std::os::unix::fs::PermissionsExt;

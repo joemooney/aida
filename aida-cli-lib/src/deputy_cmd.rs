@@ -119,12 +119,11 @@ fn run_deputy(
         Some(DeputyCommand::Deny(a)) => deny(&a),
         Some(DeputyCommand::Policy(a)) => show_policy(&deputy::current_spool(&a.name)?),
         Some(DeputyCommand::Pause(a)) => pause(&deputy::current_spool(&a.name)?, &mut out),
-        Some(DeputyCommand::Resume(a)) => {
-            if let Some(why) = ambient_refusal(false) {
-                bail!("aida deputy resume refuses: {why}");
-            }
-            resume(&deputy::current_spool(&a.name)?, &mut out)
-        }
+        Some(DeputyCommand::Resume(a)) => resume_checked(
+            &deputy::current_spool(&a.name)?,
+            ambient_refusal(false),
+            &mut out,
+        ),
         Some(DeputyCommand::Ack(a)) => {
             let main = crate::worktree_gc::find_main_worktree_root()
                 .context("aida deputy needs a git checkout")?;
@@ -276,7 +275,26 @@ fn mandate_probe(
     keep_after_mandate: bool,
     now: chrono::DateTime<Utc>,
 ) -> deputy::worker::MandateProbe {
-    use crate::gate::mandate::{current_state, MandateState};
+    mandate_probe_with(
+        keep_after_mandate,
+        now,
+        std::sync::Arc::new(crate::gate::mandate::current_state),
+    )
+}
+
+/// What [`mandate_probe`] reads the mandate records with; a test injects one.
+pub(crate) type MandateStateFn =
+    std::sync::Arc<dyn Fn() -> crate::gate::mandate::MandateState + Send + Sync>;
+
+/// [`mandate_probe`] over an injected mandate reader.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+#[cfg(unix)]
+pub(crate) fn mandate_probe_with(
+    keep_after_mandate: bool,
+    now: chrono::DateTime<Utc>,
+    current_state: MandateStateFn,
+) -> deputy::worker::MandateProbe {
+    use crate::gate::mandate::MandateState;
     use std::sync::{Arc, Mutex};
     let MandateState::Active(m) = current_state() else {
         eprintln!("  mandate: none active; the deputy runs until your grant ends or Ctrl-C");
@@ -328,6 +346,21 @@ pub(crate) fn pause(spool: &Spool, out: &mut dyn Write) -> Result<()> {
     Ok(())
 }
 
+/// `aida deputy resume` as dispatched: resuming hands claim authority back,
+/// so it refuses (leaving the pause marker in place) unless `refusal` (the
+/// human-terminal check) is `None`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn resume_checked(
+    spool: &Spool,
+    refusal: Option<String>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    if let Some(why) = refusal {
+        bail!("aida deputy resume refuses: {why}");
+    }
+    resume(spool, out)
+}
+
 /// `aida deputy resume`: the caller checked for a human terminal.
 pub(crate) fn resume(spool: &Spool, out: &mut dyn Write) -> Result<()> {
     if spool.resume()? {
@@ -339,7 +372,10 @@ pub(crate) fn resume(spool: &Spool, out: &mut dyn Write) -> Result<()> {
 }
 
 /// `aida deputy ack`: acknowledge failed jobs. `--all` takes every failed
-/// job `session` submitted (every one when there is no session).
+/// job `session` submitted (every one when there is no session). Inside a
+/// session, an explicit id another session submitted is refused, so one
+/// session cannot silence another's failure (or the operator's view of it);
+/// the operator's own shell (no session) may acknowledge any.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
 pub(crate) fn ack(
     main: &std::path::Path,
@@ -357,9 +393,25 @@ pub(crate) fn ack(
     } else {
         a.ids.clone()
     };
+    let mut refused = 0usize;
     for id in &ids {
         match spool.locate(id)? {
             Some(("failed", _)) => {
+                if let Some(me) = session {
+                    let owner = std::fs::read(spool.job_path("failed", id))
+                        .ok()
+                        .and_then(|b| serde_json::from_slice::<JobRecord>(&b).ok())
+                        .and_then(|r| r.requester.session_id);
+                    if owner.as_deref() != Some(me) {
+                        writeln!(
+                            out,
+                            "job {id}: submitted by {}, not this session; not acknowledged (the operator's shell can)",
+                            owner.as_deref().unwrap_or("an unknown session")
+                        )?;
+                        refused += 1;
+                        continue;
+                    }
+                }
                 spool.acknowledge(id)?;
                 writeln!(out, "job {id}: acknowledged")?;
             }
@@ -371,6 +423,9 @@ pub(crate) fn ack(
     }
     if ids.is_empty() {
         writeln!(out, "no failed jobs to acknowledge")?;
+    }
+    if refused > 0 {
+        bail!("{refused} job(s) belong to another session and were not acknowledged");
     }
     Ok(())
 }
@@ -436,6 +491,7 @@ pub(crate) fn submit(
         sha256: body.digest(),
         body,
         delegation: None,
+        extra: Default::default(),
     };
     spool.submit(&rec)?;
     writeln!(out, "{}", rec.id)?;
