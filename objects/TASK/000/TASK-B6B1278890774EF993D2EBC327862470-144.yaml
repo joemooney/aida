@@ -15,12 +15,12 @@ description: |
   - No dead child issuer remains in seat_authority.rs.
   - `aida criteria BUG-HOME-045` reports no untraced criteria.
   Gate: LIGHT (one targeted cargo test + make check-ci-fast).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T10:44:30.542167402Z
-modified_at: 2026-10-31T13:03:32.934147693Z
+modified_at: 2026-10-31T13:06:27.407902059Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-045
@@ -120,6 +120,20 @@ history:
   author: joe
   timestamp: 2026-10-31T12:49:53.654267564Z
   changes: []
+- id: 01a19211-91c9-7681-bf3d-27e1003bfe77
+  author: aida-auto-bump
+  timestamp: 2026-10-31T13:06:27.401686790Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a19211-91cf-77f1-9d88-6fd040294310
+  timestamp: 2026-10-31T13:06:27.407897586Z
+  agent: aida
+  commit_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
+  summary: 'All 4 TASK-144 ACs met: contained headless children of every queue/burndown/phase-driver seat route through issue_launch_child (refuse before spawn), quota exhaustion is a ChildGrantRefused that releases the review lease, issue_sandboxed_child deleted with ratchet, aida criteria BUG-HOME-045 reports no untested criteria; CI green at da58a6c.'
+  review_verdict: approved
 filed_at:
   code_sha: 273549a2d9d738b1846028776855309da26a2ef7
   branch: main
@@ -132,3 +146,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T12:46:43.887000656Z
   implemented_by: joe
+  completed_at: 2026-10-31T13:06:27.401681854Z
+  completion_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
