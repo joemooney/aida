@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-31T08:16:37.767958023Z
+modified_at: 2026-10-31T08:29:14.803763016Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -101,6 +101,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-31T07:02:18.142276332Z
   modified_at: 2026-10-31T07:02:18.142276332Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19113-c6b3-71e3-b9dc-aa0640d5d1ee
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-31 01:32 on PR-3151 round 2 (FINAL; two-round cap). Ship when these three are fixed and CI is green. The advisor read the CI logs: (1) lib-1: advisor_handshake::tests::agent_ls_and_doctor_report_an_overdue_hello_and_its_mailbox panics at story_b6b_100_handshake_tests.rs:453 "not inside an AIDA project (no .aida/config.toml found from /tmp/...)": give the test an explicit isolated project root (test_env), never the process cwd. (2) cli-1: story_1843_pr3_claude_to_agy_next_turn fails: a parent-only startup (a session with no identity of its own) now prints "Advisor handshake: no live advisor; hello queued (.../mailbox)", which breaks the STORY-1843 invariant that such a session shows no mail line. Send and print the hello ONLY for sessions launched with their own handle (aida agent new and its seats), never for an inherited or parent-only startup. Do NOT reword the line to dodge the assertion; the 1843 test stays as is. (3) MCP read_inbox must ack hellos exactly like the CLI inbox does; add a test. Gate: LIGHT (cargo test -p aida-cli-lib with the handshake filter, plus the story_1843_pr3 binary, plus make check-ci-fast).
+  created_at: 2026-10-31T08:29:14.803763016Z
+  modified_at: 2026-10-31T08:29:14.803763016Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18ae6-1e13-7781-8ad3-aa7c7eaef9ba
