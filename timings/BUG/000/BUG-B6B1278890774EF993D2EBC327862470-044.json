@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-044",
+  "publishes": [
+    {
+      "at": "2026-10-31T08:13:22.141885492Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-31T00:25:25.593477761Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-044",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T00:31:54.455056747Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-044",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T05:57:37.197435820Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-044",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T05:58:50.748674982Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-044",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T07:00:54.534393886Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-044",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T07:01:38.709454223Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-044",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T07:58:01.373508474Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-044",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T08:12:49.023439023Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-044",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T08:13:02.699305615Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-044",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3155
+      }
+    },
+    {
+      "ts": "2026-10-31T08:13:21.970775651Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-044",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bfeb79ddeb6ac8e749d42939db523d44791a9e1c",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
