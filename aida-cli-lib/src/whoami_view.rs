@@ -84,7 +84,10 @@ pub(crate) struct MailLine {
 impl From<crate::awaiting_you::MailChannel> for MailLine {
     fn from(c: crate::awaiting_you::MailChannel) -> Self {
         Self {
-            unread: c.unread,
+            // Mail to the session's role is its direct mail, counted with
+            // its own rather than as shared noise.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+            unread: c.unread + c.role_unread,
             shared_unread: c.shared_unread,
             urgent: c.urgent,
             shared_scope: c.shared_scope,

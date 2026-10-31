@@ -514,3 +514,241 @@ fn notice_time_line_is_always_emitted_and_well_formed() {
     assert!(!presence::stamp_turn_clock(None, true, now).is_empty());
     assert!(!presence::stamp_turn_clock(None, false, now).is_empty());
 }
+
+/// One unread message with full control over sender, intent, subject and age.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+fn write_mail_full(
+    project_root: &std::path::Path,
+    id: &str,
+    from: &str,
+    to: &str,
+    intent: aida_core::mailbox::Intent,
+    subject: &str,
+    timestamp: i64,
+) {
+    let msg = full_mail(id, from, to, intent, subject, timestamp);
+    crate::mailbox_store::write_message(project_root, &msg).unwrap();
+}
+
+/// The message [`write_mail_full`] writes, for a test that tweaks it first.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+fn full_mail(
+    id: &str,
+    from: &str,
+    to: &str,
+    intent: aida_core::mailbox::Intent,
+    subject: &str,
+    timestamp: i64,
+) -> aida_core::mailbox::Message {
+    aida_core::mailbox::Message {
+        subject: Some(subject.to_string()),
+        id: id.to_string(),
+        thread_id: format!("t-{id}"),
+        from: from.to_string(),
+        to: aida_core::mailbox::Recipient::Agent(to.to_string()),
+        timestamp,
+        in_reply_to: None,
+        body: "body".to_string(),
+        urgent: false,
+        intent,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    }
+}
+
+/// A bound seat whose own facts carry role `advisor`, so the role is one of
+/// its verified audience keys rather than an inspected status-context role.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+fn verified_advisor_env() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_USER", Some("operator-under-test")),
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_SESSION_ID", None),
+    ])
+}
+
+// BUG-HOME-040 AC5: a role-addressed handoff from another vendor shows by
+// sender and subject in the next per-turn notice — not as "N shared mail" —
+// while weeks-old automated notices collapse to one line and an unanswered
+// request escalates as an awaiting item. The seat's facts carry the role, so
+// `advisor` is a VERIFIED audience key (the only path that names role mail).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-040.Test | ai:claude
+#[test]
+fn role_addressed_cross_vendor_handoff_shows_by_sender_and_subject_in_the_notice() {
+    use aida_core::mailbox::Intent;
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+    let now = chrono::Utc::now().timestamp();
+    write_mail_full(
+        dir.path(),
+        "m-handoff",
+        "codex-implementer-01",
+        "advisor",
+        Intent::Handoff,
+        "PR-3122 needs review routing",
+        now - 600,
+    );
+    write_mail_full(
+        dir.path(),
+        "m-request",
+        "codex-implementer-01",
+        "advisor",
+        Intent::Request,
+        "lease refusal: please re-route",
+        now - 2 * 3600,
+    );
+    for i in 0..5 {
+        write_mail_full(
+            dir.path(),
+            &format!("m-watch-{i}"),
+            "review-watch",
+            "advisor",
+            Intent::Fyi,
+            "review-watch: PR ready",
+            1_000 + i,
+        );
+    }
+
+    let _env = verified_advisor_env();
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = awaiting_report_bound(dir.path(), &backend, &ctx, "seat-handle");
+
+    assert_eq!(
+        report.mail.role.as_deref(),
+        Some("advisor"),
+        "the verified role key names the role channel"
+    );
+    assert_eq!(report.mail.shared_unread, 0, "role mail is not shared mail");
+    assert_eq!(
+        report.mail.role_unread, 2,
+        "old automated mail is not new mail"
+    );
+    assert_eq!(report.mail.stale_automated, 5);
+    let line = report.compact_line().expect("role mail wakes the notice");
+    assert!(line.contains("2 mail to advisor"), "{line}");
+    assert!(!line.contains("shared mail"), "{line}");
+    assert!(line.contains("1 overdue request"), "{line}");
+
+    let previews = report.mail_preview_lines();
+    assert_eq!(
+        previews.len(),
+        3,
+        "two previews + one stale summary: {previews:?}"
+    );
+    assert!(
+        previews[0].contains("[request] from codex-implementer-01")
+            && previews[0].contains("lease refusal: please re-route"),
+        "requests lead: {previews:?}"
+    );
+    assert!(
+        previews[1].contains("[handoff] from codex-implementer-01")
+            && previews[1].contains("PR-3122 needs review routing")
+            && previews[1].contains("m ago ·"),
+        "handoff named by sender, age and subject: {previews:?}"
+    );
+    assert!(
+        previews[2].contains("5 unread notices older than 7d from automated senders"),
+        "stale automated mail is one line: {previews:?}"
+    );
+
+    let mut out = Vec::new();
+    report.render(false, &mut out).unwrap();
+    let rendered = String::from_utf8(out).unwrap();
+    assert!(
+        rendered.contains("unanswered [request] from codex-implementer-01"),
+        "an overdue request is an awaiting item: {rendered}"
+    );
+}
+
+// TASK-1245 / STORY-1843 refusal: a role that only the status context names
+// (not a verified audience key) is not recipient authority. Its mail is
+// COUNTED, never projected — no sender, subject or overdue item reaches the
+// notice, the render or the JSON.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 trace:STORY-1843 | ai:claude
+#[test]
+fn inspected_only_role_mail_is_counted_but_never_named() {
+    use aida_core::mailbox::Intent;
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+    let now = chrono::Utc::now().timestamp();
+    write_mail_full(
+        dir.path(),
+        "m-inspected",
+        "codex-implementer-01",
+        "advisor",
+        Intent::Request,
+        "secret routing subject",
+        now - 2 * 3600,
+    );
+
+    let _env = awaiting_clean_env();
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = awaiting_report_bound(dir.path(), &backend, &ctx, "seat-handle");
+
+    assert_eq!(report.mail.shared_unread, 1, "the mail is counted");
+    assert_eq!(report.mail.shared_scope.as_deref(), Some("advisor"));
+    assert_eq!(report.mail.role_unread, 0, "not the seat's direct mail");
+    assert!(report.mail.role.is_none());
+    assert!(
+        report.mail.previews.is_empty(),
+        "{:?}",
+        report.mail.previews
+    );
+    assert!(report.mail.overdue_requests.is_empty());
+
+    let mut out = Vec::new();
+    report.render(false, &mut out).unwrap();
+    let surfaces = [
+        report.compact_line().unwrap_or_default(),
+        report.mail_preview_lines().join("\n"),
+        String::from_utf8(out).unwrap(),
+        report.to_json().to_string(),
+    ];
+    for text in surfaces {
+        assert!(
+            !text.contains("codex-implementer-01") && !text.contains("secret routing subject"),
+            "an inspected role's sender/subject leaked: {text}"
+        );
+    }
+}
+
+// Urgent mail to the seat's verified role is urgent direct mail: it counts in
+// `MailChannel.urgent` (and so the whoami urgent fold) and is flagged on the
+// role line, not the own-inbox line.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+#[test]
+fn urgent_role_mail_counts_as_urgent_direct_mail() {
+    use aida_core::mailbox::Intent;
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+    let now = chrono::Utc::now().timestamp();
+    let mut urgent = full_mail(
+        "m-urgent",
+        "codex-implementer-01",
+        "advisor",
+        Intent::Handoff,
+        "prod is red",
+        now - 60,
+    );
+    urgent.urgent = true;
+    crate::mailbox_store::write_message(dir.path(), &urgent).unwrap();
+
+    let _env = verified_advisor_env();
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = awaiting_report_bound(dir.path(), &backend, &ctx, "seat-handle");
+
+    assert_eq!(report.mail.role_unread, 1);
+    assert_eq!(report.mail.urgent, 1, "role mail is urgent direct mail");
+    assert_eq!(report.mail.role_urgent, 1);
+    let whoami = crate::whoami_view::MailLine::from(report.mail.clone());
+    assert_eq!(whoami.urgent, 1, "whoami folds urgent role mail");
+    assert_eq!(whoami.unread, 1);
+    let line = report.compact_line().unwrap();
+    assert!(line.contains("1 mail to advisor (1 urgent)"), "{line}");
+}
