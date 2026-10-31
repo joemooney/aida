@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T20:55:05.542400254Z
+modified_at: 2026-10-31T23:34:54.659153383Z
 req_type: Story
 tags:
 - architecture
@@ -162,6 +162,33 @@ comments:
   created_at: 2026-10-31T20:55:05.542400254Z
   modified_at: 2026-10-31T20:55:05.542400254Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a19450-efc3-7210-855b-ca5d53184182
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Implements the approved sketch within the 13:56 signoff scope (no `node hub add`, no root-granted child pool: STORY-170).
+
+    ### Acceptance criteria as tests
+    - **AC1 (unit + command-level):** `store_hubs` unit tests parse `[store.hubs]`, normalize ssh/https URL shapes of this repo (github.com/joemooney/aida, gitlab), and flag a mirror-and-hub remote; `story_164_single_hub` checks `aida node show` prints the mode line; doctor check for mirror-and-hub conflict.
+    - **AC2 (command-level):** two clones of one bare hub, no root: both claim, ranges are disjoint, `aida add` mints an agreed ID.
+    - **AC3 (command-level):** a claim committed locally but not on the hub ref is not spendable (`NotOnHub`), `aida add` falls back to node-local.
+    - **AC4 (unit + command-level):** two hubs declared, no root: claim refused naming `aida node enroll-root`; a held block still dispenses.
+    - **AC5 first half (unit + command-level):** `enroll-root --dry-run` writes nothing and lists the virtual pools; `enroll-root` materializes them with the same pool ids, earlier IDs still resolve.
+    - **AC6 (unit):** lineage/overlap checks still run over hub-stamped blocks.
+    - **AC7 (docs):** `docs/cli/10-storage.md` leads with single-hub.
+
+    ### Expected files
+    - `aida-core/src/store_hubs.rs` (new), `aida-core/src/allocation_authority.rs`, `aida-core/src/allocation_lineage.rs` (+ tests)
+    - `aida-cli-lib/src/db_block.rs`, `aida-cli-lib/src/node_cmd.rs`, doctor check module
+    - `aida-cli/tests/story_164_single_hub.rs`, `docs/cli/10-storage.md`
+
+    ### Ambiguities / conflicts as questions
+    - None beyond the signoff; scope is cut at AC4 refusal + AC5 materialization.
+  created_at: 2026-10-31T23:34:54.659153383Z
+  modified_at: 2026-10-31T23:34:54.659153383Z
+  session_id: 01a194506f98
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
