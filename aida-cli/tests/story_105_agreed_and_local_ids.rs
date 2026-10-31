@@ -1,9 +1,16 @@
-//! Candidate-binary coverage of STORY-HOME-105: a bound root clone writes the
-//! agreed ID from its block AND the local ID in one object; a clone with no
-//! usable block writes a local ID only and shows the agreed ID as pending; a
-//! clone whose local setting says root while the store records another root
-//! refuses before dispensing.
+//! Candidate-binary coverage of STORY-HOME-105, along the documented
+//! post-merge runbook with no hand-written blocks: a clone with no usable
+//! block writes a local ID only and shows the agreed ID as pending (show and
+//! the agent list); after `node enroll-root` a block claim is refused until
+//! the agreed-ID backfill has run; the backfill assigns agreed IDs, renames
+//! the legacy node's specs into the bound node and retires it, and claims
+//! the root's blocks above every backfilled number; `aida add` then writes
+//! the agreed ID from that block AND the local ID in one object; the merge
+//! gate gives another node's pending spec its agreed ID; and a clone whose
+//! local setting says root while the store records another root refuses
+//! before dispensing.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+mod support;
 #[path = "support/test_git.rs"]
 mod test_git;
 use std::{
@@ -173,19 +180,99 @@ fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
     assert_eq!(first.agreed_id, None);
     let shown = f.aida_ok(&["show", &local]);
     assert!(shown.contains("pending"), "{shown}");
+    // The agent list carries the pending marker in its local_id column.
+    let listed = f.aida_ok(&["list"]);
+    assert!(listed.contains("local_id"), "{listed}");
+    assert!(listed.contains("(agreed id pending)"), "{listed}");
 
-    // Enroll as root and hold a STORY block for this clone's bound node.
+    // Runbook step 0: enroll as root.
     f.aida_ok(&["node", "enroll-root"]);
-    let blocks = f.store.join("registry/blocks.yaml");
-    fs::write(
-        &blocks,
-        format!(
-            "blocks:\n- node_id: '{}'\n  owner: o\n  hostname: h\n  type_prefix: STORY\n  range_start: 5801\n  range_end: 5900\n  next: 5801\n  allocated_at: 2026-10-31T00:00:00Z\n",
-            binding.node_id
-        ),
-    )
-    .unwrap();
+    // The store's legacy node 7 is registered and still names a spec, and a
+    // flat STORY-40 raises the STORY floor.
+    let registry = f.store.join("registry");
+    fs::create_dir_all(&registry).unwrap();
+    let nodes_toml = registry.join("nodes.toml");
+    let mut nodes = fs::read_to_string(&nodes_toml).unwrap_or_default();
+    nodes.push_str(
+        "\n[[nodes]]\nid = \"7\"\nuser_id = 1\nhostname = \"\"\nregistered = \"2026-01-01T00:00:00Z\"\n",
+    );
+    fs::write(&nodes_toml, nodes).unwrap();
+    let objects = f.store.join("objects");
+    let mut legacy = aida_core::Requirement::new("legacy node spec".into(), "fixture".into());
+    legacy.spec_id = Some("STORY-7-001".into());
+    legacy.req_type = aida_core::RequirementType::Story;
+    aida_core::object_store::write_object(&objects, &legacy).unwrap();
+    let mut flat = aida_core::Requirement::new("flat spec".into(), "fixture".into());
+    flat.spec_id = Some("STORY-40".into());
+    flat.req_type = aida_core::RequirementType::Story;
+    aida_core::object_store::write_object(&objects, &flat).unwrap();
 
+    // A block claim before the backfill is refused, and writes nothing.
+    let blocks = registry.join("blocks.yaml");
+    let out = f.aida(&["db", "block", "claim", "--type", "STORY"]);
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!out.status.success(), "{said}");
+    assert!(said.contains("before the agreed-ID backfill"), "{said}");
+    assert!(!blocks.exists(), "the refused claim wrote no ledger");
+
+    // Runbook step 1: dry run lists both mappings and the claims.
+    let dry = f.aida_ok(&["doctor", "--fix", "agreed-ids", "--dry-run"]);
+    for needle in [
+        "Local ID -> agreed ID:",
+        "STORY-7-001",
+        "Node 7 local ID -> node",
+        "Node 7 is marked retired",
+        "Blocks claimed for node",
+        "STORY-43..142",
+        "dry run: nothing written",
+    ] {
+        assert!(dry.contains(needle), "{needle}: {dry}");
+    }
+    assert!(!blocks.exists(), "the dry run wrote no ledger");
+
+    // Runbook step 2: apply.
+    f.aida_ok(&["doctor", "--fix", "agreed-ids", "--yes"]);
+    let first = f.by_title("before root");
+    let moved = f.by_title("legacy node spec");
+    let mut agreed: Vec<String> = [&first, &moved]
+        .iter()
+        .map(|r| r.agreed_id.clone().unwrap())
+        .collect();
+    agreed.sort();
+    assert_eq!(agreed, vec!["STORY-41", "STORY-42"]);
+    assert_eq!(
+        first.spec_id.as_deref(),
+        Some(local.as_str()),
+        "local ID kept"
+    );
+    let moved_local = moved.spec_id.clone().unwrap();
+    assert!(
+        moved_local
+            .to_ascii_uppercase()
+            .starts_with(&format!("STORY-{node}-")),
+        "the legacy spec now has a bound-node local ID: {moved_local}"
+    );
+    assert_ne!(moved_local, local);
+    let nodes = fs::read_to_string(registry.join("nodes.toml")).unwrap();
+    assert!(nodes.contains("retired_at"), "{nodes}");
+    // Runbook step 3 happened inside the backfill: the root's own STORY
+    // block starts above every agreed and backfilled number.
+    let ledger = aida_core::BlockRegistry::load(&blocks).unwrap();
+    let own = ledger
+        .blocks
+        .iter()
+        .find(|b| b.node_id == binding.node_id && b.type_prefix == "STORY" && !b.is_exhausted())
+        .expect("the backfill claimed a STORY block for the bound node");
+    assert_eq!((own.range_start, own.range_end), (43, 142));
+    // A re-run is a no-op.
+    let again = f.aida_ok(&["doctor", "--fix", "agreed-ids", "--dry-run"]);
+    assert!(again.contains("nothing to backfill"), "{again}");
+
+    // Runbook step 4 (verify): `aida add` mints an agreed ID, not pending.
     let out = f.add("after root");
     assert!(
         out.status.success(),
@@ -194,21 +281,76 @@ fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let second = f.by_title("after root");
-    assert_eq!(second.agreed_id.as_deref(), Some("STORY-5801"), "{stdout}");
+    assert_eq!(second.agreed_id.as_deref(), Some("STORY-43"), "{stdout}");
     let local = second.spec_id.clone().unwrap();
     assert!(
         local.to_ascii_uppercase().contains(&node),
         "the local ID is the bound node's, never the store's legacy node 7: {local}"
     );
     assert!(
-        stdout.contains("STORY-5801 ("),
+        stdout.contains("STORY-43 ("),
         "agreed first, local beside: {stdout}"
     );
-    // Both IDs open the same spec.
-    for id in ["STORY-5801", local.as_str()] {
+    // Both IDs open the same spec, and the agreed ID of the moved spec too.
+    for (id, title) in [
+        ("STORY-43", "after root"),
+        (local.as_str(), "after root"),
+        (moved.agreed_id.as_deref().unwrap(), "legacy node spec"),
+        (moved_local.as_str(), "legacy node spec"),
+    ] {
         let shown = f.aida_ok(&["show", id]);
-        assert!(shown.contains("after root"), "{id}: {shown}");
+        assert!(shown.contains(title), "{id}: {shown}");
     }
+    // The agent list shows the local ID beside the agreed one.
+    let listed = f.aida_ok(&["list"]);
+    let row = listed
+        .lines()
+        .find(|l| l.contains("after root"))
+        .unwrap_or_else(|| panic!("{listed}"));
+    assert!(row.contains("STORY-43"), "{row}");
+    assert!(row.to_ascii_uppercase().contains(&node), "{row}");
+
+    // AC2: a sync reaching the block holder (merge-gate promotion) gives
+    // another node's pending local-only spec its agreed ID, above the
+    // root's own block, and keeps its local ID.
+    let other = format!("STORY-{}-001", "c".repeat(32));
+    let mut pending = aida_core::Requirement::new("other node spec".into(), "fixture".into());
+    pending.spec_id = Some(other.clone());
+    pending.req_type = aida_core::RequirementType::Story;
+    aida_core::object_store::write_object(&objects, &pending).unwrap();
+    let shown = f.aida_ok(&["show", &other]);
+    assert!(shown.contains("pending"), "{shown}");
+    // The merge gate is an advisor act: seat a grant the way `aida role
+    // enter advisor` would at a human TTY.
+    let grant = support::ensure_seat_for(&f.home, &f.root, "t105", "advisor", &[])
+        .expect("the project is initialized");
+    let out = f
+        .command(false, &["db", "merge-gate"])
+        .env("AIDA_USER", "t105")
+        .env("AIDA_SESSION_GRANT", &grant)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let gated = f.by_title("other node spec");
+    assert_eq!(
+        gated.spec_id.as_deref(),
+        Some(other.as_str()),
+        "local ID kept"
+    );
+    let gated_agreed = gated.agreed_id.clone().expect("merge gate assigned one");
+    let n: u32 = gated_agreed.rsplit('-').next().unwrap().parse().unwrap();
+    assert!(n > 142, "outside the root's own block: {gated_agreed}");
+    let shown = f.aida_ok(&["show", &other]);
+    assert!(
+        !shown.contains("agreed_id: pending") && !shown.contains("agreed id pending"),
+        "{shown}"
+    );
+    assert!(shown.contains(&gated_agreed), "{shown}");
 
     // The local setting says root but the store now records another node.
     fs::write(

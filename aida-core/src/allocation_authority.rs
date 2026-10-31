@@ -388,6 +388,21 @@ fn with_lineage_view<T>(
 /// block is spendable.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 pub fn delegated_block(root: &Path, type_prefix: &str) -> Result<Option<usize>> {
+    let blocks = crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))?;
+    delegated_block_in(root, type_prefix, &blocks.blocks)
+}
+
+/// [`delegated_block`] against a registry the caller already holds, so a
+/// dispenser that reloaded `blocks.yaml` under its locks indexes the very
+/// copy it will write (a pull or claim between an outside lookup and the
+/// lock could otherwise reorder the blocks under a stale index).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn delegated_block_in(
+    root: &Path,
+    type_prefix: &str,
+    blocks: &[crate::node::AgreedIdBlock],
+) -> Result<Option<usize>> {
+    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
     let mode = resolve(root)?;
     if mode.authoritative {
         return Ok(None);
@@ -395,9 +410,17 @@ pub fn delegated_block(root: &Path, type_prefix: &str) -> Result<Option<usize>> 
     let Ok(node) = node(root) else {
         return Ok(None);
     };
-    with_lineage_view(root, &node, &mode, |view| {
-        view.spendable_block(type_prefix).ok()
-    })
+    let pools = PoolRegistry::load(root)?;
+    let root_record = RootRecord::load(root)?;
+    let view = LineageView {
+        pools: &pools.pools,
+        blocks,
+        root: root_record.as_ref(),
+        node: &node,
+        role: mode.role,
+        upstream: mode.upstream.as_deref(),
+    };
+    Ok(view.spendable_block(type_prefix).ok())
 }
 
 /// Whether `agreed_id` lies inside a delegated block this non-root clone may
@@ -497,7 +520,24 @@ pub fn node(root: &Path) -> Result<String> {
     {
         bail!("node-local allocation requires a valid explicit node binding")
     }
+    refuse_retired_node(root, &node)?;
     Ok(node)
+}
+
+/// Refuse when `registry/nodes.toml` marks `node` retired: its specs were
+/// renamed into another node's local IDs, so it must never allocate again.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn refuse_retired_node(root: &Path, node: &str) -> Result<()> {
+    let path = root.join("registry/nodes.toml");
+    if !path.try_exists()? {
+        return Ok(());
+    }
+    if crate::node::NodeRegistry::load(&path)?.is_retired(node) {
+        bail!(
+            "node {node} is retired (registry/nodes.toml); it allocates no IDs and claims no blocks. Bind this clone to a live node with `aida node acquire`"
+        )
+    }
+    Ok(())
 }
 
 fn local_id(id: &str, node: &str) -> bool {

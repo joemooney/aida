@@ -160,8 +160,8 @@ fn backfill_agreed_ids_end_to_end() {
     }
 
     // Re-run: nothing to do; nothing changes.
-    let (_, rows) = load_plan(&store).unwrap();
-    assert!(rows.is_empty());
+    let (_, rerun) = load_plan(&store).unwrap();
+    assert!(rerun.is_empty(), "{rerun:?}");
     run(
         &store,
         &BackfillOptions {
@@ -173,6 +173,101 @@ fn backfill_agreed_ids_end_to_end() {
     .unwrap();
     let blocks2 = aida_core::BlockRegistry::load(&store.join("registry/blocks.yaml")).unwrap();
     assert_eq!(blocks2.blocks.len(), blocks.blocks.len());
+}
+
+/// Review item 4: an unparsable `blocks.yaml` refuses both the dry run and
+/// the apply, and the ledger file is left byte-for-byte unchanged (never
+/// replaced by a registry holding only the new spent blocks).
+#[test]
+fn story_105_corrupt_blocks_yaml_refuses_and_leaves_the_ledger() {
+    use aida_core::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
+    backend.save(&aida_core::RequirementsStore::new()).unwrap();
+    let objects = store.join("objects");
+    let pending = plant(&objects, &format!("STORY-{NODE}-001"), None);
+    std::fs::create_dir_all(store.join("registry")).unwrap();
+    let blocks = store.join("registry/blocks.yaml");
+    let corrupt = "blocks:\n- node_id: [unterminated\n  range_start: nope\n";
+    std::fs::write(&blocks, corrupt).unwrap();
+
+    let dry = run(
+        &store,
+        &BackfillOptions {
+            dry_run: true,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(format!("{dry:#}").contains("blocks.yaml"), "{dry:#}");
+    let apply = run(
+        &store,
+        &BackfillOptions {
+            yes: true,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(format!("{apply:#}").contains("refusing"), "{apply:#}");
+
+    assert_eq!(std::fs::read_to_string(&blocks).unwrap(), corrupt);
+    assert!(!store.join("registry/agreed_counters.toml").exists());
+    let after = aida_core::object_store::load_all_objects(&objects).unwrap();
+    let row = after.iter().find(|r| r.id == pending.id).unwrap();
+    assert_eq!(row.agreed_id, None, "no spec was written");
+}
+
+/// Review item 5: the legacy node's specs get the bound node's next free
+/// local IDs per type (above the store's highest and the bound counter),
+/// in old-number order, skipping a number already taken.
+#[test]
+fn story_105_retirement_renames_legacy_node_specs_into_the_bound_node() {
+    let bound = NODE.to_ascii_lowercase();
+    let mut reqs = Vec::new();
+    let mut mk = |sid: &str, agreed: Option<&str>| {
+        let mut r = Requirement::new(sid.into(), String::new());
+        r.spec_id = Some(sid.into());
+        r.agreed_id = agreed.map(Into::into);
+        reqs.push(r.clone());
+        r
+    };
+    let t2 = mk("TASK-1-0002", Some("TASK-900"));
+    let t1 = mk("TASK-1-0001", Some("TASK-899"));
+    let faq = mk("FAQ-1-0007", None);
+    mk(&format!("TASK-{bound}-0003"), Some("TASK-12"));
+    // The bound node's TASK-…-0005 is taken (a padded twin counts too).
+    mk(&format!("TASK-{bound}-5"), None);
+    mk("STORY-3-0001", None); // another live node: untouched
+    let retire = Retirement {
+        old_node: "1".into(),
+        new_node: bound.clone(),
+    };
+    let counter: BTreeMap<String, u64> = [("TASK".to_string(), 4)].into();
+    let rows = plan_retirement(&reqs, &retire, &counter, 3);
+    let got: Vec<(&str, &str, Uuid)> = rows
+        .iter()
+        .map(|r| (r.old.as_str(), r.new.as_str(), r.uuid))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("FAQ-1-0007", format!("FAQ-{bound}-001").as_str(), faq.id),
+            ("TASK-1-0001", format!("TASK-{bound}-006").as_str(), t1.id),
+            ("TASK-1-0002", format!("TASK-{bound}-007").as_str(), t2.id),
+        ]
+    );
+    let mut plan = Plan::default();
+    plan.renames = rows;
+    let text = render_mapping(&plan);
+    assert!(
+        text.contains("# old_local_id\tnew_local_id\tuuid"),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("TASK-1-0001\tTASK-{bound}-006")),
+        "{text}"
+    );
 }
 
 #[test]

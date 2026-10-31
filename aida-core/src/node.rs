@@ -335,6 +335,12 @@ pub struct NodeRegistryEntry {
     pub user: Option<String>,
     /// Registration timestamp
     pub registered: DateTime<Utc>,
+    /// When the node was retired (its specs renamed into another node's
+    /// local IDs). A retired node keeps its row, so its ID is never reissued,
+    /// but it allocates nothing: no local IDs, no block claims.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retired_at: Option<DateTime<Utc>>,
 }
 
 /// Slugify a component of a default node name: lowercase, keep `[a-z0-9_-]`,
@@ -596,7 +602,16 @@ impl NodeRegistry {
             name: Some(name),
             user,
             registered: Utc::now(),
+            retired_at: None,
         });
+    }
+
+    /// Whether `node_id` is registered and retired (case-insensitive).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    pub fn is_retired(&self, node_id: &str) -> bool {
+        self.nodes
+            .iter()
+            .any(|n| n.id.eq_ignore_ascii_case(node_id) && n.retired_at.is_some())
     }
 
     /// Remove a node by id. Returns true if the entry existed.
@@ -1802,6 +1817,7 @@ registered = "2026-05-09T00:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         };
         // owner falls back to the email local-part …
         assert_eq!(entry.owner(), "alice");
@@ -1818,6 +1834,7 @@ registered = "2026-05-09T00:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         };
         assert_eq!(bare.owner(), "42");
         assert_eq!(bare.display_name(), "imac-42-9");
@@ -2280,6 +2297,7 @@ registered = "2026-01-01T00:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         }
     }
 

@@ -3119,10 +3119,10 @@ fn run_add(
                         configured_policy,
                         Some(&add_type_prefix),
                     )?;
-                    let delegated_idx = aida_core::allocation_authority::delegated_block(
-                        store_path,
-                        &add_type_prefix,
-                    )?;
+                    // The delegated block itself is resolved inside the store
+                    // and dispense locks, against the registry copy reloaded
+                    // there (never an index from an outside load).
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
                     // A clone with a work binding keeps its node-local ID as
                     // the spec ID and records the block's number as the agreed
                     // ID beside it, in the same object write.
@@ -3238,6 +3238,12 @@ fn run_add(
                                     if let Ok(mut registry) =
                                         aida_core::BlockRegistry::load(&blocks_path)
                                     {
+                                        let delegated_idx =
+                                            aida_core::allocation_authority::delegated_block_in(
+                                                store_path,
+                                                &type_prefix,
+                                                &registry.blocks,
+                                            )?;
                                         let active = match delegated_idx {
                                             Some(idx) => Some(idx),
                                             None => registry.find_active_block_or_global(
@@ -5567,13 +5573,20 @@ fn run_list(
                         // trace:BUG-1520 | ai:claude — one validation, hoisted above.
                         // STORY-1642 item 9: the FAQ table is `id` + question only.
                         // trace:STORY-1642 | ai:claude
-                        let selected = match crate::knowledge_list::faq_default_fields(
+                        let faq_default = crate::knowledge_list::faq_default_fields(
                             r#type.as_deref(),
                             fields.as_deref(),
-                        ) {
+                        );
+                        let selected = match faq_default {
                             Some(faq_fields) => toon_list_fields(Some(faq_fields))?,
                             None => selected_fields.clone(),
                         };
+                        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                        let selected = crate::output_format::with_local_id_column(
+                            selected,
+                            fields.is_some() || faq_default.is_some(),
+                            &reqs,
+                        );
                         // trace:STORY-1653 | ai:claude — `driver`, `driver_kind`
                         let mut selected = crate::driver_view::with_driver_columns(
                             selected,

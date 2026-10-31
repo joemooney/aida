@@ -84,3 +84,81 @@ fn display_puts_the_agreed_id_first_and_marks_a_pending_one() {
         "a flat id is not pending"
     );
 }
+
+/// Review item 3: the agent (TOON) list carries the local ID beside the
+/// agreed one in a `local_id` column, marks a pending agreed ID, and adds
+/// the column to the default fields only when some row has one.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.acbd0123 | ai:claude
+#[test]
+fn toon_list_shows_the_local_id_beside_the_agreed_one() {
+    use crate::output_format::{toon_list_cell, toon_local_id_cell, with_local_id_column};
+    let _guard = home();
+    let local_id = format!("STORY-{NODE}-105");
+    assert_eq!(
+        toon_local_id_cell(Some("STORY-5801"), Some(&local_id)),
+        "STORY-HOME-105"
+    );
+    assert_eq!(
+        toon_local_id_cell(None, Some(&local_id)),
+        "(agreed id pending)"
+    );
+    assert_eq!(toon_local_id_cell(Some("STORY-105"), Some("STORY-105")), "");
+
+    let summary = |sid: &str, agreed: Option<&str>| aida_core::RequirementSummary {
+        id: uuid::Uuid::new_v4(),
+        spec_id: Some(sid.to_string()),
+        agreed_id: agreed.map(str::to_string),
+        title: String::new(),
+        description: String::new(),
+        status: "Draft".to_string(),
+        priority: "high".to_string(),
+        owner: String::new(),
+        assignee: None,
+        feature: String::new(),
+        req_type: "Story".to_string(),
+        tags: Vec::new(),
+        created_at: String::new(),
+        modified_at: String::new(),
+        archived: false,
+        archived_at: None,
+        deferred: false,
+        deferred_at: None,
+        deferred_until: None,
+        deferred_reason: None,
+        in_degree: 0,
+        out_degree: 0,
+        heft: 0,
+        blocked: false,
+        has_pending_decision: false,
+        execution_mode: None,
+        weight: None,
+        origin: None,
+        completed_at: None,
+        yaml_path: String::new(),
+    };
+    let backfilled = summary(&local_id, Some("STORY-5801"));
+    assert_eq!(
+        toon_list_cell(&backfilled, (false, false, false), "id"),
+        "STORY-5801"
+    );
+    assert_eq!(
+        toon_list_cell(&backfilled, (false, false, false), "local_id"),
+        "STORY-HOME-105"
+    );
+    let defaults: Vec<String> = ["id", "title"].iter().map(|s| s.to_string()).collect();
+    assert_eq!(
+        with_local_id_column(defaults.clone(), false, &[backfilled.clone()]),
+        vec!["id", "local_id", "title"]
+    );
+    let flat = summary("STORY-105", None);
+    assert_eq!(
+        with_local_id_column(defaults.clone(), false, &[flat]),
+        defaults,
+        "a store of one-ID specs keeps its shape"
+    );
+    assert_eq!(
+        with_local_id_column(defaults.clone(), true, &[backfilled]),
+        defaults,
+        "explicit --fields are left alone"
+    );
+}

@@ -1081,6 +1081,7 @@ registered = "2026-06-17T03:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         };
         // Owner string wins.
         let mut n = base.clone();
@@ -1202,6 +1203,7 @@ registered = "2026-06-17T02:00:00Z"
             name: None,
             user: Some("joe".to_string()),
             registered: Utc::now(),
+            retired_at: None,
         });
 
         // Stray integer key (the bug) → migrates to "joe".
@@ -1224,6 +1226,7 @@ registered = "2026-06-17T02:00:00Z"
             name: None,
             user: Some("joey".to_string()),
             registered: Utc::now(),
+            retired_at: None,
         });
         let mut roster2 = TeamRoster::default().with_role_set("1", "advisor");
         assert!(!roster2.migrate_integer_keys(&nodes2));

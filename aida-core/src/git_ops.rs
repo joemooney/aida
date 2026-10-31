@@ -9747,6 +9747,7 @@ mod tests {
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         };
 
         // Base: node 1 registered, block 1-3000.
