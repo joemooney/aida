@@ -3458,7 +3458,14 @@ impl<'a> BulkWriter<'a> {
         }
         // trace:BUG-2017 | ai:codex
         if req.spec_id.is_some() || req.agreed_id.is_some() {
-            self.backend.admit_allocations(std::slice::from_ref(&req))?;
+            // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude —
+            // admit against the rows staged so far too, so an alias conflict
+            // with an earlier row of this batch gets BUG-2017's own refusal
+            // before numeric admission below sees the staged holder.
+            self.staged.push(req);
+            let admitted = self.backend.admit_allocations(&self.staged);
+            req = self.staged.pop().expect("pushed above");
+            admitted?;
             if req.spec_id.is_some() {
                 // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude —
                 // one agreed-id index for the whole batch.

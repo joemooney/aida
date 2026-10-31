@@ -1167,11 +1167,16 @@ mod tests {
                             store.requirements.extend([first, second]);
                         })
                         .map(|_| ()),
+                    // A batch-internal alias conflict may refuse at the
+                    // second add() or at finish(); either way it must be
+                    // BUG-2017's refusal and nothing may persist.
                     "bulk" => {
                         let mut writer = backend.bulk_writer().unwrap();
                         writer.add(first).unwrap();
-                        writer.add(second).unwrap();
-                        writer.finish("must not persist").map(|_| ())
+                        writer
+                            .add(second)
+                            .map(|_| ())
+                            .and_then(|()| writer.finish("must not persist").map(|_| ()))
                     }
                     _ => unreachable!(),
                 };
