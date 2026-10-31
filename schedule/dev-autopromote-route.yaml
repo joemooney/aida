@@ -8,6 +8,6 @@ result: done
 due_since: 2026-10-30T19:27:38.052798545Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-10-30T21:06:03.569910887Z
+  trip_id: dev-autopromote@2026-10-31T01:20:56.615982392Z
   job: dev-autopromote
-  error: 'exit 1: build of 508fe88be8e5a6a00f802788eb97e1d17e6e27b8 failed; log /home/joe/.aida/dev-autopromote/20261030T204352Z-508fe88be8e5.log; tail:    Compiling aida-core v0.16.0 (/home/joe/ai/aida/aida-core) |    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-tui v0.16.0 (/home/joe/ai/aida/aida-tui) |    Compiling aida-generate-types v0.16.0 (/home/joe/ai/aida/aida-generate-types) |    Compiling aida v0.16.0 (/home/joe/ai/aida/aida-crate) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 7m 39s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha 508fe88be8e, but HEAD is 15b3ff985bf1491b025c81e84e524dfc9826b2fc." | help: aida --version'
+  error: 'exit 1: build of 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b failed; log /home/joe/.aida/dev-autopromote/20261031T005924Z-00fee53b7ed4.log; tail:     Blocking waiting for file lock on package cache |     Blocking waiting for file lock on package cache |     Blocking waiting for file lock on package cache |     Blocking waiting for file lock on build directory'
