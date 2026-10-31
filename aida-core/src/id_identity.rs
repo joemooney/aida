@@ -4,7 +4,7 @@
 //! segments (`TASK`, `TASK-<node>`, `FR-1`, `$USER`) and SEQ is the trailing
 //! run of digits. Two IDs are the SAME ID when their prefixes match
 //! case-insensitively and their sequences are numerically equal: leading zeros
-//! never matter, so `TASK-0418`, `TASK-418` and `TASK-00418` name one spec.
+//! never matter, so `TASK-0042`, `TASK-42` and `TASK-00042` name one spec.
 //!
 //! Stored IDs and object filenames keep whatever padding they were minted
 //! with; identity is computed, never written. Every comparison between two
@@ -74,7 +74,7 @@ impl std::fmt::Display for IdKey {
     }
 }
 
-/// The canonical identity text of `id` (`TASK-418` for `task-0418`), usable
+/// The canonical identity text of `id` (`TASK-42` for `task-0042`), usable
 /// as a map key. A non-ID string keys as itself, trimmed and upper-cased, so
 /// callers can key arbitrary handles without a separate branch.
 pub fn id_key(id: &str) -> String {
@@ -177,31 +177,33 @@ pub fn allocate_id(
 // Width settings ([ids] in .aida/config.toml)
 // ---------------------------------------------------------------------------
 
-/// `[ids]` widths: `seq_width` for legacy/global IDs (default 0 = unpadded)
-/// and `node_seq_width` for node-local IDs (default 3). Both govern minting
-/// and rendering; stored IDs and filenames are never re-padded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `[ids]` widths: `seq_width` for legacy/global IDs and `node_seq_width`
+/// for node-local IDs. Each governs BOTH minting and rendering:
+///
+/// - **Mint:** a new ID's sequence is zero-padded to the width; an unset
+///   width mints at [`DEFAULT_MINT_WIDTH`] (3, today's `FR-001` look).
+/// - **Render:** a configured width re-pads every displayed ID; an UNSET
+///   width renders the stored ID unchanged, so a project that never sets
+///   `[ids]` keeps today's look and its displayed IDs match the filenames.
+///
+/// Stored IDs and filenames are never re-padded. This replaced the legacy
+/// `id_config.digits` knob (metadata.yaml), which no longer drives minting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IdWidths {
-    pub seq_width: usize,
-    pub node_seq_width: usize,
+    pub seq_width: Option<usize>,
+    pub node_seq_width: Option<usize>,
 }
 
-impl Default for IdWidths {
-    fn default() -> Self {
-        IdWidths {
-            seq_width: 0,
-            node_seq_width: 3,
-        }
-    }
-}
+/// Mint width when `[ids]` leaves a width unset (legacy and node-local).
+pub const DEFAULT_MINT_WIDTH: usize = 3;
 
 /// Upper bound for a configured width (keeps a typo from rendering 1000 zeros).
 pub const MAX_SEQ_WIDTH: usize = 12;
 
 impl IdWidths {
     /// Read `[ids] seq_width` / `node_seq_width` from a project's
-    /// `.aida/config.toml` text. Missing keys keep the defaults; values are
-    /// clamped to [`MAX_SEQ_WIDTH`].
+    /// `.aida/config.toml` text. Missing keys stay unset; values are clamped
+    /// to [`MAX_SEQ_WIDTH`].
     pub fn from_config_toml(text: &str) -> IdWidths {
         let mut out = IdWidths::default();
         let Ok(value) = text.parse::<toml::Table>() else {
@@ -216,16 +218,12 @@ impl IdWidths {
                 .filter(|n| *n >= 0)
                 .map(|n| (n as usize).min(MAX_SEQ_WIDTH))
         };
-        if let Some(w) = read("seq_width") {
-            out.seq_width = w;
-        }
-        if let Some(w) = read("node_seq_width") {
-            out.node_seq_width = w;
-        }
+        out.seq_width = read("seq_width");
+        out.node_seq_width = read("node_seq_width");
         out
     }
 
-    /// Load from `<project>/.aida/config.toml` (defaults when absent).
+    /// Load from `<project>/.aida/config.toml` (unset when absent).
     #[cfg(feature = "native")]
     pub fn load(project_root: &std::path::Path) -> IdWidths {
         std::fs::read_to_string(project_root.join(".aida/config.toml"))
@@ -233,8 +231,19 @@ impl IdWidths {
             .unwrap_or_default()
     }
 
-    /// The width that applies to `key`.
-    pub fn width_for(&self, key: &IdKey) -> usize {
+    /// Mint width for legacy/global IDs.
+    pub fn mint_width(&self) -> usize {
+        self.seq_width.unwrap_or(DEFAULT_MINT_WIDTH)
+    }
+
+    /// Mint width for node-local IDs.
+    pub fn node_mint_width(&self) -> usize {
+        self.node_seq_width.unwrap_or(DEFAULT_MINT_WIDTH)
+    }
+
+    /// The configured render width for `key` (`None` = render the stored
+    /// text unchanged).
+    pub fn width_for(&self, key: &IdKey) -> Option<usize> {
         if key.is_node_local() {
             self.node_seq_width
         } else {
@@ -242,20 +251,19 @@ impl IdWidths {
         }
     }
 
-    /// `id` rendered at the configured width. A non-ID string is returned
-    /// unchanged; the prefix keeps the input's text (case included) so
-    /// display labels survive.
+    /// `id` rendered at the configured width. A non-ID string, or an ID whose
+    /// width is unset, is returned unchanged; the prefix keeps the input's
+    /// text (case included) so display labels survive.
     pub fn render(&self, id: &str) -> String {
         let Some(key) = IdKey::parse(id) else {
             return id.to_string();
         };
+        let Some(width) = self.width_for(&key) else {
+            return id.to_string();
+        };
         let trimmed = id.trim();
         let prefix = trimmed.rsplit_once('-').map_or(trimmed, |(p, _)| p);
-        format!(
-            "{prefix}-{:0>width$}",
-            key.seq,
-            width = self.width_for(&key)
-        )
+        format!("{prefix}-{:0>width$}", key.seq)
     }
 }
 
@@ -352,7 +360,7 @@ mod tests {
     #[test]
     fn widths_render_legacy_and_node_local_separately() {
         let node = "0123456789ABCDEF0123456789ABCDEF";
-        let w = IdWidths::default();
+        let w = IdWidths::from_config_toml("[ids]\nseq_width = 0\nnode_seq_width = 3\n");
         assert_eq!(w.render("TASK-0418"), "TASK-418");
         assert_eq!(
             w.render(&format!("BUG-{node}-36")),
@@ -368,8 +376,25 @@ mod tests {
         assert_eq!(IdWidths::from_config_toml("garbage ="), IdWidths::default());
         assert_eq!(
             IdWidths::from_config_toml("[ids]\nseq_width = 999\n").seq_width,
-            MAX_SEQ_WIDTH
+            Some(MAX_SEQ_WIDTH)
         );
+    }
+
+    /// With no `[ids]` table the stored text renders unchanged (FR-001,
+    /// FR-1-042 and TASK-0042 keep their look and match their files), and
+    /// minting keeps the historical 3-digit width.
+    #[test]
+    fn unset_widths_preserve_the_stored_look() {
+        let w = IdWidths::default();
+        let node = "BUG-0123456789ABCDEF0123456789ABCDEF-036";
+        for id in ["FR-001", "FR-1-042", "TASK-0418", "TASK-418", node] {
+            assert_eq!(w.render(id), id);
+        }
+        assert_eq!((w.mint_width(), w.node_mint_width()), (3, 3));
+        let w = IdWidths::from_config_toml("[ids]\nseq_width = 0\n");
+        assert_eq!((w.mint_width(), w.node_mint_width()), (0, 3));
+        assert_eq!(w.render("FR-1-042"), "FR-1-42");
+        assert_eq!(w.render(node), node);
     }
 
     fn taken_by(held: Vec<(&'static str, Uuid)>) -> impl Fn(&str) -> Result<Option<Uuid>> {

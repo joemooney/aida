@@ -442,7 +442,7 @@ fn admit_with_binding(
     // before any row can be persisted. Spec and agreed IDs share ownership;
     // aliases of the same UUID are valid, including canonical case variants.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — ownership
-    // is keyed by NUMERIC identity (TASK-0418 == TASK-418). A (key, UUID)
+    // is keyed by NUMERIC identity (TASK-0042 == TASK-42). A (key, UUID)
     // pair already on disk is not a new claim, so a pre-existing collision
     // (repaired by `aida doctor --fix id-collisions`) never blocks unrelated
     // saves; only a claim this write introduces is checked.
@@ -740,7 +740,7 @@ impl crate::dispenser::Dispenser for CloneDispenser {
         // The clone decides the namespace; a custom provider cannot turn an
         // admitted local sequence into a bare global display ID.
         // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids] node_seq_width`.
-        let width = crate::id_identity::installed_widths().node_seq_width;
+        let width = crate::id_identity::installed_widths().node_mint_width();
         Ok(format!("{prefix}-{binding}-{seq:0width$}"))
     }
     fn next_id(&self, prefix: &str) -> Result<String> {

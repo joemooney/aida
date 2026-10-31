@@ -2778,9 +2778,6 @@ enabled = true
 "#
 }
 
-/// STORY-1226: the scaffolded `[schedule]` section must list the default
-/// substrate + seat jobs and parse as valid TOML once uncommented.
-// trace:STORY-1226 | ai:claude
 #[cfg(test)]
 mod bug_046_id_width_tests {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
@@ -2793,14 +2790,22 @@ mod bug_046_id_width_tests {
             "# keep me\n[project]\nname = \"x\"\n",
         )
         .unwrap();
-        super::write_id_width(dir.path(), 4).unwrap();
+        super::write_ids_widths(dir.path(), Some(4), Some(4)).unwrap();
         let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
         assert!(body.contains("# keep me"), "{body}");
         let w = aida_core::id_identity::IdWidths::from_config_toml(&body);
-        assert_eq!((w.seq_width, w.node_seq_width), (4, 4));
+        assert_eq!((w.seq_width, w.node_seq_width), (Some(4), Some(4)));
+        // `aida config digits 0` sets only the legacy width.
+        super::write_ids_widths(dir.path(), Some(0), None).unwrap();
+        let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
+        let w = aida_core::id_identity::IdWidths::from_config_toml(&body);
+        assert_eq!((w.seq_width, w.node_seq_width), (Some(0), Some(4)));
     }
 }
 
+/// STORY-1226: the scaffolded `[schedule]` section must list the default
+/// substrate + seat jobs and parse as valid TOML once uncommented.
+// trace:STORY-1226 | ai:claude
 #[cfg(test)]
 mod story_1226_init_schedule_section_tests {
     use super::*;
@@ -6830,11 +6835,16 @@ pub(crate) struct InitArgs {
     pub id_width: Option<u8>,
 }
 
-/// Record `aida init --id-width N` as `[ids] seq_width = N` and
-/// `node_seq_width = N` in `<root>/.aida/config.toml`, keeping the rest of
-/// the file (comments included) intact.
+/// Record `[ids] seq_width` and/or `node_seq_width` in
+/// `<root>/.aida/config.toml` (`aida init --id-width N` sets both, `aida
+/// config digits N` the legacy one), keeping the rest of the file (comments
+/// included) intact. `None` leaves that key as it is.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-pub(crate) fn write_id_width(root: &std::path::Path, width: u8) -> anyhow::Result<()> {
+pub(crate) fn write_ids_widths(
+    root: &std::path::Path,
+    seq_width: Option<u8>,
+    node_seq_width: Option<u8>,
+) -> anyhow::Result<()> {
     let path = root.join(".aida/config.toml");
     let body = std::fs::read_to_string(&path).unwrap_or_default();
     let mut doc = body
@@ -6843,8 +6853,12 @@ pub(crate) fn write_id_width(root: &std::path::Path, width: u8) -> anyhow::Resul
     if !doc.contains_table("ids") {
         doc["ids"] = toml_edit::table();
     }
-    doc["ids"]["seq_width"] = toml_edit::value(i64::from(width));
-    doc["ids"]["node_seq_width"] = toml_edit::value(i64::from(width));
+    if let Some(width) = seq_width {
+        doc["ids"]["seq_width"] = toml_edit::value(i64::from(width));
+    }
+    if let Some(width) = node_seq_width {
+        doc["ids"]["node_seq_width"] = toml_edit::value(i64::from(width));
+    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -7208,7 +7222,7 @@ fn run_init(
     project_capabilities::record_and_report(&statusline_project_root());
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     if let Some(width) = id_width {
-        write_id_width(&statusline_project_root(), *width)?;
+        write_ids_widths(&statusline_project_root(), Some(*width), Some(*width))?;
         println!("  Spec IDs: numbers padded to {width} digit(s) ([ids] in .aida/config.toml)");
     }
     // trace:BUG-1938 | ai:claude

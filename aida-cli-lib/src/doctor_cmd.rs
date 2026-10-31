@@ -269,14 +269,17 @@ pub(crate) fn handle_doctor_command(
         }
         // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
         cli::DoctorCommand::BareIdTwins => doctor_bare_id_twins(),
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-        cli::DoctorCommand::RenumberIdCollisions { dry_run, yes } => {
-            let project_root = find_project_root()?;
-            let store_root = detect_distributed_store_from(&project_root)
-                .unwrap_or_else(|| project_root.join(".aida-store"));
-            crate::doctor_renumber::run(&project_root, &store_root, *dry_run, *yes)
-        }
     }
+}
+
+/// `aida doctor --fix id-collisions`: renumber spec IDs that differ only by
+/// leading zeros (see `doctor_renumber`).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+fn doctor_fix_id_collisions(opts: &crate::doctor_renumber::FixOptions) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_root = detect_distributed_store_from(&project_root)
+        .unwrap_or_else(|| project_root.join(".aida-store"));
+    crate::doctor_renumber::run(&project_root, &store_root, opts)
 }
 
 // The rules intentionally match only anomalies that cannot be explained by a
@@ -9964,6 +9967,44 @@ mod story_462_doctor_tests {
         assert!(cmd.is_none());
     }
 
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn doctor_fix_id_collisions_flags_parse_and_require_fix() {
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "--fix",
+            "id-collisions",
+            "--dry-run",
+            "--mapping",
+            "m.tsv",
+        ])
+        .unwrap();
+        let crate::doctor_cmd::DoctorArgs {
+            fix,
+            dry_run,
+            mapping,
+            tree_only,
+            ..
+        } = cli.command.registered::<crate::doctor_cmd::DoctorArgs>()
+        else {
+            panic!("expected doctor command");
+        };
+        assert_eq!(fix.as_deref(), Some("id-collisions"));
+        assert!(dry_run && !tree_only);
+        assert_eq!(mapping.as_deref(), Some(std::path::Path::new("m.tsv")));
+        for bad in [
+            &["aida", "doctor", "--dry-run"][..],
+            &["aida", "doctor", "--fix", "everything"],
+            &["aida", "doctor", "--fix", "id-collisions", "--tree-only"],
+        ] {
+            assert!(
+                crate::command_registry::try_parse_from(bad.iter().copied()).is_err(),
+                "{bad:?}"
+            );
+        }
+    }
+
     #[test]
     fn normalize_doctor_category_accepts_dead_agents() {
         // STORY-496
@@ -15584,6 +15625,30 @@ pub(crate) struct DoctorArgs {
     #[clap(long)]
     pub fix_sandbox: bool,
 
+    /// Repair one category of store damage that needs a data migration.
+    /// `id-collisions`: spec IDs that differ only by leading zeros are the
+    /// same ID, so each collision keeps one spec on the number and gives the
+    /// others a fresh ID, rewriting their mentions in the store, docs and
+    /// code comments. Needs --dry-run (preview) or --yes (apply).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[clap(long, value_name = "CATEGORY", value_parser = ["id-collisions"])]
+    pub fix: Option<String>,
+
+    /// With --fix: show the plan and write nothing to the store.
+    #[clap(long, requires = "fix")]
+    pub dry_run: bool,
+
+    /// With --fix id-collisions: the old -> new mapping file. With --dry-run
+    /// a missing file is created from the plan; otherwise the file's mapping
+    /// is applied exactly as written.
+    #[clap(long, value_name = "FILE", requires = "fix")]
+    pub mapping: Option<std::path::PathBuf>,
+
+    /// With --fix id-collisions --mapping: rewrite only this checkout's
+    /// tracked files (docs, changelog, code comments), not the store.
+    #[clap(long, requires = "mapping")]
+    pub tree_only: bool,
+
     /// Run a store-wide semantic contradiction sweep combining mechanical joins
     /// in Rust with Jev System One semantic choice queries.
     // trace:STORY-1426 | ai:antigravity
@@ -15624,11 +15689,27 @@ fn run_doctor(
         all,
         since,
         fix_sandbox,
+        fix,
+        dry_run,
+        mapping,
+        tree_only,
         contradictions,
         contradictions_limit,
         contradictions_offset,
         cmd,
     } = &args;
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    if fix.is_some() {
+        if *json {
+            anyhow::bail!("`aida doctor --fix id-collisions` has no JSON projection");
+        }
+        return self::doctor_fix_id_collisions(&crate::doctor_renumber::FixOptions {
+            dry_run: *dry_run,
+            yes: *yes,
+            mapping: mapping.clone(),
+            tree_only: *tree_only,
+        });
+    }
     // STORY-665: `aida doctor --fix-sandbox` is a guided printer for bringing
     // bwrap OS-confinement up on a new machine. Short-circuit before the
     // multi-agent drift scan — it's a standalone setup helper, not a check.

@@ -8625,6 +8625,54 @@ mod tests {
         assert!(crate::id_collisions::find_requirement_id_collisions(reqs.iter()).is_empty());
     }
 
+    /// AC2: merge-gate promotion treats a PADDED twin as taken. `BUG-0034`
+    /// (spec id) and `BUG-035` (agreed id) hold 34 and 35, so the next free
+    /// agreed id is `BUG-36`, never `BUG-34`/`BUG-35` beside a padded twin.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_merge_gate_skips_padded_twins() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(store.join("registry/agreed_counters.toml"), "BUG = 33\n").unwrap();
+
+        let mut padded = Requirement::new("padded native".into(), String::new());
+        padded.spec_id = Some("BUG-0034".into());
+        padded.req_type = RequirementType::Bug;
+        object_store::write_object(&objects, &padded).unwrap();
+
+        let mut gated = Requirement::new("padded agreed".into(), String::new());
+        gated.spec_id = Some("BUG-2-080".into());
+        gated.agreed_id = Some("BUG-035".into());
+        gated.req_type = RequirementType::Bug;
+        object_store::write_object(&objects, &gated).unwrap();
+
+        let mut pending = Requirement::new("real spec".into(), String::new());
+        pending.spec_id = Some("BUG-2-081".into());
+        pending.req_type = RequirementType::Bug;
+        object_store::write_object(&objects, &pending).unwrap();
+
+        home_fixture_init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let assignments = home_fixture_merge_gate(&store).unwrap();
+        assert_eq!(
+            assignments,
+            vec![("BUG-2-081".to_string(), "BUG-36".to_string())]
+        );
+        let reqs: Vec<Requirement> = object_store::list_objects(&objects)
+            .unwrap()
+            .iter()
+            .map(|(_, p)| object_store::read_object_from_path(p).unwrap())
+            .collect();
+        assert!(crate::id_collisions::find_requirement_id_collisions(reqs.iter()).is_empty());
+    }
+
     /// BUG-1535: a counter that lags far behind a dense run of taken ids
     /// (the live store: BUG counter 34, ~1,500 BUG ids allocated by blocks)
     /// must walk to the next free id instead of bailing at a fixed cap.

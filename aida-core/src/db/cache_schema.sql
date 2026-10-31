@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- instead of the `modified_at` stand-in (a post-completion tag/comment
     -- edit no longer reorders the list). NULL when not yet completed.
     completed_at TEXT,
+    -- BUG-HOME-046: numeric identity keys (id_identity::id_key) of spec_id /
+    -- agreed_id, so TASK-0418 / TASK-418 / TASK-00418 resolve through one
+    -- indexed equality. NULL when the source id is absent.
+    id_key TEXT,
+    agreed_id_key TEXT,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 
@@ -90,6 +95,9 @@ CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
 -- TASK-1474: index completed_at so `aida list --sort completed` orders without
 -- a table scan.
 CREATE INDEX IF NOT EXISTS idx_cache_completed_at ON requirements_cache(completed_at);
+-- BUG-HOME-046: numeric-identity lookups (leading zeros insignificant).
+CREATE INDEX IF NOT EXISTS idx_cache_id_key ON requirements_cache(id_key);
+CREATE INDEX IF NOT EXISTS idx_cache_agreed_id_key ON requirements_cache(agreed_id_key);
 
 -- TASK-955: parent->child hierarchy edges, materialized at rebuild from the
 -- relationship graph so `aida list --parent <id> --recursive` can walk the full

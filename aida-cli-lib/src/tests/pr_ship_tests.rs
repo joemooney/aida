@@ -1604,3 +1604,27 @@ fn node_alias_trailers_and_traces_expand_to_canonical() {
         vec!["TASK-NOPE-001".to_string(), "TASK-12".to_string()]
     );
 }
+
+/// IDs differing only by leading zeros are one spec: extraction, Refs
+/// collection and spec matching treat `TASK-0042` and `TASK-42` as one id.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+#[test]
+fn bug_046_padded_ids_dedup_numerically() {
+    assert_eq!(
+        extract_spec_ids_from_text("TASK-0418 then TASK-418 and task-00418"),
+        vec!["TASK-0418".to_string()]
+    );
+    assert_eq!(
+        refs_spec_ids_in_text("x (Refs TASK-0418) (Refs TASK-418)"),
+        vec!["TASK-0418".to_string()]
+    );
+    let mut padded = aida_core::Requirement::new("t".into(), "d".into());
+    padded.spec_id = Some("TASK-0418".into());
+    assert!(crate::queue_cmd::spec_matches(&padded, "TASK-418"));
+    assert!(crate::queue_cmd::spec_matches(&padded, "task-00418"));
+    assert!(!crate::queue_cmd::spec_matches(&padded, "TASK-4180"));
+    assert!(
+        crate::ship_from_seat::explicit_spec_check("TASK-418", &["TASK-0418".to_string()])
+            .is_ok()
+    );
+}

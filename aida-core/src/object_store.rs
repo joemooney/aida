@@ -150,7 +150,7 @@ fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
 }
 
 /// Every stored object stem (spec_id as filed) that is numerically the same
-/// ID as `spec_id` — `TASK-0418.yaml` for `TASK-418` — sorted. Reads only the
+/// ID as `spec_id` — `TASK-0042.yaml` for `TASK-42` — sorted. Reads only the
 /// one shard directory the sequence maps to (shards are numeric, so every
 /// padding of a number lives in the same directory); no YAML is parsed.
 /// Empty for a malformed id or a missing shard.

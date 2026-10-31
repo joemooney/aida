@@ -82,7 +82,7 @@ impl Dispenser for Detached {
         match self.state()?.mode {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
             IdMode::Distributed { node_id } => {
-                let width = crate::id_identity::installed_widths().node_seq_width;
+                let width = crate::id_identity::installed_widths().node_mint_width();
                 Ok(format!("{prefix}-{node_id}-{seq:0width$}"))
             }
             _ => bail!("invalid WORK candidate mode"),

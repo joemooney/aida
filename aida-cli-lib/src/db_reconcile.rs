@@ -615,7 +615,10 @@ impl RefsCompletionFilter {
     }
 
     pub(crate) fn subject(&self, id: &str) -> bool {
-        self.subject_refs.iter().any(|r| r.eq_ignore_ascii_case(id))
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
+        self.subject_refs
+            .iter()
+            .any(|r| aida_core::id_identity::same_id(r, id))
     }
 
     pub(crate) fn body(&self, id: &str) -> bool {
@@ -623,7 +626,7 @@ impl RefsCompletionFilter {
             || self
                 .body_refs_only
                 .iter()
-                .any(|r| r.eq_ignore_ascii_case(id))
+                .any(|r| aida_core::id_identity::same_id(r, id))
     }
 }
 
@@ -645,8 +648,13 @@ pub(crate) fn refs_completion_filter(subject: &str, message: &str) -> RefsComple
         }
         let line_refs = crate::pr_ship::refs_spec_ids_in_text(line);
         for id in ids {
-            let completes = !line_refs.iter().any(|r| r.eq_ignore_ascii_case(&id));
-            *body.entry(id.to_ascii_uppercase()).or_insert(false) |= completes;
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+            let completes = !line_refs
+                .iter()
+                .any(|r| aida_core::id_identity::same_id(r, &id));
+            *body
+                .entry(aida_core::id_identity::id_key(&id))
+                .or_insert(false) |= completes;
         }
     }
     RefsCompletionFilter {

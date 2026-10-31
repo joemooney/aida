@@ -578,7 +578,11 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // Done->Completed auto-bump timestamp) so `aida list --sort completed` orders
 // on the real completion time instead of the `modified_at` stand-in.
 // trace:TASK-1474 | ai:claude
-const SCHEMA_VERSION: &str = "15";
+// BUG-HOME-046: bumped to "16" when the indexed `id_key` / `agreed_id_key`
+// columns were added (numeric identity: leading zeros are insignificant), so
+// id lookups are one indexed equality instead of a LIKE scan.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+const SCHEMA_VERSION: &str = "16";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -2894,28 +2898,42 @@ impl Cache {
     // trace:BUG-1535 | ai:claude
     pub fn id_rows_for(&self, id: &str) -> Result<Vec<crate::id_collisions::IdRow>> {
         // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric
-        // identity: `TASK-0418` must find a row stored as `TASK-418`. The LIKE
-        // pattern `TASK-%418` admits every zero-padding (plus false positives
-        // such as `TASK-1418`), which the `same_id` filter then drops.
-        let Some(pattern) = id_like_pattern(id) else {
-            return self.query_id_rows(
-                "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache \
-                 WHERE spec_id = ?1 COLLATE NOCASE OR agreed_id = ?1 COLLATE NOCASE",
-                Some(id.trim()),
-            );
-        };
-        let rows = self.query_id_rows(
+        // identity through the indexed key columns: `TASK-0042` finds a row
+        // stored as `TASK-42`. A non-ID handle keys as its upper-cased text,
+        // so this stays a case-insensitive match for those too. The literal
+        // arm keeps a row written by an older binary (which leaves the key
+        // columns NULL in a shared newer-schema cache) resolvable.
+        let key = crate::id_identity::id_key(id);
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
             "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache \
-             WHERE spec_id LIKE ?1 ESCAPE '\\' OR agreed_id LIKE ?1 ESCAPE '\\'",
-            Some(&pattern),
+             WHERE id_key = ?1 OR agreed_id_key = ?1 \
+                OR (id_key IS NULL AND spec_id = ?2 COLLATE NOCASE) \
+                OR (agreed_id_key IS NULL AND agreed_id = ?2 COLLATE NOCASE)",
         )?;
+        let rows = stmt
+            .query_map(params![key, id.trim()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows
             .into_iter()
-            .filter(|r| {
-                [r.spec_id.as_deref(), r.agreed_id.as_deref()]
-                    .into_iter()
-                    .flatten()
-                    .any(|s| crate::id_identity::same_id(s, id))
+            .filter_map(|(uuid, spec_id, agreed_id, title, status)| {
+                Uuid::parse_str(&uuid)
+                    .ok()
+                    .map(|uuid| crate::id_collisions::IdRow {
+                        uuid,
+                        spec_id,
+                        agreed_id,
+                        title,
+                        status,
+                    })
             })
             .collect())
     }
@@ -3077,6 +3095,9 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "origin",
     // trace:TASK-1474 | ai:claude
     "completed_at",
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    "id_key",
+    "agreed_id_key",
     "yaml_path",
 ];
 
@@ -3483,8 +3504,9 @@ fn insert_one(
             archived, archived_at, deferred, deferred_at, deferred_until,
             deferred_reason,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
-            has_pending_decision, execution_mode, weight, origin, completed_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
+            has_pending_decision, execution_mode, weight, origin, completed_at,
+            id_key, agreed_id_key
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -3528,6 +3550,10 @@ fn insert_one(
                 .as_ref()
                 .and_then(|i| i.completed_at)
                 .map(|t| t.to_rfc3339()),
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
+            // numeric identity keys; NULL when the id is absent or blank.
+            id_key_column(req.spec_id.as_deref()),
+            id_key_column(req.agreed_id.as_deref()),
         ],
     )?;
 
@@ -3737,49 +3763,28 @@ fn spec_id_for_uuid_on(conn: &Connection, id: &Uuid) -> Result<Option<String>> {
 /// See [`Cache::uuid_for_spec_id`].
 // trace:BUG-636 trace:TASK-1515 | ai:claude
 fn uuid_for_spec_id_on(conn: &Connection, spec_id: &str) -> Result<Option<Uuid>> {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — one indexed
+    // equality on the numeric identity key; an exact-literal row wins over a
+    // padded twin so a pre-migration collision answers deterministically.
     let id_str: Option<String> = conn
         .query_row(
-            "SELECT id FROM requirements_cache WHERE spec_id = ?1 COLLATE NOCASE",
-            params![spec_id],
+            "SELECT id FROM requirements_cache \
+             WHERE id_key = ?1 OR (id_key IS NULL AND spec_id = ?2 COLLATE NOCASE) \
+             ORDER BY (spec_id = ?2 COLLATE NOCASE) DESC, spec_id LIMIT 1",
+            params![crate::id_identity::id_key(spec_id), spec_id.trim()],
             |row| row.get::<_, String>(0),
         )
         .optional()?;
-    if let Some(found) = id_str.and_then(|s| Uuid::parse_str(&s).ok()) {
-        return Ok(Some(found));
-    }
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — a padded
-    // twin of the literal id is the same spec.
-    let Some(pattern) = id_like_pattern(spec_id) else {
-        return Ok(None);
-    };
-    let mut stmt = conn
-        .prepare("SELECT id, spec_id FROM requirements_cache WHERE spec_id LIKE ?1 ESCAPE '\\'")?;
-    let rows = stmt
-        .query_map(params![pattern], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows
-        .into_iter()
-        .filter(|(_, sid)| {
-            sid.as_deref()
-                .is_some_and(|s| crate::id_identity::same_id(s, spec_id))
-        })
-        .find_map(|(id, _)| Uuid::parse_str(&id).ok()))
+    Ok(id_str.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
-/// A SQL `LIKE` pattern (escape `\`) admitting every zero-padding of an
-/// ID-shaped `id`: `TASK-%418`. `None` for non-ID input. Callers filter the
-/// rows with [`crate::id_identity::same_id`] — the pattern over-matches.
+/// The value stored in the `id_key` / `agreed_id_key` cache columns: the
+/// numeric identity key, or NULL for an absent/blank id.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-fn id_like_pattern(id: &str) -> Option<String> {
-    let key = crate::id_identity::IdKey::parse(id)?;
-    let escape = |s: &str| {
-        s.replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_")
-    };
-    Some(format!("{}-%{}", escape(&key.prefix), key.seq))
+fn id_key_column(id: Option<&str>) -> Option<String> {
+    id.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(crate::id_identity::id_key)
 }
 
 fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
@@ -7126,6 +7131,122 @@ mod tests {
         let collisions = crate::id_collisions::find_id_collisions(all.iter());
         assert_eq!(collisions.len(), 1);
         assert_eq!(collisions[0].id, "BUG-34");
+    }
+
+    /// BUG-HOME-046: a v15 cache (no key columns) is migrated by the v16
+    /// bump, and the new columns are present afterwards.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_schema_bump_adds_indexed_id_key_columns() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute_batch(
+                "DROP INDEX idx_cache_id_key; DROP INDEX idx_cache_agreed_id_key; \
+                 ALTER TABLE requirements_cache DROP COLUMN id_key; \
+                 ALTER TABLE requirements_cache DROP COLUMN agreed_id_key;",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, '15')",
+                params![META_KEY_SCHEMA_VERSION],
+            )
+            .unwrap();
+        }
+        let cache = Cache::open(&cache_path).unwrap();
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION)
+        );
+        let conn = cache.conn();
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('requirements_cache')")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert!(cols.iter().any(|c| c == "id_key"), "{cols:?}");
+        assert!(cols.iter().any(|c| c == "agreed_id_key"), "{cols:?}");
+        let idx: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_index_list('requirements_cache')")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert!(idx.iter().any(|i| i == "idx_cache_id_key"), "{idx:?}");
+        assert!(idx.iter().any(|i| i == "idx_cache_agreed_id_key"), "{idx:?}");
+    }
+
+    /// BUG-HOME-046 AC1: id lookups use numeric identity through the key
+    /// columns — `TASK-0042` / `task-00042` find a row stored as `TASK-42`,
+    /// for the native spec_id and for an agreed_id — and the store-wide
+    /// collision scan groups padded twins.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_id_lookups_ignore_leading_zeros() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let plain = sample_req("TASK-418", "plain");
+        let mut agreed = sample_req("TASK-2-007", "agreed");
+        agreed.agreed_id = Some("TASK-77".to_string());
+        let near = sample_req("TASK-1418", "near miss");
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([plain.clone(), agreed.clone(), near]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        for id in ["TASK-418", "TASK-0418", "task-00418"] {
+            let rows = cache.id_rows_for(id).unwrap();
+            assert_eq!(rows.len(), 1, "{id}: {rows:?}");
+            assert_eq!(rows[0].uuid, plain.id, "{id}");
+            assert_eq!(cache.uuid_for_spec_id(id).unwrap(), Some(plain.id), "{id}");
+        }
+        for id in ["TASK-077", "task-0077"] {
+            let rows = cache.id_rows_for(id).unwrap();
+            assert_eq!(rows.len(), 1, "{id}");
+            assert_eq!(rows[0].uuid, agreed.id);
+        }
+        assert_eq!(
+            cache.uuid_for_spec_id("TASK-2-7").unwrap(),
+            Some(agreed.id)
+        );
+        assert!(cache.id_rows_for("TASK-41").unwrap().is_empty());
+
+        // A padded twin: both rows answer the key, the exact literal wins
+        // the single-uuid lookup, and the collision scan groups them.
+        let twin = sample_req("TASK-0418", "padded twin");
+        cache.upsert_requirement(&twin).unwrap();
+        assert_eq!(cache.id_rows_for("TASK-00418").unwrap().len(), 2);
+        assert_eq!(cache.uuid_for_spec_id("TASK-0418").unwrap(), Some(twin.id));
+        assert_eq!(cache.uuid_for_spec_id("task-418").unwrap(), Some(plain.id));
+        let all = cache.id_rows_all().unwrap();
+        let collisions = crate::id_collisions::find_id_collisions(all.iter());
+        assert_eq!(collisions.len(), 1, "{collisions:?}");
+    }
+
+    /// A row upserted by an older binary into a shared newer-schema cache has
+    /// NULL key columns; the literal arm still resolves it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_row_without_keys_still_resolves_literally() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let r = sample_req("TASK-55", "old writer");
+        cache.upsert_requirement(&r).unwrap();
+        cache
+            .conn()
+            .execute(
+                "UPDATE requirements_cache SET id_key = NULL, agreed_id_key = NULL",
+                [],
+            )
+            .unwrap();
+        assert_eq!(cache.uuid_for_spec_id("task-55").unwrap(), Some(r.id));
+        assert_eq!(cache.id_rows_for("TASK-55").unwrap().len(), 1);
     }
 
     // BUG-701: the cache-backed spec_id collision scan that replaces the O(n)

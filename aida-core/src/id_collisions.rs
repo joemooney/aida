@@ -226,7 +226,7 @@ where
             .flatten()
         {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
-            // group by numeric identity: TASK-0418 and TASK-418 collide.
+            // group by numeric identity: TASK-0042 and TASK-42 collide.
             let key = crate::id_identity::id_key(id);
             if !keys.contains(&key) {
                 keys.push(key);

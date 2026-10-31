@@ -1,22 +1,30 @@
-//! `aida doctor renumber-id-collisions`: repair numeric ID collisions.
+//! `aida doctor --fix id-collisions`: repair numeric ID collisions.
 //!
-//! Spec IDs that differ only by leading zeros (`TASK-0418` / `TASK-418`) are
+//! Spec IDs that differ only by leading zeros (`TASK-0042` / `TASK-42`) are
 //! the same ID (BUG-HOME-046), so a store holding both has a collision group.
 //! For each group one object keeps the number (the survivor) and every other
-//! object is renumbered to a freshly minted ID; literal word-boundary mentions
-//! of the old form are rewritten in other store objects and in this checkout's
-//! git-tracked docs (`*.md`) and `trace:` comments. The old -> new mapping, plus
-//! the `origin/main` commits whose message cited the old literal (immutable,
-//! so their git-log linkage now points at the survivor), is recorded in the
-//! renumbered spec's history.
+//! object is renumbered to a fresh ID; exact-case, word-boundary mentions of
+//! the old form are rewritten in other store objects and in this checkout's
+//! git-tracked text (Markdown docs and CHANGELOG whole-file; source files on
+//! comment lines only, `trace:` comments included). The old -> new mapping,
+//! plus the `origin/main` commits whose message cited the old literal
+//! (immutable, so their git-log linkage now points at the survivor), is
+//! recorded in the renumbered spec's history.
+//!
+//! The repair runs in two halves so the store is never written before
+//! review: `--dry-run --mapping FILE` plans the renumbers and saves the
+//! old -> new mapping; `--tree-only --mapping FILE` applies that mapping to
+//! the tracked tree (the reviewable code/doc half); `--mapping FILE --yes`
+//! later applies the same mapping to the store (refusing before any write if
+//! a target ID has been taken meanwhile).
 //!
 //! Survivor rule, per group: most commit-message references on `origin/main`
 //! (commit messages cannot be rewritten), then most store + tracked-tree
 //! references, then the unpadded form.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
 
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::collections::{BTreeMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use uuid::Uuid;
@@ -26,44 +34,56 @@ use aida_core::models::{Comment, FieldChange, HistoryEntry, Requirement};
 /// Author recorded on renumber history entries.
 pub(crate) const RENUMBER_AUTHOR: &str = "aida-renumber";
 
+/// How far past the dispenser's next number a dry-run plans fresh IDs, so
+/// the IDs `aida add` mints while the plan is under review do not land on
+/// them. The skipped numbers are harmless: minting skips any taken number.
+pub(crate) const RENUMBER_HEADROOM: u32 = 100;
+
+/// Options for one `aida doctor --fix id-collisions` run.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct FixOptions {
+    pub dry_run: bool,
+    pub yes: bool,
+    pub mapping: Option<PathBuf>,
+    pub tree_only: bool,
+}
+
 fn id_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '$'
 }
 
-/// Byte offsets of every word-boundary, ASCII-case-insensitive occurrence of
-/// `literal` in `text`. A match must not be preceded or followed by a
-/// character that could continue an id, so `TASK-418` is not found inside
-/// `TASK-4180` or `BUG-TASK-418`.
+/// Byte offsets of every word-boundary, EXACT-CASE occurrence of `literal`
+/// in `text`. A match must not be preceded or followed by a character that
+/// could continue an id, so `TASK-42` is not found inside `TASK-420` or
+/// `BUG-TASK-42`. Case is significant so a lowercase path or link such as
+/// `task-42.md` (a file name, not an ID mention) is never touched.
 pub(crate) fn find_id_tokens(text: &str, literal: &str) -> Vec<usize> {
     let lit = literal.trim();
     if lit.is_empty() {
         return Vec::new();
     }
-    let hay = text.as_bytes();
-    let needle = lit.as_bytes();
     let mut out = Vec::new();
-    let mut i = 0;
-    while i + needle.len() <= hay.len() {
-        if hay[i..i + needle.len()].eq_ignore_ascii_case(needle) {
-            let before_ok = i == 0 || !text[..i].chars().next_back().is_some_and(id_char);
-            let after = &text[i + needle.len()..];
-            // A trailing `-` is fine (`TASK-418-style`) only when not followed
-            // by a digit, so `TASK-418-2` (a different id) is not matched.
-            let after_ok = match after.chars().next() {
-                None => true,
-                Some('-') => !after[1..]
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_alphanumeric()),
-                Some(c) => !id_char(c),
-            };
-            if before_ok && after_ok {
-                out.push(i);
-                i += needle.len();
-                continue;
-            }
+    let mut from = 0;
+    while let Some(rel) = text[from..].find(lit) {
+        let i = from + rel;
+        let before_ok = i == 0 || !text[..i].chars().next_back().is_some_and(id_char);
+        let after = &text[i + lit.len()..];
+        // A trailing `-` ends the ID only when no alphanumeric follows it,
+        // so `TASK-42-2` (a different id) is not matched.
+        let after_ok = match after.chars().next() {
+            None => true,
+            Some('-') => !after[1..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphanumeric()),
+            Some(c) => !id_char(c),
+        };
+        if before_ok && after_ok {
+            out.push(i);
+            from = i + lit.len();
+        } else {
+            from = i + lit.chars().next().map_or(1, char::len_utf8);
         }
-        i += 1;
     }
     out
 }
@@ -204,8 +224,15 @@ fn commit_messages(project_root: &Path, rev: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Git-tracked files under `project_root` eligible for rewriting: Markdown
-/// docs anywhere plus any text file (rewritten only on `trace:` lines).
+fn citing_shas(commits: &[(String, String)], literal: &str) -> Vec<String> {
+    commits
+        .iter()
+        .filter(|(_, msg)| !find_id_tokens(msg, literal).is_empty())
+        .map(|(sha, _)| sha.clone())
+        .collect()
+}
+
+/// Git-tracked files under `project_root`.
 fn tracked_files(project_root: &Path) -> Vec<String> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -222,8 +249,25 @@ fn tracked_files(project_root: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Rewrite one tracked file's text: whole-file for Markdown, `trace:` lines
-/// only for everything else (source literals stay — they may be fixtures).
+/// The byte offset where a source line's comment begins, if it has one:
+/// a whole-line comment (`//`, `#`, `*`, `/*`, `<!--`, `--`) starts at the
+/// first non-blank character, a trailing `//` comment at its `//`.
+fn comment_start(line: &str) -> Option<usize> {
+    let indent = line.len() - line.trim_start().len();
+    let t = &line[indent..];
+    if ["//", "#", "*", "/*", "<!--", "--"]
+        .iter()
+        .any(|m| t.starts_with(m))
+    {
+        return Some(indent);
+    }
+    line.find("//")
+}
+
+/// Rewrite one tracked file's text: whole-file for Markdown, and for every
+/// other file only `trace:` lines and the comment part of each line. Code
+/// and string literals stay (they may be fixtures), so a lookup literal in
+/// code keeps resolving numerically to the survivor.
 pub(crate) fn rewrite_tracked_text(
     path: &str,
     text: &str,
@@ -235,12 +279,19 @@ pub(crate) fn rewrite_tracked_text(
     let mut total = 0;
     let mut out = String::with_capacity(text.len());
     for line in text.split_inclusive('\n') {
-        if line.contains("trace:") {
-            let (l, n) = rewrite_all(line, map);
-            total += n;
-            out.push_str(&l);
+        let start = if line.contains("trace:") {
+            Some(0)
         } else {
-            out.push_str(line);
+            comment_start(line)
+        };
+        match start {
+            Some(at) => {
+                let (tail, n) = rewrite_all(&line[at..], map);
+                total += n;
+                out.push_str(&line[..at]);
+                out.push_str(&tail);
+            }
+            None => out.push_str(line),
         }
     }
     (out, total)
@@ -259,12 +310,9 @@ fn tree_refs(project_root: &Path, files: &[String], literal: &str) -> usize {
         .sum()
 }
 
-/// Plan the renumbers for every numeric collision group in `reqs`.
-pub(crate) fn plan(
-    reqs: &[Requirement],
-    project_root: &Path,
-    main_rev: &str,
-) -> Vec<PlannedRenumber> {
+/// Numeric collision groups in `reqs`: id key -> the objects sharing it
+/// (only keys held by two or more distinct UUIDs).
+pub(crate) fn collision_groups(reqs: &[Requirement]) -> BTreeMap<String, Vec<&Requirement>> {
     let mut groups: BTreeMap<String, Vec<&Requirement>> = BTreeMap::new();
     for r in reqs {
         if let Some(sid) = r.spec_id.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -274,13 +322,17 @@ pub(crate) fn plan(
                 .push(r);
         }
     }
-    groups.retain(|_, v| {
-        v.iter()
-            .map(|r| r.id)
-            .collect::<std::collections::HashSet<_>>()
-            .len()
-            > 1
-    });
+    groups.retain(|_, v| v.iter().map(|r| r.id).collect::<HashSet<_>>().len() > 1);
+    groups
+}
+
+/// Plan the renumbers for every numeric collision group in `reqs`.
+pub(crate) fn plan(
+    reqs: &[Requirement],
+    project_root: &Path,
+    main_rev: &str,
+) -> Vec<PlannedRenumber> {
+    let groups = collision_groups(reqs);
     if groups.is_empty() {
         return Vec::new();
     }
@@ -292,11 +344,6 @@ pub(crate) fn plan(
             .iter()
             .map(|r| {
                 let literal = r.spec_id.clone().unwrap_or_default();
-                let commit_shas = commits
-                    .iter()
-                    .filter(|(_, msg)| !find_id_tokens(msg, &literal).is_empty())
-                    .map(|(sha, _)| sha.clone())
-                    .collect();
                 let store_refs: usize = reqs
                     .iter()
                     .filter(|o| o.id != r.id)
@@ -306,7 +353,7 @@ pub(crate) fn plan(
                     uuid: r.id,
                     literal: literal.clone(),
                     title: r.title.clone(),
-                    commit_shas,
+                    commit_shas: citing_shas(&commits, &literal),
                     other_refs: store_refs + tree_refs(project_root, &files, &literal),
                 }
             })
@@ -323,6 +370,97 @@ pub(crate) fn plan(
         }
     }
     out
+}
+
+/// One line of the old -> new mapping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MappingRow {
+    pub old: String,
+    pub new: String,
+    pub uuid: Uuid,
+}
+
+const MAPPING_HEADER: &str = "\
+# Spec ID renumber mapping for `aida doctor --fix id-collisions`.
+# One renumber per line: old ID <TAB> new ID <TAB> requirement UUID.
+# Apply to the store with: aida doctor --fix id-collisions --mapping <this file> --yes
+";
+
+/// The mapping file text for `rows`.
+pub(crate) fn render_mapping(rows: &[MappingRow]) -> String {
+    let mut out = MAPPING_HEADER.to_string();
+    for r in rows {
+        out.push_str(&format!("{}\t{}\t{}\n", r.old, r.new, r.uuid));
+    }
+    out
+}
+
+/// Parse a mapping file (blank and `#` lines ignored).
+pub(crate) fn parse_mapping(text: &str) -> Result<Vec<MappingRow>> {
+    let mut rows = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let [old, new, uuid] = fields.as_slice() else {
+            anyhow::bail!(
+                "mapping line {}: expected `old new uuid`, got {line:?}",
+                n + 1
+            );
+        };
+        rows.push(MappingRow {
+            old: (*old).to_string(),
+            new: (*new).to_string(),
+            uuid: Uuid::parse_str(uuid)
+                .with_context(|| format!("mapping line {}: bad uuid {uuid:?}", n + 1))?,
+        });
+    }
+    Ok(rows)
+}
+
+/// Everything wrong with applying `rows` to `reqs`; empty when the mapping
+/// is safe to apply. `holder` answers which UUID already holds an ID.
+pub(crate) fn mapping_problems(
+    reqs: &[Requirement],
+    rows: &[MappingRow],
+    holder: &dyn Fn(&str) -> Result<Option<Uuid>>,
+) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    let mut new_keys = HashSet::new();
+    for r in rows {
+        match reqs.iter().find(|q| q.id == r.uuid) {
+            None => out.push(format!("{}: no requirement has UUID {}", r.old, r.uuid)),
+            Some(q) => {
+                let filed = q.spec_id.as_deref().unwrap_or("");
+                if !filed.trim().eq_ignore_ascii_case(r.old.trim()) {
+                    out.push(format!(
+                        "{}: requirement {} is now filed as {filed}",
+                        r.old, r.uuid
+                    ));
+                }
+            }
+        }
+        if aida_core::id_identity::IdKey::parse(&r.new).is_none()
+            || !aida_core::object_store::valid_spec_id_format(
+                &aida_core::object_store::canonical_spec_id(&r.new),
+            )
+        {
+            out.push(format!("{} -> {}: not a valid spec ID", r.old, r.new));
+            continue;
+        }
+        if !new_keys.insert(aida_core::id_identity::id_key(&r.new)) {
+            out.push(format!("{}: listed twice as a new ID", r.new));
+        }
+        if let Some(h) = holder(&r.new)? {
+            out.push(format!(
+                "{} -> {}: {} is already used by requirement {h}",
+                r.old, r.new, r.new
+            ));
+        }
+    }
+    Ok(out)
 }
 
 /// The history entry recorded on a renumbered spec.
@@ -379,16 +517,23 @@ pub(crate) fn build_rewrites(
     (renames, referrers)
 }
 
-/// Rewrite this checkout's tracked docs and trace comments. Returns
-/// `(path, replacements)` for every file changed.
+/// Rewrite this checkout's tracked text for `map` (see
+/// [`rewrite_tracked_text`]), skipping `exclude` (the mapping file itself).
+/// Returns `(path, replacements)` for every file changed (or that would be,
+/// under `dry_run`).
 pub(crate) fn rewrite_tree(
     project_root: &Path,
     map: &[(String, String)],
     dry_run: bool,
+    exclude: Option<&Path>,
 ) -> Result<Vec<(String, usize)>> {
+    let exclude = exclude.and_then(|p| std::fs::canonicalize(p).ok());
     let mut out = Vec::new();
     for f in tracked_files(project_root) {
         let path = project_root.join(&f);
+        if exclude.is_some() && std::fs::canonicalize(&path).ok() == exclude {
+            continue;
+        }
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
@@ -404,155 +549,174 @@ pub(crate) fn rewrite_tree(
     Ok(out)
 }
 
-/// Entry point for `aida doctor renumber-id-collisions`.
-pub(crate) fn run(project_root: &Path, store_root: &Path, dry_run: bool, yes: bool) -> Result<()> {
+fn pairs(rows: &[MappingRow]) -> Vec<(String, String)> {
+    rows.iter()
+        .map(|r| (r.old.clone(), r.new.clone()))
+        .collect()
+}
+
+fn print_files(files: &[(String, usize)]) {
+    for (f, n) in files {
+        println!("  {f}: {n}");
+    }
+}
+
+/// Entry point for `aida doctor --fix id-collisions`.
+pub(crate) fn run(project_root: &Path, store_root: &Path, opts: &FixOptions) -> Result<()> {
+    if !opts.dry_run && !opts.tree_only && !opts.yes {
+        anyhow::bail!(
+            "renumbering rewrites spec IDs in the store; preview with --dry-run, \
+             then re-run with --yes to apply"
+        );
+    }
     let backend = aida_core::GitBackend::new(store_root)?;
     let reqs = aida_core::object_store::load_all_objects(&store_root.join("objects"))?;
-    let planned = plan(&reqs, project_root, "origin/main");
-    if planned.is_empty() {
-        println!("No numeric ID collisions: every spec number is used once.");
-        return Ok(());
-    }
-    println!(
-        "{} numeric ID collision(s) — keep / renumber (commit refs on origin/main, other refs):",
-        planned.len()
-    );
-    for p in &planned {
+    let saved = match &opts.mapping {
+        Some(p) if p.exists() => Some(parse_mapping(
+            &std::fs::read_to_string(p).with_context(|| format!("read {}", p.display()))?,
+        )?),
+        _ => None,
+    };
+    if opts.tree_only {
+        let rows = saved.context("--tree-only needs an existing --mapping file")?;
+        let files = rewrite_tree(
+            project_root,
+            &pairs(&rows),
+            opts.dry_run,
+            opts.mapping.as_deref(),
+        )?;
         println!(
-            "  {:<12} keep {} ({} commits, {} refs)  renumber {} ({} commits, {} refs) — {}",
-            p.key,
-            p.survivor.literal,
-            p.survivor.commit_shas.len(),
-            p.survivor.other_refs,
-            p.renumber.literal,
-            p.renumber.commit_shas.len(),
-            p.renumber.other_refs,
-            p.renumber.title
+            "{} {} tracked file(s) for {} renumber(s); the store is untouched.",
+            if opts.dry_run {
+                "Would rewrite"
+            } else {
+                "Rewrote"
+            },
+            files.len(),
+            rows.len()
         );
-    }
-    if dry_run {
-        println!("(dry run: nothing written)");
+        print_files(&files);
         return Ok(());
     }
-    if !yes {
-        anyhow::bail!(
-            "renumbering rewrites spec IDs; re-run with --yes to apply (or --dry-run to preview)"
-        );
-    }
-    let mut mapping: BTreeMap<Uuid, (String, String, Vec<String>)> = BTreeMap::new();
-    for p in &planned {
-        let req = reqs
+    let rows = match saved {
+        Some(rows) => {
+            println!(
+                "Using the mapping in {} ({} renumber(s)).",
+                opts.mapping.as_deref().unwrap_or(Path::new("?")).display(),
+                rows.len()
+            );
+            rows
+        }
+        None => {
+            if !opts.dry_run && opts.mapping.is_some() {
+                anyhow::bail!("mapping file not found; create it with --dry-run --mapping <file>");
+            }
+            let planned = plan(&reqs, project_root, "origin/main");
+            if planned.is_empty() {
+                println!("No numeric ID collisions: every spec number is used once.");
+                return Ok(());
+            }
+            println!(
+                "{} numeric ID collision(s) — keep / renumber (commit refs on origin/main, other refs):",
+                planned.len()
+            );
+            for p in &planned {
+                println!(
+                    "  {:<12} keep {} ({} commits, {} refs)  renumber {} ({} commits, {} refs)",
+                    p.key,
+                    p.survivor.literal,
+                    p.survivor.commit_shas.len(),
+                    p.survivor.other_refs,
+                    p.renumber.literal,
+                    p.renumber.commit_shas.len(),
+                    p.renumber.other_refs,
+                );
+            }
+            let mut reserved = HashSet::new();
+            let mut rows = Vec::new();
+            for p in &planned {
+                let req = reqs
+                    .iter()
+                    .find(|r| r.id == p.renumber.uuid)
+                    .context("planned object vanished")?;
+                let new = if opts.dry_run {
+                    backend.peek_spec_id(req, RENUMBER_HEADROOM, &reserved)?
+                } else {
+                    backend.mint_spec_id(req)?
+                };
+                reserved.insert(aida_core::id_identity::id_key(&new));
+                rows.push(MappingRow {
+                    old: p.renumber.literal.clone(),
+                    new,
+                    uuid: p.renumber.uuid,
+                });
+            }
+            rows
+        }
+    };
+    println!("Old -> new:");
+    for r in &rows {
+        let title = reqs
             .iter()
-            .find(|r| r.id == p.renumber.uuid)
-            .context("planned object vanished")?;
-        let new_id = backend.mint_spec_id(req)?;
-        println!("  {} -> {}", p.renumber.literal, new_id);
-        mapping.insert(
-            p.renumber.uuid,
+            .find(|q| q.id == r.uuid)
+            .map_or("", |q| q.title.as_str());
+        println!("  {:<14} -> {:<14} {title}", r.old, r.new);
+    }
+    let problems = mapping_problems(&reqs, &rows, &|id| backend.id_holder(id))?;
+    let commits = commit_messages(project_root, "origin/main");
+    let mapping: BTreeMap<Uuid, (String, String, Vec<String>)> = rows
+        .iter()
+        .map(|r| {
             (
-                p.renumber.literal.clone(),
-                new_id,
-                p.renumber.commit_shas.clone(),
-            ),
+                r.uuid,
+                (r.old.clone(), r.new.clone(), citing_shas(&commits, &r.old)),
+            )
+        })
+        .collect();
+    let (renames, referrers) = build_rewrites(&reqs, &mapping);
+    if opts.dry_run {
+        for p in &problems {
+            println!("  warning: {p}");
+        }
+        if let Some(path) = opts.mapping.as_deref().filter(|p| !p.exists()) {
+            std::fs::write(path, render_mapping(&rows))
+                .with_context(|| format!("write {}", path.display()))?;
+            println!("Saved the mapping to {}.", path.display());
+        }
+        let files = rewrite_tree(project_root, &pairs(&rows), true, opts.mapping.as_deref())?;
+        println!(
+            "Would renumber {} spec(s), rewrite {} store referrer(s) and {} tracked file(s).",
+            renames.len(),
+            referrers.len(),
+            files.len()
+        );
+        print_files(&files);
+        println!("(dry run: nothing written to the store)");
+        return Ok(());
+    }
+    if !problems.is_empty() {
+        anyhow::bail!(
+            "the mapping cannot be applied; nothing was written:\n  {}",
+            problems.join("\n  ")
         );
     }
-    let (renames, referrers) = build_rewrites(&reqs, &mapping);
     backend.renumber_requirements(&renames, &referrers, "doctor")?;
-    let map: Vec<(String, String)> = mapping
-        .values()
-        .map(|(o, n, _)| (o.clone(), n.clone()))
-        .collect();
-    let files = rewrite_tree(project_root, &map, false)?;
+    let files = rewrite_tree(project_root, &pairs(&rows), false, opts.mapping.as_deref())?;
     println!(
         "Renumbered {} spec(s); rewrote {} store referrer(s) and {} tracked file(s).",
         renames.len(),
         referrers.len(),
         files.len()
     );
-    for (f, n) in files {
-        println!("  {f}: {n}");
-    }
+    print_files(&files);
+    let after = aida_core::object_store::load_all_objects(&store_root.join("objects"))?;
+    println!(
+        "Numeric ID collision groups remaining: {}.",
+        collision_groups(&after).len()
+    );
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tokens_respect_id_boundaries() {
-        let t = "see TASK-418, not TASK-4180 or BUG-TASK-418 or TASK-418-2; (task-418)";
-        assert_eq!(find_id_tokens(t, "TASK-418").len(), 2);
-        let (out, n) = replace_id_tokens(t, "TASK-418", "TASK-HOME-007");
-        assert_eq!(n, 2);
-        assert!(out.starts_with("see TASK-HOME-007, not TASK-4180"));
-        assert!(out.ends_with("(TASK-HOME-007)"));
-        // The padded and unpadded literals are distinct text.
-        assert!(find_id_tokens("TASK-0418", "TASK-418").is_empty());
-    }
-
-    fn member(literal: &str, commits: usize, refs: usize) -> Member {
-        Member {
-            uuid: Uuid::new_v4(),
-            literal: literal.into(),
-            title: String::new(),
-            commit_shas: (0..commits).map(|i| format!("sha{i}")).collect(),
-            other_refs: refs,
-        }
-    }
-
-    #[test]
-    fn survivor_has_most_commit_refs_then_refs_then_unpadded() {
-        let m = [member("TASK-0418", 3, 0), member("TASK-418", 1, 50)];
-        assert_eq!(choose_survivor(&m), 0);
-        let m = [member("TASK-0418", 1, 9), member("TASK-418", 1, 2)];
-        assert_eq!(choose_survivor(&m), 0);
-        let m = [member("TASK-0418", 0, 0), member("TASK-418", 0, 0)];
-        assert_eq!(choose_survivor(&m), 1, "tie keeps the unpadded side");
-    }
-
-    #[test]
-    fn tracked_rewrite_touches_docs_and_trace_lines_only() {
-        let map = vec![("TASK-0418".to_string(), "TASK-HOME-001".to_string())];
-        let rs = "let fixture = \"TASK-0418\";\n// trace:TASK-0418 | ai:claude\n";
-        let (out, n) = rewrite_tracked_text("src/x.rs", rs, &map);
-        assert_eq!(n, 1);
-        assert!(out.contains("\"TASK-0418\""));
-        assert!(out.contains("trace:TASK-HOME-001"));
-        let (out, n) = rewrite_tracked_text("CHANGELOG.md", "- fixed TASK-0418\n", &map);
-        assert_eq!((out.as_str(), n), ("- fixed TASK-HOME-001\n", 1));
-    }
-
-    #[test]
-    fn build_rewrites_renames_records_history_and_rewrites_referrers() {
-        let mut a = Requirement::new("padded".into(), "dup of TASK-418".into());
-        a.spec_id = Some("TASK-0418".into());
-        let mut b = Requirement::new("plain".into(), String::new());
-        b.spec_id = Some("TASK-418".into());
-        let mut c = Requirement::new("referrer".into(), "see TASK-0418".into());
-        c.spec_id = Some("TASK-9".into());
-        let reqs = vec![a.clone(), b, c];
-        let mut mapping = BTreeMap::new();
-        mapping.insert(
-            a.id,
-            (
-                "TASK-0418".to_string(),
-                "TASK-HOME-001".to_string(),
-                vec!["abc".to_string()],
-            ),
-        );
-        let (renames, referrers) = build_rewrites(&reqs, &mapping);
-        assert_eq!(renames.len(), 1);
-        let (old, row) = &renames[0];
-        assert_eq!(old, "TASK-0418");
-        assert_eq!(row.spec_id.as_deref(), Some("TASK-HOME-001"));
-        let h = row.history.last().unwrap();
-        assert_eq!(h.author, RENUMBER_AUTHOR);
-        assert_eq!(h.changes[0].old_value, "TASK-0418");
-        assert!(h.changes[1].new_value.contains("abc"));
-        // The unpadded literal in a's own text is a different literal: kept.
-        assert_eq!(row.description, "dup of TASK-418");
-        assert_eq!(referrers.len(), 1);
-        assert_eq!(referrers[0].description, "see TASK-HOME-001");
-    }
-}
+#[path = "tests/bug_046_doctor_renumber_tests.rs"]
+mod tests;

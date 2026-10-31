@@ -588,7 +588,7 @@ impl GitBackend {
             return Ok(Some(req));
         }
         // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — leading
-        // zeros are insignificant: `TASK-0418` reads `TASK-418.yaml`. Only
+        // zeros are insignificant: `TASK-0042` reads `TASK-42.yaml`. Only
         // the one shard directory is listed. With several twins (a
         // pre-migration collision) the first in sorted order answers; write
         // paths refuse the ambiguity before reaching here.
@@ -602,14 +602,35 @@ impl GitBackend {
     }
 
     /// The UUID of the requirement already holding `id` (as its object file
-    /// under any padding, or as an agreed id), for mint-time admission. The
-    /// agreed-id half reads the cache-free store scan only when no object
-    /// file matches.
+    /// under any padding, or as an agreed id under any padding), for
+    /// mint-time admission. The agreed-id half scans the store's text only
+    /// when no object file matches.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-    pub(crate) fn id_holder(&self, id: &str) -> Result<Option<uuid::Uuid>> {
+    pub fn id_holder(&self, id: &str) -> Result<Option<uuid::Uuid>> {
         for stem in object_store::numeric_twin_stems(&self.objects_root, id)? {
             if let Ok(req) = object_store::read_object(&self.objects_root, &stem) {
                 return Ok(Some(req.id));
+            }
+        }
+        if crate::id_identity::IdKey::parse(id).is_none() {
+            return Ok(None);
+        }
+        // The agreed-id half: only a file whose `agreed_id:` line names the
+        // same number is parsed, so a miss costs one text read per object.
+        for (_name, path) in object_store::list_objects(&self.objects_root)? {
+            let Ok(text) = crate::read_atomic(&path) else {
+                continue;
+            };
+            let names_it = text.lines().any(|line| {
+                line.strip_prefix("agreed_id:").is_some_and(|v| {
+                    let v = v.trim().trim_matches('"').trim_matches('\'');
+                    crate::id_identity::same_id(v, id)
+                })
+            });
+            if names_it {
+                if let Ok(req) = object_store::read_object_from_path(&path) {
+                    return Ok(Some(req.id));
+                }
             }
         }
         Ok(None)
@@ -1450,7 +1471,7 @@ impl GitBackend {
     /// Mint a fresh spec ID for `template` exactly as `add_requirement` would
     /// (same prefix rules, same dispenser, same [`crate::id_identity::allocate_id`]
     /// skip of numbers used under any padding) and persist the advanced
-    /// counters. Used by `aida doctor renumber-id-collisions`.
+    /// counters. Used by `aida doctor --fix id-collisions`.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     pub fn mint_spec_id(&self, template: &Requirement) -> Result<String> {
         let _lock = self.lock_store()?;
@@ -1483,6 +1504,98 @@ impl GitBackend {
         }
         self.save_metadata(&Self::extract_metadata(&temp_store))?;
         Ok(minted)
+    }
+
+    /// Predict, WITHOUT advancing any counter or writing anything, a free ID
+    /// [`Self::mint_spec_id`] could hand `template`: the next number (for a
+    /// node-local clone, past this node's highest filed number) plus
+    /// `headroom` (so IDs minted meanwhile do not land on it),
+    /// skipping numbers already used under any padding and any key in
+    /// `reserved` (earlier predictions in the same plan). Used by the
+    /// `aida doctor --fix id-collisions --dry-run` mapping.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    pub fn peek_spec_id(
+        &self,
+        template: &Requirement,
+        headroom: u32,
+        reserved: &std::collections::HashSet<String>,
+    ) -> Result<String> {
+        let meta = self.load_metadata()?;
+        let mut temp_store = self.assemble_store(meta, Vec::new());
+        let prefix = template
+            .prefix_override
+            .as_deref()
+            .map(str::to_uppercase)
+            .or_else(|| temp_store.get_type_prefix(&template.req_type))
+            .unwrap_or_else(|| "REQ".to_string());
+        let free = |id: &str| -> Result<bool> {
+            Ok(!id.is_empty()
+                && !reserved.contains(&crate::id_identity::id_key(id))
+                && self.id_holder(id)?.is_none())
+        };
+        let budget = headroom as usize + crate::id_identity::MAX_ALLOCATION_SKIPS * 4;
+        if temp_store
+            .dispenser
+            .as_ref()
+            .is_some_and(|d| d.node_local_only())
+        {
+            // A node-local clone dispenser takes its counter's write lock even
+            // to peek, so predict from the store instead: past the highest
+            // number this node already filed under the prefix.
+            let node = crate::allocation_authority::node(&self.root)?;
+            let local = crate::id_identity::IdKey::parse(&format!("{prefix}-{node}-1"))
+                .map(|k| k.prefix)
+                .unwrap_or_default();
+            let high = object_store::list_objects(&self.objects_root)?
+                .iter()
+                .filter_map(|(stem, _)| crate::id_identity::IdKey::parse(stem))
+                .filter(|k| k.prefix == local)
+                .filter_map(|k| k.seq.parse::<u32>().ok())
+                .max()
+                .unwrap_or(0);
+            let width = crate::id_identity::installed_widths().node_mint_width();
+            let start = high.saturating_add(1).saturating_add(headroom);
+            for seq in start..start.saturating_add(budget as u32) {
+                let id = format!("{prefix}-{node}-{seq:0width$}");
+                if free(&id)? {
+                    return Ok(id);
+                }
+            }
+        } else if let Some(dispenser) = temp_store.dispenser.clone() {
+            let key = if dispenser.node_local_only()
+                || temp_store.id_config.numbering != crate::models::NumberingStrategy::Global
+            {
+                prefix.clone()
+            } else {
+                "GLOBAL".to_string()
+            };
+            let start = dispenser.peek(&key)?.saturating_add(headroom);
+            for seq in start..start.saturating_add(budget as u32) {
+                let id = dispenser.format_id(&prefix, seq)?;
+                if free(&id)? {
+                    return Ok(id);
+                }
+            }
+        } else {
+            // No dispenser: the counters live only in this in-memory copy,
+            // which is never saved, so generating ahead advances nothing.
+            let mut probe = template.clone();
+            probe.spec_id = None;
+            probe.agreed_id = None;
+            let type_prefix = temp_store.get_type_prefix(&template.req_type);
+            for drawn in 0..budget {
+                temp_store.add_requirement_with_id(probe.clone(), None, type_prefix.as_deref());
+                let id = temp_store
+                    .requirements
+                    .last()
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_default();
+                if drawn >= headroom as usize && free(&id)? {
+                    return Ok(id);
+                }
+            }
+        }
+        anyhow::bail!("no free spec ID found for prefix {prefix} within {budget} numbers")
     }
 
     /// Renumber requirements in ONE store commit: each `(old, new)` pair
@@ -4108,9 +4221,6 @@ mod tests {
         assert!(gone.is_none());
     }
 
-    /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit
-    /// (the whole point — vs update_requirement's one-commit-per-spec that
-    /// turned a 679-spec archive sweep into 679 commits).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     fn bug_046_plant(backend: &GitBackend, spec_id: &str, title: &str) -> Requirement {
         let mut r = Requirement::new(title.into(), String::new());
@@ -4220,6 +4330,37 @@ mod tests {
         );
     }
 
+    /// AC2: a number another spec holds as its AGREED id (under any padding)
+    /// is taken, so a dispensed local ID never lands on it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_id_holder_considers_agreed_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let mut holder = Requirement::new("agreed holder".into(), String::new());
+        holder.spec_id = Some("TASK-7-001".into());
+        holder.agreed_id = Some("TASK-0055".into());
+        object_store::write_object(&backend.objects_root, &holder).unwrap();
+        for id in ["TASK-55", "TASK-055", "task-0055"] {
+            assert_eq!(backend.id_holder(id).unwrap(), Some(holder.id), "{id}");
+        }
+        assert_eq!(backend.id_holder("TASK-550").unwrap(), None);
+        assert_eq!(backend.id_holder("BUG-55").unwrap(), None);
+        let mut explicit = Requirement::new("explicit".into(), String::new());
+        explicit.spec_id = Some("TASK-55".into());
+        let err = crate::id_identity::admit_new_id(
+            "TASK-55",
+            &|i| backend.id_holder(i),
+            explicit.id,
+        )
+        .unwrap_err();
+        assert!(err.downcast_ref::<crate::id_identity::IdTakenError>().is_some());
+    }
+
+    /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit
+    /// (the whole point — vs update_requirement's one-commit-per-spec that
+    /// turned a 679-spec archive sweep into 679 commits).
     #[test]
     fn bulk_update_writes_all_changed_in_a_single_commit() {
         let dir = tempfile::tempdir().unwrap();

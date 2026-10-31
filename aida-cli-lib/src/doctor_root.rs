@@ -1955,7 +1955,7 @@ pub(crate) fn id_collision_findings(
                         lines.join("; ")
                     ),
                     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-                    action: "run `aida doctor renumber-id-collisions --dry-run` to preview \
+                    action: "run `aida doctor --fix id-collisions --dry-run` to preview \
                              the repair (not auto-healed: renumbering is a data migration)"
                         .to_string(),
                     safe_heal: false,
