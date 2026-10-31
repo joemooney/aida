@@ -12,12 +12,12 @@ description: |
   4. doctor reports the mode (single-hub / rooted) and why.
   NEEDS an architecture sketch and advisor signoff before code.
   Advisor note on THIS repo (2026-10-31 12:30): GitLab is configured as a mirror_remote, but the WORK clone pushes only to GitLab and a cron reconcile bridges it hourly, so both hubs accept independent writes = TWO hubs. This repo keeps an enrolled root (the STORY-105 runbook's enroll-root stands).
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:26:20.743397763Z
-modified_at: 2026-10-31T19:30:55.585077586Z
+modified_at: 2026-10-31T20:17:55.091176863Z
 req_type: Story
 comments:
 - id: 01a19371-8fe1-7b00-8027-12febfb00433
@@ -27,6 +27,15 @@ comments:
   modified_at: 2026-10-31T19:30:55.585077586Z
   session_id: 01a19317-50be-7103-a820-408213c53b0b
   harness_version: 2.1.316 (Claude Code)
+history:
+- id: 01a1939c-9593-7f80-8f66-f03d28365244
+  author: joe
+  timestamp: 2026-10-31T20:17:55.091174031Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
