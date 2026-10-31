@@ -1,0 +1,27 @@
+id: 01a18f74-3fef-7962-bd58-16750a51dc81
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-140
+title: '(cosmetic) pr_cmd.rs ShipArgs.from_seat: --no-merge is accepted and silently ig…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-038, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (cosmetic) pr_cmd.rs ShipArgs.from_seat: --no-merge is accepted and silently ignored with --from-seat (it never merges); add it to conflicts_with_all or document it.
+  Reviewed sha: b9fac73f20bfef9168c05b85b04aa4948f3ff80b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T00:55:22.863095356Z
+modified_at: 2026-10-31T00:55:22.863095356Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-038
+- finding-hash:9c9f7580
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-038
+- kind:carried-forward
+filed_at:
+  code_sha: 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cdbecda7678
+  vendor: claude
