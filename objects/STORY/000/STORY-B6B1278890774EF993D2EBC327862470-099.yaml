@@ -52,7 +52,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T15:19:43.522299565Z
+modified_at: 2026-10-31T16:24:06.402216172Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -248,6 +248,13 @@ comments:
   created_at: 2026-10-31T15:19:43.522299565Z
   modified_at: 2026-10-31T15:19:43.522299565Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a192c6-8602-79e2-927a-5627f0db4cd9
+  author: joe
+  content: 'Round 3 (security floor, ruling 2026-10-31) pushed at 5e97940 on PR-3164. Delta: (1) claim refuses a reused id (running/done/failed job or result, tty marker, or out file) -> failed/<id>.duplicate-<n>.job + refused:duplicate-id ledger row, no result write; claim is no-replace (link+unlink); cancel sweep skips reused ids. (2) DeputyTtyMarker carries job_dev/job_ino of running/<id>.job at claim; floor requires a match; unbound markers fail closed. Tests (a)(b)(c) added: a_duplicate_of_a_running_id_is_refused_and_its_marker_survives, a_duplicate_of_a_done_id_is_refused, a_marker_for_job_a_never_authorizes_job_b. (3) docs/environment-variables.md: Deputy jobs section with the four AIDA_DEPUTY_* vars. Gates: deputy tests 37/37 pass; make check-ci-fast rc=0. gate:: filter: 1099 pass, 39 fail, all sandbox-environmental in this contained seat (merge-hold writes denied for a contained seat / read-only hermetic HOME), none in deputy/floor code.'
+  created_at: 2026-10-31T16:24:06.402216172Z
+  modified_at: 2026-10-31T16:24:06.402216172Z
+  session_id: 01a192b04425
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18a52-9d72-7b62-969e-89638e367cb5
   author: joe
