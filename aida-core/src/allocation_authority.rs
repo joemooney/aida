@@ -1042,6 +1042,7 @@ mod tests {
     }
 
     // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac5e9c08 | ai:claude
     #[test]
     fn story_105_root_setting_refuses_when_root_record_names_another_node() {
         let (dir, _) = fixture(true);

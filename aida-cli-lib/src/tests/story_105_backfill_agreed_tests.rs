@@ -62,6 +62,7 @@ fn floors_take_specs_blocks_spent_shared_blocks_and_counters() {
     assert_eq!(f["STORY"], 2010);
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.ace15a08 | ai:claude
 #[test]
 fn backfill_agreed_ids_end_to_end() {
     use aida_core::DatabaseBackend;

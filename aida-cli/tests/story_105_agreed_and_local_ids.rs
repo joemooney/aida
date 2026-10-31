@@ -149,6 +149,9 @@ impl Fixture {
     }
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac6be633 | ai:claude
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.acdb02e1 | ai:claude
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac5e9c08 | ai:claude
 #[test]
 fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
     let f = Fixture::new();

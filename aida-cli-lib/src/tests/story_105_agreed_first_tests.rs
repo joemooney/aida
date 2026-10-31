@@ -62,6 +62,7 @@ fn bare_id_opens_the_agreed_spec_and_every_name_of_a_backfilled_spec_resolves() 
     assert_eq!(local_twin_note(&objects, "STORY-5801", &backfilled), None);
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.acbd0123 | ai:claude
 #[test]
 fn display_puts_the_agreed_id_first_and_marks_a_pending_one() {
     let _guard = home();
