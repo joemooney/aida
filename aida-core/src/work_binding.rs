@@ -161,6 +161,53 @@ pub fn bound_counter_state(path: &Path) -> Result<Option<DispenserState>> {
     Ok(Some(state))
 }
 
+/// Raise the bound clone's counter so each type's next dispense is above
+/// `floor[type]` (a counter already past it is left alone), under the
+/// counter's dispense lock. Returns the counter file's prior text so a
+/// caller can roll back with [`restore_counter`]. A missing or mismatched
+/// counter refuses; it is never recreated here.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn raise_counter(
+    root: &Path,
+    floor: &std::collections::BTreeMap<String, u32>,
+) -> Result<String> {
+    let binding = load(root)?.context("this clone has no node binding")?;
+    let counter = counter_path(root)?;
+    crate::BlockRegistry::with_dispense_lock(&counter, || {
+        let prior = std::fs::read_to_string(&counter).with_context(|| {
+            format!(
+                "WORK counter {} missing; explicit recovery required",
+                counter.display()
+            )
+        })?;
+        let mut state: DispenserState = toml::from_str(&prior)
+            .with_context(|| format!("invalid WORK counter {}", counter.display()))?;
+        ensure_bound(&state, &binding.node_id, &counter)?;
+        let mut changed = false;
+        for (typ, n) in floor {
+            let e = state.sequences.entry(typ.to_ascii_uppercase()).or_insert(0);
+            if *e < *n {
+                *e = *n;
+                changed = true;
+            }
+        }
+        if changed {
+            crate::write_atomic(&counter, toml::to_string_pretty(&state)?)?;
+        }
+        Ok(prior)
+    })
+}
+
+/// Put back a counter text [`raise_counter`] returned, under the same lock.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn restore_counter(root: &Path, prior: &str) -> Result<()> {
+    let counter = counter_path(root)?;
+    crate::BlockRegistry::with_dispense_lock(&counter, || {
+        crate::write_atomic(&counter, prior)?;
+        Ok(())
+    })
+}
+
 /// Establish binding and persistent provider before init's first allocation.
 /// Store writer precedes the common dispenser lock. Restart after publishing
 /// the counter but before publishing the binding recovers that same UUID.

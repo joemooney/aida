@@ -100,6 +100,7 @@ impl Fixture {
                     retired: true,
                 },
             ],
+            ..Default::default()
         };
         write(
             &fixture.store.join("registry/node_aliases.toml"),

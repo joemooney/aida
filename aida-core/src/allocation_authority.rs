@@ -281,35 +281,177 @@ pub fn require_global(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The allocation policy this clone may use, given the configured one.
+///
+/// The root uses the configured policy, but only while `registry/root.yaml`
+/// (when present) names this clone's node: a clone whose local setting says
+/// root while the store records another holder refuses before dispensing.
+/// A non-root clone may use blocks only for a type it holds a spendable
+/// delegated block for ([`delegated_block`]); otherwise it allocates
+/// node-local IDs.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 pub fn effective_policy(
     root: &Path,
     configured: crate::IdFormatPolicy,
 ) -> Result<crate::IdFormatPolicy> {
-    if resolve(root)?.authoritative {
+    effective_policy_for(root, configured, None)
+}
+
+/// [`effective_policy`] for one type: a non-root clone holding a spendable
+/// delegated `type_prefix` block keeps the configured block policy.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn effective_policy_for(
+    root: &Path,
+    configured: crate::IdFormatPolicy,
+    type_prefix: Option<&str>,
+) -> Result<crate::IdFormatPolicy> {
+    let mode = resolve(root)?;
+    if mode.authoritative {
+        refuse_foreign_root_record(root)?;
         return Ok(configured);
+    }
+    if configured.uses_blocks() {
+        if let Some(typ) = type_prefix {
+            if delegated_block(root, typ)?.is_some() {
+                return Ok(configured);
+            }
+        }
     }
     if configured == crate::IdFormatPolicy::BlocksOnly {
         // Name the missing piece rather than only "not authoritative".
         // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
-        match resolve(root)?.upstream {
+        match mode.upstream {
             None => bail!(
                 "id_format policy is `blocks-only` but this clone cannot use blocks: {}",
                 crate::allocation_lineage::Unusable::NoUpstream
             ),
             Some(upstream) => bail!(
-                "id_format policy is `blocks-only` but this clone cannot dispense from a block granted by its upstream `{upstream}` yet; it may allocate only node-local IDs"
+                "id_format policy is `blocks-only` but this clone holds no usable block granted by its upstream `{upstream}`; it may allocate only node-local IDs"
             ),
         }
     }
     Ok(crate::IdFormatPolicy::NodeAwareOnly)
 }
 
+/// Refuse when this clone's local setting says root but the store's
+/// `registry/root.yaml` names a different holder (or this clone's node
+/// cannot be determined to compare). No record means no claim to check.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn refuse_foreign_root_record(root: &Path) -> Result<()> {
+    let Some(record) = crate::allocation_lineage::RootRecord::load(root)? else {
+        return Ok(());
+    };
+    let node = node(root).with_context(|| {
+        format!(
+            "this clone is marked as the allocation root but its node is unknown, so it cannot be checked against node {}, the root recorded in {}",
+            record.holder_node,
+            crate::allocation_lineage::ROOT_YAML_REL
+        )
+    })?;
+    if record.holder_node != node {
+        bail!(
+            "this clone is marked as the allocation root, but {} records node {} as the root and this clone is node {node}; refusing to dispense. Run `aida node show` and re-enroll or clear this clone's setting",
+            crate::allocation_lineage::ROOT_YAML_REL,
+            record.holder_node
+        )
+    }
+    Ok(())
+}
+
+/// The lineage inputs for this (non-root or root) clone, read from the store
+/// and the clone-local setting.
+fn with_lineage_view<T>(
+    root: &Path,
+    node: &str,
+    mode: &AllocationMode,
+    f: impl FnOnce(&crate::allocation_lineage::LineageView<'_>) -> T,
+) -> Result<T> {
+    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
+    let pools = PoolRegistry::load(root)?;
+    let blocks = crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))?;
+    let root_record = RootRecord::load(root)?;
+    let view = LineageView {
+        pools: &pools.pools,
+        blocks: &blocks.blocks,
+        root: root_record.as_ref(),
+        node,
+        role: mode.role,
+        upstream: mode.upstream.as_deref(),
+    };
+    Ok(f(&view))
+}
+
+/// Index (in `registry/blocks.yaml`) of the delegated `type_prefix` block a
+/// non-root clone may dispense agreed IDs from, per
+/// [`LineageView::spendable_block`](crate::allocation_lineage::LineageView::spendable_block).
+/// `None` on the root (it dispenses from its own blocks) and whenever no
+/// block is spendable.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn delegated_block(root: &Path, type_prefix: &str) -> Result<Option<usize>> {
+    let blocks = crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))?;
+    delegated_block_in(root, type_prefix, &blocks.blocks)
+}
+
+/// [`delegated_block`] against a registry the caller already holds, so a
+/// dispenser that reloaded `blocks.yaml` under its locks indexes the very
+/// copy it will write (a pull or claim between an outside lookup and the
+/// lock could otherwise reorder the blocks under a stale index).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn delegated_block_in(
+    root: &Path,
+    type_prefix: &str,
+    blocks: &[crate::node::AgreedIdBlock],
+) -> Result<Option<usize>> {
+    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
+    let mode = resolve(root)?;
+    if mode.authoritative {
+        return Ok(None);
+    }
+    let Ok(node) = node(root) else {
+        return Ok(None);
+    };
+    let pools = PoolRegistry::load(root)?;
+    let root_record = RootRecord::load(root)?;
+    let view = LineageView {
+        pools: &pools.pools,
+        blocks,
+        root: root_record.as_ref(),
+        node: &node,
+        role: mode.role,
+        upstream: mode.upstream.as_deref(),
+    };
+    Ok(view.spendable_block(type_prefix).ok())
+}
+
+/// Whether `agreed_id` lies inside a delegated block this non-root clone may
+/// spend (same type, within the block's range, below its `next`). The one
+/// way a non-root clone may write a bare agreed ID.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+fn dispensed_from_delegated_block(root: &Path, node: &str, agreed_id: &str) -> Result<bool> {
+    let Some((prefix, seq)) = agreed_id.trim().rsplit_once('-') else {
+        return Ok(false);
+    };
+    let Ok(seq) = seq.parse::<u32>() else {
+        return Ok(false);
+    };
+    if prefix.contains('-') || !prefix.chars().all(|c| c.is_ascii_alphabetic()) {
+        return Ok(false);
+    }
+    let mode = resolve(root)?;
+    with_lineage_view(root, node, &mode, |view| {
+        view.spendable_block(prefix).is_ok_and(|i| {
+            let b = &view.blocks[i];
+            b.range_start <= seq && seq < b.next
+        })
+    })
+}
+
 /// Why a non-root clone issues node-local `type_prefix` IDs although
 /// blocks are configured, read from its upstream setting and the store's
-/// lineage records. `None` on the root, which dispenses as before.
+/// lineage records. `None` on the root, which dispenses as before, and on a
+/// clone holding a spendable delegated block (it dispenses from it).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
 pub fn downgrade_reason(root: &Path, type_prefix: &str) -> Result<Option<String>> {
-    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
     let mode = resolve(root)?;
     if mode.authoritative {
         return Ok(None);
@@ -318,25 +460,11 @@ pub fn downgrade_reason(root: &Path, type_prefix: &str) -> Result<Option<String>
         Ok(node) => node,
         Err(e) => return Ok(Some(format!("{e:#}"))),
     };
-    let pools = PoolRegistry::load(root)?;
-    let blocks = crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))?;
-    let root_record = RootRecord::load(root)?;
-    let view = LineageView {
-        pools: &pools.pools,
-        blocks: &blocks.blocks,
-        root: root_record.as_ref(),
-        node: &node,
-        role: mode.role,
-        upstream: mode.upstream.as_deref(),
-    };
-    Ok(Some(match view.spendable_block(type_prefix) {
-        // Claims, the only way a node gains such a block, wire dispensing.
-        Ok(_) => format!(
-            "this clone holds a delegated {} block, but dispensing from delegated blocks is not enabled yet",
-            type_prefix.to_ascii_uppercase()
-        ),
-        Err(reason) => reason.to_string(),
-    }))
+    with_lineage_view(root, &node, &mode, |view| {
+        view.spendable_block(type_prefix)
+            .err()
+            .map(|reason| reason.to_string())
+    })
 }
 
 /// True the first time `reason` is seen in this session (the AIDA session,
@@ -392,7 +520,24 @@ pub fn node(root: &Path) -> Result<String> {
     {
         bail!("node-local allocation requires a valid explicit node binding")
     }
+    refuse_retired_node(root, &node)?;
     Ok(node)
+}
+
+/// Refuse when `registry/nodes.toml` marks `node` retired: its specs were
+/// renamed into another node's local IDs, so it must never allocate again.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn refuse_retired_node(root: &Path, node: &str) -> Result<()> {
+    let path = root.join("registry/nodes.toml");
+    if !path.try_exists()? {
+        return Ok(());
+    }
+    if crate::node::NodeRegistry::load(&path)?.is_retired(node) {
+        bail!(
+            "node {node} is retired (registry/nodes.toml); it allocates no IDs and claims no blocks. Bind this clone to a live node with `aida node acquire`"
+        )
+    }
+    Ok(())
 }
 
 fn local_id(id: &str, node: &str) -> bool {
@@ -419,7 +564,12 @@ pub fn admit(
     if resolve(root)?.authoritative {
         return Ok(());
     }
-    admit_with_binding(incoming, existing, || node(root))
+    admit_with_binding(
+        incoming,
+        existing,
+        || node(root),
+        |node, id| dispensed_from_delegated_block(root, node, id),
+    )
 }
 
 // Exactly the same ownership and local-ID admission for an unspent candidate.
@@ -430,13 +580,16 @@ pub(crate) fn admit_candidate(
     incoming: &[crate::Requirement],
     existing: &[crate::Requirement],
 ) -> Result<()> {
-    admit_with_binding(incoming, existing, || Ok(node.to_owned()))
+    admit_with_binding(incoming, existing, || Ok(node.to_owned()), |_, _| Ok(false))
 }
 
 fn admit_with_binding(
     incoming: &[crate::Requirement],
     existing: &[crate::Requirement],
     mut resolve_node: impl FnMut() -> Result<String>,
+    // Whether a new agreed ID was dispensed from a delegated block this
+    // node may spend. trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    mut delegated: impl FnMut(&str, &str) -> Result<bool>,
 ) -> Result<()> {
     // trace:BUG-2017 | ai:codex — reserve the complete candidate namespace
     // before any row can be persisted. Spec and agreed IDs share ownership;
@@ -481,12 +634,14 @@ fn admit_with_binding(
     let mut binding = None;
     for req in incoming {
         let prior = old.get(&req.id);
-        for (id, previous) in [
+        for (agreed_slot, id, previous) in [
             (
+                false,
                 req.spec_id.as_deref(),
                 prior.and_then(|r| r.spec_id.as_deref()),
             ),
             (
+                true,
                 req.agreed_id.as_deref(),
                 prior.and_then(|r| r.agreed_id.as_deref()),
             ),
@@ -499,10 +654,21 @@ fn admit_with_binding(
                     Some(b) => b,
                     None => binding.insert(resolve_node()?),
                 };
-                if !crate::object_store::valid_spec_id_format(id) || !local_id(id, binding) {
+                let local = local_id(id, binding);
+                if crate::object_store::valid_spec_id_format(id)
+                    && !local
+                    && agreed_slot
+                    && delegated(binding, id)?
+                {
+                    continue;
+                }
+                if !crate::object_store::valid_spec_id_format(id) || !local {
                     bail!("new or changed global display IDs refuse on a non-authoritative clone; nothing was written")
                 }
-            } else if previous.is_none() && req.spec_id.is_none() {
+            } else if previous.is_none() && req.spec_id.is_none() && req.agreed_id.is_none() {
+                // A row carrying only a delegated agreed ID gets its local
+                // spec ID from the bound dispenser after admission.
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
                 bail!("node-local allocation failed; requirement has no display ID")
             }
         }
@@ -633,10 +799,15 @@ impl CloneDispenser {
         crate::transport_policy::refuse_unsupported(&self.root)?;
         let mode = resolve(&self.root)?;
         if mode.authoritative {
-            return self
-                .inner
-                .clone()
-                .context("authoritative allocator has no configured dispenser");
+            // A bound root mints its local IDs from its bound node counter
+            // (the agreed ID comes from a block); an unbound root keeps the
+            // configured provider. trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+            if let Some(inner) = &self.inner {
+                return Ok(inner.clone());
+            }
+            if crate::work_binding::load(&self.root)?.is_none() {
+                bail!("authoritative allocator has no configured dispenser")
+            }
         }
         // trace:BUG-2017 | ai:codex — lifecycle migration is lazy, after model
         // identity admission. Loading a provider for a refused global request
@@ -1056,6 +1227,92 @@ mod tests {
         drop(_session);
         let (home, _) = fixture(true);
         assert_eq!(downgrade_reason(home.path(), "BUG").unwrap(), None);
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac5e9c08 | ai:claude
+    #[test]
+    fn story_105_root_setting_refuses_when_root_record_names_another_node() {
+        let (dir, _) = fixture(true);
+        let policy = crate::IdFormatPolicy::BlocksThenFallback;
+        // No root.yaml yet: nothing to contradict the local setting.
+        assert_eq!(effective_policy(dir.path(), policy).unwrap(), policy);
+        std::fs::create_dir_all(dir.path().join("registry")).unwrap();
+        let record = dir.path().join(crate::allocation_lineage::ROOT_YAML_REL);
+        std::fs::write(&record, "holder_node: '9'\nepoch: 1\n").unwrap();
+        let err = effective_policy(dir.path(), policy)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("records node 9"), "{err}");
+        assert!(err.contains("this clone is node 7"), "{err}");
+        std::fs::write(&record, "holder_node: '7'\nepoch: 1\n").unwrap();
+        assert_eq!(effective_policy(dir.path(), policy).unwrap(), policy);
+    }
+
+    /// A non-root node 7 with upstream `gitlab` holding a BUG block carved
+    /// from the root's pool on that upstream.
+    fn delegated_fixture() -> (tempfile::TempDir, GitBackend) {
+        let (dir, backend) = fixture(false);
+        write_mode(dir.path(), AllocationRole::Node, Some("gitlab")).unwrap();
+        let registry = dir.path().join("registry");
+        std::fs::create_dir_all(&registry).unwrap();
+        std::fs::write(registry.join("root.yaml"), "holder_node: R\nepoch: 1\n").unwrap();
+        std::fs::write(
+            registry.join("pools.yaml"),
+            "pools:\n- pool_id: p-bug\n  type_prefix: BUG\n  range_start: 1\n  range_end: 1000\n  holder_node: R\n  home_ref: gitlab/aida-store\n",
+        )
+        .unwrap();
+        std::fs::write(
+            registry.join("blocks.yaml"),
+            "blocks:\n- node_id: '7'\n  owner: o\n  hostname: h\n  type_prefix: BUG\n  range_start: 101\n  range_end: 200\n  next: 102\n  allocated_at: 2026-10-31T00:00:00Z\n  pool_id: p-bug\n",
+        )
+        .unwrap();
+        (dir, backend)
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[test]
+    fn story_105_non_root_dispenses_from_a_spendable_delegated_block() {
+        let (dir, _) = delegated_fixture();
+        let policy = crate::IdFormatPolicy::BlocksThenFallback;
+        assert_eq!(delegated_block(dir.path(), "BUG").unwrap(), Some(0));
+        assert_eq!(delegated_block(dir.path(), "TASK").unwrap(), None);
+        assert_eq!(
+            effective_policy_for(dir.path(), policy, Some("BUG")).unwrap(),
+            policy
+        );
+        assert_eq!(
+            effective_policy_for(dir.path(), policy, Some("TASK")).unwrap(),
+            crate::IdFormatPolicy::NodeAwareOnly
+        );
+        assert_eq!(downgrade_reason(dir.path(), "BUG").unwrap(), None);
+        assert!(downgrade_reason(dir.path(), "TASK").unwrap().is_some());
+
+        // An agreed ID the block has dispensed (below `next`) is admitted
+        // beside a local ID; one it has not dispensed yet is refused.
+        let mut req = Requirement::new("x".into(), "fixture".into());
+        req.spec_id = Some("BUG-7-001".into());
+        req.agreed_id = Some("BUG-101".into());
+        admit(dir.path(), std::slice::from_ref(&req), &[]).unwrap();
+        req.agreed_id = Some("BUG-150".into());
+        assert!(admit(dir.path(), std::slice::from_ref(&req), &[]).is_err());
+        // An agreed ID alone (the local ID is minted after admission).
+        req.spec_id = None;
+        req.agreed_id = Some("BUG-101".into());
+        admit(dir.path(), std::slice::from_ref(&req), &[]).unwrap();
+
+        // Saving an advanced `next` is allowed; re-ranging is not.
+        let path = dir.path().join("registry/blocks.yaml");
+        let mut reg = crate::node::BlockRegistry::load(&path).unwrap();
+        reg.blocks[0].next = 103;
+        reg.save_dispensed(&path, "7").unwrap();
+        assert_eq!(
+            crate::node::BlockRegistry::load(&path).unwrap().blocks[0].next,
+            103
+        );
+        reg.blocks[0].range_end = 900;
+        assert!(reg.save_dispensed(&path, "7").is_err());
+        assert!(reg.save(&path).is_err(), "plain save stays root-only");
     }
 
     // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
