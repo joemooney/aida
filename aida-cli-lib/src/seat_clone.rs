@@ -1525,9 +1525,11 @@ const ORIGIN_REFRESH_CAP: std::time::Duration = std::time::Duration::from_secs(2
 
 /// BUG-051: [`probe_until`] under the ancestor-of-origin rule: a branch head
 /// that is an ancestor of origin's copy of the branch counts as pushed. Every
-/// host reading that decides whether a clone holds commits origin lacks
-/// (session end, reap, status and awaiting, the lease classifiers, salvage,
-/// phase 2) goes through here, so they agree. A clone whose first reading
+/// host reading that acts on whether a clone holds commits origin lacks
+/// (session end, reap, the lease classifiers, salvage, phase 2) goes through
+/// here, so they agree. The read-only status and awaiting surfaces call
+/// [`probe_until`] directly: they apply the same rule against main's
+/// last-fetched origin refs but never fetch or move them. A clone whose first reading
 /// counts no such commits costs no network. Otherwise origin's copy of
 /// `branch` (the host-recorded lease branch; the clone's checked-out branch
 /// when there is none) is fetched into main, bounded by half the remaining
