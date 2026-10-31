@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T09:25:27.847837105Z
+modified_at: 2026-10-31T09:27:10.888734566Z
 req_type: Bug
 tags:
 - ids
@@ -124,6 +124,30 @@ comments:
   created_at: 2026-10-31T09:25:27.847837105Z
   modified_at: 2026-10-31T09:25:27.847837105Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19148-d128-75c1-87f5-ff43f02261bf
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Implementing the advisor-approved sketch (comment 3, signoff comment 4) as written.
+
+    ### Acceptance criteria as tests
+    - **Unit (`id_identity`):** IdKey parse/equality across 0/1/4 leading zeros, node-local, lowercase; render at widths 0/3/4 (AC1, AC5).
+    - **Unit (`allocate_id`/`admit_new_id`):** store holding `TASK-0005`, dispenser hands out 5 -> minted `TASK-6`; explicit `TASK-5` refused (AC2).
+    - **Unit/fixture (models lookup):** `get_by_spec_id("TASK-0418")` finds stored `TASK-418` and reverse; collision -> AmbiguousIdError (AC1).
+    - **Unit (doctor collisions):** grouping by IdKey reports TASK-0418/TASK-418 (AC4).
+    - **Fixture (doctor --fix id-collisions):** renumbers per the selection rule, rewrites references, records history, then zero groups (AC3).
+    - **Unit (width):** seq_width flip renders mixed-padding IDs at configured width without renaming (AC5c).
+
+    ### Expected files
+    See sketch "Expected files"; new `aida-core/src/id_identity.rs`.
+
+    ### Ambiguities / conflicts as questions
+    - None beyond those the advisor answered. Note: status flip to in-progress refused (Needs Attention needs advisor authority); working under the implementer lease.
+  created_at: 2026-10-31T09:27:10.888734566Z
+  modified_at: 2026-10-31T09:27:10.888734566Z
+  session_id: 01a191485f3f
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
