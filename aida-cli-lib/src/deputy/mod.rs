@@ -11,8 +11,9 @@
 //! - `<name>/` holds what only the deputy writes: `running/`, `done/`,
 //!   `failed/`, `out/`, the ledger, the TTY policy and the terminal markers.
 //!
-//! The worker claims a job by renaming it into `running/`, so two submits
-//! never clobber each other and a job runs once. Each job runs as a child
+//! The worker claims a job by moving it into `running/` without replacing
+//! anything there, so two submits never clobber each other, a job runs once,
+//! and a submission that reuses a known id is refused as a duplicate. Each job runs as a child
 //! process, never sourced into the loop. Its output goes to `out/<id>.out`,
 //! its result to `done|failed/<id>.rc.json`, and every step to the
 //! append-only `deputy.ledger`.
@@ -367,6 +368,54 @@ impl Spool {
             .collect();
         ids.sort();
         ids
+    }
+
+    /// Where job id `id` has already been used, if anywhere: a job file or
+    /// result in `running/`, `done/` or `failed/`, a terminal marker, or an
+    /// output file. A submit that reuses such an id is a forgery (an agent
+    /// can write `incoming/`) and is never claimed: the claim would replace
+    /// the real job's record and inherit its terminal marker.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    pub(crate) fn id_in_use(&self, id: &str) -> Option<&'static str> {
+        let present = |p: PathBuf| std::fs::symlink_metadata(p).is_ok();
+        for state in ["running", "done", "failed"] {
+            if present(self.job_path(state, id)) || present(self.result_path(state, id)) {
+                return Some(state);
+            }
+        }
+        if present(self.tty_marker_path(id)) {
+            return Some("a terminal marker");
+        }
+        if present(self.out_path(id)) {
+            return Some("an output file");
+        }
+        None
+    }
+
+    /// Where a refused duplicate submission is filed: beside, never over, the
+    /// real job's record. The name is not `<uuid>.job`, so no listing or
+    /// lookup ever mistakes it for job `id`.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    pub(crate) fn duplicate_path(&self, id: &str) -> PathBuf {
+        self.dir("failed")
+            .join(format!("{id}.duplicate-{}.job", new_job_id()))
+    }
+
+    /// Claim `incoming/<id>.job` into `running/` WITHOUT replacing anything
+    /// there (link, then unlink the source; `rename(2)` would overwrite), and
+    /// return the claimed file's (device, inode) for the terminal marker.
+    /// `AlreadyExists` means the id is taken; `NotFound` means another
+    /// claimer won.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    pub(crate) fn claim(&self, id: &str) -> std::io::Result<(u64, u64)> {
+        let (from, to) = (self.job_path("incoming", id), self.job_path("running", id));
+        std::fs::hard_link(&from, &to)?;
+        if let Err(e) = std::fs::remove_file(&from) {
+            let _ = std::fs::remove_file(&to);
+            return Err(e);
+        }
+        let md = std::fs::symlink_metadata(&to)?;
+        Ok(crate::gate::kernel_deps::deputy_file_identity(&md))
     }
 
     /// Ids with a cancel request on file.

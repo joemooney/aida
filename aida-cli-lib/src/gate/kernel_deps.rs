@@ -84,13 +84,37 @@ pub(crate) const DEPUTY_JOB_ENV: &str = "AIDA_DEPUTY_JOB";
 pub(crate) const DEPUTY_SPOOL_ENV: &str = "AIDA_DEPUTY_SPOOL";
 
 /// The marker the deputy writes at `<spool>/running/<job>.tty` while a job
-/// runs on a terminal its TTY policy authorized.
+/// runs on a terminal its TTY policy authorized. It is bound to the claimed
+/// job FILE, not only its id: `job_dev`/`job_ino` are the identity of
+/// `running/<job>.job` at claim time, so a different file under the same id
+/// (a forged resubmission) never inherits the marker.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub(crate) struct DeputyTtyMarker {
     pub job: String,
     pub entry: String,
     pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub job_dev: u64,
+    pub job_ino: u64,
+}
+
+/// Where a claimed job's file sits while it runs: `<spool>/running/<job>.job`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_running_job_path(spool: &std::path::Path, job: &str) -> std::path::PathBuf {
+    spool.join("running").join(format!("{job}.job"))
+}
+
+/// The (device, inode) identity a terminal marker binds to.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+#[cfg(unix)]
+pub(crate) fn deputy_file_identity(md: &std::fs::Metadata) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    (md.dev(), md.ino())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn deputy_file_identity(_md: &std::fs::Metadata) -> (u64, u64) {
+    (0, 0)
 }
 
 /// Where the deputy keeps job `job`'s terminal marker under `spool`.
@@ -124,7 +148,8 @@ pub(crate) fn deputy_job_floor_authorized() -> bool {
 /// doubt: no spool, a job id that is not a UUID, a spool or `running/`
 /// directory not owned by us or open to others, or a marker that is missing,
 /// linked, foreign, writable by others, unparsable, for another job, or
-/// expired.
+/// expired, or a marker bound to a different job file than the one now at
+/// `running/<job>.job`.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 pub(crate) fn deputy_job_floor_authorized_from(
     job: Option<&str>,
@@ -159,8 +184,16 @@ pub(crate) fn deputy_job_floor_authorized_from(
     let Ok(bytes) = std::fs::read(&marker) else {
         return false;
     };
-    serde_json::from_slice::<DeputyTtyMarker>(&bytes)
-        .is_ok_and(|m| m.job == job && m.expires_at > now)
+    let Ok(m) = serde_json::from_slice::<DeputyTtyMarker>(&bytes) else {
+        return false;
+    };
+    let Ok(job_md) = std::fs::symlink_metadata(deputy_running_job_path(spool, job)) else {
+        return false;
+    };
+    if !job_md.file_type().is_file() || !owned_without(&job_md, 0o022) {
+        return false;
+    }
+    m.job == job && m.expires_at > now && deputy_file_identity(&job_md) == (m.job_dev, m.job_ino)
 }
 
 /// Owned by this process's uid with none of the `forbidden` mode bits.

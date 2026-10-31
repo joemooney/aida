@@ -426,11 +426,7 @@ fn floor_needs_a_live_marker_for_this_job() {
 
     write_tty_marker(
         &spool,
-        &TtyMarker {
-            job: id.clone(),
-            entry: "e1".into(),
-            expires_at: now + CDuration::minutes(10),
-        },
+        &bound_marker(&spool, &id, now + CDuration::minutes(10)),
     )
     .unwrap();
     assert!(job_floor_authorized_from(Some(&id), Some(&root), now));
@@ -441,6 +437,80 @@ fn floor_needs_a_live_marker_for_this_job() {
     let other = new_job_id();
     assert!(!job_floor_authorized_from(Some(&other), Some(&root), now));
     assert!(!job_floor_authorized_from(Some("../x"), Some(&root), now));
+}
+
+/// A live marker bound to `running/<id>.job` (created if absent), as the
+/// worker writes it at claim.
+#[cfg(unix)]
+fn bound_marker(spool: &Spool, id: &str, expires_at: DateTime<Utc>) -> TtyMarker {
+    let job_file = spool.job_path("running", id);
+    if !job_file.exists() {
+        write_private_new(&job_file, b"{}").unwrap();
+    }
+    let md = std::fs::symlink_metadata(&job_file).unwrap();
+    let (job_dev, job_ino) = crate::gate::kernel_deps::deputy_file_identity(&md);
+    TtyMarker {
+        job: id.to_string(),
+        entry: "e1".into(),
+        expires_at,
+        job_dev,
+        job_ino,
+    }
+}
+
+/// Ruling test (c): a marker authorizes only the job file it was written
+/// for. Another job id never matches it, and neither does a different file
+/// put at the same `running/<id>.job` (a forged resubmission of the id).
+#[cfg(unix)]
+#[test]
+fn a_marker_for_job_a_never_authorizes_job_b() {
+    use crate::gate::kernel_deps::{
+        deputy_job_floor_authorized_from as authorized, deputy_running_job_path,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let spool = spool_in(&dir);
+    let root = spool.root.to_string_lossy().to_string();
+    let now = Utc::now();
+    let a = new_job_id();
+    assert_eq!(
+        deputy_running_job_path(&spool.root, &a),
+        spool.job_path("running", &a),
+        "the floor reads the file the worker claims"
+    );
+    write_tty_marker(
+        &spool,
+        &bound_marker(&spool, &a, now + CDuration::minutes(10)),
+    )
+    .unwrap();
+    assert!(authorized(Some(&a), Some(&root), now));
+
+    // Job B under its own id, with A's marker copied to B's name.
+    let b = new_job_id();
+    write_private_new(&spool.job_path("running", &b), b"{}").unwrap();
+    assert!(!authorized(Some(&b), Some(&root), now), "B has no marker");
+    let mut copied = bound_marker(&spool, &a, now + CDuration::minutes(10));
+    copied.job = b.clone();
+    write_tty_marker(&spool, &copied).unwrap();
+    assert!(
+        !authorized(Some(&b), Some(&root), now),
+        "A's marker, renamed for B, is bound to A's file"
+    );
+
+    // Job B's file put over A's id: A's marker no longer authorizes anyone.
+    let forged = spool.dir("running").join(".forged");
+    write_private_new(&forged, b"{}").unwrap();
+    std::fs::rename(&forged, spool.job_path("running", &a)).unwrap();
+    assert!(
+        !authorized(Some(&a), Some(&root), now),
+        "a different file under A's id does not inherit A's marker"
+    );
+    // A marker without the binding (the pre-fix format) fails closed.
+    std::fs::remove_file(spool.tty_marker_path(&a)).unwrap();
+    let legacy = serde_json::json!({
+        "job": a, "entry": "e1", "expires_at": now + CDuration::minutes(10)
+    });
+    write_private_new(&spool.tty_marker_path(&a), legacy.to_string().as_bytes()).unwrap();
+    assert!(!authorized(Some(&a), Some(&root), now), "unbound marker");
 }
 
 /// Pins the human-terminal probes to a TTY for this thread (the BUG-1618
@@ -492,11 +562,7 @@ fn integrity_floor_refuses_a_deputy_job_without_a_live_marker() {
     );
     write_tty_marker(
         &spool,
-        &TtyMarker {
-            job: new_job_id(),
-            entry: "e1".into(),
-            expires_at: Utc::now() + CDuration::minutes(10),
-        },
+        &bound_marker(&spool, &new_job_id(), Utc::now() + CDuration::minutes(10)),
     )
     .unwrap();
     assert!(
@@ -505,21 +571,13 @@ fn integrity_floor_refuses_a_deputy_job_without_a_live_marker() {
     );
     write_tty_marker(
         &spool,
-        &TtyMarker {
-            job: id.clone(),
-            entry: "e1".into(),
-            expires_at: Utc::now() - CDuration::seconds(1),
-        },
+        &bound_marker(&spool, &id, Utc::now() - CDuration::seconds(1)),
     )
     .unwrap();
     assert!(!has_integrity_floor_authority(), "an expired marker");
     write_tty_marker(
         &spool,
-        &TtyMarker {
-            job: id.clone(),
-            entry: "e1".into(),
-            expires_at: Utc::now() + CDuration::minutes(10),
-        },
+        &bound_marker(&spool, &id, Utc::now() + CDuration::minutes(10)),
     )
     .unwrap();
     assert!(
@@ -883,6 +941,131 @@ mod worker_fixtures {
         }
         let ledger = std::fs::read_to_string(spool.ledger_path()).unwrap();
         assert_eq!(ledger.matches("\"refused\"").count(), 3);
+    }
+
+    /// A forged job reusing `id` (an agent can write `incoming/`): same id,
+    /// a body that would leave `forged-ran` behind if it ever ran.
+    fn forged(spool: &Spool, id: &str) -> JobRecord {
+        let mut rec = job(sh("touch \"$AIDA_DEPUTY_SPOOL/forged-ran\""), None, 30);
+        rec.id = id.to_string();
+        spool.submit(&rec).unwrap();
+        rec
+    }
+
+    fn duplicate_rows(spool: &Spool, id: &str) -> usize {
+        std::fs::read_to_string(spool.ledger_path())
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<LedgerRow>(l).ok())
+            .filter(|r| {
+                r.job == id
+                    && r.event == "refused"
+                    && r.reason
+                        .as_deref()
+                        .is_some_and(|w| w.starts_with("refused:duplicate-id"))
+            })
+            .count()
+    }
+
+    fn duplicates_filed(spool: &Spool, id: &str) -> usize {
+        std::fs::read_dir(spool.dir("failed"))
+            .unwrap()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("{id}.duplicate-"))
+            })
+            .count()
+    }
+
+    /// Ruling test (a): a submission reusing a RUNNING job's id is refused;
+    /// the running job's record and terminal marker survive and still
+    /// authorize it, and the forgery never runs.
+    #[test]
+    fn a_duplicate_of_a_running_id_is_refused_and_its_marker_survives() {
+        use crate::gate::kernel_deps::deputy_job_floor_authorized_from as authorized;
+        let dir = tempfile::tempdir().unwrap();
+        let spool = spool_in(&dir);
+        let mut pol = Policy::default();
+        pol.allow(policy::parse_prefix("aida -c"), 600, false, Utc::now())
+            .unwrap();
+        policy::save(&spool, &pol).unwrap();
+        let real = job(sh("sleep 3; echo real-done"), None, 30);
+        spool.submit(&real).unwrap();
+        let (s, id) = (spool.clone(), real.id.clone());
+        let attacker = std::thread::spawn(move || {
+            let root = s.root.to_string_lossy().to_string();
+            for _ in 0..100 {
+                if s.tty_marker_path(&id).exists() {
+                    forged(&s, &id);
+                    for _ in 0..100 {
+                        if duplicate_rows(&s, &id) == 1 {
+                            return Some((
+                                s.tty_marker_path(&id).exists(),
+                                authorized(Some(&id), Some(&root), Utc::now()),
+                            ));
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            None
+        });
+        run(&spool, &cfg(2));
+        let (marker_kept, still_authorized) =
+            attacker.join().unwrap().expect("duplicate never refused");
+        assert!(marker_kept, "the running job's marker was deleted");
+        assert!(still_authorized, "the running job lost its terminal floor");
+
+        let r = spool.read_result(&real.id).unwrap();
+        assert_eq!(r.rc, 0, "{r:?}");
+        assert!(r.tty);
+        assert!(out(&spool, &real.id).contains("real-done"));
+        let kept = read_job_file(&spool.job_path("done", &real.id), &real.id).unwrap();
+        assert_eq!(kept.sha256, real.sha256, "the real record was replaced");
+        assert!(!spool.root.join("forged-ran").exists(), "the forgery ran");
+        assert!(!spool.job_path("incoming", &real.id).exists());
+        assert_eq!(duplicates_filed(&spool, &real.id), 1);
+        assert!(!spool.result_path("failed", &real.id).exists());
+    }
+
+    /// Ruling test (b): a submission reusing a DONE job's id is refused and
+    /// the finished job's record and result are untouched.
+    #[test]
+    fn a_duplicate_of_a_done_id_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let spool = spool_in(&dir);
+        let real = job(sh("echo real"), None, 30);
+        spool.submit(&real).unwrap();
+        run(&spool, &cfg(1));
+        assert_eq!(spool.read_result(&real.id).unwrap().rc, 0);
+
+        forged(&spool, &real.id);
+        run(&spool, &cfg(1));
+        assert_eq!(duplicate_rows(&spool, &real.id), 1);
+        assert_eq!(duplicates_filed(&spool, &real.id), 1);
+        assert!(!spool.root.join("forged-ran").exists(), "the forgery ran");
+        let kept = read_job_file(&spool.job_path("done", &real.id), &real.id).unwrap();
+        assert_eq!(kept.sha256, real.sha256);
+        let r = spool.read_result(&real.id).unwrap();
+        assert_eq!((r.rc, r.reason.as_str()), (0, "ok"));
+        assert!(!spool.result_path("failed", &real.id).exists());
+        assert_eq!(
+            spool.locate(&real.id).unwrap().map(|(s, _)| s),
+            Some("done")
+        );
+
+        // A cancel request beside the forgery does not file it over the
+        // real record either.
+        forged(&spool, &real.id);
+        spool.request_cancel(&real.id).unwrap();
+        run(&spool, &cfg(1));
+        assert_eq!(duplicate_rows(&spool, &real.id), 2);
+        assert!(!spool.result_path("failed", &real.id).exists());
+        assert_eq!(spool.read_result(&real.id).unwrap().rc, 0);
     }
 
     #[test]

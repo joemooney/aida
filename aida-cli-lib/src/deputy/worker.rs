@@ -137,7 +137,9 @@ fn clear_job_markers(spool: &Spool, id: &str) {
 fn sweep_cancel_requests(spool: &Spool, cfg: &WorkerConfig, active: &Arc<Mutex<Active>>) {
     for id in spool.cancel_request_ids() {
         let queued = spool.job_path("incoming", &id);
-        if queued.exists() {
+        // A queued file reusing a known id is a forgery the claim round
+        // refuses; cancelling it here would file it over the real record.
+        if queued.exists() && spool.id_in_use(&id).is_none() {
             let rec = read_job_file(&queued, &id).ok();
             let res = JobResult {
                 id: id.clone(),
@@ -265,6 +267,15 @@ fn claim_round(
             a.running
         };
         let path = spool.job_path("incoming", &id);
+        // Before anything else: never let a submission reuse an id the
+        // deputy has already claimed (security floor, advisor ruling
+        // 2026-10-31). Every other refusal files into `failed/<id>`, which
+        // for a reused id would overwrite the real job's record.
+        if let Some(where_) = spool.id_in_use(&id) {
+            refuse_duplicate(spool, cfg, &id, where_);
+            bump_handled(active);
+            continue;
+        }
         let rec = match read_job_file(&path, &id) {
             Ok(rec) => rec,
             Err(refusal) => {
@@ -288,9 +299,15 @@ fn claim_round(
             bump_handled(active);
             continue;
         }
-        if std::fs::rename(&path, spool.job_path("running", &id)).is_err() {
-            continue; // another claimer won it
-        }
+        let job_file = match spool.claim(&id) {
+            Ok(identity) => identity,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                refuse_duplicate(spool, cfg, &id, "running");
+                bump_handled(active);
+                continue;
+            }
+            Err(_) => continue, // another claimer won it
+        };
         let mut row = LedgerRow::new(&cfg.name, &id, "claimed");
         row.requester = Some(rec.requester.clone());
         row.summary = Some(rec.body.summary());
@@ -335,7 +352,7 @@ fn claim_round(
         let cfg = cfg.clone();
         let active = Arc::clone(active);
         handles.push(std::thread::spawn(move || {
-            let res = run_job(&spool, &cfg, &rec, tty, worker_idx);
+            let res = run_job(&spool, &cfg, &rec, tty, job_file, worker_idx);
             if let Err(e) = res {
                 eprintln!(
                     "deputy {}: job {} bookkeeping failed: {e:#}",
@@ -385,6 +402,21 @@ fn refuse(
     row.reason = Some(reason.to_string());
     let _ = spool.ledger(&row);
     let _ = std::fs::rename(spool.job_path(from, id), spool.job_path("failed", id));
+    eprintln!("deputy {}: refused job {id}: {reason}", cfg.name);
+}
+
+/// Refuse a submission that reuses an id already in use (`where_` says
+/// where). It is filed beside the real job (`Spool::duplicate_path`) with
+/// a ledger row and NO result file, so the real job's record, result and
+/// terminal marker are untouched.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+fn refuse_duplicate(spool: &Spool, cfg: &WorkerConfig, id: &str, where_: &str) {
+    let reason = format!("refused:duplicate-id (job id {id} is already in use: {where_})");
+    let mut row = LedgerRow::new(&cfg.name, id, "refused");
+    row.rc = Some(RC_REFUSED);
+    row.reason = Some(reason.clone());
+    let _ = spool.ledger(&row);
+    let _ = std::fs::rename(spool.job_path("incoming", id), spool.duplicate_path(id));
     eprintln!("deputy {}: refused job {id}: {reason}", cfg.name);
 }
 
@@ -530,6 +562,7 @@ pub(crate) fn run_job(
     cfg: &WorkerConfig,
     rec: &JobRecord,
     tty: Option<(String, DateTime<Utc>)>,
+    job_file: (u64, u64),
     worker_idx: usize,
 ) -> Result<JobResult> {
     let out_path = spool.out_path(&rec.id);
@@ -554,6 +587,9 @@ pub(crate) fn run_job(
                 job: rec.id.clone(),
                 entry: entry.clone(),
                 expires_at: *expires_at,
+                // Bound to the file this claim moved into `running/`.
+                job_dev: job_file.0,
+                job_ino: job_file.1,
             },
         )?;
         let (master, slave) = open_pty()?;

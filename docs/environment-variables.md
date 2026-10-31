@@ -190,6 +190,24 @@ doesn't match.
 
 ---
 
+## Deputy jobs (`aida deputy`)
+
+`aida deputy` runs jobs that other sessions submit, in the operator's
+terminal. It sets these variables on each job it runs and on the `aida`
+shell function's call that starts it. **You never set these by hand.**
+Setting them does not give a process any authority. If a process has
+`AIDA_DEPUTY_JOB` set but the deputy's terminal marker for that job is
+missing, the human-terminal checks refuse it.
+
+| Variable | What it does | Default | Who sets it | Scope |
+| --- | --- | --- | --- | --- |
+| `AIDA_DEPUTY_JOB` | The id of the deputy job this process belongs to. When it is set, the human-terminal check (the integrity floor) passes only while the deputy's terminal marker for this exact job file is present and not expired, so a job cannot use a terminal it found some other way. | unset outside a deputy job. | launch-path (`aida deputy` worker) | process env |
+| `AIDA_DEPUTY_SPOOL` | The path of the deputy spool the job came from, where its terminal marker lives. With `AIDA_DEPUTY_JOB` set and this unset or wrong, the floor check fails closed. | unset outside a deputy job. | launch-path (`aida deputy` worker) | process env |
+| `AIDA_DEPUTY_REQUESTER` | The session id of whoever submitted the job (`unknown` if the submitter had no session id). For display and attribution only; it grants nothing. | unset outside a deputy job. | launch-path (`aida deputy` worker) | process env |
+| `AIDA_DEPUTY_VIA_WRAPPER` | Set by the `aida()` shell function, only for the one command, when it starts `aida deputy`. A bare binary run without it is told to start the deputy from the shell. The worker strips it from every job's environment. | unset. | launch-path (`aida()` shell function) | per-command env |
+
+---
+
 ## Storage, cache & paths
 
 | Variable | What it does | Default | Who sets it | Scope |
