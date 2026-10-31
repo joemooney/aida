@@ -13,13 +13,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T13:41:23.838431809Z
+modified_at: 2026-10-31T13:46:56.746175340Z
 req_type: Bug
 relationships:
 - rel_type: Parent
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-31T13:38:14.116486847Z
   created_by: joe
+comments:
+- id: 01a19236-a36a-78e1-8600-1a40f46d25ba
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    (Posted after the first edits: I missed the post-before-edit rule.)
+
+    ### Acceptance criteria as tests
+    - **Unit (argv):** `session::tests::headless_argv_disables_monitor_and_background_tasks` checks that every headless claude argv (fresh, resume, contained, uncontained) carries one `--settings` whose `env` sets `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`. That variable was probed in the installed Claude Code 2.1.316 binary. The test also checks `--disallowed-tools AskUserQuestion Monitor`, and a `Monitor` deny rule in the contained settings. The interactive contained flags are unchanged.
+    - **Fixture (fake claude):** the existing BUG-044 mock-vendor tests (`a_run_parked_on_its_own_build_is_waited_for_and_resumed`, bounded resumes) already cover the resume safety net. The resume prompt now opens with the fixed continuation sentence (unit test). The new gap is a rework round that ends while its old PR is still open. The resume loop used to stop on any open PR. It now treats a PR still on its launch head as PR-less (`is_stale_pr`).
+    - **Unit:** `a_rework_round_left_uncommitted_on_the_old_pr_head_is_a_stall` checks that a stale PR plus uncommitted paths reports `implementer: no-pr reason=uncommitted-work uncommitted=N`.
+
+    ### Expected files
+    - `aida-cli-lib/src/session.rs`, `standalone_implementer.rs`, `headless_background.rs`, the BUG-044 tests, `docs/cli/03-work-autonomy.md`
+
+    ### Ambiguities / conflicts as questions
+    - Should a stale PR on a clean seat stay `pr-opened`? Chosen: yes, because that round had nothing to change.
+  created_at: 2026-10-31T13:46:56.746175340Z
+  modified_at: 2026-10-31T13:46:56.746175340Z
+  session_id: 01a192318a61
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1922e-768b-7b43-9bc4-deca919d4df0
   author: joe
