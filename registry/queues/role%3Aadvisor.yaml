@@ -1,11 +1,4 @@
 - user_id: role:advisor
-  requirement_id: 01a18a29-6886-7b50-a99b-a5e2c4e1a699
-  position: -31000
-  added_by: role:advisor
-  note: help golden snapshot out of date (CI lib-0)
-  added_at: 2026-10-31T07:13:35.434417733Z
-  for_role: advisor
-- user_id: role:advisor
   requirement_id: 01a18ae5-f60d-7122-8066-666c4f29cd59
   position: -30000
   added_by: role:advisor
