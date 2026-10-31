@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T20:53:39.355607373Z
+modified_at: 2026-10-31T20:54:33.387114469Z
 req_type: Story
 tags:
 - architecture
@@ -142,6 +142,19 @@ comments:
   modified_at: 2026-10-31T20:53:39.355607373Z
   session_id: 01a193ba465d
   harness_version: 2.1.316 (Claude Code)
+- id: 01a193be-20ab-71b3-83ea-7d8c4dcc7ea1
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 13:56 on the implementer sketch: APPROVED with one scope cut.
+    Q1 virtual implicit pool: APPROVED. The hub:<h>:<T> stamp on every block keeps the store self-describing about where a block was ordered, and virtual avoids a first-claim race on pools.yaml and any migration.
+    Q2 explicit committed [store.hubs] before minting: APPROVED. Defaulting to origin would make this repo's HOME and WORK clones mint on two refs. aida init writing the entry keeps new single-clone projects zero-touch.
+    Q3 SCOPE CUT: this story ends at claim_authority + HubCas + NotOnHub spendability + the multi-hub-no-root refusal (AC4) + enroll-root materialization of virtual pools (AC5 first half) + node show mode lines + docs. 'aida node hub add' and the root-granted child pool move to a new story (filed now). AC5's 'hub add grants a disjoint pool' test moves with it.
+    Q4 air-gap bundles: deferred to SPIKE-004 (human-only), agreed.
+    Also required: the URL-normalization unit test must include this repo's two real URL shapes (ssh and https), and the mirror-and-hub-same-remote config error gets a doctor check, not just node show.
+    SEQUENCING: implementation starts only after PR-3170 (STORY-105) merges, branching from main that contains it. Heft is high: STRICT tier, run the story_095/story_164 integration binaries.
+  created_at: 2026-10-31T20:54:33.387114469Z
+  modified_at: 2026-10-31T20:54:33.387114469Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
