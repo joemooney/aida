@@ -12,12 +12,12 @@ description: |-
   5. Display padding is a setting: [display] id_seq_width in .aida/config.toml (0 = no padding) pads the sequence on output only, never in stored IDs or filenames; default keeps today's look (legacy unpadded, node-local 3). aida list aligns its ID column to the widest rendered ID.
 
   Architecture: this changes ID identity and needs a sketch on this spec plus advisor signoff before code.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T09:10:39.253867420Z
+modified_at: 2026-10-31T09:15:38.510864204Z
 req_type: Bug
 tags:
 - ids
@@ -52,6 +52,71 @@ comments:
   created_at: 2026-10-31T09:07:36.615428193Z
   modified_at: 2026-10-31T09:07:36.615428193Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a1913e-12dd-75b2-a601-d886383e5370
+  author: joe
+  content: |-
+    ## Architecture sketch: numeric ID identity, mint-time collision guard, renumber, seq_width
+
+    Sketch only, no code yet. This needs advisor signoff before implementation. Store counts below come from `.aida-store/objects` on 2026-10-31.
+
+    ### Corrected scope
+    The store has **30 numeric-collision groups**, but not all are TASK: **28 TASK** (396, 412-418, 420-427, 429-432, 434-440, 446), **BUG-0445/BUG-445** and **STORY-0444/STORY-444**. No node-local groups exist. Every padded object was created 2026-05..10, and none of them carries an `agreed_id`.
+
+    ### (a) The single allocator-facing seam (STORY-HOME-105 reuses it)
+    New module `aida-core/src/id_identity.rs`:
+    - `IdKey { prefix: String, node: Option<String>, seq: u64 }` (upper-cased). `IdKey::parse(&str) -> Option<IdKey>` accepts `TYPE-N` and `TYPE-NODE-N` with any number of leading zeros, so `TASK-0418`, `TASK-418` and `TASK-00418` give the same key. `$USER`/`$TEAM` meta IDs parse the same way.
+    - `same_id(a, b) -> bool` and `IdKey::render(width) -> String`.
+    - **THE seam:** `pub fn admit_new_id(candidate: &str, taken: &dyn Fn(&IdKey) -> Option<Uuid>, owner: Uuid) -> Result<()>`. It refuses when a different UUID already holds the candidate's IdKey under any padding, as `spec_id` or as `agreed_id`. Every mint path calls it:
+      - `allocation_authority::admit_with_binding`: the `owners` map is re-keyed from `canonical_spec_id` (uppercase-only) to `IdKey`. **The check moves above the `resolve(root)?.authoritative` early return in `admit()`**. Today an authoritative clone skips admission entirely, which is how padded twins could be written.
+      - `allocate_id(prefix, dispenser, taken) -> Result<String>` wraps `dispenser.next_id`. When `admit_new_id` refuses a dispensed number, it skips that number and draws the next one, at most N tries, then errors. The callers are `RequirementsStore::next_*`/`next_meta_id` (models.rs:5888), `allocation_authority::format_id/next_id` (:715-740), `work_candidate.rs:83` and the merge-gate promotion in `git_ops.rs:~9141`. STORY-105's block dispenser routes block-dispensed IDs through `allocate_id` too.
+      - Explicit caller-supplied IDs (`aida add` with an explicit id, MCP `add_requirement`, import) go through `admit_new_id` and refuse rather than skip.
+
+    ### (b) Where lookup normalizes leading zeros
+    - **Object files** (`object_store`): `canonical_spec_id` stays uppercase-only, because it names files and stored IDs keep their padding. `GitBackend::get_requirement_by_object_file` (git_backend.rs:552) tries the literal path first. On a miss it lists only the one shard directory implied by the numeric seq (`shard_number(seq)` is already numeric) and matches stems by `IdKey`. That reads file names only, with no YAML parse. The `agreed_id` scan in `get_requirement_by_exact_spec_id` (:523) compares by `IdKey`.
+    - **Cache** (`db/cache.rs`): add an indexed `id_key` column (plus `agreed_id_key`) to `requirements_cache` and bump the schema so it rebuilds. `id_rows_for` (:2895), the `WHERE spec_id = ?1 COLLATE NOCASE` lookup (:3722) and the duplicate scan (:2864 `GROUP BY UPPER(spec_id)`) switch to the key columns.
+    - **In-memory store** (`models.rs`): `spec_id_index_exact` (:6206) and `resolve_unambiguous_index_exact` compare with `same_id`. **Ambiguity is safe by construction:** while a collision still exists, `resolve_unambiguous_index` returns the existing BUG-1535 `AmbiguousIdError`, which lists both UUID handles, instead of a guess.
+    - **Node aliases** (`node_alias.rs`): `NodeAliasMap::expand` (:278) and `local_twin*` (:593-603) stop hard-coding `{n:03}`. They return the canonical node ID, and the lookup above matches it by key. `resolve_literal_first` stays as the order (literal first, then alias), and its inner `lookup` becomes key-based.
+    - **Text parsers (trailers, Refs, trace comments):** these already route through `node_alias::expand_or_keep` and then into the store lookups above, so they resolve numerically once (b) lands. Dedup and comparison sites that compare strings switch to `same_id`/`IdKey`: `pr_ship.rs` `extract_spec_ids_from_text` (:174), `extract_trailing_*` (:725, :762), the dedup at :815/:856, `ship_from_seat.rs:420`, `queue_cmd.rs:9030`/`:10118`, `trace.rs:28`, and the trace-to-spec matching in `trace_cmd.rs`. Edit, comment and link all resolve through `get_requirement_by_spec_id`/`resolve_unambiguous_index`, so they get no separate change.
+
+    ### (c) One-time renumber of the 30 groups
+    - **Which side:** the rule is applied per pair and re-counted on migration day. (1) Renumber the side with fewer **commit-message references** on `origin/main`, because commit messages cannot be rewritten. (2) On a tie, the side with fewer store plus tracked-tree references. (3) On a further tie, the padded side, which is non-canonical and has no `agreed_id`. Today's result is 21 unpadded and 9 padded renumbers. Renumber **BUG-0445, STORY-0444, TASK-0412, TASK-0413, TASK-0416, TASK-0425, TASK-0426, TASK-0437, TASK-0440** and **TASK-396, 414, 415, 417, 418, 420-424, 427, 429-432, 434-436, 438, 439, 446**. The command prints this table in dry-run.
+    - **How:** `aida doctor --fix id-collisions [--dry-run]` reuses the doctor-fix plumbing, so it sits beside the AC4 check, and it is tested in Rust. For each group it:
+      1. Mints a fresh ID through `allocate_id`, so the fresh ID is whatever `aida add` would mint now (node-local `TASK-<node>-NNN` under `blocks-then-fallback`; STORY-105 later gives these a global ID).
+      2. Rewrites the object's `spec_id`. If the renumbered side had an `agreed_id`, that is rewritten too. The file moves to the new path with `git mv`.
+      3. Rewrites **literal, word-boundary** mentions of the old form in other store objects (descriptions, comments, relationship text) and in git-tracked repo text files: `// trace:` comments, CHANGELOG.md and docs. Matching is literal on the old padded or unpadded form, so it is unambiguous before numeric identity merges. This is why **the migration ships and runs in the same PR as (a) and (b), and runs before the PR merges.**
+      4. Appends a history entry on the renumbered spec (`field_name: spec_id`, `old -> new`, author `aida-renumber`). The entry also lists the SHAs of `origin/main` commits whose message cited the old literal, so linkage stays recoverable.
+    - The store change is one store commit. The source and doc rewrites are commits on this PR's branch.
+
+    ### (d) `[ids]` width settings (amended AC5)
+    - `[ids] seq_width` (legacy/global IDs, default **0**) and `[ids] node_seq_width` (node-local IDs, default **3**). One key cannot express both of today's defaults, so node-local gets its own key, as AC5d allows. `aida init --id-width N` sets both.
+    - **Mint:** `allocate_id` and `format_id` format the sequence with `{seq:0w$}`. Width is a minimum, so TASK-2357 still renders whole at width 3.
+    - **Render:** `node_alias::display_spec_id` already wraps display (44 call sites). It re-pads the seq to the configured width with `IdKey::render`. An implementation audit routes the rest through it: list/show text, JSON `spec_id` output, the ID `aida add` prints, suggested trace comments and commit trailers. `--canonical-ids` still turns off label substitution but **not** width. Stored IDs and filenames are never re-padded.
+    - `aida list` measures the widest rendered ID and pads that column.
+    - Settings are read from `.aida/config.toml` into the installed alias map, so there is no new process-global.
+
+    ### (e) Doctor check
+    `doctor_root.rs:1934` `find_requirement_id_collisions` and `id_collisions::find_id_collisions` (:213) group by `IdKey` instead of `UPPER(id)`. A group of 2 or more UUIDs under one key becomes the existing collision finding, which names both objects and now prints `run aida doctor --fix id-collisions`. Expect zero groups after (c).
+
+    ### (f) Test plan
+    - **unit** (`id_identity`): `IdKey::parse` equality across 0, 1 and 4 leading zeros, node-local, meta and lowercase input; a non-ID is rejected; `render` at widths 0, 3 and 4 with seq wider than the width.
+    - **unit** (`admit_new_id`/`allocate_id`): a store holding `TASK-0005` gets a dispenser that hands out 5; the minted ID is `TASK-6` and the refusal for explicit `TASK-5` is the AC2 regression test. The same test covers the authoritative clone and merge-gate promotion.
+    - **command-level**: `show`, `edit`, `comment add` and `link` on `TASK-0418` find the object stored as `TASK-418`, and the reverse. A trailer `(TASK-00418)` completes it at merge. A `trace:TASK-0418` comment resolves.
+    - **fixture**: a store with a live collision returns `AmbiguousIdError` on write and a doctor finding; `doctor --fix id-collisions` renumbers per the rule, rewrites a fixture trace comment and a CHANGELOG line, records history, and then reports zero groups.
+    - **fixture** (AC5c): a mixed-padding store; flip `seq_width` 0 -> 4 -> 0 and assert lookups by every padding and rendered output; `aida list` column alignment.
+    - **cache**: the schema bump rebuilds, and the key lookups match the in-memory lookups.
+
+    ### Expected files
+    `aida-core/src/{id_identity.rs (new), allocation_authority.rs, models.rs, object_store.rs, node_alias.rs, id_collisions.rs, work_candidate.rs, git_ops.rs, db/{cache.rs, git_backend.rs, cached_git_backend.rs}, config}`, `aida-cli-lib/src/{pr_ship.rs, ship_from_seat.rs, queue_cmd.rs, trace.rs, trace_cmd.rs, doctor_root.rs, doctor_cmd.rs (fix), list rendering, init args}` plus the help golden. The migration then touches about 30 store objects, their referrers, CHANGELOG.md and the traced source files.
+
+    ### Questions for the advisor
+    1. **Immutable commit history:** after renumbering, old commits that cite the renumbered literal resolve numerically to the *survivor*. This affects `aida show` linkage and any re-run auto-bump. The proposal is to record those SHAs in the history entry and accept the mis-attribution in git-log-derived linkage, with no shim. Is that acceptable, or should linkage honour a recorded `renumbered_from` list? That list would be a small compat shim.
+    2. Should the fresh IDs be node-local (what `aida add` mints today), or drawn from a global block so they look like their neighbours?
+    3. Should the migration be `aida doctor --fix id-collisions` (tested, kept for future stray groups) or a throwaway script? I lean doctor-fix.
+    4. Should CHANGELOG mentions be rewritten (AC3 says docs), or left as the historical record with a footnote?
+  created_at: 2026-10-31T09:15:26.813570029Z
+  modified_at: 2026-10-31T09:15:26.813570029Z
+  session_id: 01a19139aa92
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
@@ -61,6 +126,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1913e-408e-74f3-b7ab-5cbf5da3bb71
+  author: joe
+  timestamp: 2026-10-31T09:15:38.510900841Z
+  session_id: 01a19139aa92
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -69,3 +143,9 @@ filed_at:
   aida_build_sha: cdbecda7678
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+attention_reason:
+  category: design-fork
+  detail: 'Sketch-only brief: architecture sketch posted as a comment; advisor signoff required before code. Open questions: (1) old commit messages citing renumbered literals resolve to the survivor; accept, or keep a renumbered_from linkage list; (2) node-local vs global-block fresh IDs; (3) doctor --fix vs throwaway migration script; (4) rewrite CHANGELOG mentions or leave them. Scope correction: 28 TASK + BUG-0445 + STORY-0444 groups.'
+  lean: Accept git-log mis-attribution and record the old SHAs in history; mint node-local fresh IDs; use 'aida doctor --fix id-collisions'; rewrite CHANGELOG. Ship seam, lookup and migration in one PR and run the migration before merge.
+  raised_by: implementer
+  raised_at: 2026-10-31T09:15:38.510864204Z
