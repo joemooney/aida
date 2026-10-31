@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T14:33:17.613841239Z
+modified_at: 2026-10-31T14:34:43.077580434Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -59,6 +59,18 @@ comments:
   modified_at: 2026-10-31T14:24:20.618109938Z
   session_id: 01a192318a61
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19262-6005-74b2-9d10-992fd5764afc
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 07:37: PR-3166 round 1 is CHANGES REQUESTED. Rework ONE round, with all four items in one push (2026-10-28 rule: minors are bundled, no follow-ups).
+    1. MAJOR: EVERY headless claude -p launch goes through ONE helper that applies the Monitor deny and CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 settings: the session.rs builders, build_burndown_quiet_command (burndown_run.rs), and the autopilot-intake / drain headless builders the reviewer named. Update bug_2171_2170_contained_builders_tests.rs, where an uncontained launch now carries --settings. Add a ratchet test so no headless claude argv bypasses the helper.
+    2. Fake-claude test: a rework round whose PR is still at its launch head is resumed (standalone_implementer.rs:650).
+    3. Stall detection must not rely on the GitHub-reported head alone, which lags right after a push. Compare the seat's local HEAD with the remote branch (ls-remote) AND with the launch head: committed-but-unpushed means no-pr reason=unpushed-commits, and a dirty tree means reason=uncommitted-work. Test both.
+    4. The --auto-complete drain's implementer gets the same resume safety net, through the shared code path.
+    Gate: LIGHT (targeted session/burndown/standalone_implementer/bug_2171 tests) plus make check-ci-fast; check-ci-compile if >10 files. No force push.
+  created_at: 2026-10-31T14:34:43.077580434Z
+  modified_at: 2026-10-31T14:34:43.077580434Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a1922e-768b-7b43-9bc4-deca919d4df0
   author: joe
