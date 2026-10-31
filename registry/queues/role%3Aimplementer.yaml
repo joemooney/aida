@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a18a29-6886-7b50-a99b-a5e2c4e1a699
+  position: 279000
+  added_by: role:implementer
+  note: help golden snapshot out of date (CI lib-0)
+  added_at: 2026-10-31T07:14:59.536401405Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a18a48-0391-7f13-8b5e-f8d961716571
   position: 280000
   added_by: role:implementer
