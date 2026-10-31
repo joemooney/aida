@@ -3070,8 +3070,10 @@ mod bug_1738_mirror_hook_drift_tests {
 /// exploit: nest every worktree under ONE directory, trust that once, and no future worktree
 /// prompts again.
 ///
-/// This check is strictly READ-ONLY. AIDA never writes `~/.claude.json` and never marks a
-/// directory trusted on the operator's behalf — that grant is the operator's to give.
+/// This check is strictly READ-ONLY. The only writer of `~/.claude.json` is the opt-in
+/// per-seat pre-trust at launch (`[worktree_pool] trust_seat_worktrees`, BUG-049,
+/// `crate::claude_trust`); this check only reports whether it is on and whether it
+/// left entries for seats that no longer exist.
 ///
 /// Silent when trust cannot be determined (no readable `~/.claude.json`), so an unreadable
 /// config reads as unknown rather than as a false alarm.
@@ -3086,7 +3088,88 @@ fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFindin
             unrelated_dirs: count_unrelated_child_dirs(&ancestor, project_root, &parent),
         })
     });
-    worktree_trust_findings(&resolved, configured.is_some(), trusted.as_deref(), breadth)
+    let mut findings =
+        worktree_trust_findings(&resolved, configured.is_some(), trusted.as_deref(), breadth);
+    // BUG-049: report the per-seat pre-trust — off: say how to turn it on in the
+    // finding that needs it; either way: entries left for seats now gone.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+    let enabled = crate::claude_trust::trust_enabled(project_root);
+    let stale = crate::home_dir()
+        .map(|home| crate::claude_trust::stale_seat_entries(&home, project_root))
+        .unwrap_or_default();
+    seat_trust_findings(&mut findings, enabled, &stale);
+    findings
+}
+
+/// BUG-049: fold the per-seat pre-trust state into the worktree-trust findings.
+/// Pure over its inputs.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+fn seat_trust_findings(
+    findings: &mut Vec<DoctorFinding>,
+    enabled: bool,
+    stale: &[std::path::PathBuf],
+) {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    if enabled {
+        // On: reported whatever the parent's trust, since AIDA then writes
+        // ~/.claude.json at every implementer launch.
+        findings.push(DoctorFinding {
+            category: "agent-launch".to_string(),
+            id: "worktree-seat-pre-trust".to_string(),
+            summary: format!(
+                "per-seat pre-trust is on (`[worktree_pool] {}`): AIDA trusts each \
+                 implementer seat and compete lane in ~/.claude.json before claude starts \
+                 there, so the lane keeps the project's permissions.allow list (review \
+                 trees are never trusted)",
+                crate::claude_trust::CONFIG_KEY,
+            ),
+            action: format!(
+                "none needed; set `[worktree_pool] {} = false` (or {}=0 on this host) to stop \
+                 AIDA writing ~/.claude.json",
+                crate::claude_trust::CONFIG_KEY,
+                crate::claude_trust::ENV_OVERRIDE,
+            ),
+            safe_heal: false,
+        });
+    }
+    for finding in findings
+        .iter_mut()
+        .filter(|f| f.id == "worktree-folder-trust")
+    {
+        if !enabled {
+            finding.summary.push_str(
+                ", and a headless lane there ignores the project's permissions.allow list",
+            );
+            finding.action.push_str(&format!(
+                "; or set `[worktree_pool] {} = true` in .aida/config.toml (or {}=1 on this \
+                 host) so AIDA trusts each seat in ~/.claude.json before it launches claude there",
+                crate::claude_trust::CONFIG_KEY,
+                crate::claude_trust::ENV_OVERRIDE,
+            ));
+        }
+    }
+    if !stale.is_empty() {
+        findings.push(DoctorFinding {
+            category: "agent-launch".to_string(),
+            id: "worktree-seat-trust-stale".to_string(),
+            summary: format!(
+                "~/.claude.json holds {} Claude Code trust entr{} for worktrees that no longer \
+                 exist (e.g. {})",
+                stale.len(),
+                if stale.len() == 1 { "y" } else { "ies" },
+                stale[0].display()
+            ),
+            action: if enabled {
+                "the next seat launch prunes them automatically; or remove those `projects` \
+                 entries from ~/.claude.json by hand"
+            } else {
+                "remove those `projects` entries from ~/.claude.json by hand (pre-trust is off, \
+                 so AIDA does not edit the file)"
+            }
+            .to_string(),
+            safe_heal: false,
+        });
+    }
 }
 
 // trace:BUG-1744 | ai:codex
@@ -3257,12 +3340,85 @@ fn worktree_trust_findings(
         summary: format!(
             "worktrees are created under {}, which has no Claude Code folder-trust record — an \
              interactive `aida agent new claude --spec <ID>` there stops on a folder-trust \
-             modal instead of starting work (headless drains are unaffected)",
+             modal instead of starting work",
             parent.display()
         ),
         action,
         safe_heal: false,
     }]
+}
+
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+#[cfg(test)]
+mod bug_b6b_049_seat_trust_doctor_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn untrusted() -> Vec<DoctorFinding> {
+        worktree_trust_findings(Path::new("/home/op/wt"), true, Some(&[]), None)
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    #[test]
+    fn off_names_the_opt_in_key_in_the_untrusted_finding() {
+        let mut findings = untrusted();
+        seat_trust_findings(&mut findings, false, &[]);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].action.contains("trust_seat_worktrees = true"));
+        assert!(findings[0]
+            .summary
+            .contains("a headless lane there ignores the project's permissions.allow list"));
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    #[test]
+    fn on_reports_pre_trust_as_on_and_drops_the_headless_claim() {
+        let mut findings = untrusted();
+        seat_trust_findings(&mut findings, true, &[]);
+        assert_eq!(findings.len(), 2);
+        assert!(!findings[0].action.contains("trust_seat_worktrees = true"));
+        assert!(!findings[0].summary.contains("ignores the project's"));
+        assert_eq!(findings[1].id, "worktree-seat-pre-trust");
+        assert!(findings[1].summary.contains("per-seat pre-trust is on"));
+    }
+
+    /// Ruling 3: on is reported even when the worktrees parent is already
+    /// trusted (no folder-trust finding to annotate); off reports nothing.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    #[test]
+    fn on_is_reported_when_the_parent_is_already_trusted() {
+        let mut findings = Vec::new();
+        seat_trust_findings(&mut findings, true, &[]);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "worktree-seat-pre-trust");
+        assert!(findings[0]
+            .summary
+            .contains("review trees are never trusted"));
+        let mut off = Vec::new();
+        seat_trust_findings(&mut off, false, &[]);
+        assert!(off.is_empty());
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
+    #[test]
+    fn stale_entries_are_reported() {
+        let mut findings = Vec::new();
+        seat_trust_findings(
+            &mut findings,
+            true,
+            &[PathBuf::from("/home/op/wt/aida-seat-x")],
+        );
+        let stale = findings
+            .iter()
+            .find(|f| f.id == "worktree-seat-trust-stale")
+            .unwrap();
+        assert!(stale.summary.contains("1 Claude Code trust entry"));
+        assert!(stale.action.contains("prunes them automatically"));
+        assert!(!stale.safe_heal);
+        let mut off = Vec::new();
+        seat_trust_findings(&mut off, false, &[PathBuf::from("/home/op/wt/aida-seat-x")]);
+        assert!(off[0].action.contains("by hand"));
+    }
 }
 
 #[cfg(test)]

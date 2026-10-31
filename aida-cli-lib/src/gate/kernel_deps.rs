@@ -75,6 +75,141 @@ pub(crate) fn authority_stdin_is_terminal() -> bool {
     std::io::stdin().is_terminal()
 }
 
+// ── Deputy jobs on the integrity floor ──────────────────────────────────────
+
+/// Set by `aida deputy` on every job it runs: the job id, and the spool the
+/// job came from. The deputy reads these names from here.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) const DEPUTY_JOB_ENV: &str = "AIDA_DEPUTY_JOB";
+pub(crate) const DEPUTY_SPOOL_ENV: &str = "AIDA_DEPUTY_SPOOL";
+
+/// The marker the deputy writes at `<spool>/running/<job>.tty` while a job
+/// runs on a terminal its TTY policy authorized. It is bound to the claimed
+/// job FILE, not only its id: `job_dev`/`job_ino` are the identity of
+/// `running/<job>.job` at claim time, so a different file under the same id
+/// (a forged resubmission) never inherits the marker.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub(crate) struct DeputyTtyMarker {
+    pub job: String,
+    pub entry: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub job_dev: u64,
+    pub job_ino: u64,
+}
+
+/// Where a claimed job's file sits while it runs: `<spool>/running/<job>.job`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_running_job_path(spool: &std::path::Path, job: &str) -> std::path::PathBuf {
+    spool.join("running").join(format!("{job}.job"))
+}
+
+/// The (device, inode) identity a terminal marker binds to.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+#[cfg(unix)]
+pub(crate) fn deputy_file_identity(md: &std::fs::Metadata) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    (md.dev(), md.ino())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn deputy_file_identity(_md: &std::fs::Metadata) -> (u64, u64) {
+    (0, 0)
+}
+
+/// Where the deputy keeps job `job`'s terminal marker under `spool`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_tty_marker_path(spool: &std::path::Path, job: &str) -> std::path::PathBuf {
+    spool.join("running").join(format!("{job}.tty"))
+}
+
+/// Defence in depth for the integrity floor (signed off on the spec, Q6): a
+/// process that carries a deputy job's environment holds the floor only while
+/// the deputy's own marker says the TTY policy authorized that job a terminal.
+/// Outside a deputy job (no `AIDA_DEPUTY_JOB`) this is always true and the
+/// floor is the terminal check alone.
+///
+/// What it guarantees: a job, or any child that keeps the job environment
+/// (every `aida` command does), cannot use a terminal it found some other way
+/// (`script(1)`, a pty helper) to pass the floor. What it does NOT guarantee:
+/// a job that can clear its own environment escapes this check. A script job
+/// (only with `--allow-scripts`) or an `--allow-exec` program can run
+/// `env -u AIDA_DEPUTY_JOB script …`. Against those, the boundary is the
+/// operator's start-time choice to allow them; the deputy still never hands
+/// them its terminal.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_job_floor_authorized() -> bool {
+    let job = std::env::var(DEPUTY_JOB_ENV).ok();
+    let spool = std::env::var(DEPUTY_SPOOL_ENV).ok();
+    deputy_job_floor_authorized_from(job.as_deref(), spool.as_deref(), chrono::Utc::now())
+}
+
+/// Pure-input half of [`deputy_job_floor_authorized`]. Fails closed on every
+/// doubt: no spool, a job id that is not a UUID, a spool or `running/`
+/// directory not owned by us or open to others, or a marker that is missing,
+/// linked, foreign, writable by others, unparsable, for another job, or
+/// expired, or a marker bound to a different job file than the one now at
+/// `running/<job>.job`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_job_floor_authorized_from(
+    job: Option<&str>,
+    spool: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let Some(job) = job.filter(|j| !j.is_empty()) else {
+        return true;
+    };
+    let Some(spool) = spool.filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    let canonical_id = uuid::Uuid::parse_str(job).is_ok_and(|u| u.hyphenated().to_string() == job);
+    if !canonical_id {
+        return false;
+    }
+    let spool = std::path::Path::new(spool);
+    let private_dir = |d: &std::path::Path| {
+        std::fs::symlink_metadata(d)
+            .is_ok_and(|md| md.file_type().is_dir() && owned_without(&md, 0o077))
+    };
+    if !private_dir(spool) || !private_dir(&spool.join("running")) {
+        return false;
+    }
+    let marker = deputy_tty_marker_path(spool, job);
+    let Ok(md) = std::fs::symlink_metadata(&marker) else {
+        return false;
+    };
+    if !md.file_type().is_file() || !owned_without(&md, 0o022) {
+        return false;
+    }
+    let Ok(bytes) = std::fs::read(&marker) else {
+        return false;
+    };
+    let Ok(m) = serde_json::from_slice::<DeputyTtyMarker>(&bytes) else {
+        return false;
+    };
+    let Ok(job_md) = std::fs::symlink_metadata(deputy_running_job_path(spool, job)) else {
+        return false;
+    };
+    if !job_md.file_type().is_file() || !owned_without(&job_md, 0o022) {
+        return false;
+    }
+    m.job == job && m.expires_at > now && deputy_file_identity(&job_md) == (m.job_dev, m.job_ino)
+}
+
+/// Owned by this process's uid with none of the `forbidden` mode bits.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+#[cfg(unix)]
+fn owned_without(md: &std::fs::Metadata, forbidden: u32) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: getuid has no preconditions and cannot fail.
+    md.uid() == unsafe { libc::getuid() } && md.mode() & forbidden == 0
+}
+
+#[cfg(not(unix))]
+fn owned_without(_md: &std::fs::Metadata, _forbidden: u32) -> bool {
+    true
+}
+
 /// Whether stdout is an interactive terminal, through the same test seam as
 /// [`authority_stdin_is_terminal`]. A human-at-terminal gate checks both: an
 /// agent that pipes stdout (or stdin) is not a person at a terminal.

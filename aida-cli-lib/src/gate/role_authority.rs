@@ -122,5 +122,16 @@ pub(crate) fn has_dispatch_authority() -> bool {
 
 // trace:STORY-1353 | ai:codex
 pub(crate) fn has_integrity_floor_authority() -> bool {
-    integrity_floor_authority_from(authority_stdin_is_terminal()) // trace:BUG-1618 | ai:claude
+    // mandate-gate: a process carrying a deputy job's environment
+    // (AIDA_DEPUTY_JOB set) holds the floor only while the deputy's own marker
+    // says the TTY policy authorized that job a terminal (signed off on the
+    // spec, Q6). This binds every job and child that keeps that environment;
+    // a job able to clear it (a script or --allow-exec job, which only the
+    // operator can enable) is out of its reach, see
+    // `kernel_deps::deputy_job_floor_authorized`.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    integrity_floor_authority_from(
+        authority_stdin_is_terminal() // trace:BUG-1618 | ai:claude
+            && crate::gate::kernel_deps::deputy_job_floor_authorized(),
+    )
 }

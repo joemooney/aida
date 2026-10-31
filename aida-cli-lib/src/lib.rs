@@ -127,6 +127,9 @@ mod drain_gate;
 mod findings_gate;
 // trace:STORY-1889 | ai:claude — gate authority, all on the mandate floor.
 mod gate;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+mod deputy;
+mod deputy_cmd;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
@@ -585,6 +588,8 @@ mod schema;
 mod grant_keyring;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude — pre-trust seat worktrees in ~/.claude.json.
+mod claude_trust;
 mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;

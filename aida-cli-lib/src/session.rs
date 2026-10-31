@@ -1486,6 +1486,14 @@ pub(crate) fn compose_headless_command(
     // trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "headless session")?;
     let worktree = headless_worktree_root();
+    // BUG-049: a fresh seat worktree is untrusted, so Claude Code would drop
+    // the project allow-list and deny the lane's Bash calls. Pre-trust it
+    // before the spawn — Claude only; opt-in; seats under the worktrees root
+    // only. Best-effort: a failure warns and the launch goes ahead.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+    if vendor == HeadlessVendor::Claude {
+        crate::claude_trust::report(&crate::claude_trust::ensure_seat_trusted(&worktree));
+    }
     // BUG-799: Codex gets slash-commands inline-rendered; Claude expands its
     // own skills, so its path is byte-identical to before.
     let effective_prompt: std::borrow::Cow<'_, str> = if vendor == HeadlessVendor::Codex {
@@ -3213,6 +3221,10 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
                 &main,
             )?);
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+            paths.extend(crate::contained_boundary::contained_deputy_write_paths(
+                &main,
+            )?);
             paths
         }
         None => Vec::new(),
@@ -3979,6 +3991,10 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
     rw_paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
         &main,
     )?);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    rw_paths.extend(crate::contained_boundary::contained_deputy_write_paths(
+        &main,
+    )?);
     if let Some(home) = crate::home_dir() {
         let cargo_home = std::env::var_os("CARGO_HOME")
             .map(PathBuf::from)
@@ -3998,6 +4014,12 @@ pub(crate) fn prepare_contained_mailbox_for_launch(worktree: &Path) -> Result<()
         let main = crate::main_worktree_root_from(root);
         verify_linked_worktree_main(root, &main)?;
         crate::contained_boundary::prepare_mailbox(&main)?;
+        // Best-effort: a launcher that cannot create it (a contained parent
+        // whose own sandbox did not bind it) leaves the path missing, which
+        // the sandbox skips; `aida deputy submit` then says no deputy is set
+        // up. It never widens the boundary and never blocks the launch.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+        let _ = crate::contained_boundary::prepare_deputy_incoming(&main);
     }
     Ok(())
 }

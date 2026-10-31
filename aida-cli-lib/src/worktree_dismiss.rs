@@ -119,6 +119,11 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
             eprintln!("  Skipping: {e:#}");
             continue;
         }
+        // BUG-049: the removed tree's Claude Code trust entry goes with it.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+        if let Err(error) = crate::claude_trust::remove_seat_trust(&project_root, &target) {
+            eprintln!("  could not remove the Claude Code trust entry: {error:#}");
+        }
 
         // trace:BUG-2211 | ai:claude
         aida_core::git_ops::output_healing_config_lock(

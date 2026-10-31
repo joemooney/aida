@@ -405,6 +405,23 @@ When a run ends with mail its sessions never read, that mail stays with the run:
 Each notice is recorded once in the run's outbox, however often the end is recorded or retried. If a sender cannot be reached now (its session ended, or its handle now belongs to someone else), or no advisor with a recipient id is live, the notice stays pending. The next `relay-mail end`, `relay-mail bind` or `aida agent gc` retries it. An outbox entry that cannot be read is skipped with a warning and the other notices still go out; its run stays live until the entry is fixed or removed. If notice delivery fails, `aida agent gc` prints a warning and continues. `aida relay-mail outbox [--run <ID>] [--json]` lists each notice and whether it was delivered or is pending, with the last error. Sending mail ends a run whose controller is provably gone and records its notices, but delivers none of them. Read-only commands, such as `aida mailbox migrate --dry-run`, never end a run.
 <!-- trace:STORY-1843 | ai:claude -->
 
+### `aida deputy`
+
+**One line** — a stand-in that runs commands other sessions hand it, under the seat grant held by your own terminal, so you don't have to hand-roll script loops in `/tmp`.
+
+Start it once in your terminal, from your shell: `aida deputy [--name N] [--workers K]`. It refuses to start if stdin, stdout or stderr isn't your terminal, inside an agent or headless run, inside a deputy job, without a seat grant (run `aida role enter <seat>` first), or when run as a bare binary (`command aida deputy`) instead of through the `aida()` shell function (`aida dev shell-init --install`; a shell function installed before `aida deputy` existed is told to update). The banner shows the grant, its expiry, the spool directory and the terminal entries in effect. Ctrl-C stops it.
+
+Sessions submit work with `aida deputy submit -- <command…>`, which prints a job id. Add `--wait` to wait for the job, print its output and the path of its output file, and exit with its exit code; `aida deputy status <id>`, `aida deputy log <id> [--follow]`, `aida deputy cancel <id>` and `aida deputy list` do the rest. `--serial ship` runs jobs of one class one at a time while others run in parallel. `--timeout` (default 30m) stops a job that runs too long.
+
+- **Spool.** Jobs are submitted to `.aida/deputy/incoming/<name>/` in the main checkout; everything else lives in `.aida/deputy/<name>/`. Both must be owned by you with no group or other access. A sandboxed agent session may write only the `incoming` directory (to submit or cancel); the running jobs, results, ledger and terminal entries stay out of its reach. Each job is its own file, so two submits never overwrite each other. A job file not owned by you, writable by others, linked, or edited after submit is refused and logged.
+- **What runs.** By default only `aida` commands run. `--allow-exec PATH` adds an executable; `--allow-scripts` allows shell-script jobs (`submit -f FILE` or `--script`). Each job runs as its own process, so an `exit` in one job does not stop the deputy.
+- **Terminal.** A job runs on a terminal only if its command matches an entry you set at your terminal: `aida deputy --allow-tty 'aida merge-hold clear' --ttl 8h` at start, or `aida deputy allow '<prefix>' [--ttl D] [--single-use]` later (`aida deputy deny`, `aida deputy policy`). An entry never outlasts your grant. A single-use entry is spent only once the deputy has recorded its use; if it cannot, the job runs without a terminal and the entry stays unused. Every other job runs with no terminal, so a command that needs a person at the keyboard refuses it. Script jobs never get a terminal, and neither does a command carrying a gate-bypass flag (force, no-verify, admin, yes-i-know, override-stale-approval). A terminal job that prints nothing for `--tty-idle` (default 10s) shows as waiting on a prompt in `aida deputy status` and `list`; it keeps running until it ends or its `--timeout` stops it.
+- **Results and audit.** Output goes to `out/<id>.out` and the result to `done/` or `failed/`. `deputy.ledger` records who submitted each job, its command digest, whether it ran on a terminal, and its exit code.
+- **Grant expiry and restarts.** When your grant expires or is revoked, the deputy stops taking new jobs until you renew it in that shell and start it again. Jobs left running when a deputy died are marked failed and never re-run. Only one deputy per name runs at a time.
+
+`aida runloop` is an alias.
+<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude -->
+
 ### `aida driver`
 
 **One line** — register the long-running loops (relays, drains, headless agents) that work in-progress specs, so every view can say *who* is driving each one.
