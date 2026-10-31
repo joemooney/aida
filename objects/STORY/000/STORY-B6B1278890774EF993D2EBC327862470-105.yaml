@@ -26,12 +26,12 @@ description: |
   - Resolution chain: BUG-ggg (agreed) and BUG-1-mmm (alias) both resolve to the spec whose local id is BUG-B6B...-nnn. trace: comments, commit trailers and blocked-by edges that name BUG-1-mmm keep working through the alias. Rewrite edges in the store to the new id; do not rewrite git history.
   - Node 1 is retired after the migration and never allocates again.
   - SKETCH QUESTION for the lane (advisor rules on the sketch): do the 5746 flat pre-node specs (agreed id only, no local id) also get b6b local ids under the "every spec has a local id" rule? Lay out the cost and benefit; the advisor's default is yes, done in the same one-time pass if the alias mechanism is identical.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T00:29:30.904508417Z
+modified_at: 2026-10-31T16:26:10.625048068Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -66,6 +66,14 @@ history:
   timestamp: 2026-10-31T15:55:44.068429565Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a192c8-6b41-7332-bc31-d3c68413bc6a
+  author: aida-session-start
+  timestamp: 2026-10-31T16:26:10.625046846Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
