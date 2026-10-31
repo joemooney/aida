@@ -769,6 +769,9 @@ pub(crate) const TOON_LIST_DEFAULT_FIELDS: &[&str] =
 // trace:TASK-964
 pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "id",
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude — local ID
+    // beside the agreed one, or `(agreed id pending)`.
+    "local_id",
     "title",
     "status",
     "type",

@@ -1006,12 +1006,12 @@ Options:
           Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or
           `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
           exactly those columns in that order — on the human table AND the token-efficient agent
-          output (a real token win for agents). Valid fields: id, title, status, type, priority,
-          feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
-          creation time. Aliases: req_type = type, created_at = opened, created = opened. Default
-          (no `--fields`) keeps the standard columns; agent mode defaults to the minimal
-          id,title,status,type,modified_at set
+          output (a real token win for agents). Valid fields: id, local_id, title, status, type,
+          priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued,
+          in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens.
+          `opened` is the creation time. Aliases: req_type = type, created_at = opened, created =
+          opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the
+          minimal id,title,status,type,modified_at set
 
       --topics
           List the topics (tags) in use on live FAQs, with how many FAQs carry each, most-used
@@ -11824,9 +11824,11 @@ Options:
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
-          code comments. Needs --dry-run (preview) or --yes (apply)
+          code comments. `agreed-ids`: give every node-local spec that has no agreed ID the next
+          agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes
+          (apply)
           
-          [possible values: id-collisions]
+          [possible values: id-collisions, agreed-ids]
 
       --dry-run
           With --fix: show the plan and write nothing to the store
@@ -24921,12 +24923,12 @@ Options:
       --fields <FIELDS>
           Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or
           `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
-          exactly those columns in that order. Valid fields: id, title, status, type, priority,
-          feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
-          creation time. Aliases: req_type = type, created_at = opened, created = opened. Search
-          rows carry no work-routing state, so queued, in_flight and blocked render false. Default
-          keeps the standard layout. Mirrors `aida list --fields`
+          exactly those columns in that order. Valid fields: id, local_id, title, status, type,
+          priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued,
+          in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens.
+          `opened` is the creation time. Aliases: req_type = type, created_at = opened, created =
+          opened. Search rows carry no work-routing state, so queued, in_flight and blocked render
+          false. Default keeps the standard layout. Mirrors `aida list --fields`
 
   -h, --help
           Print help (see a summary with '-h')
@@ -29887,7 +29889,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, local_id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
       },
       {
         "name": "format",
@@ -40912,7 +40914,7 @@ Working on aida itself
       {
         "name": "fix",
         "takes_value": true,
-        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. Needs --dry-run (preview) or --yes (apply)"
+        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. `agreed-ids`: give every node-local spec that has no agreed ID the next agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes (apply)"
       },
       {
         "name": "fix-sandbox",
@@ -54264,7 +54266,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, local_id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
       },
       {
         "name": "format",

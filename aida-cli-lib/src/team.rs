@@ -439,6 +439,7 @@ mod tests {
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         }
     }
 
@@ -596,6 +597,7 @@ mod tests {
             name: Some("imac-joe-1".to_string()),
             user: Some("joe".to_string()),
             registered: Utc::now(),
+            retired_at: None,
         };
         let key = aida_core::team::person_key(&entry);
         assert_eq!(
