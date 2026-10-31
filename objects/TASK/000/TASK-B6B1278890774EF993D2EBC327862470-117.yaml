@@ -9,12 +9,12 @@ description: |
   2. Help text, docs (docs/cli/, docs/agents/), templates/skills and hook messages that tell users to run `aida agent ls` say `aida agent list` (edit template masters, then `make sync-templates`).
   3. Existing scripts calling `aida agent ls` keep working unchanged (test).
   4. `aida agent list` does not collide with `list-roles`.
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:30:25.120917105Z
-modified_at: 2026-10-30T17:03:00.959832485Z
+modified_at: 2026-10-31T00:07:35.179247656Z
 req_type: Task
 tags:
 - batch:fasttrack
@@ -156,6 +156,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a18f48-7bbf-7fd2-b150-4284dbcdbb57
+  author: aida-auto-bump
+  timestamp: 2026-10-31T00:07:34.591947808Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a18f48-7e0b-7151-b0db-7764cefa9c80
+  timestamp: 2026-10-31T00:07:35.179244374Z
+  agent: aida
+  commit_sha: 2f299376ba7a2634bd17a64937351ea2ac93fdac
+  summary: 'All 4 ACs met: List variant canonical with visible ls alias and Status kept (task_117 test + help golden); user-facing hints/docs/template say agent list; ls with --all/--stale/--ended still parses to List (task_117, parses_agent_ls_ended_flag, story_423); list-roles unaffected (task_117). CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -166,4 +180,6 @@ filed_at:
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
 implementation_info:
   implemented: false
+  completed_at: 2026-10-31T00:07:34.591942882Z
+  completion_sha: 2f299376ba7a2634bd17a64937351ea2ac93fdac
   reopened_at_sha: 236b190e488d845eb4d5cab12fe2ceec4e403db6
