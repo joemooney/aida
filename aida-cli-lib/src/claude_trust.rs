@@ -11,21 +11,31 @@
 //! This module writes exactly one entry, `projects["<seat>"]`, with
 //! `hasTrustDialogAccepted = true` and `"aida"` in `enabledMcpjsonServers`,
 //! for the one directory a claude lane is spawned in, at the spawn. Growth is
-//! bounded by design rather than by wiring every teardown path: every write
-//! also prunes the `projects` entries directly under the worktrees root whose
-//! directory no longer exists, so a tree torn down by any path loses its
-//! entry at the next write. Dismissal removes the entry at once as a fast
-//! path. Entries outside the worktrees root, and every other key, keep their
-//! values (serde_json re-sorts object keys; Claude Code does not depend on
-//! key order).
+//! bounded by design rather than by wiring every teardown path: when
+//! `[worktree_pool] worktree_parent` is configured, every write also prunes
+//! the `projects` entries directly under that root whose directory no longer
+//! exists, so a tree torn down by any path loses its entry at the next write.
+//! Dismissal removes the entry at once as a fast path. Entries outside the
+//! worktrees root, and every other key, keep their values (serde_json
+//! re-sorts object keys; Claude Code does not depend on key order).
 //!
 //! Guard rails:
 //! - opt-in: `[worktree_pool] trust_seat_worktrees = true` in the default
 //!   branch's committed `.aida/config.toml` (never the branch-local copy), or
 //!   `AIDA_TRUST_SEAT_WORKTREES=1|0` to turn it on or off on one host (the
-//!   variable wins);
-//! - only an existing directory directly inside the configured worktrees
-//!   root (never the main checkout, never anything else);
+//!   variable wins). Off means no writes at all: no trust, no removal, no
+//!   prune;
+//! - only an existing directory directly inside the worktrees root (never the
+//!   main checkout, never anything else);
+//! - only a tree that runs the lane's own work: an implementer seat clone
+//!   (`aida-seat-*`) or a compete lane (`aida-compete-*`). A reviewer tree
+//!   (`aida-pr-N`, `take-N`, `pr-N`, or any name carrying a PR number) is
+//!   never trusted: trust makes Claude Code apply the checked-out tree's own
+//!   `.claude/settings.json` allow rules and hooks, so trusting code under
+//!   review would let a PR configure the session reviewing it;
+//! - the prune only ever runs under an explicitly configured
+//!   `worktree_parent`: the fallback root (the main checkout's parent) is
+//!   typically a directory of unrelated projects;
 //! - the read-modify-write runs under an OS advisory lock (`flock`) on the
 //!   sidecar `~/.claude.json.aida.lock`, waited on with a timeout, so two AIDA
 //!   writers never edit at once; the file is replaced with an atomic rename
@@ -147,6 +157,47 @@ pub(crate) fn seat_trust_key(main: &Path, seat: &Path) -> Result<PathBuf, String
     Ok(seat)
 }
 
+/// The directory-name prefixes of the trees a pre-trust may be written for:
+/// trees that run the lane's own work.
+pub(crate) const TRUSTABLE_PREFIXES: &[&str] = &[
+    aida_core::seat_clone_detect::CLONE_DIR_PREFIX,
+    "aida-compete-",
+];
+
+/// May `seat` be pre-trusted? Only an implementer seat clone or a compete
+/// lane — never a tree that checks out code under review (whose own
+/// `.claude/settings.json` trust would then apply to its reviewer). Any name
+/// carrying a PR number (`aida-pr-N`, `take-N`, `pr-N`, `…-pr-N…`) is refused
+/// even under an allowed prefix. Pure.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+pub(crate) fn is_trustable_tree(seat: &Path) -> bool {
+    let Some(name) = seat.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    TRUSTABLE_PREFIXES.iter().any(|p| name.starts_with(p)) && !names_a_pr(name)
+}
+
+/// Does a directory name carry a PR number (`pr-<digits>` as a whole
+/// `-`-separated segment pair, or a review-tree prefix)?
+fn names_a_pr(name: &str) -> bool {
+    if crate::worktree_reclaim::pr_number_from_dir(name).is_some() {
+        return true;
+    }
+    let segments: Vec<&str> = name.split('-').collect();
+    segments.windows(2).any(|w| {
+        w[0].eq_ignore_ascii_case("pr")
+            && !w[1].is_empty()
+            && w[1].bytes().all(|b| b.is_ascii_digit())
+    })
+}
+
+/// The worktrees root when it is EXPLICITLY configured
+/// (`[worktree_pool] worktree_parent`), else `None`. The prune and the stale
+/// scan only ever run under this root.
+fn explicit_worktrees_root(main: &Path) -> Option<PathBuf> {
+    crate::worktree_pool_config_worktree_parent(main).map(|_| worktrees_root(main))
+}
+
 /// The main checkout `seat` belongs to (a seat clone's verified main, or a
 /// git worktree's main worktree).
 fn main_for_seat(seat: &Path) -> PathBuf {
@@ -166,6 +217,29 @@ pub(crate) fn ensure_seat_trusted(seat: &Path) -> Result<TrustWrite> {
     ensure_seat_trusted_in(&home, &main_for_seat(seat), seat)
 }
 
+/// [`ensure_seat_trusted`] for a launch whose role is known (`agent new
+/// --bg`): only an implementer lane (or one launched without a role) is
+/// trusted; a reviewer, advisor or any other role reads code it did not
+/// write, so its tree is never trusted whatever its name.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+pub(crate) fn ensure_role_seat_trusted(seat: &Path, role: Option<&str>) -> Result<TrustWrite> {
+    if let Some(refused) = refuse_role(role) {
+        return Ok(refused);
+    }
+    ensure_seat_trusted(seat)
+}
+
+/// The refusal for a role that must not get a trusted tree; `None` when the
+/// role may (implementer, or no role). Pure.
+pub(crate) fn refuse_role(role: Option<&str>) -> Option<TrustWrite> {
+    match role {
+        None | Some("implementer") => None,
+        Some(other) => Some(TrustWrite::Refused(format!(
+            "a `{other}` launch is not an implementer lane; only implementer seats are trusted"
+        ))),
+    }
+}
+
 /// [`ensure_seat_trusted`] with the home and main checkout given — the
 /// testable core.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049.acaf7e35 | ai:claude
@@ -180,6 +254,12 @@ pub(crate) fn ensure_seat_trusted_in(home: &Path, main: &Path, seat: &Path) -> R
     if !key.is_dir() {
         return Ok(TrustWrite::Refused(format!(
             "{} is not an existing directory a lane is spawned in",
+            key.display()
+        )));
+    }
+    if !is_trustable_tree(&key) {
+        return Ok(TrustWrite::Refused(format!(
+            "{} is not an implementer seat or compete lane (review trees are never trusted)",
             key.display()
         )));
     }
@@ -223,10 +303,11 @@ pub(crate) fn ensure_seat_trusted_in(home: &Path, main: &Path, seat: &Path) -> R
 }
 
 /// Remove `seat`'s entry when the seat is torn down — the fast path; the
-/// prune on every write is what bounds growth. Runs whether or not the opt-in
-/// is on (an entry written while it was on must not outlive the seat), but
-/// only for a path inside the worktrees root. Returns whether an entry was
-/// removed; errors are swallowed by the caller (teardown must not fail on it).
+/// prune on every write is what bounds growth. A no-op when the opt-in is off
+/// (off means AIDA writes nothing to `~/.claude.json`; an entry left from
+/// while it was on is reported by doctor), and only for a path inside the
+/// worktrees root. Returns whether an entry was removed; errors are swallowed
+/// by the caller (teardown must not fail on it).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
 pub(crate) fn remove_seat_trust(main: &Path, seat: &Path) -> Result<bool> {
     let Some(home) = crate::home_dir() else {
@@ -236,7 +317,11 @@ pub(crate) fn remove_seat_trust(main: &Path, seat: &Path) -> Result<bool> {
 }
 
 /// [`remove_seat_trust`] with the home given.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
 pub(crate) fn remove_seat_trust_in(home: &Path, main: &Path, seat: &Path) -> Result<bool> {
+    if !trust_enabled(main) {
+        return Ok(false);
+    }
     let Ok(key) = seat_trust_key(main, seat) else {
         return Ok(false);
     };
@@ -252,9 +337,10 @@ pub(crate) fn remove_seat_trust_in(home: &Path, main: &Path, seat: &Path) -> Res
     })
 }
 
-/// `projects` keys directly inside `main`'s worktrees root (seat clones, spec
-/// worktrees, reviewer and compete worktrees alike) whose directory no longer
-/// exists — what doctor reports and what every write prunes.
+/// `projects` keys directly inside `main`'s explicitly configured worktrees
+/// root (seat clones, spec worktrees, reviewer and compete worktrees alike)
+/// whose directory no longer exists — what doctor reports and what every
+/// write prunes. Empty without a configured `worktree_parent`.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
 pub(crate) fn stale_seat_entries(home: &Path, main: &Path) -> Vec<PathBuf> {
     let Ok(body) = std::fs::read_to_string(home.join(".claude.json")) else {
@@ -263,7 +349,9 @@ pub(crate) fn stale_seat_entries(home: &Path, main: &Path) -> Vec<PathBuf> {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) else {
         return Vec::new();
     };
-    let root = worktrees_root(main);
+    let Some(root) = explicit_worktrees_root(main) else {
+        return Vec::new();
+    };
     value
         .get("projects")
         .and_then(serde_json::Value::as_object)
@@ -299,7 +387,7 @@ fn prune_stale(file: &mut serde_json::Map<String, serde_json::Value>, root: &Pat
 
 /// Locked read-modify-write of `<home>/.claude.json`. `edit` returns whether
 /// it changed anything; every write also prunes the stale entries under
-/// `main`'s worktrees root. The file is rewritten only when either changed
+/// `main`'s explicitly configured worktrees root (none without one). The file is rewritten only when either changed
 /// something. Returns `edit`'s answer.
 fn edit_claude_json(
     home: &Path,
@@ -307,7 +395,7 @@ fn edit_claude_json(
     edit: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>) -> Result<bool>,
 ) -> Result<bool> {
     let path = home.join(".claude.json");
-    let wt_root = worktrees_root(main);
+    let wt_root = explicit_worktrees_root(main);
     let _lock = ClaudeJsonLock::acquire(home, LOCK_WAIT)?;
     let (mut value, mode) = match std::fs::read_to_string(&path) {
         Ok(body) => {
@@ -331,7 +419,9 @@ fn edit_claude_json(
         );
     };
     let changed = edit(root)?;
-    let pruned = prune_stale(root, &wt_root);
+    let pruned = wt_root
+        .as_deref()
+        .map_or(0, |wt_root| prune_stale(root, wt_root));
     if !changed && pruned == 0 {
         return Ok(false);
     }

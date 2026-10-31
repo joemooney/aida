@@ -3253,8 +3253,15 @@ pub(crate) fn agent_new_bg_dispatch(
     }
 
     // BUG-049: pre-trust the seat before `claude --bg` starts in it, so the
-    // session keeps the project allow-list. trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
-    crate::claude_trust::report(&crate::claude_trust::ensure_seat_trusted(&plan.launch_cwd));
+    // session keeps the project allow-list. Implementer lanes only: a review
+    // seat must not run under the reviewed tree's own settings.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+    if config.agent_type == "claude" {
+        crate::claude_trust::report(&crate::claude_trust::ensure_role_seat_trusted(
+            &plan.launch_cwd,
+            plan.role.as_deref(),
+        ));
+    }
 
     let mut command = build_agent_new_bg_command(
         &binary,

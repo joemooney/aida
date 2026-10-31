@@ -145,11 +145,15 @@ fn every_write_prunes_entries_whose_tree_is_gone() {
         .collect();
     for tree in &trees {
         std::fs::create_dir_all(tree).unwrap();
-        ensure_seat_trusted_in(&f.home, &f.main, tree).unwrap();
     }
-    // An entry outside the root whose directory is also gone stays: it is not
-    // ours to judge.
+    ensure_seat_trusted_in(&f.home, &f.main, &trees[0]).unwrap();
+    // Entries for the other trees (written by hand or by an older build: AIDA
+    // itself never trusts a review tree), plus one outside the root whose
+    // directory is also gone — that one stays: it is not ours to judge.
     let mut cfg = read(&f.home);
+    for tree in &trees[1..] {
+        cfg["projects"][tree.to_string_lossy().as_ref()] = json!({"hasTrustDialogAccepted": true});
+    }
     cfg["projects"]["/gone/elsewhere"] = json!({"hasTrustDialogAccepted": true});
     std::fs::write(f.home.join(".claude.json"), cfg.to_string()).unwrap();
 
@@ -218,6 +222,124 @@ fn a_path_outside_the_worktrees_root_is_refused_and_nothing_is_written() {
         assert!(!remove_seat_trust_in(&f.home, &f.main, path).unwrap());
     }
     assert_eq!(std::fs::read(f.home.join(".claude.json")).unwrap(), before);
+}
+
+/// Ruling 2: a tree that checks out code under review is never trusted —
+/// trusting it would apply the PR's own `.claude/settings.json` to its
+/// reviewer. Only implementer seat clones and compete lanes are.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.Test | ai:claude
+#[test]
+fn a_review_tree_is_never_trusted() {
+    let f = fixture(true);
+    let before = std::fs::read(f.home.join(".claude.json")).unwrap();
+    let root = f.seat.parent().unwrap().to_path_buf();
+    for name in [
+        "aida-pr-3167",
+        "take-3167",
+        "pr-3167",
+        "aida-seat-main-pr-3167",
+        "aida-compete-pr-12-claude",
+        "spec-worktree",
+        "bug-1",
+    ] {
+        let tree = root.join(name);
+        std::fs::create_dir_all(&tree).unwrap();
+        assert!(
+            matches!(
+                ensure_seat_trusted_in(&f.home, &f.main, &tree).unwrap(),
+                TrustWrite::Refused(_)
+            ),
+            "{name} must not be trusted"
+        );
+    }
+    assert_eq!(std::fs::read(f.home.join(".claude.json")).unwrap(), before);
+
+    // A reviewer (or any non-implementer) launch is refused whatever the tree.
+    for role in ["reviewer", "advisor", "integrator"] {
+        assert!(matches!(
+            refuse_role(Some(role)),
+            Some(TrustWrite::Refused(_))
+        ));
+    }
+    assert_eq!(refuse_role(Some("implementer")), None);
+    assert_eq!(refuse_role(None), None);
+
+    // What is trusted: implementer seat clones and compete lanes.
+    for name in ["aida-seat-main-bug-2", "aida-compete-compete-task-1-claude"] {
+        let tree = root.join(name);
+        std::fs::create_dir_all(&tree).unwrap();
+        assert!(is_trustable_tree(&tree), "{name}");
+        assert_eq!(
+            ensure_seat_trusted_in(&f.home, &f.main, &tree).unwrap(),
+            TrustWrite::Written(tree.clone())
+        );
+    }
+}
+
+/// Ruling 1: with the opt-in off, AIDA writes nothing at all — a dismissal of
+/// a seat that still has an entry leaves `~/.claude.json` byte-identical (no
+/// removal, no prune).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
+#[test]
+fn opt_in_off_means_no_removal_and_no_prune() {
+    let f = fixture(false);
+    let mut cfg = read(&f.home);
+    let key = f.seat.to_string_lossy().into_owned();
+    let gone = f.seat.parent().unwrap().join("aida-seat-main-gone");
+    cfg["projects"][&key] = json!({"hasTrustDialogAccepted": true});
+    cfg["projects"][gone.to_string_lossy().as_ref()] = json!({"hasTrustDialogAccepted": true});
+    std::fs::write(f.home.join(".claude.json"), cfg.to_string()).unwrap();
+    let before = std::fs::read(f.home.join(".claude.json")).unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(ENV_OVERRIDE, None)]);
+    assert!(!trust_enabled(&f.main));
+    std::fs::remove_dir_all(&f.seat).unwrap();
+    assert!(!remove_seat_trust_in(&f.home, &f.main, &f.seat).unwrap());
+    assert_eq!(
+        ensure_seat_trusted_in(&f.home, &f.main, &f.seat).unwrap(),
+        TrustWrite::Disabled
+    );
+    assert_eq!(std::fs::read(f.home.join(".claude.json")).unwrap(), before);
+    assert!(
+        !f.home.join(LOCK_FILE).exists(),
+        "off must not even take the lock"
+    );
+}
+
+/// Ruling 1: without an explicitly configured `worktree_parent` the root
+/// falls back to the main checkout's parent — typically a directory of
+/// unrelated projects — so no write ever prunes there.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac15c23c | ai:claude
+#[test]
+fn no_configured_worktree_parent_means_no_prune() {
+    let f = fixture(true);
+    let base = f.main.parent().unwrap().to_path_buf();
+    std::fs::write(
+        f.main.join(".aida").join("config.toml"),
+        "[worktree_pool]\ntrust_seat_worktrees = true\n",
+    )
+    .unwrap();
+    git(&f.main, &["commit", "-q", "-am", "no parent"]);
+    let seat = base.join("aida-seat-main-sib");
+    std::fs::create_dir_all(&seat).unwrap();
+    let gone = base.join("some-deleted-project");
+    let mut cfg = read(&f.home);
+    cfg["projects"][gone.to_string_lossy().as_ref()] = json!({"allowedTools": ["Bash"]});
+    std::fs::write(f.home.join(".claude.json"), cfg.to_string()).unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(ENV_OVERRIDE, None)]);
+    assert!(stale_seat_entries(&f.home, &f.main).is_empty());
+    assert_eq!(
+        ensure_seat_trusted_in(&f.home, &f.main, &seat).unwrap(),
+        TrustWrite::Written(seat.clone())
+    );
+    let after = read(&f.home);
+    assert!(
+        after["projects"]
+            .get(gone.to_string_lossy().as_ref())
+            .is_some(),
+        "a sibling project's entry was pruned: {after:#}"
+    );
 }
 
 // trace:BUG-B6B1278890774EF993D2EBC327862470-049.ac891c92 | ai:claude
@@ -388,38 +510,36 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A git main checkout (trust on) with two real `git worktree`s under its
-/// worktrees root — a headless reviewer's `aida-pr-N` tree and a spec
-/// worktree (an `aida-seat-*` name is reserved for seat clones) — and a
+/// A git main checkout (trust on) with three real `git worktree`s under its
+/// worktrees root — a compete lane (`aida-compete-*`, a trustable tree that
+/// is a plain git worktree; an `aida-seat-*` name is reserved for seat
+/// clones), a codex lane, and a headless reviewer's `aida-pr-N` tree — and a
 /// fixture HOME.
-fn git_fixture() -> (Fixture, PathBuf) {
+fn git_fixture() -> (Fixture, PathBuf, PathBuf) {
     let mut f = fixture(true);
     std::fs::remove_dir_all(&f.seat).unwrap();
-    f.seat = f.seat.parent().unwrap().join("aida-pr-1");
-    git(
-        &f.main,
-        &[
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            "bug-1",
-            f.seat.to_str().unwrap(),
-        ],
-    );
-    let codex_seat = f.seat.parent().unwrap().join("bug-2");
-    git(
-        &f.main,
-        &[
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            "bug-2",
-            codex_seat.to_str().unwrap(),
-        ],
-    );
-    (f, codex_seat)
+    let root = f.seat.parent().unwrap().to_path_buf();
+    f.seat = root.join("aida-compete-compete-bug-1-claude");
+    let codex_seat = root.join("aida-compete-compete-bug-1-codex");
+    let reviewer = root.join("aida-pr-1");
+    for (branch, tree) in [
+        ("compete/bug-1-claude", &f.seat),
+        ("compete/bug-1-codex", &codex_seat),
+        ("pr-1", &reviewer),
+    ] {
+        git(
+            &f.main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                branch,
+                tree.to_str().unwrap(),
+            ],
+        );
+    }
+    (f, codex_seat, reviewer)
 }
 
 /// A fake `claude` that exits 0 only if `$HOME/.claude.json` already trusts
@@ -447,7 +567,7 @@ fn fake_claude(dir: &Path) -> PathBuf {
 #[cfg(unix)]
 #[test]
 fn launcher_trusts_before_the_spawn_and_dismiss_removes_it() {
-    let (f, codex_seat) = git_fixture();
+    let (f, codex_seat, reviewer) = git_fixture();
     let fake = fake_claude(&f.home);
     let key = f.seat.to_string_lossy().into_owned();
     let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
@@ -503,6 +623,27 @@ fn launcher_trusts_before_the_spawn_and_dismiss_removes_it() {
         .get(codex_seat.to_string_lossy().as_ref())
         .is_none());
 
+    // Ruling 2: a reviewer launch (claude, in the PR's tree) writes no trust
+    // entry — the PR's own .claude/settings.json must not configure it.
+    {
+        let _cwd = crate::session::contained_cwd_seam::pin(&reviewer);
+        crate::session::compose_headless_command(
+            crate::session::HeadlessVendor::Claude,
+            "review",
+            "sess-reviewer",
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+    }
+    assert!(
+        read_home()["projects"]
+            .get(reviewer.to_string_lossy().as_ref())
+            .is_none(),
+        "a reviewer tree was trusted"
+    );
+
     // Claude: the launcher writes the entry before the spawn.
     let (program, args) = {
         let _cwd = crate::session::contained_cwd_seam::pin(&f.seat);
@@ -530,4 +671,110 @@ fn launcher_trusts_before_the_spawn_and_dismiss_removes_it() {
     assert!(!f.seat.exists(), "dismiss did not remove the seat");
     let after = read_home();
     assert!(after["projects"].get(&key).is_none(), "{after:#}");
+}
+
+/// A fake `claude --bg` that records in `marker` whether `$HOME/.claude.json`
+/// trusted its cwd when it started, then exits 1 so the dispatch stops right
+/// after the spawn (nothing is linked or registered).
+#[cfg(unix)]
+fn fake_bg_claude(dir: &Path, marker: &Path) -> PathBuf {
+    let path = dir.join("fake-claude-bg");
+    crate::test_exec::write_executable(
+        &path,
+        &format!(
+            "#!/bin/sh\n\
+             seat=$(pwd -P)\n\
+             if grep -qF \"\\\"$seat\\\"\" \"$HOME/.claude.json\" 2>/dev/null; then\n\
+               echo trusted > '{m}'\n\
+             else\n\
+               echo untrusted > '{m}'\n\
+             fi\n\
+             exit 1\n",
+            m = marker.display()
+        ),
+    );
+    path
+}
+
+/// Drive the real `aida agent new claude --bg` dispatch with a fake claude:
+/// an implementer launch in a lane is trusted before the spawn; a reviewer
+/// launch in the PR's tree is not (ruling 2).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.Test | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-049.acaf7e35 | ai:claude
+#[cfg(unix)]
+#[test]
+fn agent_new_bg_trusts_an_implementer_lane_and_never_a_reviewer_tree() {
+    let (f, _codex, reviewer) = git_fixture();
+    let marker = f.home.join("bg-marker");
+    let fake = fake_bg_claude(&f.home, &marker);
+    let binary: &'static str = Box::leak(fake.to_string_lossy().into_owned().into_boxed_str());
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &f.main,
+        "advisor",
+        &["implementer", "reviewer"],
+        &[(ENV_OVERRIDE, None), ("AIDA_CONTAINED", None)],
+    );
+    let home = crate::home_dir().expect("hermetic test home");
+    let trusted_in_home = |tree: &Path| {
+        std::fs::read_to_string(home.join(".claude.json"))
+            .ok()
+            .and_then(|b| serde_json::from_str::<Value>(&b).ok())
+            .is_some_and(|v| v["projects"].get(tree.to_string_lossy().as_ref()).is_some())
+    };
+    let dispatch = |role: &str, cwd: &Path, name: &str| {
+        let _ = std::fs::remove_file(&marker);
+        let config = crate::agent_launch::AgentLaunchConfig {
+            agent_type: "claude",
+            binary,
+            default_args: vec!["--bg".into()],
+            prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let err = crate::agent_launch::agent_new_bg_dispatch(
+            config,
+            Some(role.into()),
+            None,
+            true,
+            Some(cwd),
+            crate::agent_launch::AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            crate::agent_launch::AgentPromptOptions::new(Some("work".into()), false),
+            crate::agent_launch::AgentResumeOptions::new(false, None, false, false),
+            crate::agent_launch::AgentDefaultFlagOptions::new(false, Vec::new(), None),
+            Some(name.into()),
+            None,
+            false,
+        )
+        .unwrap_err();
+        let err = format!("{err:#}");
+        let ran = std::fs::read_to_string(&marker)
+            .ok()
+            .map(|m| m.trim().to_string());
+        (err, ran)
+    };
+
+    // An implementer lane is trusted before the spawn.
+    let (err, ran) = dispatch("implementer", &f.seat, "bg-impl-049");
+    assert!(err.contains("exited with status"), "{err}");
+    assert_eq!(ran.as_deref(), Some("trusted"), "{err}");
+    assert!(trusted_in_home(&f.seat));
+
+    // Even an implementer-role launch in a PR's review tree reaches the spawn
+    // untrusted: the tree, not just the role, decides.
+    let (err, ran) = dispatch("implementer", &reviewer, "bg-impl-pr-049");
+    assert!(err.contains("exited with status"), "{err}");
+    assert_eq!(ran.as_deref(), Some("untrusted"), "{err}");
+    assert!(!trusted_in_home(&reviewer), "a review tree was trusted");
+
+    // A reviewer launch (refused by `--bg` itself after the trust step)
+    // writes no trust entry either.
+    let (err, _) = dispatch("reviewer", &reviewer, "bg-rev-049");
+    assert!(
+        err.contains("exited with status") || err.contains("cannot launch a `reviewer`"),
+        "{err}"
+    );
+    assert!(!trusted_in_home(&reviewer), "a reviewer tree was trusted");
 }

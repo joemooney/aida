@@ -447,10 +447,13 @@ enabled = true
 # trace:TASK-1563 | ai:claude
 [worktree_pool]
 worktree_parent = "../aida-worktrees"
-# BUG-049: pre-trust each seat worktree in ~/.claude.json before a lane's
-# claude starts there. Every write also prunes the entries of trees under the
-# worktrees root that no longer exist, and dismissal drops the entry at once,
-# so ~/.claude.json stays bounded. A fresh
+# BUG-049: pre-trust each implementer seat clone (aida-seat-*) and compete
+# lane in ~/.claude.json before a lane's claude starts there. Reviewer trees
+# (aida-pr-N) are never trusted: trust would apply the reviewed branch's own
+# .claude/settings.json to its reviewer. Every write also prunes the entries
+# of trees under worktree_parent that no longer exist, and dismissal drops the
+# entry at once, so ~/.claude.json stays bounded. Off means AIDA never writes
+# the file at all. A fresh
 # seat is otherwise untrusted, Claude Code ignores .claude/settings.json's
 # permissions.allow, and the lane's Bash calls are denied. The operator
 # authorized trusting aida-worktrees/* seats on 2026-10-25. Read from the
