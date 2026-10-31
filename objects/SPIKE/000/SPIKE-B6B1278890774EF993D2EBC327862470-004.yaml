@@ -1,0 +1,37 @@
+id: 01a1936a-7fb6-7573-aa6a-60feed5ce902
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-004
+title: 'Spike: can a pool grant cross an air gap in a git bundle and be spent on the inside hub?'
+description: |
+  ## Why
+  The multi-hub case for block delegation is an air-gapped network with its own internal git server. Its clones can only mint agreed IDs if a pool grant from the root crosses the gap once, usually as a git bundle carried in by hand. The storage docs say "a block that merely appears in an imported store is never spendable", and only the immediate parent pool's `home_ref` is checked against the upstream. Nobody has tested whether a bundle-delivered grant is usable inside the gap.
+
+  ## Questions (each answered with a probe against two local bare repos standing in for the outside and inside hubs)
+  1. Grant in: the root grants a pool homed on the inside hub; deliver it with `git bundle` and fetch it into the inside hub. Does a clone inside, with that hub as its upstream, claim a block from the pool and mint agreed IDs? If not, which check refuses it?
+  2. Claims inside: do two inside clones racing for a block get ordered by the inside hub (one rejected, retries)?
+  3. Exhaustion: when the inside pool runs out, does `aida add` fall back to local IDs with the stated reason, with nothing blocked?
+  4. Bring out: carry the inside store back with a bundle. Does the outside sync combine the claims cleanly? Does the sync claim check refuse a deliberately overlapping claim?
+  5. Depth: with root, then inside hub, then a team pool inside, which lineage hops are verified today, and what would a three-level check need?
+
+  ## Deliverable
+  A findings comment per question with the exact commands, plus draft bugs or stories for every gap found.
+
+  ## Out of scope
+  Local models for coding agents in an air gap (see docs/what-is-aida.md, Air-gapped development).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T19:23:12.694681525Z
+modified_at: 2026-10-31T19:23:12.694681525Z
+req_type: Spike
+tags:
+- air-gap
+- id-allocation
+filed_at:
+  code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
+human_only: true
