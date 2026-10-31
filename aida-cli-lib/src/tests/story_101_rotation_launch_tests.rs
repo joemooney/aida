@@ -6,6 +6,8 @@
 // its env. The second exits fast without a handoff, which stops the run.
 use super::*;
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.ac433c65 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.ac5c23ac | ai:claude
 #[cfg(unix)]
 #[test]
 fn a_fresh_handoff_relaunches_the_same_handle_and_a_bare_fast_exit_stops() {

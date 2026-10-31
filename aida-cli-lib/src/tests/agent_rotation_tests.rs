@@ -54,6 +54,7 @@ fn a_handoff_from_this_session_relaunches() {
     );
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.acc7cb9f | ai:claude
 #[test]
 fn a_stale_or_foreign_handoff_never_relaunches() {
     // Another session of the same handle (a stale handoff), another handle,
@@ -77,6 +78,7 @@ fn without_a_seeded_session_id_freshness_falls_back_to_the_spawn_time() {
     ));
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.acc7cb9f | ai:claude
 #[test]
 fn a_final_handoff_ends_the_run() {
     let r = [record(
@@ -89,6 +91,7 @@ fn a_final_handoff_ends_the_run() {
     assert_eq!(decide(Some("s1"), 600, &r), RotationDecision::Final);
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.ac7aed7c | ai:claude
 #[test]
 fn a_fast_exit_without_a_handoff_is_a_crash_but_with_one_is_a_rotation() {
     assert_eq!(
@@ -102,6 +105,7 @@ fn a_fast_exit_without_a_handoff_is_a_crash_but_with_one_is_a_rotation() {
     ));
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.ac7aed7c | ai:claude
 #[test]
 fn the_window_caps_relaunches() {
     let r = [record(
@@ -143,6 +147,7 @@ fn stop_messages_say_why() {
     assert!(limit.contains("3 relaunches in 10 min (limit)"));
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.aca30260 | ai:claude
 #[test]
 fn countdown_runs_to_zero_or_stops_on_ctrl_c() {
     let stop = AtomicBool::new(false);
@@ -244,6 +249,7 @@ fn the_supervised_ceiling_notice_promises_a_relaunch_under_the_handle() {
 // The launch's own reservation becomes a relay run: every generation binds
 // the same recipient, the label is held in the gap between generations, and
 // ending the run lets it go.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.ac433c65 | ai:claude
 #[test]
 fn the_rotation_run_keeps_one_recipient_across_generations() {
     use crate::agent_handle::{load_reservation, reserve_handle, HandleRequest};
@@ -290,6 +296,7 @@ fn the_rotation_run_keeps_one_recipient_across_generations() {
     assert!(crate::relay_mail::run_holding(&root, &gen2).is_none());
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.acb71b7b | ai:claude
 #[test]
 fn ls_shows_the_generation_and_the_last_rotation() {
     use crate::relay_mail::ChildBinding;
@@ -316,6 +323,7 @@ fn ls_shows_the_generation_and_the_last_rotation() {
     assert_eq!(rotation_status(&[]), None);
 }
 
+// trace:STORY-b6b1278890774ef993d2ebc327862470-101.acccf8c6 | ai:claude
 #[test]
 fn a_rotated_hello_names_the_generation_and_the_previous_session() {
     use crate::advisor_handshake::{handle_label, hello_message, HelloContext, Rotation};
