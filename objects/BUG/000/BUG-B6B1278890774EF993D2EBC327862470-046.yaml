@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T00:30:56.507959079Z
+modified_at: 2026-10-31T09:07:36.615428193Z
 req_type: Bug
 tags:
 - ids
@@ -44,6 +44,13 @@ comments:
     ADVISOR SEQUENCING 2026-10-30 17:30: this lands before STORY-HOME-105 (agreed IDs from reserved blocks). Put numeric identity and the collision guard in ONE allocator-facing function, so 105 can route block-dispensed IDs through it. The sketch should name that seam.
   created_at: 2026-10-31T00:30:56.507959079Z
   modified_at: 2026-10-31T00:30:56.507959079Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19136-e627-70f0-a53c-3ff5da381394
+  author: joe
+  content: |
+    ADVISOR BRIEF 2026-10-31 02:10: SKETCH ONLY. This lane writes the architecture sketch as a comment on this spec and then stops (aida punt), with NO code. The sketch covers: (a) the single allocator-facing seam where numeric identity and the mint-time collision guard live, for STORY-HOME-105 to reuse; (b) where lookup normalizes leading zeros (show/edit/comment/link/trace/trailer resolution), listing the functions; (c) the one-time renumber of the 30 TASK-04xx/4xx pairs: which side, how references (store, code traces, CHANGELOG) are rewritten, and how old->new is recorded; (d) the [ids] seq_width setting: mint and render paths, defaults, and whether node-local IDs share it; (e) the doctor collision check; (f) the test plan. The advisor signs off before implementation.
+  created_at: 2026-10-31T09:07:36.615428193Z
+  modified_at: 2026-10-31T09:07:36.615428193Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
