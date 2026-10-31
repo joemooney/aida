@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T12:32:52.971880467Z
+modified_at: 2026-10-31T13:27:24.991562662Z
 req_type: Bug
 tags:
 - ids
@@ -62,6 +62,12 @@ comments:
     The pull-time scan itself stays as is. Once 1 lands, no shipped commit can carry an uncovered trailer to main. Gate: LIGHT (targeted trailer_coverage, pr_ship, story_1888 and task_2143 tests) plus make check-ci-fast. No force push.
   created_at: 2026-10-31T12:32:52.971880467Z
   modified_at: 2026-10-31T12:32:52.971880467Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19224-c23f-7210-9e74-f232c417e3eb
+  author: joe
+  content: 'ADVISOR 06:32: the round-3 lane ended its turn waiting on a background cargo build (a headless-rule violation) and was stopped. Its edits are uncommitted in the seat. Resumed lane: run cargo in the FOREGROUND in bounded steps (timeout <= 55s per call, re-polling the same build), never end a turn to wait for a notification. Finish the 05:36 ruling, commit and push.'
+  created_at: 2026-10-31T13:27:24.991562662Z
+  modified_at: 2026-10-31T13:27:24.991562662Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19166-4eb3-7172-8f0a-f2ff30b1fe9b
