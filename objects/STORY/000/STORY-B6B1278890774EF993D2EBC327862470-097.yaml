@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T06:13:18.764454250Z
+modified_at: 2026-10-31T06:14:46.286575341Z
 req_type: Story
 relationships:
 - rel_type:
@@ -79,6 +79,13 @@ comments:
     ADVISOR RULING 2026-10-30 17:58 on PR-3152 round 1 (2026-10-28 rule: ruled once here). ONE new commit (no force-push) fixes ALL six review findings (PR comment 6536743741): (1) add docs/cli-format-json-audit.md rows for `aida remote bridge` and `aida remote push-hubs` (the cli-0 red); confirm in the CI log after push. (2) MAJOR: the push gate must not break `aida add` on a gitlab-only clone: redirect the id-allocation push (store_sync.rs:1267) and the origin-hardcoded writers (node_alias, alias, team, git_ops) to the declared hubs, never Err them; add a test where aida add on a gitlab-only clone succeeds and pushes only to gitlab. (3) criterion anchors trace:<SPEC>.acXXXXXXXX on the tests. (4) end-to-end tests for db sync --push, the aida push store leg, mirror-sync and the reconcile filter; register the gate in lib tests. (5) `remote bridge --enable` removes the stopgap cron only once the schedule tick is installed. (6) gate the init/bootstrap store leg and remote mirror-push too. Gate: LIGHT (one targeted cargo test -p aida-cli-lib with the story_097/remote filter, plus make check-ci-fast).
   created_at: 2026-10-31T00:52:17.931092579Z
   modified_at: 2026-10-31T00:52:17.931092579Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19098-a90e-7a03-bc53-316ce80f1f68
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 23:18 on PR-3152 round 2. This is the FINAL round (two-round cap): after it, the PR ships when the delta review confirms these items and CI is green. ONE new commit fixes ALL: (1) BLOCKER: lib-0 red at ebad1b8 (run 41174619430) while main is green: name the failing test from the log (gh run view 41174619430 --log-failed) and fix it. (2) push_to_redirect_hubs / push_store_to_hubs: push to the remaining hubs only after the first hub accepts, so a rejected pre-rebase commit never lands on a secondary hub; test it. (3) db_cmd.rs:446-466 redirect branch of db_sync_push_leg: on a rejected gitlab push, rebase and retry by reusing the gate-redirected origin path; test the rejected-then-retried case. (4) store_pull_remote: send only writer-retry pulls to the first push hub (or document why every origin pull redirects) and test that behaviour. (5) docs/multi-hub-sync.md: say what mirror-push really does with unlisted hubs. (6) tests for the bootstrap store-leg filter and retire_stopgap_reconcile_cron (the install wiring at maintenance_schedule.rs:2952). Gate: LIGHT.
+  created_at: 2026-10-31T06:14:46.286575341Z
+  modified_at: 2026-10-31T06:14:46.286575341Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
