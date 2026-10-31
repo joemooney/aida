@@ -293,6 +293,9 @@ jobs:
       # BUG-2224: inherited main-checkout refs end cleanly while seat-only
       # work refuses (`bug_2224_bwrap_`) joins the gate and the same count.
       # trace:BUG-2224 | ai:claude
+      # The empty `.gitmodules` sandbox-placeholder salvage test joins under
+      # the existing `task_2053_bwrap_` prefix and the same count.
+      # trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |

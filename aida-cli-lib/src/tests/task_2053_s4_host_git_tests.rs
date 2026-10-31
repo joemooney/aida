@@ -275,7 +275,7 @@ fn task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed() {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-047.acb6fd87 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
-fn bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
+fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
     use std::os::unix::fs::PermissionsExt;
     if crate::test_env::run_path_isolated_test() {
         return;
@@ -298,13 +298,15 @@ fn bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
     // An untracked `.gitmodules` with no submodule section: not evidence.
     let other = leased_clone(&fx, "nosub", "c0ffee000046");
     std::fs::write(other.join(".gitmodules"), "[core]\n\tx = 1\n").unwrap();
-    assert!(
-        !matches!(
-            crate::seat_clone::probe(&fx.main, &other),
-            crate::seat_clone::Probe::HasSubmodules(_)
+    // It must read as a readable clone whose `.gitmodules` is ordinary
+    // untracked work (salvageable), not as submodules and not as Unknown.
+    match crate::seat_clone::probe(&fx.main, &other) {
+        crate::seat_clone::Probe::Known(facts) => assert!(
+            facts.dirty.iter().any(|line| line == "? .gitmodules"),
+            "a .gitmodules defining no submodule is salvageable work: {facts:?}"
         ),
-        "a .gitmodules defining no submodule is not submodule evidence"
-    );
+        other => panic!("expected a readable clone with untracked .gitmodules, got {other:?}"),
+    }
 
     let clone = leased_clone(&fx, "placeholder", "c0ffee000047");
     let placeholder = clone.join(".gitmodules");
