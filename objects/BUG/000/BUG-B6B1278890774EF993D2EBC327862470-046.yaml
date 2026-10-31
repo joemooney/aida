@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T11:04:32.882550711Z
+modified_at: 2026-10-31T11:51:05.919945784Z
 req_type: Bug
 tags:
 - ids
@@ -200,6 +200,40 @@ comments:
   created_at: 2026-10-31T11:04:32.882550711Z
   modified_at: 2026-10-31T11:04:32.882550711Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a191cc-93bf-7e00-a56d-d947e1be4492
+  author: joe
+  content: |
+    ## Implementer handoff, round 2 (seat rotated at context ceiling, 2026-10-31 04:50)
+
+    ALL round-2 work is UNCOMMITTED in worktree aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-046. The ruling wants ONE new commit (no force-push) covering every finding.
+
+    ### Done (uncommitted)
+    - Tool is now `aida doctor --fix id-collisions [--dry-run] [--mapping FILE] [--tree-only] [--yes]` (doctor_cmd.rs DoctorArgs). The old renumber-id-collisions subcommand is removed. doctor_renumber.rs is rewritten: exact-case token match (lowercase links stay), comment-line rewrite in source files (trace lines, lines starting //, #, *, and trailing //), mapping TSV (render, parse, mapping_problems), tree-only mode, and an apply-from-mapping that refuses if a target is taken. Tests are in aida-cli-lib/src/tests/bug_046_doctor_renumber_tests.rs, including an end-to-end fixture. NOT YET COMPILED OR RUN.
+    - GitBackend: id_holder is now pub and scans agreed_id. New peek_spec_id predicts node-local IDs from the store max plus headroom 100, with no lock (the sandbox refuses the dispenser lock). New tests: bug_046_id_holder_considers_agreed_ids, git_ops bug_046_merge_gate_skips_padded_twins, models bug_046_seq_width_flip_on_mixed_padding_store. The aida-core targeted run passed 104 tests, but that run was before the peek change.
+    - AC5: IdWidths widths are now Option (unset renders the stored text unchanged and mints at 3). Models and dispenser mint through installed_widths().mint_width(); digits is no longer read. `aida config digits` writes [ids] seq_width (init_cmd::write_ids_widths). This repo's .aida/config.toml sets [ids] seq_width=0 and node_seq_width=3. These now go through render_id: list/show JSON spec_id, the add footer and next steps, and the trace hint.
+    - Cache (fork): indexed id_key and agreed_id_key columns, schema 15->16, db::cache tests 233 pass. The sync guard spec_id_collisions is deliberately still text-grouped until the store apply runs.
+    - AC1 (fork): aida-cli/tests/bug_046_padded_id_cli.rs passes 4/4. same_id is used in pr_ship, ship_from_seat, queue_cmd, db_reconcile and criteria. The unit test bug_046_padded_ids_dedup_numerically in tests/pr_ship_tests.rs has NOT been run.
+    - CI: scripts/config-trust.toml updated (init_cmd 12 sites, id_identity reader, [keys.worktree.ids]). docs/cli/07-project-setup.md now uses placeholders and the bullet list is fixed. Doc comments reattached (init_cmd STORY-1226, git_backend BUG-425, models BUG-1535).
+    - Real dry run done with the worktree build. The mapping is saved at docs/plans/2026-10-31-id-collision-renumber.tsv (30 rows, store untouched). Survivors differ from the sketch for TASK-420/423/435: on recount, the padded TASK-0420, TASK-0423 and TASK-0435 are the ones renumbered.
+
+    ### Remaining
+    1. Tree-only rewrite: `<worktree build>/aida doctor --fix id-collisions --mapping docs/plans/2026-10-31-id-collision-renumber.tsv --tree-only`, then review the git diff (39 files: CHANGELOG, templates and mirrors, comments), then `make sync-templates && make check-templates`.
+    2. Regenerate the help golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot` and review the diff.
+    3. Run targeted tests:
+       - cli-lib: bug_046, doctor_fix_id_collisions, bug_1723, pr_ship_tests, init_cmd
+       - aida-core: id_identity, bug_046, merge_gate
+       - `-p aida-cli --test bug_046_padded_id_cli --test bug_1502_format_json_audit`
+    4. make check-ci-compile, make check-ci-fast, and python3 docs/cli/verify-manual.py.
+    5. Make ONE commit and push without force.
+    6. Post the mapping table as a PR-3161 comment and as a spec comment. The post-merge apply is `aida doctor --fix id-collisions --mapping docs/plans/2026-10-31-id-collision-renumber.tsv --yes`.
+    7. Follow-ups to record:
+       - server REST/gRPC still expose the dead id_config.digits
+       - drop metadata.yaml digits:4 after the merge
+       - switch the cache sync guard to key grouping after the apply
+  created_at: 2026-10-31T11:51:05.919945784Z
+  modified_at: 2026-10-31T11:51:05.919945784Z
+  session_id: 01a191a5be2e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
