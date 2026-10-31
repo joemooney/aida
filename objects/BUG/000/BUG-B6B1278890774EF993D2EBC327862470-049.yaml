@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:22:58.265909250Z
-modified_at: 2026-10-31T15:01:54.982828473Z
+modified_at: 2026-10-31T16:49:37.620484357Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -47,6 +47,17 @@ comments:
     Gate: LIGHT plus make check-ci-fast. No force push.
   created_at: 2026-10-31T15:01:54.982828473Z
   modified_at: 2026-10-31T15:01:54.982828473Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a192dd-e354-74b3-8027-242a5dd44c70
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 09:52: PR-3167 round 2 PASSED at b9669c0, but two findings are not shippable as is. ONE final small round:
+    1. Opt-in off means NO writes at all: removal and prune must also be no-ops when pre-trust is disabled. With no worktree_parent configured, never prune outside an explicitly configured root. Test: with opt-in off, a dismiss leaves ~/.claude.json byte-identical.
+    2. REVERSING my 08:04 ruling for reviewers: do NOT pre-trust reviewer worktrees (aida-pr-N) or any tree that checks out code under review. Trusting them makes Claude Code apply the PR branch's own .claude/settings.json (allow rules and hooks) inside the session reviewing that PR, which lets a PR configure its own reviewer. Pre-trust only implementer seat clones and compete lanes, which run the lane's own work. Test: a reviewer launch writes no trust entry.
+    3. Bundled minors: command-level tests for the agent new --bg pre-trust and the seat-clone teardown removal; doctor reports pre-trust on whenever it is enabled, regardless of parent trust.
+    Gate: LIGHT plus make check-ci-fast. No force push. Delta review only.
+  created_at: 2026-10-31T16:49:37.620484357Z
+  modified_at: 2026-10-31T16:49:37.620484357Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a191e9-ed3f-7cc0-a193-eb4bb70fd0eb
