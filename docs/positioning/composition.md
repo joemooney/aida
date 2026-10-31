@@ -44,7 +44,7 @@ graph for the life of the project.
 spec and reference the Spec Kit artifact by hand. An opt-in importer that ingests
 Spec Kit / OpenSpec / Kiro artifacts into AIDA records (preserving paths,
 assigning stable IDs, inferring relationships conservatively) is filed as
-**TASK-0416** and not yet shipped. Until it lands, the composition is real but
+**TASK-b6b1278890774ef993d2ebc327862470-252** and not yet shipped. Until it lands, the composition is real but
 hand-wired; the [vs-spec-kit](../archive/positioning/vs-spec-kit.md) page covers the division of labor
 in full.
 

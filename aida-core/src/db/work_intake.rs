@@ -591,6 +591,22 @@ impl GitBackend {
         store: &mut RequirementsStore,
         mut row: Requirement,
     ) -> Result<()> {
+        if let Some(id) = row.spec_id.as_deref().filter(|s| !s.trim().is_empty()) {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+            if let Some(holder) = store
+                .requirements
+                .iter()
+                .find(|old| old.id != row.id && old.matches_id_ignore_case(id))
+            {
+                return Err(crate::id_identity::IdTakenError {
+                    candidate: id.to_string(),
+                    owner: holder.id,
+                }
+                .into());
+            }
+            store.requirements.push(row);
+            return Ok(());
+        }
         if row.spec_id.is_some() {
             store.requirements.push(row);
             return Ok(());
@@ -607,11 +623,13 @@ impl GitBackend {
                 .as_deref()
                 .filter(|id| !id.is_empty())
                 .context("WORK candidate allocation failed")?;
-            if !store.requirements.iter().any(|old| {
-                old.spec_id.as_deref().is_some_and(|old| {
-                    object_store::canonical_spec_id(old) == object_store::canonical_spec_id(id)
-                })
-            }) {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
+            // numeric identity: a padded twin (spec or agreed id) is taken.
+            if !store
+                .requirements
+                .iter()
+                .any(|old| old.matches_id_ignore_case(id))
+            {
                 store.requirements.push(row);
                 return Ok(());
             }

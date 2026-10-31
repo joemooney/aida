@@ -13,7 +13,7 @@ impl Scaffolder {
     /// Code does, so we inline rather than reference. Trade: drift detection
     /// is delimiter-based instead of single-file checksum.
     /// trace:FR-1-035 | ai:claude
-    // trace:TASK-0413 | ai:claude
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-249 | ai:claude
     pub(super) fn generate_agents_md(&self, store: &RequirementsStore) -> String {
         let project_name = if !store.title.is_empty() {
             &store.title

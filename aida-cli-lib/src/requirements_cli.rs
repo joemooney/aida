@@ -3710,8 +3710,11 @@ fn run_add(
                         // trace:TASK-974 trace:STORY-737 | ai:claude
                         if let Some(sid) = last.spec_id.as_deref() {
                             if agent_output_mode() {
-                                let next =
-                                    crate::help_next::spec_next(&last.status.to_string(), sid);
+                                // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                                let next = crate::help_next::spec_next(
+                                    &last.status.to_string(),
+                                    &aida_core::id_identity::render_id(sid),
+                                );
                                 if let Some(block) = crate::help_next::render(&next) {
                                     println!("{block}");
                                 }
@@ -3727,7 +3730,8 @@ fn run_add(
                                     "{}",
                                     crate::help_next::render_human_add_footer(
                                         &last.status.to_string(),
-                                        sid
+                                        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                                        &aida_core::id_identity::render_id(sid)
                                     )
                                 );
                             }
@@ -5323,7 +5327,8 @@ fn run_list(
                         // trace:TASK-670 | ai:claude
                         #[derive(serde::Serialize)]
                         struct ListJsonRow<'a> {
-                            spec_id: &'a str,
+                            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids]` width.
+                            spec_id: String,
                             // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                             display_id: String,
                             title: &'a str,
@@ -5406,7 +5411,7 @@ fn run_list(
                                     .or(r.spec_id.as_deref())
                                     .unwrap_or("");
                                 ListJsonRow {
-                                    spec_id,
+                                    spec_id: aida_core::id_identity::render_id(spec_id),
                                     display_id: aida_core::node_alias::display_spec_id(spec_id),
                                     title: r.title.as_str(),
                                     req_type: r.req_type.as_str(),
@@ -6525,6 +6530,17 @@ fn run_show(
                                     "display_id".to_string(),
                                     serde_json::Value::String(req.friendly_id()),
                                 );
+                                // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                                // — `spec_id` renders at the `[ids]` width (unchanged
+                                // when no width is configured).
+                                if let Some(sid) = req.spec_id.as_deref() {
+                                    object.insert(
+                                        "spec_id".to_string(),
+                                        serde_json::Value::String(
+                                            aida_core::id_identity::render_id(sid),
+                                        ),
+                                    );
+                                }
                                 object.insert(
                                     "uuid".to_string(),
                                     serde_json::Value::String(req.id.to_string()),

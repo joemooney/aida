@@ -36,9 +36,11 @@ pub enum ConfigCommand {
         strategy: String,
     },
 
-    /// Set the number of digits in IDs
+    /// Set how many digits new spec ID numbers are padded to (writes `[ids]
+    /// seq_width` in .aida/config.toml; displayed IDs use it too)
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     Digits {
-        /// Number of digits (1-6)
+        /// Number of digits (0-6; 0 = no padding)
         digits: u8,
     },
 

@@ -24,7 +24,7 @@ PR-350's CI (run 26619373730) failed on **two** things, neither a code-logic bug
 1. **BUG-103**: `cargo did not resolve to the real cargo binary (stale rustup-init cache)` — flaky CI infra. Usually clears on a fresh run (a rebase + push triggers one). Do NOT use `gh run rerun` (re-runs the same SHA); push the rebased commit or an empty commit to trigger fresh CI (see `feedback_gh_run_rerun_is_not_fresh_ci`).
 2. **`error: untracked working tree files would be overwritten by merge`** — the file→dir collision (`aida-pr.md` vs `aida-pr/`) surfacing during a checkout/merge step. The branch content is correct; this is an environmental/working-tree issue during the git operation, not a content bug.
 
-Also relevant: earlier this session a *stale* `embedded_templates.rs` referencing a deleted `templates/skills/aida-pr/SKILL.md` broke a local build (cross-worktree cargo-fingerprint, TASK-396). The `build.rs` `embed_directory` walk handles `skills/aida-pr/SKILL.md` correctly once regenerated — so a clean build is the gate.
+Also relevant: earlier this session a *stale* `embedded_templates.rs` referencing a deleted `templates/skills/aida-pr/SKILL.md` broke a local build (cross-worktree cargo-fingerprint, TASK-b6b1278890774ef993d2ebc327862470-247). The `build.rs` `embed_directory` walk handles `skills/aida-pr/SKILL.md` correctly once regenerated — so a clean build is the gate.
 
 ## The task
 

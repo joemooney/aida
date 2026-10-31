@@ -49,7 +49,7 @@ input/output mutation. The classification drives where each one should re-home.
 | Hook (event) | What it does | Class | Codex / non-Claude equivalent | Gap + coverage |
 |---|---|---|---|---|
 | `aida-validate-commit.sh` (PreToolUse) | Validates the commit message shape before a `git commit` tool call | enforcement | Codex command hook on `PreToolUse`, or — better — the git `commit-msg` hook AIDA already scaffolds (`aida-commit-msg`) | The git hook is the portable boundary; the Claude hook is a redundant early warning. Move enforcement to the git hook for non-Claude agents. Coverage: TASK-0427 (decision matrix: enforcement belongs outside the agent runtime) |
-| `aida-git-guardrails.sh` (PreToolUse) | Blocks dangerous git operations (force-push main, etc.) before the Bash tool runs | enforcement | Codex `PreToolUse` command hook can run the same script; Codex sandbox/approval profiles are the stronger boundary | Codex command hooks can host the same script, but the hard guarantee should be a git pre-push hook + sandbox, not an agent hook. Coverage: TASK-0423 (sandbox strategy) + TASK-0427 |
+| `aida-git-guardrails.sh` (PreToolUse) | Blocks dangerous git operations (force-push main, etc.) before the Bash tool runs | enforcement | Codex `PreToolUse` command hook can run the same script; Codex sandbox/approval profiles are the stronger boundary | Codex command hooks can host the same script, but the hard guarantee should be a git pre-push hook + sandbox, not an agent hook. Coverage: TASK-b6b1278890774ef993d2ebc327862470-258 (sandbox strategy) + TASK-0427 |
 | `aida-cargo-timeout-guard.sh` (PreToolUse) | Warns, never blocks, when a Bash command wraps cargo or make in an outer `timeout <N>`; suggests `AIDA_CARGO_TIMEOUT=<N>` and background mode | advisory | Codex `PreToolUse` command hook runs the same script and returns `additionalContext` | Same script, both wirings (STORY-1854) |
 | `aida-advisor-code-guard.sh` (PreToolUse, Edit/Write matcher) | Prevents an advisor-role session from editing code (role discipline) | enforcement | No direct Codex equivalent: depends on Claude's per-matcher `PreToolUse` blocking. Substrate equivalent: role-gated MCP write tools refusing the write | Load-bearing role discipline currently enforced in the Claude hook only. Needs an AIDA-side gate (MCP/CLI refuses code writes for advisor role). Coverage: TASK-0422 (re-home defer/role hook semantics to durable AIDA state) — **partial**; a dedicated role-write-gate spec is **uncovered** |
 | `aida-track-commits.sh` (PostToolUse) | After a `git commit`, records the commit→spec linkage | observation | Codex `PostToolUse` command hook, or a git `post-commit` hook | Straightforward port; observation, not load-bearing. Prefer a git hook (agent-agnostic). Coverage: TASK-0427 |
@@ -93,7 +93,7 @@ shortcuts (`/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`,
 
 | Surface | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
-| `CLAUDE.md` (repo root) | Primary durable instruction surface for Claude sessions | guidance | `AGENTS.md` (Codex-native) + `docs/aida/discipline/` | `aida init` already scaffolds both `CLAUDE.md` and `AGENTS.md`. The risk is drift: agent-neutral discipline that lives only in `CLAUDE.md`. Coverage: TASK-0424 (template completeness) + TASK-0426 (positioning/cold-reader clarity) |
+| `CLAUDE.md` (repo root) | Primary durable instruction surface for Claude sessions | guidance | `AGENTS.md` (Codex-native) + `docs/aida/discipline/` | `aida init` already scaffolds both `CLAUDE.md` and `AGENTS.md`. The risk is drift: agent-neutral discipline that lives only in `CLAUDE.md`. Coverage: TASK-0424 (template completeness) + TASK-b6b1278890774ef993d2ebc327862470-261 (positioning/cold-reader clarity) |
 | `CLAUDE.md` `@`-imports (discipline README) | Transitively loads `docs/aida/discipline/README.md` into context | guidance | `AGENTS.md` references; Codex has no identical `@`-import transitive-load semantics | The discipline pack is plain markdown, so it ports as references. The auto-load mechanic is Claude-specific but non-load-bearing. Coverage: TASK-0424 |
 
 ## 5. The headless path — `claude -p` vs `codex exec`
@@ -105,10 +105,10 @@ reviewer, advisor) are driven by Claude-specific spawn helpers in
 
 | Surface (code) | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
-| `session::spawn_claude_headless` + `claude_headless_args` (`session.rs`) | Spawns the headless drain worker: `claude -p --permission-mode bypassPermissions --output-format stream-json --verbose --disallowed-tools AskUserQuestion --session-id <uuid> <prompt>` | session control / enforcement | `codex exec [--json] [--output-schema] <prompt>` | Hardcoded Claude binary + Claude-only flags. No `codex exec` drain path exists. The `--disallowed-tools AskUserQuestion` structural gate has no Codex flag analog. Coverage: TASK-0422 (session-comm replacement) + TASK-0425 (validation runbook) — **the orchestrator drain itself is uncovered for Codex**; needs an implementation child spec |
+| `session::spawn_claude_headless` + `claude_headless_args` (`session.rs`) | Spawns the headless drain worker: `claude -p --permission-mode bypassPermissions --output-format stream-json --verbose --disallowed-tools AskUserQuestion --session-id <uuid> <prompt>` | session control / enforcement | `codex exec [--json] [--output-schema] <prompt>` | Hardcoded Claude binary + Claude-only flags. No `codex exec` drain path exists. The `--disallowed-tools AskUserQuestion` structural gate has no Codex flag analog. Coverage: TASK-0422 (session-comm replacement) + TASK-b6b1278890774ef993d2ebc327862470-260 (validation runbook) — **the orchestrator drain itself is uncovered for Codex**; needs an implementation child spec |
 | `session::spawn_claude_resume` / `advisor_watch::spawn_claude_headless_resume` | Resumes a deferred/parked headless run with `claude --resume <id>` | session control | `codex exec` has no documented resumable-pending-tool-call equivalent | Resume-after-defer is Claude-specific (see §6). For Codex the pattern is "record durable state, start a fresh run." Coverage: TASK-0422 |
-| `auto_complete.rs` orchestrator phases | Drives implementer → CI → reviewer → advisor through headless `claude -p` calls | session control / approval | Would need per-phase `codex exec` invocations | All phase spawns assume Claude. Coverage: TASK-0425 (validation) — **uncovered** for an actual Codex drain implementation |
-| `compete.rs` `vendor_adapter("codex")` → `codex exec --dangerously-bypass-approvals-and-sandbox` | The N-way "compete" feature *already* has a Codex headless adapter | session control | This IS the Codex equivalent, but only for the experimental compete feature | A working `codex exec` adapter already exists in-tree for `aida compete`, but the **main orchestrator drain does not reuse it** (`compete.rs:50` notes the claude argv intentionally does not reuse `session::claude_headless_args`). Reusable prior art for the drain port. Coverage: TASK-0425 / uncovered for drain reuse |
+| `auto_complete.rs` orchestrator phases | Drives implementer → CI → reviewer → advisor through headless `claude -p` calls | session control / approval | Would need per-phase `codex exec` invocations | All phase spawns assume Claude. Coverage: TASK-b6b1278890774ef993d2ebc327862470-260 (validation) — **uncovered** for an actual Codex drain implementation |
+| `compete.rs` `vendor_adapter("codex")` → `codex exec --dangerously-bypass-approvals-and-sandbox` | The N-way "compete" feature *already* has a Codex headless adapter | session control | This IS the Codex equivalent, but only for the experimental compete feature | A working `codex exec` adapter already exists in-tree for `aida compete`, but the **main orchestrator drain does not reuse it** (`compete.rs:50` notes the claude argv intentionally does not reuse `session::claude_headless_args`). Reusable prior art for the drain port. Coverage: TASK-b6b1278890774ef993d2ebc327862470-260 / uncovered for drain reuse |
 
 ## 6. `defer` / resume + session communication
 
@@ -136,8 +136,8 @@ CLI. The gap is not the substrate; it is that the headless orchestrator
 | Surface (code) | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
 | `aida agent new <claude\|codex\|antigravity>` interactive launcher (`main.rs`) | Resolves the agent binary by type, registers it, snapshots role context, spawns it interactively | session control | **Already vendor-aware** — accepts `codex` and resolves the codex binary | The dispatch (`main.rs`, the `config.agent_type == "claude"` branch) already supports non-Claude types for the bare spawn. Coverage: works today |
-| `os_wrap` (bwrap) confinement around the launch | Optional OS sandbox boundary around the spawned process | enforcement | Codex-native sandbox / permission profiles | **Claude-only:** the `os_wrap` wrapping branch fires only when `config.agent_type == "claude"`; non-Claude agents take the bare path (`main.rs`, `else` branch — "Non-claude agents keep the bare path"). Same for headless (`session::spawn_claude_headless`). Coverage: TASK-0423 (decide whether Codex needs an AIDA outer wrapper or whether Codex-native sandbox suffices) |
-| Background dispatch / supervisor (`aida agent new` `--bg` path, AIDA_USER env) | Launches an agent detached with its own mailbox/queue identity | session control | A `codex exec` background run + the same registry/identity env | The registry/identity plumbing is agent-agnostic; the detached *worker* still routes to the Claude headless spawn for drains. Coverage: TASK-0425 / uncovered for a Codex background worker |
+| `os_wrap` (bwrap) confinement around the launch | Optional OS sandbox boundary around the spawned process | enforcement | Codex-native sandbox / permission profiles | **Claude-only:** the `os_wrap` wrapping branch fires only when `config.agent_type == "claude"`; non-Claude agents take the bare path (`main.rs`, `else` branch — "Non-claude agents keep the bare path"). Same for headless (`session::spawn_claude_headless`). Coverage: TASK-b6b1278890774ef993d2ebc327862470-258 (decide whether Codex needs an AIDA outer wrapper or whether Codex-native sandbox suffices) |
+| Background dispatch / supervisor (`aida agent new` `--bg` path, AIDA_USER env) | Launches an agent detached with its own mailbox/queue identity | session control | A `codex exec` background run + the same registry/identity env | The registry/identity plumbing is agent-agnostic; the detached *worker* still routes to the Claude headless spawn for drains. Coverage: TASK-b6b1278890774ef993d2ebc327862470-260 / uncovered for a Codex background worker |
 | Pending-brief banner on agent exit | Warns claude/codex/antigravity sessions of unacked briefs before exit | observation | Already vendor-aware (`pending_brief_banner_lines` matches all three) | No gap |
 
 ## 9. The TUI PTY host
@@ -145,7 +145,7 @@ CLI. The gap is not the substrate; it is that the headless orchestrator
 | Surface (code) | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
 | `aida-tui` `PtyHost::spawn(argv, ...)` (`aida-tui/src/pty.rs`) | Opens a PTY and spawns an arbitrary argv inside it | n/a (argv-agnostic) | Could host any agent — the host itself is not Claude-specific | The PTY host is fully generic; it spawns whatever argv it is handed |
-| TUI tab argv (`app.rs::spawn_tab`) | Builds `aida queue work <scope> --session-id/--resume <id>` as the hosted argv | session control | Would need a Codex-flavored hosted session | The TUI hosts `aida queue work`, which in turn calls `session::spawn_claude_session` (claude-only) and threads Claude `--session-id`/`--resume` flags. So the **host is generic but the hosted session is Claude-bound**. Coverage: **uncovered** — no spec yet covers a Codex-hosting TUI session; closest is TASK-0425 (validation) which would surface it |
+| TUI tab argv (`app.rs::spawn_tab`) | Builds `aida queue work <scope> --session-id/--resume <id>` as the hosted argv | session control | Would need a Codex-flavored hosted session | The TUI hosts `aida queue work`, which in turn calls `session::spawn_claude_session` (claude-only) and threads Claude `--session-id`/`--resume` flags. So the **host is generic but the hosted session is Claude-bound**. Coverage: **uncovered** — no spec yet covers a Codex-hosting TUI session; closest is TASK-b6b1278890774ef993d2ebc327862470-260 (validation) which would surface it |
 | TUI crash-recovery re-attach (`--resume <claude_session_id>`) | Re-attaches recorded Claude session ids after a crash | session control | Codex session-resume semantics differ | Recorded ids are Claude session ids; resume is Claude-specific. Coverage: uncovered |
 
 ## Coverage summary
@@ -165,18 +165,18 @@ CLI. The gap is not the substrate; it is that the headless orchestrator
 - Hook re-homing + classification — TASK-0427 (decision matrix), TASK-0424
   (Codex hook scaffold).
 - `defer`/resume + session communication → durable AIDA state — TASK-0422.
-- Outer OS sandbox (`os_wrap`) for Codex launches — TASK-0423.
+- Outer OS sandbox (`os_wrap`) for Codex launches — TASK-b6b1278890774ef993d2ebc327862470-258.
 - `SessionStart` / mail-notice / role-context hook ports — TASK-0424.
 - Skill/command mapping to Codex skills vs AIDA CLI — TASK-0424, TASK-0427.
-- End-to-end Codex validation through MCP/queue/brief — TASK-0425.
-- Cold-reader positioning of `CLAUDE.md`→`AGENTS.md` split — TASK-0426.
+- End-to-end Codex validation through MCP/queue/brief — TASK-b6b1278890774ef993d2ebc327862470-260.
+- Cold-reader positioning of `CLAUDE.md`→`AGENTS.md` split — TASK-b6b1278890774ef993d2ebc327862470-261.
 
 **Uncovered gaps found (need new child specs):**
 
 1. **Headless orchestrator drain on Codex.** `session::spawn_claude_headless`,
    `auto_complete.rs` phase spawns, and `advisor_watch` resume are Claude-only.
    The `codex exec` adapter in `compete.rs` is reusable prior art but the main
-   drain does not use it. TASK-0425 only *validates*; no spec implements a
+   drain does not use it. TASK-b6b1278890774ef993d2ebc327862470-260 only *validates*; no spec implements a
    `codex exec` drain worker. **High-risk: this is the autonomy keystone.**
 2. **Headless advisor tier (`/aida-advise`) on Codex.** Spawned via `claude -p`
    on a punt; no Codex spawn path. TASK-0422 designs the substrate, not the
@@ -208,7 +208,7 @@ invariants (graph, IDs, traces, MCP, queue, leases, briefs, punts, findings,
 commit trailers, git hooks, CI) are already agent-agnostic and need no port.
 The real Claude coupling is concentrated in the **headless orchestrator drain
 and its advisor tier** (§5, gaps 1–2), the **outer sandbox wiring** (§8,
-TASK-0423), the **role-write enforcement hook** (gap 3), and the **TUI-hosted
+TASK-b6b1278890774ef993d2ebc327862470-258), the **role-write enforcement hook** (gap 3), and the **TUI-hosted
 session** (gap 4). Those four are where a "no Claude" mandate would actually
 bite — everything else is convenience or already covered.
 

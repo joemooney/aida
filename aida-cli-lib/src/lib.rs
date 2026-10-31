@@ -178,6 +178,8 @@ mod do_dispatch;
 mod doc_cmd;
 mod docs;
 mod doctor_cmd;
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+mod doctor_renumber;
 // trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.
 mod drain_caps;
 mod drain_cmd;

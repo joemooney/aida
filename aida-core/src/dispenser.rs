@@ -112,15 +112,22 @@ pub trait Dispenser: Send + Sync {
     /// - Distributed: `FR-7-001`
     fn format_id(&self, object_type: &str, seq: u32) -> Result<String> {
         let state = self.state()?;
-        let digits = 3; // minimum padding
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids]`
+        // widths govern minting (unset = the historical 3).
+        let widths = crate::id_identity::installed_widths();
         match &state.mode {
-            IdMode::Centralized => Ok(format!("{}-{:0>width$}", object_type, seq, width = digits)),
+            IdMode::Centralized => Ok(format!(
+                "{}-{:0>width$}",
+                object_type,
+                seq,
+                width = widths.mint_width()
+            )),
             IdMode::Distributed { node_id } => Ok(format!(
                 "{}-{}-{:0>width$}",
                 object_type,
                 node_id,
                 seq,
-                width = digits
+                width = widths.node_mint_width()
             )),
         }
     }

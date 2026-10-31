@@ -623,7 +623,7 @@ EOF
   `aida state-snapshot --spec <SPEC-ID> --json` emits the branch / commit / PR /
   drain state as a machine-readable object — use it for the `Branch:` / `Commit:`
   line (and to attach a structured snapshot beside the finding's prose) rather
-  than re-deriving from `git` per finding. trace:TASK-415 | ai:claude
+  than re-deriving from `git` per finding. trace:TASK-b6b1278890774ef993d2ebc327862470-251 | ai:claude
 
 **Report what was filed.** Close the step with a one-line summary naming the
 count and the TASK IDs — under TASK-307's tee this reaches the terminal, and
@@ -1064,7 +1064,7 @@ the next pickup.">
 | ⊕ Route to the advisor *(include only when the State snapshot or deciding factor flags a risk the implementer cannot grade — omit the whole row otherwise)* | `/aida-advise <last-SPEC-ID>` — today: copy this menu to the advisor seat; STORY-306's tier routes punts automatically | When the just-finished member surfaced something the implementer can't grade (an emerging shared-file conflict, a plan deviation, a scope realization), park the keep-draining-vs-pivot call with the advisor instead of guessing through more cluster commits. |
 | ⏸ Stop here | Ctrl+D, then `aida session end <session-id>` from the parent shell | Releases the lease mid-cluster; `[planned:by-<session>]` chips keep the rest claimed for next time |
 
-*Simple mode, queue has more items routed to this role:* — trace:TASK-414
+*Simple mode, queue has more items routed to this role:* — trace:TASK-b6b1278890774ef993d2ebc327862470-250
 
 Print the State preamble first — generate it with `aida state-snapshot
 --spec <SPEC-ID>` and emit its output verbatim above the table (the command
