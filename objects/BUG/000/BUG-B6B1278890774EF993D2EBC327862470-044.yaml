@@ -2,12 +2,12 @@ id: 01a18e5a-cf58-7ce1-89b7-8ccd68829290
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-044
 title: Headless implementer lanes end their turn while their own background test runs are still going, so the lane exits with no push and needs a manual --resume
 description: '2026-10-30: BUG-041 (lane 041c, result ''Waiting on the aida-core test build.''), BUG-038 (lane 038d, result ''Both runs are in the background; I''ll pick up results when they finish.'') and BUG-040 each needed a manual --resume; 041c had 12 modified files uncommitted at exit. The HEADLESS WAITING RULE in the prompt does not prevent it. Fix in the launcher, not the prompt: when the vendor returns a final result while the seat still has live child processes (cargo/rustc/test binaries started by the session) or the result text matches a waiting-on-background pattern, auto-resume the same session (bounded, e.g. 3 times) with a ''your background run finished; continue'' message once those children exit, instead of reporting no-pr. Also: when no-pr is reported and the seat has uncommitted changes, say so in the implementer: line. Tests with a mock vendor.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T05:57:21.834834138Z
+modified_at: 2026-10-31T05:57:34.754476607Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-10-31T05:57:21.834834138Z
   modified_at: 2026-10-31T05:57:21.834834138Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19088-eba2-7630-bd6b-e3b7c730ae2c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and acceptance are met (auto-resume on live build work or a waiting-shaped result, capped at 3, no-pr uncommitted=<n>, mock-vendor tests that pass locally), but PR CI is red: lib-0 and lib-1 ''Run tests'' failed at the head while main is green at the parent. Fix CI, and address the background-work detection gaps.. No triage reason was given.'
+  created_at: 2026-10-31T05:57:34.754475260Z
+  modified_at: 2026-10-31T05:57:34.754475260Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18e5a-f640-76a3-951a-92b3c103b557
   author: joe
@@ -76,6 +82,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19088-eba2-7630-bd6b-e3adef2340ab
+  author: joe
+  timestamp: 2026-10-31T05:57:34.754454367Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 8fd81b90a87f7104e4274fd16cd057657c25611b
   branch: main
@@ -84,11 +98,3 @@ filed_at:
   aida_build_sha: 79ed6f56bf8
   vendor: claude
   session: 59c0ddec-c215-4704-bb07-25b6ce885ad1
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design and acceptance are met (auto-resume on live build work or a waiting-shaped result, capped at 3, no-pr uncommitted=<n>, mock-vendor tests that pass locally), but PR CI is red: lib-0 and lib-1 ''Run tests'' failed at the head while main is green at the parent. Fix CI, and address the background-work detection gaps.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-044 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T05:55:21.194468816Z
