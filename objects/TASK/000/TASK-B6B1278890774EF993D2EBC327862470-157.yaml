@@ -1,0 +1,30 @@
+id: 019e0ee4-88cf-7f70-86b3-ff9365d20887
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-157
+title: '[FR-215 test] child req with parent'
+description: ''
+status: Rejected
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T22:38:38.799518079Z
+modified_at: 2026-10-31T20:33:54.631315425Z
+req_type: Task
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 019e1ac4-ab72-7590-8e0c-c0e87e97b74c
+  created_at: 2026-05-12T05:59:22.280679630Z
+  created_by: joe
+history:
+- id: 01a193ab-39c7-77a3-8de7-e1864ab39f45
+  author: aida-renumber
+  timestamp: 2026-10-31T20:33:54.631315186Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-31
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-157
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-31 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z

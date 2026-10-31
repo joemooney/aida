@@ -1,6 +1,5 @@
 id: 019e0e28-86c8-7cf3-b486-1ff15d643e66
-spec_id: STORY-41
-agreed_id: STORY-41
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-167
 title: 'Story 2a: Node id is String, not u32'
 description: |
   Type change across the kernel: NodeRegistryEntry.id, NodeConfig.node_id, AgreedIdBlock.node_id, dispenser sequence keys all become String.
@@ -18,11 +17,22 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:17.512063677Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-10-31T20:33:54.647072097Z
 req_type: Story
 tags:
 - node-ids
 - refactor
 - types
+history:
+- id: 01a193ab-39d7-7af2-bfac-ad614aadf2dd
+  author: aida-renumber
+  timestamp: 2026-10-31T20:33:54.647071879Z
+  changes:
+  - field_name: spec_id
+    old_value: STORY-41
+    new_value: STORY-b6b1278890774ef993d2ebc327862470-167
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing STORY-41 (now resolve to the survivor): 548f32c85922924b11740918748f3dfb4dbba21b fc021f59277465bfa0115481a9b7c6f79a3db27c'
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

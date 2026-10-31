@@ -1,6 +1,5 @@
 id: 019e0ee6-7b92-75f3-8229-acd705dc9461
-spec_id: TASK-32
-agreed_id: TASK-32
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-158
 title: '[FR-215 verify] child with parent'
 description: ''
 status: Rejected
@@ -8,7 +7,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T22:40:46.482687231Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-10-31T20:33:54.629369089Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -25,5 +24,16 @@ comments:
   content: Duplicate of TASK-35 (which pre-existed but hadn't been merge-gated yet — pseudo-ID TASK-2-079 was assigned its short ID in the same merge-gate run that issued TASK-32's TASK-2-080). Closing TASK-32 in favor of TASK-35, which captures the same fix with the same two approach options. PR-11's TASK-62 fix-forward (commit bc788e88) references the wrong follow-up ID in its comment trail — that comment chain is the only loose thread; TASK-35 carries the work.
   created_at: 2026-05-12T04:05:15.663477452Z
   modified_at: 2026-05-12T04:05:15.663477452Z
+history:
+- id: 01a193ab-39c5-7932-b975-f80e1982169a
+  author: aida-renumber
+  timestamp: 2026-10-31T20:33:54.629368396Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-32
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-158
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-32 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

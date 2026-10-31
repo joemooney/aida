@@ -1,6 +1,5 @@
 id: 019e0fba-0e8e-74f2-bfce-562c8908ff0b
-spec_id: TASK-34
-agreed_id: TASK-34
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-160
 title: 'Convention: v2/v3 follow-ups must be filed as STORYs, not described in EPIC body'
 description: |
   ## Gap
@@ -35,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:31:52.206565944Z
-modified_at: 2026-06-06T08:37:34.192281299Z
+modified_at: 2026-10-31T20:33:54.631928314Z
 req_type: Task
 relationships:
 - rel_type:
@@ -49,3 +48,14 @@ comments:
   content: Disposition sweep 2026-06-06 — COMPLETED. Adopted (lived convention) — followups auto-file as child TASKs on Done/Completed via the [aida:followups] mechanism; child-spec-per-slice discipline is in practice, not pending.
   created_at: 2026-06-06T08:37:32.253999521Z
   modified_at: 2026-06-06T08:37:32.253999521Z
+history:
+- id: 01a193ab-39c7-77a3-8de7-e1a02802256b
+  author: aida-renumber
+  timestamp: 2026-10-31T20:33:54.631928200Z
+  changes:
+  - field_name: spec_id
+    old_value: TASK-34
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-160
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing TASK-34 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'

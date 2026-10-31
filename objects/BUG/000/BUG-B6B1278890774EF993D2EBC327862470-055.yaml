@@ -1,0 +1,30 @@
+id: 019e0e84-6136-7153-bd1d-615cd44a81a0
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-055
+title: '[test] dispense skip verification'
+description: ''
+status: Rejected
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T20:53:37.206205197Z
+modified_at: 2026-10-31T20:33:54.640320068Z
+req_type: Bug
+comments:
+- id: 019e0e84-85f5-7063-905b-d6595cebd1be
+  author: joe
+  content: Test req for BUG-31 skip verification — rejecting.
+  created_at: 2026-05-09T20:53:46.613672198Z
+  modified_at: 2026-05-09T20:53:46.613672198Z
+history:
+- id: 01a193ab-39d0-7843-8244-aac6e9481c99
+  author: aida-renumber
+  timestamp: 2026-10-31T20:33:54.640319787Z
+  changes:
+  - field_name: spec_id
+    old_value: BUG-34
+    new_value: BUG-b6b1278890774ef993d2ebc327862470-055
+  - field_name: renumber_commit_refs
+    old_value: ''
+    new_value: 'origin/main commits citing BUG-34 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4 687961bc84e23aeaa2067dac841f1ae88b865968'
+archived: true
+archived_at: 2026-05-31T21:36:46.262164594Z
