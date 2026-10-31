@@ -1486,6 +1486,14 @@ pub(crate) fn compose_headless_command(
     // trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "headless session")?;
     let worktree = headless_worktree_root();
+    // BUG-049: a fresh seat worktree is untrusted, so Claude Code would drop
+    // the project allow-list and deny the lane's Bash calls. Pre-trust it
+    // before the spawn — Claude only; opt-in; seats under the worktrees root
+    // only. Best-effort: a failure warns and the launch goes ahead.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+    if vendor == HeadlessVendor::Claude {
+        crate::claude_trust::report(&crate::claude_trust::ensure_seat_trusted(&worktree));
+    }
     // BUG-799: Codex gets slash-commands inline-rendered; Claude expands its
     // own skills, so its path is byte-identical to before.
     let effective_prompt: std::borrow::Cow<'_, str> = if vendor == HeadlessVendor::Codex {
