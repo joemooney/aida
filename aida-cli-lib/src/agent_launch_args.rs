@@ -859,7 +859,7 @@ pub enum AgentCommand {
     /// to its prompt — so a seat that has finished its work still holds this command.
     /// Budget for that: run it where you can leave it, or stop the seat with
     /// `aida agent stop <name>` once it reports. To tell a finished seat from a working
-    /// one without attaching, read the CPU column in `aida agent status`: seconds of CPU
+    /// one without attaching, read the CPU column in `aida agent list`: seconds of CPU
     /// across hours of age means the seat is idle at its prompt. Do NOT rely on the
     /// `status` column for that — it reports `busy` for a seat whose worktree any live
     /// lease covers, which for the main checkout is effectively always.
@@ -910,7 +910,9 @@ pub enum AgentCommand {
     // trace:TASK-542 | ai:antigravity
     // trace:TASK-1184 | ai:codex
     // trace:STORY-790 | ai:codex
-    Ls {
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-117 | ai:codex
+    #[clap(visible_alias = "ls")]
+    List {
         /// Include stale registry entries instead of pruning them first.
         #[clap(long)]
         all: bool,
@@ -924,7 +926,7 @@ pub enum AgentCommand {
         ended: bool,
     },
 
-    /// Show active agent processes (alias of `ls`).
+    /// Show active agent processes (alias of `list`).
     // trace:STORY-528 | ai:claude
     // trace:STORY-790 | ai:codex
     Status {

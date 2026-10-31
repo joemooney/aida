@@ -32,7 +32,7 @@ ledger is kept.
 - Codex older than 0.164.0 has no `codex queue`: the launch warns and the row
   reads `unsupported`. Antigravity launches warn once that mail arrives on the
   next turn.
-- `aida agent ls` shows a `WAKE` column: `armed`, `pending-thread`, `failed`,
+- `aida agent list` shows a `WAKE` column: `armed`, `pending-thread`, `failed`,
   `off`, `unsupported`, `retired`, or `-`.
 - `aida doctor check codex-mail-wake` reads every armed agent's thread health
   (stale snapshots, unread accepted mail, uncertain submissions) as well as the

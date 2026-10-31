@@ -79,7 +79,7 @@ AIDA provides every mechanic you need.
 | Hand a session its brief or findings | `aida brief <agent> <SPEC> --note - --notify` (the note is read from stdin) |
 | Message a named agent | `aida mailbox send --to <agent> --subject "<SPEC> findings" --stdin` |
 | Type into a live interactive session | `aida session send <session-or-SPEC> "<text>" --enter` |
-| See what is running | `aida ps` (add `--json` for machine output), `aida agent ls` |
+| See what is running | `aida ps` (add `--json` for machine output), `aida agent list` |
 | Read what one session is doing | `aida tail <SPEC-or-session-id> --no-follow -n 40` |
 | Stop a stuck session | `aida agent stop <name>`, else the harness's own job control or `kill <pid>` from `aida ps` |
 | Close a finished session's worktree and lease | `aida session end <id> -y` |
