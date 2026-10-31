@@ -7,7 +7,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T19:47:58.424560537Z
-modified_at: 2026-10-31T05:55:21.194468816Z
+modified_at: 2026-10-31T05:57:21.834834138Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -38,6 +38,13 @@ comments:
   modified_at: 2026-10-31T04:50:43.526453087Z
   session_id: 01a1904aacfa
   harness_version: 2.1.314 (Claude Code)
+- id: 01a19088-b92a-7071-a25b-cd668084397b
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 23:00 on PR-3155 round 1 (2026-10-28 rule: ruled once here). ONE new commit fixes ALL five: (1) CI lib-0/lib-1 red: read gh run view 41171446248 --log-failed and fix. (2) headless_background.rs:66-79: count only real build work (cargo, rustc, test binaries under target/), not an sccache server or any long-lived daemon that merely inherits the marker. Test: a lingering sccache-like daemon does not hold the lane. (3) At the hold ceiling, if the build is killed, the resume prompt must say it was TERMINATED at the ceiling (rerun it), never that it finished; test both ceiling paths. (4) A lane waiting on its own background work still counts toward the standalone-implementer cap, so no other launch takes its slot; test it. (5) WAITING_PHRASES trigger a resume only when live build work is also detected (or use build/test-specific phrases), so "waiting for the advisor" never resumes; test it. Gate: LIGHT (one targeted cargo test -p aida-cli-lib with the bug_044 / headless_background filter, plus make check-ci-fast).
+  created_at: 2026-10-31T05:57:21.834834138Z
+  modified_at: 2026-10-31T05:57:21.834834138Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18e5a-f640-76a3-951a-92b3c103b557
   author: joe
