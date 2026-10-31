@@ -1,0 +1,32 @@
+id: 01a191d5-51ab-7de3-ab88-4aace78085bb
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-154
+title: 'Review PR-3164: [AI:claude] feat(deputy): aida deputy runs submitted jobs under the operator''s grant, terminal only by TTY policy (STORY-B6B1278890774EF993D2EBC327862470-099)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19190`) for branch `story-b6b1278890774ef993d2ebc327862470-099`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3164>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-099` → `main`
+
+  ## Covers
+
+  - STORY-B6B1278890774EF993D2EBC327862470-099
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3164` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T12:00:38.827115163Z
+modified_at: 2026-10-31T12:00:38.827115163Z
+req_type: Story
+filed_at:
+  code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d083bdf13d4
+  vendor: claude
