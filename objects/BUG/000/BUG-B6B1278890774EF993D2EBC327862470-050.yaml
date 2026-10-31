@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T19:06:00.008742848Z
+modified_at: 2026-10-31T19:09:43.404346314Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -109,6 +109,12 @@ comments:
   content: 'ADVISOR 12:06: the CI-fix lane stalled (ended its turn waiting on its own test runs) and was stopped and resumed. Run cargo in the FOREGROUND, bounded (<= 55s per call), then commit and push.'
   created_at: 2026-10-31T19:06:00.008742848Z
   modified_at: 2026-10-31T19:06:00.008742848Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1935e-266c-7f83-b52a-8d9e07fbdefb
+  author: joe
+  content: 'ADVISOR 12:11: the resumed CI-fix lane stalled AGAIN (backgrounded its tests, then ended its turn). I SALVAGED its uncommitted work as d14f90c (pushed, no force): it sets the disable env through the shared headless_wait_envs helper, and the guardrail test file gains a NEW, stricter test (every_headless_spawn_site_disables_background_tasks), not an exemption, which is consistent with the 11:33 ruling. Untested locally (the lane''s runs were terminated); CI plus an independent delta review are the gate.'
+  created_at: 2026-10-31T19:09:43.404346314Z
+  modified_at: 2026-10-31T19:09:43.404346314Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a1922e-768b-7b43-9bc4-deca919d4df0
