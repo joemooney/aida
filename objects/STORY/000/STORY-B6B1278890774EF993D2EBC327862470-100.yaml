@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-31T00:52:32.621579059Z
+modified_at: 2026-10-31T06:58:14.986870722Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -68,6 +68,13 @@ comments:
     ADVISOR RULING 2026-10-30 17:58 on PR-3151 round 1 (2026-10-28 rule: ruled once here). ONE new commit fixes ALL findings: (1) cli-0 is red at head with main green: diagnose it from the CI log (gh run view 41149240170 --log-failed) and fix. (2) AC1: the Antigravity (--client agy) hook branch must send the hello too; test the hook-script wiring. (3) AC2: test the `aida mailbox inbox` auto-ack wiring (mailbox_cmd.rs:745-758) and the advisor branch of run(). (4) AC3: test the agent ls wiring and the doctor routing; ls_note must do the find_ack check that doctor_scan does, so an acked agent is never reported unreachable. (5) advisor_handshake.rs:351: reset the per-handle record on a new session so a reused handle says hello again. (6) ack_hellos must not re-report already-acked hellos. (7) criterion-level trace anchors on the tests. Gate: LIGHT (one targeted cargo test -p aida-cli-lib with the advisor_handshake filter, plus make check-ci-fast).
   created_at: 2026-10-31T00:52:32.621579059Z
   modified_at: 2026-10-31T00:52:32.621579059Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190c0-774a-7412-8478-c5ef771c19b7
+  author: joe
+  content: |
+    ADVISOR 00:02: PR-3151 now CONFLICTS with main (GitHub cannot update the branch). Merge origin/main into the branch (new merge commit, no force-push), resolve conflicts keeping both sides, rerun the targeted handshake tests plus make check-ci-fast, and push. The review then runs on the merged head.
+  created_at: 2026-10-31T06:58:14.986870722Z
+  modified_at: 2026-10-31T06:58:14.986870722Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18ae6-1e13-7781-8ad3-aa7c7eaef9ba
