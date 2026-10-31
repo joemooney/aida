@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:06:13.638469229Z
-modified_at: 2026-10-31T19:25:44.360288767Z
+modified_at: 2026-10-31T19:27:06.130359375Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -55,6 +55,12 @@ comments:
   modified_at: 2026-10-31T18:22:59.404683512Z
   session_id: 01a1932faaba
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1936e-0f92-74c0-8cb5-3b6926faa708
+  author: joe
+  content: 'ADVISOR RULING 12:33: PR-3173 round 1 is CHANGES REQUESTED; the design is verified sound (final ID minted under the shared store write lock, host jumps via next_above). ONE round: (1) CI (rest) fails its Test time budget gate. Find the slow new test(s) (likely fixtures spawning real stores/locks) and make them fast (shared fixture, fewer iterations), rather than raising the budget; (2) add a command-level test for AC2: the printed ID/queued notice and that  works in the same contained session before the host drain. LIGHT plus make check-ci-fast; no force push.'
+  created_at: 2026-10-31T19:27:06.130359375Z
+  modified_at: 2026-10-31T19:27:06.130359375Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19324-33a0-7f61-a5dc-fb9d7370af97
   author: joe
