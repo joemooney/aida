@@ -2009,11 +2009,15 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     if plan.contained {
         prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
     }
-    let grant = crate::gate::seat_authority::issue_child(
-        project_root,
-        "reviewer",
-        &crate::current_user_id(None),
-    )?;
+    // A contained reviewer's tool calls run in a sandbox, where only a
+    // keyring-held key presents its grant: refuse before the review is spent.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+    let issue = if plan.contained {
+        crate::gate::seat_authority::issue_sandboxed_child
+    } else {
+        crate::gate::seat_authority::issue_child
+    };
+    let grant = issue(project_root, "reviewer", &crate::current_user_id(None))?;
     let mut cmd = std::process::Command::new(&plan.program);
     cmd.args(&plan.args)
         .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)

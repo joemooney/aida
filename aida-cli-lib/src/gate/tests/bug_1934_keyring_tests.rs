@@ -461,3 +461,34 @@ fn doctor_warns_on_ptrace_scope_zero_with_a_grant() {
     assert!(ptrace_scope_finding(true, Some("1")).is_none());
     assert!(ptrace_scope_finding(true, None).is_none());
 }
+
+/// BUG-HOME-045: a contained (sandboxed) worker whose child grant got no
+/// keyring key is refused before launch: its sandboxed `aida review record`
+/// could never present the grant. An unsandboxed worker only warns, and a
+/// structurally unavailable keyring never refuses.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+#[test]
+fn sandboxed_child_without_a_keyring_key_is_refused_before_launch() {
+    let err = crate::grant_keyring::InstallError::new(
+        "cannot hold the previous session keyring",
+        libc::ELOOP,
+    );
+    let refusal =
+        sandboxed_child_key_refusal("reviewer", &err, true, true).expect("a contained refusal");
+    assert!(
+        refusal.contains("cannot launch the contained `reviewer` worker"),
+        "{refusal}"
+    );
+    assert!(
+        refusal.contains("cannot hold the previous session keyring"),
+        "{refusal}"
+    );
+    assert_eq!(
+        sandboxed_child_key_refusal("reviewer", &err, true, false),
+        None
+    );
+    assert_eq!(
+        sandboxed_child_key_refusal("reviewer", &err, false, true),
+        None
+    );
+}

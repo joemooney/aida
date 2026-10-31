@@ -1933,6 +1933,29 @@ pub(crate) fn issue_child(
     requested_seat: &str,
     child_subject: &str,
 ) -> Result<SeatGrant> {
+    issue_child_for(project_root, requested_seat, child_subject, false)
+}
+
+/// [`issue_child`] for a worker whose tool calls run in a sandbox (a
+/// contained reviewer). Such a worker can present its grant only through the
+/// keyring key, so a child the keyring could not hold is refused before the
+/// worker runs, instead of launching a review whose verdict every
+/// `aida review record` would then reject.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn issue_sandboxed_child(
+    project_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+) -> Result<SeatGrant> {
+    issue_child_for(project_root, requested_seat, child_subject, true)
+}
+
+fn issue_child_for(
+    project_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+    sandboxed: bool,
+) -> Result<SeatGrant> {
     // trace:TASK-1955 | ai:claude (advisor comment 35)
     let parent = validate_child_delegation(project_root, requested_seat)
         .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
@@ -1963,9 +1986,16 @@ pub(crate) fn issue_child(
         // trace:BUG-1934 | ai:claude
         Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(requested_seat, &e)),
         Err(e) => {
-            if let Some(warning) =
-                proc_only_child_warning(requested_seat, &e, crate::grant_keyring::available())
+            let keyring_available = crate::grant_keyring::available();
+            // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+            if let Some(refusal) =
+                sandboxed_child_key_refusal(requested_seat, &e, keyring_available, sandboxed)
             {
+                return Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
+                    refusal
+                ))));
+            }
+            if let Some(warning) = proc_only_child_warning(requested_seat, &e, keyring_available) {
                 eprintln!("{warning}");
             }
         }
@@ -2001,6 +2031,24 @@ pub(crate) fn proc_only_child_warning(
     keyring_available.then(|| {
         format!(
             "Warning: the child `{seat}` grant is bound to this launcher's process only: {err}. A worker whose tool calls run in a sandbox cannot present it"
+        )
+    })
+}
+
+/// Why a sandboxed worker's launch is refused when its child grant could not
+/// get a keyring key. `None` when the worker is not sandboxed, or where the
+/// keyring is structurally unavailable (off Linux, or refused by the kernel):
+/// there every child is proc-only and refusing would block every launch.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+pub(crate) fn sandboxed_child_key_refusal(
+    seat: &str,
+    err: &crate::grant_keyring::InstallError,
+    keyring_available: bool,
+    sandboxed: bool,
+) -> Option<String> {
+    (sandboxed && keyring_available).then(|| {
+        format!(
+            "cannot launch the contained `{seat}` worker: its grant key could not be put in a session keyring ({err}), so its sandboxed tool calls could not present the grant and its verdict would be refused. Launch it from a terminal that entered your role (`eval \"$(aida role enter <role>)\"`) rather than from inside another agent's sandbox"
         )
     })
 }
