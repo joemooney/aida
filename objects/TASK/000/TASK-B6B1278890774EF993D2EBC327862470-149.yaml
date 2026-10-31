@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T16:28:11.669610307Z
+modified_at: 2026-10-31T17:30:34.982145104Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -35,6 +35,27 @@ relationships:
   target_id: 01a19299-2949-77f2-802b-f9fa90066054
   created_at: 2026-10-31T15:38:38.219333015Z
   created_by: joe
+comments:
+- id: 01a19303-6266-7051-be68-aa169cf1158b
+  author: joe
+  content: |-
+    Two acceptance items need a store write that the implementer seat could not make (the store's git dir is read-only inside the contained sandbox; an attempted commit failed with "Read-only file system" and the edit was reverted):
+
+    1. Item 2: remove the line `  digits: 4` under `id_config:` in .aida-store/metadata.yaml and commit it. Once the PR is merged, the binary ignores the key, but it stays on disk until a metadata write changes another field.
+    2. Acceptance "doctor reports 0 id-collision groups": after the PR merges and the binary is promoted, run
+       aida doctor --fix id-collisions --dry-run --mapping docs/plans/<date>-native-agreed-renumber.tsv
+       then the same command with --yes instead of --dry-run. It renumbers the NATIVE side of the 8 native-vs-agreed groups (BUG-34, STORY-41, STORY-42, TASK-31, TASK-32, ...). Mentions of the old IDs are not rewritten because they now name the agreed holder. aida doctor should then report 0 id-collision groups.
+
+    Item 6's AC5 amendment went through aida edit (queued for host commit).
+
+    Raised by the implementer while working TASK-B6B1278890774EF993D2EBC327862470-149.
+    Branch: task-b6b1278890774ef993d2ebc327862470-149  ·  Commit: 644ecc6bfbf  (PR link added on merge)
+
+    Design choices: digits removed from the IdConfiguration model itself (nothing read it); web settings tab lost its Digits input. Agreed-vs-agreed groups are printed as needing a manual fix. Could not file this as a draft finding: aida add fails here (ID allocation: Read-only file system).
+  created_at: 2026-10-31T17:30:34.982145104Z
+  modified_at: 2026-10-31T17:30:34.982145104Z
+  session_id: 01a192ca4027
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19213-9b1f-7a82-b146-412ba9b18a8f
   author: joe
