@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T10:44:30.542167402Z
-modified_at: 2026-10-31T11:59:33.992355436Z
+modified_at: 2026-10-31T12:01:24.170719699Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-045
@@ -40,6 +40,30 @@ relationships:
   target_id: 01a1918f-c65e-7692-8497-fb80476c31c5
   created_at: 2026-10-31T11:14:58.670569747Z
   created_by: joe
+comments:
+- id: 01a191d6-02ca-7ac2-9c53-3de5001e0146
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (gate/tests/bug_1934_keyring_tests.rs):** `issue_headless_child(.., contained=true)` for a delegated implementer with the keyring install forced to ELOOP returns ChildGrantRefused and writes no grant; uncontained keeps the proc-only fallback. Every caller (queue_cmd fresh headless arm, burndown_run x2, phase_driver_trait CI-fix) passes its containment, so the compiler enforces item 1; the BUG-045 source ratchet is extended to assert queue_cmd passes `contained` to issue_headless_child. Issuance precedes spawn on each arm.
+    - **Unit:** `preflight_sandboxed_child_key` with EDQUOT forced yields ChildGrantRefused (and `refused_review_launch_releases_lease(true, &err)` is true, i.e. the lease is released); launcher-level: a contained `run_standalone_reviewer` with EDQUOT forced is refused before the reviewer runs.
+    - **Source/compile:** `issue_sandboxed_child` deleted; no caller remains (compile).
+    - **Command-level:** criterion-id traces (`trace:BUG-...-045.<ac>`) on the BUG-045 tests, plus a new contained record+collect test (real run_standalone_reviewer, contained=true, mock reviewer records in its own worktree under its own grant, launcher collects it) for ace2889c; verify with `aida criteria BUG-...-045`.
+
+    ### Expected files
+    - aida-cli-lib/src/gate/seat_authority.rs
+    - aida-cli-lib/src/queue_cmd.rs, burndown_run.rs, phase_driver_trait.rs (call-site arg)
+    - aida-cli-lib/src/gate/tests/{bug_1934_keyring_tests,seat_authority_tests}.rs
+    - aida-cli-lib/src/tests/{bug_home_045_reviewer_verdict_tests,bug_2149_2150_standalone_reviewer_tests,story_696_ps_tests,story_1662_standalone_implementer_tests}.rs
+
+    ### Ambiguities / conflicts as questions
+    - Should the issuer's own quota bail (issue_child_for) also be ChildGrantRefused? Proposed yes, for consistency: it fires before any grant is written, which is exactly the type's contract.
+  created_at: 2026-10-31T12:01:24.170719699Z
+  modified_at: 2026-10-31T12:01:24.170719699Z
+  session_id: 01a191d44fda
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a191aa-2b1e-7090-a0bd-b099b1917f9d
   author: joe
