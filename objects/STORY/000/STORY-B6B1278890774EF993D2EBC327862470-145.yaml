@@ -1,0 +1,32 @@
+id: 01a190a6-b774-7bf1-9ae5-6eda97f9e483
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-145
+title: 'Review PR-3155: [AI:claude] fix(implement): resume a headless implementer that parks on its own background run (BUG-B6B1278890774EF993D2EBC327862470-044)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1908a`) for branch `bug-b6b1278890774ef993d2ebc327862470-044`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3155>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-044` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-044
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3155` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T06:30:07.476054117Z
+modified_at: 2026-10-31T06:30:07.476054117Z
+req_type: Story
+filed_at:
+  code_sha: 0055329071e020e27dc8342cd4479eec6b4a1e87
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f4aac4402f3
+  vendor: claude
