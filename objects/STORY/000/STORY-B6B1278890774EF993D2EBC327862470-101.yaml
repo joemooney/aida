@@ -16,12 +16,12 @@ description: |
   7. Interacts with STORY-HOME-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
 
   Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-HOME-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T10:26:55.746580598Z
+modified_at: 2026-10-31T10:38:49.632174475Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -56,6 +56,14 @@ history:
   timestamp: 2026-10-30T04:45:31.833233753Z
   session_id: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
   changes: []
+- id: 01a1918a-6920-7052-b3e9-ce1200d52f0a
+  author: aida-session-start
+  timestamp: 2026-10-31T10:38:49.632172132Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
