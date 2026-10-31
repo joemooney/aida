@@ -6,12 +6,12 @@ description: |-
 
   (minor, non-blocking) ship_from_seat.rs run_from: in a real run, a refusal after import (trailer check, explicit-spec mismatch, diff-stat failure) leaves refs/aida/seat-import/<branch> in main (tested as intended); nothing ever prunes stale quarantine refs. Consider deleting on refusal or adding a prune path.
   Reviewed sha: b9fac73f20bfef9168c05b85b04aa4948f3ff80b
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T00:54:47.103116093Z
-modified_at: 2026-10-31T07:55:22.264466096Z
+modified_at: 2026-10-31T08:02:28.608265695Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-038
@@ -54,6 +54,14 @@ history:
   timestamp: 2026-10-31T07:55:24.278871691Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
   changes: []
+- id: 01a190fb-4480-7670-9e69-28af9f17e00a
+  author: aida-session-start
+  timestamp: 2026-10-31T08:02:28.608262482Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b
   branch: main
