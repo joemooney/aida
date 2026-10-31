@@ -16,12 +16,12 @@ description: |
   7. Interacts with STORY-HOME-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
 
   Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-HOME-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T10:54:19.708760887Z
+modified_at: 2026-10-31T11:23:40.772031250Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -149,6 +149,12 @@ comments:
   created_at: 2026-10-31T10:54:19.708760887Z
   modified_at: 2026-10-31T10:54:19.708760887Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a191b3-7964-7e30-8aa3-9435273bcdd5
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: Architecture sketch posted as a spec comment per the advisor brief (sketch only, no code). It needs advisor signoff and answers to 7 open questions before implementation: opt-in vs default-on, relay-run vs token reuse for the handle, relaunch on non-zero exit, lease liveness during the gap, codex slice, generation-1 injection, and slicing.. No triage reason was given.'
+  created_at: 2026-10-31T11:23:40.772025778Z
+  modified_at: 2026-10-31T11:23:40.772025778Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a18ae8-d622-72c1-a3a5-8d4fa60beadd
   author: joe
@@ -177,6 +183,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a191b3-7963-7492-bcb5-a021557f4f53
+  author: joe
+  timestamp: 2026-10-31T11:23:40.772000794Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -185,9 +199,3 @@ filed_at:
   aida_build_sha: 9a86ae54ce5
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
-attention_reason:
-  category: design-fork
-  detail: 'Architecture sketch posted as a spec comment per the advisor brief (sketch only, no code). It needs advisor signoff and answers to 7 open questions before implementation: opt-in vs default-on, relay-run vs token reuse for the handle, relaunch on non-zero exit, lease liveness during the gap, codex slice, generation-1 injection, and slicing.'
-  lean: Opt-in --rotate, claude first; reuse the relay-mail run (STORY-1843) to hold the handle; the supervisor stamps itself as lease active_pid; slice 1 = loop+guard+countdown+stamped handoff+--final
-  raised_by: implementer
-  raised_at: 2026-10-31T10:42:52.975795685Z
