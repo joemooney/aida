@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- edit no longer reorders the list). NULL when not yet completed.
     completed_at TEXT,
     -- BUG-HOME-046: numeric identity keys (id_identity::id_key) of spec_id /
-    -- agreed_id, so TASK-0418 / TASK-418 / TASK-00418 resolve through one
+    -- agreed_id, so TASK-0042 / TASK-42 / TASK-00042 resolve through one
     -- indexed equality. NULL when the source id is absent.
     id_key TEXT,
     agreed_id_key TEXT,

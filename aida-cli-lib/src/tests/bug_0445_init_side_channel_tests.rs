@@ -1,4 +1,4 @@
-//! BUG-0445: the `aida()` wrapper's `init` arm must run the binary with its
+//! BUG-b6b1278890774ef993d2ebc327862470-149: the `aida()` wrapper's `init` arm must run the binary with its
 //! stdout ATTACHED, and receive the `cd` block through a side-channel file.
 //!
 //! The arm used to capture stdout (`_aida_out=$(command aida "$@" ...)`) to
@@ -15,7 +15,7 @@
 //! is available — through a real pseudo-terminal, so the child's `[ -t 1 ]`
 //! verdict is observed rather than inferred.
 #![cfg(unix)]
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
 use crate::shell_eval::{EVAL_BEGIN, EVAL_END, INIT_CD_FILE_ENV};
@@ -29,7 +29,7 @@ use std::sync::OnceLock;
 /// stdout the wrapper handed it), prints prose, creates the directory, and
 /// writes the marked `cd` block to the side-channel file. `exit_code` lets the
 /// failure path reuse the same shape.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 fn side_channel_stub(exit_code: i32) -> String {
     format!(
         "#!/usr/bin/env bash\n\
@@ -50,7 +50,7 @@ fn side_channel_stub(exit_code: i32) -> String {
 
 /// A stub that writes `content_lines` (shell `printf '%s\n'` arguments) to the
 /// side-channel file: the malformed-file cases.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 fn file_content_stub(content_lines: &str) -> String {
     format!(
         "#!/usr/bin/env bash\n\
@@ -66,7 +66,7 @@ fn file_content_stub(content_lines: &str) -> String {
 /// token — markers on stdout — and of a bare in-place init that prints prose.
 /// The `cd` is relative so the printed block is identical across the per-shell
 /// tempdirs `init_side_channel_agrees_across_shells` compares byte for byte.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 // trace:BUG-1960 | ai:claude
 fn stdout_only_stub() -> String {
     format!(
@@ -83,7 +83,7 @@ fn stdout_only_stub() -> String {
 /// The body every scenario runs: export the probe paths the stub writes to,
 /// invoke the wrapper, then report status, where the shell ended up, whether
 /// the per-command env var leaked, and whether the side-channel file is gone.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 fn init_body(dir: &str) -> String {
     format!(
         "export AIDA_T_PROBE=\"$PWD/probe\" AIDA_T_FILE=\"$PWD/cdfile\"\n\
@@ -108,7 +108,7 @@ fn init_body(dir: &str) -> String {
 /// demands the child see a file, which a capturing wrapper can never satisfy.
 /// This one pins the observable half: the prose reaches the harness, the `cd`
 /// still applies, and the markers never appear on stdout.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn init_prose_is_displayed_and_the_side_channel_cd_applies() {
     for &shell in wrapper_shells() {
@@ -146,7 +146,7 @@ fn init_prose_is_displayed_and_the_side_channel_cd_applies() {
 /// that captures the child in `$(...)` hands it a pipe instead, which is
 /// exactly the condition that made the binary auto-select the agent format
 /// and buffer its prompts.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn init_child_inherits_the_wrappers_stdout_not_a_capture_pipe() {
     for &shell in wrapper_shells() {
@@ -173,7 +173,7 @@ fn init_child_inherits_the_wrappers_stdout_not_a_capture_pipe() {
 /// When the CALLER pipes the wrapper (`aida init x | cat`), the child must see
 /// that pipe — non-interactive format selection is the caller's choice and the
 /// wrapper must neither hide nor add to it.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn a_caller_pipe_is_still_a_pipe_for_the_child() {
     for &shell in wrapper_shells() {
@@ -194,7 +194,7 @@ fn a_caller_pipe_is_still_a_pipe_for_the_child() {
 /// util-linux `script`, when it runs here: it is the only portable-enough way
 /// to give the wrapper a real pseudo-terminal from a Rust test. BSD `script`
 /// has a different flag set and no `--version`, so it is a clean skip.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 fn util_linux_script_runs() -> bool {
     static PROBE: OnceLock<bool> = OnceLock::new();
     *PROBE.get_or_init(|| {
@@ -218,7 +218,7 @@ fn util_linux_script_runs() -> bool {
 /// Like `run_wrapper_in`, but the shell runs INSIDE a pseudo-terminal created
 /// by `script`, so `[ -t 1 ]` inside the stub is a real verdict. Returns the
 /// PTY transcript (CRLF line endings) and the shell's exit status.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 fn run_wrapper_in_pty(shell: &str, stub: &str, body: &str) -> (String, Option<i32>) {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join("home");
@@ -259,7 +259,7 @@ fn run_wrapper_in_pty(shell: &str, stub: &str, body: &str) -> (String, Option<i3
 /// `aida init <DIR>` child sees a TTY on stdout (so the binary keeps human
 /// rendering and its prompts are visible), and the shell still ends up in the
 /// new directory.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn on_a_real_terminal_the_init_child_sees_a_tty_and_the_shell_still_cds() {
     if !util_linux_script_runs() {
@@ -288,7 +288,7 @@ fn on_a_real_terminal_the_init_child_sees_a_tty_and_the_shell_still_cds() {
 
 /// A failing init leaves the shell where it was, propagates its status, and
 /// still cleans up — even though the stub wrote a well-formed block.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn a_failing_init_never_moves_the_shell() {
     for &shell in wrapper_shells() {
@@ -311,7 +311,7 @@ fn a_failing_init_never_moves_the_shell() {
 
 /// Only a file holding exactly one marker pair and nothing else is eval'd.
 /// Bare payloads, prose around the block, and a second pair are all rejected.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn a_malformed_side_channel_file_is_never_evaled() {
     let cd = "\"cd '$PWD/$2'\"";
@@ -362,7 +362,7 @@ fn a_malformed_side_channel_file_is_never_evaled() {
 /// Version skew: an older binary that still emits markers on STDOUT (or a bare
 /// in-place init that prints prose) is display-only. Nothing on stdout is an
 /// eval candidate in the init arm, and the shell stays put.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn stdout_markers_from_an_older_binary_are_display_only() {
     for &shell in wrapper_shells() {
@@ -385,7 +385,7 @@ fn stdout_markers_from_an_older_binary_are_display_only() {
 /// Same stubs, every shell on the machine, byte-identical stdout/stderr/status
 /// against the bash baseline — so a zsh-only difference in the file-reading
 /// loop or the per-command env prefix fails here, not in a zsh user's terminal.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[test]
 fn init_side_channel_agrees_across_shells() {
     let cases: [(&str, String); 3] = [

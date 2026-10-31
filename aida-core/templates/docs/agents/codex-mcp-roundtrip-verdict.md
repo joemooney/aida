@@ -96,9 +96,9 @@ What works:
 - Text-envelope tool results.
 - CLI to MCP read consistency.
 - MCP to CLI write consistency after BUG-310.
-- Punt response atomic writes after TASK-439.
+- Punt response atomic writes after TASK-b6b1278890774ef993d2ebc327862470-272.
 - Review tag canonicalization after TASK-437.
-- Directive verb validation after TASK-436.
+- Directive verb validation after TASK-b6b1278890774ef993d2ebc327862470-269.
 - Headless AskUserQuestion structural disablement after BUG-327.
 - Black-box MCP stdio test infrastructure after TASK-451.
 - Doc-vs-MCP consistency gate after TASK-452.
@@ -107,7 +107,7 @@ Known constraints:
 
 - `structuredContent` is not emitted. STORY-399 tracks this.
 - Error bodies are text-first, not structured machine-readable error objects. STORY-401 tracks this.
-- `claim_task` still has a TOCTOU race under concurrent same-spec claims. TASK-438 tracks this.
+- `claim_task` still has a TOCTOU race under concurrent same-spec claims. TASK-b6b1278890774ef993d2ebc327862470-271 tracks this.
 - Original spec-graph tools work but are thinner than the newer coordination cluster. STORY-82 and EPIC-27 track modernization.
 - Cross-machine MCP transport and auth are not implemented.
 - Codex registration is manual today; `aida init` does not yet run `codex mcp add`.
@@ -158,7 +158,7 @@ The next practical moves are:
 
 - Keep `tests/test_mcp_stdio.sh --skip-agent-contract` and `tests/test_mcp_doc_consistency.sh` green.
 - Decide whether the stdio suite's duplicated agent-contract alias gate should be removed or regenerated from the doc consistency test, because the canonical doc consistency gate already passes.
-- Implement TASK-438 before stress-testing concurrent claims.
+- Implement TASK-b6b1278890774ef993d2ebc327862470-271 before stress-testing concurrent claims.
 - Implement STORY-399 when a schema-native MCP client requires `structuredContent`.
 - Keep architectural changes behind master-advisor sign-off.
 

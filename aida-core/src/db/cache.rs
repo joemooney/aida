@@ -7178,7 +7178,10 @@ mod tests {
             .map(|r| r.unwrap())
             .collect();
         assert!(idx.iter().any(|i| i == "idx_cache_id_key"), "{idx:?}");
-        assert!(idx.iter().any(|i| i == "idx_cache_agreed_id_key"), "{idx:?}");
+        assert!(
+            idx.iter().any(|i| i == "idx_cache_agreed_id_key"),
+            "{idx:?}"
+        );
     }
 
     /// BUG-HOME-046 AC1: id lookups use numeric identity through the key
@@ -7211,10 +7214,7 @@ mod tests {
             assert_eq!(rows.len(), 1, "{id}");
             assert_eq!(rows[0].uuid, agreed.id);
         }
-        assert_eq!(
-            cache.uuid_for_spec_id("TASK-2-7").unwrap(),
-            Some(agreed.id)
-        );
+        assert_eq!(cache.uuid_for_spec_id("TASK-2-7").unwrap(), Some(agreed.id));
         assert!(cache.id_rows_for("TASK-41").unwrap().is_empty());
 
         // A padded twin: both rows answer the key, the exact literal wins

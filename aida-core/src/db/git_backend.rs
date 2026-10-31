@@ -4349,13 +4349,12 @@ mod tests {
         assert_eq!(backend.id_holder("BUG-55").unwrap(), None);
         let mut explicit = Requirement::new("explicit".into(), String::new());
         explicit.spec_id = Some("TASK-55".into());
-        let err = crate::id_identity::admit_new_id(
-            "TASK-55",
-            &|i| backend.id_holder(i),
-            explicit.id,
-        )
-        .unwrap_err();
-        assert!(err.downcast_ref::<crate::id_identity::IdTakenError>().is_some());
+        let err =
+            crate::id_identity::admit_new_id("TASK-55", &|i| backend.id_holder(i), explicit.id)
+                .unwrap_err();
+        assert!(err
+            .downcast_ref::<crate::id_identity::IdTakenError>()
+            .is_some());
     }
 
     /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit

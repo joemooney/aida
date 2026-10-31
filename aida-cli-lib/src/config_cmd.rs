@@ -79,9 +79,8 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
 
             // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the
             // `[ids]` widths replaced `id_config.digits`.
-            let widths = aida_core::id_identity::IdWidths::load(&store_sync_config_project_root(
-                storage,
-            ));
+            let widths =
+                aida_core::id_identity::IdWidths::load(&store_sync_config_project_root(storage));
             let show = |w: Option<usize>| match w {
                 Some(w) => w.to_string(),
                 None => format!(

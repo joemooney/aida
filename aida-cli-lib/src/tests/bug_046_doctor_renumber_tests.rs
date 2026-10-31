@@ -173,7 +173,11 @@ fn fix_id_collisions_end_to_end() {
     .unwrap();
     std::fs::write(
         root.join("CHANGELOG.md"),
-        "- TASK-0042 padded fix\n- TASK-42 plain fix\n- TASK-42 again, see [n](task-0042.md)\n",
+        // The plain twin has more references (4 here vs 3 for the padded
+        // one: trace comment, changelog, store referrer), so the selection
+        // rule renumbers the padded twin.
+        "- TASK-0042 padded fix\n- TASK-42 plain fix\n- TASK-42 again, see [n](task-0042.md)\n\
+         - TASK-42 follow-up\n- TASK-42 cleanup\n",
     )
     .unwrap();
     git(&root, &["add", "."]);
@@ -211,7 +215,10 @@ fn fix_id_collisions_end_to_end() {
     run(&root, &store, &opts(true, false, false)).unwrap();
     let rows = parse_mapping(&std::fs::read_to_string(&mapping).unwrap()).unwrap();
     assert_eq!(rows.len(), 1, "{rows:?}");
-    assert_eq!((rows[0].old.as_str(), rows[0].uuid), ("TASK-0042", padded.id));
+    assert_eq!(
+        (rows[0].old.as_str(), rows[0].uuid),
+        ("TASK-0042", padded.id)
+    );
     let new = rows[0].new.clone();
     assert!(!aida_core::id_identity::same_id(&new, "TASK-42"));
     assert_eq!(
@@ -239,14 +246,20 @@ fn fix_id_collisions_end_to_end() {
     // 3. Store apply with the same mapping.
     run(&root, &store, &opts(false, true, false)).unwrap();
     let after = aida_core::object_store::load_all_objects(&objects).unwrap();
-    assert!(collision_groups(&after).is_empty(), "doctor must report zero groups");
+    assert!(
+        collision_groups(&after).is_empty(),
+        "doctor must report zero groups"
+    );
     assert!(!aida_core::object_store::object_exists(&objects, "TASK-0042").unwrap());
     let moved = after.iter().find(|r| r.id == padded.id).unwrap();
     assert_eq!(moved.spec_id.as_deref(), Some(new.as_str()));
     let h = moved.history.last().unwrap();
     assert_eq!(h.author, RENUMBER_AUTHOR);
     assert_eq!(
-        (h.changes[0].old_value.as_str(), h.changes[0].new_value.as_str()),
+        (
+            h.changes[0].old_value.as_str(),
+            h.changes[0].new_value.as_str()
+        ),
         ("TASK-0042", new.as_str())
     );
     let kept = after.iter().find(|r| r.id == plain.id).unwrap();

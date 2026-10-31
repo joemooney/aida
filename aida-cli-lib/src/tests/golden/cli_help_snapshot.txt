@@ -11741,11 +11741,6 @@ Commands:
                             name this node's local spec with the same number (TYPE-HOME-100). A bare
                             id resolves to the agreed spec, so prose meaning the local one should
                             use the alias form. Reports only
-  renumber-id-collisions    Repair spec IDs that differ only by leading zeros (TASK-0418 and
-                            TASK-418 are the same ID). For each collision the spec with more
-                            commit-message references keeps the number; the others get a fresh ID,
-                            and their mentions in the store, Markdown docs and trace comments are
-                            rewritten. The old ID is recorded in the renumbered spec's history
   check                     Focused multi-agent drift diagnostic for one category
   heal                      Focused multi-agent drift heal for one category
   migrate-counter-scope     Migrate this project from per-type counters (each type counts
@@ -11824,6 +11819,25 @@ Options:
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
 
+      --fix <CATEGORY>
+          Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
+          that differ only by leading zeros are the same ID, so each collision keeps one spec on the
+          number and gives the others a fresh ID, rewriting their mentions in the store, docs and
+          code comments. Needs --dry-run (preview) or --yes (apply)
+          
+          [possible values: id-collisions]
+
+      --dry-run
+          With --fix: show the plan and write nothing to the store
+
+      --mapping <FILE>
+          With --fix id-collisions: the old -> new mapping file. With --dry-run a missing file is
+          created from the plan; otherwise the file's mapping is applied exactly as written
+
+      --tree-only
+          With --fix id-collisions --mapping: rewrite only this checkout's tracked files (docs,
+          changelog, code comments), not the store
+
       --contradictions
           Run a store-wide semantic contradiction sweep combining mechanical joins in Rust with Jev
           System One semantic choice queries
@@ -11901,37 +11915,6 @@ local one should use the alias form. Reports only
 Usage: aida doctor bare-id-twins [OPTIONS]
 
 Options:
-      --format <FORMAT>
-          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
-          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
-          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
-
-          Possible values:
-          - human: Human-readable tables / emoji (the interactive default at a TTY)
-          - toon:  Token-efficient TOON — the compact agent default when piped/captured
-          - json:  Machine JSON, for commands that support a JSON projection
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-  -h, --help
-          Print help (see a summary with '-h')
-===== aida doctor renumber-id-collisions
-Repair spec IDs that differ only by leading zeros (TASK-0418 and TASK-418 are the same ID). For each
-collision the spec with more commit-message references keeps the number; the others get a fresh ID,
-and their mentions in the store, Markdown docs and trace comments are rewritten. The old ID is
-recorded in the renumbered spec's history
-
-Usage: aida doctor renumber-id-collisions [OPTIONS]
-
-Options:
-      --dry-run
-          Print the plan without writing anything
-
-  -y, --yes
-          Apply without the confirmation refusal
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -18460,7 +18443,8 @@ Commands:
   show         Show current ID configuration
   format       Set the ID format (single-level or two-level)
   numbering    Set the numbering strategy
-  digits       Set the number of digits in IDs
+  digits       Set how many digits new spec ID numbers are padded to (writes `[ids] seq_width` in
+               .aida/config.toml; displayed IDs use it too)
   migrate      Migrate existing SPEC-XXX IDs to new format
   user         Show or update user-level preferences at `~/.aida/preferences.toml`. Currently
                stores: preferred node id (used as default by `aida init`) and a fallback email (used
@@ -18787,13 +18771,14 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida config digits
-Set the number of digits in IDs
+Set how many digits new spec ID numbers are padded to (writes `[ids] seq_width` in
+.aida/config.toml; displayed IDs use it too)
 
 Usage: aida config digits [OPTIONS] <DIGITS>
 
 Arguments:
   <DIGITS>
-          Number of digits (1-6)
+          Number of digits (0-6; 0 = no padding)
 
 Options:
       --format <FORMAT>
@@ -40446,6 +40431,16 @@ Working on aida itself
         "help": "Zero-based offset into the deterministically ordered contradiction findings. Ignored with --all"
       },
       {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "With --fix: show the plan and write nothing to the store"
+      },
+      {
+        "name": "fix",
+        "takes_value": true,
+        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. Needs --dry-run (preview) or --yes (apply)"
+      },
+      {
         "name": "fix-sandbox",
         "takes_value": false,
         "help": "Print the guided, copy-pasteable steps to bring the OS sandbox (bubblewrap write-confinement) up on this host: detect the current state, the exact sysctl to persist if the kernel blocks unprivileged user namespaces, how to opt in, and the verify command. Prints the sequence — sudo steps are clearly marked \"run this yourself\"; it never silently runs sudo. Runs the non-sudo availability re-probe as a smoke check"
@@ -40476,9 +40471,19 @@ Working on aida itself
         "help": "Emit machine-readable JSON"
       },
       {
+        "name": "mapping",
+        "takes_value": true,
+        "help": "With --fix id-collisions: the old -> new mapping file. With --dry-run a missing file is created from the plan; otherwise the file's mapping is applied exactly as written"
+      },
+      {
         "name": "since",
         "takes_value": true,
         "help": "Exempt specs completed before this point from the completed-without-commit integrity check: a relative duration (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a zone-less ISO datetime (local time), RFC3339, or else a git ref/tag whose commit date is the cutoff. An invalid value is an error. Quiets noise on legacy history predating trace conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var"
+      },
+      {
+        "name": "tree-only",
+        "takes_value": false,
+        "help": "With --fix id-collisions --mapping: rewrite only this checkout's tracked files (docs, changelog, code comments), not the store"
       },
       {
         "name": "yes",
@@ -40572,42 +40577,6 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
-      }
-    ],
-    "hidden": false
-  },
-  {
-    "path": [
-      "aida",
-      "doctor",
-      "renumber-id-collisions"
-    ],
-    "about": "Repair spec IDs that differ only by leading zeros (TASK-0418 and TASK-418 are the same ID). For each collision the spec with more commit-message references keeps the number; the others get a fresh ID, and their mentions in the store, Markdown docs and trace comments are rewritten. The old ID is recorded in the renumbered spec's history",
-    "flags": [
-      {
-        "name": "canonical-ids",
-        "takes_value": false,
-        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
-      },
-      {
-        "name": "dry-run",
-        "takes_value": false,
-        "help": "Print the plan without writing anything"
-      },
-      {
-        "name": "format",
-        "takes_value": true,
-        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
-      },
-      {
-        "name": "help",
-        "takes_value": false,
-        "help": "Print help (see more with '--help')"
-      },
-      {
-        "name": "yes",
-        "takes_value": false,
-        "help": "Apply without the confirmation refusal"
       }
     ],
     "hidden": false
@@ -47582,7 +47551,7 @@ Working on aida itself
       "config",
       "digits"
     ],
-    "about": "Set the number of digits in IDs",
+    "about": "Set how many digits new spec ID numbers are padded to (writes `[ids] seq_width` in .aida/config.toml; displayed IDs use it too)",
     "flags": [
       {
         "name": "canonical-ids",

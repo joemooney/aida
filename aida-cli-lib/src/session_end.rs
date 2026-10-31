@@ -989,7 +989,7 @@ mod bug_779_wrapper_eval_tests;
 #[path = "tests/task_1171_eval_channel_tests.rs"]
 mod task_1171_eval_channel_tests;
 
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_0445_init_side_channel_tests.rs"]
 mod bug_0445_init_side_channel_tests;

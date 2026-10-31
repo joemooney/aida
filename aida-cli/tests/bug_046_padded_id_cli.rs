@@ -62,7 +62,10 @@ impl Fx {
         std::fs::create_dir_all(&repo).unwrap();
         std::fs::create_dir_all(root.join("home")).unwrap();
         git_in(&repo, &["init", "-q", "-b", "main"]);
-        git_in(&repo, &["commit", "-q", "--allow-empty", "-m", "chore: base"]);
+        git_in(
+            &repo,
+            &["commit", "-q", "--allow-empty", "-m", "chore: base"],
+        );
         test_git::enroll_synthetic_home(&repo);
         let fx = Fx {
             _tmp: tmp,
@@ -146,7 +149,10 @@ impl Fx {
         )
         .unwrap();
         git_in(&self.store(), &["add", "-A"]);
-        git_in(&self.store(), &["commit", "-q", "-m", &format!("seed {spec_id}")]);
+        git_in(
+            &self.store(),
+            &["commit", "-q", "-m", &format!("seed {spec_id}")],
+        );
         uuid
     }
 
@@ -216,7 +222,10 @@ fn edit_comment_and_link_write_the_stored_object_under_any_padding() {
 
     fx.ok(&["rel", "add", "TASK-01", "TASK-0002", "--type", "related"]);
     let linked = fx.object("TASK-0001");
-    assert!(linked.contains(&plain), "relationship targets TASK-2:\n{linked}");
+    assert!(
+        linked.contains(&plain),
+        "relationship targets TASK-2:\n{linked}"
+    );
 
     // Every write landed on the stored file; no re-padded twin was created.
     fx.assert_no_twin_files(&["TASK-0001", "TASK-2"]);
@@ -248,11 +257,23 @@ fn commit_trailer_under_another_padding_completes_the_spec_at_merge() {
     fx.ok(&["cache", "rebuild"]);
     git_in(
         &fx.repo,
-        &["commit", "-q", "--allow-empty", "-m", "fix: padded trailer (TASK-00003)"],
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "fix: padded trailer (TASK-00003)",
+        ],
     );
     git_in(
         &fx.repo,
-        &["commit", "-q", "--allow-empty", "-m", "fix: plain trailer (TASK-0004) (#12)"],
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "fix: plain trailer (TASK-0004) (#12)",
+        ],
     );
     let out = fx.aida(&["db", "reconcile-status"]);
     assert!(out.status.success(), "{}", text(&out));

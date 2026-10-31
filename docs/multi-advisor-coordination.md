@@ -272,9 +272,9 @@ reversible, grounded decisions, but cross-subsystem conflicts, public contracts,
 or autonomy/security/keystone machinery escalate to the master advisor or human.
 
 <!-- trace:TASK-0434 | ai:codex -->
-<!-- trace:TASK-0435 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-268 | ai:codex -->
 <!-- trace:TASK-0436 | ai:codex -->
-<!-- trace:TASK-0437 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-270 | ai:codex -->
 
 ## Related
 

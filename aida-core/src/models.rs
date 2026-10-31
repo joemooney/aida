@@ -6634,13 +6634,7 @@ impl RequirementsStore {
                 if number == 0 {
                     return String::new();
                 }
-                format!(
-                    "{}-{}-{:0>width$}",
-                    feat,
-                    typ,
-                    number,
-                    width = digits
-                )
+                format!("{}-{}-{:0>width$}", feat, typ, number, width = digits)
             }
         }
     }
@@ -6723,12 +6717,7 @@ impl RequirementsStore {
             };
         }
 
-        format!(
-            "{}-{:0>width$}",
-            prefix_upper,
-            number,
-            width = digits
-        )
+        format!("{}-{:0>width$}", prefix_upper, number, width = digits)
     }
 
     /// Get the type prefix for a RequirementType enum value

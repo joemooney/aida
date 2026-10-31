@@ -119,7 +119,7 @@ The strategic rule is:
 
 ## What AIDA Offers During This Migration
 
-<!-- trace:TASK-0426 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-261 | ai:codex -->
 <!-- trace:TASK-1187 | ai:codex -->
 AIDA is the agent-collaboration layer for AI-assisted software work. Its core
 is a small, git-backed intent graph: requirements, bugs, tasks, decisions,

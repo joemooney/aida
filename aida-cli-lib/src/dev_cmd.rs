@@ -1605,7 +1605,7 @@ fn print_shell_wrapper_status() {
 // trace:BUG-780 | ai:claude
 // trace:BUG-779 | ai:claude
 // trace:TASK-1171 | ai:claude
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 #
 # Most `aida` subcommands run as plain commands. The few that need to

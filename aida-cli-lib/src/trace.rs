@@ -1709,9 +1709,8 @@ pub(crate) fn print_git_linkage(
         // and left them at a dead end. trace:TASK-726 | ai:claude
         // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the
         // suggested trace comment and trailer render at the `[ids]` width.
-        let example_id = aida_core::id_identity::render_id(
-            ids.first().map(|s| s.as_str()).unwrap_or("TASK-1"),
-        );
+        let example_id =
+            aida_core::id_identity::render_id(ids.first().map(|s| s.as_str()).unwrap_or("TASK-1"));
         println!(
             "\n{}: {}",
             "Git linkage".green().bold(),

@@ -4709,7 +4709,7 @@ pub(crate) fn handle_init_distributed_worktree(
     // node-acquire / db-sync work without a manual `git push -u`. Skipped
     // silently when there's no origin (single-machine projects) or when
     // the push fails (offline, auth, etc.) — failure isn't fatal here.
-    // trace:BUG-23 trace:TASK-421 | ai:claude
+    // trace:BUG-23 trace:TASK-b6b1278890774ef993d2ebc327862470-256 | ai:claude
     //
     // BUG-559 root-cause prevention (TASK-844): the orphan-store push below is
     // the FIRST push to a fresh origin. A forge that adopts the first-pushed
