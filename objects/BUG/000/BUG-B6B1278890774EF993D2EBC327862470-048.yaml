@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T11:26:47.434240768Z
+modified_at: 2026-10-31T12:21:09.222309096Z
 req_type: Bug
 tags:
 - ids
@@ -41,6 +41,12 @@ comments:
     Gate: LIGHT. One targeted cargo test (aida-cli-lib with filter trailer_coverage plus node_alias_display_ratchet), then make check-ci-fast, then push (no force). Title keeps the full canonical ID trailer.
   created_at: 2026-10-31T11:26:47.434240768Z
   modified_at: 2026-10-31T11:26:47.434240768Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a191e8-17e6-7811-bf40-7605c8f07414
+  author: joe
+  content: 'ADVISOR 2026-10-31 05:22 on the round-2 gap: pull-side auto-bump in db_reconcile.rs (:2276/:2320/:3275/:3304) is ACCEPTED without a fix in this PR. Reason: aida pr ship now refuses any branch commit whose trailer the PR does not cover, so no shipped commit can put an uncovered trailer on main. The only remaining source is a direct push to main, which has no branch or lease to check coverage against, and it is operator-authored. AC2 is satisfied for every shipped path. No follow-up spec (2026-10-28 rule).'
+  created_at: 2026-10-31T12:21:09.222309096Z
+  modified_at: 2026-10-31T12:21:09.222309096Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19166-4eb3-7172-8f0a-f2ff30b1fe9b
