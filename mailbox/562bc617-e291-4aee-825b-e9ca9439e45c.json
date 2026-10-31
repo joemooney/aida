@@ -1,0 +1,19 @@
+{
+  "id": "562bc617-e291-4aee-825b-e9ca9439e45c",
+  "thread_id": "562bc617-e291-4aee-825b-e9ca9439e45c",
+  "from": "claude-implementer-496",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793480027879,
+  "body": "SKETCH READY STORY-164. Sketch posted as a comment on STORY-b6b1278890774ef993d2ebc327862470-164. Summary: hubs declared by normalized URL in tracked [store.hubs]; nothing is minted until a hub is declared (no origin guess). Single-hub claims are CAS pushes to the hub remote, stamped with a virtual pool hub:<hub>:<TYPE>. A block is spendable only once it is present on refs/remotes/<hub>/aida-store. A second hub with no root refuses claims and names enroll-root. enroll-root turns the virtual pools into real ones under the same pool_id, so nothing is renumbered; the new node hub add grants a disjoint pool, CAS-pushed to hub 1. This repo stays rooted (GitHub+GitLab as two hubs). Four signoff questions are at the end of the sketch. No code, no PR.",
+  "subject": "SKETCH READY STORY-164",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
