@@ -1,0 +1,13 @@
+claim_id = "2ea613c5-c2ef-4afb-a389-ed1decf7150b"
+scope = "TASK-b6b1278890774ef993d2ebc327862470-141"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 1156334
+pid_start_time = "linux-starttime:1434629"
+agent = "implementer"
+started_at = "2026-10-31T05:03:37.867750430+00:00"
+heartbeat_at = "2026-10-31T05:03:37.867750430+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
