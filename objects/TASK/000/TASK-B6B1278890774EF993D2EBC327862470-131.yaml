@@ -6,12 +6,12 @@ description: |-
 
   cosmetic (non-blocking): docs/showcase/index.html nav 'Capabilities' now points to capabilities.html, so the landing's in-page #capabilities section (index.html:84) is no longer reachable from the header nav
   Reviewed sha: 8de7ba2fb5df1e3e085f5d988c33aef041fd8351
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T20:01:37.987391381Z
-modified_at: 2026-10-31T00:22:46.633917473Z
+modified_at: 2026-10-31T00:30:38.055063647Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-128
@@ -45,6 +45,14 @@ history:
   timestamp: 2026-10-31T00:23:04.510226332Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
   changes: []
+- id: 01a18f5d-97e7-72d3-87e0-2619df2631ad
+  author: aida-session-start
+  timestamp: 2026-10-31T00:30:38.055060436Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d7ff223575290d0a2d3d749400efa29f7ed24605
   branch: main
