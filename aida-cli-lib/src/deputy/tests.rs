@@ -942,7 +942,16 @@ mod worker_fixtures {
             assert_eq!(r.rc, RC_REFUSED);
             assert!(r.reason.starts_with(want), "{}", r.reason);
             assert!(spool.job_path("failed", &j.id).exists());
+            // The result names an output file; a refusal writes it.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+            let out = std::fs::read_to_string(&r.output)
+                .unwrap_or_else(|e| panic!("{} missing: {e}", r.output.display()));
+            assert!(out.contains(want), "{out}");
+            assert!(out.contains("did not run"), "{out}");
         }
+        let exec_out = std::fs::read_to_string(spool.out_path(&exec.id)).unwrap();
+        assert!(exec_out.contains("/bin/echo"), "{exec_out}");
+        assert!(exec_out.contains("--allow-exec"), "{exec_out}");
         let ledger = std::fs::read_to_string(spool.ledger_path()).unwrap();
         assert_eq!(ledger.matches("\"refused\"").count(), 3);
     }
@@ -1313,6 +1322,10 @@ mod worker_fixtures {
             let r = spool.read_result(&id).unwrap();
             assert_eq!(r.rc, RC_CANCELLED);
             assert_eq!(r.reason, "cancelled before it ran");
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+            assert!(std::fs::read_to_string(&r.output)
+                .unwrap()
+                .contains("before it ran"));
             assert!(spool.job_path("failed", &id).exists());
             assert!(!spool.root.join("never-ran").exists());
 
