@@ -12,18 +12,56 @@ description: |-
   Must not weaken the boundary: no prompt (refuse as today) when not a TTY, under AIDA_HEADLESS, under any agent harness env (CLAUDECODE, CODEX_*, AIDA_AGENT_*), inside a contained seat, or when a grant is present but invalid/expired (that path keeps its existing message). A --yes flag does not skip the prompt (the human keystroke is the proof); '--grant-inline=no' restores pure refusal for scripts.
 
   Acceptance: (1) TTY, no grant, answer y: child launches with a child-specific grant, the role-enter audit event is recorded with principal and seat, the parent shell env is unchanged afterwards; (2) answer n: today's refusal text, exit non-zero; (3) non-TTY / headless / agent env / contained: no prompt, today's refusal; (4) an existing valid grant: no prompt, today's behaviour; (5) the BUG-052 picker marks still apply (undelegable seats refused before the prompt); (6) docs: agent new section + FAQ-42 updated to say a human terminal is offered the inline grant. Tests: PTY-driven CLI test for (1)(2), env-matrix unit test for (3). Architecture/security-adjacent: implementer posts a short sketch of the in-process mint path and gets advisor signoff before coding.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-10-31T22:21:53.497704528Z
+modified_at: 2026-10-31T22:23:27.544223639Z
 req_type: Story
 tags:
 - agent-new
 - epic-home-003
 - grants
 - ux
+comments:
+- id: 01a1940f-5a1a-7332-a9bc-75b36e260c17
+  author: joe
+  content: |-
+    ## Implementer sketch: in-process inline parent-grant mint (needs advisor signoff before coding)
+
+    ### Where it hooks
+    `agent_launch.rs::preflight_agent_new_delegation` (the `parent == None` arm of `agent_new_delegation_refusal`). Only the **no grant at all** case (GrantCheck missing, not invalid/expired) is eligible; invalid/expired keep today's message. BUG-052's undelegable-seat refusal and roster checks run first, unchanged.
+
+    ### Eligibility gate (all must hold; otherwise today's refusal)
+    `--grant-inline` != `no`; `require_direct_human()` passes (no AIDA_AGENT_NAME/TYPE; stdin+stderr TTY) **and** stdout TTY; AIDA_HEADLESS unset; no CLAUDECODE / CODEX_* / AIDA_AGENT_* env; not a contained seat; roster allows principal→parent seat and parent→child seat. One pure fn `inline_grant_eligibility(env, ttys) -> Result<(), Reason>` so the env matrix is unit-testable.
+
+    ### Mint path
+    1. Prompt via inquire on /dev/tty after seat pick: `No parent grant in this shell. Launch the <seat> under a one-time grant from you (operator)? [Y/n]` (+ optional extra delegate seats only when the picked seat needs them; default none). `--yes` does not skip it.
+    2. New `seat_authority::issue_inline_parent(project_root, parent_seat="advisor", delegable=[seat,+extras])` sharing issue_direct's body (roster load, delegable-subset check, SeatGrant shape, write_grant) via an extracted helper, so principal/subject/tty_issued_at/roster checks are identical. Differences, by necessity:
+       - **No key secret.** issue_direct bails when stdout is a terminal because the secret goes in eval text; agent new's stdout IS the terminal and nothing is eval'd. Binding = this `aida agent new` process (`own_process_token`) + session leader (`sid:`), NOT the shell (`chain[1]`) — so the parent shell can never present it. GRANT_ENV is never set in the shell.
+       - **TTL = default MAX_GRANT_AGE** (or the configured seat max). See Q1.
+    3. Derive the child via `issue_child_for` refactored to take an explicit `parent: &SeatGrant` (today it re-reads `current_grant` from env). The env-reading entry points keep their signatures and call the new one.
+    4. Audit: stamp the grant record with `origin: "agent-new-inline"` and emit the same history/event record role enter emits. See Q3.
+
+    ### Tests
+    - **unit (env matrix):** eligibility fn over TTY×HEADLESS×CLAUDECODE×CODEX_*×AIDA_AGENT_*×contained×grant-state → prompt/no-prompt. (acc 3,4)
+    - **command-level PTY (aida-cli/tests, like task_1597_delegation_prompt.rs):** answer y → child grant has parent_grant_id = inline grant, inline grant origin+principal+seat recorded, the shell env has no AIDA_SESSION_GRANT afterwards; answer n → today's refusal text, non-zero. (acc 1,2)
+    - **unit:** undelegable seat still refused before prompt (acc 5).
+    - docs: agent new section + FAQ-42 (acc 6). Help golden regenerated for `--grant-inline`.
+
+    ### Expected files
+    `aida-cli-lib/src/agent_launch.rs`, `agent_new_args.rs` (or the agent-new args module), `gate/seat_authority.rs`, new unit tests under `aida-cli-lib/src/tests/`, PTY test under `aida-cli/tests/`, `docs/cli/` agent-new + FAQ, help golden snapshot.
+
+    ### Questions for signoff
+    - **Q1 (lifetime):** a child grant is valid only while its parent is unexpired and unrevoked (seat_authority grant_check parent chain; child TTL clamps to parent.expires_at). "Lives only for this launch" therefore cannot mean "revoke the parent after spawn" without killing the child. Proposal: parent is never exported, bound to the launcher pid+sid, default TTL; it dies naturally. OK, or should the inline parent get a shorter TTL (e.g. 8h) and the child inherit it?
+    - **Q2 (binding):** binding the parent to the launcher process instead of the shell is what keeps it out of the shell — but a resumed/re-derived child (`aida agent resume`, rework rounds) that re-validates the parent later from a different process would see the launcher pid gone. Is the sid token enough, or should inline-parent children be non-resumable (re-prompt instead)?
+    - **Q3 (audit):** `aida role enter` does not emit a separate audit event today — the grant JSON under the grant dir IS the record. "Same audit record as role enter" = the same SeatGrant record plus an `origin` marker? Or do you want a new substrate history event (and for role enter too)?
+    - **Q4 (parent seat):** spec says "the operator/advisor role that role enter would use". I'll hardcode `advisor` (matching today's recovery hint) unless the roster lacks it for the principal, in which case → today's refusal. OK?
+  created_at: 2026-10-31T22:23:16.506503999Z
+  modified_at: 2026-10-31T22:23:16.506503999Z
+  session_id: 01a1940e10b7
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
@@ -33,6 +71,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1940f-8538-7a20-aaae-f2697a7bdca4
+  author: joe
+  timestamp: 2026-10-31T22:23:27.544258676Z
+  session_id: 01a1940e10b7
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -41,3 +88,9 @@ filed_at:
   aida_build_sha: 584e95e4505
   vendor: claude
   session: f5694f22-ff09-4e87-8934-e79adca4efba
+attention_reason:
+  category: design-fork
+  detail: 'Spec requires a sketch of the in-process mint path plus advisor signoff before coding (security-adjacent). Sketch posted as a spec comment with four open questions: Q1 child validity depends on parent lifetime/revocation, so ''parent lives only for this launch'' cannot mean revoke-after-spawn; Q2 binding the parent to the launcher pid (to keep it out of the shell) may break later resume/rework re-validation; Q3 role enter emits no separate audit event today, so what is ''the same audit record''; Q4 hardcode parent seat=advisor. No code written.'
+  lean: 'Q1: never export, bind to launcher pid+sid, default TTL, let it expire naturally. Q2: rely on the sid token; if resume fails re-prompt. Q3: same SeatGrant record plus an origin=agent-new-inline marker, no new event type. Q4: advisor; refuse as today if the roster lacks it.'
+  raised_by: implementer
+  raised_at: 2026-10-31T22:23:27.544223639Z
