@@ -88,6 +88,15 @@ impl FinalResultWatch {
         }
     }
 
+    /// A watch that reads only what follows byte `pos` of `path`.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    pub(crate) fn starting_at(path: &Path, pos: u64) -> Self {
+        Self {
+            pos,
+            ..Self::new(path)
+        }
+    }
+
     /// Read what was appended since the last poll; the final result once
     /// any complete line carried it.
     pub(crate) fn poll(&mut self) -> Option<FinalResult> {
@@ -138,8 +147,30 @@ pub(crate) fn wait_reaping_after_result(
     log_path: &Path,
     grace: Duration,
 ) -> std::io::Result<LingerWait> {
+    wait_reaping_after_result_holding(child, log_path, grace, &|| false)
+}
+
+/// [`wait_reaping_after_result`], except that while `hold()` is true at the
+/// end of the grace the tree is left running: a vendor kept alive by the
+/// session's own background build or test run is waiting on real work, not
+/// lingering. Once the hold lifts the vendor gets one more grace; if it
+/// writes to its log meanwhile it went back to work, and its next final
+/// result is awaited instead. `hold` bounds itself.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+#[cfg(unix)]
+pub(crate) fn wait_reaping_after_result_holding(
+    child: &mut Child,
+    log_path: &Path,
+    grace: Duration,
+    hold: &dyn Fn() -> bool,
+) -> std::io::Result<LingerWait> {
     let mut watch = FinalResultWatch::new(log_path);
     let mut result_seen: Option<(Instant, FinalResult)> = None;
+    // The log's length when a hold last started or lifted: a vendor that
+    // writes past it went back to work, so its next result is awaited.
+    let mut held_at: Option<u64> = None;
+    let mut lifted = false;
+    let log_len = || std::fs::metadata(log_path).map(|m| m.len()).unwrap_or(0);
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(LingerWait {
@@ -151,15 +182,38 @@ pub(crate) fn wait_reaping_after_result(
             result_seen = watch.poll().map(|r| (Instant::now(), r));
         }
         if let Some((seen_at, result)) = result_seen {
-            if seen_at.elapsed() >= grace {
-                terminate_tree(child)?;
-                use std::os::unix::process::ExitStatusExt;
-                let code = i32::from(result.is_error);
-                return Ok(LingerWait {
-                    status: ExitStatus::from_raw(code << 8),
-                    reaped: true,
-                });
+            if seen_at.elapsed() < grace {
+                std::thread::sleep(POLL);
+                continue;
             }
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+            if let Some(at) = held_at.filter(|at| log_len() > *at) {
+                watch = FinalResultWatch::starting_at(log_path, at);
+                result_seen = None;
+                held_at = None;
+                lifted = false;
+                continue;
+            }
+            if hold() {
+                result_seen = Some((Instant::now(), result));
+                held_at = Some(log_len());
+                lifted = false;
+                continue;
+            }
+            if held_at.is_some() && !lifted {
+                // The hold just lifted: one more grace to carry on alone.
+                result_seen = Some((Instant::now(), result));
+                held_at = Some(log_len());
+                lifted = true;
+                continue;
+            }
+            terminate_tree(child)?;
+            use std::os::unix::process::ExitStatusExt;
+            let code = i32::from(result.is_error);
+            return Ok(LingerWait {
+                status: ExitStatus::from_raw(code << 8),
+                reaped: true,
+            });
         }
         std::thread::sleep(POLL);
     }
@@ -174,6 +228,34 @@ pub(crate) fn wait_reaping_after_result(
     Ok(LingerWait {
         status: child.wait()?,
         reaped: false,
+    })
+}
+
+#[cfg(not(unix))]
+pub(crate) fn wait_reaping_after_result_holding(
+    child: &mut Child,
+    log_path: &Path,
+    grace: Duration,
+    _hold: &dyn Fn() -> bool,
+) -> std::io::Result<LingerWait> {
+    wait_reaping_after_result(child, log_path, grace)
+}
+
+/// The text of the last final result event in the log at `path`: what the
+/// vendor said as it ended its turn.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn final_result_text(path: &Path) -> Option<String> {
+    let body = std::fs::read_to_string(path).ok()?;
+    body.lines().rev().find_map(|line| {
+        parse_final_result(line)?;
+        let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+        Some(
+            value
+                .get("result")
+                .and_then(|r| r.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        )
     })
 }
 
@@ -295,6 +377,87 @@ mod tests {
             !aida_core::liveness::process_identity_is_alive(gc, None),
             "the vendor's child (the MCP server's stand-in) must be killed too"
         );
+    }
+
+    /// BUG-044: a vendor kept alive by its own background build is not
+    /// reaped while `hold` says that work is running; once it stops, it is.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_held_vendor_is_reaped_only_once_the_hold_lifts() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("run.jsonl");
+        let mut child = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "echo '{{\"type\":\"result\",\"is_error\":false}}' >> {}; sleep 300",
+                log.display()
+            ))
+            .spawn()
+            .unwrap();
+        let started = Instant::now();
+        let hold = || started.elapsed() < Duration::from_millis(1500);
+        let out =
+            wait_reaping_after_result_holding(&mut child, &log, Duration::from_millis(100), &hold)
+                .unwrap();
+        assert!(out.reaped);
+        assert!(
+            started.elapsed() >= Duration::from_millis(1500),
+            "reaped while the hold was on"
+        );
+    }
+
+    /// BUG-044: `claude -p` waits on its background task past its result,
+    /// then carries on. Once the hold lifts, a vendor that writes again is
+    /// back at work: its next result is awaited, it is not reaped.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_vendor_that_resumes_after_its_held_work_is_not_reaped() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("run.jsonl");
+        // The hold follows the "build" (a file the vendor touches), not the
+        // clock, so a slow start on a loaded runner cannot lift it early.
+        let built = dir.path().join("built");
+        let mut child = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "echo '{{\"type\":\"result\",\"is_error\":false}}' >> {log}; sleep 2.5; \
+                 touch {built}; sleep 0.2; \
+                 echo '{{\"type\":\"assistant\"}}' >> {log}; sleep 0.2; \
+                 echo '{{\"type\":\"result\",\"is_error\":false}}' >> {log}; exit 5",
+                log = log.display(),
+                built = built.display()
+            ))
+            .spawn()
+            .unwrap();
+        let hold = || !built.exists();
+        let out =
+            wait_reaping_after_result_holding(&mut child, &log, Duration::from_millis(1000), &hold)
+                .unwrap();
+        assert!(!out.reaped, "the vendor went back to work");
+        assert_eq!(out.status.code(), Some(5));
+    }
+
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    #[test]
+    fn final_result_text_reads_the_last_result_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("run.jsonl");
+        assert_eq!(final_result_text(&log), None);
+        std::fs::write(
+            &log,
+            "{\"type\":\"assistant\"}\n\
+             {\"type\":\"result\",\"is_error\":false,\"result\":\"first\"}\n\
+             {\"type\":\"result\",\"is_error\":false,\"result\":\"Waiting on the test build.\"}\n",
+        )
+        .unwrap();
+        assert_eq!(
+            final_result_text(&log).as_deref(),
+            Some("Waiting on the test build.")
+        );
+        std::fs::write(&log, "{\"type\":\"assistant\"}\n").unwrap();
+        assert_eq!(final_result_text(&log), None);
     }
 
     /// A vendor that exits on its own is waited normally, result or not.

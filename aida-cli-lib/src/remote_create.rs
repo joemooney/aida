@@ -789,13 +789,16 @@ fn store_bypass_hint_lines(
         ));
         lines.push(format!("  store to {hub} only, bypassing the mirror."));
     }
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
     lines.push(
-        "  If that clone must not push to every hub, run the reconcile on a schedule from a"
+        "  If that clone must not push to every hub, declare its hubs there (`aida remote"
             .to_string(),
     );
-    lines.push("  clone that reaches every hub, e.g. an hourly crontab entry:".to_string());
     lines.push(
-        "    0 * * * * cd <bridge-clone> && flock -n ~/.aida/store-reconcile.lock aida remote reconcile --execute >> ~/.aida/store-reconcile.log 2>&1"
+        "  push-hubs <hub>`) and mark one clone that reaches every hub as the bridge:".to_string(),
+    );
+    lines.push(
+        "    aida remote bridge --enable   (reconciles every hub hourly on the schedule tick)"
             .to_string(),
     );
     lines
@@ -1603,6 +1606,9 @@ pub fn run_mirror_push(
     }
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     let mut failures: Vec<String> = Vec::new();
+    // No push-hubs check here: `mirror_push_refspecs` never yields the store
+    // branch, so this raw push only ever carries code refs.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
     for mirror in mirrors {
         if !aida_core::git_ops::has_remote(project_root, mirror) {
             println!(
@@ -1915,7 +1921,19 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
         return Ok(report);
     }
 
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let push_hubs = crate::store_local::push_hubs(project_root);
     for (branch, source) in &sources {
+        // A clone that does not push the store to origin does not follow
+        // origin's store either: its hubs lead origin until the hub bridge
+        // unions them, so origin's older tip would only be rejected there.
+        if branch == STORE_BRANCH && !push_hubs.allows("origin") {
+            report.skipped.push(format!(
+                "{STORE_BRANCH}: this clone's push hubs exclude origin — the hub bridge \
+                 (`aida remote bridge`) carries the store between hubs"
+            ));
+            continue;
+        }
         let Some(source) = source else {
             for mirror in &live_mirrors {
                 report.rows.push(MirrorSyncRow {
@@ -1971,6 +1989,13 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
             }
         }
         for mirror in &live_mirrors {
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+            if branch == STORE_BRANCH && !push_hubs.allows(mirror) {
+                report
+                    .skipped
+                    .push(format!("{STORE_BRANCH} → {}", push_hubs.refusal(mirror)));
+                continue;
+            }
             if let Some(err) = &fetch_error {
                 report.rows.push(MirrorSyncRow {
                     mirror: mirror.clone(),
@@ -2635,8 +2660,12 @@ pub fn handle_remote_reconcile(
     } else {
         frontier.first().cloned()
     };
+    // A hub outside this clone's push hubs is read (its commits join the
+    // union) but never pushed to. trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    let push_hubs = crate::store_local::push_hubs(project_root);
     let hubs_needing_push: Vec<&HubStanding> = hubs
         .iter()
+        .filter(|h| push_hubs.allows(&h.remote))
         .filter(|h| match (&h.sha, &union_candidate) {
             (Some(s), Some(u)) => s != u,
             // Diverged frontier: every hub gets the (future) union.
@@ -2819,8 +2848,14 @@ pub fn handle_remote_reconcile(
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     let mut push_failures: Vec<String> = Vec::new();
     let mut pushed: Vec<String> = Vec::new();
+    let mut not_push_hubs: Vec<String> = Vec::new();
     for h in &hubs {
         if h.sha.as_deref() == Some(union.as_str()) {
+            continue;
+        }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+        if !push_hubs.allows(&h.remote) {
+            not_push_hubs.push(h.remote.clone());
             continue;
         }
         match git_ops::push_exact(&store_dir, &h.remote, &union, STORE_BRANCH) {
@@ -2844,6 +2879,7 @@ pub fn handle_remote_reconcile(
                 "merged_tips": frontier,
                 "merge_notes": merge_notes,
                 "pushed": pushed,
+                "not_push_hubs": not_push_hubs,
                 "push_failures": push_failures,
                 "executed": true,
             })
@@ -2859,6 +2895,11 @@ pub fn handle_remote_reconcile(
         }
         for r in &pushed {
             println!("  pushed → {r}");
+        }
+        for r in &not_push_hubs {
+            println!(
+                "  skipped {r} (not one of this clone's push hubs; the hub bridge carries it)"
+            );
         }
         for f in &push_failures {
             eprintln!("  {warn} {f}");
@@ -3307,11 +3348,13 @@ mod tests {
         );
         assert!(guidance.contains("store to gitlab only"), "{guidance}");
         assert!(!guidance.contains("origin has"), "{guidance}");
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
         assert!(
-            guidance.contains("aida remote reconcile --execute"),
+            guidance.contains("aida remote bridge --enable"),
             "{guidance}"
         );
-        assert!(guidance.contains("crontab"), "{guidance}");
+        assert!(guidance.contains("aida remote"), "{guidance}");
+        assert!(guidance.contains("push-hubs <hub>"), "{guidance}");
     }
 
     #[test]
@@ -3328,7 +3371,7 @@ mod tests {
         .join("\n");
 
         assert!(!guidance.contains("bypassing the mirror"), "{guidance}");
-        assert!(!guidance.contains("crontab"), "{guidance}");
+        assert!(!guidance.contains("remote bridge"), "{guidance}");
     }
 
     #[test]
@@ -4147,6 +4190,89 @@ host = \"should.not.count\"
         let sha = commit_file(&other, name, "changed\n", &format!("advance {branch}"));
         git(&other, &["push", "-q", "origin", branch]);
         sha
+    }
+
+    /// Declare `project`'s push hubs in the store-local layer under `home`
+    /// (the test's AIDA_HOME).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+    fn declare_push_hubs(home: &Path, project: &Path, hubs: &[&str]) {
+        let hubs: Vec<String> = hubs.iter().map(|h| h.to_string()).collect();
+        crate::store_local::write_push_hubs(
+            &home
+                .join(".aida")
+                .join(crate::store_local::LOCAL_LAYER_FILE),
+            &crate::store_local::clone_key(project),
+            Some(&hubs),
+        )
+        .unwrap();
+    }
+
+    // mirror-sync on a clone whose push hubs exclude origin skips the store
+    // branch (origin's older tip would be rejected on its hubs), still
+    // mirrors main, and leaves origin's store ref unchanged.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn story_097_mirror_sync_skips_the_store_when_push_hubs_exclude_origin() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        declare_push_hubs(home.path(), &project, &["mirror"]);
+        let main_sha = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
+        let store_sha = advance_on_origin(tmp.path(), &origin, STORE_BRANCH, "spec.yaml");
+
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(
+            report.skipped.iter().any(|s| s.starts_with(STORE_BRANCH)),
+            "{report:?}"
+        );
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(main_sha.as_str()));
+        assert!(tip(&mirror, STORE_BRANCH).is_none(), "store not mirrored");
+        assert_eq!(
+            tip(&origin, STORE_BRANCH).as_deref(),
+            Some(store_sha.as_str())
+        );
+
+        // push_hubs = [origin]: the mirror is excluded, so the store is not
+        // pushed there either.
+        declare_push_hubs(home.path(), &project, &["origin"]);
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(
+            report
+                .skipped
+                .iter()
+                .any(|s| s.contains("not one of this clone's push hubs")),
+            "{report:?}"
+        );
+        assert!(tip(&mirror, STORE_BRANCH).is_none());
+    }
+
+    // reconcile on a clone whose push hubs are [mirror] reads origin but
+    // pushes the union to the mirror only.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn story_097_reconcile_pushes_only_to_the_declared_hubs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        let origin_store = tip(&origin, STORE_BRANCH).unwrap();
+        std::fs::write(project.join(".git/info/exclude"), ".aida-store/\n.aida/\n").unwrap();
+        git(
+            &project,
+            &["worktree", "add", "-q", ".aida-store", STORE_BRANCH],
+        );
+        let store = project.join(".aida-store");
+        let local = commit_file(&store, "spec.yaml", "id: X\n", "local store write");
+        declare_push_hubs(home.path(), &project, &["mirror"]);
+
+        handle_remote_reconcile(&project, true, true, false).unwrap();
+        assert_eq!(tip(&mirror, STORE_BRANCH).as_deref(), Some(local.as_str()));
+        assert_eq!(
+            tip(&origin, STORE_BRANCH).as_deref(),
+            Some(origin_store.as_str()),
+            "origin is read, never pushed"
+        );
     }
 
     // BUG-1676 acceptance 3: after a merge that only origin saw, both `main`
