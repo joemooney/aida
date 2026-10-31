@@ -5,9 +5,33 @@
     {
       "at": "2026-10-31T15:20:57.988459785Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-31T16:01:35.289812403Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-31T11:15:24.577048365Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-150",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T14:28:25.773797146Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-150",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-31T14:28:40.673416638Z",
       "spec": "STORY-b6b1278890774ef993d2ebc327862470-150",
@@ -15,6 +39,44 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-31T15:44:40.730889348Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-150",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3168,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2301923b4a81a0fa24cc0827dcca66726f636e44"
+      }
+    },
+    {
+      "ts": "2026-10-31T16:00:58.763922171Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-150",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T16:01:18.235346637Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-150",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3168
+      }
+    },
+    {
+      "ts": "2026-10-31T16:01:35.106852119Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-150",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c611187664254175736d3361213f6e53ba3dd9ea",
+        "closed_by": "auto-bump"
       }
     }
   ]
