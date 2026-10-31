@@ -716,6 +716,15 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida alias list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida alias add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida alias remove` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy submit` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy log` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy cancel` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy allow` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy deny` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy policy` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption refresh` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
