@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T15:34:12.652827840Z
+modified_at: 2026-10-31T16:06:42.313174743Z
 req_type: Bug
 tags:
 - ids
@@ -338,6 +338,12 @@ comments:
   content: 'ADVISOR RULING 2026-10-31 07:45: PR-3161 round 3 code is VERIFIED; all four ruled gaps and all five ACs are met. ONLY CI lib-1 is red: spec_arg::tests::every_spec_named_argument_in_the_tree_resolves_aliases (bug_015_spec_arg_tests.rs:415) flags the new `doctor --preserve` argument. Fix: add value_parser = crate::spec_arg::spec_id to --preserve (it names a spec). This is a CI-ONLY delta: change nothing else. Gate: cargo test -p aida-cli-lib --lib spec_arg plus make check-ci-fast, then push (no force). The re-review is scoped to that delta.'
   created_at: 2026-10-31T14:43:28.189822809Z
   modified_at: 2026-10-31T14:43:28.189822809Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a192b6-9789-7d63-8baf-484074bec2a1
+  author: joe
+  content: 'ADVISOR 2026-10-31 ~09:00: STORE APPLY DONE. Rebuilt and promoted the live binary from main d12cca2. Ran the dry run (30 renumbers, matching docs/plans/2026-10-31-id-collision-renumber.tsv; 51 store referrers; 0 tracked files), then --yes: ''Renumbered 30 spec(s); rewrote 51 store referrer(s) and 0 tracked file(s). Numeric ID collision groups remaining: 0.'' BUG-046''s own record is preserved (its comments still carry the old IDs). REMAINING: doctor still reports 8 id-collision groups of a DIFFERENT class: a legacy native ID equals another spec''s agreed ID (e.g. BUG-34 native vs BUG-2-081 agreed BUG-34). All are closed specs; the fix tool groups by spec_id only, so it reports none. Filed as item 7 of TASK-HOME-149.'
+  created_at: 2026-10-31T16:06:42.313174743Z
+  modified_at: 2026-10-31T16:06:42.313174743Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
