@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.470798142Z
-modified_at: 2026-10-31T23:26:23.526960507Z
+modified_at: 2026-10-31T23:38:56.835822038Z
 req_type: Task
 tags:
 - air-gap
@@ -82,6 +82,12 @@ comments:
   modified_at: 2026-10-31T23:17:48.151670333Z
   session_id: 01a1941b7369
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19454-a1c3-7362-b099-9dadf41e51de
+  author: joe
+  content: 'ADVISOR REWORK BRIEF round 2 (16:38), PR-3180, docs-only. AC3: the ''One hub'' and ''Two hubs without a root'' sections present non-root clones claiming blocks by push as CURRENT behaviour. Today only the enrolled root claims blocks; other clones spend blocks delegated from the root or fall back to node-local IDs. Rewrite those sections in present tense for what is built (root claims, delegation, node-local fallback) and mark single-hub claiming without a root as planned. AC6 (deploy) is post-merge: leave it. Gate: the showcase build/tests the PR already runs + make check-ci-fast.'
+  created_at: 2026-10-31T23:38:56.835822038Z
+  modified_at: 2026-10-31T23:38:56.835822038Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1940f-9c9c-7bc2-b372-5391b71b2076
   author: joe
