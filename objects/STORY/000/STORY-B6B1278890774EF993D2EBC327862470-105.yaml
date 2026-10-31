@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T21:34:41.106617602Z
+modified_at: 2026-10-31T22:18:15.371955260Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -165,6 +165,12 @@ comments:
   modified_at: 2026-10-31T21:34:41.106617602Z
   session_id: 01a193c0fc6a
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1940a-c1cb-74d1-8f0d-500dbcaff787
+  author: joe
+  content: 'ADVISOR RULING 15:20 on PR-3170 round-3 PASS non-blocking findings (ruled once): (1) PR body still describes round 2: the advisor updates the runbook before running it, adding the checks ''aida add --type task succeeds'' and ''aida show TASK-1-418 opens the renamed spec''. (2) old-ID trailer resolution unit-tested only: ACCEPTED, the CLI fixture covers show-by-old-ID and the trailer path shares the same resolver. (3) backfill writes not undone if the git commit fails: ACCEPTED, the backfill is a one-time advisor-run step and git status exposes any leftover writes for a rerun. No follow-up specs.'
+  created_at: 2026-10-31T22:18:15.371955260Z
+  modified_at: 2026-10-31T22:18:15.371955260Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
