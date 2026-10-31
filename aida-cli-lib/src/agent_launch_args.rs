@@ -632,6 +632,14 @@ pub enum SessionCommand {
         #[clap(long = "final", requires = "write")]
         final_: bool,
 
+        /// With `--show`, inside a session `aida agent new --rotate`
+        /// relaunched: show exactly the handoff its supervisor matched
+        /// (`AIDA_ROTATION_HANDOFF`), not the seat's latest. The SessionStart
+        /// hook's call.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        #[clap(long, hide = true, requires = "show")]
+        rotated: bool,
+
         /// Manage the seat's repo-local standing orders
         /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
         /// entry, `list` prints them. `--show` prints standing orders before

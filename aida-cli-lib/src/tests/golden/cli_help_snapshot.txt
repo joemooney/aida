@@ -42770,6 +42770,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "rotated",
+        "takes_value": false,
+        "help": "With `--show`, inside a session `aida agent new --rotate` relaunched: show exactly the handoff its supervisor matched (`AIDA_ROTATION_HANDOFF`), not the seat's latest. The SessionStart hook's call"
+      },
+      {
         "name": "seat",
         "takes_value": true,
         "help": "The seat the handoff belongs to (advisor, reviewer, product, ...). Defaults to `$AIDA_SESSION_ROLE`"

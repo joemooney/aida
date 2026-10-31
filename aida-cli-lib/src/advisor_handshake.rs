@@ -14,7 +14,8 @@
 //!   and `aida doctor` say `advisor unreachable: <reason>`, naming the mailbox
 //!   the hello was written to.
 //!
-//! The hello is ordinary mail typed by its thread id (`aida-hello-<id>`), so
+//! The hello is ordinary mail typed by its thread id (`aida-hello-<handle>`:
+//! one advisor thread per handle, across rotations), so
 //! the message schema is unchanged. The sender keeps a per-handle record at
 //! `<mailbox home>/.aida/mailbox/.handshake/<handle>.json`: inside the
 //! mailbox directory a contained seat can already write.
@@ -366,6 +367,15 @@ impl SendOutcome {
     }
 }
 
+/// PURE: the thread every hello from `handle` belongs to.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+pub(crate) fn hello_thread_id(handle: &str) -> String {
+    format!(
+        "{THREAD_PREFIX}{}",
+        mailbox_store::sanitize_id(handle.trim())
+    )
+}
+
 pub(crate) fn hello_message(
     id: &str,
     ctx: &HelloContext,
@@ -398,7 +408,10 @@ pub(crate) fn hello_message(
     );
     Message {
         id: id.to_string(),
-        thread_id: format!("{THREAD_PREFIX}{id}"),
+        // One advisor thread per handle: every hello from this handle (a
+        // rotated generation, or a later session reusing it) continues it.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        thread_id: hello_thread_id(&ctx.handle),
         from: ctx.handle.clone(),
         to: Recipient::Agent(to.to_string()),
         timestamp: now.timestamp_millis(),

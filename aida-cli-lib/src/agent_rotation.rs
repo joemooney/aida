@@ -25,6 +25,47 @@ pub(crate) const GENERATION_ENV: &str = "AIDA_ROTATION_GENERATION";
 pub(crate) const HANDOFF_ENV: &str = "AIDA_ROTATION_HANDOFF";
 /// The native session id of the generation a relaunched child replaces.
 pub(crate) const PREVIOUS_SESSION_ENV: &str = "AIDA_ROTATION_PREVIOUS_SESSION";
+/// The `written=` stamp of [`HANDOFF_ENV`]'s file, as its log record names it.
+pub(crate) const HANDOFF_STAMP_ENV: &str = "AIDA_ROTATION_HANDOFF_STAMP";
+/// The seat the supervisor reads handoffs for. The child's handoff commands
+/// and its SessionStart hook resolve their seat from it, so all three agree.
+pub(crate) const SEAT_ENV: &str = "AIDA_ROTATION_SEAT";
+
+/// PURE: the seat a supervised launch rotates on: its role, else the agent
+/// type (a launch without `--role`).
+pub(crate) fn supervisor_seat(role: Option<&str>, agent_type: &str) -> String {
+    role.map(str::trim)
+        .filter(|r| !r.is_empty())
+        .map(|r| crate::canonical_role_name(&r.to_ascii_lowercase()))
+        .unwrap_or_else(|| agent_type.to_string())
+}
+
+/// PURE: whether a launch is supervised. Claude only in this slice; an
+/// explicit `--rotate` always is, while `[agents.claude] rotate = true` only
+/// applies when stdin is a terminal, so a scripted or piped launch never
+/// relaunches unless it asked to.
+pub(crate) fn rotation_enabled(
+    agent_type: &str,
+    explicit: bool,
+    config_default: bool,
+    stdin_is_tty: bool,
+) -> bool {
+    agent_type == "claude" && (explicit || (config_default && stdin_is_tty))
+}
+
+/// PURE: a launch that resumes a session (`--resume`). An explicit
+/// `--rotate` refuses it rather than being dropped; the config default is
+/// simply off for the resumed session (`Ok`).
+pub(crate) fn refuse_rotating_resume(explicit_rotate: bool) -> std::result::Result<(), String> {
+    if explicit_rotate {
+        return Err(
+            "`--rotate` cannot supervise a resumed session; drop `--resume` to start a \
+                    new supervised session, or drop `--rotate` to resume unsupervised"
+                .into(),
+        );
+    }
+    Ok(())
+}
 
 /// Relaunch limits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,16 +145,13 @@ pub(crate) enum RotationDecision {
     /// A fresh `--final` handoff: a real exit, as the agent asked.
     Final,
     /// A fast exit without a handoff: never relaunched.
-    Crash {
-        after_secs: i64,
-    },
+    Crash { after_secs: i64 },
     /// The window already holds `max_relaunches` relaunches.
-    Limit {
-        relaunches: usize,
-        window_mins: i64,
-    },
+    Limit { relaunches: usize, window_mins: i64 },
+    /// Relaunch with exactly this handoff, identified by its log stamp.
     Relaunch {
         handoff: PathBuf,
+        stamp: DateTime<Utc>,
     },
 }
 
@@ -151,7 +189,67 @@ pub(crate) fn rotation_decision(
     }
     RotationDecision::Relaunch {
         handoff: PathBuf::from(&fresh.path),
+        stamp: fresh.ts,
     }
+}
+
+/// The `written=` timestamp in a handoff file's header comment.
+fn header_stamp(content: &str) -> Option<DateTime<Utc>> {
+    let header = content.lines().next()?;
+    let rest = header.strip_prefix("<!-- seat handoff:")?;
+    let written = rest
+        .split_whitespace()
+        .find_map(|kv| kv.strip_prefix("written="))?;
+    DateTime::parse_from_rfc3339(written)
+        .ok()
+        .map(|t| t.with_timezone(&Utc))
+}
+
+/// The handoff a relaunched generation loads: exactly the file the
+/// supervisor matched, and only while its header still carries the stamp the
+/// supervisor saw. `Err` is the one-line reason nothing is loaded. A newer
+/// handoff on the same seat (a sibling session's) never stands in for it.
+pub(crate) fn matched_handoff(path: &str, stamp: &str) -> std::result::Result<String, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("the supervisor named no handoff file".into());
+    }
+    let want = DateTime::parse_from_rfc3339(stamp.trim())
+        .map(|t| t.with_timezone(&Utc))
+        .map_err(|_| format!("the handoff stamp `{}` is not a timestamp", stamp.trim()))?;
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!("the matched handoff {path} is gone"));
+        }
+        Err(e) => return Err(format!("the matched handoff {path} is unreadable: {e}")),
+    };
+    match header_stamp(&content) {
+        Some(got) if got == want => Ok(content),
+        Some(got) => Err(format!(
+            "the handoff at {path} now carries stamp {} instead of {}",
+            got.to_rfc3339(),
+            want.to_rfc3339()
+        )),
+        None => Err(format!("the handoff at {path} has no stamp")),
+    }
+}
+
+/// How a supervised run ended.
+#[derive(Debug)]
+pub(crate) enum RotationOutcome {
+    /// The last generation's exit (a real exit, a crash or a limit stop).
+    Exited(std::process::ExitStatus),
+    /// The operator stopped the relaunch countdown; the lease is released.
+    Cancelled,
+}
+
+/// The policy a supervisor runs under, and a probe called in each gap
+/// between generations (after the countdown, before the next spawn) with
+/// the generation about to start. The probe is a no-op outside tests.
+pub(crate) struct Supervision<'a> {
+    pub policy: RotationPolicy,
+    pub on_gap: &'a mut dyn FnMut(u64),
 }
 
 /// PURE: the line the supervisor prints for a decision that stops it.

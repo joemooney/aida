@@ -268,12 +268,13 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             show,
             seat,
             final_,
+            rotated,
             standing_orders,
         } => {
             if let Some(args) = standing_orders {
                 session_handoff_standing_orders(args, seat.as_deref())
             } else if write.is_some() || *show {
-                session_handoff_seat(write.as_deref(), *show, seat.as_deref(), *final_)
+                session_handoff_seat(write.as_deref(), *show, seat.as_deref(), *final_, *rotated)
             } else {
                 session_handoff_check(*check)
             }
@@ -2690,7 +2691,7 @@ pub(crate) fn agent_new_with_config_wake(
     show_prompt: bool,
     verbose: bool,
     prompt: AgentPromptOptions,
-    resume: AgentResumeOptions,
+    mut resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -2713,12 +2714,32 @@ pub(crate) fn agent_new_with_config_wake(
         )
     })?;
     // Rotation is claude-only in this slice: `--rotate`, else
-    // `[agents.claude] rotate = true`. trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
-    let rotate = config.agent_type == "claude"
-        && (flag_options.rotate
-            || (flag_options.use_config_defaults
-                && load_agents_tool_bool(&project_root, config.agent_type, "rotate")?
-                    .unwrap_or(false)));
+    // `[agents.claude] rotate = true` on a terminal launch (a scripted or
+    // piped launch never rotates unless it passed `--rotate`).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    let explicit_rotate = flag_options.rotate;
+    let config_rotate = flag_options.use_config_defaults
+        && config.agent_type == "claude"
+        && load_agents_tool_bool(&project_root, config.agent_type, "rotate")?.unwrap_or(false);
+    let mut rotate = crate::agent_rotation::rotation_enabled(
+        config.agent_type,
+        explicit_rotate,
+        config_rotate,
+        std::io::stdin().is_terminal(),
+    );
+    // A resume is not supervised: an explicit `--rotate` refuses it; the
+    // config default says it is off for this session.
+    if rotate && resume.direct_target.is_some() {
+        crate::agent_rotation::refuse_rotating_resume(explicit_rotate)
+            .map_err(anyhow::Error::msg)?;
+        eprintln!("  rotation: off for a resumed session");
+        rotate = false;
+    }
+    // A supervised launch starts a new session, so the resume picker never
+    // turns it into an unsupervised resume.
+    if rotate {
+        resume.prompt_enabled = false;
+    }
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -6125,7 +6146,12 @@ fn run_tracked_agent_after_spawn(
 ) -> Result<()> {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     let status = if rotate {
-        run_rotating_agent(
+        let mut no_probe = |_: u64| {};
+        let supervision = crate::agent_rotation::Supervision {
+            policy: crate::agent_rotation::RotationPolicy::default(),
+            on_gap: &mut no_probe,
+        };
+        match run_rotating_agent(
             binary,
             config,
             plan,
@@ -6135,8 +6161,12 @@ fn run_tracked_agent_after_spawn(
             title,
             verbose,
             mail_wake,
+            supervision,
             on_spawn,
-        )?
+        )? {
+            crate::agent_rotation::RotationOutcome::Exited(status) => status,
+            crate::agent_rotation::RotationOutcome::Cancelled => std::process::exit(130),
+        }
     } else {
         run_agent_generation(
             binary,
@@ -6164,7 +6194,9 @@ fn run_tracked_agent_after_spawn(
 #[derive(Debug, Clone, Copy)]
 struct RotationEnv<'a> {
     generation: u64,
-    handoff: Option<&'a std::path::Path>,
+    seat: &'a str,
+    /// The handoff file the supervisor matched, and its log stamp.
+    handoff: Option<(&'a std::path::Path, &'a str)>,
     previous_session: Option<&'a str>,
 }
 
@@ -6175,7 +6207,7 @@ fn relaunch_prompt_args(config: &AgentLaunchConfig, seat: &str) -> Vec<String> {
     let prompt = format!(
         "You were relaunched after a context rotation under the same handle, lease and \
          worktree. Your seat handoff was loaded at session start (re-read it with \
-         `aida session handoff --seat {seat} --show`). Continue from it."
+         `aida session handoff --seat {seat} --show --rotated`). Continue from it."
     );
     match config.prompt_style {
         AgentPromptStyle::Positional => vec![prompt],
@@ -6213,16 +6245,15 @@ fn run_rotating_agent(
     title: bool,
     verbose: bool,
     mail_wake: Option<agent_registry::MailWake>,
+    supervision: crate::agent_rotation::Supervision<'_>,
     on_spawn: impl FnOnce(),
-) -> Result<std::process::ExitStatus> {
-    use crate::agent_rotation::{self, RotationDecision};
+) -> Result<crate::agent_rotation::RotationOutcome> {
+    use crate::agent_rotation::{self, RotationDecision, RotationOutcome};
     use crate::relay_mail::TerminalReason;
-    let policy = agent_rotation::RotationPolicy::default();
-    let seat = plan
-        .role
-        .as_deref()
-        .map(canonical_role_name)
-        .unwrap_or_else(|| config.agent_type.to_string());
+    let agent_rotation::Supervision { policy, on_gap } = supervision;
+    // ONE seat for the supervisor, the child's handoff commands and its
+    // SessionStart hook: the child gets it as AIDA_ROTATION_SEAT.
+    let seat = agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type);
     let mut run = agent_rotation::RotationRun::bind(&plan.project_root, &plan.name)?;
     if let Some(lease_id) = &plan.lease_id {
         if let Err(e) =
@@ -6243,7 +6274,7 @@ fn run_rotating_agent(
     let mut plan = plan.clone();
     let mut on_spawn = Some(on_spawn);
     let mut relaunches = Vec::new();
-    let mut handoff: Option<std::path::PathBuf> = None;
+    let mut handoff: Option<(std::path::PathBuf, String)> = None;
     let mut previous_session: Option<String> = None;
     let mut generation = 1u64;
     let relaunch_prompt = relaunch_prompt_args(&config, &seat);
@@ -6258,7 +6289,7 @@ fn run_rotating_agent(
                 plan.name
             );
             run.end(TerminalReason::Blocked);
-            return Ok(std::process::ExitStatus::default());
+            return Ok(RotationOutcome::Exited(std::process::ExitStatus::default()));
         }
         let spawned_at = chrono::Utc::now();
         let first_spawn = on_spawn.take();
@@ -6278,7 +6309,10 @@ fn run_rotating_agent(
             mail_wake,
             Some(RotationEnv {
                 generation,
-                handoff: handoff.as_deref(),
+                seat: &seat,
+                handoff: handoff
+                    .as_ref()
+                    .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
                 previous_session: previous_session.as_deref(),
             }),
             move || {
@@ -6301,13 +6335,17 @@ fn run_rotating_agent(
             &relaunches,
             &policy,
         );
-        let RotationDecision::Relaunch { handoff: next } = &decision else {
+        let RotationDecision::Relaunch {
+            handoff: next,
+            stamp,
+        } = &decision
+        else {
             eprintln!(
                 "{}",
                 agent_rotation::stop_message(&plan.name, generation, &decision)
             );
             run.end(TerminalReason::Exit);
-            return Ok(status);
+            return Ok(RotationOutcome::Exited(status));
         };
         let stop = agent_rotation::StopFlag::install()?;
         let proceed = agent_rotation::countdown(
@@ -6320,17 +6358,24 @@ fn run_rotating_agent(
         );
         drop(stop);
         if !proceed {
+            // Sketch §6: an operator stop ends the relay run and releases
+            // the lease, which would otherwise name this (exiting) launcher
+            // as its live process.
             eprintln!(
                 "stopped: rotation of {} cancelled by the operator",
                 plan.name
             );
             run.end(TerminalReason::Stop);
-            drop(run);
-            std::process::exit(130);
+            if let Some(lease_id) = &plan.lease_id {
+                crate::session_reap::release_lease_files(&plan.project_root, lease_id);
+                eprintln!("  released lease {lease_id}");
+            }
+            return Ok(RotationOutcome::Cancelled);
         }
         relaunches.push(exited_at);
         generation += 1;
-        handoff = Some(plan.project_root.join(next));
+        on_gap(generation);
+        handoff = Some((plan.project_root.join(next), stamp.to_rfc3339()));
         previous_session = plan.native_session_id.take();
         plan.native_session_id = agent_native_session_id_for_new(config.agent_type);
         reseed_session_args(
@@ -6402,14 +6447,20 @@ fn run_agent_generation(
     command
         .env_remove(crate::agent_rotation::GENERATION_ENV)
         .env_remove(crate::agent_rotation::HANDOFF_ENV)
-        .env_remove(crate::agent_rotation::PREVIOUS_SESSION_ENV);
+        .env_remove(crate::agent_rotation::PREVIOUS_SESSION_ENV)
+        .env_remove(crate::agent_rotation::HANDOFF_STAMP_ENV)
+        .env_remove(crate::agent_rotation::SEAT_ENV);
     if let Some(rotation) = rotation {
-        command.env(
-            crate::agent_rotation::GENERATION_ENV,
-            rotation.generation.to_string(),
-        );
-        if let Some(path) = rotation.handoff {
-            command.env(crate::agent_rotation::HANDOFF_ENV, path);
+        command
+            .env(
+                crate::agent_rotation::GENERATION_ENV,
+                rotation.generation.to_string(),
+            )
+            .env(crate::agent_rotation::SEAT_ENV, rotation.seat);
+        if let Some((path, stamp)) = rotation.handoff {
+            command
+                .env(crate::agent_rotation::HANDOFF_ENV, path)
+                .env(crate::agent_rotation::HANDOFF_STAMP_ENV, stamp);
         }
         if let Some(sid) = rotation.previous_session {
             command.env(crate::agent_rotation::PREVIOUS_SESSION_ENV, sid);

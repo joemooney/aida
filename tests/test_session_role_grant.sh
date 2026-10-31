@@ -22,6 +22,9 @@ if [ "${1:-}" = "role" ] && [ "${2:-}" = "current" ]; then
     [ -n "${STUB_SLEEP:-}" ] && sleep "$STUB_SLEEP"
     printf '%s\n' "${STUB_SEAT:-}"
 fi
+if [ "${1:-}" = "session" ] && [ "${2:-}" = "handoff" ]; then
+    printf 'STUB-HANDOFF %s\n' "$*"
+fi
 exit 0
 STUB
 chmod +x "$TMP/bin/aida"
@@ -217,5 +220,22 @@ print(json.loads(raw)["hookSpecificOutput"]["additionalContext"] if raw.strip() 
     absent "under the Codex daemon the advisor purpose is not injected" \
         "Route work and groom the queue." "$ctx"
 fi
+
+# STORY-101: a rotated generation loads exactly the handoff its supervisor
+# matched (`--show --rotated`, never the seat's latest.md) on the seat the
+# supervisor named, with or without a role.
+# trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor AIDA_AGENT_NAME=claude-advisor-08 \
+    AIDA_ROTATION_GENERATION=2 AIDA_ROTATION_SEAT=advisor \
+    AIDA_ROTATION_HANDOFF=/p/.aida/handoff/advisor/h1.md AIDA_ROTATION_HANDOFF_STAMP=2026-10-31T00:00:00+00:00)
+contains "a rotated session shows the matched handoff via --rotated on the supervisor's seat" \
+    "STUB-HANDOFF session handoff --seat advisor --show --rotated" "$ctx"
+contains "a rotated session names its generation" "Rotated: claude-advisor-08 #2" "$ctx"
+ctx=$(role_ctx AIDA_AGENT_NAME=claude-03 AIDA_ROTATION_GENERATION=2 AIDA_ROTATION_SEAT=claude \
+    AIDA_ROTATION_HANDOFF=/p/.aida/handoff/claude/h1.md AIDA_ROTATION_HANDOFF_STAMP=2026-10-31T00:00:00+00:00)
+contains "a rotated session without a role still gets its handoff, on the agent-type seat" \
+    "STUB-HANDOFF session handoff --seat claude --show --rotated" "$ctx"
+ctx=$(role_ctx AIDA_SESSION_ROLE=advisor STUB_SEAT=advisor AIDA_ROTATION_GENERATION=1 AIDA_ROTATION_SEAT=advisor)
+absent "generation 1 loads no rotation handoff" "STUB-HANDOFF" "$ctx"
 
 exit "$fail"

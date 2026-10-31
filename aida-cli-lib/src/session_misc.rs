@@ -942,17 +942,38 @@ pub(crate) fn collect_session_handoff_facts(project_root: &std::path::Path) -> S
 }
 
 /// The seat a handoff verb acts on: `--seat`, else `$AIDA_SESSION_ROLE`.
-fn resolve_handoff_seat(seat: Option<&str>) -> Result<String> {
-    match seat {
-        Some(s) => Ok(s.to_string()),
-        None => std::env::var("AIDA_SESSION_ROLE")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| canonical_role_name(&s))
-            .ok_or_else(|| {
-                anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
-            }),
+pub(crate) fn resolve_handoff_seat(seat: Option<&str>) -> Result<String> {
+    let env = |k: &str| std::env::var(k).ok().filter(|s| !s.trim().is_empty());
+    resolve_handoff_seat_from(
+        seat,
+        env(crate::agent_rotation::SEAT_ENV).as_deref(),
+        env("AIDA_SESSION_ROLE").as_deref(),
+    )
+}
+
+/// PURE: the seat a handoff command works on. A rotation supervisor names
+/// its seat in `AIDA_ROTATION_SEAT` (a launch without `--role` rotates on
+/// the agent type), and that wins over the session role so the supervisor,
+/// the child's `--write` and its SessionStart hook all use ONE seat.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+pub(crate) fn resolve_handoff_seat_from(
+    seat: Option<&str>,
+    rotation_seat: Option<&str>,
+    session_role: Option<&str>,
+) -> Result<String> {
+    if let Some(s) = seat {
+        return Ok(s.to_string());
     }
+    if let Some(s) = rotation_seat.map(str::trim).filter(|s| !s.is_empty()) {
+        return Ok(s.to_string());
+    }
+    session_role
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(canonical_role_name)
+        .ok_or_else(|| {
+            anyhow::anyhow!("no seat given: pass --seat <seat> or set AIDA_SESSION_ROLE")
+        })
 }
 
 /// STORY-1464: write or show a seat handoff note (the rotation primitive).
@@ -962,6 +983,7 @@ pub(crate) fn session_handoff_seat(
     _show: bool,
     seat: Option<&str>,
     final_: bool,
+    rotated: bool,
 ) -> Result<()> {
     let seat = resolve_handoff_seat(seat)?;
     let project_root = main_worktree_root_from(&find_project_root()?);
@@ -993,9 +1015,28 @@ pub(crate) fn session_handoff_seat(
         println!("Next session: aida session handoff --seat {seat} --show");
         return Ok(());
     }
+    // A rotated generation loads exactly the handoff its supervisor matched
+    // (`AIDA_ROTATION_HANDOFF` + its stamp), never the seat's shared
+    // latest.md, which a sibling session may have overwritten since. A
+    // missing or re-stamped file loads nothing and says why in one line.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    let handoff = if rotated {
+        let var = |k: &str| std::env::var(k).unwrap_or_default();
+        match crate::agent_rotation::matched_handoff(
+            &var(crate::agent_rotation::HANDOFF_ENV),
+            &var(crate::agent_rotation::HANDOFF_STAMP_ENV),
+        ) {
+            Ok(content) => Some(content),
+            Err(reason) => {
+                println!("Rotation handoff not loaded: {reason}.");
+                return Ok(());
+            }
+        }
+    } else {
+        seat_rotation::read_latest_handoff(&project_root, &seat)?
+    };
     // trace:STORY-1693 | ai:claude
     let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
-    let handoff = seat_rotation::read_latest_handoff(&project_root, &seat)?;
     // STORY-1700: the active mandate, read live, prints first.
     // trace:STORY-1700 | ai:claude
     let state = crate::gate::mandate::current_state();

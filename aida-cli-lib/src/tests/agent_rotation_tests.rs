@@ -49,7 +49,8 @@ fn a_handoff_from_this_session_relaunches() {
     assert_eq!(
         decide(Some("s1"), 600, &r),
         RotationDecision::Relaunch {
-            handoff: PathBuf::from(".aida/handoff/advisor/500.md")
+            handoff: PathBuf::from(".aida/handoff/advisor/500.md"),
+            stamp: at(500),
         }
     );
 }
@@ -194,16 +195,22 @@ fn a_stamped_handoff_round_trips_through_the_log() {
     assert!(latest.contains("handle=claude-advisor-08 generation=2"));
     let records = read_handoff_log(dir.path(), "advisor");
     assert_eq!(records.len(), 1);
-    assert!(matches!(
-        rotation_decision(
-            &run(Some("s1")),
-            at(600),
-            &records,
-            &[],
-            &RotationPolicy::default()
-        ),
-        RotationDecision::Relaunch { .. }
-    ));
+    let RotationDecision::Relaunch { handoff, stamp } = rotation_decision(
+        &run(Some("s1")),
+        at(600),
+        &records,
+        &[],
+        &RotationPolicy::default(),
+    ) else {
+        panic!("expected a relaunch");
+    };
+    // The log's stamp identifies the very file the writer produced.
+    let matched = matched_handoff(
+        &dir.path().join(&handoff).display().to_string(),
+        &stamp.to_rfc3339(),
+    )
+    .unwrap();
+    assert!(matched.contains("next: x"), "{matched}");
     let final_writer = crate::seat_rotation::HandoffWriter {
         final_: true,
         ..writer
@@ -349,5 +356,148 @@ fn a_rotated_hello_names_the_generation_and_the_previous_session() {
         .body
         .contains("generation: 3 (rotated; previous session s2)"));
     assert_eq!(msg.from, "claude-implementer-12");
-    assert_eq!(msg.thread_id, "aida-hello-id-1");
+    // One advisor thread per handle, whatever the generation.
+    assert_eq!(msg.thread_id, "aida-hello-claude-implementer-12");
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[test]
+fn successive_generations_resend_the_hello_on_one_thread() {
+    use crate::advisor_handshake::{send_hello, HelloContext, Rotation, SendOutcome};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(root.join(".aida/config.toml"), "").unwrap();
+    let store = root.join(".aida-store");
+    let home = crate::mailbox_store::mailbox_home(&root);
+    let gen1_started = Utc::now() - chrono::Duration::seconds(30);
+    let mut ctx = HelloContext {
+        handle: "claude-implementer-12".into(),
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        role: "implementer".into(),
+        spec: None,
+        path: root.clone(),
+        rotation: None,
+        session_started: Some(gen1_started),
+    };
+    let first = send_hello(
+        &home,
+        &store,
+        &ctx,
+        gen1_started + chrono::Duration::seconds(1),
+    )
+    .unwrap();
+    assert!(!matches!(first, SendOutcome::AlreadySent(_)));
+    // Generation 1 re-running its hook does not send twice.
+    let again = send_hello(
+        &home,
+        &store,
+        &ctx,
+        gen1_started + chrono::Duration::seconds(2),
+    )
+    .unwrap();
+    assert!(matches!(again, SendOutcome::AlreadySent(_)));
+    // Generation 2 has a new registry row (a later start) and says hello
+    // again, as #2, on the same thread.
+    let gen2_started = Utc::now();
+    ctx.session_started = Some(gen2_started);
+    ctx.rotation = Some(Rotation {
+        generation: 2,
+        previous_native_session_id: Some("s1".into()),
+    });
+    let second = send_hello(
+        &home,
+        &store,
+        &ctx,
+        gen2_started + chrono::Duration::seconds(1),
+    )
+    .unwrap();
+    let (SendOutcome::Sent(rec) | SendOutcome::Queued(rec)) = &second else {
+        panic!("generation 2 must send its own hello: {second:?}");
+    };
+    assert_eq!(rec.rotation.as_ref().map(|r| r.generation), Some(2));
+    assert_ne!(rec.hello_id, first.record().hello_id);
+    let hellos: Vec<_> = crate::mailbox_store::read_local_messages(&root)
+        .unwrap()
+        .into_iter()
+        .filter(crate::advisor_handshake::is_hello)
+        .collect();
+    assert_eq!(hellos.len(), 2, "{hellos:?}");
+    assert!(hellos
+        .iter()
+        .all(|m| m.thread_id == "aida-hello-claude-implementer-12"));
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[test]
+fn the_matched_handoff_loads_only_with_its_stamp() {
+    let dir = tempfile::tempdir().unwrap();
+    let w = crate::seat_rotation::write_handoff_by(
+        dir.path(),
+        "claude",
+        "mine",
+        at(5),
+        &crate::seat_rotation::HandoffWriter::default(),
+    )
+    .unwrap();
+    let path = w.path.display().to_string();
+    assert!(matched_handoff(&path, &at(5).to_rfc3339())
+        .unwrap()
+        .contains("mine"));
+    let wrong = matched_handoff(&path, &at(6).to_rfc3339()).unwrap_err();
+    assert!(wrong.contains("instead of"), "{wrong}");
+    let gone = matched_handoff(&format!("{path}.missing"), &at(5).to_rfc3339()).unwrap_err();
+    assert!(gone.contains("is gone"), "{gone}");
+    assert!(matched_handoff("", &at(5).to_rfc3339()).is_err());
+    assert!(matched_handoff(&path, "not-a-time").is_err());
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[test]
+fn the_config_default_rotates_only_a_terminal_launch() {
+    // Explicit --rotate always supervises (a script may ask for it).
+    assert!(rotation_enabled("claude", true, false, false));
+    // agents.toml `rotate = true`: a terminal launch, never a piped one.
+    assert!(rotation_enabled("claude", false, true, true));
+    assert!(!rotation_enabled("claude", false, true, false));
+    assert!(!rotation_enabled("claude", false, false, true));
+    assert!(!rotation_enabled("codex", true, true, true));
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[test]
+fn an_explicit_rotate_refuses_a_resume_and_the_default_is_off_for_it() {
+    let err = refuse_rotating_resume(true).unwrap_err();
+    assert!(err.contains("cannot supervise a resumed session"), "{err}");
+    assert!(refuse_rotating_resume(false).is_ok());
+}
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[test]
+fn the_supervisor_and_the_handoff_commands_share_one_seat() {
+    use crate::session_misc::resolve_handoff_seat_from;
+    // No --role: the supervisor rotates on the agent type and names it in
+    // AIDA_ROTATION_SEAT, which the child's handoff commands then use.
+    let seat = supervisor_seat(None, "claude");
+    assert_eq!(seat, "claude");
+    assert_eq!(
+        resolve_handoff_seat_from(None, Some(&seat), None).unwrap(),
+        "claude"
+    );
+    // With a role the two agree too, and the rotation seat beats the role.
+    let seat = supervisor_seat(Some("Advisor"), "claude");
+    assert_eq!(seat, "advisor");
+    assert_eq!(
+        resolve_handoff_seat_from(None, Some(&seat), Some("implementer")).unwrap(),
+        "advisor"
+    );
+    assert_eq!(
+        resolve_handoff_seat_from(None, None, Some("implementer")).unwrap(),
+        "implementer"
+    );
+    assert_eq!(
+        resolve_handoff_seat_from(Some("x"), Some(&seat), None).unwrap(),
+        "x"
+    );
+    assert!(resolve_handoff_seat_from(None, None, None).is_err());
 }

@@ -75,8 +75,43 @@ Role unresolved: ${DAEMON_NOTE}"
     exit 0
 fi
 
+# STORY-101: a session `aida agent new --rotate` relaunched after a context
+# rotation loads its handoff here (generation 2 on), so it resumes under the
+# same handle without being told to read it. It loads exactly the file the
+# supervisor matched (AIDA_ROTATION_HANDOFF + its stamp, via `--rotated`),
+# never the seat's shared latest.md, on the seat the supervisor named
+# (AIDA_ROTATION_SEAT), so a launch without --role gets its handoff too.
+# trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+rotation_block=""
+rotation_gen="${AIDA_ROTATION_GENERATION:-}"
+case "$rotation_gen" in
+    '' | *[!0-9]*) rotation_gen=0 ;;
+esac
+if [ "$rotation_gen" -ge 2 ] && [ -n "${AIDA_ROTATION_SEAT:-}" ]; then
+    handoff_show=""
+    if command -v aida >/dev/null 2>&1; then
+        if command -v timeout >/dev/null 2>&1; then
+            handoff_show=$(timeout 3 aida session handoff --seat "$AIDA_ROTATION_SEAT" --show --rotated 2>/dev/null)
+        else
+            handoff_show=$(aida session handoff --seat "$AIDA_ROTATION_SEAT" --show --rotated 2>/dev/null)
+        fi
+    fi
+    [ -n "$handoff_show" ] ||
+        handoff_show="Rotation handoff not loaded: \`aida session handoff --show --rotated\` printed nothing."
+    rotation_block="Rotated: ${AIDA_AGENT_NAME:-this seat} #${rotation_gen} (relaunched by aida agent new after a handoff; same handle, lease and worktree).
+Handoff: ${AIDA_ROTATION_HANDOFF:-(none named)}
+
+${handoff_show}"
+fi
+
 role="${AIDA_SESSION_ROLE:-}"
 if [ -z "$role" ]; then
+    # A rotated session without a role still gets its handoff.
+    if [ -n "$rotation_block" ]; then
+        emit_context "# AIDA rotated session
+
+${rotation_block}"
+    fi
     exit 0
 fi
 
@@ -150,31 +185,6 @@ for root in "$project_root" "$main_root"; do
         break
     fi
 done
-
-# STORY-101: a session `aida agent new --rotate` relaunched after a context
-# rotation loads its seat handoff here (generation 2 on), so it resumes
-# under the same handle without being told to read it.
-# trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
-rotation_block=""
-rotation_gen="${AIDA_ROTATION_GENERATION:-}"
-case "$rotation_gen" in
-    '' | *[!0-9]*) rotation_gen=0 ;;
-esac
-if [ "$rotation_gen" -ge 2 ] && [ -n "${AIDA_ROTATION_HANDOFF:-}" ] &&
-    command -v aida >/dev/null 2>&1; then
-    if command -v timeout >/dev/null 2>&1; then
-        handoff_show=$(timeout 3 aida session handoff --seat "$canonical_label" --show 2>/dev/null)
-    else
-        handoff_show=$(aida session handoff --seat "$canonical_label" --show 2>/dev/null)
-    fi
-    rotation_block="Rotated: ${AIDA_AGENT_NAME:-this seat} #${rotation_gen} (relaunched by aida agent new after a handoff; same handle, lease and worktree).
-Handoff: ${AIDA_ROTATION_HANDOFF}"
-    if [ -n "$handoff_show" ]; then
-        rotation_block="${rotation_block}
-
-${handoff_show}"
-    fi
-fi
 
 if [ -z "$role_file" ] && [ -z "$standing_line" ] && [ -z "$rotation_block" ]; then
     exit 0
