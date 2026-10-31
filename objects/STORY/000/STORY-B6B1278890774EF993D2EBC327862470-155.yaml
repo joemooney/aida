@@ -16,8 +16,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T12:09:24.781126891Z
-modified_at: 2026-10-31T12:09:48.165160159Z
+modified_at: 2026-10-31T15:19:47.311235933Z
 req_type: Story
+comments:
+- id: 01a1928b-a36f-7401-88ad-ec654c92f5b8
+  author: joe
+  content: 'ADVISOR 08:23: acceptance item 0 (added): the operator runs one live merge-hold clear through a policy-matched pty deputy job and confirms it in a comment here. Moved from the STORY-099 review (not a merge gate there).'
+  created_at: 2026-10-31T15:19:47.311235933Z
+  modified_at: 2026-10-31T15:19:47.311235933Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a191dd-b7e7-70b3-8177-0ebe5af4e0f9
   author: joe
