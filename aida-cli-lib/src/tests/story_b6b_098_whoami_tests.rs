@@ -436,6 +436,7 @@ fn active_mandate() -> crate::gate::mandate::Mandate {
         revoked_by: None,
         scopes: Default::default(),
         kind: None,
+        renewals: Vec::new(),
     }
 }
 

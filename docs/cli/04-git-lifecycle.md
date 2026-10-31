@@ -491,13 +491,22 @@ The stale-approval override of `aida pr ship` is never honoured under a
 mandate.
 
 **Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
-accepted, at most `24h`). A mandate cannot be extended: stop it and start
-another. `--reason` records why. `--scope <scope>` adds explicit scopes such
+accepted, at most `24h`). `--reason` records why. `--scope <scope>` adds explicit scopes such
 as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
 `--drive` starts a drive mandate covering all scopes. `--include-supervised`
 also covers sensitive specs (security, containment, review or merge authority,
 guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
 specs human-only.
+
+**Renewing.** `aida mandate renew [--for <duration>]` extends the active
+mandate in place, so you do not retype its flags. Its scope, flags, reason and
+id stay the same, and anything already acting under it (queued dispatches, the
+drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
+the duration it was started with, at most `24h`. Like start and stop, it needs
+a human at an interactive terminal, and it refuses when no mandate is active.
+Each renewal is recorded on the mandate (who renewed it, the old and the new
+expiry) and in `.aida/events.jsonl`. `aida mandate status` shows the renewal
+count.
 Specs tagged `operator-only` or with execution mode `operator` or `decide`
 always stay human-only. Exclusion is sticky: a spec that was ever in an
 excluded class, in any stored version or in the local exclusion ledger
@@ -555,7 +564,7 @@ and dispatch fixers, and a 15-minute tick routes every stalled lane.
 
 **What it covers.** `--drive` implies `--ship-held` and covers sensitive specs
 unless you pass `--exclude-supervised`. Everything above still applies: the
-same human-only start and stop, the 24h cap, no extension, sticky exclusion,
+same human-only start, renew and stop, the 24h cap, sticky exclusion,
 and specs tagged `operator-only` (or in `operator` / `decide` mode) stay
 human-only.
 

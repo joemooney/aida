@@ -36,7 +36,7 @@ pub enum MandateAction {
         #[clap(long, requires = "drive", conflicts_with = "include_supervised")]
         exclude_supervised: bool,
         /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
-        /// A mandate cannot be extended; stop it and start another.
+        /// Extend an active one with `aida mandate renew`.
         #[clap(long)]
         ttl: Option<String>,
         /// Why the mandate exists, recorded with it.
@@ -46,6 +46,16 @@ pub enum MandateAction {
         /// guided, keystone). Operator-only specs are never covered.
         #[clap(long)]
         include_supervised: bool,
+    },
+    /// Extend the active mandate in place, keeping its scope, flags and
+    /// reason, so nothing has to be retyped. Grants that name the mandate
+    /// stay valid. Human at an interactive terminal only.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    Renew {
+        /// How long from now it lasts, e.g. `8h` or `90m` (default: the
+        /// duration it was started with, at most 24h).
+        #[clap(long = "for", value_name = "DURATION")]
+        duration: Option<String>,
     },
     /// End the active mandate now. Human at an interactive terminal only.
     Stop,
