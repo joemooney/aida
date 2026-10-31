@@ -17,12 +17,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:18:27.082204893Z
-modified_at: 2026-10-31T22:30:34.814187174Z
+modified_at: 2026-10-31T22:30:41.699025368Z
 req_type: Task
 tags:
 - from-implementer:BUG-b6b1278890774ef993d2ebc327862470-057
 - kind:design-choice
 - severity:minor
+comments:
+- id: 01a19416-2523-7820-b8dc-ba6d19a87f48
+  author: joe
+  content: Folded into BUG-057 round 2 brief (15:32) as the accepted rule set.
+  created_at: 2026-10-31T22:30:41.699025368Z
+  modified_at: 2026-10-31T22:30:41.699025368Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a19416-0a3e-7bd0-89ad-1c37c5b5fdf3
   author: joe
