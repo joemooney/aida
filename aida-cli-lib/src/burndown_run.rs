@@ -1458,14 +1458,17 @@ pub(crate) fn burndown_verbose_claude_args_with_containment(
         "-p".to_string(),
         "--permission-mode".to_string(),
         mode.to_string(),
+    ];
+    // BUG-050: a burndown lane is headless: no Monitor, no background tasks.
+    // The `--output-format` after the posture ends its tool list.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    args.extend(crate::session::headless_claude_posture_for(contained)?);
+    args.extend([
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--include-partial-messages".to_string(),
-    ];
-    if contained {
-        args.extend(crate::session::claude_contained_flags()?);
-    }
+    ]);
     args.push(prompt.to_string());
     Ok(args)
 }
@@ -2207,9 +2210,9 @@ pub(crate) fn build_burndown_quiet_command(
         .arg(current_prompt)
         .arg("--permission-mode")
         .arg(mode);
-    if contained {
-        cmd.args(crate::session::claude_contained_flags()?);
-    }
+    // BUG-050: a burndown lane is headless: no Monitor, no background tasks.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    cmd.args(crate::session::headless_claude_posture_for(contained)?);
     cmd.env("AIDA_BURNDOWN_LOCK_HELD", "1")
         .env(ceiling_key, ceiling_value);
     crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);

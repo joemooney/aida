@@ -96,7 +96,7 @@ branches on the exit code:
 | Exit | stdout line | Meaning |
 |---|---|---|
 | 0 | `implementer: pr-opened pr=<n> head=<sha>` | The PR is open; review it with a separate reviewer. |
-| 31 | `implementer: no-pr` (`reason=uncommitted-work uncommitted=<n>` appended when the worktree has uncommitted changes; a rework round whose PR is still on its launch head reports this too, not `pr-opened`, when it leaves such changes) | No PR, punt or hold. If the vendor itself exited non-zero, that code is returned instead. |
+| 31 | `implementer: no-pr`, with `reason=uncommitted-work uncommitted=<n>` appended when the worktree has uncommitted changes, or `reason=unpushed-commits` when it is clean but holds commits `origin` does not have. A rework round whose PR is still open reports this too, not `pr-opened`, when it pushed nothing and left such work. | No PR, punt or hold. If the vendor itself exited non-zero, that code is returned instead. |
 | 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
@@ -123,6 +123,19 @@ most three times, and while it waits it keeps its place under the
 concurrency cap. Each resume logs to its own `-resume<n>.jsonl` file next to
 the first log.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude -->
+
+Whether a run shipped is read from its worktree's git, not only from the
+forge, which can report a PR's old head for a few seconds after a push. A run
+has shipped when its local `HEAD` moved past the head it launched on and
+`origin`'s branch is at it; the reported `head=` is then that commit. A rework
+round whose PR is still open but which has not pushed is treated like a run
+with no PR: it is resumed if it parked. The `--auto-complete` drain's
+phase-1 Claude implementer gets the same wait-and-resume behavior. Every
+headless `claude -p` launch (queue lanes, burndown, autopilot intake,
+compete arms and judges, Ask-AI) runs without the `Monitor` tool and with
+background tasks turned off (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` in its
+`--settings`), since no later turn ever comes to collect them.
+<!-- trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude -->
 
 The child must stop once its PR is open. Inside it, `aida pr ship` and
 `aida review record` refuse (the child carries

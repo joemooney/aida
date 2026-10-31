@@ -12,9 +12,14 @@
 //! - resumes the same session with [`RESUME_PROMPT`], at most
 //!   [`MAX_AUTO_RESUMES`] times.
 //!
-//! "The session's own work" is a build-shaped process carrying the
-//! launcher's [`crate::standalone_implementer::MARKER_ENV`] value: every
-//! process the child starts inherits it, even after it is reparented.
+//! "The session's own work" is a build-shaped process carrying the lane's
+//! [`LANE_MARKER_ENV`] value: every process the child starts inherits it,
+//! even after it is reparented.
+//!
+//! BUG-050: the loop is [`ResumeLoop`], shared by the standalone launch and
+//! the `--auto-complete` drain's phase-1 implementer. Whether a run shipped is
+//! read from the seat's git state ([`SeatState`]), not from the forge alone,
+//! whose PR head lags a push by seconds.
 //!
 //! trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
 
@@ -172,13 +177,18 @@ pub(crate) fn marked_processes(marker_env: &str, value: &str) -> Vec<MarkedProce
     }
 }
 
-/// The build or test processes the standalone implementer on lease
+/// BUG-050: the marker every headless implementer child on a lease carries
+/// (the lease id), set where the child is spawned, so the standalone launch
+/// and the `--auto-complete` drain's phase-1 child are both found the same
+/// way. Unlike [`crate::standalone_implementer::MARKER_ENV`] it refuses
+/// nothing; it only names the lane's processes.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) const LANE_MARKER_ENV: &str = "AIDA_HEADLESS_LANE";
+
+/// The build or test processes the headless implementer on lease
 /// `lease_id` still has running.
 pub(crate) fn live_background_work(lease_id: &str) -> Vec<MarkedProcess> {
-    build_work_among(marked_processes(
-        crate::standalone_implementer::MARKER_ENV,
-        lease_id,
-    ))
+    build_work_among(marked_processes(LANE_MARKER_ENV, lease_id))
 }
 
 /// The build or test work in a snapshot of marked processes: a lingering
@@ -386,6 +396,258 @@ pub(crate) fn uncommitted_paths(worktree: &Path) -> Option<usize> {
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).lines().count())
+}
+
+/// The seat's local `HEAD` commit, or `None` when it cannot be read (no
+/// commit yet, or host git refuses the tree).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn seat_head(worktree: &Path) -> Option<String> {
+    let out = aida_core::git_ops::host_git_command(worktree)
+        .args(["rev-parse", "--verify", "-q", "HEAD"])
+        .output()
+        .ok()?;
+    let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !sha.is_empty()).then_some(sha)
+}
+
+/// Where `origin`'s copy of a branch is, as `git ls-remote` reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum OriginHead {
+    At(String),
+    /// `origin` answered and has no such branch.
+    Absent,
+    /// `ls-remote` failed (no `origin`, network, auth).
+    Unknown,
+}
+
+/// `origin`'s head of `branch`, asked from `worktree`. Bounded like the
+/// BUG-257 probe, so a hung dial never holds the launcher.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn origin_head(worktree: &Path, branch: &str) -> OriginHead {
+    use aida_core::git_ops::RemoteCredentialsExt as _;
+    let out = aida_core::git_ops::host_git_command(worktree)
+        .args([
+            "-c",
+            "http.lowSpeedLimit=1000",
+            "-c",
+            "http.lowSpeedTime=10",
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            &format!("refs/heads/{branch}"),
+        ])
+        .remote_credentials(worktree, "origin")
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .split_whitespace()
+            .next()
+            .map(|sha| OriginHead::At(sha.to_string()))
+            .unwrap_or(OriginHead::Unknown),
+        Ok(o) if o.status.code() == Some(2) => OriginHead::Absent,
+        _ => OriginHead::Unknown,
+    }
+}
+
+/// BUG-050: what a lane's seat holds after a run, read from git: its local
+/// `HEAD`, `origin`'s copy of its branch, and its uncommitted paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SeatState {
+    pub(crate) head: Option<String>,
+    pub(crate) origin: OriginHead,
+    pub(crate) uncommitted: Option<usize>,
+}
+
+/// Work a run left in its seat without shipping it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Unshipped {
+    /// The tree has this many uncommitted paths.
+    UncommittedWork(usize),
+    /// The tree is clean, but `HEAD` moved past the launch head and `origin`
+    /// does not have it.
+    UnpushedCommits,
+}
+
+impl SeatState {
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    pub(crate) fn read(worktree: &Path, branch: &str) -> Self {
+        Self {
+            head: seat_head(worktree),
+            origin: origin_head(worktree, branch),
+            uncommitted: uncommitted_paths(worktree),
+        }
+    }
+
+    /// Whether this run pushed: `HEAD` moved past `launch_head` and `origin`
+    /// is at it. `None` when git cannot tell (no `HEAD`, `origin` unknown).
+    pub(crate) fn pushed_since(&self, launch_head: Option<&str>) -> Option<bool> {
+        let head = self.head.as_deref()?;
+        match &self.origin {
+            OriginHead::Unknown => None,
+            OriginHead::Absent => Some(false),
+            OriginHead::At(at) => Some(at == head && launch_head != Some(head)),
+        }
+    }
+
+    /// `HEAD` when `origin` is at it: the head a pushed PR is on, ahead of
+    /// what the forge reports in the seconds after a push.
+    pub(crate) fn pushed_head(&self) -> Option<&str> {
+        let head = self.head.as_deref()?;
+        (self.origin == OriginHead::At(head.to_string())).then_some(head)
+    }
+
+    /// The work this run left unshipped, if any. A pushed run has none (a
+    /// stray path beside a push is not a stall); otherwise a dirty tree is
+    /// [`Unshipped::UncommittedWork`], and a clean tree whose `HEAD` moved
+    /// past `launch_head` without reaching `origin` is
+    /// [`Unshipped::UnpushedCommits`].
+    pub(crate) fn unshipped(&self, launch_head: Option<&str>) -> Option<Unshipped> {
+        if self.pushed_since(launch_head) == Some(true) {
+            return None;
+        }
+        if let Some(n) = self.uncommitted.filter(|n| *n > 0) {
+            return Some(Unshipped::UncommittedWork(n));
+        }
+        let moved = self.head.as_deref().is_some_and(|h| launch_head != Some(h));
+        (moved && self.pushed_since(launch_head) == Some(false))
+            .then_some(Unshipped::UnpushedCommits)
+    }
+}
+
+/// The log of the `n`th automatic resume of the run logging to `first`:
+/// a fresh file beside it, so the linger reaper's final-result watch never
+/// reads the previous run's result.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn resume_log_path(first: &Path, n: u32) -> std::path::PathBuf {
+    let stem = first
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    first.with_file_name(format!("{stem}-resume{n}.jsonl"))
+}
+
+/// BUG-050: the one resume safety net for a headless implementer lane, used
+/// by the standalone launch and the `--auto-complete` drain's phase-1 child.
+pub(crate) struct ResumeLoop<'a> {
+    /// The vendor can `--resume` (Claude).
+    pub(crate) can_resume: bool,
+    /// How long to wait on the lane's own background run.
+    pub(crate) ceiling: Duration,
+    /// The lane's lease: its processes carry it as [`LANE_MARKER_ENV`].
+    pub(crate) lease_id: &'a str,
+    /// The first run's log; each resume logs beside it.
+    pub(crate) log_path: &'a Path,
+    /// Called whenever the lane goes on waiting for its own work.
+    pub(crate) on_waiting: &'a dyn Fn(),
+    /// Called with each resume's log path before it runs.
+    pub(crate) on_log: &'a dyn Fn(&Path),
+}
+
+/// How a [`ResumeLoop`] ended.
+pub(crate) struct LoopEnd<T> {
+    pub(crate) status: std::process::ExitStatus,
+    /// The last [`ResumeLoop::run`] judgement.
+    pub(crate) verdict: T,
+    pub(crate) resumes: u32,
+    pub(crate) log: std::path::PathBuf,
+}
+
+impl ResumeLoop<'_> {
+    /// Run the lane, resuming it while it parks. `run_once(prompt, log,
+    /// resume, hold_reap)` runs the vendor once. `judge()` reads the result
+    /// after each run: a verdict, and whether the lane is done (shipped,
+    /// punted, held). A lane that is not done is resumed only when it parked
+    /// ([`resume_reason`]); otherwise the loop ends with its verdict.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    pub(crate) fn run<T>(
+        &self,
+        prompt: String,
+        mut run_once: impl FnMut(
+            &str,
+            &Path,
+            bool,
+            &dyn Fn() -> bool,
+        ) -> anyhow::Result<std::process::ExitStatus>,
+        mut judge: impl FnMut() -> (T, bool),
+    ) -> anyhow::Result<LoopEnd<T>> {
+        use colored::Colorize as _;
+        let live_work = || live_background_work(self.lease_id);
+        let mut resumes = 0;
+        let mut log = self.log_path.to_path_buf();
+        let mut prompt = prompt;
+        loop {
+            let reap_hold = ReapHold::new(self.ceiling);
+            let hold = || {
+                let was_held = reap_hold.held();
+                let on = reap_hold.check(!live_work().is_empty());
+                if on && !was_held {
+                    (self.on_waiting)();
+                }
+                on
+            };
+            let status = run_once(&prompt, &log, resumes > 0, &hold)?;
+            let (verdict, done) = judge();
+            let finish = |verdict| LoopEnd {
+                status,
+                verdict,
+                resumes,
+                log: log.clone(),
+            };
+            if done {
+                return Ok(finish(verdict));
+            }
+            let live = live_work();
+            let Some(mut reason) = resume_reason(
+                resumes,
+                self.can_resume,
+                crate::headless_linger::final_result_text(&log).as_deref(),
+                !live.is_empty(),
+                reap_hold.held(),
+                reap_hold.expired(),
+            ) else {
+                return Ok(finish(verdict));
+            };
+            // A resume is pending: the lane keeps its cap slot while it waits.
+            (self.on_waiting)();
+            if !live.is_empty() && !reap_hold.expired() {
+                eprintln!(
+                    "{} the implementer ended its turn with its background run still going; waiting for it (up to {}m)",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    self.ceiling.as_secs() / 60
+                );
+            }
+            let settled =
+                settle_background_work(self.ceiling, reap_hold.expired(), live_work, || {
+                    terminate_background_work(live_work)
+                });
+            if settled == Settled::Terminated {
+                eprintln!(
+                    "{} the background run was still going after {}m; the launcher stopped it",
+                    "Note:".cyan().bold(),
+                    self.ceiling.as_secs() / 60
+                );
+                reason = ResumeReason::Terminated;
+            }
+            resumes += 1;
+            log = resume_log_path(self.log_path, resumes);
+            (self.on_log)(&log);
+            eprintln!(
+                "{} resuming the implementer session ({resumes}/{MAX_AUTO_RESUMES}; {}) → {}",
+                crate::glyph(crate::glyphs::Glyph::FlowActive)
+                    .green()
+                    .bold(),
+                match reason {
+                    ResumeReason::Terminated => "its background run was stopped at the ceiling",
+                    ResumeReason::LiveWork | ResumeReason::HeldForWork =>
+                        "its background run finished",
+                    ResumeReason::SaidWaiting => "it ended its turn waiting on a background run",
+                },
+                log.display().to_string().dimmed()
+            );
+            prompt = resume_prompt(&reason).to_string();
+        }
+    }
 }
 
 #[cfg(test)]

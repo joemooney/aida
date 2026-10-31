@@ -1026,9 +1026,9 @@ pub(crate) fn build_autopilot_intake_command(
         .arg(prompt)
         .arg("--permission-mode")
         .arg(mode);
-    if contained {
-        command.args(crate::session::claude_contained_flags()?);
-    }
+    // BUG-050: the intake pass is headless: no Monitor, no background tasks.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    command.args(crate::session::headless_claude_posture_for(contained)?);
     command
         .env("AIDA_SESSION_ROLE", "advisor")
         .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id)
