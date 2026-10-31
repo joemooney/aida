@@ -1,0 +1,27 @@
+id: 01a193a0-9223-78b1-b07a-2ef16de9e758
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-156
+title: 'cosmetic (non-blocking): BulkWriter::add now re-admits every staged row on each…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-149, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): BulkWriter::add now re-admits every staged row on each explicit-id add (an O(N^2) batch-internal check, and admit_allocations still lists every object on each call in non-authoritative stores). This is fine at current import sizes; worth one batch-level admit if bulk imports grow.
+  Reviewed sha: 9b58bbb9530701d536b7278ec018c4ec43f0a542
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-31T20:22:16.355237732Z
+modified_at: 2026-10-31T20:22:16.355237732Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-149
+- finding-hash:e34be7ac
+- from-review:TASK-B6B1278890774EF993D2EBC327862470-149
+- kind:carried-forward
+filed_at:
+  code_sha: 271e42d368032e9e155226631512ebdde8c71ba5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
