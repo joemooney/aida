@@ -1510,6 +1510,33 @@ pub(crate) fn compose_headless_command(
     )
 }
 
+/// BUG-044: [`compose_headless_command`], with `resume` rewriting the
+/// composed `--session-id <id>` to `--resume <id>` (Claude only) so a resume
+/// keeps the launch's posture, model and wrapper. One shared builder, so the
+/// BUG-342 ratchet sees every headless launch route through it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn compose_headless_command_for(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    resume: bool,
+) -> Result<(String, Vec<String>)> {
+    let (program, args) =
+        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
+    if !resume {
+        return Ok((program, args));
+    }
+    anyhow::ensure!(
+        vendor == HeadlessVendor::Claude,
+        "only a claude session can be resumed headless, not {}",
+        vendor.as_str()
+    );
+    Ok((program, resume_session_args(args, session_id)?))
+}
+
 /// STORY-683: spawn (not exec) a headless run of `vendor`'s CLI and wait,
 /// returning the exit status. The vendor-neutral generalization of
 /// [`spawn_claude_headless`]: it builds the right argv per vendor
@@ -4214,11 +4241,31 @@ pub(crate) fn build_exec_vendor_headless_command(
     seat: &str,
     grant_env: &str,
 ) -> Result<std::process::Command> {
+    build_exec_vendor_headless_command_for(
+        vendor, prompt, session_id, contained, model, effort, seat, grant_env, false,
+    )
+}
+
+/// [`build_exec_vendor_headless_command`]; `resume` continues `session_id`
+/// (Claude) instead of starting it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn build_exec_vendor_headless_command_for(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    seat: &str,
+    grant_env: &str,
+    resume: bool,
+) -> Result<std::process::Command> {
     use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
     let (program, args) =
-        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
+        compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
@@ -4496,12 +4543,31 @@ pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
 pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) customize: Option<&'a dyn Fn(&mut std::process::Command)>,
     pub(crate) on_spawn: Option<&'a dyn Fn(u32)>,
+    /// BUG-044: `--resume` the existing `session_id` instead of starting it
+    /// (Claude only; the launcher never asks another vendor to resume).
+    pub(crate) resume: bool,
+    /// BUG-044: while true, a vendor still alive after its final result is
+    /// left running rather than reaped (its own background build is going).
+    pub(crate) hold_reap: Option<&'a dyn Fn() -> bool>,
+}
+
+/// BUG-044: `args` (a composed `--session-id <id>` launch) rewritten to
+/// `--resume <id>`, every other flag kept, so a resume runs with the same
+/// posture, model and wrapper as the launch it continues.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn resume_session_args(mut args: Vec<String>, session_id: &str) -> Result<Vec<String>> {
+    let at = args
+        .windows(2)
+        .position(|w| w[0] == "--session-id" && w[1] == session_id)
+        .ok_or_else(|| anyhow::anyhow!("no `--session-id {session_id}` to resume"))?;
+    args[at] = "--resume".to_string();
+    Ok(args)
 }
 
 /// STORY-1662: run a standalone implementer's headless child and wait for
 /// it. Unlike [`exec_vendor_headless`] this returns the exit status, so the
-/// launcher can classify the outcome. The child's grant is revoked when the
-/// child exits, as on the exec path.
+/// launcher can classify the outcome. The launcher revokes the child's grant
+/// with [`revoke_standalone_implementer_grant`] once it stops resuming it.
 // trace:STORY-1662 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_standalone_implementer_child(
@@ -4515,7 +4581,7 @@ pub(crate) fn run_standalone_implementer_child(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
-    let result = run_vendor_headless_child(
+    run_vendor_headless_child(
         vendor,
         prompt,
         session_id,
@@ -4526,11 +4592,18 @@ pub(crate) fn run_standalone_implementer_child(
         "implementer",
         child_grant.env_value(),
         hooks,
-    );
+    )
+}
+
+/// The standalone implementer's grant dies with its last run, as on the
+/// exec path.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn revoke_standalone_implementer_grant(
+    child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
+) {
     if let Some(id) = child_grant.id() {
         revoke_headless_child_grant(id);
     }
-    result
 }
 
 // trace:BUG-2139 | ai:claude
@@ -4577,7 +4650,7 @@ fn run_vendor_headless_child(
     // Own reservations from command construction through the actual spawn.
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
-    let mut child_cmd = build_exec_vendor_headless_command(
+    let mut child_cmd = build_exec_vendor_headless_command_for(
         vendor,
         prompt,
         session_id,
@@ -4586,6 +4659,7 @@ fn run_vendor_headless_child(
         tuning.effort.as_deref(),
         seat,
         grant_env,
+        hooks.resume,
     )?;
     // trace:STORY-1662 | ai:claude
     if let Some(customize) = hooks.customize {
@@ -4622,10 +4696,12 @@ fn run_vendor_headless_child(
     // A vendor still alive after its final result (held up by an MCP child)
     // is terminated past a bounded grace, so it frees its lane and cap slot.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-    let status = crate::headless_linger::wait_reaping_after_result(
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    let status = crate::headless_linger::wait_reaping_after_result_holding(
         &mut child,
         log_path,
         crate::headless_linger::result_grace(),
+        hooks.hold_reap.unwrap_or(&|| false),
     )
     .map(|waited| {
         if waited.reaped {
