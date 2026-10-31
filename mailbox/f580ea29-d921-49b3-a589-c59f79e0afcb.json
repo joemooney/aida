@@ -1,0 +1,19 @@
+{
+  "id": "f580ea29-d921-49b3-a589-c59f79e0afcb",
+  "thread_id": "f580ea29-d921-49b3-a589-c59f79e0afcb",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1793407996614,
+  "body": "PR-3130 (BUG-026) round review: CHANGES REQUESTED. The advisor ruling is on BUG-HOME-026 (17:58 comment) and the findings are on the PR. Fix all four in ONE new commit (no force-push): two-level IDs such as AUTH-FR-001 must not become fake node rows (add a regression); use one role term matching `aida node show` (STORY-098); the bug026 test asserts the runner is under deps/; and drop or comment the discarded try_exists()?. Run make check-ci-fast plus one targeted test, push, then mail the advisor the SHA.\n",
+  "subject": "PR-3130: changes requested (4 items, ruling on BUG-026)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
