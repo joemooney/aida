@@ -3158,6 +3158,10 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
                 &main,
             )?);
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+            paths.extend(crate::contained_boundary::contained_deputy_write_paths(
+                &main,
+            )?);
             paths
         }
         None => Vec::new(),
@@ -3924,6 +3928,10 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
     rw_paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
         &main,
     )?);
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    rw_paths.extend(crate::contained_boundary::contained_deputy_write_paths(
+        &main,
+    )?);
     if let Some(home) = crate::home_dir() {
         let cargo_home = std::env::var_os("CARGO_HOME")
             .map(PathBuf::from)
@@ -3943,6 +3951,12 @@ pub(crate) fn prepare_contained_mailbox_for_launch(worktree: &Path) -> Result<()
         let main = crate::main_worktree_root_from(root);
         verify_linked_worktree_main(root, &main)?;
         crate::contained_boundary::prepare_mailbox(&main)?;
+        // Best-effort: a launcher that cannot create it (a contained parent
+        // whose own sandbox did not bind it) leaves the path missing, which
+        // the sandbox skips; `aida deputy submit` then says no deputy is set
+        // up. It never widens the boundary and never blocks the launch.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+        let _ = crate::contained_boundary::prepare_deputy_incoming(&main);
     }
     Ok(())
 }
