@@ -1520,20 +1520,31 @@ pub fn store_push_route(repo: &Path, remote: &str, target: &str) -> StorePushRou
         .map_or(StorePushRoute::Allow, |gate| gate(repo, remote))
 }
 
-/// The remote a store pull of `branch` from `remote` fetches. A clone whose
-/// push hubs exclude origin publishes the store to its first hub, so that
-/// hub is the tip its writers must rebase onto before pushing again.
+/// The remote a store pull of `branch` from `remote` fetches. Every
+/// origin-addressed store pull (`db sync --pull`, `aida pull`, a writer's
+/// retry), not only writer retries, reads the first push hub on a clone
+/// whose push hubs exclude origin. That hub is where this clone publishes,
+/// so it is the tip the next push must fast-forward. Origin only receives
+/// this clone's writes through the hub bridge, so a rebase onto origin
+/// could miss commits already on the hub and get the next push rejected.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 fn store_pull_remote(repo: &Path, remote: &str, branch: &str) -> String {
-    match store_push_route(repo, remote, branch) {
+    pull_remote_for_route(store_push_route(repo, remote, branch), remote)
+}
+
+/// [`store_pull_remote`] for an already decided route.
+fn pull_remote_for_route(route: StorePushRoute, remote: &str) -> String {
+    match route {
         StorePushRoute::Redirect(hubs) if !hubs.is_empty() => hubs[0].clone(),
         _ => remote.to_string(),
     }
 }
 
 /// Run a redirected store push against each hub: the first hub's result is
-/// the push's result (its rejection is the caller's rebase-and-retry signal);
-/// a later hub that fails is reported and left for the hub bridge.
+/// the push's result (its rejection is the caller's rebase-and-retry signal).
+/// The later hubs are pushed only once the first hub accepted, so a commit
+/// the writer is about to rebase never lands on a secondary hub; a later hub
+/// that fails is reported and left for the hub bridge.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 fn push_to_redirect_hubs<T>(
     remote: &str,
@@ -1552,6 +1563,9 @@ fn push_to_redirect_hubs<T>(
         "store push gate redirected `{remote}` to itself"
     );
     let primary = push_one(first);
+    if !matches!(&primary, Ok(r) if landed(r)) {
+        return primary;
+    }
     for hub in rest {
         match push_one(hub) {
             Ok(r) if landed(&r) => {}
@@ -1566,7 +1580,8 @@ fn push_to_redirect_hubs<T>(
 
 #[cfg(test)]
 mod store_push_gate_tests {
-    use super::{push_to_redirect_hubs, targets_store_branch};
+    use super::StorePushRoute;
+    use super::{pull_remote_for_route, push_to_redirect_hubs, targets_store_branch};
 
     // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
     #[test]
@@ -1589,6 +1604,62 @@ mod store_push_gate_tests {
         assert!(super::is_store_push_refusal(&none), "{none:#}");
         assert!(
             push_to_redirect_hubs("origin", &["origin".into()], |_| Ok(true), |ok| *ok).is_err()
+        );
+    }
+
+    /// A first hub that rejects (or fails) the push stops the fan-out: the
+    /// writer rebases next, so the pre-rebase commit must not land on a
+    /// secondary hub.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn redirected_push_skips_later_hubs_when_the_first_does_not_land() {
+        let hubs = vec!["gitlab".to_string(), "backup".to_string()];
+        let tried = std::cell::RefCell::new(Vec::new());
+        let rejected = push_to_redirect_hubs(
+            "origin",
+            &hubs,
+            |h| {
+                tried.borrow_mut().push(h.to_string());
+                Ok(false)
+            },
+            |ok| *ok,
+        )
+        .unwrap();
+        assert!(!rejected);
+        assert_eq!(*tried.borrow(), vec!["gitlab".to_string()]);
+
+        tried.borrow_mut().clear();
+        let failed = push_to_redirect_hubs(
+            "origin",
+            &hubs,
+            |h| -> anyhow::Result<bool> {
+                tried.borrow_mut().push(h.to_string());
+                anyhow::bail!("unreachable")
+            },
+            |ok| *ok,
+        );
+        assert!(failed.is_err());
+        assert_eq!(*tried.borrow(), vec!["gitlab".to_string()]);
+    }
+
+    /// Every store pull a redirect applies to reads the first push hub; an
+    /// allowed or refused remote is pulled as asked.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn redirected_store_pulls_read_the_first_push_hub() {
+        let redirect = StorePushRoute::Redirect(vec!["gitlab".into(), "backup".into()]);
+        assert_eq!(pull_remote_for_route(redirect, "origin"), "gitlab");
+        assert_eq!(
+            pull_remote_for_route(StorePushRoute::Allow, "origin"),
+            "origin"
+        );
+        assert_eq!(
+            pull_remote_for_route(StorePushRoute::Refuse("no".into()), "github"),
+            "github"
+        );
+        assert_eq!(
+            pull_remote_for_route(StorePushRoute::Redirect(Vec::new()), "origin"),
+            "origin"
         );
     }
 

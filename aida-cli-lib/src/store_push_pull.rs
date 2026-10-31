@@ -600,8 +600,9 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
             git_ops::has_remote(store_path, r)
         })
     {
-        let (pushed, failures) =
-            crate::store_local::push_store_to_hubs(store_path, &branch, &sha, &hubs);
+        let crate::store_local::HubPush {
+            pushed, failures, ..
+        } = crate::store_local::push_store_to_hubs(store_path, &branch, &sha, &hubs);
         if failures.is_empty() && !pushed.is_empty() {
             eprintln!(
                 "  {} auto-pushed aida-store to {} ({reason})",
@@ -1718,8 +1719,9 @@ pub(crate) fn handle_push_command(
             Ok(Some((branch, sha))) if redirect.is_some() => {
                 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
                 let hubs = redirect.unwrap_or_default();
-                let (pushed, failures) =
-                    crate::store_local::push_store_to_hubs(store_path, &branch, &sha, &hubs);
+                let crate::store_local::HubPush {
+                    pushed, failures, ..
+                } = crate::store_local::push_store_to_hubs(store_path, &branch, &sha, &hubs);
                 for hub in &pushed {
                     println!("  pushed → {hub}");
                 }

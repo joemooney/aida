@@ -225,27 +225,54 @@ pub(crate) fn redirected_store_hubs(
     }
 }
 
+/// What [`push_store_to_hubs`] did.
+#[derive(Debug, Default)]
+pub(crate) struct HubPush {
+    /// The hubs that accepted the push.
+    pub(crate) pushed: Vec<String>,
+    /// One line per hub that failed, rejected, or was skipped.
+    pub(crate) failures: Vec<String>,
+    /// The first hub (the clone's store upstream) rejected the push as
+    /// diverged: the caller's signal to rebase onto it and retry.
+    pub(crate) first_rejected: bool,
+}
+
 /// Push store commit `sha` to each of `hubs` (the redirect when `origin` is
-/// not a push hub). Returns `(pushed, failures)`; a rejected hub has diverged
-/// and is left for the hub bridge.
+/// not a push hub). The later hubs are pushed only after the first accepted:
+/// a commit the writer is about to rebase must not land on a secondary hub,
+/// where the rebased commit would then be rejected. A later hub that
+/// rejects has diverged and is left for the hub bridge.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
 pub(crate) fn push_store_to_hubs(
     store: &Path,
     branch: &str,
     sha: &str,
     hubs: &[String],
-) -> (Vec<String>, Vec<String>) {
-    let mut pushed = Vec::new();
-    let mut failures = Vec::new();
-    for hub in hubs {
+) -> HubPush {
+    let mut out = HubPush::default();
+    for (i, hub) in hubs.iter().enumerate() {
         match aida_core::git_ops::push_exact(store, hub, sha, branch) {
-            Ok(true) => pushed.push(hub.clone()),
-            Ok(false) => failures.push(format!(
-                "{hub}: rejected (diverged) — `aida db sync --pull` from it, or let the hub bridge reconcile"
-            )),
-            Err(e) => failures.push(format!("{hub}: {e:#}")),
+            Ok(true) => {
+                out.pushed.push(hub.clone());
+                continue;
+            }
+            Ok(false) => {
+                out.first_rejected = i == 0;
+                out.failures.push(format!(
+                    "{hub}: rejected (diverged) — `aida db sync --pull` from it, or let the hub bridge reconcile"
+                ));
+            }
+            Err(e) => out.failures.push(format!("{hub}: {e:#}")),
+        }
+        if i == 0 {
+            for skipped in &hubs[1..] {
+                out.failures
+                    .push(format!("{skipped}: skipped until `{hub}` accepts the push"));
+            }
+            break;
         }
     }
-    (pushed, failures)
+    out
 }
 
 /// Write `bridge` for this clone into the layer at `path`.
@@ -597,6 +624,11 @@ mod tests {
             let store = proj.join(".aida-store");
             std::fs::create_dir_all(&store).unwrap();
             git(&store, &["init", "-q", "-b", "aida-store"]);
+            // The store's own writers (auto-push commits, a retry's rebase)
+            // run without this helper's env identity; a CI runner has no
+            // global one.
+            git(&store, &["config", "user.name", "t"]);
+            git(&store, &["config", "user.email", "t@example.invalid"]);
             git(&store, &["commit", "-q", "--allow-empty", "-m", "seed"]);
             for hub in ["origin", "gitlab", "github"] {
                 let bare = root.path().join(format!("{hub}.git"));
@@ -776,6 +808,61 @@ mod tests {
         let next = h.commit("spec2.yaml");
         crate::db_cmd::db_sync_push_leg(&h.store, "aida-store", Some(next.clone())).unwrap();
         assert_eq!(h.tip("origin"), next);
+    }
+
+    /// The bridge moved gitlab on: `aida db sync --push` on the gitlab-only
+    /// clone is rejected, rebases onto gitlab and lands on the retry, with
+    /// origin untouched throughout.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn db_sync_push_on_a_gitlab_only_clone_rebases_onto_gitlab_and_retries() {
+        install_store_push_gate();
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab"]);
+        let bridged = h.advance("gitlab", "bridged.yaml");
+        let local = h.commit("spec.yaml");
+        crate::db_cmd::db_sync_push_leg(&h.store, "aida-store", Some(local)).unwrap();
+        let landed = h.tip("gitlab");
+        assert_eq!(landed, h.head());
+        assert!(aida_core::git_ops::is_ancestor(&h.store, &bridged, &landed).unwrap());
+        assert!(
+            h.store.join("spec.yaml").exists(),
+            "the local write survived the rebase"
+        );
+        assert_eq!(h.tip("origin"), h.seed);
+    }
+
+    /// With two push hubs, a commit the first hub rejects is not pushed to
+    /// the second; once the first accepts, the second gets it too.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn secondary_hub_gets_the_push_only_after_the_first_accepts() {
+        install_store_push_gate();
+        let h = Hubs::new();
+        h.push_hubs(&["gitlab", "github"]);
+        let hubs = vec!["gitlab".to_string(), "github".to_string()];
+        h.advance("gitlab", "elsewhere.yaml");
+        let stale = h.commit("spec.yaml");
+        let out = push_store_to_hubs(&h.store, "aida-store", &stale, &hubs);
+        assert!(out.first_rejected);
+        assert!(out.pushed.is_empty());
+        assert_eq!(
+            h.tip("github"),
+            h.seed,
+            "the pre-rebase commit never reached github"
+        );
+
+        aida_core::git_ops::pull_rebase(&h.store, "gitlab", "aida-store").unwrap();
+        let rebased = h.head();
+        let out = push_store_to_hubs(&h.store, "aida-store", &rebased, &hubs);
+        assert!(
+            !out.first_rejected && out.failures.is_empty(),
+            "{:?}",
+            out.failures
+        );
+        assert_eq!(h.tip("gitlab"), rebased);
+        assert_eq!(h.tip("github"), rebased);
+        assert_eq!(h.tip("origin"), h.seed);
     }
 
     /// The `aida push` store leg on a gitlab-only clone pushes to gitlab and

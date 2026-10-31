@@ -232,9 +232,15 @@ aida remote bridge               # show this clone's setting
   reads every hub but pushes only to the listed ones. Every other store writer that
   addresses `origin` (an `aida add` id allocation, node, alias and team registry writes)
   publishes to the listed hubs instead, and rebases onto the first of them when it
-  rejects the push. `remote mirror-push`, and the store leg of a `remote create` /
-  bootstrap, skip a hub that is not listed. A store push to any other excluded hub is
-  refused before git runs. An unreadable layer refuses every store push; an `aida add`
+  rejects the push. The other listed hubs get the push only after the first accepts it,
+  so a commit about to be rebased never lands on a secondary hub. Every store pull that
+  addresses `origin` (`aida db sync --pull`, `aida pull`, a writer's retry) reads the
+  first listed hub too: that is where this clone publishes, so it is the tip the next
+  push must build on, while `origin` only sees this clone's writes after the bridge runs.
+  The store leg of a `remote create` / bootstrap skips a hub that is not listed.
+  `remote mirror-push` is exempt from the check: it carries code refs only, never the
+  store branch, so it pushes to every mirror it would otherwise. A store push to any
+  other excluded hub is refused before git runs. An unreadable layer refuses every store push; an `aida add`
   then keeps the new spec committed locally and publishes it once the layer is fixed.
 - **Hub bridge.** The bridge clone's schedule registry gains `store-bridge-reconcile`
   (runs `aida remote reconcile --execute` hourly; set `bridge_every` in the layer to change

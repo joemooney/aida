@@ -2949,19 +2949,20 @@ fn install_driver_command(
             &mut crate::schedule_driver::RealDriverHost,
         )
     })?;
-    retire_stopgap_reconcile_cron(project_root);
+    retire_stopgap_reconcile_cron(project_root, crate::store_local::remove_stopgap_cron);
     Ok(())
 }
 
 /// On the hub-bridge clone, the installed tick now runs the reconcile, so
-/// the hand-installed stopgap crontab entry would run it twice: remove it.
-/// Best-effort — a crontab that cannot be read never fails the install.
+/// the hand-installed stopgap crontab entry would run it twice: remove it
+/// with `remove` (the real crontab edit outside tests). Best-effort — a
+/// crontab that cannot be read never fails the install.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
-fn retire_stopgap_reconcile_cron(project_root: &Path) {
+fn retire_stopgap_reconcile_cron(project_root: &Path, remove: impl FnOnce() -> Result<bool>) {
     if !bridge_jobs(project_root).is_ok_and(|jobs| !jobs.is_empty()) {
         return;
     }
-    match crate::store_local::remove_stopgap_cron() {
+    match remove() {
         Ok(true) => println!(
             "Removed the stopgap `{}` crontab entry — `{}` replaces it.",
             crate::store_local::STOPGAP_CRON_MARKER,
@@ -4955,6 +4956,45 @@ enabled = true
         assert!(load_registry(other.path())
             .unwrap()
             .is_none_or(|c| c.tasks.is_empty()));
+    }
+
+    /// The install path's stopgap retirement removes the marker line on the
+    /// bridge clone and leaves the crontab alone on any other clone.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.ac9e5341 | ai:claude
+    #[test]
+    fn install_retires_the_stopgap_cron_only_on_the_bridge_clone() {
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let bridge = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let layer = home
+            .path()
+            .join(".aida")
+            .join(crate::store_local::LOCAL_LAYER_FILE);
+        crate::store_local::write_bridge(
+            &layer,
+            &crate::store_local::clone_key(bridge.path()),
+            true,
+        )
+        .unwrap();
+        let stopgap = "# aida-store-reconcile\n\
+                       0 * * * * flock -n ~/.aida/store-reconcile.lock aida remote reconcile --execute\n\
+                       30 2 * * * backup.sh\n";
+        let crontab = std::cell::RefCell::new(stopgap.to_string());
+        let remove = || -> Result<bool> {
+            let next = crate::store_local::crontab_without_stopgap(&crontab.borrow());
+            Ok(next.map(|body| *crontab.borrow_mut() = body).is_some())
+        };
+
+        retire_stopgap_reconcile_cron(other.path(), remove);
+        assert_eq!(
+            *crontab.borrow(),
+            stopgap,
+            "a non-bridge clone keeps the stopgap"
+        );
+
+        retire_stopgap_reconcile_cron(bridge.path(), remove);
+        assert_eq!(*crontab.borrow(), "30 2 * * * backup.sh\n");
     }
 
     // trace:TASK-1532 | ai:agy

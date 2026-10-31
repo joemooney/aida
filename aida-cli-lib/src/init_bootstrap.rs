@@ -516,8 +516,7 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
     // to every hub this clone may push the store to, after the code branch
     // reached every hub. trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
     let policy = crate::store_local::push_hubs(dir);
-    let (store_hubs, excluded): (Vec<String>, Vec<String>) =
-        hubs.iter().cloned().partition(|h| policy.allows(h));
+    let (store_hubs, excluded) = store_leg_hubs(&policy, &hubs);
     for hub in &excluded {
         println!(
             "  {} aida-store → {}",
@@ -572,6 +571,40 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
         branch
     );
     Ok(Some(hubs))
+}
+
+/// Split the bootstrap's `hubs` into the ones the store leg pushes to and
+/// the ones this clone's push hubs exclude, keeping the order.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
+fn store_leg_hubs(
+    policy: &crate::store_local::PushHubs,
+    hubs: &[String],
+) -> (Vec<String>, Vec<String>) {
+    hubs.iter().cloned().partition(|h| policy.allows(h))
+}
+
+#[cfg(test)]
+mod store_leg_tests {
+    use super::store_leg_hubs;
+    use crate::store_local::PushHubs;
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-097.acb959c8 | ai:claude
+    #[test]
+    fn bootstrap_store_leg_skips_hubs_the_clone_excludes() {
+        let hubs = vec!["origin".to_string(), "gitlab".to_string()];
+        let (pushed, skipped) = store_leg_hubs(&PushHubs::Only(vec!["gitlab".into()]), &hubs);
+        assert_eq!(pushed, vec!["gitlab".to_string()]);
+        assert_eq!(skipped, vec!["origin".to_string()]);
+        let (pushed, skipped) = store_leg_hubs(&PushHubs::Unrestricted, &hubs);
+        assert_eq!(pushed, hubs);
+        assert!(skipped.is_empty());
+        let (pushed, skipped) = store_leg_hubs(&PushHubs::Unreadable("bad".into()), &hubs);
+        assert!(
+            pushed.is_empty(),
+            "an unreadable layer pushes the store nowhere"
+        );
+        assert_eq!(skipped, hubs);
+    }
 }
 
 /// How the final `cd` into the new project reaches the calling shell.

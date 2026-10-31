@@ -437,41 +437,55 @@ pub(crate) fn db_sync_push_leg(
     mut push_sha: Option<String>,
 ) -> anyhow::Result<()> {
     // A clone whose push hubs exclude origin pushes the store to those hubs
-    // instead and never attempts origin.
+    // instead and never attempts origin. The first hub is its store
+    // upstream: a rejection there takes the same rebase-and-retry path as
+    // origin's, rebasing onto that hub.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-097 | ai:claude
     let policy = crate::store_local::push_hubs(store_path);
     let redirect = crate::store_local::redirected_store_hubs(&policy, |r| {
         aida_core::git_ops::has_remote(store_path, r)
     });
-    if let Some(hubs) = redirect {
-        let Some(sha) = push_sha.as_deref() else {
-            anyhow::bail!("store has no commit to push");
-        };
-        if hubs.is_empty() {
-            anyhow::bail!(
-                "this clone's push hubs (`aida remote push-hubs`) name no remote \
-                 configured here and exclude origin; the store was not pushed"
-            );
+    let upstream = match &redirect {
+        None => {
+            println!("Pushing to origin/{}...", branch);
+            "origin".to_string()
         }
-        println!("Pushing to {} (this clone's push hubs)...", hubs.join(", "));
-        let (pushed, failures) =
-            crate::store_local::push_store_to_hubs(store_path, branch, sha, &hubs);
-        for hub in &pushed {
+        Some(hubs) => {
+            let Some(first) = hubs.first() else {
+                anyhow::bail!(
+                    "this clone's push hubs (`aida remote push-hubs`) name no remote \
+                     configured here and exclude origin; the store was not pushed"
+                );
+            };
+            println!("Pushing to {} (this clone's push hubs)...", hubs.join(", "));
+            first.clone()
+        }
+    };
+    // One push attempt; Ok(false) is the upstream's rejection. A redirected
+    // push fails outright when a later hub did not take it.
+    let push_once = |sha: &str| -> anyhow::Result<bool> {
+        let Some(hubs) = &redirect else {
+            return aida_core::git_ops::push_exact(store_path, "origin", sha, branch);
+        };
+        let out = crate::store_local::push_store_to_hubs(store_path, branch, sha, hubs);
+        for hub in &out.pushed {
             println!("  pushed → {hub}");
         }
-        if !failures.is_empty() {
-            anyhow::bail!("store push failed: {}", failures.join("; "));
+        if out.first_rejected {
+            return Ok(false);
         }
-        return Ok(());
-    }
-    println!("Pushing to origin/{}...", branch);
+        if !out.failures.is_empty() {
+            anyhow::bail!("store push failed: {}", out.failures.join("; "));
+        }
+        Ok(true)
+    };
     // trace:TASK-1717 | ai:claude — push the commit captured under
     // the lock, by SHA. A rejection retakes the lock, rebases the
     // CURRENT store (keeping any commit another writer made since)
     // and pushes the new head once; a second rejection fails.
     let pushed = match push_sha.as_deref() {
         None => Err(anyhow::anyhow!("store has no commit to push")),
-        Some(sha) => aida_core::git_ops::push_exact(store_path, "origin", sha, branch),
+        Some(sha) => push_once(sha),
     };
     let origin_sha = match pushed {
         Ok(true) => {
@@ -481,7 +495,7 @@ pub(crate) fn db_sync_push_leg(
         Ok(false) => {
             println!("  Push rejected. Pulling and retrying...");
             let sha = aida_core::db::with_store_write_lock(store_path, || {
-                aida_core::git_ops::pull_rebase(store_path, "origin", branch).map_err(|e| {
+                aida_core::git_ops::pull_rebase(store_path, &upstream, branch).map_err(|e| {
                     anyhow::anyhow!(
                         "Pull failed: {}",
                         crate::store_pull_failure_hint(store_path, &e.to_string())
@@ -490,9 +504,9 @@ pub(crate) fn db_sync_push_leg(
                 crate::ensure_no_spec_id_collisions_canonical(store_path)?;
                 aida_core::git_ops::head_sha(store_path)
             })?;
-            if !aida_core::git_ops::push_exact(store_path, "origin", &sha, branch)? {
+            if !push_once(&sha)? {
                 anyhow::bail!(
-                    "Push rejected again after rebasing onto origin/{branch}; \
+                    "Push rejected again after rebasing onto {upstream}/{branch}; \
                      your commits are kept locally. Re-run `aida db sync --pull --push`."
                 );
             }
@@ -500,11 +514,16 @@ pub(crate) fn db_sync_push_leg(
             push_sha = Some(sha);
             push_sha.clone()
         }
+        Err(e) if redirect.is_some() => return Err(e),
         Err(e) => {
             eprintln!("  Push failed: {}", e);
             None
         }
     };
+    if redirect.is_some() {
+        // The hubs were the push; origin's mirror fan-out does not apply.
+        return Ok(());
+    }
 
     // TASK-1096: fan out the store push to every configured mirror
     // remote so a clone can't silently leave one hub behind — the
