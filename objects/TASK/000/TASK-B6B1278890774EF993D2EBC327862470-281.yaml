@@ -1,0 +1,27 @@
+id: 01a1940f-d934-7172-93e1-7da68ded638c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-281
+title: 'what-is-aida: name mandate renew as human-TTY-only alongside start/stop'
+description: |
+  docs/what-is-aida.md:169 and docs/what-is-aida.html:719 say "Starting and stopping a mandate are refused unless the process has an interactive terminal...". `aida mandate renew` has the same floor (STORY-166 AC1); add it to that sentence.
+
+  Raised in review of PR-3175: https://github.com/joemooney/aida/pull/3175#issuecomment-6549936924
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:23:49.044464609Z
+modified_at: 2026-10-31T22:23:49.044464609Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-3175
+- severity:cosmetic
+filed_at:
+  code_sha: 9b13e9e400ff1a829ee90c0a3a45136a5bc48fda
+  branch: pr-3175
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a1940b38a7
+  harness_version: 2.1.316 (Claude Code)

@@ -1,0 +1,27 @@
+id: 01a1940f-eb1f-7172-8243-739a21dcb826
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-282
+title: 'mandate lineage validator: reject a renewal recorded at/after the previous expiry'
+description: |
+  aida-cli-lib/src/gate/mandate.rs renewal_problem() accepts a renewal entry whose renewed_at >= previous_expires_at, i.e. a renewal of an already-expired mandate. extend() can never write one, because it renews only an Active mandate. Rejecting it would stop a hand-edited record from resurrecting an expired mandate. Same-uid forgery is outside the stated threat model, so this is optional hardening.
+
+  Raised in review of PR-3175: https://github.com/joemooney/aida/pull/3175#issuecomment-6549936924
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:23:53.631532267Z
+modified_at: 2026-10-31T22:23:53.631532267Z
+req_type: Task
+tags:
+- from-review:PR-3175
+- mandate
+- severity:minor
+filed_at:
+  code_sha: 9b13e9e400ff1a829ee90c0a3a45136a5bc48fda
+  branch: pr-3175
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a1940b38a7
+  harness_version: 2.1.316 (Claude Code)
