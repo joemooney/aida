@@ -1,0 +1,34 @@
+id: 01a1940a-ef8a-7371-b556-32050e20c503
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-279
+title: 'Rework prompt: only a brief (not a ruling) supersedes a verdict; untimed verdicts stay authoritative'
+description: |
+  Design calls made in aida-cli-lib/src/rework_direction.rs (brief_supersedes_verdict, detect_main_conflict):
+
+  1. Only an ADVISOR BRIEF / REWORK BRIEF newer than the last verdict demotes the verdict findings to SUPERSEDED CONTEXT. An "Advisor ruling" still leads the prompt (BUG-021 wording: binding over the description) but leaves the findings authoritative, because a ruling usually settles one finding rather than replacing the task.
+  2. When no verdict time is known (no `Recorded:` line, no recorded findings comment), the findings stay authoritative and the brief just leads.
+  3. The conflict check runs `git fetch origin <base> <head>` (best effort) during the rework pickup, then a `git merge-tree` forecast. An unknown forecast adds nothing.
+
+  If rulings should also supersede, change brief_supersedes_verdict.
+
+  Raised by the implementer while working BUG-B6B1278890774EF993D2EBC327862470-057.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-057  ·  Commit: 3a1cc557101  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:18:27.082204893Z
+modified_at: 2026-10-31T22:18:27.082204893Z
+req_type: Task
+tags:
+- from-implementer:BUG-b6b1278890774ef993d2ebc327862470-057
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 3a1cc5571019904064d2644b9e83900fe767abe0
+  branch: bug-b6b1278890774ef993d2ebc327862470-057
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a193e80c9b
+  harness_version: 2.1.316 (Claude Code)
