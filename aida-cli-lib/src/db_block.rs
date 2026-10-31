@@ -589,10 +589,14 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                 .collect();
             let registered: std::collections::HashSet<String> =
                 nodes_registry.nodes.iter().map(|n| n.id.clone()).collect();
+            // A native node a label or the root record registers owns its
+            // blocks legitimately without a nodes.toml row.
+            // trace:BUG-2378 | ai:claude
+            let known = aida_core::allocation_authority::registered_node_ids(store_path)?;
 
             let blocks_without_node: Vec<&str> = block_owners
                 .iter()
-                .filter(|id| !registered.contains(*id))
+                .filter(|id| !known.contains(&id.to_ascii_lowercase()))
                 .map(|s| s.as_str())
                 .collect();
             let nodes_without_block: Vec<&str> = registered
@@ -626,7 +630,7 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
             if !blocks_without_node.is_empty() {
                 had_error = true;
                 println!(
-                    "{} {} block-owning node{} not in registry/nodes.toml:",
+                    "{} {} block-owning node{} not registered (no registry/nodes.toml row, node label or root record):",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     blocks_without_node.len(),
                     if blocks_without_node.len() == 1 {

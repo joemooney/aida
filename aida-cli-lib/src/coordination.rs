@@ -626,6 +626,13 @@ fn canonical_clone_path(clone_path: &Path) -> String {
 /// readable label; clone-identity comparisons key off `clone_path`.
 /// trace:STORY-637 | ai:claude
 fn node_id_for_clone(store_root: &Path, clone_path: &Path) -> String {
+    // The clone's WORK binding lives in its own git common dir, so it is
+    // per-clone already and outranks every shared-store guess: a clone whose
+    // legacy node was retired must not keep stamping the retired id.
+    // trace:BUG-2378 | ai:claude
+    if let Ok(Some(binding)) = aida_core::work_binding::load(store_root) {
+        return binding.node_id;
+    }
     let canon = canonical_clone_path(clone_path);
     let registry_path = store_root.join("registry").join("nodes.toml");
     if let Ok(registry) = aida_core::NodeRegistry::load(&registry_path) {

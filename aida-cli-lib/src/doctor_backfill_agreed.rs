@@ -104,6 +104,9 @@ pub(crate) struct Plan {
     pub retire: Option<Retirement>,
     /// Whether the retirement still needs its `registry/nodes.toml` mark.
     pub mark_retired: bool,
+    /// Whether this clone's `.aida/node.toml` still names the retired node
+    /// and must be re-pointed at the bound node. trace:BUG-2378 | ai:claude
+    pub repoint_identity: bool,
     pub claim_node: Option<String>,
     pub claims: Vec<PlannedClaim>,
 }
@@ -113,6 +116,7 @@ impl Plan {
         self.agreed.is_empty()
             && self.renames.is_empty()
             && !self.mark_retired
+            && !self.repoint_identity
             && self.claims.is_empty()
     }
 }
@@ -497,6 +501,8 @@ fn load_plan(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
         Plan {
             agreed,
             renames,
+            // `retiring_node` only names a node `.aida/node.toml` still holds.
+            repoint_identity: retire.is_some(),
             retire,
             mark_retired,
             claim_node,
@@ -560,6 +566,12 @@ fn print_plan(plan: &Plan, reqs: &[Requirement]) {
             println!(
                 "Node {} is marked retired in registry/nodes.toml.",
                 r.old_node
+            );
+        }
+        if plan.repoint_identity {
+            println!(
+                "This clone's .aida/node.toml identity: node {} -> node {}.",
+                r.old_node, r.new_node
             );
         }
     }
@@ -917,6 +929,18 @@ fn write_plan(
         let path = nodes_path(store_root);
         undo.snapshot(&path)?;
         nodes.save(&path)?;
+    }
+
+    // 6. Re-point this clone's legacy identity at the bound node, so
+    // `aida node show` and every lease or commit stamp stop naming the
+    // retired node. The file is clone-local (never committed).
+    // trace:BUG-2378 | ai:claude
+    if let (Some(r), true) = (&plan.retire, plan.repoint_identity) {
+        let path = store_root.join(".aida/node.toml");
+        let mut config = aida_core::NodeConfig::load(&path)?;
+        config.node_id = r.new_node.clone();
+        undo.snapshot(&path)?;
+        config.save(&path)?;
     }
     fail_point("end")
 }

@@ -582,3 +582,35 @@ fn bug_2017_legacy_duplicates_already_shared_never_block_a_sync() {
         sync(&c.b).unwrap_or_else(|e| panic!("{name}: {e:#}"));
     }
 }
+
+/// BUG-2378: reconcile passes every hub tip, and one hub can still sit at a
+/// commit before a registration change (a node marked retired) while the
+/// other hub already has it. A tip that is an ancestor of another tip claims
+/// nothing new, so joining it is clean; a real divergence still refuses.
+// trace:BUG-2378 | ai:claude
+#[test]
+fn bug_2378_a_hub_behind_another_tip_is_not_a_second_claimant() {
+    let c = clones();
+    let stale = head_sha(&c.a).unwrap();
+    write_file(&c.a, "registry/nodes.toml", &nodes_toml("retired-host"));
+    commit(&c.a, "a changes the node registration");
+    let updated = head_sha(&c.a).unwrap();
+    write_row(&c.a, &row("FR-2"));
+    commit(&c.a, "a keeps working");
+    let report = collect(&c.a, Some("HEAD"), &[updated.clone(), stale.clone()]);
+    assert!(report.is_clean(), "{report}");
+    crate::allocation_conflicts::refuse_conflicts(&c.a, Some("HEAD"), &[updated, stale.clone()])
+        .unwrap();
+
+    // The same stale tip with an independent change of its own still refuses.
+    write_file(&c.b, "registry/nodes.toml", &nodes_toml("other-host"));
+    commit(&c.b, "b rebinds");
+    let diverged = head_sha(&c.b).unwrap();
+    run(&c.a, &["fetch", "-q", c.b.to_str().unwrap(), "aida-store"]);
+    let report = collect(&c.a, Some("HEAD"), &[diverged, stale]);
+    assert_eq!(
+        kinds(&report.conflicts),
+        [ConflictKind::NodeBinding],
+        "{report}"
+    );
+}

@@ -819,6 +819,27 @@ fn collect_with(
             }
         }
     }
+    // A tip that is an ancestor of another tip claims nothing new: every
+    // claim it holds is history the descendant already carries, and joining
+    // it is a fast-forward. Counted as its own claimant, a hub that is merely
+    // behind looks like a second side that kept an old registration, and a
+    // claim changed after the hub's tip (a node marked retired, a renamed
+    // display ID) reads as a dispute between two baseline values.
+    // trace:BUG-2378 | ai:claude
+    let behind: Vec<bool> = tips
+        .iter()
+        .map(|t| {
+            tips.iter().any(|other| {
+                t != other
+                    && matches!(
+                        git_status(repo, &["merge-base", "--is-ancestor", t, other]),
+                        Ok((0, _, _))
+                    )
+            })
+        })
+        .collect();
+    let mut flags = behind.into_iter();
+    tips.retain(|_| !flags.next().unwrap_or(false));
     // A sync that joins one distinct tip introduces nothing: that tip is its
     // own baseline (an unborn local, or local already equal to incoming).
     let mut bases: Vec<String> = match tips.as_slice() {
