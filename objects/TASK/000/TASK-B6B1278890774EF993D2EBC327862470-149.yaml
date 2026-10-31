@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T18:09:42.116633001Z
+modified_at: 2026-10-31T18:34:33.744154196Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -62,6 +62,13 @@ comments:
   created_at: 2026-10-31T18:09:42.116633001Z
   modified_at: 2026-10-31T18:09:42.116633001Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1933d-f590-7541-a350-778938da7343
+  author: joe
+  content: 'Round 2 (7fff083c7e0): item 1 fixed. The failing rest test was allocation_authority::tests::bug_2017_batch_alias_conflicts_refuse_before_any_persistence (bulk/cross_field arm): per-batch numeric admission refused the second add() with IdTakenError before BUG-2017''s alias-conflict check ran. BulkWriter::add now runs admit_allocations over the staged rows plus the new row, before numeric admission, so BUG-2017''s ''another UUID'' refusal fires first. Neither check is weakened. The test''s bulk arm accepts that refusal from add() or from finish(), and still asserts the message and that nothing persisted. Gates: cargo test -p aida-core --lib allocation_authority (34 ok), the db:: tests (370 ok), make check-ci-fast (36 gates ok). Item 2 is deferred: the advisor ruling says this is a CI-only delta and nothing else should change (a doc note on doctor_renumber::plan is a fine follow-up). Item 3 is still post-merge operator work: remove ''digits: 4'' from metadata.yaml, then run ''aida doctor --fix id-collisions''. Do not mark this task completed until both are done.'
+  created_at: 2026-10-31T18:34:33.744154196Z
+  modified_at: 2026-10-31T18:34:33.744154196Z
+  session_id: 01a1932e5723
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19213-9b1f-7a82-b146-412ba9b18a8f
   author: joe
