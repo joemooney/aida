@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:01:23.418689366Z
-modified_at: 2026-10-31T06:00:51.182816572Z
+modified_at: 2026-10-31T06:14:32.817260228Z
 req_type: Task
 tags:
 - ci
@@ -55,6 +55,13 @@ comments:
     ADVISOR 22:10: the GitLab schedule ALREADY EXISTS (operator-requested, created via glab as joe): ai/aida schedule ID 1, ref main, cron "0 3 * * *" America/Phoenix, active. AC4 docs should describe it as existing (how to view or edit it: `GITLAB_HOST=gitlab.joemooney.com glab schedule list -R ai/aida`) rather than as a step still to take.
   created_at: 2026-10-31T05:08:57.259121014Z
   modified_at: 2026-10-31T05:08:57.259121014Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19098-7471-72a3-a037-481ae154078c
+  author: joe
+  content: |
+    ADVISOR 23:16 (2026-10-28 rule): the review note "no automated test pins the gitlab rules" is ACCEPTED: the rules are declarative YAML exercised by the nightly schedule and every MR pipeline, and a YAML-shape test would only restate the file.
+  created_at: 2026-10-31T06:14:32.817260228Z
+  modified_at: 2026-10-31T06:14:32.817260228Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a19057-b89a-7fd3-b8b4-93f755ff8235
