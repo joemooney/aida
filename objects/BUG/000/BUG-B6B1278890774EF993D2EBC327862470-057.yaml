@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-10-31T23:16:00.517057750Z
+modified_at: 2026-10-31T23:17:16.814405954Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -32,6 +32,17 @@ comments:
     Also TASK-279 (your design note) is ACCEPTED as the rule set, with item 1 above refining it: a ruling never supersedes a verdict, a newer brief does, untimed verdicts stay authoritative. LIGHT gate: cargo test -p aida-cli-lib rework_direction ; make check-ci-fast.
   created_at: 2026-10-31T22:30:30.683584453Z
   modified_at: 2026-10-31T22:30:30.683584453Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a19440-cb8e-79f3-82cb-9af5d54fc567
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF round 3 (16:18, final, focused), PR-3177. Round-2 items 1 and 4 are met. Fix exactly three things:
+    1. Placement: a brief OLDER than the last verdict renders BELOW the authoritative findings, as background context (today it renders above them). The assembly test for case (c) brief→verdict must assert the order (findings index < brief index).
+    2. Case (d) no verdict time: add the end-to-end assembly test through the extracted pure function (brief leads, findings stay authoritative), failing if the brief_supersedes filter is removed.
+    3. Run cargo fmt on queue_rework_tests.rs (rustfmt failure).
+    Gate: cargo test -p aida-cli-lib rework_direction queue_rework ; cargo fmt --check ; make check-ci-fast. No other changes.
+  created_at: 2026-10-31T23:17:16.814405954Z
+  modified_at: 2026-10-31T23:17:16.814405954Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
