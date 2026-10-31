@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T13:37:00.526455140Z
+modified_at: 2026-10-31T14:42:05.427759909Z
 req_type: Bug
 tags:
 - ids
@@ -367,6 +367,12 @@ history:
   session_id: 01a19217942c
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19269-2468-7cf3-b75f-50380d8f8563
+  author: joe
+  timestamp: 2026-10-31T14:42:06.568050203Z
+  session_id: 01a1925bebeb
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -385,7 +391,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Numeric identity, mint seam, cache key columns, doctor check, renumber tool and the tree rewrite (matches the mapping TSV exactly, case kept) are solid and CI is green at 9d99db0; four small gaps remain in AC2/AC3/AC5e
+  detail: 'Round-3 code meets the four ruled gaps and all five ACs, but PR CI is red at the head: CI (lib-1) fails at f02efae and at b22ce47, while round 2 (9d99db0) and main (e564a29) are green.'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-046 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T13:25:40.657621141Z
+  shelved_at: 2026-10-31T14:42:05.427759909Z
