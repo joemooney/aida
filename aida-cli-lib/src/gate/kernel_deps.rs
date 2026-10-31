@@ -75,6 +75,13 @@ pub(crate) fn authority_stdin_is_terminal() -> bool {
     std::io::stdin().is_terminal()
 }
 
+/// Whether a deputy job's integrity-floor claim is backed by the deputy's own
+/// TTY-policy marker (always true outside a deputy job).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+pub(crate) fn deputy_job_floor_authorized() -> bool {
+    crate::deputy::job_floor_authorized()
+}
+
 /// Whether stdout is an interactive terminal, through the same test seam as
 /// [`authority_stdin_is_terminal`]. A human-at-terminal gate checks both: an
 /// agent that pipes stdout (or stdin) is not a person at a terminal.

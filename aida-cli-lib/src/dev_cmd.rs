@@ -1721,6 +1721,14 @@ AIDA_WRAPPER_OUTPUT
             fi
             return 0
             ;;
+        "deputy "*|"runloop "*)
+            # `aida deputy` starts the operator's stand-in, which must run in
+            # THIS shell so its jobs inherit this shell's grant. The marker is
+            # a per-command prefix, never exported, so a bare-binary run
+            # (`command aida deputy`) cannot present it and is refused.
+            # trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+            AIDA_DEPUTY_VIA_WRAPPER=1 command aida "$@"
+            ;;
         "init"|"init "*)
             # STORY-780: `aida init <DIR>` finishes by handing this shell a
             # `cd` into the new project. The block travels on a SIDE CHANNEL,

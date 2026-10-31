@@ -127,6 +127,9 @@ mod drain_gate;
 mod findings_gate;
 // trace:STORY-1889 | ai:claude — gate authority, all on the mandate floor.
 mod gate;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+mod deputy;
+mod deputy_cmd;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;

@@ -122,5 +122,12 @@ pub(crate) fn has_dispatch_authority() -> bool {
 
 // trace:STORY-1353 | ai:codex
 pub(crate) fn has_integrity_floor_authority() -> bool {
-    integrity_floor_authority_from(authority_stdin_is_terminal()) // trace:BUG-1618 | ai:claude
+    // mandate-gate: a deputy job (AIDA_DEPUTY_JOB set) holds the floor only
+    // while the deputy's TTY policy authorized it a terminal; a job that finds
+    // a terminal some other way is refused (signed off on the spec, Q6).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+    integrity_floor_authority_from(
+        authority_stdin_is_terminal() // trace:BUG-1618 | ai:claude
+            && crate::gate::kernel_deps::deputy_job_floor_authorized(),
+    )
 }
