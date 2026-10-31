@@ -376,12 +376,22 @@ where
     let display_ids: Vec<String> = reqs
         .iter()
         .map(|req| {
-            aida_core::node_alias::display_spec_id(
-                req.agreed_id
-                    .as_deref()
-                    .or(req.spec_id.as_deref())
-                    .unwrap_or("?"),
-            )
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude —
+            // agreed ID first, local ID beside it (the Origin column shows
+            // the local ID itself under --show-origin).
+            if options.show_origin {
+                aida_core::node_alias::display_spec_id(
+                    req.agreed_id
+                        .as_deref()
+                        .or(req.spec_id.as_deref())
+                        .unwrap_or("?"),
+                )
+            } else {
+                aida_core::node_alias::agreed_and_local(
+                    req.agreed_id.as_deref(),
+                    req.spec_id.as_deref(),
+                )
+            }
         })
         .collect();
     let widest_id = display_ids

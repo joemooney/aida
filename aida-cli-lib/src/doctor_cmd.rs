@@ -282,6 +282,16 @@ fn doctor_fix_id_collisions(opts: &crate::doctor_renumber::FixOptions) -> Result
     crate::doctor_renumber::run(&project_root, &store_root, opts)
 }
 
+/// `aida doctor --fix agreed-ids`: assign agreed IDs to node-local specs that
+/// lack one (see `doctor_backfill_agreed`).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+fn doctor_fix_agreed_ids(opts: &crate::doctor_backfill_agreed::BackfillOptions) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_root = detect_distributed_store_from(&project_root)
+        .unwrap_or_else(|| project_root.join(".aida-store"));
+    crate::doctor_backfill_agreed::run(&store_root, opts)
+}
+
 // The rules intentionally match only anomalies that cannot be explained by a
 // wrapped prose line. A broad "two spaces" rule produces table/code noise and
 // cannot distinguish a typo from lost command-substitution text.
@@ -15629,9 +15639,12 @@ pub(crate) struct DoctorArgs {
     /// `id-collisions`: spec IDs that differ only by leading zeros are the
     /// same ID, so each collision keeps one spec on the number and gives the
     /// others a fresh ID, rewriting their mentions in the store, docs and
-    /// code comments. Needs --dry-run (preview) or --yes (apply).
+    /// code comments. `agreed-ids`: give every node-local spec that has no
+    /// agreed ID the next agreed number of its type; local IDs keep
+    /// resolving. Needs --dry-run (preview) or --yes (apply).
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-    #[clap(long, value_name = "CATEGORY", value_parser = ["id-collisions"])]
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[clap(long, value_name = "CATEGORY", value_parser = ["id-collisions", "agreed-ids"])]
     pub fix: Option<String>,
 
     /// With --fix: show the plan and write nothing to the store.
@@ -15708,9 +15721,20 @@ fn run_doctor(
         cmd,
     } = &args;
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-    if fix.is_some() {
+    if let Some(category) = fix.as_deref() {
         if *json {
-            anyhow::bail!("`aida doctor --fix id-collisions` has no JSON projection");
+            anyhow::bail!("`aida doctor --fix {category}` has no JSON projection");
+        }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+        if category == "agreed-ids" {
+            if *tree_only || !preserve.is_empty() {
+                anyhow::bail!("--tree-only and --preserve apply only to --fix id-collisions");
+            }
+            return self::doctor_fix_agreed_ids(&crate::doctor_backfill_agreed::BackfillOptions {
+                dry_run: *dry_run,
+                yes: *yes,
+                mapping: mapping.clone(),
+            });
         }
         return self::doctor_fix_id_collisions(&crate::doctor_renumber::FixOptions {
             dry_run: *dry_run,

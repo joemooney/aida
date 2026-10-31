@@ -3106,10 +3106,28 @@ fn run_add(
                     // creation path also has to start from fresh store state.
                     // trace:BUG-2017 | ai:codex — refuse before network or counters.
                     let configured_policy = read_id_format_policy(&project_dir);
-                    let id_policy = aida_core::allocation_authority::effective_policy(
+                    let add_type_prefix = match &req.prefix_override {
+                        Some(p) => p.clone(),
+                        None => req.req_type.default_prefix().to_string(),
+                    };
+                    // Type-aware: a non-root clone holding a spendable
+                    // delegated block for this type dispenses from it; the
+                    // root refuses when registry/root.yaml names another node.
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                    let id_policy = aida_core::allocation_authority::effective_policy_for(
                         store_path,
                         configured_policy,
+                        Some(&add_type_prefix),
                     )?;
+                    let delegated_idx = aida_core::allocation_authority::delegated_block(
+                        store_path,
+                        &add_type_prefix,
+                    )?;
+                    // A clone with a work binding keeps its node-local ID as
+                    // the spec ID and records the block's number as the agreed
+                    // ID beside it, in the same object write.
+                    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                    let keep_local_id = aida_core::work_binding::load(store_path)?.is_some();
                     // Blocks configured but unusable: say why, once per session.
                     // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
                     if configured_policy.uses_blocks() && !id_policy.uses_blocks() {
@@ -3220,9 +3238,14 @@ fn run_add(
                                     if let Ok(mut registry) =
                                         aida_core::BlockRegistry::load(&blocks_path)
                                     {
-                                        match registry
-                                            .find_active_block_or_global(&node_id, &type_prefix)
-                                        {
+                                        let active = match delegated_idx {
+                                            Some(idx) => Some(idx),
+                                            None => registry.find_active_block_or_global(
+                                                &node_id,
+                                                &type_prefix,
+                                            ),
+                                        };
+                                        match active {
                                             None => {
                                                 // No block for this type. Under `blocks-only`
                                                 // this is fatal — the project requires every
@@ -3294,9 +3317,33 @@ fn run_add(
                                                 // we land on a free slot or exhaust.
                                                 let mut dispensed: Option<(String, bool)> = None;
                                                 let mut skipped: Vec<String> = Vec::new();
+                                                let width =
+                                                    aida_core::id_identity::installed_widths()
+                                                        .seq_width;
                                                 while let Some((candidate, is_low)) =
-                                                    registry.dispense(&node_id, &type_prefix)
+                                                    match delegated_idx {
+                                                        Some(idx) => registry.blocks[idx]
+                                                            .dispense_with_prefix(&type_prefix)
+                                                            .map(|id| {
+                                                                (id, registry.blocks[idx].is_low())
+                                                            }),
+                                                        None => registry
+                                                            .dispense(&node_id, &type_prefix),
+                                                    }
                                                 {
+                                                    // `[ids] seq_width` pads a dispensed agreed
+                                                    // ID like any other mint (BUG-HOME-046);
+                                                    // unset keeps the block's own text.
+                                                    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                                                    let candidate = match (
+                                                        width,
+                                                        aida_core::id_identity::IdKey::parse(
+                                                            &candidate,
+                                                        ),
+                                                    ) {
+                                                        (Some(w), Some(key)) => key.render(w),
+                                                        _ => candidate,
+                                                    };
                                                     let taken = backend
                                                         .get_requirement_by_spec_id(&candidate)
                                                         .map(|opt| opt.is_some())
@@ -3354,7 +3401,13 @@ fn run_add(
                                                         );
                                                     }
                                                     // Persist the updated next pointer
-                                                    if let Err(e) = registry.save(&blocks_path) {
+                                                    let saved = if delegated_idx.is_some() {
+                                                        registry
+                                                            .save_dispensed(&blocks_path, &node_id)
+                                                    } else {
+                                                        registry.save(&blocks_path)
+                                                    };
+                                                    if let Err(e) = saved {
                                                         eprintln!(
                                                             "Warning: could not save blocks.yaml: {}",
                                                             e
@@ -3369,9 +3422,14 @@ fn run_add(
                                                         );
                                                     }
                                                     req.agreed_id = Some(agreed_id.clone());
-                                                    // Use the agreed ID as the spec_id so it is immediately
-                                                    // visible as the primary identifier.
-                                                    req.spec_id = Some(agreed_id);
+                                                    // An unbound (legacy single-node) store uses the
+                                                    // agreed ID as the spec_id too. A bound clone keeps
+                                                    // spec_id empty here so the node-local dispenser
+                                                    // assigns the local ID in the same write.
+                                                    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                                                    if !keep_local_id {
+                                                        req.spec_id = Some(agreed_id);
+                                                    }
                                                 }
                                             }
                                         }
@@ -3407,10 +3465,12 @@ fn run_add(
                     {
                         let last = &added;
                         // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+                        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
                         println!(
                             "Added: {} - {}",
-                            aida_core::node_alias::display_spec_id(
-                                last.spec_id.as_deref().unwrap_or("?")
+                            aida_core::node_alias::agreed_and_local(
+                                last.agreed_id.as_deref(),
+                                last.spec_id.as_deref()
                             ),
                             last.title
                         );
@@ -6700,6 +6760,13 @@ fn run_show(
                                         lines.push(crate::toon::scalar("origin_id", origin));
                                     }
                                 }
+                                // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                                if aida_core::node_alias::agreed_id_pending(
+                                    req.agreed_id.as_deref(),
+                                    req.spec_id.as_deref(),
+                                ) {
+                                    lines.push(crate::toon::scalar("agreed_id", "pending"));
+                                }
                                 lines.push(crate::toon::scalar("title", &req.title));
                                 lines.push(crate::toon::scalar(
                                     "type",
@@ -6986,7 +7053,29 @@ fn run_show(
                             }
                             // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
                             let friendly = req.friendly_id();
-                            println!("{}: {}", "ID".bold(), friendly);
+                            // Agreed ID first, local ID beside it; a local-only
+                            // spec says its agreed ID is still pending.
+                            // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                            if aida_core::node_alias::agreed_id_pending(
+                                req.agreed_id.as_deref(),
+                                req.spec_id.as_deref(),
+                            ) {
+                                println!(
+                                    "{}: {} {}",
+                                    "ID".bold(),
+                                    friendly,
+                                    "(agreed id pending)".dimmed()
+                                );
+                            } else {
+                                println!(
+                                    "{}: {}",
+                                    "ID".bold(),
+                                    aida_core::node_alias::agreed_and_local(
+                                        req.agreed_id.as_deref(),
+                                        req.spec_id.as_deref(),
+                                    )
+                                );
+                            }
                             if !friendly.eq_ignore_ascii_case(&req.display_id()) {
                                 println!(
                                     "{}: {}",
@@ -9892,3 +9981,7 @@ pub(crate) static SEARCH: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/task_1981_add_tests.rs"]
 mod task_1981_add_tests;
+
+#[cfg(test)]
+#[path = "tests/story_105_agreed_first_tests.rs"]
+mod story_105_agreed_first_tests;

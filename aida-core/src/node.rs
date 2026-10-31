@@ -885,6 +885,41 @@ impl BlockRegistry {
         Ok(())
     }
 
+    /// Save after dispensing from a delegated block on a non-root clone.
+    ///
+    /// The only change admitted against the registry on disk is `next`
+    /// advancing on `node_id`'s own blocks: no block is added, removed,
+    /// re-ranged or re-bound, so this can never mint a claim. The root (or a
+    /// file outside a clone) takes the ordinary [`save`](Self::save) path.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[cfg(feature = "native")]
+    pub fn save_dispensed(&self, path: &Path, node_id: &str) -> anyhow::Result<()> {
+        let parent = path.parent().unwrap_or(Path::new("."));
+        let root = parent.parent().unwrap_or(parent);
+        if crate::allocation_authority::resolve(root).is_ok_and(|m| m.authoritative)
+            || !crate::allocation_authority::in_git_clone(root).unwrap_or(true)
+        {
+            return self.save(path);
+        }
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(path)?;
+        let on_disk = Self::load(path)?;
+        let same_shape = on_disk.blocks.len() == self.blocks.len()
+            && on_disk.blocks.iter().zip(&self.blocks).all(|(old, new)| {
+                let mut moved = new.clone();
+                moved.next = old.next;
+                moved == *old
+                    && (new.next == old.next || (new.node_id == node_id && new.next > old.next))
+            });
+        anyhow::ensure!(
+            same_shape,
+            "a non-root clone may only advance its own delegated blocks; registry/blocks.yaml was not written"
+        );
+        let content = serde_yaml::to_string(self)?;
+        crate::write_atomic(path, content)?;
+        Ok(())
+    }
+
     /// Run `f` while holding an exclusive advisory lock tied to the block
     /// registry at `blocks_path`.
     ///

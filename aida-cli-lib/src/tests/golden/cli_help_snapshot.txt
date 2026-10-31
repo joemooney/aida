@@ -11824,9 +11824,11 @@ Options:
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
-          code comments. Needs --dry-run (preview) or --yes (apply)
+          code comments. `agreed-ids`: give every node-local spec that has no agreed ID the next
+          agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes
+          (apply)
           
-          [possible values: id-collisions]
+          [possible values: id-collisions, agreed-ids]
 
       --dry-run
           With --fix: show the plan and write nothing to the store
@@ -40816,7 +40818,7 @@ Working on aida itself
       {
         "name": "fix",
         "takes_value": true,
-        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. Needs --dry-run (preview) or --yes (apply)"
+        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. `agreed-ids`: give every node-local spec that has no agreed ID the next agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes (apply)"
       },
       {
         "name": "fix-sandbox",

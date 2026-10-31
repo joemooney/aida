@@ -518,6 +518,34 @@ pub fn display_spec_id(id: &str) -> String {
     installed().display(&crate::id_identity::render_id(id), canonical_ids())
 }
 
+/// A spec's IDs as list rows show them: the agreed ID first, with the local
+/// ID beside it in parentheses when the spec has both and they differ
+/// (`STORY-5801 (STORY-HOME-105)`); otherwise the one ID it has.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn agreed_and_local(agreed_id: Option<&str>, spec_id: Option<&str>) -> String {
+    let agreed = agreed_id.map(str::trim).filter(|a| !a.is_empty());
+    let local = spec_id.map(str::trim).filter(|s| !s.is_empty());
+    match (agreed, local) {
+        (Some(a), Some(l)) if !crate::id_identity::same_id(a, l) => {
+            format!("{} ({})", display_spec_id(a), display_spec_id(l))
+        }
+        (Some(a), _) => display_spec_id(a),
+        (None, Some(l)) => display_spec_id(l),
+        (None, None) => "?".to_string(),
+    }
+}
+
+/// Whether a spec still waits for its agreed ID: it has only a node-local
+/// ID (`TYPE-<node>-NNN`) and no agreed ID. The next sync that reaches a
+/// block holder (merge-gate promotion) assigns one.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub fn agreed_id_pending(agreed_id: Option<&str>, spec_id: Option<&str>) -> bool {
+    agreed_id.is_none_or(|a| a.trim().is_empty())
+        && spec_id
+            .and_then(crate::id_identity::IdKey::parse)
+            .is_some_and(|k| k.is_node_local())
+}
+
 // ---------------------------------------------------------------------------
 // Bare ids vs node-local numbers (BUG-b6b1…-036).
 //
