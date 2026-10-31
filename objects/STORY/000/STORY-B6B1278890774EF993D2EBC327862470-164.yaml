@@ -33,12 +33,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T19:23:04.998731220Z
+modified_at: 2026-10-31T20:18:20.178676500Z
 req_type: Story
 tags:
 - architecture
 - from-operator
 - id-allocation
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1936d-5e47-74e2-95dd-d057a2653444
+  created_at: 2026-10-31T20:18:20.178671706Z
+  created_by: joe
+history:
+- id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
+  author: joe
+  timestamp: 2026-10-31T20:18:22.256216839Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes: []
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
