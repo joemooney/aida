@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T18:08:10.261990516Z
+modified_at: 2026-10-31T18:09:42.116633001Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -56,6 +56,12 @@ comments:
   modified_at: 2026-10-31T17:30:34.982145104Z
   session_id: 01a192ca4027
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19327-32e4-76f2-b1fd-ad5ad72be359
+  author: joe
+  content: 'ADVISOR RULING 2026-10-31 11:11: PR-3171 round 1 is CHANGES REQUESTED; all 7 items are verified in the diff. CI (rest), read by the advisor (job 124612168488): aida-core allocation_authority::tests::bug_2017_batch_alias_conflicts_refuse_before_any_persistence fails with an unwrap on Err "spec ID BUG-7-009 is already used by requirement 01a19319... (IDs differing only by leading zeros are the same ID); nothing was written". Item 4''s new per-batch agreed-id index now refuses at a point where this BUG-2017 test expects to reach its OWN alias-conflict refusal. Most likely the fixture batch re-uses an ID that the new index sees as staged. Fix the ordering, or the fixture, so BUG-2017''s alias-conflict refusal still fires first and is asserted; do not weaken either check. This is a CI-only delta: change nothing else. Gate: cargo test -p aida-core --lib allocation_authority plus make check-ci-fast. No force push.'
+  created_at: 2026-10-31T18:09:42.116633001Z
+  modified_at: 2026-10-31T18:09:42.116633001Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19213-9b1f-7a82-b146-412ba9b18a8f
   author: joe
