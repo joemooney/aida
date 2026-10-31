@@ -9027,7 +9027,9 @@ pub(crate) fn rework_pr_head_accepted(
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
 fn rework_held_prs_for_spec(project_root: &std::path::Path, spec: &str) -> Vec<u64> {
     use crate::gate::merge_hold_core as mh;
-    let canonical = |id: &str| aida_core::node_alias::expand_or_keep(id).to_ascii_uppercase();
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
+    let canonical =
+        |id: &str| aida_core::id_identity::id_key(&aida_core::node_alias::expand_or_keep(id));
     let wanted = canonical(spec);
     let root = mh::hold_store_root(project_root);
     mh::list_holds(&root)
@@ -10115,18 +10117,13 @@ pub(crate) fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
     if let Ok(uuid) = uuid::Uuid::parse_str(query) {
         return req.id == uuid;
     }
-    let q = aida_core::node_alias::expand_or_keep(query).to_ascii_uppercase();
-    if let Some(s) = &req.spec_id {
-        if s.to_ascii_uppercase() == q {
-            return true;
-        }
-    }
-    if let Some(a) = &req.agreed_id {
-        if a.to_ascii_uppercase() == q {
-            return true;
-        }
-    }
-    false
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric
+    // identity: TASK-0042 matches a spec stored as TASK-42.
+    let q = aida_core::node_alias::expand_or_keep(query);
+    [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+        .into_iter()
+        .flatten()
+        .any(|s| aida_core::id_identity::same_id(s, &q))
 }
 
 /// STORY-42: pick the scope string for a single queued entry.

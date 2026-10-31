@@ -131,7 +131,7 @@ trusted AIDA project, the same snippet can live in `.codex/config.toml`.
 Continue using `aida statusline` directly in the shell when you need the
 AIDA-specific role, queue, cache, and session summary.
 
-trace:TASK-0413 | ai:claude
+trace:TASK-b6b1278890774ef993d2ebc327862470-249 | ai:claude
 
 ## Launch Codex Through AIDA
 
@@ -245,7 +245,7 @@ Recommended pattern:
   `file_finding`, `claim_task`, `post_directive`, `ack_brief`.
 - Verify cross-surface state with CLI when testing the substrate: MCP write, then CLI read.
 - Parse tool output defensively. Error and success bodies are human-readable text envelopes today.
-- Avoid concurrent claims on the same spec until TASK-438 closes the `claim_task` TOCTOU race.
+- Avoid concurrent claims on the same spec until TASK-b6b1278890774ef993d2ebc327862470-271 closes the `claim_task` TOCTOU race.
 - Punt design forks instead of guessing. Use `post_punt` when a spec is ambiguous and `file_finding` for rough edges.
 
 ## Codex Discipline In AIDA Projects
@@ -290,7 +290,7 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 
 - `structuredContent` is emitted on success (Path B, STORY-399) alongside the text envelope; parse either.
 - Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
-- `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
+- `claim_task` has a known race under concurrent claims. TASK-b6b1278890774ef993d2ebc327862470-271 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
 - Project-local Codex registration is scaffolded only when explicitly requested with `aida init --with-mcp` (a `.codex/config.toml` with an `[mcp_servers.aida]` block). Manual `codex mcp add aida -- aida mcp-serve` remains available for existing projects or a personal `~/.codex/config.toml`. trace:TASK-0424 trace:STORY-1129
 - The default invisible-memory path is CLI/TOON; MCP is optional. The

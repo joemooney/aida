@@ -158,7 +158,7 @@ Found 2 punt(s):
 
 - TASK-440 [ambiguous-spec] The spec body ends with 'Defer until the first MCP client surfaces a need for the structured shape...'
   resolution: escalated-to-human  (2026-05-22T04:22:53.581943535+00:00)
-- TASK-439 [other] Redundant drain: TASK-439 is already implemented, committed, pushed, and under review as PR-166...
+- TASK-b6b1278890774ef993d2ebc327862470-272 [other] Redundant drain: TASK-b6b1278890774ef993d2ebc327862470-272 is already implemented, committed, pushed, and under review as PR-166...
   resolution: advisor-resolved  (2026-05-22T06:08:38.272372873+00:00)
 ```
 
@@ -183,15 +183,15 @@ Found 49 finding(s):
 ```text
 Found 1 active lease(s):
 
-- 019e5089edee scope=TASK-438 role=implementer owner=joe.mooney@gmail.com kind=session started_at=2026-05-22T16:34:37.216236922Z
+- 019e5089edee scope=TASK-b6b1278890774ef993d2ebc327862470-271 role=implementer owner=joe.mooney@gmail.com kind=session started_at=2026-05-22T16:34:37.216236922Z
 ```
 
 ### 5. Worker Directives Cluster
 **Tool Called:** `list_directives()`
 ```text
 11 pending directives:
-  1. drain TASK-439 --auto-complete --no-human=both
-  2. drain TASK-436 --auto-complete --no-human=both
+  1. drain TASK-b6b1278890774ef993d2ebc327862470-272 --auto-complete --no-human=both
+  2. drain TASK-b6b1278890774ef993d2ebc327862470-269 --auto-complete --no-human=both
   3. drain TASK-440 --auto-complete --no-human=both
   ...
   11. exit
@@ -232,7 +232,7 @@ to Claude, Codex and Antigravity the same way.
 
 - `structuredContent` is emitted on success (Path B, STORY-399) alongside the text envelope.
 - Error payloads carry both a text envelope and a structured `structuredError` object (STORY-401).
-- Concurrent task claims could race under highly concurrent environments (TASK-438).
+- Concurrent task claims could race under highly concurrent environments (TASK-b6b1278890774ef993d2ebc327862470-271).
 
 ## Phase 2: Bounded Writes
 

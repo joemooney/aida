@@ -77,7 +77,23 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
             };
             println!("{}: {}", "Numbering".cyan(), numbering_str);
 
-            println!("{}: {}", "Digits".cyan(), store.id_config.digits);
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the
+            // `[ids]` widths replaced `id_config.digits`.
+            let widths =
+                aida_core::id_identity::IdWidths::load(&store_sync_config_project_root(storage));
+            let show = |w: Option<usize>| match w {
+                Some(w) => w.to_string(),
+                None => format!(
+                    "<unset> (mints {}, displays as stored)",
+                    aida_core::id_identity::DEFAULT_MINT_WIDTH
+                ),
+            };
+            println!("{}: {}", "[ids] seq_width".cyan(), show(widths.seq_width));
+            println!(
+                "{}: {}",
+                "[ids] node_seq_width".cyan(),
+                show(widths.node_seq_width)
+            );
             println!(
                 "{}: {}",
                 "Next global number".cyan(),
@@ -130,13 +146,15 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
             );
         }
         ConfigCommand::Digits { digits } => {
-            if *digits < 1 || *digits > 6 {
-                anyhow::bail!("Digits must be between 1 and 6");
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — writes
+            // `[ids] seq_width`; metadata.yaml `digits` no longer drives minting.
+            if *digits > 6 {
+                anyhow::bail!("Digits must be between 0 and 6");
             }
-            store.id_config.digits = *digits;
-            storage.save(&store)?;
+            let project_root = store_sync_config_project_root(storage);
+            crate::init_cmd::write_ids_widths(&project_root, Some(*digits), None)?;
             println!(
-                "{} ID digits set to {}",
+                "{} Spec ID numbers now pad to {} digit(s) ([ids] seq_width in .aida/config.toml)",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 digits
             );

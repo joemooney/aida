@@ -175,6 +175,8 @@ mod do_dispatch;
 mod doc_cmd;
 mod docs;
 mod doctor_cmd;
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+mod doctor_renumber;
 // trace:STORY-1462 | ai:claude — runaway-seat watchdog doctor category.
 mod drain_caps;
 mod drain_cmd;
@@ -515,6 +517,8 @@ mod presence;
 mod presence_cmd;
 mod process_probe;
 mod process_retry;
+// BUG-HOME-048: title trailers complete only the specs a PR covers.
+mod trailer_coverage;
 use crate::process_retry::RetryEtxtbsy;
 // BUG-677: the /proc probe + lease/spec liveness classifiers moved to
 // aida-core so aida-tui can compute liveness in-process. Re-export the shared

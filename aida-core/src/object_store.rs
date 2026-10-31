@@ -149,6 +149,42 @@ fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
     Ok((type_prefix, seq))
 }
 
+/// Every stored object stem (spec_id as filed) that is numerically the same
+/// ID as `spec_id` — `TASK-0042.yaml` for `TASK-42` — sorted. Reads only the
+/// one shard directory the sequence maps to (shards are numeric, so every
+/// padding of a number lives in the same directory); no YAML is parsed.
+/// Empty for a malformed id or a missing shard.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+pub fn numeric_twin_stems(objects_root: &Path, spec_id: &str) -> Result<Vec<String>> {
+    let canonical = canonical_spec_id(spec_id.trim());
+    let Ok((type_prefix, seq)) = parse_spec_id(&canonical) else {
+        return Ok(Vec::new());
+    };
+    let dir = objects_root
+        .join(&type_prefix)
+        .join(format!("{:03}", shard_number(seq)));
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(|| format!("Failed to read {}", dir.display())),
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if crate::id_identity::same_id(stem, &canonical) {
+            out.push(stem.to_string());
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
 /// Write a single requirement to the object store.
 ///
 /// Creates parent directories as needed. Overwrites if the file already exists.
@@ -686,7 +722,12 @@ pub fn scan_id_matches_until(
         let Ok(text) = crate::read_atomic(&path) else {
             continue;
         };
-        if !text.to_ascii_uppercase().contains(&needle) {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the
+        // cheap text pre-filter matches the numeric tail so padded twins pass.
+        let tail = crate::id_identity::IdKey::parse(&needle)
+            .map(|k| k.seq)
+            .unwrap_or_else(|| needle.clone());
+        if !text.to_ascii_uppercase().contains(&tail) {
             continue;
         }
         let Ok(req) = serde_yaml::from_str::<Requirement>(&text) else {
@@ -694,8 +735,7 @@ pub fn scan_id_matches_until(
         };
         let answers = |s: &Option<String>| {
             s.as_deref()
-                .map(str::trim)
-                .is_some_and(|s| s.eq_ignore_ascii_case(&needle))
+                .is_some_and(|s| crate::id_identity::same_id(s, &needle))
         };
         if answers(&req.spec_id) || answers(&req.agreed_id) {
             matches.push(req);

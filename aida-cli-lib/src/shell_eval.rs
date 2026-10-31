@@ -81,7 +81,7 @@ pub(crate) const INIT_CD_CAP: &str = "init-cd";
 /// as inert comment noise and the `cd` would be lost. A binary that predates
 /// the file channel sees neither `init-cd` nor a meaningful env var and prints
 /// the plain copy-paste hint, which is the correct degradation.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 pub(crate) const INIT_CD_FILE_CAP: &str = "init-cd-file";
 
 /// The capability token a wrapper advertises in `AIDA_SHELL_WRAPPER` when its
@@ -95,7 +95,7 @@ pub(crate) const ZSH_LOCALOPTS_CAP: &str = "zsh-localopts";
 /// invocation (never exported into the shell), so the child's stdout stays its
 /// own: an interactive init renders human output and shows its prompts live
 /// instead of being buffered inside a command substitution.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 pub(crate) const INIT_CD_FILE_ENV: &str = "AIDA_INIT_CD_FILE";
 
 /// The side-channel path the wrapper handed THIS process, captured once by
@@ -129,7 +129,7 @@ pub(crate) fn init_cd_file() -> Option<&'static std::ffi::OsStr> {
 /// the file that it applies to stdout for the legacy verbs, so a file that was
 /// never written, was truncated mid-write, or holds anything outside the
 /// markers is never eval'd.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 pub(crate) fn write_init_cd_file(path: &std::path::Path, payload: &str) -> std::io::Result<()> {
     std::fs::write(path, format!("{EVAL_BEGIN}\n{payload}\n{EVAL_END}\n"))
 }
@@ -270,7 +270,7 @@ mod tests {
 
     /// The side-channel file carries exactly one marker pair around the
     /// payload and nothing else, so the wrapper's strict validation accepts it.
-    // trace:BUG-0445 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
     #[test]
     fn init_cd_file_holds_exactly_one_marked_block() {
         let dir = tempfile::tempdir().unwrap();
@@ -284,7 +284,7 @@ mod tests {
 
     /// The file channel and the stdout channel are different capabilities and
     /// neither token is a substring match for the other.
-    // trace:BUG-0445 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
     #[test]
     fn init_cd_file_cap_is_distinct_from_init_cd() {
         assert!(marker_has_cap(

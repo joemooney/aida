@@ -174,7 +174,7 @@ pub fn derive_pr_body_from_commit(commit_message: &str) -> String {
 pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
     let re = regex::Regex::new(r"(?i)\b([a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d+(?:-\d+)*)\b")
         .expect("valid spec id regex");
-    let mut out = Vec::new();
+    let mut out: Vec<String> = Vec::new();
     for cap in re.captures_iter(text) {
         let id = cap[1].to_ascii_uppercase();
         let prefix = id.split('-').next().unwrap_or("");
@@ -182,7 +182,12 @@ pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
         if matches!(prefix, "PR" | "MR" | "GH" | "GL") {
             continue;
         }
-        if !out.iter().any(|seen| seen == &id) {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — TASK-0042
+        // and TASK-42 are one spec: dedup by numeric identity.
+        if !out
+            .iter()
+            .any(|seen| aida_core::id_identity::same_id(seen, &id))
+        {
             out.push(id);
         }
     }
@@ -340,7 +345,12 @@ pub(crate) fn derive_squash_trailer(
         )]);
     }
     let refs_ids = refs_spec_ids_in_text(pr_title);
-    let is_ref = |id: &str| refs_ids.iter().any(|r| r.eq_ignore_ascii_case(id));
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    let is_ref = |id: &str| {
+        refs_ids
+            .iter()
+            .any(|r| aida_core::id_identity::same_id(r, id))
+    };
     let mut notes = Vec::new();
     let title_ids: Vec<String> = extract_trailing_spec_ids_from_subject(pr_title)
         .into_iter()
@@ -604,7 +614,12 @@ pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
     let existing = extract_trailing_spec_ids_from_subject(subject);
     let missing: Vec<&String> = ids
         .iter()
-        .filter(|id| !existing.iter().any(|seen| seen == *id))
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+        .filter(|id| {
+            !existing
+                .iter()
+                .any(|seen| aida_core::id_identity::same_id(seen, id))
+        })
         .collect();
     if missing.is_empty() {
         return subject.to_string();
@@ -788,7 +803,11 @@ pub fn refs_spec_ids_in_text(text: &str) -> Vec<String> {
             break;
         };
         for id in refs_group_spec_ids(&rest[..close_at]) {
-            if !out.contains(&id) {
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+            if !out
+                .iter()
+                .any(|seen| aida_core::id_identity::same_id(seen, &id))
+            {
                 out.push(id);
             }
         }

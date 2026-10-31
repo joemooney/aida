@@ -74,7 +74,11 @@ queued without that evidence.
   useful commit text and inspect the resulting PR. Enrich the description
   through the existing forge tooling if needed; the optional
   [description example](examples/pr-description-template.md) can help.
-  Keep every covered spec in the title's trailing parenthesized group.
+  Keep every covered spec in the title's trailing parenthesized group,
+  written as the full canonical or display id the lane claimed
+  (`TASK-HOME-138`), never a bare short form (`TASK-138`) that can resolve
+  to a different spec. Ship refuses a trailer outside the PR's claim.
+  <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude -->
 - Keep review independent: the implementer hands off, never supplies their
   own approval or self-merges by default. Opening a PR is not completion;
   never mark a spec Completed before merge. Use the existing Done checkpoint
