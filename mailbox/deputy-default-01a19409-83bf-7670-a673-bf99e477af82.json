@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a19409-83bf-7670-a673-bf99e477af82",
+  "thread_id": "deputy-01a19409-83bf-7670-a673-bf99e477af82",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793485030364,
+  "body": "Deputy \"default\" finished job 01a19409-83bf-7670-a673-bf99e477af82: rc 0 (ok).\nCommand: aida add --type task --priority medium --status draft --tags docs,website,air-gap --title Publish the air-gapped development explainer on the product website --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/task-site-airgap.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a19409-83bf-7670-a673-bf99e477af82.out\nRead it with `aida deputy log 01a19409-83bf-7670-a673-bf99e477af82`.\n",
+  "subject": "deputy job 01a19409 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

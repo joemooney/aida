@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a19409-8552-7903-898c-3b73a2bc0e7d",
+  "thread_id": "deputy-01a19409-8552-7903-898c-3b73a2bc0e7d",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793485039828,
+  "body": "Deputy \"default\" finished job 01a19409-8552-7903-898c-3b73a2bc0e7d: rc 1 (exit).\nCommand: aida add --type task --priority low --status draft --tags docs,website,gitlab --title Publish the product website on GitLab Pages as well as GitHub Pages --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/task-gitlab-pages.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a19409-8552-7903-898c-3b73a2bc0e7d.out\nRead it with `aida deputy log 01a19409-8552-7903-898c-3b73a2bc0e7d`.\n`aida awaiting` lists it until you run `aida deputy ack 01a19409-8552-7903-898c-3b73a2bc0e7d`.\n",
+  "subject": "deputy job 01a19409 FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
