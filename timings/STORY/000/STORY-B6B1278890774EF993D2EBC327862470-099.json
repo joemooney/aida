@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-099",
+  "publishes": [
+    {
+      "at": "2026-10-31T16:51:15.986855111Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T01:00:50.931002810Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T10:00:02.184110457Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-099",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T11:23:39.594162638Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-31T11:23:39.596361031Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-31T13:06:27.848099017Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-099",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-099",
+        "branch": "origin/story-b6b1278890774ef993d2ebc327862470-099",
+        "first_seen": "2026-10-31T13:06:27.848067408+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-31T14:57:33.799854581Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-31T14:57:33.848004163Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-31T16:50:33.546608211Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T16:50:59.764080259Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-099",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3164
+      }
+    },
+    {
+      "ts": "2026-10-31T16:51:15.847913250Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-099",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "796646253353707591b7394e6e9a47db3d634a5c",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
