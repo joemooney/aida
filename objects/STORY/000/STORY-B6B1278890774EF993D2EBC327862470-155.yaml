@@ -1,0 +1,28 @@
+id: 01a191dd-582d-79f0-926c-9c800ec6c13d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-155
+title: 'aida deputy slice 2: failed jobs in awaiting, completion mail, pause/resume, stop at mandate expiry'
+description: |
+  Slice 2 of STORY-HOME-099 (aida deputy), planned in the 03:30 signoff and carved out at the PR-3164 review (advisor, 2026-10-31 05:12). Covers the parts of 099's AC5 and the deferred items that slice 1 does not build.
+
+  Acceptance:
+  1. `aida awaiting` lists failed deputy jobs (job id, requester session, rc, log path) until they are acknowledged. (099 AC5, second half)
+  2. When a job finishes, the requester gets mail with rc and log path; `submit --wait` is unchanged.
+  3. `aida deputy pause` / `resume`: a paused deputy claims no new jobs, and running jobs finish.
+  4. The deputy exits cleanly when the operator's mandate or grant expires, and refuses new claims after that point. Tested with a short-TTL grant fixture.
+  5. The slice-3 tty policy hooks named in the 099 sketch are stubbed with refusals, so no silent fail-open.
+  Gate: STRICT (authority-bearing).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T12:09:24.781126891Z
+modified_at: 2026-10-31T12:09:24.781126891Z
+req_type: Story
+filed_at:
+  code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d083bdf13d4
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
