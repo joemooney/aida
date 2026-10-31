@@ -23,12 +23,12 @@ description: |
 
   ## Out of scope
   Changing the delegation policy itself (a grant still does not implicitly delegate its own seat). Separate cosmetic oddity, not required here: `role enter --no-resume` prints "✓ Resumed role".
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:05:17.938860854Z
-modified_at: 2026-10-31T21:22:48.542131081Z
+modified_at: 2026-10-31T22:10:45.232431240Z
 req_type: Bug
 tags:
 - area:agents
@@ -126,6 +126,20 @@ history:
   timestamp: 2026-10-31T20:47:55.288035211Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a19403-e36a-7013-92db-31996db531d7
+  author: aida-auto-bump
+  timestamp: 2026-10-31T22:10:45.226151860Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a19403-e370-7871-84bf-96fd0d0ed26d
+  timestamp: 2026-10-31T22:10:45.232426279Z
+  agent: aida
+  commit_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
+  summary: 'Base-only update from main (gh update-branch ad1f3fef8804cd8450f867f5afa623a19d490df3 -> f7c65a0845f6bec8b9eac5a820d2c10cf48a3fc9); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -137,3 +151,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T20:44:10.999483572Z
   implemented_by: joe
+  completed_at: 2026-10-31T22:10:45.226146415Z
+  completion_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
