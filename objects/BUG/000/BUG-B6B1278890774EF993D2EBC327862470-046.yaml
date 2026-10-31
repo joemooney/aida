@@ -12,12 +12,12 @@ description: |-
   5. Display padding is a setting: [display] id_seq_width in .aida/config.toml (0 = no padding) pads the sequence on output only, never in stored IDs or filenames; default keeps today's look (legacy unpadded, node-local 3). aida list aligns its ID column to the widest rendered ID.
 
   Architecture: this changes ID identity and needs a sketch on this spec plus advisor signoff before code.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T09:07:36.615428193Z
+modified_at: 2026-10-31T09:10:39.253867420Z
 req_type: Bug
 tags:
 - ids
@@ -52,6 +52,15 @@ comments:
   created_at: 2026-10-31T09:07:36.615428193Z
   modified_at: 2026-10-31T09:07:36.615428193Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+history:
+- id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
+  author: aida-session-start
+  timestamp: 2026-10-31T09:10:39.253865261Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
