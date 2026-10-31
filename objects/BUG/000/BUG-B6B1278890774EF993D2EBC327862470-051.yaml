@@ -1,0 +1,26 @@
+id: 01a1924e-c791-71f2-9695-838a8b0a1ce4
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-051
+title: Seat-clone end refuses with an empty 'holds work origin does not have' list (ancestor-of-origin branch counted as unpushed)
+description: |
+  `aida session end <lease> --yes` (and the reviewer launch that calls it to end a dead implementer lease) refuses with `seat clone <path> holds work origin does not have:` followed by an EMPTY list, so the operator cannot see what blocks it. Seen 2026-10-31 07:13 on the BUG-048 seat: git status clean, the branch head an ancestor of origin's branch (origin only gained a merge from main via update-branch), and .aida-store a symlink to the primary store with 0 unpushed commits. The advisor had to rm -rf the clone and run `aida worktree dismiss` to unblock the PR-3162 review. Earlier (06:12, BUG-046 seat) the real cause was two untracked scratch files, which the message also did not name.
+
+  Acceptance:
+  1. The refusal lists every item it found (untracked paths, commits not on origin, stashes, refs), one per line. An empty finding set is never a refusal.
+  2. A branch whose head is an ancestor of origin's copy of that branch counts as pushed.
+  3. Symlinked store dirs (.aida-store -> primary) and gitignored build or cache files (.aida/cache.db*, .aida/agents, target/) are not "work".
+  4. Tests: an ancestor-of-origin branch ends cleanly; an untracked file is refused and named.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T14:13:18.865775624Z
+modified_at: 2026-10-31T14:13:18.865775624Z
+req_type: Bug
+filed_at:
+  code_sha: e564a298167291f6bac3ebc7fe842839c1a2285c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0ee902ae50d
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
