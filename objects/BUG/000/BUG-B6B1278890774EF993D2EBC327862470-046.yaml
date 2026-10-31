@@ -9,7 +9,7 @@ description: |-
   2. The allocator (every path that mints IDs, incl. db merge-gate promotion) refuses or skips a number already used under any padding; a regression test mints next to a padded existing ID and gets no collision.
   3. One-time migration (single-user surgery, no compat shim): renumber one side of each of the 30 colliding pairs to fresh IDs, rewriting references in the store, code trace comments and docs; record old->new in each renumbered spec's history. Pick the side with fewer references; the sketch states which.
   4. aida doctor reports any remaining numeric-collision group (should be zero after 3).
-  5. Display padding is a setting: [display] id_seq_width in .aida/config.toml (0 = no padding) pads the sequence on output only, never in stored IDs or filenames; default keeps today's look (legacy unpadded, node-local 3). aida list aligns its ID column to the widest rendered ID.
+  5. Display padding is a setting: [ids] seq_width in .aida/config.toml (0 = no padding) pads the sequence on output only, never in stored IDs or filenames; default keeps today's look (legacy unpadded, node-local 3). aida list aligns its ID column to the widest rendered ID.
 
   Architecture: this changes ID identity and needs a sketch on this spec plus advisor signoff before code.
 status: Completed
@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T16:06:42.313174743Z
+modified_at: 2026-10-31T16:37:48.174524949Z
 req_type: Bug
 tags:
 - ids
@@ -392,6 +392,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a192d3-16b5-7222-b9db-4dd09923d960
+  author: joe
+  timestamp: 2026-10-31T16:37:49.877643887Z
+  session_id: 01a192ca4027
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a19298-d7ac-7993-9699-a898e858d67d
   timestamp: 2026-10-31T15:34:12.652822197Z
