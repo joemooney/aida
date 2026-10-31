@@ -11,12 +11,12 @@ description: |
   3. Keeps the scope and flags exactly; the new expiry is now + duration (default: the original duration), capped by the same maximum as start.
   4. Writes an audit/lineage record (old expiry -> new expiry, who renewed); `aida mandate status` shows the renewal count.
   5. Grants derived from the mandate stay valid across the renewal (no re-delegation needed), with a test.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:00:23.068491024Z
-modified_at: 2026-10-31T23:05:13.450731606Z
+modified_at: 2026-10-31T23:27:27.159370353Z
 req_type: Story
 relationships:
 - rel_type:
@@ -94,6 +94,20 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: STORY-2206
+- id: 01a1944a-1bb2-7633-baf4-813562edb8bb
+  author: aida-auto-bump
+  timestamp: 2026-10-31T23:27:27.154124529Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1944a-1bb7-7c92-8a1d-b917515038a0
+  timestamp: 2026-10-31T23:27:27.159366015Z
+  agent: aida
+  commit_sha: 4f33bdec3db7b660a60445af3c879486b5c33977
+  summary: 'Base-only update from main (gh update-branch 1755fe213e07ea872b6999a08ee4372072df309d -> 07097ad0f0b2b6462cd6dfd01004393192d06441); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -102,11 +116,7 @@ filed_at:
   aida_build_sha: 53817a25ee8
   vendor: claude
   session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 5 ACs are implemented and tested, but CI cli-0 is red on every head of this branch (4/4): the new ''aida mandate renew'' command has no row in docs/cli-format-json-audit.md, so the BUG-1502 exhaustive-audit integration test fails.'
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-166 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T22:23:23.547927702Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-31T23:27:27.154119386Z
+  completion_sha: 4f33bdec3db7b660a60445af3c879486b5c33977
