@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T16:27:46.713725587Z
+modified_at: 2026-10-31T16:28:24.653607688Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -88,6 +88,12 @@ comments:
   modified_at: 2026-10-31T16:27:34.950389161Z
   session_id: 01a192c86747
   harness_version: 2.1.316 (Claude Code)
+- id: 01a192ca-76cd-7a11-a964-0ffea1f1e88d
+  author: joe
+  content: 'ADVISOR SIGNOFF 2026-10-31 09:31 on the sketch: APPROVED, implementation may start. Q1: agreed-first for a bare STORY-NNN, plus a one-line ''did you mean <local twin>'' hint when a local twin exists. This deliberately reverses BUG-HOME-036''s local-twin preference for backfilled specs; note that in the PR body and update 036''s test expectations rather than deleting them. Q2: NO. A flat agreed ID is already canonical and renders alone, so it gets no b6b local ID. Q3: ship the tooling plus a dry-run mapping posted on this spec. The ADVISOR (not the operator; single user, zero-intervention) runs enroll-root and the backfill apply right after merge, the same way BUG-046''s apply was run. Gate: LIGHT plus the CLI fixture for resolution order; make check-ci-compile if >10 files. No force push.'
+  created_at: 2026-10-31T16:28:24.653607688Z
+  modified_at: 2026-10-31T16:28:24.653607688Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
