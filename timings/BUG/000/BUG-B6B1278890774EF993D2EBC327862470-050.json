@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+  "publishes": [
+    {
+      "at": "2026-10-31T21:03:58.857828919Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-31T13:38:03.897201597Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-050",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T13:41:26.187282134Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-050",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T17:35:59.082910873Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+        "branch": "origin/bug-b6b1278890774ef993d2ebc327862470-050",
+        "first_seen": "2026-10-31T17:35:59.082881302+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-31T20:44:22.560668313Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3166,
+        "verdict": "APPROVED",
+        "reviewed_sha": "19934edc38dec932d4b62bd2fb548d8c60a27d54"
+      }
+    },
+    {
+      "ts": "2026-10-31T21:03:06.422099965Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T21:03:41.663790940Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3166
+      }
+    },
+    {
+      "ts": "2026-10-31T21:03:58.704615658Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-050",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "86f67caeb0c9cad0f7c952df302bf0deca11f39a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
