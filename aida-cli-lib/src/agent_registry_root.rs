@@ -18,6 +18,19 @@ pub(crate) fn ls_handle_cell(name: Option<&str>) -> String {
 pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    agent_ls_in(&project_root, show_all, stale_only, ended_only)
+}
+
+/// [`agent_ls`] for an explicit main-checkout root, so a test never resolves
+/// it from the process cwd.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+pub(crate) fn agent_ls_in(
+    project_root: &std::path::Path,
+    show_all: bool,
+    stale_only: bool,
+    ended_only: bool,
+) -> Result<()> {
+    let project_root = project_root.to_path_buf();
     if !show_all && !stale_only && !ended_only {
         let _ = agent_registry::gc_dead_agents(&project_root, false, None);
     }

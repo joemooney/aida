@@ -245,11 +245,13 @@ fn the_hook_reports_queued_then_unreachable_then_the_ack() {
     let clone = leased_clone(&fx, "story-100-hook", "b100c10e0002");
     let clone_store = share_store(&fx.main, &clone);
     let home = mailbox_home(&clone);
+    // The env `aida agent new` gives a seat: its own handle as
+    // `AIDA_AGENT_NAME` and `AIDA_USER`, no inherited `AIDA_HANDLE`.
     let run_hook = |event: Option<&str>| {
         let _env = crate::test_env::AgentSessionIsolation::apply(&[
-            ("AIDA_USER", Some("claude-implementer")),
-            ("AIDA_AGENT_NAME", Some("claude-implementer")),
-            ("AIDA_HANDLE", Some(HANDLE)),
+            ("AIDA_USER", Some(HANDLE)),
+            ("AIDA_AGENT_NAME", Some(HANDLE)),
+            ("AIDA_HANDLE", None),
             ("AIDA_SESSION_ROLE", Some("implementer")),
             ("AIDA_SESSION_SCOPE", Some("STORY-HOME-100")),
             ("AIDA_AGENT_TYPE", Some("claude")),
@@ -311,6 +313,37 @@ fn the_hook_reports_queued_then_unreachable_then_the_ack() {
     assert_eq!(acked.len(), 1, "{acked:?}");
     assert!(acked[0].contains("ack from operator"), "{acked:?}");
     assert!(run_hook(None).is_empty(), "announced once");
+}
+
+/// A startup without its own handle (a headless queue child: seat label in
+/// `AIDA_AGENT_NAME`, its own `AIDA_HANDLE`; or a child holding its parent's
+/// names) sends no hello and prints nothing.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100.acf0ac12 | ai:claude
+#[test]
+fn a_startup_without_its_own_handle_sends_no_hello() {
+    let fx = fixture();
+    let clone = leased_clone(&fx, "story-100-nohello", "b100c10e0006");
+    let clone_store = share_store(&fx.main, &clone);
+    let home = mailbox_home(&clone);
+    let _env = crate::test_env::AgentSessionIsolation::apply(&[
+        ("AIDA_USER", Some("claude-implementer")),
+        ("AIDA_AGENT_NAME", Some("claude-implementer")),
+        ("AIDA_HANDLE", Some(HANDLE)),
+        ("AIDA_SESSION_ROLE", Some("implementer")),
+        ("AIDA_AGENT_TYPE", Some("claude")),
+        ("AIDA_HOOK_EVENT", Some("SessionStart")),
+        ("AIDA_ADVISOR_HANDSHAKE", None),
+    ]);
+    let lines = crate::advisor_handshake::run(&home, &clone, &clone_store, true).unwrap();
+    assert!(lines.is_empty(), "{lines:?}");
+    assert_eq!(load_record(home.root(), HANDLE), None);
+    assert!(
+        !read_local_messages(home.root())
+            .unwrap()
+            .iter()
+            .any(is_hello),
+        "no hello was written"
+    );
 }
 
 #[test]

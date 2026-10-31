@@ -2,13 +2,13 @@
 //! first act is a mail round trip with the advisor, so a broken mail path
 //! shows up within minutes instead of when an operator relays mail by hand.
 //!
-//! - **Hello.** On SessionStart, an `aida agent new` session whose role is not
-//!   advisor mails the `advisor` role once, naming its handle, role, spec and
+//! - **Hello.** On SessionStart, a session `aida agent new` launched with its
+//!   own handle, whose role is not advisor, mails the `advisor` role once, naming its handle, role, spec and
 //!   worktree/clone path. With no live advisor the send is queued for the role
 //!   (durable) and the agent is told so.
 //! - **Ack.** An advisor's per-turn notice lists unacknowledged hellos;
-//!   reading them with `aida mailbox inbox` acks each one with a reply to the
-//!   sender's handle.
+//!   reading them with `aida mailbox inbox` (or MCP `read_inbox` with
+//!   `mark_seen`) acks each one with a reply to the sender's handle.
 //! - **Unreachable.** With no ack after the window (default 10 minutes,
 //!   `[mailbox] handshake_timeout_mins`), the agent's notice, `aida agent ls`
 //!   and `aida doctor` say `advisor unreachable: <reason>`, naming the mailbox
@@ -139,9 +139,21 @@ pub(crate) enum State {
 }
 
 /// PURE: whether this session is a launched non-advisor agent that says
-/// hello. `agent_name` is `AIDA_AGENT_NAME`, which `aida agent new` sets.
-pub(crate) fn eligible(agent_name: Option<&str>, role: Option<&str>) -> bool {
-    let launched = agent_name.is_some_and(|n| !n.trim().is_empty());
+/// hello. `agent_name` is `AIDA_AGENT_NAME`, which `aida agent new` (and its
+/// seats) sets to the handle the session runs under; `own_handle` is the
+/// handle this session resolves to. Only a session launched with its own
+/// handle says hello: one that inherited a parent's `AIDA_AGENT_NAME` (a
+/// parent-only startup) or a headless queue child, whose `AIDA_AGENT_NAME`
+/// is its seat label beside a separate `AIDA_HANDLE`, does not.
+pub(crate) fn eligible(
+    agent_name: Option<&str>,
+    own_handle: Option<&str>,
+    role: Option<&str>,
+) -> bool {
+    let launched = agent_name
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .is_some_and(|n| own_handle.map(str::trim) == Some(n));
     let role = role
         .map(crate::canonical_role_name)
         .filter(|r| !r.is_empty());
@@ -258,11 +270,14 @@ pub(crate) fn record_roots(main: &Path, live: &[AgentRegistryEntry]) -> Vec<Path
     roots
 }
 
-/// The record for `handle` from the first root that has one.
+/// The newest record for `handle` across `roots`, so an earlier session's
+/// record for a reused handle in the primary never shadows the current one
+/// in a linked worktree or clone.
 pub(crate) fn find_record(roots: &[PathBuf], handle: &str) -> Option<(PathBuf, HelloRecord)> {
     roots
         .iter()
-        .find_map(|root| load_record(root, handle).map(|rec| (root.clone(), rec)))
+        .filter_map(|root| load_record(root, handle).map(|rec| (root.clone(), rec)))
+        .max_by_key(|(_, rec)| rec.sent_at)
 }
 
 fn is_live_advisor(e: &AgentRegistryEntry) -> bool {
@@ -526,9 +541,19 @@ pub(crate) fn ack_hellos(
 }
 
 /// A hello waiting for an advisor, as the advisor's notice lists it.
+/// A hello stranded in an unverified clone never reached the advisor inbox,
+/// so the line points at the clone's `aida mailbox sync` instead.
 fn pending_line(rec: &HelloRecord, now: DateTime<Utc>) -> String {
+    let how = if rec.home == HomeKind::UnverifiedClone {
+        format!(
+            "the hello is stranded in {}; run `aida mailbox sync` from that clone to deliver it",
+            rec.mailbox
+        )
+    } else {
+        "`aida mailbox inbox` acks it".to_string()
+    };
     format!(
-        "Advisor handshake: hello from {} ({} · {} · {}), waiting {} — `aida mailbox inbox` acks it.",
+        "Advisor handshake: hello from {} ({} · {} · {}), waiting {} — {how}.",
         rec.handle,
         rec.role,
         rec.spec.as_deref().unwrap_or("no spec"),
@@ -549,13 +574,18 @@ pub(crate) fn advisor_lines(records: &[HelloRecord], now: DateTime<Utc>) -> Vec<
     pending.iter().map(|r| pending_line(r, now)).collect()
 }
 
-fn all_records(roots: &[PathBuf]) -> Vec<HelloRecord> {
-    let mut seen = std::collections::BTreeSet::new();
-    roots
-        .iter()
-        .flat_map(|root| load_records(root))
-        .filter(|r| seen.insert(r.handle.clone()))
-        .collect()
+/// The newest record per handle across `roots` (see [`find_record`]).
+pub(crate) fn all_records(roots: &[PathBuf]) -> Vec<HelloRecord> {
+    let mut newest = std::collections::BTreeMap::<String, HelloRecord>::new();
+    for rec in roots.iter().flat_map(|root| load_records(root)) {
+        match newest.get(&rec.handle) {
+            Some(cur) if cur.sent_at >= rec.sent_at => {}
+            _ => {
+                newest.insert(rec.handle.clone(), rec);
+            }
+        }
+    }
+    newest.into_values().collect()
 }
 
 /// The agent's own notice line for `rec`, or `None` when there is nothing to
@@ -634,8 +664,8 @@ pub(crate) fn run(
     }
     let now = Utc::now();
     let role = crate::resolve_mail_sender_role();
-    let live = crate::agent_registry::load_live_entries(&main);
     if role.as_deref() == Some(ADVISOR_ROLE) {
+        let live = crate::agent_registry::load_live_entries(&main);
         let lines = advisor_lines(&all_records(&record_roots(&main, &live)), now);
         if lines.is_empty() && !hook {
             return Ok(vec![
@@ -644,15 +674,18 @@ pub(crate) fn run(
         }
         return Ok(lines);
     }
+    // Eligibility first, so a per-turn hook in any other session pays no
+    // registry read.
     let agent_name = env_nonempty("AIDA_AGENT_NAME");
-    if !eligible(agent_name.as_deref(), role.as_deref()) {
+    let (handle, from_source) = crate::resolve_mail_sender_identity(None);
+    if !eligible(agent_name.as_deref(), Some(&handle), role.as_deref()) {
         return Ok(if hook {
             Vec::new()
         } else {
-            vec!["Advisor handshake: only agents launched with `aida agent new` in a non-advisor role say hello.".into()]
+            vec!["Advisor handshake: only agents launched with their own handle by `aida agent new` in a non-advisor role say hello.".into()]
         });
     }
-    let (handle, from_source) = crate::resolve_mail_sender_identity(None);
+    let live = crate::agent_registry::load_live_entries(&main);
     let is_start = {
         let payload = std::env::var("AIDA_HOOK_PAYLOAD").unwrap_or_default();
         let event = std::env::var("AIDA_HOOK_EVENT").ok();

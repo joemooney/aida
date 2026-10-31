@@ -57,15 +57,99 @@ fn message(thread: &str, to: &str, in_reply_to: Option<&str>) -> Message {
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100.acf0ac12 | ai:claude
 #[test]
 fn only_launched_non_advisor_agents_say_hello() {
-    assert!(eligible(Some("claude-implementer"), Some("implementer")));
-    assert!(eligible(Some("codex-reviewer"), Some("Reviewer")));
-    assert!(!eligible(Some("claude-advisor"), Some("advisor")));
+    let own = |h: &'static str| (Some(h), Some(h));
+    let (name, handle) = own("claude-implementer-1");
+    assert!(eligible(name, handle, Some("implementer")));
+    let (name, handle) = own("codex-reviewer-2");
+    assert!(eligible(name, handle, Some("Reviewer")));
+    let (name, handle) = own("claude-advisor-1");
+    assert!(!eligible(name, handle, Some("advisor")));
     assert!(
-        !eligible(None, Some("implementer")),
+        !eligible(None, Some("claude-implementer-1"), Some("implementer")),
         "not launched by agent new"
     );
-    assert!(!eligible(Some(" "), Some("implementer")));
-    assert!(!eligible(Some("claude-implementer"), None), "no role");
+    assert!(!eligible(Some(" "), Some(" "), Some("implementer")));
+    let (name, handle) = own("claude-implementer-1");
+    assert!(!eligible(name, handle, None), "no role");
+}
+
+/// A parent-only startup (a child that inherited its parent's
+/// `AIDA_AGENT_NAME` but resolves to its own handle) and a headless queue
+/// child (seat label in `AIDA_AGENT_NAME`, its own `AIDA_HANDLE`) were not
+/// launched with their own handle, so neither says hello.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100.acf0ac12 | ai:claude
+#[test]
+fn an_inherited_or_seat_label_agent_name_says_no_hello() {
+    assert!(
+        !eligible(
+            Some("claude-implementer-1"),
+            Some("agy-implementer-2"),
+            Some("implementer")
+        ),
+        "inherited from the parent"
+    );
+    assert!(
+        !eligible(
+            Some("claude-reviewer"),
+            Some("claude-reviewer-07"),
+            Some("reviewer")
+        ),
+        "headless queue child"
+    );
+    assert!(
+        !eligible(Some("claude-implementer-1"), None, Some("implementer")),
+        "no resolved handle"
+    );
+}
+
+/// An unverified clone's hello never reached the advisor inbox, so the
+/// advisor's line points at the clone's sync, not at an inbox read.
+#[test]
+fn the_advisor_line_for_a_stranded_hello_points_at_mailbox_sync() {
+    let mut stranded = record(HomeKind::UnverifiedClone, 3);
+    stranded.mailbox = "/work/aida-seat-x/.aida/mailbox".into();
+    let lines = advisor_lines(&[stranded], now());
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].contains("stranded in /work/aida-seat-x/.aida/mailbox"),
+        "{lines:?}"
+    );
+    assert!(lines[0].contains("`aida mailbox sync`"), "{lines:?}");
+    assert!(
+        !lines[0].contains("`aida mailbox inbox` acks it"),
+        "{lines:?}"
+    );
+}
+
+/// A reused handle: the primary's older record must not shadow the current
+/// session's newer record in a linked worktree, for ls/doctor and the
+/// advisor's list alike.
+#[test]
+fn the_newest_record_for_a_handle_wins_across_roots() {
+    let primary = tempfile::tempdir().unwrap();
+    let worktree = tempfile::tempdir().unwrap();
+    let mut old = record(HomeKind::Checkout, 60 * 3);
+    old.hello_id = "old".into();
+    old.acked_at = Some(t(60 * 3 - 1));
+    save_record(primary.path(), &old).unwrap();
+    let mut new = record(HomeKind::Checkout, 15);
+    new.hello_id = "new".into();
+    save_record(worktree.path(), &new).unwrap();
+    let roots = vec![primary.path().to_path_buf(), worktree.path().to_path_buf()];
+
+    let (root, found) = find_record(&roots, HANDLE).unwrap();
+    assert_eq!(found.hello_id, "new");
+    assert_eq!(root, worktree.path());
+    let all = all_records(&roots);
+    assert_eq!(all.len(), 1, "{all:?}");
+    assert_eq!(all[0].hello_id, "new");
+
+    let mut census = census(primary.path());
+    census.roots = roots;
+    assert!(
+        ls_note(&census, Some(HANDLE), t(30)).contains("advisor unreachable"),
+        "the current session's overdue hello is reported"
+    );
 }
 
 #[test]
@@ -374,8 +458,7 @@ fn the_mail_notice_hook_relays_the_hello_for_every_client() {
 
 /// `aida agent ls` and both doctor routes (`doctor check advisor-handshake`
 /// and the scan's category path) over a live agent's overdue hello. Runs
-/// in its own process: it changes the working directory and captures
-/// stdout.
+/// in its own process: it captures stdout.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100.ac05f0ba | ai:claude
 #[test]
 fn agent_ls_and_doctor_report_an_overdue_hello_and_its_mailbox() {
@@ -446,11 +529,13 @@ fn agent_ls_and_doctor_report_an_overdue_hello_and_its_mailbox() {
     rec.sent_at = Utc::now() - Duration::minutes(15);
     rec.mailbox = mailbox_store::mailbox_dir(&root).display().to_string();
     save_record(&root, &rec).unwrap();
-    std::env::set_current_dir(&root).unwrap();
+    // An explicit isolated project root: never the process cwd, which in CI
+    // sits under a temp dir with no `.aida/config.toml` above it.
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&root, None);
 
     // `--all`, so the row does not depend on the busy/stale classifier.
     println!("=== ls");
-    crate::agent_ls(true, false, false).unwrap();
+    crate::agent_registry_root::agent_ls_in(&root, true, false, false).unwrap();
     println!("=== check");
     let check = crate::cli::DoctorCommand::Check {
         category: DOCTOR_CATEGORY.into(),

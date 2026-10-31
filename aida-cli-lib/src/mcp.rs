@@ -358,6 +358,11 @@ struct JsonRpcResponse {
 struct PendingAck {
     project_root: PathBuf,
     plan: aida_core::mailbox_lifecycle::ack::AckPlan,
+    /// The store the hello acks resolve their recipients through.
+    store_root: PathBuf,
+    /// The returned messages, so a hello among them is acked exactly as
+    /// `aida mailbox inbox` acks it.
+    shown: Vec<aida_core::mailbox::Message>,
 }
 
 /// Write one JSON-RPC response line and flush it; only then commit the
@@ -372,12 +377,28 @@ fn deliver(out: &mut impl Write, mut response: JsonRpcResponse) -> io::Result<()
     let json = serde_json::to_string(&response)?;
     writeln!(out, "{}", json)?;
     out.flush()?;
-    if let Some(PendingAck { project_root, plan }) = pending {
+    if let Some(PendingAck {
+        project_root,
+        plan,
+        store_root,
+        shown,
+    }) = pending
+    {
         // Authority is re-resolved after the flush, before any lock.
         let current = crate::mailbox_view::own_audience_in(&project_root);
         if let Err(e) = crate::mailbox_view::commit_ack(&project_root, plan, &current) {
             eprintln!(
                 "aida mcp: read_inbox mark_seen did not finish ({e:#}); call read_inbox with mark_seen again to show and record what is still unrecorded"
+            );
+        } else {
+            // Reading a hello is the advisor's ack of it, as in the CLI inbox.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+            let shown: Vec<&aida_core::mailbox::Message> = shown.iter().collect();
+            crate::advisor_handshake::ack_hellos(
+                &project_root,
+                &store_root,
+                &shown,
+                chrono::Utc::now(),
             );
         }
     }
@@ -3120,6 +3141,8 @@ impl<'a> McpServer<'a> {
             plan.map(|plan| PendingAck {
                 project_root: self.mailbox_root(),
                 plan,
+                store_root,
+                shown: shown.iter().map(|r| r.message.clone()).collect(),
             }),
         ))
     }
@@ -11427,6 +11450,86 @@ mod tests {
             .unwrap();
         let full_p: Value = serde_json::from_str(&full).unwrap();
         assert_eq!(full_p["count"], 2);
+    }
+
+    /// An advisor reading its mail through MCP `read_inbox` with `mark_seen`
+    /// acks a hello exactly as `aida mailbox inbox` does: one ack to the
+    /// sender, the sender's record marked, and a peek acks nothing.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-100.ac5a43a5 | ai:claude
+    #[test]
+    fn mcp_read_inbox_mark_seen_acks_a_hello_like_the_cli_inbox() {
+        use crate::advisor_handshake::{
+            ack_id, hello_message, load_record, save_record, HelloContext, HelloRecord, HomeKind,
+        };
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("operator")),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let server = mk_server(&root);
+        let handle = "claude-implementer-7";
+        let now = chrono::Utc::now();
+        let id = uuid::Uuid::new_v4().to_string();
+        let mailbox = crate::mailbox_store::mailbox_dir(&root);
+        let ctx = HelloContext {
+            handle: handle.into(),
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            role: "implementer".into(),
+            spec: None,
+            path: root.clone(),
+            session_started: None,
+        };
+        let hello = hello_message(&id, &ctx, "advisor", &mailbox, now);
+        crate::mailbox_store::write_message(&root, &hello).unwrap();
+        save_record(
+            &root,
+            &HelloRecord {
+                handle: handle.into(),
+                role: "implementer".into(),
+                spec: None,
+                path: root.display().to_string(),
+                hello_id: id.clone(),
+                sent_at: now,
+                mailbox: mailbox.display().to_string(),
+                home: HomeKind::Checkout,
+                advisor_live: true,
+                acked_at: None,
+                acked_by: None,
+                ack_reported: false,
+            },
+        )
+        .unwrap();
+        let ack_file = mailbox.join(format!("{}.json", ack_id(&id)));
+
+        // A peek is not a read: no ack.
+        let peek: Value = serde_json::from_str(&server.read_inbox_delivered(json!({}))).unwrap();
+        assert!(
+            peek["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["id"] == json!(id)),
+            "the advisor sees the hello: {peek}"
+        );
+        assert!(!ack_file.exists(), "a peek acks nothing");
+
+        server.read_inbox_delivered(json!({ "mark_seen": true }));
+        assert!(ack_file.exists(), "mark_seen acks the hello");
+        let acks: Vec<_> = crate::mailbox_store::read_local_messages(&root)
+            .unwrap()
+            .into_iter()
+            .filter(|m| m.in_reply_to.as_deref() == Some(id.as_str()))
+            .collect();
+        assert_eq!(acks.len(), 1, "one ack");
+        assert_eq!(
+            acks[0].to,
+            aida_core::mailbox::Recipient::Agent(handle.into())
+        );
+        let rec = load_record(&root, handle).unwrap();
+        assert!(rec.acked_at.is_some(), "the sender's record is marked");
+        assert_eq!(rec.acked_by.as_deref(), Some("operator"));
     }
 
     /// STORY-1843 R2-F1: inspecting another inbox counts a receipt (what
