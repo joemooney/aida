@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-10-31T22:26:10.095206330Z
+modified_at: 2026-10-31T22:30:30.683584453Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -19,6 +19,19 @@ relationships:
   target_id: 01a1940b-4f21-7da3-86c4-18335c0a304c
   created_at: 2026-10-31T22:18:58.329149960Z
   created_by: joe
+comments:
+- id: 01a19415-fa1b-7a62-9a05-73ae1386197c
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF round 2 (15:32), PR-3177. Fix all four review findings in one push:
+    1. Pick the newest POST-VERDICT brief independently of rulings: verdict, then brief, then ruling must still lead with the brief (rulings are listed after it, binding on the specific point they settle) and the verdict findings become SUPERSEDED CONTEXT.
+    2. A brief OLDER than the last verdict must not lead or be labelled binding: the verdict findings are authoritative; the old brief may appear only as background context below them.
+    3. Extract the handle_queue_work prompt assembly (derive_rework_queue_work_prompt + findings filter + lead) into a pure function and test it: (a) verdict→brief, (b) verdict→brief→ruling, (c) brief→verdict, (d) no verdict time. Each test must fail if the brief_supersedes filter is removed (no vacuous !contains asserts).
+    4. detect_main_conflict: tempdir origin with a conflicting branch → Some(conflict item); a clean branch → None.
+    Also TASK-279 (your design note) is ACCEPTED as the rule set, with item 1 above refining it: a ruling never supersedes a verdict, a newer brief does, untimed verdicts stay authoritative. LIGHT gate: cargo test -p aida-cli-lib rework_direction ; make check-ci-fast.
+  created_at: 2026-10-31T22:30:30.683584453Z
+  modified_at: 2026-10-31T22:30:30.683584453Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
