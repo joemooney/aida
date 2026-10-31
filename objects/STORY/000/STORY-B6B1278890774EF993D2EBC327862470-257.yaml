@@ -1,0 +1,59 @@
+id: 01a1940b-4f21-7da3-86c4-18335c0a304c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-257
+title: 'Review PR-3177: [AI:claude] fix(rework): a brief newer than the last verdict leads the pickup; a PR conflicting with main is the first task (BUG-B6B1278890774EF993D2EBC327862470-057)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a193e8`) for branch `bug-b6b1278890774ef993d2ebc327862470-057`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3177>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-057` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-057
+  - BUG-B6B1278890774EF993D2EBC327862470-052
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3177` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:18:51.553493788Z
+modified_at: 2026-10-31T22:19:02.598808319Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
+  created_at: 2026-10-31T22:18:54.701420941Z
+  created_by: joe
+- rel_type:
+    custom: implements
+  target_id: 01a19323-2af2-78a2-825a-55c8a6fafc13
+  created_at: 2026-10-31T22:19:02.598804711Z
+  created_by: joe
+history:
+- id: 01a1940b-624f-7cb1-a5af-b2829b06e39d
+  author: joe
+  timestamp: 2026-10-31T22:18:56.463288837Z
+  session_id: 01a193e80c9b
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a1940b-8121-7530-96f7-fe139ca64fca
+  author: joe
+  timestamp: 2026-10-31T22:19:04.353802158Z
+  session_id: 01a193e80c9b
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 86cddcee3197c0b5b140ee2d48121ddd9be8f4e0
+  branch: bug-b6b1278890774ef993d2ebc327862470-057
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a193e80c9b
+  harness_version: 2.1.316 (Claude Code)
