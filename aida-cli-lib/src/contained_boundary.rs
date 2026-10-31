@@ -708,6 +708,10 @@ mod tests;
 mod store_tests;
 
 #[cfg(test)]
+#[path = "tests/bug_053_contained_add_tests.rs"]
+mod contained_add_tests;
+
+#[cfg(test)]
 #[path = "tests/bug_1982_main_git_metadata_tests.rs"]
 mod main_git_tests;
 

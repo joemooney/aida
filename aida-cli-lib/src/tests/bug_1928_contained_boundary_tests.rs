@@ -400,6 +400,17 @@ fn allow_rules_in_flags(flags: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// BUG-050: the argv's `--settings` (the uncontained headless posture alone)
+/// carries no `permissions.allow` rules at all: no contained boundary.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+fn no_allow_rules(flags: &[String]) -> bool {
+    let pos = flags.iter().position(|f| f == "--settings").unwrap();
+    let v: serde_json::Value = serde_json::from_str(&flags[pos + 1]).unwrap();
+    v["permissions"]["allow"]
+        .as_array()
+        .is_none_or(|a| a.is_empty())
+}
+
 /// Whether `rule` is one of the write boundary's `Tool(...)` rules.
 // trace:BUG-2201 | ai:claude
 fn is_write_rule(rule: &str) -> bool {
@@ -596,10 +607,16 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
             .all(|r| !r.contains(&cwd_str)),
         "{args:?}"
     );
-    // The uncontained resume carries no contained flags.
+    // BUG-050: the resume takes the shared headless posture on top of the
+    // contained boundary (one merged `--settings`, sandbox on).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    crate::session::assert_headless_posture(&args, true, "contained resume");
+    // The uncontained resume carries no contained boundary: its one
+    // `--settings` is the headless posture alone (no sandbox, no allow rules).
     let plain =
         crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None).unwrap();
-    assert!(!plain.iter().any(|a| a == "--settings"), "{plain:?}");
+    crate::session::assert_headless_posture(&plain, false, "uncontained resume");
+    assert!(no_allow_rules(&plain), "{plain:?}");
     assert!(
         plain.contains(&"bypassPermissions".to_string()),
         "{plain:?}"
@@ -1136,8 +1153,11 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
         .map(|tool| format!("{tool}(/{}/**)", worktree.display()))
         .collect();
     assert_eq!(allow_rules_in_flags(&captured), expected);
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    crate::session::assert_headless_posture(&captured, true, "spawned contained resume");
 
-    // 2. contained = false -> forwards None, producing bypassPermissions without --settings
+    // 2. contained = false -> forwards None: bypassPermissions, and the only
+    // `--settings` is the headless posture (no contained boundary).
     let status = crate::session::spawn_claude_headless_resume(
         "proceed",
         "sid-2",
@@ -1154,9 +1174,10 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
         .lines()
         .map(str::to_string)
         .collect();
+    crate::session::assert_headless_posture(&captured_plain, false, "spawned uncontained resume");
     assert!(
-        !captured_plain.iter().any(|a| a == "--settings"),
-        "uncontained resume must not pass --settings: {captured_plain:?}"
+        no_allow_rules(&captured_plain),
+        "uncontained resume must carry no contained boundary: {captured_plain:?}"
     );
     assert!(
         captured_plain.contains(&"bypassPermissions".to_string()),

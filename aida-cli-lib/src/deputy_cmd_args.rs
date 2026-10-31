@@ -56,9 +56,11 @@ pub(crate) struct DeputyStartArgs {
     /// still applies.
     #[arg(long, default_value = "10s")]
     pub tty_idle: String,
-    /// Keep running after the mandate expires (the mandate tie-in arrives in
-    /// a later release; accepted now so start lines stay stable).
-    #[arg(long, hide = true)]
+    /// Keep running after the mandate active at start expires or is
+    /// stopped. Without it the deputy stops claiming then and exits once its
+    /// running jobs finish. It always does so when your grant ends.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    #[arg(long)]
     pub keep_after_mandate: bool,
 }
 
@@ -80,6 +82,27 @@ pub(crate) enum DeputyCommand {
     Deny(DeputyDenyArgs),
     /// Show the live TTY entries.
     Policy(DeputyNameArgs),
+    /// Stop claiming new jobs; running jobs finish.
+    Pause(DeputyNameArgs),
+    /// Claim jobs again after a pause (at your terminal only).
+    Resume(DeputyNameArgs),
+    /// Acknowledge failed jobs so `aida awaiting` stops listing them.
+    Ack(DeputyAckArgs),
+}
+
+/// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+#[derive(Args, Debug)]
+pub(crate) struct DeputyAckArgs {
+    /// The failed job ids to acknowledge.
+    #[arg(required_unless_present = "all")]
+    pub ids: Vec<String>,
+    /// Acknowledge every failed job you submitted (every one, outside a
+    /// session).
+    #[arg(long, conflicts_with = "ids")]
+    pub all: bool,
+    /// Which deputy.
+    #[arg(long, default_value = "default")]
+    pub name: String,
 }
 
 #[derive(Args, Debug)]
