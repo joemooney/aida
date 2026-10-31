@@ -313,10 +313,6 @@ format: IdFormat,
  */
 numbering: NumberingStrategy,
 /**
- * Number of digits for the numeric portion (default 3 = 001)
- */
-digits: number,
-/**
  * Configured requirement types
  */
 requirement_types: Array<RequirementTypeDefinition>, };

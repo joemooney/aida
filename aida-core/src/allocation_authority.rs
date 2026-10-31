@@ -962,6 +962,7 @@ mod tests {
             crate::RequirementsStore::new().next_spec_number
         );
     }
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac5bd8aa | ai:claude
     #[test]
     fn bug_2017_imported_local_id_cannot_be_overwritten_by_new_uuid() {
         let (_dir, backend) = fixture(false);
@@ -1166,11 +1167,16 @@ mod tests {
                             store.requirements.extend([first, second]);
                         })
                         .map(|_| ()),
+                    // A batch-internal alias conflict may refuse at the
+                    // second add() or at finish(); either way it must be
+                    // BUG-2017's refusal and nothing may persist.
                     "bulk" => {
                         let mut writer = backend.bulk_writer().unwrap();
                         writer.add(first).unwrap();
-                        writer.add(second).unwrap();
-                        writer.finish("must not persist").map(|_| ())
+                        writer
+                            .add(second)
+                            .map(|_| ())
+                            .and_then(|()| writer.finish("must not persist").map(|_| ()))
                     }
                     _ => unreachable!(),
                 };
