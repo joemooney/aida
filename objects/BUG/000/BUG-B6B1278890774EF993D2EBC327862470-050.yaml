@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T16:21:27.893446160Z
+modified_at: 2026-10-31T16:59:54.126400014Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -131,6 +131,12 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a192e7-4fb7-7a22-8142-6ba4f8822029
+  author: joe
+  timestamp: 2026-10-31T16:59:55.191723983Z
+  session_id: 01a192d1cae6
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -147,7 +153,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'AC1 partial: Monitor deny + CLAUDE_CODE_DISABLE_BACKGROUND_TASKS reach only the session.rs headless builders; burndown and autopilot-intake headless claude -p lanes still get Monitor and background tasks. AC2 and AC3 are met for the standalone implementer, with the gaps listed below. CI was pending at the reviewed head. AC status: ac265abc PARTIAL (session::tests::headless_argv_disables_monitor_and_background_tasks covers only fresh/resume x contained/uncontained in session.rs); ac9cf711 verified for the standalone implementer by the a_run_parked_on_its_own_build_is_waited_for_and_resumed fixture and the_resume_prompt_opens_with_the_fixed_continuation; ac9d20b3 verified at unit level by a_rework_round_left_uncommitted_on_the_old_pr_head_is_a_stall.'
+  detail: All three acceptance criteria are implemented and traced to tests, but CI is red at ab3b66cd (contracts drift-guard and lib-0 tests); main c6111876 is green, so the PR causes both
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-050 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T14:33:17.613841239Z
+  shelved_at: 2026-10-31T16:59:54.126400014Z
