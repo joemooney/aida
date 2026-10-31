@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:09:24.781126891Z
-modified_at: 2026-10-31T17:34:58.343353450Z
+modified_at: 2026-10-31T18:08:41.307811757Z
 req_type: Story
 comments:
 - id: 01a1928b-a36f-7401-88ad-ec654c92f5b8
@@ -49,6 +49,19 @@ comments:
     - Who may pause/resume? I take: pause from anywhere that can write the deputy's root (lowers authority), resume only at the human terminal.
   created_at: 2026-10-31T17:34:58.343353450Z
   modified_at: 2026-10-31T17:34:58.343353450Z
+  session_id: 01a193046a6d
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19326-455b-7db3-86a2-5436ec764139
+  author: joe
+  content: |-
+    ## Implementer findings (could not be filed as draft TASKs: in this contained seat, ID allocation fails with "Read-only file system")
+
+    1. **deviation (minor):** acceptance item 0 (the operator runs a live merge-hold clear through a policy-matched pty job and confirms it here) is not done. A headless seat can't do it, so it's left for the operator.
+    2. **design-choice (minor):** AC5 is implemented as three refusal stubs (`deputy/hooks.rs`, `worker.rs`): a job carrying `delegation` is refused; while `<spool>/deputy.commands` exists, every claim is refused; and the TTY policy is now `deny_unknown_fields`, so an unreadable policy REFUSES the job. Slice 1 ran such a job detached, so this deliberately changes slice-1 behaviour. Please confirm this is the intended set.
+    3. **design-choice (minor):** `pause` has no terminal check (it only takes authority away); `resume` uses the human-terminal check from allow/deny. An invalid or expired grant now makes the deputy exit after its running jobs finish (slice 1 kept idling). The mandate stop applies only when a mandate was active at start.
+    4. **followup (cosmetic):** I added the `docs/cli-format-json-audit.md` rows for pause/resume/ack by hand, because the generator needs a built binary. If CI's bug_1502 test disagrees, regenerate them with the script.
+  created_at: 2026-10-31T18:08:41.307811757Z
+  modified_at: 2026-10-31T18:08:41.307811757Z
   session_id: 01a193046a6d
   harness_version: 2.1.316 (Claude Code)
 history:
