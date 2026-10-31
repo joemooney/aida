@@ -339,15 +339,14 @@ fn review_record_accepts_the_claimed_spec() {
 #[test]
 fn a_rebase_with_an_uncovered_branch_commit_trailer_is_refused() {
     let store = incident_store();
-    let root = tempfile::tempdir().unwrap();
-    let refusal = crate::pr_cmd::rebase_trailer_refusal(
-        root.path(),
+    let coverage = TrailerCoverage::for_pr(&store, BRANCH, &[], Some(3159));
+    let refusal = branch_commit_refusal(
         &store,
-        BRANCH,
+        coverage.as_ref(),
         3159,
         &[
             format!("fix(ship-from-seat): first slice ({NODE_138})"),
-            "fix(ship-from-seat): quarantine cleanup (TASK-139)".to_string(),
+            "fix(ship-from-seat): quarantine cleanup (TASK-139)\n\nbody".to_string(),
         ],
     )
     .expect("an uncovered branch-commit trailer refuses the rebase");
@@ -356,14 +355,243 @@ fn a_rebase_with_an_uncovered_branch_commit_trailer_is_refused() {
     assert!(refusal.contains("-138"), "{refusal}");
 
     assert_eq!(
-        crate::pr_cmd::rebase_trailer_refusal(
-            root.path(),
+        branch_commit_refusal(
             &store,
-            BRANCH,
+            coverage.as_ref(),
             3159,
             &[format!("fix: covered ({NODE_138})")],
         ),
         None
+    );
+}
+
+/// The pull-side auto-bump's view of `body` landed as the squash commit of
+/// PR-3159: every spec id it would complete.
+fn pull_completes(body: &str) -> Vec<String> {
+    let message = format!("[AI:claude] fix(ship-from-seat): quarantine cleanup (#3159)\n\n{body}");
+    // The scan's own extractors, as db_reconcile runs them on a `(#N)` subject.
+    let subject = message.lines().next().unwrap();
+    let is_ref = crate::db_reconcile::refs_completion_filter(subject, &message);
+    let raw: Vec<String> = crate::pr_lookup::extract_referenced_spec_ids_from_commit(&message)
+        .into_iter()
+        .filter(|id| !is_ref.body(id))
+        .collect();
+    assert_eq!(
+        raw,
+        crate::trailer_coverage::commit_completion_ids(&message),
+        "the mirror agrees with the scan"
+    );
+    raw
+}
+
+/// The incident branch commit, as the identity gate / forge default body
+/// lists it.
+const INCIDENT_SQUASH_BODY: &str = "* [AI:claude] fix(ship-from-seat): quarantine cleanup \
+                                    (TASK-139)\n\n* chore: notes\n";
+
+/// Ruling item 1, the squash hole: a squash ship of a branch whose commit
+/// ends `(TASK-139)` hands the forge an explicit body the pull-time scan
+/// completes nothing from.
+#[test]
+fn a_squash_ship_body_carries_no_uncovered_trailer_to_main() {
+    assert_eq!(
+        pull_completes(INCIDENT_SQUASH_BODY),
+        vec!["TASK-139".to_string()],
+        "guard: the forge's own body would complete the legacy spec"
+    );
+    let store = incident_store();
+    let body = ship_trailer_check(
+        Ok(store.clone()),
+        |s| TrailerCoverage::for_pr(s, BRANCH, &[], Some(3159)),
+        crate::forge::MergeMethod::Squash,
+        3159,
+        || unreachable!("a squash lands no branch commit verbatim"),
+        || Ok(INCIDENT_SQUASH_BODY.to_string()),
+    )
+    .unwrap()
+    .expect("every squash ship passes an explicit body");
+    assert_eq!(pull_completes(&body), Vec::<String>::new(), "{body}");
+    assert!(
+        body.contains("(Refs TASK-139)"),
+        "kept as a reference: {body}"
+    );
+    assert!(body.contains("* chore: notes"), "{body}");
+}
+
+/// A covered trailer on the same line keeps its completion; a `(#N)` group
+/// stays in place.
+#[test]
+fn neutralizing_keeps_the_covered_trailers() {
+    let store = incident_store();
+    let coverage = TrailerCoverage::for_pr(&store, BRANCH, &[], Some(3159)).unwrap();
+    let (body, notes) = coverage.neutralize_body(
+        &store,
+        &format!("* fix: a (TASK-139, {NODE_138}) (#12)\n* fix: b ({NODE_138})\n* fix: c (scope)"),
+    );
+    assert_eq!(
+        body,
+        format!(
+            "* fix: a (Refs TASK-139) ({NODE_138}) (#12)\n* fix: b ({NODE_138})\n* fix: c (scope)"
+        )
+    );
+    assert_eq!(pull_completes(&body), vec![NODE_138.to_string()]);
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].contains("TASK-1-114"), "{notes:?}");
+}
+
+/// An unclaimed branch has no coverage, so the body is passed unchanged —
+/// but still explicitly, never left to the forge.
+#[test]
+fn an_unclaimed_squash_still_passes_an_explicit_body() {
+    let body = ship_trailer_check(
+        Ok(incident_store()),
+        |s| TrailerCoverage::for_pr(s, "fix-thing", &[], None),
+        crate::forge::MergeMethod::Squash,
+        1,
+        || unreachable!(),
+        || Ok(INCIDENT_SQUASH_BODY.to_string()),
+    )
+    .unwrap();
+    assert_eq!(body.as_deref(), Some(INCIDENT_SQUASH_BODY));
+}
+
+/// Ruling item 2: the check fails closed on an unreadable store or commit
+/// range, and a rebase with an uncovered branch commit is refused.
+#[test]
+fn the_ship_trailer_check_fails_closed() {
+    use crate::forge::MergeMethod;
+    let coverage = |s: &RequirementsStore| TrailerCoverage::for_pr(s, BRANCH, &[], Some(3159));
+    for method in [MergeMethod::Squash, MergeMethod::Rebase, MergeMethod::Merge] {
+        let err = ship_trailer_check(
+            Err(anyhow::anyhow!("corrupt store")),
+            coverage,
+            method,
+            3159,
+            || Ok(vec![]),
+            || Ok(String::new()),
+        )
+        .expect_err("an unreadable store refuses");
+        assert!(
+            format!("{err:#}").contains("store could not be read"),
+            "{err:#}"
+        );
+    }
+    for method in [MergeMethod::Rebase, MergeMethod::Merge] {
+        let err = ship_trailer_check(
+            Ok(incident_store()),
+            coverage,
+            method,
+            3159,
+            || Err(anyhow::anyhow!("bad range")),
+            || unreachable!(),
+        )
+        .expect_err("an unreadable range refuses");
+        assert!(
+            format!("{err:#}").contains("branch commits could not be read"),
+            "{err:#}"
+        );
+        let err = ship_trailer_check(
+            Ok(incident_store()),
+            coverage,
+            method,
+            3159,
+            || Ok(vec!["fix: x (TASK-139)".to_string()]),
+            || unreachable!(),
+        )
+        .expect_err("an uncovered branch commit refuses");
+        assert!(format!("{err:#}").contains("TASK-1-114"), "{err:#}");
+        assert_eq!(
+            ship_trailer_check(
+                Ok(incident_store()),
+                coverage,
+                method,
+                3159,
+                || Ok(vec![format!("fix: x ({NODE_138})")]),
+                || unreachable!(),
+            )
+            .unwrap(),
+            None
+        );
+    }
+    let err = ship_trailer_check(
+        Ok(incident_store()),
+        coverage,
+        MergeMethod::Squash,
+        3159,
+        || unreachable!(),
+        || Err(anyhow::anyhow!("uninspectable branch")),
+    )
+    .expect_err("an unreadable squash body refuses");
+    assert!(format!("{err:#}").contains("uninspectable"), "{err:#}");
+}
+
+/// `branch_commit_messages` reads full messages and fails on a bad range.
+#[test]
+fn branch_commit_messages_reads_full_messages_and_fails_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "t@t.t"]);
+    git(root, &["config", "user.name", "t"]);
+    git(
+        root,
+        &["commit", "-q", "--allow-empty", "-m", "chore: base"],
+    );
+    git(
+        root,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "fix: one (TASK-139)\n\nwhy",
+        ],
+    );
+    git(root, &["commit", "-q", "--allow-empty", "-m", "fix: two"]);
+    let messages = crate::trailer_coverage::branch_commit_messages(root, "HEAD~2", "HEAD").unwrap();
+    assert_eq!(messages, vec!["fix: one (TASK-139)\n\nwhy", "fix: two"]);
+    assert!(crate::trailer_coverage::branch_commit_messages(root, "nope", "HEAD").is_err());
+}
+
+/// Ruling item 2: `aida pr ship` calls the trailer check for every merge
+/// method, before the merge, and hands its body to the forge.
+#[test]
+fn pr_ship_runs_the_trailer_check_before_the_merge() {
+    let src = include_str!("../../pr_cmd.rs");
+    let start = src
+        .find(concat!(
+            "pub(crate) fn pr_ship_",
+            "with_method_and_dispatch_ctx("
+        ))
+        .expect("the ship function");
+    let body = &src[start..];
+    let check = body
+        .find(concat!("trailer_coverage::ship_", "trailer_check("))
+        .expect("pr ship calls the trailer check");
+    let call = &body[check..];
+    let args_end = call.find(")?;").expect("the check's result is propagated");
+    assert!(
+        call[..args_end].contains("\n            merge_method,\n"),
+        "the check sees every merge method"
+    );
+    let handed = body
+        .find("squash_body: sanitized_squash_body")
+        .expect("the body reaches the merge options");
+    let merge = body.find(concat!(".merge_", "change(")).expect("the merge");
+    assert!(check < handed && handed < merge);
+    // No merge-method condition wraps the check: it sits in the same block
+    // as the merge options the forge receives.
+    let indent = |at: usize| {
+        let line = &body[body[..at].rfind('\n').map_or(0, |i| i + 1)..];
+        line.len() - line.trim_start().len()
+    };
+    let opts = body
+        .find("let mut merge_opts = crate::forge::MergeOptions {")
+        .expect("the merge options");
+    assert_eq!(
+        indent(check),
+        indent(opts),
+        "the check is not gated on the merge method"
     );
 }
 

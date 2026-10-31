@@ -1,236 +1,180 @@
-//! BUG-HOME-048: a PR-title trailer completes only a spec the PR covers.
+//! BUG-HOME-048: the parsing and display side of the trailer coverage check.
 //!
-//! A `(SPEC-ID)` title trailer is written by whoever opened the PR. Before
-//! this check, ship granted completion to any trailer id that resolved in the
-//! store, so a bare short form (`TASK-139`) that resolved to an unrelated
-//! legacy spec (TASK-1-114) was completed by the merge while the spec the
-//! branch actually claimed (TASK-HOME-138) stayed open.
-//!
-//! The covered set is what the PR's branch or lease actually claims, plus the
-//! specs bundled into those claims:
-//!
-//! - the spec ids in the branch name and in the scope of any lease on that
-//!   branch (the claim);
-//! - specs linked to a claimed spec by a recorded supersede
-//!   (`superseded-by` / `supersedes`, either direction);
-//! - the specs the PR's queued review story lists under `## Covers` (its
-//!   `implements` relationships).
-//!
-//! When nothing is claimed (a hand-named branch with no lease), the set is
-//! unknown and no coverage check applies: refusing every trailer there would
-//! stop ordinary human PRs from completing anything.
+//! The decision — which specs a PR covers, and what ship, `review record`
+//! and the gates refuse — lives on the protected floor in
+//! [`crate::gate::trailer_coverage`]. This module reads the completion
+//! trailers out of commit messages the way the pull-side auto-bump does,
+//! rewrites squash-body trailer lines, reads a branch's commit range and the
+//! leases on a branch, and formats the refusal phrases.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 
-use std::collections::BTreeSet;
+use aida_core::Requirement;
 
-use aida_core::{RelationshipType, Requirement, RequirementsStore};
-
-/// The specs one PR may complete through its title trailer.
-#[derive(Debug, Clone)]
-pub(crate) struct TrailerCoverage {
-    /// Store ids of every covered spec.
-    covered: BTreeSet<uuid::Uuid>,
-    /// Display ids of the claimed specs, for the refusal message.
-    claimed: Vec<String>,
+/// `` `id` resolves to X ("title"), which this PR does not cover (it claims
+/// Y) `` for trailer `id` resolving to the uncovered `req`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+pub(crate) fn uncovered_phrase(id: &str, req: &Requirement, claimed: &[String]) -> String {
+    // spec_id first: a legacy spec's agreed id IS the bare trailer, so only
+    // its spec id tells the reader it is a different spec.
+    let resolved = req.spec_id.as_deref().unwrap_or(id);
+    format!(
+        "`{id}` resolves to {resolved} (\"{}\"), which this PR does not cover (it claims {})",
+        short_title(&req.title),
+        claimed.join(", "),
+    )
 }
 
-impl TrailerCoverage {
-    /// The coverage for a PR on `branch`. `lease_scopes` are the `--owns`
-    /// scopes of leases on that branch; `pr` selects the review story whose
-    /// covers count. `None` when neither the branch nor a lease claims a spec.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    pub(crate) fn for_pr(
-        store: &RequirementsStore,
-        branch: &str,
-        lease_scopes: &[String],
-        pr: Option<u64>,
-    ) -> Option<Self> {
-        let mut claim_ids = crate::pr_ship::extract_spec_ids_from_text(branch);
-        for scope in lease_scopes {
-            claim_ids.extend(crate::pr_ship::extract_spec_ids_from_text(scope));
-        }
-        let mut covered = BTreeSet::new();
-        let mut claimed = Vec::new();
-        for id in &claim_ids {
-            if let Ok(Some(req)) = store.get_requirement_unambiguous(id) {
-                if covered.insert(req.id) {
-                    claimed.push(req.friendly_id());
-                }
+/// The spec ids the pull-side auto-bump completes from `message` once it is
+/// a commit on the default branch: the subject's trailers, and — on a
+/// `(#N)` squash/merge subject — the body's trailer lines, minus `(Refs …)`
+/// references. A plan, non-completing or slice commit completes nothing.
+/// Mirrors the scan in `db_reconcile` so ship refuses exactly what the pull
+/// would complete.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+pub(crate) fn commit_completion_ids(message: &str) -> Vec<String> {
+    let subject = message.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    if crate::zen_drive_root::is_plan_commit_subject(subject)
+        || crate::db_reconcile::commit_declares_non_completing(message)
+        || crate::db_reconcile::slice_subject_withholds_completion(subject)
+    {
+        return Vec::new();
+    }
+    let is_ref = crate::db_reconcile::refs_completion_filter(subject, message);
+    let mut out: Vec<String> = crate::zen_drive_root::extract_spec_ids_from_commit(subject)
+        .into_iter()
+        .filter(|id| !is_ref.subject(id))
+        .collect();
+    if crate::pr_lookup::extract_pr_number_from_commit_subject(subject).is_some() {
+        for id in crate::pr_lookup::extract_referenced_spec_ids_from_commit(message) {
+            if !is_ref.body(&id) && !out.iter().any(|o| o.eq_ignore_ascii_case(&id)) {
+                out.push(id);
             }
         }
-        if covered.is_empty() {
-            return None;
+    }
+    out
+}
+
+/// One trailing paren group of a body line, as the pull-side scan walks it.
+enum TrailerGroup {
+    /// `(#N)`, kept verbatim.
+    Pr(String),
+    /// A spec-id group: its inner text and the ids the scan harvests from it.
+    Ids(String, Vec<String>),
+}
+
+/// `body` with each trailer line rewritten so the ids `uncovered` answers
+/// `Some` for move into a leading `(Refs …)` group: the pull-side scan stops
+/// at a group that does not start with a spec id, and its Refs filter never
+/// completes a referenced id. The other trailers on the line keep their
+/// groups (and their completion). Code-like lines, which the scan skips,
+/// are left as they are.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+pub(crate) fn rewrite_body_trailers(
+    body: &str,
+    mut uncovered: impl FnMut(&str) -> Option<()>,
+) -> String {
+    let mut out: Vec<String> = Vec::new();
+    for line in body.lines() {
+        if crate::pr_lookup::body_line_is_code_like(line) {
+            out.push(line.to_string());
+            continue;
         }
-        // Bundled by a recorded supersede, in either direction, one hop.
-        let claimed_ids: Vec<uuid::Uuid> = covered.iter().copied().collect();
-        for req in &store.requirements {
-            let claimed_req = claimed_ids.contains(&req.id);
-            for rel in &req.relationships {
-                if !matches!(
-                    rel.rel_type,
-                    RelationshipType::Supersedes | RelationshipType::SupersededBy
-                ) {
+        out.push(rewrite_trailer_line(line, &mut uncovered).unwrap_or_else(|| line.to_string()));
+    }
+    let mut joined = out.join("\n");
+    if body.ends_with('\n') {
+        joined.push('\n');
+    }
+    joined
+}
+
+/// `line` rewritten (see [`rewrite_body_trailers`]), or `None` when none of
+/// its trailers is uncovered.
+fn rewrite_trailer_line(
+    line: &str,
+    uncovered: &mut impl FnMut(&str) -> Option<()>,
+) -> Option<String> {
+    let mut tail = line.trim_end();
+    let mut groups: Vec<TrailerGroup> = Vec::new();
+    while tail.ends_with(')') {
+        let Some(open) = tail.rfind('(') else {
+            break;
+        };
+        let inner = &tail[open + 1..tail.len() - 1];
+        if inner.len() > 1
+            && inner.starts_with('#')
+            && inner[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            groups.push(TrailerGroup::Pr(format!("({inner})")));
+        } else {
+            let mut ids = Vec::new();
+            crate::pr_lookup::push_paren_spec_ids_from_line(&format!("({inner})"), &mut ids);
+            if ids.is_empty() {
+                break;
+            }
+            groups.push(TrailerGroup::Ids(inner.to_string(), ids));
+        }
+        tail = tail[..open].trim_end();
+    }
+    let mut refs: Vec<String> = Vec::new();
+    let mut kept: Vec<String> = Vec::new();
+    for group in groups.into_iter().rev() {
+        match group {
+            TrailerGroup::Pr(text) => kept.push(text),
+            TrailerGroup::Ids(inner, ids) => {
+                let (bad, good): (Vec<String>, Vec<String>) =
+                    ids.into_iter().partition(|id| uncovered(id).is_some());
+                if bad.is_empty() {
+                    kept.push(format!("({inner})"));
                     continue;
                 }
-                if claimed_req {
-                    covered.insert(rel.target_id);
-                } else if claimed_ids.contains(&rel.target_id) {
-                    covered.insert(req.id);
+                refs.extend(bad);
+                if !good.is_empty() {
+                    kept.push(format!("({})", good.join(", ")));
                 }
             }
         }
-        // The PR's queued review story's `## Covers` list.
-        if let Some(n) = pr {
-            for review in store
-                .requirements
-                .iter()
-                .filter(|r| crate::pr_lookup::parse_review_story_pr_number(&r.title) == Some(n))
-            {
-                for rel in &review.relationships {
-                    if matches!(
-                        &rel.rel_type,
-                        RelationshipType::Custom(name) if name.eq_ignore_ascii_case("implements")
-                    ) {
-                        covered.insert(rel.target_id);
-                    }
-                }
-            }
-        }
-        Some(TrailerCoverage { covered, claimed })
     }
-
-    /// The spec trailer `id` resolves to when this PR does not cover it;
-    /// `None` when it is covered or does not resolve. The one coverage test
-    /// every path shares: completion, the approval gate, `review record`, and
-    /// the rebase/merge branch-commit check.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    fn uncovered<'s>(&self, store: &'s RequirementsStore, id: &str) -> Option<&'s Requirement> {
-        let req = store.get_requirement_unambiguous(id).ok().flatten()?;
-        (!self.covered.contains(&req.id)).then_some(req)
+    if refs.is_empty() {
+        return None;
     }
-
-    /// `` `id` resolves to X ("title"), which this PR does not cover (it
-    /// claims Y) `` for an uncovered `id`.
-    fn uncovered_phrase(&self, store: &RequirementsStore, id: &str) -> Option<String> {
-        let req = self.uncovered(store, id)?;
-        // spec_id first: a legacy spec's agreed id IS the bare trailer, so
-        // only its spec id tells the reader it is a different spec.
-        let resolved = req.spec_id.as_deref().unwrap_or(id);
-        Some(format!(
-            "`{id}` resolves to {resolved} (\"{}\"), which this PR does not cover (it claims {})",
-            short_title(&req.title),
-            self.claimed.join(", "),
-        ))
+    let mut rewritten = tail.to_string();
+    if !rewritten.trim().is_empty() {
+        rewritten.push(' ');
     }
-
-    /// Why trailer `id` may not complete its spec, or `None` when the spec it
-    /// resolves to is covered (or `id` does not resolve, which the caller's
-    /// own resolution check already refuses).
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    pub(crate) fn refusal(&self, store: &RequirementsStore, id: &str) -> Option<String> {
-        let phrase = self.uncovered_phrase(store, id)?;
-        Some(format!(
-            "title trailer {phrase} — not completed by this merge; name the claimed spec by \
-             its full id"
-        ))
+    rewritten.push_str(&format!("(Refs {})", refs.join(", ")));
+    for k in kept {
+        rewritten.push(' ');
+        rewritten.push_str(&k);
     }
-
-    /// Why `aida review record <spec> --pr <n>` may not record a verdict for
-    /// `spec`, or `None` when PR `n` covers it.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    pub(crate) fn record_refusal(
-        &self,
-        store: &RequirementsStore,
-        spec: &str,
-        pr: u64,
-    ) -> Option<String> {
-        let phrase = self.uncovered_phrase(store, spec)?;
-        Some(format!(
-            "refused: review record for PR-{pr}: {phrase} — nothing was recorded; record the \
-             approval under the claimed spec's full id"
-        ))
-    }
-
-    /// One refusal per trailer id in `subjects` (the subjects of the branch
-    /// commits a rebase or merge lands verbatim) that this PR does not cover.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    pub(crate) fn commit_refusals(
-        &self,
-        store: &RequirementsStore,
-        subjects: &[String],
-    ) -> Vec<String> {
-        let mut out = Vec::new();
-        for subject in subjects {
-            for id in crate::pr_ship::extract_trailing_spec_ids_from_subject(subject) {
-                if let Some(phrase) = self.uncovered_phrase(store, &id) {
-                    let line = format!("commit \"{}\": trailer {phrase}", short_title(subject));
-                    if !out.contains(&line) {
-                        out.push(line);
-                    }
-                }
-            }
-        }
-        out
-    }
+    Some(rewritten)
 }
 
-/// The ids in `title` the ship approval gate looks verdicts up under: every id
-/// when the PR's coverage is unknown (no store, or no claim), otherwise only
-/// the covered ones, so an approval recorded under a foreign bare id
-/// (`TASK-139`) is neither demanded nor accepted.
+/// The full messages of the commits in `base..head`, oldest first. An
+/// unreadable range is an error: the trailer check fails closed on it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-pub(crate) fn covered_title_ids(
+pub(crate) fn branch_commit_messages(
     project_root: &std::path::Path,
-    branch: &str,
-    pr: Option<u64>,
-    title: &str,
-) -> Vec<String> {
-    let ids = crate::pr_ship::extract_spec_ids_from_text(title);
-    if ids.is_empty() {
-        return ids;
+    base: &str,
+    head: &str,
+) -> anyhow::Result<Vec<String>> {
+    let range = format!("{base}..{head}");
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args(["log", "--reverse", "-z", "--format=%B", &range, "--"])
+        .output()
+        .map_err(|e| anyhow::anyhow!("could not run git log {range}: {e}"))?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git log {range} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
-    let Some(store) = crate::load_store_for_lookup(project_root) else {
-        return ids;
-    };
-    match crate::pr_cmd::pr_trailer_coverage(project_root, &store, branch, pr) {
-        Some(coverage) => ids
-            .into_iter()
-            .filter(|id| coverage.uncovered(&store, id).is_none())
-            .collect(),
-        None => ids,
-    }
-}
-
-/// `aida review record <spec> --pr <n>` against PR `n`'s head `branch`: the
-/// refusal when the PR does not cover `spec`.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-pub(crate) fn review_record_refusal(
-    project_root: &std::path::Path,
-    branch: &str,
-    pr: u64,
-    spec: &str,
-) -> Option<String> {
-    let store = crate::load_store_for_lookup(project_root)?;
-    crate::pr_cmd::pr_trailer_coverage(project_root, &store, branch, Some(pr))?
-        .record_refusal(&store, spec, pr)
-}
-
-/// The refusals for the branch commits a rebase or merge of PR `pr` on
-/// `branch` would land verbatim on the default branch: each one names a
-/// trailer the PR does not cover, which the pull-side auto-bump would
-/// otherwise complete. Empty when coverage is unknown or every trailer is
-/// covered.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-pub(crate) fn branch_commit_refusals(
-    project_root: &std::path::Path,
-    store: &RequirementsStore,
-    branch: &str,
-    pr: u64,
-    subjects: &[String],
-) -> Vec<String> {
-    crate::pr_cmd::pr_trailer_coverage(project_root, store, branch, Some(pr))
-        .map(|c| c.commit_refusals(store, subjects))
-        .unwrap_or_default()
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .split('\0')
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_string)
+        .collect())
 }
 
 /// The `--owns` scopes of leases on `branch` in `project_root`'s main
@@ -249,32 +193,7 @@ pub(crate) fn lease_scopes_for_branch(project_root: &std::path::Path, branch: &s
         .collect()
 }
 
-/// Store-backed trailer resolution with the coverage check: `id` carries
-/// completion authority only when it resolves unambiguously and, when the
-/// coverage is known, to a covered spec. Each refusal is pushed to `notes`.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-pub(crate) fn admits(
-    store: &RequirementsStore,
-    coverage: Option<&TrailerCoverage>,
-    id: &str,
-    notes: &std::cell::RefCell<Vec<String>>,
-) -> bool {
-    if !matches!(store.get_requirement_unambiguous(id), Ok(Some(_))) {
-        return false;
-    }
-    match coverage.and_then(|c| c.refusal(store, id)) {
-        Some(why) => {
-            let mut notes = notes.borrow_mut();
-            if !notes.contains(&why) {
-                notes.push(why);
-            }
-            false
-        }
-        None => true,
-    }
-}
-
-fn short_title(title: &str) -> String {
+pub(crate) fn short_title(title: &str) -> String {
     const MAX: usize = 60;
     if title.chars().count() <= MAX {
         title.to_string()
@@ -283,7 +202,3 @@ fn short_title(title: &str) -> String {
         format!("{cut}…")
     }
 }
-
-#[cfg(test)]
-#[path = "tests/trailer_coverage_tests.rs"]
-mod tests;

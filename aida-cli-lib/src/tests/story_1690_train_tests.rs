@@ -918,6 +918,9 @@ impl MemberChecks for FakeChecks {
         self.calls.push("metadata");
         Ok(self.meta.clone())
     }
+    fn covered_ids(&mut self, _pr: u64, _head_ref: &str, ids: Vec<String>) -> Vec<String> {
+        ids
+    }
     fn hold_marker(&mut self, _pr: u64) -> Option<String> {
         self.calls.push("hold");
         self.hold.clone()

@@ -729,6 +729,11 @@ fn fetch_base(repo: &Path, base: &str) -> Result<String> {
 // trace:STORY-1690 | ai:claude
 pub(crate) trait MemberChecks {
     fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String>;
+    /// BUG-HOME-048: `ids` without those resolving to a spec PR `pr` on
+    /// `head_ref` does not cover — the shared gate id filter, so the train
+    /// never looks a verdict or spec policy up under a foreign bare id.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String>;
     /// The local merge-hold marker's reason, if any.
     fn hold_marker(&mut self, pr: u64) -> Option<String>;
     fn labels(
@@ -915,12 +920,22 @@ pub(crate) fn gate_member_with(
             short(&head)
         ));
     }
-    let hints = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title));
+    // BUG-HOME-048: both id lists pass the PR's trailer coverage.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let hints = checks.covered_ids(
+        pr,
+        &head_ref,
+        crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title)),
+    );
     checks.corpus(pr, &hints, &head)?;
     let (subject, body) = checks.message(pr, &meta, &head)?;
     // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
     // before it merges. trace:STORY-1690 | ai:claude
-    let ids = member_spec_ids(&head_ref, &meta.title, &subject, &body);
+    let ids = checks.covered_ids(
+        pr,
+        &head_ref,
+        member_spec_ids(&head_ref, &meta.title, &subject, &body),
+    );
     let records = checks.spec_records(&ids);
     let tty = checks.interactive_tty();
     // BUG-2214: the cover is read at most once per gate run — the supervised
@@ -984,6 +999,9 @@ impl MemberChecks for LiveChecks<'_> {
         self.forge
             .change_metadata(pr, &mut crate::network_retry::NoopSink)
             .map_err(|e| format!("its metadata could not be read ({e:#})"))
+    }
+    fn covered_ids(&mut self, pr: u64, head_ref: &str, ids: Vec<String>) -> Vec<String> {
+        crate::gate::trailer_coverage::covered_gate_ids(self.project_root, head_ref, Some(pr), ids)
     }
     fn hold_marker(&mut self, pr: u64) -> Option<String> {
         crate::gate::merge_hold_core::read_hold(self.main_worktree, pr)

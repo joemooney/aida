@@ -1814,6 +1814,15 @@ pub(crate) fn pr_gate_subject(
              every recorded author is treated as one of its authors"
         ),
     }
+    // BUG-HOME-048: the commit-subject trailers pass the PR's coverage, so a
+    // verdict is never looked up under a foreign bare id.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let ids = crate::gate::trailer_coverage::covered_gate_ids(
+        main_worktree,
+        branch.as_deref().unwrap_or(""),
+        Some(pr),
+        ids,
+    );
     refs_ids.extend(ids.iter().cloned());
     (
         normalized_spec_ids(&ids),
@@ -1828,7 +1837,7 @@ pub(crate) fn pr_gate_subject(
 /// `aida pr ship-batch` waits on the same set, so its "approved at head"
 /// cannot drift from what ship accepts.
 ///
-/// BUG-HOME-048: the title's ids pass the PR's trailer coverage first, so a
+/// BUG-HOME-048: the whole list passes the PR's trailer coverage, so a
 /// foreign bare id (`TASK-139`) is neither demanded nor accepted. The mandate
 /// cover and the pre-merge approval gate use this same set.
 // trace:STORY-1887 | ai:claude
@@ -1845,14 +1854,9 @@ pub(crate) fn ship_gate_known_ids(
         .collect();
     ids.extend(pr_ship::extract_spec_ids_from_text(branch));
     if let Some(title) = title {
-        ids.extend(crate::trailer_coverage::covered_title_ids(
-            project_root,
-            branch,
-            pr,
-            title,
-        ));
+        ids.extend(pr_ship::extract_spec_ids_from_text(title));
     }
-    ids
+    crate::gate::trailer_coverage::covered_gate_ids(project_root, branch, pr, ids)
 }
 
 /// BUG-2184: what is left of `--wait SECS` for the CI wait: the time since the
@@ -3117,33 +3121,6 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 head_sha.as_deref().unwrap_or(&ship_branch),
             )?;
         }
-        // BUG-HOME-048: a rebase or merge lands the branch commits verbatim,
-        // and the pull-side auto-bump completes every trailer on them — so a
-        // branch commit whose trailer the PR does not cover is refused here,
-        // before it can reach the default branch.
-        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-        if merge_method != crate::forge::MergeMethod::Squash {
-            let subjects = branch_commit_subjects(
-                &project_root,
-                &format!("origin/{retarget_base}"),
-                head_sha.as_deref().unwrap_or(&ship_branch),
-            );
-            if let Some(refusal) = Storage::new(main_worktree.join(".aida-store"))
-                .load()
-                .ok()
-                .and_then(|store| {
-                    rebase_trailer_refusal(
-                        &main_worktree,
-                        &store,
-                        &ship_branch,
-                        pr_number,
-                        &subjects,
-                    )
-                })
-            {
-                return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
-            }
-        }
         if branch_in_sibling {
             eprintln!(
                 "  step 3: branch {} is checked out in a sibling worktree — \
@@ -3234,18 +3211,51 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         } else {
             None
         };
-        let sanitized_squash_body = ship_squash_body(
-            merge_method,
-            declares_non_completing,
-            sanitized_squash_body,
-            || {
-                crate::identity_gate::squash_commit_messages_body(
-                    &project_root,
-                    &retarget_base,
-                    head_sha.as_deref().unwrap_or(&ship_branch),
+        // BUG-HOME-048: the trailer check, for every merge method and fail
+        // closed. A rebase or merge lands the branch commits verbatim and the
+        // pull-side auto-bump completes every trailer on them, so one whose
+        // trailer the PR does not cover is refused here. A squash gets an
+        // explicit body — never the forge's own copy of the branch commit
+        // messages — with every uncovered trailer kept only as a reference.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        let ship_head = head_sha.as_deref().unwrap_or(&ship_branch).to_string();
+        let checked_squash_body = crate::gate::trailer_coverage::ship_trailer_check(
+            Storage::new(main_worktree.join(".aida-store")).load(),
+            |store| {
+                crate::gate::trailer_coverage::pr_trailer_coverage(
+                    &main_worktree,
+                    store,
+                    &ship_branch,
+                    Some(pr_number),
                 )
             },
+            merge_method,
+            pr_number,
+            || {
+                crate::trailer_coverage::branch_commit_messages(
+                    &project_root,
+                    &format!("origin/{retarget_base}"),
+                    &ship_head,
+                )
+                .or_else(|_| {
+                    crate::trailer_coverage::branch_commit_messages(
+                        &project_root,
+                        &retarget_base,
+                        &ship_head,
+                    )
+                })
+            },
+            || match sanitized_squash_body {
+                Some(body) => Ok(body),
+                None => crate::identity_gate::squash_commit_messages_body(
+                    &project_root,
+                    &retarget_base,
+                    &ship_head,
+                ),
+            },
         )?;
+        let sanitized_squash_body =
+            ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -3796,8 +3806,12 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let spec_ids = Storage::new(main_worktree.join(".aida-store"))
             .load()
             .map(|store| {
-                let coverage =
-                    pr_trailer_coverage(&main_worktree, &store, &branch, Some(pr_number));
+                let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
+                    &main_worktree,
+                    &store,
+                    &branch,
+                    Some(pr_number),
+                );
                 ship_completion_trailer_for_method(
                     &store,
                     coverage.as_ref(),
@@ -3879,7 +3893,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 Storage::new(main_worktree.join(".aida-store"))
                     .load()
                     .map(|store| {
-                        let coverage = pr_trailer_coverage(
+                        let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
                             &main_worktree,
                             &store,
                             merged_branch,
@@ -4794,7 +4808,8 @@ pub(crate) fn derive_pr_ship_squash_subject_from_message(
     let store = Storage::new(store_root.join(".aida-store")).load()?;
     // BUG-HOME-048: a title trailer completes only a spec this PR covers.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-    let coverage = pr_trailer_coverage(project_root, &store, branch, pr.number);
+    let coverage =
+        crate::gate::trailer_coverage::pr_trailer_coverage(project_root, &store, branch, pr.number);
     let refusals = std::cell::RefCell::new(Vec::new());
     let (normalized, mut trailer) = pr_ship::derive_squash_subject_with_trailer(
         &pr.title,
@@ -4802,7 +4817,7 @@ pub(crate) fn derive_pr_ship_squash_subject_from_message(
         &pr.body,
         commit_msg,
         no_complete,
-        |id| crate::trailer_coverage::admits(&store, coverage.as_ref(), id, &refusals),
+        |id| crate::gate::trailer_coverage::admits(&store, coverage.as_ref(), id, &refusals),
         |id| pr_ship::spec_completion_hold_reason(&store, id),
     )
     .unwrap_or_else(|| {
@@ -4872,7 +4887,8 @@ pub(crate) fn derive_pr_ship_subject_for_method_from(
     }
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
-    let coverage = pr_trailer_coverage(project_root, &store, branch, pr.number);
+    let coverage =
+        crate::gate::trailer_coverage::pr_trailer_coverage(project_root, &store, branch, pr.number);
     let trailer = ship_completion_trailer_for_method(
         &store,
         coverage.as_ref(),
@@ -4947,7 +4963,7 @@ pub(crate) fn pr_ship_dry_run_output_for_method(
 // trace:BUG-1919 | ai:claude
 pub(crate) fn ship_completion_trailer(
     store: &aida_core::RequirementsStore,
-    coverage: Option<&crate::trailer_coverage::TrailerCoverage>,
+    coverage: Option<&crate::gate::trailer_coverage::TrailerCoverage>,
     pr_title: &str,
     branch: &str,
     pr_body: &str,
@@ -4976,7 +4992,7 @@ pub(crate) fn ship_completion_trailer(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn ship_completion_trailer_for_method(
     store: &aida_core::RequirementsStore,
-    coverage: Option<&crate::trailer_coverage::TrailerCoverage>,
+    coverage: Option<&crate::gate::trailer_coverage::TrailerCoverage>,
     method: crate::forge::MergeMethod,
     final_slice: bool,
     pr_title: &str,
@@ -4992,68 +5008,11 @@ pub(crate) fn ship_completion_trailer_for_method(
         branch,
         pr_body,
         no_complete,
-        |id| crate::trailer_coverage::admits(store, coverage, id, &refusals),
+        |id| crate::gate::trailer_coverage::admits(store, coverage, id, &refusals),
         |id| pr_ship::spec_completion_hold_reason(store, id),
     );
     trailer.notes.extend(refusals.into_inner());
     trailer
-}
-
-/// BUG-HOME-048: the refusal for a rebase/merge ship of PR `pr` whose branch
-/// commits (`subjects`) carry a trailer the PR does not cover; `None` when
-/// every trailer is covered or coverage is unknown.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-pub(crate) fn rebase_trailer_refusal(
-    project_root: &std::path::Path,
-    store: &aida_core::RequirementsStore,
-    branch: &str,
-    pr: u64,
-    subjects: &[String],
-) -> Option<String> {
-    let refusals =
-        crate::trailer_coverage::branch_commit_refusals(project_root, store, branch, pr, subjects);
-    if refusals.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "PR-{pr} would land branch commits whose trailers it does not cover, and the \
-         default-branch auto-bump would complete those specs:\n  - {}\nReword the commits to \
-         name the claimed spec by its full id, or ship as a squash merge (without `--rebase`).",
-        refusals.join("\n  - ")
-    ))
-}
-
-/// The subjects of the commits in `base..head` (best effort: empty when the
-/// range is not available locally).
-// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-fn branch_commit_subjects(project_root: &std::path::Path, base: &str, head: &str) -> Vec<String> {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["log", "--format=%s", &format!("{base}..{head}"), "--"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// BUG-HOME-048: the trailer coverage for PR `pr` on `branch` — its branch
-/// and lease claim, supersede bundles, and review-story covers.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-pub(crate) fn pr_trailer_coverage(
-    project_root: &std::path::Path,
-    store: &aida_core::RequirementsStore,
-    branch: &str,
-    pr: Option<u64>,
-) -> Option<crate::trailer_coverage::TrailerCoverage> {
-    let scopes = crate::trailer_coverage::lease_scopes_for_branch(project_root, branch);
-    crate::trailer_coverage::TrailerCoverage::for_pr(store, branch, &scopes, pr)
 }
 
 /// TASK-1765: `body` with an `aida: no-complete` declaration line appended,
@@ -5070,31 +5029,33 @@ pub(crate) fn non_completing_squash_body(body: &str) -> String {
     }
 }
 
-/// The squash body `aida pr ship` hands the forge. A non-completing squash
-/// ship carries the `aida: no-complete` declaration, appended to the
-/// identity gate's sanitized body or, when the gate left the body to the
-/// forge, to the branch's commit messages (`commit_messages`).
+/// The squash body `aida pr ship` hands the forge: `body` (built by
+/// [`crate::gate::trailer_coverage::ship_trailer_check`] for every squash
+/// ship, never left to the forge) carrying, on a non-completing ship, the
+/// `aida: no-complete` declaration. Other merge methods pass no body.
 ///
-/// TASK-2116 trade-off: an explicit body replaces the forge's default one,
-/// so GitHub no longer derives `Co-authored-by:` trailers from the other
-/// commit authors for that merge. Trailers already written in commit
-/// messages are kept. A non-completing ship accepts this so the declaration
-/// reaches main; an ordinary ship leaves the body to the forge.
+/// TASK-2116 / BUG-HOME-048 trade-off: an explicit body replaces the
+/// forge's default one, so GitHub no longer derives `Co-authored-by:`
+/// trailers from the other commit authors. Trailers already written in
+/// commit messages are kept. Every squash ship accepts this: the forge's
+/// default body copies each branch commit message verbatim, and the
+/// pull-side scan would complete any uncovered trailer it found there.
 // trace:TASK-1951 trace:TASK-1765 trace:TASK-2116 trace:TASK-2117 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 pub(crate) fn ship_squash_body(
     method: crate::forge::MergeMethod,
     declares_non_completing: bool,
-    sanitized: Option<String>,
-    commit_messages: impl FnOnce() -> Result<String>,
-) -> Result<Option<String>> {
-    if method != crate::forge::MergeMethod::Squash || !declares_non_completing {
-        return Ok(sanitized);
+    body: Option<String>,
+) -> Option<String> {
+    if method != crate::forge::MergeMethod::Squash {
+        return None;
     }
-    let body = match sanitized {
-        Some(body) => body,
-        None => commit_messages()?,
-    };
-    Ok(Some(non_completing_squash_body(&body)))
+    let body = body?;
+    Some(if declares_non_completing {
+        non_completing_squash_body(&body)
+    } else {
+        body
+    })
 }
 
 /// STORY-1663: optional slice-stack verifier hook before rebase merge.
@@ -9045,16 +9006,13 @@ mod story_1663_rebase_ship_tests {
         // left it to the forge; an ordinary ship leaves it to the forge.
         // trace:TASK-1951 trace:TASK-2117 | ai:claude
         use crate::forge::MergeMethod;
-        let squash = |declares, sanitized: Option<&str>| {
-            ship_squash_body(
-                MergeMethod::Squash,
-                declares,
-                sanitized.map(str::to_string),
-                || Ok("* fix: one (Refs TASK-9)".to_string()),
-            )
-            .unwrap()
+        let squash = |declares, body: &str| {
+            ship_squash_body(MergeMethod::Squash, declares, Some(body.to_string()))
         };
-        for body in [squash(true, None), squash(true, Some("* sanitized"))] {
+        for body in [
+            squash(true, "* fix: one (Refs TASK-9)"),
+            squash(true, "* sanitized"),
+        ] {
             let opts = crate::forge::MergeOptions {
                 method: MergeMethod::Squash,
                 squash_subject: None,
@@ -9069,13 +9027,10 @@ mod story_1663_rebase_ship_tests {
                 .expect("--body passed");
             assert!(argv[at + 1].ends_with("\n\naida: no-complete"), "{argv:?}");
         }
+        // BUG-HOME-048: an ordinary squash ship passes its explicit body too.
+        assert_eq!(squash(false, "* a"), Some("* a".to_string()));
         assert_eq!(
-            squash(false, None),
-            None,
-            "an ordinary ship leaves the body to the forge"
-        );
-        assert_eq!(
-            ship_squash_body(MergeMethod::Rebase, true, None, || unreachable!()).unwrap(),
+            ship_squash_body(MergeMethod::Rebase, true, Some("* a".into())),
             None
         );
     }

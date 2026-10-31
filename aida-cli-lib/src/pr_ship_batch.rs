@@ -579,7 +579,7 @@ impl BatchPorts for GitHubPorts {
     fn completion_preview(&mut self, pr: u64, view: &PrView) -> Option<String> {
         let store = crate::load_store_for_lookup(&self.project_root)?;
         // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-        let coverage = crate::pr_cmd::pr_trailer_coverage(
+        let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
             &self.project_root,
             &store,
             &view.head_ref,

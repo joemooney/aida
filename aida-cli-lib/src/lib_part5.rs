@@ -3120,7 +3120,7 @@ pub(crate) fn handle_review_record_at(
         // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
         if let (Some(n), Some(head)) = (review_pr_number(spec, pr), author_branch.as_deref()) {
             if let Some(refusal) =
-                crate::trailer_coverage::review_record_refusal(&project_root, head, n, spec)
+                crate::gate::trailer_coverage::review_record_refusal(&project_root, head, n, spec)
             {
                 anyhow::bail!(refusal);
             }
