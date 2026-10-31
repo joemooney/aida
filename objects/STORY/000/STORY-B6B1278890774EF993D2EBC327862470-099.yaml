@@ -47,12 +47,12 @@ description: |
   - Every privileged act is logged with the job id, the submitting seat and the outcome, and the job's output is still captured (via tee or a pty transcript), not redirected away from the TTY.
   - The submitter gets each job's result back (exit code plus a log path), replacing the /tmp/aida_runme*.sh plus log-tail convention.
   - Jobs that wait on a prompt time out with a clear "needs the operator" notice instead of hanging the queue.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T11:23:36.640233199Z
+modified_at: 2026-10-31T11:57:29.189179163Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -255,6 +255,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a191d2-6d5b-7522-a658-eb37c3bd8f60
+  author: joe
+  timestamp: 2026-10-31T11:57:29.307651722Z
+  session_id: 01a19190567e
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -263,3 +272,7 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T11:57:29.189179163Z
+  implemented_by: joe
