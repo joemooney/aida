@@ -6,12 +6,12 @@ description: |-
 
   cosmetic (non-blocking): docs/showcase/index.html nav 'Capabilities' now points to capabilities.html, so the landing's in-page #capabilities section (index.html:84) is no longer reachable from the header nav
   Reviewed sha: 8de7ba2fb5df1e3e085f5d988c33aef041fd8351
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T20:01:37.987391381Z
-modified_at: 2026-10-31T00:58:07.717218260Z
+modified_at: 2026-10-31T04:55:10.188254382Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-128
@@ -62,6 +62,20 @@ history:
   author: joe
   timestamp: 2026-10-31T00:58:09.440523463Z
   changes: []
+- id: 01a1904f-c864-7992-8e56-c0716a674724
+  author: aida-auto-bump
+  timestamp: 2026-10-31T04:55:10.180023522Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1904f-c86c-7d80-a360-a011166e0443
+  timestamp: 2026-10-31T04:55:10.188249932Z
+  agent: aida
+  commit_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
+  summary: 'Base-only update from main (gh update-branch c1f0fffbb2b3f4176a0246839603386f77516644 -> 03ae02664a4bc6d2e923276137f8d62fbee5aabc); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: d7ff223575290d0a2d3d749400efa29f7ed24605
   branch: main
@@ -69,3 +83,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 79ed6f56bf8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-31T04:55:10.180018511Z
+  completion_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
