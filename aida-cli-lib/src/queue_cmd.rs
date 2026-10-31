@@ -13423,11 +13423,15 @@ pub(crate) fn handle_queue_work(
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
             // trace:BUG-2139 | ai:claude
+            // A contained child of any seat whose key cannot be held is
+            // refused here, before it spawns.
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
             let seat = crate::canonical_role_name(&role);
             let grant = crate::gate::seat_authority::issue_headless_child(
                 &project_root,
                 &seat,
                 &crate::current_user_id(None),
+                contained,
             )?;
             match &grant {
                 crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {

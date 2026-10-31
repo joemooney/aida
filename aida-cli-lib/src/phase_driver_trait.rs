@@ -3774,10 +3774,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
         // trace:BUG-2165 | ai:antigravity
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
         let child_grant = match crate::gate::seat_authority::issue_headless_child(
             &self.project_root,
             "implementer",
             &crate::current_user_id(None),
+            self.contained,
         ) {
             Ok(g) => {
                 if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &g {
