@@ -1771,3 +1771,158 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
         vec!["1 commit(s) that origin does not have".to_string()]
     );
 }
+
+/// BUG-051: every probe `git status` entry is named by its path, and a set
+/// of findings is never rendered as an empty list.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[test]
+fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
+    assert_eq!(describe_status_entry("? notes.txt"), "untracked: notes.txt");
+    assert_eq!(
+        describe_status_entry("1 .M N... 100644 100644 100644 0123abc 0123abc src/a b.rs"),
+        "changed (.M): src/a b.rs"
+    );
+    assert_eq!(
+        describe_status_entry("2 R. N... 100644 100644 100644 aaa aaa R100 new.rs\told.rs"),
+        "renamed (R.): old.rs -> new.rs"
+    );
+    assert_eq!(
+        describe_status_entry("u UU N... 100644 100644 100644 100644 a b c conflict.rs"),
+        "unmerged (UU): conflict.rs"
+    );
+    assert_eq!(describe_status_entry("garbage"), "garbage");
+
+    let clean = ProbeFacts::default();
+    assert!(!clean.unshipped());
+    assert!(unshipped_items(&clean).is_empty());
+
+    // Commits counted on no listed ref still produce a named line.
+    let orphaned = ProbeFacts {
+        unpushed: 3,
+        ..ProbeFacts::default()
+    };
+    let items = unshipped_items(&orphaned);
+    assert!(items.len() >= 2, "{items:?}");
+    assert!(items[0].contains("3 commit(s)"), "{items:?}");
+    assert!(unshipped_reason(&orphaned).contains("3 commit(s) on no listed ref"));
+
+    let dirty = ProbeFacts {
+        dirty: vec!["? scratch.txt".into()],
+        unpushed: 1,
+        unpushed_refs: vec!["1 commit(s) on refs/heads/feat".into()],
+        ..ProbeFacts::default()
+    };
+    let items = unshipped_items(&dirty);
+    assert_eq!(items[0], "untracked: scratch.txt");
+    assert!(items.iter().any(|i| i.contains("refs/heads/feat")));
+    let reason = unshipped_reason(&dirty);
+    assert!(reason.contains("untracked: scratch.txt"), "{reason}");
+    assert!(reason.contains("refs/heads/feat"), "{reason}");
+}
+
+/// BUG-051: the session's runtime links and build/cache output are not work.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_051_runtime_links_and_build_output_are_not_work() {
+    let tmp = tempfile::tempdir().unwrap();
+    let clone = tmp.path();
+    std::os::unix::fs::symlink(tmp.path(), clone.join(".aida-store")).unwrap();
+    for noise in [
+        "? .aida-store",
+        "? .aida/cache.db",
+        "? .aida/cache.db-wal",
+        "? .aida/agents/claude.json",
+        "? target/debug/aida",
+    ] {
+        assert!(is_runtime_noise_entry(clone, noise), "{noise}");
+    }
+    for work in [
+        "? scratch.txt",
+        "? .aida/config.toml",
+        "? src/target/x.rs",
+        "1 .M N... 100644 100644 100644 a a target/tracked.rs",
+    ] {
+        assert!(!is_runtime_noise_entry(clone, work), "{work}");
+    }
+    // A real `.aida-store` directory, not the link, still counts.
+    let other = tempfile::tempdir().unwrap();
+    std::fs::create_dir(other.path().join(".aida-store")).unwrap();
+    assert!(!is_runtime_noise_entry(other.path(), "? .aida-store"));
+}
+
+/// BUG-051: a seat branch published by URL (no tracking ref in the clone or
+/// main), whose origin copy then gained a commit (an update-branch merge), is
+/// pushed: session end, without `--force`, removes the clone. The session's
+/// runtime links and build output do not hold it either.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000051";
+    let clone = seat(&fx, "bug051a", id);
+    seat_commit(&clone, "work.txt");
+    let origin = fx.origin.to_str().unwrap();
+    seat_git(&clone, &["push", "-q", origin, "feat:refs/heads/feat"]);
+    let other = fx.root.join("bug051-other");
+    seat_git(
+        &fx.root,
+        &["clone", "-q", "-b", "feat", origin, other.to_str().unwrap()],
+    );
+    seat_git(
+        &other,
+        &["commit", "-q", "--allow-empty", "-m", "merge main"],
+    );
+    seat_git(&other, &["push", "-q", "origin", "feat"]);
+    assert!(!ref_exists(&clone, "refs/remotes/origin/feat"));
+    assert!(!ref_exists(&fx.main, "refs/remotes/origin/feat"));
+
+    std::os::unix::fs::symlink(&fx.main, clone.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(clone.join(".aida/agents")).unwrap();
+    std::fs::write(clone.join(".aida/agents/claude.json"), "{}").unwrap();
+    std::fs::write(clone.join(".aida/cache.db"), "db").unwrap();
+    std::fs::create_dir_all(clone.join("target/debug")).unwrap();
+    std::fs::write(clone.join("target/debug/aida"), "bin").unwrap();
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    end_session(id, false).unwrap();
+    assert!(!clone.exists());
+    assert!(!crate::lease_path(&fx.main, id).exists());
+    assert!(!fx
+        .main
+        .join(".aida/salvage")
+        .join(clone.file_name().unwrap())
+        .exists());
+}
+
+/// BUG-051: an untracked file refuses session end, and the refusal names it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_051_bwrap_session_end_refusal_names_the_untracked_file() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000052";
+    let clone = seat(&fx, "bug051b", id);
+    std::fs::write(clone.join("scratch-notes.txt"), "draft\n").unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    let refused = format!("{:#}", end_session(id, false).unwrap_err());
+    assert!(
+        refused.contains("untracked: scratch-notes.txt"),
+        "{refused}"
+    );
+    assert!(clone.exists());
+    assert!(crate::lease_path(&fx.main, id).exists());
+}

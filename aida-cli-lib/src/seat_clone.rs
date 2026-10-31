@@ -1300,6 +1300,11 @@ pub(crate) fn probe_until(
     if is_empty_gitmodules_placeholder(clone) {
         facts.dirty.retain(|line| line != "? .gitmodules");
     }
+    // The session's runtime links and build/cache output are not work.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+    facts
+        .dirty
+        .retain(|line| !is_runtime_noise_entry(clone, line));
     let base = pinned_base(main, clone).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -1352,9 +1357,15 @@ pub(crate) fn probe_until(
 /// Why a clone with `facts` is kept: the work origin does not have, by ref.
 // trace:BUG-2224 | ai:claude
 pub(crate) fn unshipped_reason(facts: &ProbeFacts) -> String {
-    let mut parts = Vec::new();
-    if !facts.dirty.is_empty() {
-        parts.push(format!("{} uncommitted change(s)", facts.dirty.len()));
+    // BUG-051: name every item, never an empty list.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+    let mut parts: Vec<String> = facts
+        .dirty
+        .iter()
+        .map(|line| describe_status_entry(line))
+        .collect();
+    if facts.unpushed > 0 && facts.unpushed_refs.is_empty() {
+        parts.push(format!("{} commit(s) on no listed ref", facts.unpushed));
     }
     parts.extend(facts.unpushed_refs.iter().cloned());
     if parts.is_empty() {
@@ -1362,6 +1373,116 @@ pub(crate) fn unshipped_reason(facts: &ProbeFacts) -> String {
     } else {
         format!("it holds work origin does not have: {}", parts.join("; "))
     }
+}
+
+/// Every item that makes a clone with `facts` unshipped, one per entry: each
+/// changed or untracked path ([`describe_status_entry`]), then the commits
+/// origin lacks with the refs holding them. Empty exactly when
+/// [`ProbeFacts::unshipped`] is false.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
+    let mut items: Vec<String> = facts
+        .dirty
+        .iter()
+        .map(|line| describe_status_entry(line))
+        .collect();
+    if facts.unpushed > 0 {
+        items.push(format!(
+            "{} commit(s) that origin does not have, on:",
+            facts.unpushed
+        ));
+        if facts.unpushed_refs.is_empty() {
+            items.push("  (no listed ref holds them)".to_string());
+        } else {
+            items.extend(facts.unpushed_refs.iter().map(|line| format!("  {line}")));
+        }
+    }
+    items
+}
+
+/// A `git status --porcelain=v2` entry as `<kind>: <path>`, so a refusal
+/// names the file rather than printing modes and object ids. A line that does
+/// not parse is shown as it is. The path is seat-written, so it is escaped.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn describe_status_entry(line: &str) -> String {
+    let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
+    let xy = line.split(' ').nth(1).unwrap_or("");
+    let described = match line.as_bytes().first() {
+        Some(b'?') => field(1).map(|p| format!("untracked: {}", p.escape_debug())),
+        Some(b'!') => field(1).map(|p| format!("ignored: {}", p.escape_debug())),
+        Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", p.escape_debug())),
+        Some(b'2') => field(9).map(|p| match p.split_once('\t') {
+            Some((to, from)) => format!(
+                "renamed ({xy}): {} -> {}",
+                from.escape_debug(),
+                to.escape_debug()
+            ),
+            None => format!("renamed ({xy}): {}", p.escape_debug()),
+        }),
+        Some(b'u') => field(10).map(|p| format!("unmerged ({xy}): {}", p.escape_debug())),
+        _ => None,
+    };
+    described.unwrap_or_else(|| line.escape_debug().to_string())
+}
+
+/// Whether a probe `git status` entry is the session's runtime state or
+/// build/cache output rather than work: the `.aida-store` link to the
+/// primary's store, `.aida/cache.db*`, `.aida/agents`, and `target/`. Only
+/// untracked entries qualify; `.aida-store` only while it is a symlink (read
+/// with metadata only; nothing in the clone is opened).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
+    let Some(path) = line.strip_prefix("? ") else {
+        return false;
+    };
+    let path = path.trim_end_matches('/');
+    if path == ".aida-store" {
+        return std::fs::symlink_metadata(clone.join(path))
+            .is_ok_and(|meta| meta.file_type().is_symlink());
+    }
+    path.starts_with(".aida/cache.db")
+        || path == ".aida/agents"
+        || path.starts_with(".aida/agents/")
+        || path == "target"
+        || path.starts_with("target/")
+}
+
+/// Bring origin's copy of `branch` into `main`'s `refs/remotes/origin/<branch>`
+/// (host git in main only, bounded, no prompts), so a clone whose branch head
+/// is an ancestor of it reads as pushed: [`main_reachable_commits`] excuses
+/// tips main reaches. A seat publishes through main ([`crate::ship_from_seat`])
+/// without a tracking ref in the clone, and origin's branch may since have
+/// gained commits (an update-branch merge). Best effort: a failure, an absent
+/// branch or a timeout changes nothing and the count stays conservative.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn refresh_origin_branch(main: &Path, branch: &str) {
+    let valid = !branch.is_empty()
+        && !branch.starts_with('-')
+        && git(main)
+            .args(["check-ref-format", "--branch", branch])
+            .output()
+            .is_ok_and(|out| out.status.success());
+    if !valid {
+        return;
+    }
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .env(ACCESSOR_ENV, "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
+        .stdin(std::process::Stdio::null())
+        .args([
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "origin",
+        ])
+        .arg(format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"));
+    let _ = crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20));
 }
 
 /// Parse [`UNPUSHED_COUNT_SCRIPT`]'s output: the total on the first line,
