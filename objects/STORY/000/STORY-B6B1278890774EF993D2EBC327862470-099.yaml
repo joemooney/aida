@@ -52,12 +52,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-30T14:06:09.059368652Z
+modified_at: 2026-10-31T09:58:37.659510432Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T01:00:30.715272571Z
+comments:
+- id: 01a19165-9b5b-7c73-9930-3f6c408fea79
+  author: joe
+  content: |
+    ADVISOR BRIEF 2026-10-31 03:00: SKETCH ONLY (authority-bearing; STRICT review later). Write the architecture sketch as a comment on this spec, then stop (aida punt), with NO code. Cover: how jobs are submitted (a private, owner-only spool instead of /tmp), how the deputy authenticates the submitter session and records who submitted each job, concurrency and per-job result capture (no shared-log grepping, no lost overwrites), what authority the deputy holds (operator grant, renewal, expiry) and what it must refuse (never waives an unresolved gate, never runs arbitrary shell outside an allowlist?), how it survives reboot, and the test plan. List open questions for the advisor.
+  created_at: 2026-10-31T09:58:37.659510432Z
+  modified_at: 2026-10-31T09:58:37.659510432Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a52-9d72-7b62-969e-89638e367cb5
   author: joe
