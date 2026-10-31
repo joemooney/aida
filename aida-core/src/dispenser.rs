@@ -115,12 +115,13 @@ pub trait Dispenser: Send + Sync {
         let digits = 3; // minimum padding
         match &state.mode {
             IdMode::Centralized => Ok(format!("{}-{:0>width$}", object_type, seq, width = digits)),
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
             IdMode::Distributed { node_id } => Ok(format!(
                 "{}-{}-{:0>width$}",
                 object_type,
                 node_id,
                 seq,
-                width = digits
+                width = crate::id_identity::installed_widths().node_seq_width
             )),
         }
     }

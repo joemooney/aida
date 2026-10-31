@@ -2893,11 +2893,31 @@ impl Cache {
     /// resolution paths can afford the ambiguity check on every lookup.
     // trace:BUG-1535 | ai:claude
     pub fn id_rows_for(&self, id: &str) -> Result<Vec<crate::id_collisions::IdRow>> {
-        self.query_id_rows(
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric
+        // identity: `TASK-0418` must find a row stored as `TASK-418`. The LIKE
+        // pattern `TASK-%418` admits every zero-padding (plus false positives
+        // such as `TASK-1418`), which the `same_id` filter then drops.
+        let Some(pattern) = id_like_pattern(id) else {
+            return self.query_id_rows(
+                "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache \
+                 WHERE spec_id = ?1 COLLATE NOCASE OR agreed_id = ?1 COLLATE NOCASE",
+                Some(id.trim()),
+            );
+        };
+        let rows = self.query_id_rows(
             "SELECT id, spec_id, agreed_id, title, status FROM requirements_cache \
-             WHERE spec_id = ?1 COLLATE NOCASE OR agreed_id = ?1 COLLATE NOCASE",
-            Some(id.trim()),
-        )
+             WHERE spec_id LIKE ?1 ESCAPE '\\' OR agreed_id LIKE ?1 ESCAPE '\\'",
+            Some(&pattern),
+        )?;
+        Ok(rows
+            .into_iter()
+            .filter(|r| {
+                [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|s| crate::id_identity::same_id(s, id))
+            })
+            .collect())
     }
 
     /// Every cached row's id projection, for the store-wide collision scan.
@@ -3724,7 +3744,42 @@ fn uuid_for_spec_id_on(conn: &Connection, spec_id: &str) -> Result<Option<Uuid>>
             |row| row.get::<_, String>(0),
         )
         .optional()?;
-    Ok(id_str.and_then(|s| Uuid::parse_str(&s).ok()))
+    if let Some(found) = id_str.and_then(|s| Uuid::parse_str(&s).ok()) {
+        return Ok(Some(found));
+    }
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — a padded
+    // twin of the literal id is the same spec.
+    let Some(pattern) = id_like_pattern(spec_id) else {
+        return Ok(None);
+    };
+    let mut stmt = conn
+        .prepare("SELECT id, spec_id FROM requirements_cache WHERE spec_id LIKE ?1 ESCAPE '\\'")?;
+    let rows = stmt
+        .query_map(params![pattern], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows
+        .into_iter()
+        .filter(|(_, sid)| {
+            sid.as_deref()
+                .is_some_and(|s| crate::id_identity::same_id(s, spec_id))
+        })
+        .find_map(|(id, _)| Uuid::parse_str(&id).ok()))
+}
+
+/// A SQL `LIKE` pattern (escape `\`) admitting every zero-padding of an
+/// ID-shaped `id`: `TASK-%418`. `None` for non-ID input. Callers filter the
+/// rows with [`crate::id_identity::same_id`] — the pattern over-matches.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+fn id_like_pattern(id: &str) -> Option<String> {
+    let key = crate::id_identity::IdKey::parse(id)?;
+    let escape = |s: &str| {
+        s.replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    };
+    Some(format!("{}-%{}", escape(&key.prefix), key.seq))
 }
 
 fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {

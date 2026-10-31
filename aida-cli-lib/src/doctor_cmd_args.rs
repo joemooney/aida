@@ -33,6 +33,22 @@ pub enum DoctorCommand {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
     BareIdTwins,
 
+    /// Repair spec IDs that differ only by leading zeros (TASK-0418 and
+    /// TASK-418 are the same ID). For each collision the spec with more
+    /// commit-message references keeps the number; the others get a fresh
+    /// ID, and their mentions in the store, Markdown docs and trace comments
+    /// are rewritten. The old ID is recorded in the renumbered spec's history.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    RenumberIdCollisions {
+        /// Print the plan without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Apply without the confirmation refusal.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
     /// Focused multi-agent drift diagnostic for one category.
     // trace:STORY-462 | ai:codex
     Check {

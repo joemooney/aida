@@ -11741,6 +11741,11 @@ Commands:
                             name this node's local spec with the same number (TYPE-HOME-100). A bare
                             id resolves to the agreed spec, so prose meaning the local one should
                             use the alias form. Reports only
+  renumber-id-collisions    Repair spec IDs that differ only by leading zeros (TASK-0418 and
+                            TASK-418 are the same ID). For each collision the spec with more
+                            commit-message references keeps the number; the others get a fresh ID,
+                            and their mentions in the store, Markdown docs and trace comments are
+                            rewritten. The old ID is recorded in the renumbered spec's history
   check                     Focused multi-agent drift diagnostic for one category
   heal                      Focused multi-agent drift heal for one category
   migrate-counter-scope     Migrate this project from per-type counters (each type counts
@@ -11896,6 +11901,37 @@ local one should use the alias form. Reports only
 Usage: aida doctor bare-id-twins [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor renumber-id-collisions
+Repair spec IDs that differ only by leading zeros (TASK-0418 and TASK-418 are the same ID). For each
+collision the spec with more commit-message references keeps the number; the others get a fresh ID,
+and their mentions in the store, Markdown docs and trace comments are rewritten. The old ID is
+recorded in the renumbered spec's history
+
+Usage: aida doctor renumber-id-collisions [OPTIONS]
+
+Options:
+      --dry-run
+          Print the plan without writing anything
+
+  -y, --yes
+          Apply without the confirmation refusal
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -20839,6 +20875,11 @@ Options:
           Friendly name for this node, recorded alongside the node id in the shared roster (`aida
           team`). Defaults to `<host>-<user>-<seq>` (e.g. `imac-joe-1`). At a TTY with no flag you
           are prompted with the default pre-filled; non-interactive init uses the default silently
+
+      --id-width <N>
+          Zero-pad the number in new spec IDs to N digits (TASK-0001 with 4), for legacy and
+          node-local IDs alike. IDs that differ only by leading zeros are the same ID, so changing
+          this later renames nothing. Written to `[ids]` in .aida/config.toml
 
   -h, --help
           Print help (see a summary with '-h')
@@ -40539,6 +40580,42 @@ Working on aida itself
     "path": [
       "aida",
       "doctor",
+      "renumber-id-collisions"
+    ],
+    "about": "Repair spec IDs that differ only by leading zeros (TASK-0418 and TASK-418 are the same ID). For each collision the spec with more commit-message references keeps the number; the others get a fresh ID, and their mentions in the store, Markdown docs and trace comments are rewritten. The old ID is recorded in the renumbered spec's history",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Print the plan without writing anything"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "yes",
+        "takes_value": false,
+        "help": "Apply without the confirmation refusal"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
       "check"
     ],
     "about": "Focused multi-agent drift diagnostic for one category",
@@ -49640,6 +49717,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "id-width",
+        "takes_value": true,
+        "help": "Zero-pad the number in new spec IDs to N digits (TASK-0001 with 4), for legacy and node-local IDs alike. IDs that differ only by leading zeros are the same ID, so changing this later renames nothing. Written to `[ids]` in .aida/config.toml"
       },
       {
         "name": "lang",

@@ -6353,7 +6353,9 @@ pub fn collect_taken_short_ids(
     for (stem, path) in files {
         let stem = stem.trim();
         if !stem.is_empty() {
-            taken.insert(stem.to_ascii_uppercase());
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude —
+            // numeric identity keys: a padded twin reserves the number.
+            taken.insert(crate::id_identity::id_key(stem));
         }
         let Ok(existing) = crate::object_store::read_object_from_path(path) else {
             continue;
@@ -6364,7 +6366,7 @@ pub fn collect_taken_short_ids(
         {
             let id = id.trim();
             if !id.is_empty() {
-                taken.insert(id.to_ascii_uppercase());
+                taken.insert(crate::id_identity::id_key(id));
             }
         }
     }
@@ -7314,14 +7316,14 @@ fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
         // store's BUG counter sits at 34 with ~1,500 BUG ids allocated).
         // trace:BUG-1535 | ai:claude
         for _ in 0..=taken_short_ids.len() {
-            if !taken_short_ids.contains(&agreed.to_ascii_uppercase()) {
+            if !taken_short_ids.contains(&crate::id_identity::id_key(&agreed)) {
                 break;
             }
             skipped.push(agreed.clone());
             seq = counters.next(type_prefix);
             agreed = AgreedCounters::format_agreed_id(type_prefix, seq);
         }
-        if taken_short_ids.contains(&agreed.to_ascii_uppercase()) {
+        if taken_short_ids.contains(&crate::id_identity::id_key(&agreed)) {
             anyhow::bail!(
                 "merge-gate collision guard: walked every candidate for prefix `{}` \
                  without finding a free agreed-id (last tried: {}); aborting before \
@@ -7350,7 +7352,7 @@ fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
 
         // Reserve this id so a later iteration of THIS merge-gate run
         // doesn't double-allocate it.
-        taken_short_ids.insert(agreed.to_ascii_uppercase());
+        taken_short_ids.insert(crate::id_identity::id_key(&agreed));
 
         let prior = req.clone(); // trace:STORY-1674 | ai:codex
         req.agreed_id = Some(agreed.clone());
@@ -8683,7 +8685,7 @@ mod tests {
             taken.contains("TASK-1"),
             "unparseable file's id is reserved"
         );
-        assert!(taken.contains("TASK-2-001"));
+        assert!(taken.contains(&crate::id_identity::id_key("TASK-2-001")));
 
         home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();

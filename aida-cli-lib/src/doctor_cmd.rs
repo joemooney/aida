@@ -269,6 +269,13 @@ pub(crate) fn handle_doctor_command(
         }
         // trace:BUG-B6B1278890774EF993D2EBC327862470-036 | ai:claude
         cli::DoctorCommand::BareIdTwins => doctor_bare_id_twins(),
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+        cli::DoctorCommand::RenumberIdCollisions { dry_run, yes } => {
+            let project_root = find_project_root()?;
+            let store_root = detect_distributed_store_from(&project_root)
+                .unwrap_or_else(|| project_root.join(".aida-store"));
+            crate::doctor_renumber::run(&project_root, &store_root, *dry_run, *yes)
+        }
     }
 }
 
@@ -14039,6 +14046,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
     // trace:EPIC-19 | ai:claude
     let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
     walk_yamls(&objects_root, &mut yaml_files);
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity keys.
     let mut known_specs: std::collections::HashSet<String> = std::collections::HashSet::new();
     for path in &yaml_files {
         let Ok(content) = std::fs::read_to_string(path) else {
@@ -14049,13 +14057,13 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
             if let Some(v) = t.strip_prefix("spec_id:") {
                 let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                 if !s.is_empty() {
-                    known_specs.insert(s.to_ascii_uppercase());
+                    known_specs.insert(aida_core::id_identity::id_key(&s));
                 }
             } else if let Some(v) = t.strip_prefix("agreed_id:") {
                 let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                 // agreed_id can be `null` / empty in YAML; skip those.
                 if !s.is_empty() && s != "null" && s != "~" {
-                    known_specs.insert(s.to_ascii_uppercase());
+                    known_specs.insert(aida_core::id_identity::id_key(&s));
                 }
             }
         }
@@ -14071,7 +14079,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
 
     let mut orphan_specs: Vec<&String> = by_spec
         .keys()
-        .filter(|s| !known_specs.contains(&s.to_ascii_uppercase()))
+        .filter(|s| !known_specs.contains(&aida_core::id_identity::id_key(s)))
         .collect();
     orphan_specs.sort();
 
@@ -14925,12 +14933,12 @@ fn doctor_fsck() -> Result<()> {
                     if let Some(v) = t.strip_prefix("spec_id:") {
                         let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                         if !s.is_empty() {
-                            known_specs.insert(s.to_ascii_uppercase());
+                            known_specs.insert(aida_core::id_identity::id_key(&s));
                         }
                     } else if let Some(v) = t.strip_prefix("agreed_id:") {
                         let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
                         if !s.is_empty() && s != "null" && s != "~" {
-                            known_specs.insert(s.to_ascii_uppercase());
+                            known_specs.insert(aida_core::id_identity::id_key(&s));
                         }
                     }
                 }
@@ -14942,12 +14950,12 @@ fn doctor_fsck() -> Result<()> {
         let total_refs: usize = by_spec.values().map(|v| v.len()).sum();
         let dangling: usize = by_spec
             .iter()
-            .filter(|(s, _)| !known_specs.contains(&s.to_ascii_uppercase()))
+            .filter(|(s, _)| !known_specs.contains(&aida_core::id_identity::id_key(s)))
             .map(|(_, v)| v.len())
             .sum();
         let dangling_specs: usize = by_spec
             .keys()
-            .filter(|s| !known_specs.contains(&s.to_ascii_uppercase()))
+            .filter(|s| !known_specs.contains(&aida_core::id_identity::id_key(s)))
             .count();
         if dangling == 0 {
             println!(

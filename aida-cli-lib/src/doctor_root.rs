@@ -1954,8 +1954,9 @@ pub(crate) fn id_collision_findings(
                         collision.candidates.len(),
                         lines.join("; ")
                     ),
-                    action: "decide which object keeps the id, then give the other a free \
-                             agreed id (not auto-healed: renumbering is a data migration)"
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                    action: "run `aida doctor renumber-id-collisions --dry-run` to preview \
+                             the repair (not auto-healed: renumbering is a data migration)"
                         .to_string(),
                     safe_heal: false,
                 }
@@ -1965,7 +1966,7 @@ pub(crate) fn id_collision_findings(
     let unique: std::collections::HashSet<String> = store
         .requirements
         .iter()
-        .map(|r| r.display_id().to_ascii_uppercase())
+        .map(|r| aida_core::id_identity::id_key(&r.display_id()))
         .collect();
     if unique.len() != objects {
         out.push(DoctorFinding {

@@ -4798,14 +4798,16 @@ impl Requirement {
 
     /// Case-insensitive match on the native `spec_id` or the `agreed_id`.
     // trace:BUG-1535 | ai:claude
+    /// Leading zeros in the sequence are insignificant (BUG-HOME-046).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     pub fn matches_id_ignore_case(&self, id: &str) -> bool {
         self.spec_id
             .as_deref()
-            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+            .is_some_and(|s| crate::id_identity::same_id(s, id))
             || self
                 .agreed_id
                 .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                .is_some_and(|s| crate::id_identity::same_id(s, id))
     }
 
     /// Gets the effective status string, preferring custom_status if set
@@ -6202,17 +6204,27 @@ impl RequirementsStore {
         crate::node_alias::resolve_literal_first_opt(id, |id| self.spec_id_index_exact(id))
     }
 
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric
+    // identity; an exact-text match still wins over a padded twin so a
+    // pre-migration collision answers deterministically.
     fn spec_id_index_exact(&self, id: &str) -> Option<usize> {
-        let native = self.requirements.iter().position(|r| {
+        let literal = self.requirements.iter().position(|r| {
             r.spec_id
                 .as_deref()
-                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                .is_some_and(|s| s.trim().eq_ignore_ascii_case(id.trim()))
+        });
+        let native = literal.or_else(|| {
+            self.requirements.iter().position(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|s| crate::id_identity::same_id(s, id))
+            })
         });
         native.or_else(|| {
             self.requirements.iter().position(|r| {
                 r.agreed_id
                     .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                    .is_some_and(|s| crate::id_identity::same_id(s, id))
             })
         })
     }
@@ -8025,6 +8037,41 @@ mod tests {
 
     // BUG-1535: an ambiguous id (native spec_id on one object, agreed_id on
     // another) resolves to the NATIVE owner regardless of load order.
+    /// AC1: leading zeros are insignificant; an exact-text match wins over a
+    /// padded twin, and a write refuses the ambiguity.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn bug_046_lookup_is_numeric() {
+        let mut padded = Requirement::new("padded".into(), "d".into());
+        padded.spec_id = Some("TASK-0418".into());
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![padded.clone()];
+        for id in ["TASK-418", "task-00418", "TASK-0418"] {
+            assert_eq!(
+                store.get_requirement_by_spec_id(id).unwrap().id,
+                padded.id,
+                "{id}"
+            );
+            assert_eq!(
+                store.get_requirement_unambiguous(id).unwrap().unwrap().id,
+                padded.id
+            );
+        }
+        assert!(store.get_requirement_by_spec_id("TASK-4180").is_none());
+        let mut plain = Requirement::new("plain".into(), "d".into());
+        plain.spec_id = Some("TASK-418".into());
+        store.requirements.push(plain.clone());
+        assert_eq!(
+            store.get_requirement_by_spec_id("TASK-418").unwrap().id,
+            plain.id
+        );
+        assert_eq!(
+            store.get_requirement_by_spec_id("TASK-0418").unwrap().id,
+            padded.id
+        );
+        assert!(store.get_requirement_unambiguous("TASK-418").is_err());
+    }
+
     // trace:BUG-1535 | ai:claude
     #[test]
     fn get_requirement_by_spec_id_prefers_native_owner_in_any_order() {

@@ -542,7 +542,8 @@ fn trace_scan(
             if let Some(req) = store.requirements.iter_mut().find(|r| {
                 r.spec_id
                     .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(&req_id))
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                    .is_some_and(|s| aida_core::id_identity::same_id(s, &req_id))
             }) {
                 // Check if trace link already exists for this file and line
                 let exists = req
@@ -707,7 +708,8 @@ fn trace_sweep(
             if let Some(req) = store.requirements.iter_mut().find(|r| {
                 r.spec_id
                     .as_deref()
-                    .is_some_and(|s| s.eq_ignore_ascii_case(&req_id))
+                    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+                    .is_some_and(|s| aida_core::id_identity::same_id(s, &req_id))
             }) {
                 // Check if this commit is already linked
                 let exists = req
