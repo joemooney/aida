@@ -136,13 +136,29 @@ notice() {
         aida "$@" 2>/dev/null || true
     fi
 }
+# Advisor handshake: on SessionStart a launched non-advisor agent mails the
+# advisor once; every turn it reports a new ack or an overdue hello
+# (`advisor unreachable: <reason>`), and an advisor sees the hellos waiting
+# for its ack. Silent otherwise. Same bounded, fail-open shape as `notice`.
+# trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+hello() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 4 aida mailbox hello --hook 2>/dev/null || true
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout 4 aida mailbox hello --hook 2>/dev/null || true
+    else
+        aida mailbox hello --hook 2>/dev/null || true
+    fi
+}
 if [ -z "$agy" ]; then
     notice
+    hello
     exit 0
 fi
-# JSON-escape the notice lines (backslash, quote, tab; CR dropped; lines
-# joined with \n) — the verb prints plain text with no other control bytes.
-text=$(notice | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, ""); if (NR > 1) printf "\\n"; printf "%s", $0 }')
+# JSON-escape the notice and handshake lines (backslash, quote, tab; CR
+# dropped; lines joined with \n) — the verbs print plain text with no other
+# control bytes. trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+text=$({ notice; hello; } | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, ""); if (NR > 1) printf "\\n"; printf "%s", $0 }')
 [ -n "$text" ] || done_out
 printf '{"injectSteps":[{"systemMessage":{"systemMessage":"%s"}}]}\n' "$text"
 exit 0

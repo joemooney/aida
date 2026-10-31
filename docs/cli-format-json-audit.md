@@ -150,6 +150,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida mailbox send` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox inbox` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox notice` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mailbox hello` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox read` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox retract` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
