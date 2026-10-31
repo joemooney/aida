@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.470798142Z
-modified_at: 2026-10-31T22:36:30.442670100Z
+modified_at: 2026-10-31T22:38:18.081211191Z
 req_type: Task
 tags:
 - air-gap
@@ -40,6 +40,32 @@ comments:
   created_at: 2026-10-31T22:23:40.989046749Z
   modified_at: 2026-10-31T22:23:40.989046749Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a1941d-1be1-7f90-b7f7-5fe765872da5
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Fixture (build check):** AC1 — new source `docs/air-gapped-development.md` added to `docs/showcase/publication.json`; `python3 docs/showcase/build.py` generates `docs/showcase/air-gapped.html`, its card in `library.html` and its record in `search-data.js`; `build.py --check` (in `make check-ci-fast`) proves no drift.
+    - **Manual review:** AC2 — grep the source for SPEC-ID / PR / seat / advisor terms before commit.
+    - **Manual review against docs/cli/10-storage.md + code:** AC3 — only root enrollment, upstream, pool lineage + spendability, node-local fallback and the sync-time claim check are described as current. Single-hub-without-root, pool grants to a hub, automatic block claims during push, and transfer of the root are labelled planned.
+    - **Manual review:** AC4 — the bundle-crossing walkthrough step carries an explicit "untested" note (the air-gap spike has not reported).
+    - **Fixture:** AC5 — diagrams as SVG assets under `docs/showcase/assets/` with <title>/<desc>, a light palette plus a `prefers-color-scheme: dark` style block; alt text from title/desc. Small build.py extension: a standalone `![alt](showcase/assets/x.svg)` line renders as a <figure>.
+    - **Not testable in this PR:** AC6 — the gh-pages snapshot must come from an approved *merged* revision, so it happens after merge; flagged as a follow-up.
+
+    ### Expected files
+    - `docs/air-gapped-development.md` (new source)
+    - `docs/showcase/assets/air-gapped-*.svg` (new)
+    - `docs/showcase/build.py`, `docs/showcase/publication.json`, `docs/showcase/README.md`
+    - regenerated `docs/showcase/*.html`, `docs/showcase/search-data.js`
+
+    ### Ambiguities / conflicts as questions
+    - The private draft artifact is not readable from this headless session (Claude Docs access denied). Page is written from the repo's documented, built behaviour covering the same topics; is a later pass against the draft wanted?
+    - AC6 deploy needs a merged revision — confirm the gh-pages refresh is a post-merge step.
+  created_at: 2026-10-31T22:38:18.081211191Z
+  modified_at: 2026-10-31T22:38:18.081211191Z
+  session_id: 01a1941b7369
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-9c9c-7bc2-b372-5391b71b2076
   author: joe
