@@ -17,12 +17,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-10-31T22:20:21.225603942Z
+modified_at: 2026-10-31T22:22:41.909657839Z
 req_type: Task
 tags:
 - authority
 - docs
 - website
+comments:
+- id: 01a1940e-d2f5-7a71-bee0-bff30b9a188a
+  author: joe
+  content: 'PRODUCT 2026-10-31: draft for review at https://claude.ai/artifact/BgMiHbfYKZEVWweaZsZ5GP (private; operator to review substance before implementation). Two claims to re-verify when building: (1) the illustrative refusal text for a label-only advisor; use the real message. (2) which commands check for a terminal; the list was taken from docs/cli/06-roles-sessions.md and aida mandate --help, and merge-hold clear was left off because its help does not say.'
+  created_at: 2026-10-31T22:22:41.909657839Z
+  modified_at: 2026-10-31T22:22:41.909657839Z
+  session_id: 01a19317-50be-7103-a820-408213c53b0b
+  harness_version: 2.1.316 (Claude Code)
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
