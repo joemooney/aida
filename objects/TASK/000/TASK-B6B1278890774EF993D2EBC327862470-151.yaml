@@ -6,18 +6,27 @@ description: |-
 
   cosmetic (non-blocking): no test is anchored to a criterion ID, so 'aida criteria BUG-HOME-046' reports all 5 criteria untraced although tests cover each (id_identity tests, git_backend bug_046_*, bug_046_padded_id_cli, bug_046_doctor_renumber_tests, id_collisions padded_twins_are_one_collision_group, list_columns_align...). The AC5 criteria text still shows the original [display] id_seq_width, not the amended [ids] seq_width.
   Reviewed sha: 36f6cd5264e069bd5ed12bce9cb5626a6ab8b2ec
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T15:34:28.998919925Z
-modified_at: 2026-10-31T15:34:28.998919925Z
+modified_at: 2026-10-31T15:38:17.752367552Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-046
 - finding-hash:f089a497
 - from-review:BUG-B6B1278890774EF993D2EBC327862470-046
 - kind:carried-forward
+history:
+- id: 01a1929c-9518-7d62-9c0a-070cd99d4219
+  author: joe
+  timestamp: 2026-10-31T15:38:17.752362853Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d12cca28a61c8f00c7d30cb4a4cafc7e3566104b
   branch: main
