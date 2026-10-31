@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T07:13:15.841895920Z
+modified_at: 2026-10-31T07:13:22.682430237Z
 req_type: Story
 relationships:
 - rel_type:
@@ -100,6 +100,12 @@ comments:
     ADVISOR 00:20: PR-3152 final round, CI-only: CI lib-0 fails ONLY command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/golden/cli_help_snapshot.txt differs at line 8439, the new remote bridge help text). Regenerate the golden help snapshot with the project bless procedure (see the test for its update env var), check the diff is ONLY the new remote bridge / push-hubs help, commit, push. Change nothing else. Gate: run that one test plus make check-ci-fast.
   created_at: 2026-10-31T07:13:15.841895920Z
   modified_at: 2026-10-31T07:13:15.841895920Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190ce-5063-75a1-b83f-59b53d9d71b7
+  author: joe
+  content: 'Advisor ruling: PR-3152 final round, CI-only: CI lib-0 fails ONLY command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot (aida-cli-lib/src/tests/golden/cli_help_snapshot.txt differs at line 8439, the new remote bridge help text). Regenerate the golden help snapshot with the project bless procedure (see the test for its update env var), check the diff is ONLY the new remote bridge / push-hubs help, commit, push. Change nothing else. Gate: run that one test plus make check-ci-fast.'
+  created_at: 2026-10-31T07:13:22.531218956Z
+  modified_at: 2026-10-31T07:13:22.531218956Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a38-53c7-7dc0-8f23-10e62147269f
