@@ -1936,25 +1936,15 @@ pub(crate) fn issue_child(
     issue_child_for(project_root, requested_seat, child_subject, false)
 }
 
-/// [`issue_child`] for a worker whose tool calls run in a sandbox (a
-/// contained reviewer). Such a worker can present its grant only through the
-/// keyring key, so a child the keyring could not hold is refused before the
-/// worker runs, instead of launching a review whose verdict every
-/// `aida review record` would then reject.
+/// The child grant for a launched worker. A `contained` worker's tool calls
+/// run in a sandbox, so it can present its grant only through the keyring
+/// key: a child the keyring could not hold is refused (a
+/// [`ChildGrantRefused`]) before the worker runs. An uncontained worker keeps
+/// [`issue_child`]'s warn-only proc-only fallback. Every launch path that
+/// knows its containment (fresh or resumed, headless or interactive, any
+/// seat) mints through here, directly or via [`issue_headless_child`].
 // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-pub(crate) fn issue_sandboxed_child(
-    project_root: &Path,
-    requested_seat: &str,
-    child_subject: &str,
-) -> Result<SeatGrant> {
-    issue_child_for(project_root, requested_seat, child_subject, true)
-}
-
-/// The child grant for a launched worker: [`issue_sandboxed_child`] when its
-/// tool calls run contained, else [`issue_child`]. Every launch path that
-/// knows its containment (fresh or resumed, headless or interactive) mints
-/// through here, so none can hand a contained worker an unpresentable grant.
-// trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
 pub(crate) fn issue_launch_child(
     project_root: &Path,
     requested_seat: &str,
@@ -1976,7 +1966,9 @@ pub(crate) fn preflight_sandboxed_child_key(seat: &str) -> Result<()> {
             crate::grant_keyring::invalidate(&probe);
             Ok(())
         }
-        Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(seat, &e)),
+        // A quota refusal is a child-grant refusal too, so a refused review
+        // launch releases its lease. trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+        Err(e) if e.quota_exhausted() => Err(key_quota_child_refusal(seat, &e)),
         Err(e) => {
             match sandboxed_child_key_refusal(seat, &e, crate::grant_keyring::available(), true) {
                 Some(refusal) => Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
@@ -2022,7 +2014,10 @@ fn issue_child_for(
         // exhaustion refuses the launch: a proc-only child could never be
         // presented by a sandboxed worker. Any other failure is named.
         // trace:BUG-1934 | ai:claude
-        Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(requested_seat, &e)),
+        // No grant is written on this path, so it is a [`ChildGrantRefused`]
+        // like the delegation and ELOOP refusals.
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+        Err(e) if e.quota_exhausted() => return Err(key_quota_child_refusal(requested_seat, &e)),
         Err(e) => {
             let keyring_available = crate::grant_keyring::available();
             // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
@@ -2098,6 +2093,16 @@ pub(crate) fn key_quota_refusal(seat: &str, err: &crate::grant_keyring::InstallE
     format!(
         "cannot launch the `{seat}` worker: its grant key does not fit in your kernel key quota ({err}; kernel.keys.maxkeys / kernel.keys.maxbytes). A worker without the key is refused in a sandbox. End stale role sessions and launchers (`eval \"$(aida role end)\"`), or raise the quota (`sudo sysctl kernel.keys.maxkeys=<n> kernel.keys.maxbytes=<n>`), then launch again"
     )
+}
+
+/// [`key_quota_refusal`] as a [`ChildGrantRefused`]: no child grant was
+/// minted, so a launcher holding a lease for the child can release it.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+fn key_quota_child_refusal(seat: &str, err: &crate::grant_keyring::InstallError) -> anyhow::Error {
+    anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
+        "{}",
+        key_quota_refusal(seat, err)
+    )))
 }
 
 /// BUG-2139: the seats that confer nothing a grant gates — the implementer
@@ -2198,23 +2203,27 @@ impl HeadlessChildGrant {
 
 /// BUG-2139: mint the authority for a fresh headless child in `seat`.
 /// [`preflight_headless_child`] decides; a delegated seat goes through
-/// [`issue_child`], which re-validates, so a roster edit or a parent revoked
-/// between preflight and launch still fails closed.
+/// [`issue_launch_child`], which re-validates, so a roster edit or a parent
+/// revoked between preflight and launch still fails closed, and a `contained`
+/// child whose key the keyring could not hold is refused before it spawns.
 // trace:BUG-2139 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
 pub(crate) fn issue_headless_child(
     project_root: &Path,
     seat: &str,
     child_subject: &str,
+    contained: bool,
 ) -> Result<HeadlessChildGrant> {
     let seat = aida_core::team::canonical_role(seat.trim());
     // trace:TASK-1955 | ai:claude (advisor comment 35)
     let authority = preflight_headless_child(project_root, &seat)
         .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
     match authority {
-        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_child(
+        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_launch_child(
             project_root,
             &seat,
             child_subject,
+            contained,
         )?)),
         HeadlessChildAuthority::Baseline { cause } => Ok(HeadlessChildGrant::Baseline { cause }),
     }
