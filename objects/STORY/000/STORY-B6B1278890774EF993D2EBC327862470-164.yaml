@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T20:54:33.387114469Z
+modified_at: 2026-10-31T20:55:05.542400254Z
 req_type: Story
 tags:
 - architecture
@@ -154,6 +154,12 @@ comments:
     SEQUENCING: implementation starts only after PR-3170 (STORY-105) merges, branching from main that contains it. Heft is high: STRICT tier, run the story_095/story_164 integration binaries.
   created_at: 2026-10-31T20:54:33.387114469Z
   modified_at: 2026-10-31T20:54:33.387114469Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a193be-9e46-7fc0-8319-30f8b2fd8f6b
+  author: joe
+  content: 'ADVISOR BRIEF (IMPLEMENTATION, supersedes the 13:22 sketch-only brief): implement the approved sketch within the 13:56 signoff scope (hub add + pool grant are STORY-170, NOT here). Branch from main containing PR-3170. Add trace comments. Gate (STRICT, heft high): cargo test -p aida-core allocation_ ; cargo test -p aida-cli --test story_164_single_hub --test story_095_block_delegation ; make check-ci-fast. Open the PR via aida ship.'
+  created_at: 2026-10-31T20:55:05.542400254Z
+  modified_at: 2026-10-31T20:55:05.542400254Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
