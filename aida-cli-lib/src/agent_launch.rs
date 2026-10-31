@@ -5122,7 +5122,12 @@ pub(crate) fn render_launch_due_jobs_section(
 ) -> String {
     let mut out = String::new();
     let seat = role.map(canonical_role_name);
-    let due = maintenance_schedule::due_seat_jobs(project_root, seat.as_deref());
+    let mut due = maintenance_schedule::due_seat_jobs(project_root, seat.as_deref());
+    // A launched agent is never the human at the operator terminal, so an
+    // operator escalation never enters its launch context — not even when
+    // the seat is unknown and every seat's jobs are listed.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+    due.retain(|j| !crate::mail_backlog::is_operator_job(&j.seats));
     if due.is_empty() {
         out.push_str(&format!(
             "- No scheduled seat jobs are due for `{}` at launch. Poll with `aida schedule due{}`.\n",

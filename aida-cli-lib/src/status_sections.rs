@@ -1722,6 +1722,29 @@ pub(crate) struct QueueRow {
     pub(crate) lease_started_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// The session lease covering `cwd`, and the session's seat: `env_role`
+/// (`AIDA_SESSION_ROLE`) when set, else the role of that lease. The one
+/// seat rule shared by the awaiting notice and `aida schedule done`, so an
+/// escalation a seat cannot see is one it cannot clear either.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+pub(crate) fn session_seat(
+    env_role: Option<String>,
+    leases: &[SessionLease],
+    cwd: Option<&std::path::Path>,
+) -> (Option<SessionLease>, Option<String>) {
+    let session = cwd.and_then(|cwd| {
+        let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+        leases
+            .iter()
+            .find(|&l| lease_covers_cwd(l, &canon))
+            .cloned()
+    });
+    let role = env_role
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| session.as_ref().and_then(|l| l.role.clone()));
+    (session, role)
+}
+
 pub(crate) fn collect_user_context(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -1729,17 +1752,12 @@ pub(crate) fn collect_user_context(
     no_ci: bool,
 ) -> UserStatusContext {
     let leases = list_leases(project_root);
-    let session = std::env::current_dir().ok().and_then(|cwd| {
-        let canon = cwd.canonicalize().unwrap_or(cwd);
-        leases
-            .iter()
-            .find(|&l| lease_covers_cwd(l, &canon))
-            .cloned()
-    });
-    let role = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .or_else(|| session.as_ref().and_then(|l| l.role.clone()));
+    let cwd = std::env::current_dir().ok();
+    let (session, role) = session_seat(
+        crate::queue_role_fallback::session_role_env(),
+        &leases,
+        cwd.as_deref(),
+    );
 
     let branch = collect_branch_facts(project_root);
 

@@ -1538,25 +1538,51 @@ where
 /// clears the due flag, and mirrors the clock locally.
 // trace:STORY-1226 | ai:claude
 pub(crate) fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
-    let seat =
-        crate::queue_role_fallback::session_role_env().map(|s| crate::canonical_role_name(&s));
+    let seat = resolve_done_seat(
+        project_root,
+        crate::queue_role_fallback::session_role_env(),
+        std::env::current_dir().ok().as_deref(),
+    );
     done_as(
         project_root,
         job,
         note,
-        seat.as_deref(),
+        seat.as_ref().map(|s| s.as_deref()).map_err(String::as_str),
         crate::autopilot::current_headless(),
     )
 }
 
+/// The reporting session's seat, resolved exactly as the awaiting notice
+/// resolves it ([`crate::session_seat`]: env, else the lease covering cwd).
+/// `Err` when the seat cannot be determined — no cwd, or an unreadable lease
+/// directory — so the operator-escalation gate fails closed.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+fn resolve_done_seat(
+    project_root: &Path,
+    env_role: Option<String>,
+    cwd: Option<&Path>,
+) -> std::result::Result<Option<String>, String> {
+    let leases = if env_role.is_some() {
+        Vec::new()
+    } else {
+        let Some(_) = cwd else {
+            return Err("the working directory is unknown".to_string());
+        };
+        crate::leases::list_leases_strict(project_root, &[])?
+    };
+    let (_, role) = crate::session_seat(env_role, &leases, cwd);
+    Ok(role.map(|r| crate::canonical_role_name(&r)))
+}
+
 /// [`done`] with the caller's seat and headless flag explicit. An operator
-/// escalation may only be cleared from a session a human reads.
+/// escalation may only be cleared from a session a human reads; `seat` is
+/// `Err` when it could not be resolved, which refuses an operator job.
 // trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
 fn done_as(
     project_root: &Path,
     job: &str,
     note: Option<&str>,
-    seat: Option<&str>,
+    seat: std::result::Result<Option<&str>, &str>,
     headless: bool,
 ) -> Result<()> {
     let config = load_registry(project_root)?;
@@ -1569,13 +1595,20 @@ fn done_as(
     let Some(found) = task.as_ref() else {
         anyhow::bail!("no scheduled job named '{job}' (see `aida schedule list`)");
     };
-    if crate::mail_backlog::is_operator_job(&found.seats)
-        && !crate::mail_backlog::operator_escalation_visible(seat, headless)
-    {
-        anyhow::bail!(
-            "'{job}' is an operator escalation for the human at the terminal; \
+    if crate::mail_backlog::is_operator_job(&found.seats) {
+        let seat = match seat {
+            Ok(seat) => seat,
+            Err(why) => anyhow::bail!(
+                "'{job}' is an operator escalation, and this session's seat could not be \
+                 resolved ({why}); run it from the operator terminal"
+            ),
+        };
+        if !crate::mail_backlog::operator_escalation_visible(seat, headless) {
+            anyhow::bail!(
+                "'{job}' is an operator escalation for the human at the terminal; \
              only the operator terminal or an interactive advisor session can mark it done"
-        );
+            );
+        }
     }
     let now = Utc::now();
     let by = reporter(task.as_ref());
@@ -7391,7 +7424,7 @@ enabled = true
             (Some("advisor"), true),
             (None, true),
         ] {
-            let err = done_as(tmp.path(), op, None, seat, headless).unwrap_err();
+            let err = done_as(tmp.path(), op, None, Ok(seat), headless).unwrap_err();
             assert!(err.to_string().contains("operator escalation"), "{err}");
             assert!(
                 schedule_ledger::load(&store, op)
@@ -7407,12 +7440,109 @@ enabled = true
             (Some("advisor"), false),
         ] {
             raise();
-            done_as(tmp.path(), op, None, seat, headless).unwrap();
+            done_as(tmp.path(), op, None, Ok(seat), headless).unwrap();
             assert!(schedule_ledger::load(&store, op)
                 .unwrap()
                 .due_since
                 .is_none());
         }
+    }
+
+    fn write_role_lease(root: &Path, worktree: &Path, role: &str) {
+        let mut table: toml::Table = toml::from_str(
+            r#"
+id = "lease-impl"
+scope = "STORY-9"
+slug = "story-9"
+owner = "tester"
+branch = "claude/story-9"
+started_at = "2026-10-22T00:00:00Z"
+hostname = "h"
+"#,
+        )
+        .unwrap();
+        table.insert(
+            "worktree_path".into(),
+            toml::Value::String(worktree.to_string_lossy().into_owned()),
+        );
+        table.insert("role".into(), toml::Value::String(role.into()));
+        let path = crate::lease_path(root, "lease-impl");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, toml::to_string_pretty(&table).unwrap()).unwrap();
+    }
+
+    // `schedule done` resolves the seat exactly as the awaiting notice does
+    // (env, else the lease covering cwd): a role-leased implementer with no
+    // AIDA_SESSION_ROLE is refused, and an unresolvable seat fails closed.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+    #[test]
+    fn schedule_done_seat_comes_from_the_covering_lease_and_fails_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        let lane = root.join("lane");
+        std::fs::create_dir_all(lane.join("src")).unwrap();
+        write_role_lease(&root, &lane, "implementer");
+        let store = store_root(&root);
+        let op = "mail-backlog-guard-route-operator";
+        schedule_ledger::write_cas(&store, op, |l| l.due_since = Some(Utc::now())).unwrap();
+
+        let cwd = lane.join("src");
+        let seat = resolve_done_seat(&root, None, Some(&cwd));
+        assert_eq!(seat, Ok(Some("implementer".to_string())));
+        // The notice's rule agrees on the same inputs.
+        let (lease, role) =
+            crate::session_seat(None, &crate::leases::list_leases(&root), Some(&cwd));
+        assert!(lease.is_some());
+        assert_eq!(role.as_deref(), Some("implementer"));
+
+        let err = done_as(
+            &root,
+            op,
+            None,
+            seat.as_ref().map(|s| s.as_deref()).map_err(String::as_str),
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("operator escalation"), "{err}");
+        // Unknown cwd: the seat cannot be resolved, so the gate refuses.
+        let unresolved = resolve_done_seat(&root, None, None);
+        assert!(unresolved.is_err());
+        let err = done_as(&root, op, None, Err("no cwd"), false).unwrap_err();
+        assert!(err.to_string().contains("could not be resolved"), "{err}");
+        assert!(schedule_ledger::load(&store, op)
+            .unwrap()
+            .due_since
+            .is_some());
+        // The env still wins, as in the notice; outside any lease the
+        // operator terminal (no seat) can clear it.
+        assert_eq!(
+            resolve_done_seat(&root, Some("advisor".into()), Some(&cwd)),
+            Ok(Some("advisor".to_string()))
+        );
+        assert_eq!(resolve_done_seat(&root, None, Some(&root)), Ok(None));
+        done_as(&root, op, None, Ok(None), false).unwrap();
+    }
+
+    // A launched agent's context never lists the operator escalation, even
+    // when its seat is unknown and every seat's due jobs are listed.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+    #[test]
+    fn launch_due_jobs_section_omits_operator_escalations() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let op = "mail-backlog-guard-route-operator";
+        let adv = "mail-backlog-guard-route-advisor";
+        for job in [op, adv] {
+            schedule_ledger::write_cas(&store, job, |l| l.due_since = Some(Utc::now())).unwrap();
+        }
+        assert!(due_seat_jobs(tmp.path(), None).iter().any(|j| j.name == op));
+        for role in [None, Some("operator"), Some("advisor")] {
+            let out =
+                crate::agent_launch::render_launch_due_jobs_section(tmp.path(), role, "claude");
+            assert!(!out.contains(op), "{role:?}: {out}");
+        }
+        let out = crate::agent_launch::render_launch_due_jobs_section(tmp.path(), None, "claude");
+        assert!(out.contains(adv), "{out}");
     }
 }
 
