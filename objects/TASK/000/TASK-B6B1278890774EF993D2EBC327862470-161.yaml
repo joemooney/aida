@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-161
 agreed_id: TASK-2572
 title: Add a test-time budget entry for bug_053_contained_add_cli (10.6s over the 10s unbudgeted limit fails cli-1)
 description: 'FASTTRACK. CI cli-1 ''Test time budget'' failed on PR-3174 (run 41244805881, 2026-10-31 21:47Z): ''aida-cli::bug_053_contained_add_cli contained_add_prints_the_final_id_and_queued_notice_and_show_resolves_it: 10.6s with no budget entry (limit 10s for an unbudgeted test)''. The same step failed once on PR-3171 (run 41230254053, TASK-155 ruling said fix on recurrence; this is the recurrence). Fix: add one line to scripts/test-time-budget.toml in the style of neighbouring entries: "aida-cli::bug_053_contained_add_cli contained_add_prints_the_final_id_and_queued_notice_and_show_resolves_it" = 25  # max 10.6s in CI (PR-3174 run 41244805881), x2.5 for shard load; plus a trace comment. Gate: make check-ci-fast only (no cargo). Open the PR via aida ship.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:00:02.128832100Z
-modified_at: 2026-10-31T22:29:10.576572131Z
+modified_at: 2026-10-31T22:59:52.775148881Z
 req_type: Task
 tags:
 - ci
@@ -57,6 +57,20 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: TASK-2572
+- id: 01a19430-dd41-7c43-b650-3d713f72789f
+  author: aida-auto-bump
+  timestamp: 2026-10-31T22:59:52.769442794Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a19430-dd47-7332-a173-9a80b1c3cb29
+  timestamp: 2026-10-31T22:59:52.775144527Z
+  agent: aida
+  commit_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
+  summary: 'Base-only update from main (gh update-branch 9b0d56f6d5969b05b8b84b8f47540e4c47d103c7 -> fc79de4e3a33e9c7301a46f5c4d71a270bd80642); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 584e95e4505310c1a681700bd42eda3ccb951b98
   branch: main
@@ -69,3 +83,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T22:21:33.294617327Z
   implemented_by: joe
+  completed_at: 2026-10-31T22:59:52.769437755Z
+  completion_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
