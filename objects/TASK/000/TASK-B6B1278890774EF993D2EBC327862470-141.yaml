@@ -11,12 +11,12 @@ description: |-
   4. docs/gitlab-ci-runner.md says the main pipeline is nightly, with the one-time step to create the schedule (GitLab UI: CI/CD > Schedules, daily, target main). Creating the schedule is an operator step, not part of this PR.
   5. The header comment explains why main pushes don't run: GitHub CI already gated them.
   Gate: FASTTRACK (make check-ci-fast; no cargo). If a lint checks .gitlab-ci.yml, it passes.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:01:23.418689366Z
-modified_at: 2026-10-31T05:08:57.259121014Z
+modified_at: 2026-10-31T05:22:29.927046286Z
 req_type: Task
 tags:
 - ci
@@ -65,6 +65,15 @@ history:
   session_id: 01a19057b32b
   harness_version: 2.1.314 (Claude Code)
   changes: []
+- id: 01a19068-ce2d-7a43-8bfb-da21830e19e6
+  author: joe
+  timestamp: 2026-10-31T05:22:30.061963368Z
+  session_id: 01a19057b32b
+  harness_version: 2.1.314 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
   branch: main
@@ -73,3 +82,7 @@ filed_at:
   aida_build_sha: 00fee53b7ed
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T05:22:29.927046286Z
+  implemented_by: joe
