@@ -1,0 +1,32 @@
+id: 01a190c5-d865-72c2-b458-f190a0753c98
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-146
+title: 'Review PR-3157: [AI:claude] fix(review): contained reviewer launch fails fast without a keyring key; no stale PASS on a no-verdict review (BUG-b6b1278890774ef993d2ebc327862470-045)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1908a`) for branch `bug-b6b1278890774ef993d2ebc327862470-045`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3157>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-045` → `main`
+
+  ## Covers
+
+  - BUG-b6b1278890774ef993d2ebc327862470-045
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3157` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T07:04:07.525563996Z
+modified_at: 2026-10-31T07:04:07.525563996Z
+req_type: Story
+filed_at:
+  code_sha: 518815e3c293dde8c94830f0e55ccf7a68cbd477
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 38624ff8462
+  vendor: claude
