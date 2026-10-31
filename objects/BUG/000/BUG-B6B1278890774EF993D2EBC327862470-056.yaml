@@ -1,5 +1,6 @@
 id: 01a193e5-4c18-7cb0-bb49-37ce7256a41c
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-056
+agreed_id: BUG-2478
 title: aida pr ship refuses a mandate ship when the store changes during exclusion collection (3 attempts) instead of retrying under the store lock
 description: 'Observed 2026-10-31 13:16 (advisor, serial-ship of PR-3171 under the ship-held mandate, ~5 concurrent lanes/reviewers writing the store): ''PR-3171 left OPEN — the merge-hold stays. the fire-fighting mandate does not cover this ship: the PR''s mandate exclusion evidence could not be read (the store changed while collecting exclusions (3 attempts); retry).'' A manual retry 1 minute later merged. Evidence: /tmp/aida_runme2.log. Expected: exclusion evidence is read from one consistent snapshot (a store ref pinned at start, or under the store read lock) so concurrent unrelated writes cannot fail the read; at minimum bounded backoff retries long enough to outlast normal fleet write bursts. Acceptance: (1) the read uses a pinned store commit; (2) a test with a concurrent writer committing during collection still yields the evidence; (3) a genuine change to an excluded spec during the ship still refuses.'
 status: NeedsAttention
@@ -85,6 +86,10 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a19430-c797-7361-a014-1244b95bc875
+  author: joe
+  timestamp: 2026-10-31T22:59:47.223581567Z
+  changes: []
 filed_at:
   code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
   branch: main
