@@ -1454,17 +1454,30 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
 /// without a tracking ref in the clone, and origin's branch may since have
 /// gained commits (an update-branch merge). Best effort: a failure, an absent
 /// branch or a timeout changes nothing and the count stays conservative.
+/// Returns whether main's tracking ref moved (only then can a re-read differ).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-pub(crate) fn refresh_origin_branch(main: &Path, branch: &str) {
-    let valid = !branch.is_empty()
+pub(crate) fn refresh_origin_branch(
+    main: &Path,
+    branch: &str,
+    timeout: std::time::Duration,
+) -> bool {
+    let valid = !timeout.is_zero()
+        && !branch.is_empty()
         && !branch.starts_with('-')
         && git(main)
             .args(["check-ref-format", "--branch", branch])
             .output()
             .is_ok_and(|out| out.status.success());
     if !valid {
-        return;
+        return false;
     }
+    let tracking = format!("refs/remotes/origin/{branch}");
+    let tip = || {
+        let mut cmd = git(main);
+        cmd.args(["rev-parse", "--verify", "--quiet", &tracking]);
+        run(cmd, "read origin's branch in the main checkout").ok()
+    };
+    let before = tip();
     let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
     fetch
         .env(ACCESSOR_ENV, "1")
@@ -1481,8 +1494,60 @@ pub(crate) fn refresh_origin_branch(main: &Path, branch: &str) {
             "--no-write-fetch-head",
             "origin",
         ])
-        .arg(format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"));
-    let _ = crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20));
+        .arg(format!("+refs/heads/{branch}:{tracking}"));
+    let fetched =
+        crate::command_output_with_timeout(fetch, timeout).is_some_and(|out| out.status.success());
+    fetched && tip() != before
+}
+
+/// The most one [`probe_counting_origin`] refresh fetch may take; it never
+/// takes more than half the check's remaining budget either.
+const ORIGIN_REFRESH_CAP: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// BUG-051: [`probe_until`] under the ancestor-of-origin rule: a branch head
+/// that is an ancestor of origin's copy of the branch counts as pushed. Every
+/// host reading that decides whether a clone holds commits origin lacks
+/// (session end, reap, status and awaiting, the lease classifiers, salvage,
+/// phase 2) goes through here, so they agree. A clone whose first reading
+/// counts no such commits costs no network. Otherwise origin's copy of
+/// `branch` (the host-recorded lease branch; the clone's checked-out branch
+/// when there is none) is fetched into main, bounded by half the remaining
+/// budget (`deadline`, else one [`PROBE_TIMEOUT`]) and [`ORIGIN_REFRESH_CAP`],
+/// and the clone is read again under the same deadline. A fetch that moves
+/// nothing, or a re-read with no answer, leaves the first (conservative)
+/// reading standing.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn probe_counting_origin(
+    main: &Path,
+    clone: &Path,
+    branch: Option<&str>,
+    shipped: &[String],
+    deadline: Option<std::time::Instant>,
+) -> Probe {
+    let first = probe_until(main, clone, shipped, deadline);
+    let Probe::Known(facts) = &first else {
+        return first;
+    };
+    if facts.unpushed == 0 {
+        return first;
+    }
+    let Some(branch) = branch
+        .filter(|b| !b.is_empty())
+        .map(str::to_owned)
+        .or_else(|| facts.branch.clone())
+    else {
+        return first;
+    };
+    let remaining = deadline.map_or(PROBE_TIMEOUT, |end| {
+        end.saturating_duration_since(std::time::Instant::now())
+    });
+    if !refresh_origin_branch(main, &branch, (remaining / 2).min(ORIGIN_REFRESH_CAP)) {
+        return first;
+    }
+    match probe_until(main, clone, shipped, deadline) {
+        again @ Probe::Known(_) => again,
+        _ => first,
+    }
 }
 
 /// Parse [`UNPUSHED_COUNT_SCRIPT`]'s output: the total on the first line,

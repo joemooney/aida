@@ -1104,11 +1104,15 @@ pub(crate) fn session_end(
         // trace:TASK-2110 | ai:claude
         let shipped = crate::seat_clone::merged_pr_heads(&project_root, &target.branch);
         // BUG-051: a branch head that is an ancestor of origin's copy of the
-        // branch is pushed; fetch that copy into main so the probe sees it.
+        // branch is pushed (the probe fetches that copy into main when needed).
         // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
-        crate::seat_clone::refresh_origin_branch(&project_root, &target.branch);
-        match crate::seat_clone::probe_with_shipped(&project_root, &target.worktree_path, &shipped)
-        {
+        match crate::seat_clone::probe_counting_origin(
+            &project_root,
+            &target.worktree_path,
+            Some(&target.branch),
+            &shipped,
+            None,
+        ) {
             crate::seat_clone::Probe::Known(facts) => Some(facts),
             crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
                 "session {} works in the seat clone {}, whose state could not be read ({why}). \

@@ -1853,11 +1853,96 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
     assert!(!is_runtime_noise_entry(other.path(), "? .aida-store"));
 }
 
+/// A seat clone (lease `id`) whose one commit on `feat` was pushed to origin
+/// by URL, after which origin's `feat` gained a commit (an update-branch
+/// merge). Neither the clone nor main tracks origin's `feat`, so the plain
+/// probe counts the seat commit as one origin lacks.
+fn ancestor_of_origin_seat(fx: &Fixture, name: &str, id: &str) -> PathBuf {
+    let clone = seat(fx, name, id);
+    seat_commit(&clone, "work.txt");
+    let origin = fx.origin.to_str().unwrap();
+    seat_git(&clone, &["push", "-q", origin, "feat:refs/heads/feat"]);
+    let other = fx.root.join(format!("{name}-other"));
+    seat_git(
+        &fx.root,
+        &["clone", "-q", "-b", "feat", origin, other.to_str().unwrap()],
+    );
+    seat_git(
+        &other,
+        &["commit", "-q", "--allow-empty", "-m", "merge main"],
+    );
+    seat_git(&other, &["push", "-q", "origin", "feat"]);
+    // The precondition is that neither the clone nor main tracks origin's
+    // branch: with a tracking ref at the seat's tip the probe would count
+    // nothing whatever the ancestor rule did. Whether the push leaves one
+    // depends on the git version (CI's did), so remove it rather than assume.
+    for dir in [&clone, &fx.main] {
+        if ref_exists(dir, "refs/remotes/origin/feat") {
+            git_ok(dir, &["update-ref", "-d", "refs/remotes/origin/feat"]);
+        }
+        assert!(!ref_exists(dir, "refs/remotes/origin/feat"));
+    }
+    assert_eq!(known(probe(&fx.main, &clone)).unpushed, 1);
+    clone
+}
+
+/// BUG-051: the lease classifier (reap, status and the dormant-lease checks
+/// read clones the same way) applies session end's ancestor-of-origin rule:
+/// the clone reads clean, while a seat commit origin lacks still counts.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_051_bwrap_lease_classifier_counts_an_ancestor_of_origin_as_pushed() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    aida_core::seat_clone_detect::note_host_main(&fx.main);
+    let id = "c0ffee000053";
+    let clone = ancestor_of_origin_seat(&fx, "bug051c", id);
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|lease| lease.id == id)
+        .expect("clone lease");
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert!(entries.is_empty(), "{entries:?}");
+    assert!(ref_exists(&fx.main, "refs/remotes/origin/feat"));
+
+    seat_commit(&clone, "more.txt");
+    let entries = crate::leases::lease_tree_dirty_entries(&lease);
+    assert_eq!(
+        entries,
+        vec!["1 commit(s) that origin does not have".to_string()]
+    );
+}
+
+/// BUG-051: the refresh fetch never runs without budget, or for a branch name
+/// git would not accept.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[test]
+fn bug_051_refresh_origin_branch_needs_budget_and_a_valid_branch() {
+    let fx = fixture();
+    let refresh = crate::seat_clone::refresh_origin_branch;
+    let budget = std::time::Duration::from_secs(5);
+    assert!(!refresh(&fx.main, "main", std::time::Duration::ZERO));
+    assert!(!refresh(&fx.main, "", budget));
+    assert!(!refresh(&fx.main, "-x", budget));
+    assert!(!refresh(&fx.main, "a..b", budget));
+    // origin's `main` is already tracked at the same commit: nothing moved.
+    assert!(!refresh(&fx.main, "main", budget));
+    git_ok(&fx.main, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    assert!(refresh(&fx.main, "main", budget));
+    assert!(ref_exists(&fx.main, "refs/remotes/origin/main"));
+}
+
 /// BUG-051: a seat branch published by URL (no tracking ref in the clone or
 /// main), whose origin copy then gained a commit (an update-branch merge), is
 /// pushed: session end, without `--force`, removes the clone. The session's
 /// runtime links and build output do not hold it either.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.Tests | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
@@ -1870,22 +1955,7 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
     }
     let fx = fixture();
     let id = "c0ffee000051";
-    let clone = seat(&fx, "bug051a", id);
-    seat_commit(&clone, "work.txt");
-    let origin = fx.origin.to_str().unwrap();
-    seat_git(&clone, &["push", "-q", origin, "feat:refs/heads/feat"]);
-    let other = fx.root.join("bug051-other");
-    seat_git(
-        &fx.root,
-        &["clone", "-q", "-b", "feat", origin, other.to_str().unwrap()],
-    );
-    seat_git(
-        &other,
-        &["commit", "-q", "--allow-empty", "-m", "merge main"],
-    );
-    seat_git(&other, &["push", "-q", "origin", "feat"]);
-    assert!(!ref_exists(&clone, "refs/remotes/origin/feat"));
-    assert!(!ref_exists(&fx.main, "refs/remotes/origin/feat"));
+    let clone = ancestor_of_origin_seat(&fx, "bug051a", id);
 
     std::os::unix::fs::symlink(&fx.main, clone.join(".aida-store")).unwrap();
     std::fs::create_dir_all(clone.join(".aida/agents")).unwrap();
@@ -1907,6 +1977,7 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
 
 /// BUG-051: an untracked file refuses session end, and the refusal names it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.Tests | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]

@@ -1346,8 +1346,15 @@ fn scan_clone_lease(
             // TASK-2110: a squash-merged PR's head counts as shipped.
             // trace:TASK-2110 | ai:claude
             let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
-            let probe =
-                crate::seat_clone::probe_with_shipped(project_root, &lease.worktree_path, &shipped);
+            // BUG-051: the ancestor-of-origin rule session end applies.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+            let probe = crate::seat_clone::probe_counting_origin(
+                project_root,
+                &lease.worktree_path,
+                Some(&lease.branch),
+                &shipped,
+                None,
+            );
             if let crate::seat_clone::Probe::Known(facts) = &probe {
                 branch_tip = facts.head.clone();
             }
