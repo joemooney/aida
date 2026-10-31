@@ -13,12 +13,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:21:31.863608220Z
-modified_at: 2026-10-31T08:00:07.351019413Z
+modified_at: 2026-10-31T08:10:21.248407395Z
 req_type: Bug
 tags:
 - salvage
 - sandbox
 - worktree
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a19102-4692-7342-af2a-f21baa9bb159
+  created_at: 2026-10-31T08:10:21.248403897Z
+  created_by: joe
 comments:
 - id: 01a190c5-8a40-7b62-ba70-8666e35b08ff
   author: joe
@@ -71,6 +77,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19102-90d5-7e83-a9b0-80277d86b87b
+  author: joe
+  timestamp: 2026-10-31T08:10:26.901072181Z
+  changes: []
 filed_at:
   code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
   branch: main
