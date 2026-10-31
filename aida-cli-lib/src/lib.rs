@@ -409,6 +409,8 @@ mod glyph_config;
 mod glyphs;
 mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude — resume a lane parked on its own background run.
+mod headless_background;
 mod headless_linger;
 mod headless_tail;
 mod headless_tee;
