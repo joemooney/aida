@@ -12,12 +12,12 @@ description: |
   5. Test: an agent in a seat clone sends hello; the advisor in the primary sees it; the agent sees the ack. This test fails until BUG-HOME-031 is fixed.
 
   Depends on BUG-HOME-031 (seat-clone mail reaches the primary inbox).
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-31T07:02:21.896580490Z
+modified_at: 2026-10-31T07:04:48.110974007Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -156,6 +156,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a190c6-76ee-7741-9f69-519f3f4dac08
+  author: aida-session-start
+  timestamp: 2026-10-31T07:04:48.110973263Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
