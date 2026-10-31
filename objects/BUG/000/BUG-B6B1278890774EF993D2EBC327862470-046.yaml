@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T13:08:26.732579727Z
+modified_at: 2026-10-31T13:25:40.657621141Z
 req_type: Bug
 tags:
 - ids
@@ -343,6 +343,12 @@ history:
   session_id: 01a1919ac6fa
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19223-2e6d-7eb0-8030-440aea85ee15
+  author: joe
+  timestamp: 2026-10-31T13:25:41.613313602Z
+  session_id: 01a19217942c
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -361,7 +367,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Numeric identity seam and lookups are sound, but AC3 migration was never run (30 collision groups still in store), AC5 mint width is still driven by id_config.digits, and PR CI is red (contracts spec-id leak reproduced; cli-0 and lib-1 test jobs failing).
+  detail: Numeric identity, mint seam, cache key columns, doctor check, renumber tool and the tree rewrite (matches the mapping TSV exactly, case kept) are solid and CI is green at 9d99db0; four small gaps remain in AC2/AC3/AC5e
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-046 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T11:02:29.761091449Z
+  shelved_at: 2026-10-31T13:25:40.657621141Z
