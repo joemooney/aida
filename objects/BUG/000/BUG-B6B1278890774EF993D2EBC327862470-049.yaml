@@ -9,12 +9,12 @@ description: |
   2. The write is opt-in per host via a config key (default on for this repo), and doctor's worktree-trust check reports it.
   3. Seat dismissal removes the entry, so ~/.claude.json does not grow without bound.
   4. Test: a fixture HOME, launch a seat, and the entry exists before the spawn; dismiss, and it is gone. A path outside the worktrees root is refused.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:22:58.265909250Z
-modified_at: 2026-10-31T12:23:33.071792725Z
+modified_at: 2026-10-31T14:29:53.106222212Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -35,6 +35,14 @@ history:
   timestamp: 2026-10-31T12:23:34.775519610Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a1925d-f352-7d41-8778-cfe9395ac831
+  author: aida-session-start
+  timestamp: 2026-10-31T14:29:53.106219764Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
   branch: main
