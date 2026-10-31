@@ -14,11 +14,15 @@
 //!      into `refs/heads`; the diff stat against the default branch and the
 //!      clone's config/hooks report are printed, and the STORY-469 trailer
 //!      check runs on the imported commits. A dry run fetches into a scratch
-//!      repository instead and stops here, leaving no ref in main;
+//!      repository instead and stops here, leaving no ref in main. A refusal
+//!      here deletes the quarantine ref;
 //!   5. the quarantined commit is pushed to `origin/<branch>`, the quarantine
 //!      ref is deleted, and the PR is opened, titled with the commit subject.
 //!
-//! trace:BUG-HOME-038 | ai:claude
+//! Every run first prunes quarantine refs older than a day (by their reflog's
+//! import time), so an interrupted or failed run leaves nothing for long.
+//!
+//! trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
 
 use std::path::{Path, PathBuf};
 
@@ -158,8 +162,12 @@ pub(crate) fn quarantine_bundle(
     tip: &str,
 ) -> Result<String> {
     let quarantine = format!("{QUARANTINE_PREFIX}{branch}");
+    // The reflog records when the host imported the ref, which is what
+    // [`prune_stale_quarantine`] ages it by (the commit date is the seat's).
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
     // remote-creds-ok(TASK-2001): fetches from a local bundle file; contacts no remote.
     let fetch = aida_core::git_ops::host_git_command(main)
+        .args(["-c", "core.logAllRefUpdates=always"])
         .args(["fetch", "--quiet", "--no-tags", "--no-write-fetch-head"])
         .arg(bundle)
         .arg(format!("+refs/heads/{branch}:{quarantine}"))
@@ -173,9 +181,94 @@ pub(crate) fn quarantine_bundle(
     }
     let landed = git_text(main, &["rev-parse", "--verify", &quarantine])?;
     if landed != tip {
+        let _ = git_text(main, &["update-ref", "-d", &quarantine, &landed]);
         anyhow::bail!("{quarantine} is at {landed}, not the bundle's {tip}");
     }
     Ok(quarantine)
+}
+
+/// How long a quarantine ref may outlive its run before
+/// [`prune_stale_quarantine`] deletes it.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+pub(crate) const QUARANTINE_MAX_AGE_SECS: u64 = 24 * 60 * 60;
+
+/// When `reference` was last written in `main`: its newest reflog entry
+/// (the host's import time), else, for a ref with no reflog, its commit's
+/// committer date. `None` when neither can be read.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+fn quarantine_written_at(main: &Path, reference: &str) -> Option<u64> {
+    let reflog = git_text(
+        main,
+        &[
+            "reflog",
+            "show",
+            "--date=unix",
+            "--format=%gd",
+            "-n1",
+            reference,
+        ],
+    )
+    .ok()
+    .and_then(|line| {
+        let stamp = line.rsplit_once("@{")?.1.strip_suffix('}')?;
+        stamp.parse::<u64>().ok()
+    });
+    reflog.or_else(|| {
+        git_text(main, &["log", "-1", "--format=%ct", reference, "--"])
+            .ok()?
+            .parse()
+            .ok()
+    })
+}
+
+/// Delete every `refs/aida/seat-import/*` ref in `main` written more than
+/// `max_age` seconds before `now` (unix seconds): what a refused, failed or
+/// interrupted `--from-seat` run left behind. Returns the deleted refs.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+pub(crate) fn prune_stale_quarantine(main: &Path, now: u64, max_age: u64) -> Vec<String> {
+    let Ok(listed) = git_text(
+        main,
+        &[
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            QUARANTINE_PREFIX,
+        ],
+    ) else {
+        return Vec::new();
+    };
+    let mut pruned = Vec::new();
+    for line in listed.lines() {
+        let Some((oid, reference)) = line.split_once(' ') else {
+            continue;
+        };
+        let stale = quarantine_written_at(main, reference)
+            .is_some_and(|written| now.saturating_sub(written) > max_age);
+        // Delete only if it still points where it did when listed, so a
+        // concurrent run's fresh import of the same branch survives.
+        if stale && git_text(main, &["update-ref", "-d", reference, oid]).is_ok() {
+            pruned.push(reference.to_string());
+        }
+    }
+    pruned
+}
+
+/// Delete a real run's quarantine ref after a refusal, and pass the refusal
+/// on. A dry run's ref lives in its scratch repository and goes with it.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+fn drop_quarantine_on_refusal<T>(staged: &Staged, dry_run: bool, result: Result<T>) -> Result<T> {
+    if result.is_err() && !dry_run {
+        if let Err(err) = git_text(
+            &staged.repo,
+            &["update-ref", "-d", &staged.reference, &staged.tip],
+        ) {
+            eprintln!(
+                "{} could not delete {}: {err:#}",
+                "warning:".yellow().bold(),
+                staged.reference
+            );
+        }
+    }
+    result
 }
 
 /// Host git in `main`, stdout trimmed; an error carries stderr.
@@ -407,47 +500,19 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
     for line in crate::seat_clone::config_hooks_report(&main, &seat.root) {
         eprintln!("  seat {line}");
     }
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    for pruned in prune_stale_quarantine(&main, now, QUARANTINE_MAX_AGE_SECS) {
+        eprintln!("  pruned stale {pruned}");
+    }
 
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
     let staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
+    let checked = check_staged(&main, &staged, &opts);
+    drop_quarantine_on_refusal(&staged, opts.dry_run, checked)?;
     let (quarantine, tip) = (&staged.reference, &staged.tip);
-    eprintln!(
-        "  {} bundle verified ({tip}){}",
-        crate::glyph(crate::glyphs::Glyph::Check).green(),
-        if opts.dry_run {
-            " into a scratch repository"
-        } else {
-            ""
-        }
-    );
-    let base = crate::detect_default_branch_ref(&main).unwrap_or_else(|| "origin/main".into());
-    let base_oid = git_text(
-        &main,
-        &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
-    )?;
-    let stat = git_text(
-        &staged.repo,
-        &["diff", "--stat", &format!("{base_oid}...{quarantine}")],
-    )?;
-    eprintln!("  changes against {base}:");
-    for line in stat.lines() {
-        eprintln!("    {line}");
-    }
-    let store = crate::load_store_for_lookup(&main);
-    if store.is_none() {
-        eprintln!(
-            "{} ship --from-seat: no requirement store reachable; trailer spec-IDs are not \
-             resolved",
-            "warning:".yellow().bold()
-        );
-    }
-    let trailer_ids =
-        seat_trailer_check(&staged.repo, &format!("{base_oid}..{quarantine}"), |id| {
-            crate::trace::resolve_spec_in_store(store.as_ref(), id)
-        })?;
-    if let Some(explicit) = opts.spec.as_deref() {
-        explicit_spec_check(explicit, &trailer_ids)?;
-    }
     if opts.dry_run {
         eprintln!(
             "  dry run: would push {tip} to origin/{branch}{}; nothing was imported",
@@ -473,9 +538,70 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
              retrying"
         );
     }
-    // Pushed: the quarantine ref has done its job (a failure above keeps it).
+    // Pushed: the quarantine ref has done its job (a failure above keeps it
+    // for investigation; a later run prunes it once stale).
     git_text(&main, &["update-ref", "-d", quarantine, tip])?;
-    if opts.no_pr {
+    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)
+}
+
+/// Everything [`run_from`] checks on a staged import before it pushes: the
+/// diff stat against the default branch, the STORY-469 trailer check and an
+/// explicit spec's match. A refusal here deletes the quarantine ref.
+// trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions) -> Result<()> {
+    let (quarantine, tip) = (&staged.reference, &staged.tip);
+    eprintln!(
+        "  {} bundle verified ({tip}){}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        if opts.dry_run {
+            " into a scratch repository"
+        } else {
+            ""
+        }
+    );
+    let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
+    let base_oid = git_text(
+        main,
+        &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
+    )?;
+    let stat = git_text(
+        &staged.repo,
+        &["diff", "--stat", &format!("{base_oid}...{quarantine}")],
+    )?;
+    eprintln!("  changes against {base}:");
+    for line in stat.lines() {
+        eprintln!("    {line}");
+    }
+    let store = crate::load_store_for_lookup(main);
+    if store.is_none() {
+        eprintln!(
+            "{} ship --from-seat: no requirement store reachable; trailer spec-IDs are not \
+             resolved",
+            "warning:".yellow().bold()
+        );
+    }
+    let trailer_ids =
+        seat_trailer_check(&staged.repo, &format!("{base_oid}..{quarantine}"), |id| {
+            crate::trace::resolve_spec_in_store(store.as_ref(), id)
+        })?;
+    if let Some(explicit) = opts.spec.as_deref() {
+        explicit_spec_check(explicit, &trailer_ids)?;
+    }
+    Ok(())
+}
+
+/// After the push: open (or find) the PR unless `no_pr`.
+// trace:BUG-HOME-038 | ai:claude
+fn finish_published(
+    main: &Path,
+    seat: &HostRecordedClone,
+    branch: &str,
+    spec: &str,
+    tip: &str,
+    no_pr: bool,
+    deps: &Deps<'_>,
+) -> Result<()> {
+    if no_pr {
         eprintln!(
             "{} aida ship --from-seat — {branch} pushed (--no-pr; no PR opened)",
             crate::glyph(crate::glyphs::Glyph::Check).green().bold()
@@ -483,17 +609,15 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         return Ok(());
     }
 
-    let forge = (deps.forge)(&main);
+    let forge = (deps.forge)(main);
     // Only a clean "no open change" opens one: a failed lookup could hide an
     // open PR, and opening another would duplicate it.
-    let pr = match forge.change_for_branch(&branch) {
+    let pr = match forge.change_for_branch(branch) {
         Ok(crate::forge::ChangeLookup::Found(change)) => {
             eprintln!("  found open PR-{} for branch {branch}", change.id);
             change.id
         }
-        Ok(crate::forge::ChangeLookup::NoChange) => {
-            open_seat_pr(&*forge, &main, &seat, &branch, tip)?
-        }
+        Ok(crate::forge::ChangeLookup::NoChange) => open_seat_pr(&*forge, main, seat, branch, tip)?,
         Ok(other) => anyhow::bail!(
             "{branch} was pushed, but looking up its open PR failed ({}); no PR was opened. \
              Check the forge CLI, then run `aida ship --from-seat {}` again",
@@ -506,11 +630,11 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
             )))
         }
     };
-    (deps.after_open)(&main, &branch);
+    (deps.after_open)(main, branch);
     eprintln!(
         "{} aida ship --from-seat — PR-{pr} open for {} (not merged)",
         "⏸".yellow().bold(),
-        aida_core::node_alias::display_spec_id(&spec).bold()
+        aida_core::node_alias::display_spec_id(spec).bold()
     );
     Ok(())
 }

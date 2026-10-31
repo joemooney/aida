@@ -7982,11 +7982,13 @@ pub(crate) struct ShipArgs {
     /// stat and the clone's git config and hooks, check its commit trailers,
     /// push it and open the PR. The seat's hooks never run. Never merges.
     /// With --dry-run, nothing is imported or pushed.
-    // trace:BUG-HOME-038 | ai:claude — plain `//` keeps the marker out of `--help`.
+    // trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-140 | ai:claude
+    // — plain `//` keeps the marker out of `--help`. It never merges, so
+    // `--no-merge` is refused rather than silently ignored.
     #[clap(
         long,
         value_name = "CLONE",
-        conflicts_with_all = ["message", "keep_worktree", "no_trailer_check"]
+        conflicts_with_all = ["message", "keep_worktree", "no_trailer_check", "no_merge"]
     )]
     pub from_seat: Option<std::path::PathBuf>,
 }

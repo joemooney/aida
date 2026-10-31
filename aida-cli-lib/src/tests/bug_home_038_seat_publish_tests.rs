@@ -42,11 +42,16 @@ fn bug_home_038_host_git_refusal_is_not_pending_work() {
     assert!(!crate::ship::tracked_changes_pending(&fx.main).unwrap());
 }
 
-/// Run `f` with the containment probe reporting `EROFS`, as it does under
-/// the seat sandbox's read-only bind of main (no real mount needed).
+/// Run `f` with the containment probe answering as the seat sandbox of the
+/// seat whose tree is `own` does: everything outside `own` (main, sibling
+/// clones) read-only (`EROFS`), `own` writable (no real mount needed).
 #[cfg(unix)]
-fn read_only_main<R>(f: impl FnOnce() -> R) -> R {
-    aida_core::seat_clone_detect::with_containment_probe(Some(libc::EROFS), f)
+fn seat_view<R>(own: &Path, f: impl FnOnce() -> R) -> R {
+    let own = own.to_path_buf();
+    aida_core::seat_clone_detect::with_containment_probe(
+        move |git_dir| (!git_dir.starts_with(&own)).then_some(libc::EROFS),
+        f,
+    )
 }
 
 /// Main's `.git` chmod 0555 (`EACCES`, which a seat can arrange for any
@@ -56,10 +61,11 @@ fn read_only_main<R>(f: impl FnOnce() -> R) -> R {
 fn bug_home_038_eacces_on_main_git_is_not_containment() {
     let fx = fixture();
     let clone = leased_clone(&fx, "eacces", "c0ffee038010");
-    let _session = session("c0ffee038010");
-    let refused = aida_core::seat_clone_detect::with_containment_probe(Some(libc::EACCES), || {
-        aida_core::seat_clone_detect::contained_in_clone(&clone)
-    });
+    let own = clone.clone();
+    let refused = aida_core::seat_clone_detect::with_containment_probe(
+        move |git_dir| (!git_dir.starts_with(&own)).then_some(libc::EACCES),
+        || aida_core::seat_clone_detect::contained_in_clone(&clone),
+    );
     assert!(!refused);
 }
 
@@ -79,18 +85,18 @@ fn plant_hooks(clone: &Path, sentinel: &Path, root: &Path) {
     );
 }
 
-/// This process's session is `id` (and no Claude Code session id leaks in).
-fn session(id: &str) -> crate::test_env::EnvVarsGuard {
-    crate::test_env::EnvVarsGuard::apply(&[
-        ("AIDA_SESSION_ID", Some(id)),
-        ("CLAUDE_CODE_SESSION_ID", None),
-    ])
+/// This process claims session `id` (both session variables, as a seat that
+/// sets its own environment can).
+#[cfg(unix)]
+fn session(id: Option<&str>) -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", id), ("CLAUDE_CODE_SESSION_ID", id)])
 }
 
-/// Condition 2: with main's `.git` read-only (EROFS) and this process's
-/// session leasing the clone, host git runs in the seat's own clone, and
-/// neither a planted pre-push hook nor a `core.hooksPath` hook ever runs.
-/// Without the session's lease, the refusal is back.
+/// Condition 2: with main's `.git` read-only (EROFS), the clone leased in
+/// main and writable to this process, host git runs in the seat's own clone,
+/// and neither a planted pre-push hook nor a `core.hooksPath` hook ever runs.
+/// With the clone read-only too (another seat's view of it), the refusal is
+/// back.
 #[cfg(unix)]
 #[test]
 fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
@@ -103,8 +109,7 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
     git_ok(&clone, &["config", "maintenance.auto", "false"]);
     git_ok(&clone, &["config", "gc.auto", "0"]);
 
-    let own = session("c0ffee038002");
-    read_only_main(|| {
+    seat_view(&clone, || {
         assert!(aida_core::seat_clone_detect::contained_in_clone(&clone));
         assert_eq!(aida_core::git_ops::refused_seat_clone(&clone), None);
         std::fs::write(clone.join("README.md"), "seat\n").unwrap();
@@ -129,10 +134,8 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
     assert!(ref_exists(&fx.origin, "refs/heads/seat-pushed"));
     // Main writable again (the host's view): git is refused.
     assert!(!aida_core::seat_clone_detect::contained_in_clone(&clone));
-    // Not this process's lease any more: git is refused.
-    drop(own);
-    let _other = session("c0ffee0380ff");
-    read_only_main(|| {
+    // Not this process's clone (read-only to it): git is refused.
+    seat_view(&fx.root.join("aida-seat-aida-elsewhere"), || {
         assert!(!aida_core::seat_clone_detect::contained_in_clone(&clone));
         assert_eq!(
             aida_core::git_ops::refused_seat_clone(&clone),
@@ -141,16 +144,31 @@ fn bug_home_038_contained_seat_git_never_runs_planted_hooks() {
     });
 }
 
-/// Ruling item 1: a contained process holding seat A's lease is refused in
-/// seat B's clone (readable to it, but B's config is not A's to run).
+/// Ruling item 1: a contained seat A is refused in seat B's clone (readable
+/// to it, but B's config is not A's to run). TASK-139: that holds whatever
+/// session id A exports — none, its own, or B's.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-139 | ai:claude
 #[cfg(unix)]
 #[test]
 fn bug_home_038_contained_seat_is_refused_in_another_seats_clone() {
     let fx = fixture();
     let seat_a = super::s4_host_git_tests::leased_clone_on(&fx, "seat-a", "c0ffee038005", "a");
     let seat_b = super::s4_host_git_tests::leased_clone_on(&fx, "seat-b", "c0ffee038006", "b");
-    let _session = session("c0ffee038005");
-    read_only_main(|| {
+    for claimed in [None, Some("c0ffee038005"), Some("c0ffee038006")] {
+        let _session = session(claimed);
+        seat_view(&seat_a, || {
+            assert!(
+                aida_core::seat_clone_detect::contained_in_clone(&seat_a),
+                "{claimed:?}"
+            );
+            assert!(
+                !aida_core::seat_clone_detect::contained_in_clone(&seat_b),
+                "seat A claiming {claimed:?} passed the own-clone check in seat B's clone"
+            );
+        });
+    }
+    let _session = session(Some("c0ffee038006"));
+    seat_view(&seat_a, || {
         assert!(aida_core::seat_clone_detect::contained_in_clone(&seat_a));
         assert!(!aida_core::seat_clone_detect::contained_in_clone(&seat_b));
         assert_eq!(
@@ -541,6 +559,8 @@ fn bug_home_038_from_seat_explicit_spec_must_match_trailers() {
     assert!(err.contains("you named BUG-1"), "{err}");
     assert!(err.contains("BUG-2"), "{err}");
     assert!(!ref_exists(&fx.origin, "refs/heads/seat-mismatch"));
+    // TASK-138: the refusal after import leaves no quarantine ref.
+    assert_eq!(import_refs(&fx.main), "", "the refused import kept its ref");
 
     let ids = vec!["BUG-2".to_string(), "TASK-7".to_string()];
     crate::ship_from_seat::explicit_spec_check("bug-2", &ids).unwrap();
@@ -565,8 +585,8 @@ fn bug_home_038_from_seat_inside_a_clone_is_refused() {
 }
 
 /// Ruling item 2: a seat commit with no `(SPEC-ID)` trailer is refused
-/// before the push, its quarantine ref kept; a dead trailer is refused by
-/// the STORY-469 check.
+/// before the push, and (TASK-138) its quarantine ref is deleted; a dead
+/// trailer is refused by the STORY-469 check.
 #[test]
 fn bug_home_038_from_seat_trailer_check_runs_before_push() {
     let fx = fixture();
@@ -581,7 +601,7 @@ fn bug_home_038_from_seat_trailer_check_runs_before_push() {
         .to_string();
     assert!(err.contains("carries a `(SPEC-ID)` trailer"), "{err}");
     assert!(!ref_exists(&fx.origin, "refs/heads/bare"));
-    assert_eq!(import_refs(&fx.main), "refs/aida/seat-import/bare");
+    assert_eq!(import_refs(&fx.main), "", "the refused import kept its ref");
 
     let base = git_ok(&fx.main, &["rev-parse", "origin/main"]);
     let (clone, _) = seat_with_commit(&fx, "dead", "c0ffee03800a", "dead", "fix: y (BUG-404)");
@@ -596,6 +616,159 @@ fn bug_home_038_from_seat_trailer_check_runs_before_push() {
         crate::trace::SpecResolution::Live
     })
     .unwrap();
+}
+
+/// Write `reference` at `oid` in `repo` with a reflog entry dated `at`
+/// (unix seconds), or with no reflog when `at` is `None`.
+fn quarantine_ref_at(repo: &Path, reference: &str, oid: &str, at: Option<u64>) {
+    let mut cmd = crate::test_git::git_command();
+    cmd.arg("-C").arg(repo);
+    if let Some(at) = at {
+        cmd.env("GIT_COMMITTER_DATE", format!("@{at} +0000"))
+            .args(["-c", "core.logAllRefUpdates=always"]);
+    } else {
+        cmd.args(["-c", "core.logAllRefUpdates=false"]);
+    }
+    let out = cmd.args(["update-ref", reference, oid]).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+/// TASK-138: quarantine refs imported more than a day ago are pruned (by
+/// their reflog's import time, or, with no reflog, their commit date);
+/// fresh ones and refs outside the quarantine prefix are kept.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+#[test]
+fn ship_from_seat_prunes_only_stale_quarantine_refs() {
+    let fx = fixture();
+    let fresh_commit = orphan_commit(&fx.main, "fresh-commit", "f.txt");
+    let now = unix_now();
+    let two_days = 2 * crate::ship_from_seat::QUARANTINE_MAX_AGE_SECS;
+    let old_commit = {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(&fx.main)
+            .env("GIT_COMMITTER_DATE", format!("@{} +0000", now - two_days))
+            .args([
+                "commit-tree",
+                "-m",
+                "old",
+                &format!("{fresh_commit}^{{tree}}"),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let p = crate::ship_from_seat::QUARANTINE_PREFIX;
+    quarantine_ref_at(
+        &fx.main,
+        &format!("{p}old"),
+        &fresh_commit,
+        Some(now - two_days),
+    );
+    quarantine_ref_at(&fx.main, &format!("{p}new"), &fresh_commit, Some(now - 60));
+    quarantine_ref_at(&fx.main, &format!("{p}nolog-old"), &old_commit, None);
+    quarantine_ref_at(&fx.main, &format!("{p}nolog-new"), &fresh_commit, None);
+    quarantine_ref_at(
+        &fx.main,
+        "refs/aida/other/old",
+        &fresh_commit,
+        Some(now - two_days),
+    );
+
+    let mut pruned = crate::ship_from_seat::prune_stale_quarantine(
+        &fx.main,
+        now,
+        crate::ship_from_seat::QUARANTINE_MAX_AGE_SECS,
+    );
+    pruned.sort();
+    assert_eq!(pruned, vec![format!("{p}nolog-old"), format!("{p}old")]);
+    assert_eq!(
+        import_refs(&fx.main),
+        format!("{p}new\n{p}nolog-new"),
+        "a fresh quarantine ref was pruned"
+    );
+    assert!(ref_exists(&fx.main, "refs/aida/other/old"));
+}
+
+/// TASK-138: every `--from-seat` run (a dry run included) prunes stale
+/// quarantine refs first, and a real import's ref carries a reflog, so it
+/// ages by when the host imported it.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
+#[test]
+fn ship_from_seat_run_prunes_stale_quarantine_and_reflogs_imports() {
+    let fx = fixture();
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "prune",
+        "c0ffee03800d",
+        "seat-prune",
+        "fix: seat change (BUG-1)",
+    );
+    let stale = format!("{}left-behind", crate::ship_from_seat::QUARANTINE_PREFIX);
+    let long_ago = unix_now() - 2 * crate::ship_from_seat::QUARANTINE_MAX_AGE_SECS;
+    let base = git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    quarantine_ref_at(&fx.main, &stale, &base, Some(long_ago));
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| panic!("a dry run reached the forge"),
+        after_open: &|_, _| {},
+    };
+    crate::ship_from_seat::run_from(&fx.main, opts(&clone, true, false), &deps).unwrap();
+    assert!(
+        !ref_exists(&fx.main, &stale),
+        "the stale ref survived the run"
+    );
+
+    let bytes = test_bundle(&fx.main, &clone, "seat-prune").unwrap();
+    let staged =
+        crate::ship_from_seat::stage_bundle(&fx.main, "seat-prune", &bytes, false).unwrap();
+    assert_eq!(staged.tip, tip);
+    let reflog = git_ok(
+        &fx.main,
+        &["reflog", "show", "--format=%H", &staged.reference],
+    );
+    assert_eq!(reflog, tip, "the import wrote no reflog entry");
+    assert!(crate::ship_from_seat::prune_stale_quarantine(
+        &fx.main,
+        unix_now(),
+        crate::ship_from_seat::QUARANTINE_MAX_AGE_SECS
+    )
+    .is_empty());
+}
+
+/// TASK-140: `--from-seat` never merges, so `--no-merge` with it is a parse
+/// error instead of being accepted and ignored.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-140 | ai:claude
+#[test]
+fn ship_from_seat_conflicts_with_no_merge() {
+    use clap::Parser as _;
+    let err =
+        crate::pr_cmd::ShipArgs::try_parse_from(["ship", "--from-seat", "seat", "--no-merge"])
+            .unwrap_err();
+    assert_eq!(
+        err.kind(),
+        clap::error::ErrorKind::ArgumentConflict,
+        "{err}"
+    );
+    let ok = crate::pr_cmd::ShipArgs::try_parse_from(["ship", "--from-seat", "seat", "--no-pr"])
+        .unwrap();
+    assert!(ok.no_pr && !ok.no_merge);
 }
 
 #[test]
