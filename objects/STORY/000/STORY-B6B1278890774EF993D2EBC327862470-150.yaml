@@ -7,12 +7,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T10:54:23.603768457Z
-modified_at: 2026-10-31T11:15:21.607302778Z
+modified_at: 2026-10-31T11:15:25.889504963Z
 req_type: Story
 tags:
 - agents
 - codex
 - rotation
+comments:
+- id: 01a191ab-ec41-7893-bc43-9c9a7c500245
+  author: joe
+  content: 'Advisor 2026-10-31 04:16: approved, acceptance is concrete. Sequenced after STORY-HOME-101 merges (it reuses that rotation supervisor).'
+  created_at: 2026-10-31T11:15:25.889504963Z
+  modified_at: 2026-10-31T11:15:25.889504963Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a191ab-db87-7011-8bcf-f104ffe63d83
   author: joe
