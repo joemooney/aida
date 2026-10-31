@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T13:27:12.087377320Z
+modified_at: 2026-10-31T13:37:00.526455140Z
 req_type: Bug
 tags:
 - ids
@@ -326,6 +326,12 @@ comments:
     Gate: LIGHT (targeted bug_046 + doctor renumber tests + the CLI fixture), make check-ci-fast. No force push.
   created_at: 2026-10-31T13:27:12.087377320Z
   modified_at: 2026-10-31T13:27:12.087377320Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a1922d-8a6e-7fd0-9780-17e7e8e16d2e
+  author: joe
+  content: 'ADVISOR 06:39: the final-round lane armed a Monitor and ended its turn while the test build ran (headless-rule violation), so it was stopped and resumed. Resumed lane: run cargo in the FOREGROUND in bounded steps (<= 55s per call, re-polling), never use Monitor or run_in_background, never end a turn to wait. Finish the 06:30 ruling, commit and push.'
+  created_at: 2026-10-31T13:37:00.526455140Z
+  modified_at: 2026-10-31T13:37:00.526455140Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
