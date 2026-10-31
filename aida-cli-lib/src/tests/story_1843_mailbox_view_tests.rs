@@ -587,7 +587,7 @@ fn story1843_bound_child_never_sees_inherited_parent_mail() {
         .iter()
         .all(|row| !row["recipient"].as_str().unwrap().starts_with("parent")));
     let mail = awaiting_mail(&r.main, || facts.clone());
-    assert_eq!(mail.unread + mail.shared_unread, 1);
+    assert_eq!(mail.unread + mail.shared_unread + mail.role_unread, 1);
 
     let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, false, 10);
     ack_displayed(&r.main, &view, &rows).unwrap();

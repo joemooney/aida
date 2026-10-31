@@ -940,6 +940,9 @@ pub(crate) struct CronChannel {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct MailChannel {
     pub unread: usize,
+    /// Urgent unread mail to this session: its own inbox plus its role's
+    /// (`role_urgent` of these), since role mail is direct mail.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
     pub urgent: usize,
     /// Unread mail in the shared role / agent-type inboxes this session also
     /// reads, EXCLUDING anything already counted in `unread` (a broadcast is
@@ -954,6 +957,123 @@ pub(crate) struct MailChannel {
     /// so the report must not read as caught up.
     // trace:STORY-1843 | ai:claude
     pub partial: bool,
+    /// Unread mail addressed to this session's ROLE (e.g. `advisor`). It is
+    /// direct mail for the seat, so it never reads as `shared` noise.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+    pub role_unread: usize,
+    /// The role `role_unread` counts, e.g. `advisor`.
+    pub role: Option<String>,
+    /// How many of `urgent` are role mail.
+    pub role_urgent: usize,
+    /// The newest unread items (own, role and shared), `[request]` first,
+    /// capped at [`MAIL_PREVIEW_LINES`], so the notice names who wrote what.
+    pub previews: Vec<MailPreview>,
+    /// Unread `[request]` mail to the operator or role left unread longer
+    /// than [`OVERDUE_REQUEST_SECS`] — an item for the addressed seat.
+    pub overdue_requests: Vec<MailPreview>,
+    /// Unread automated notices older than [`STALE_AUTOMATED_MAIL_SECS`],
+    /// dropped from every count above and summarized as one line.
+    pub stale_automated: usize,
+}
+
+impl MailChannel {
+    /// The urgent mail in the session's own inbox, apart from its role's.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+    pub(crate) fn own_urgent(&self) -> usize {
+        self.urgent.saturating_sub(self.role_urgent)
+    }
+}
+
+/// ` (N urgent)`, or nothing when none is.
+fn urgent_suffix(n: usize) -> String {
+    if n > 0 {
+        format!(" ({n} urgent)")
+    } else {
+        String::new()
+    }
+}
+
+/// One unread message, as the per-turn notice names it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MailPreview {
+    pub from: String,
+    pub intent: aida_core::mailbox::Intent,
+    pub age_secs: i64,
+    pub subject: String,
+}
+
+impl MailPreview {
+    fn from_message(m: &aida_core::mailbox::Message, now: i64) -> Self {
+        Self {
+            from: m.from.clone(),
+            intent: m.intent,
+            age_secs: mail_age_secs(m, now).unwrap_or(0).max(0),
+            subject: aida_core::mailbox::subject_line(m, 72),
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "from": self.from,
+            "intent": self.intent.as_str(),
+            "age_secs": self.age_secs,
+            "subject": self.subject,
+        })
+    }
+
+    /// `[request] from codex · 9h ago · PR-3122 needs review routing`.
+    pub fn line(&self) -> String {
+        format!(
+            "[{}] from {} · {} ago · {}",
+            self.intent.as_str(),
+            self.from,
+            mail_age_label(self.age_secs),
+            self.subject
+        )
+    }
+}
+
+/// How many unread items the per-turn notice names.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+pub(crate) const MAIL_PREVIEW_LINES: usize = 3;
+/// An unread `[request]` older than this escalates in `aida awaiting`.
+pub(crate) const OVERDUE_REQUEST_SECS: i64 = 30 * 60;
+/// Unread automated notices older than this stop counting as new mail.
+pub(crate) const STALE_AUTOMATED_MAIL_SECS: i64 = 7 * 86_400;
+
+/// Senders that are AIDA's own machinery, not a seat: `review-watch`,
+/// `aida-session-reap`, and other `aida-*` / `*-watch` notifiers.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+pub(crate) fn is_automated_sender(from: &str) -> bool {
+    let from = from.trim().to_ascii_lowercase();
+    from.starts_with("aida-") || from.ends_with("-watch") || from.contains("-watch-")
+}
+
+/// An automated notice left unread past [`STALE_AUTOMATED_MAIL_SECS`].
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+pub(crate) fn is_stale_automated(m: &aida_core::mailbox::Message, now: i64) -> bool {
+    is_automated_sender(&m.from)
+        && mail_age_secs(m, now).is_some_and(|age| age > STALE_AUTOMATED_MAIL_SECS)
+}
+
+/// Seconds since a message was sent, given `now` in unix SECONDS. Message
+/// timestamps are epoch MILLIS (BUG-032); `None` when the time is unknown, so
+/// an unstamped message is neither stale nor overdue.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+pub(crate) fn mail_age_secs(m: &aida_core::mailbox::Message, now: i64) -> Option<i64> {
+    aida_core::mailbox::timestamp_is_known(m.timestamp)
+        .then(|| now.saturating_sub(m.timestamp / 1000))
+}
+
+fn mail_age_label(secs: i64) -> String {
+    if secs < 60 {
+        "<1m".to_string()
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else {
+        crate::leases::humanize_age_secs(secs.unsigned_abs())
+    }
 }
 
 /// BUG-767: split unread mail into the operator's OWN inbox and the SHARED
@@ -976,28 +1096,119 @@ pub(crate) fn split_mail_scopes(
     messages: &[aida_core::mailbox::Message],
     watermarks: &std::collections::HashMap<String, i64>,
 ) -> MailChannel {
-    use aida_core::mailbox::unread_for_identities;
-    let own = unread_for_identities([operator], messages, watermarks);
-    let own_ids: std::collections::HashSet<&str> = own.iter().map(|m| m.id.as_str()).collect();
+    split_mail_scopes_for_role(
+        operator,
+        None,
+        shared,
+        messages,
+        watermarks,
+        chrono::Utc::now().timestamp(),
+    )
+}
+
+/// [`split_mail_scopes`] with the session's ROLE pulled out of the shared
+/// scope: mail addressed to the role is the seat's direct mail
+/// (`role_unread`), not fleet-wide noise. Also builds the per-turn previews,
+/// the overdue-request items, and drops automated notices older than
+/// [`STALE_AUTOMATED_MAIL_SECS`] from every count into `stale_automated`.
+/// PURE: `now` is supplied (unix seconds).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+pub(crate) fn split_mail_scopes_for_role(
+    operator: &str,
+    role: Option<&str>,
+    shared: &[String],
+    messages: &[aida_core::mailbox::Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    now: i64,
+) -> MailChannel {
+    use aida_core::mailbox::{unread_for_identities, Intent, Message, Recipient};
+    let operator = operator.trim();
+    let stale = |m: &Message| is_stale_automated(m, now);
+
+    let own_all = unread_for_identities([operator], messages, watermarks);
+    let own_ids: std::collections::HashSet<&str> = own_all.iter().map(|m| m.id.as_str()).collect();
+    let role = role
+        .map(str::trim)
+        .filter(|r| !r.is_empty() && *r != operator);
+    let role_all: Vec<&Message> = role
+        .map(|r| {
+            unread_for_identities([r], messages, watermarks)
+                .into_iter()
+                .filter(|m| !own_ids.contains(m.id.as_str()) && m.to != Recipient::Broadcast)
+                .collect()
+        })
+        .unwrap_or_default();
+    let role_ids: std::collections::HashSet<&str> =
+        role_all.iter().map(|m| m.id.as_str()).collect();
     let shared_ids: Vec<&str> = shared
         .iter()
-        .map(String::as_str)
-        .filter(|s| !s.trim().is_empty() && s.trim() != operator.trim())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && *s != operator && Some(*s) != role)
         .collect();
-    let shared_unread = unread_for_identities(shared_ids.iter().copied(), messages, watermarks)
-        .into_iter()
-        .filter(|m| !own_ids.contains(m.id.as_str()))
+    let shared_all: Vec<&Message> =
+        unread_for_identities(shared_ids.iter().copied(), messages, watermarks)
+            .into_iter()
+            .filter(|m| !own_ids.contains(m.id.as_str()) && !role_ids.contains(m.id.as_str()))
+            .collect();
+
+    let stale_automated = own_all
+        .iter()
+        .chain(&role_all)
+        .chain(&shared_all)
+        .filter(|m| stale(m))
         .count();
+    let own: Vec<&Message> = own_all.into_iter().filter(|m| !stale(m)).collect();
+    let role_mail: Vec<&Message> = role_all.into_iter().filter(|m| !stale(m)).collect();
+    let shared_mail: Vec<&Message> = shared_all.into_iter().filter(|m| !stale(m)).collect();
+
+    let rank = |i: Intent| match i {
+        Intent::Request => 0,
+        Intent::Handoff => 1,
+        Intent::Fyi => 2,
+    };
+    let mut newest: Vec<&Message> = own
+        .iter()
+        .chain(&role_mail)
+        .chain(&shared_mail)
+        .copied()
+        .collect();
+    newest.sort_by(|a, b| {
+        rank(a.intent)
+            .cmp(&rank(b.intent))
+            .then_with(|| b.timestamp.cmp(&a.timestamp))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    let previews = newest
+        .into_iter()
+        .take(MAIL_PREVIEW_LINES)
+        .map(|m| MailPreview::from_message(m, now))
+        .collect();
+    let mut overdue: Vec<&Message> = own
+        .iter()
+        .chain(&role_mail)
+        .copied()
+        .filter(|m| {
+            m.intent == Intent::Request
+                && mail_age_secs(m, now).is_some_and(|age| age > OVERDUE_REQUEST_SECS)
+        })
+        .collect();
+    overdue.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+
     MailChannel {
         unread: own.len(),
-        urgent: own.iter().filter(|m| m.urgent).count(),
-        shared_unread,
-        shared_scope: if shared_unread > 0 {
-            Some(shared_ids.join(" + "))
-        } else {
-            None
-        },
+        urgent: own.iter().chain(&role_mail).filter(|m| m.urgent).count(),
+        shared_unread: shared_mail.len(),
+        shared_scope: (!shared_mail.is_empty()).then(|| shared_ids.join(" + ")),
         partial: false,
+        role_unread: role_mail.len(),
+        role_urgent: role_mail.iter().filter(|m| m.urgent).count(),
+        role: role.filter(|_| !role_mail.is_empty()).map(str::to_string),
+        previews,
+        overdue_requests: overdue
+            .into_iter()
+            .map(|m| MailPreview::from_message(m, now))
+            .collect(),
+        stale_automated,
     }
 }
 
@@ -1650,6 +1861,10 @@ impl AwaitingReport {
             ("briefs", self.pending_briefs.len()),
             ("findings", usize::from(self.findings_total > 0)),
             ("mail_unread", usize::from(self.mail.unread > 0)),
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude —
+            // role mail is the seat's direct mail; overdue requests are items.
+            ("mail_role_unread", usize::from(self.mail.role_unread > 0)),
+            ("mail_overdue_requests", self.mail.overdue_requests.len()),
             // trace:BUG-767 | ai:claude — the shared-inbox line is its own row.
             (
                 "mail_shared_unread",
@@ -1734,6 +1949,19 @@ impl AwaitingReport {
         // BUG-767: shared role/agent-type inboxes on their own labelled keys —
         // `mail_unread` stays the operator's own, deterministic count.
         // trace:BUG-767 | ai:claude
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+        let _ = writeln!(out, "mail_role_unread: {}", self.mail.role_unread);
+        let _ = writeln!(
+            out,
+            "mail_role: {}",
+            self.mail.role.as_deref().unwrap_or("-")
+        );
+        let _ = writeln!(
+            out,
+            "mail_overdue_requests: {}",
+            self.mail.overdue_requests.len()
+        );
+        let _ = writeln!(out, "mail_stale_automated: {}", self.mail.stale_automated);
         let _ = writeln!(out, "mail_shared_unread: {}", self.mail.shared_unread);
         let _ = writeln!(out, "mail_partial: {}", self.mail.partial);
         let _ = writeln!(
@@ -2347,11 +2575,7 @@ impl AwaitingReport {
             if budget == 0 {
                 overflow += 1;
             } else {
-                let urgent = if self.mail.urgent > 0 {
-                    format!(" ({} urgent)", self.mail.urgent)
-                } else {
-                    String::new()
-                };
+                let urgent = urgent_suffix(self.mail.own_urgent());
                 writeln!(
                     w,
                     "  {} {} unread mail{}{} — `{}`",
@@ -2360,6 +2584,41 @@ impl AwaitingReport {
                     if self.mail.unread == 1 { "" } else { "s" },
                     urgent,
                     "aida mailbox inbox".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
+        // BUG-HOME-040: a [request] left unread past the threshold is an item
+        // for the addressed seat, named by sender and subject.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+        for req in &self.mail.overdue_requests {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                writeln!(
+                    w,
+                    "  {} unanswered {} — `{}`",
+                    crate::glyph(crate::glyphs::Glyph::Warning),
+                    req.line(),
+                    "aida mailbox inbox".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+        if self.mail.role_unread > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let role = self.mail.role.as_deref().unwrap_or("your role");
+                writeln!(
+                    w,
+                    "  {} {} unread mail to {}{} — `{}`",
+                    crate::glyph(crate::glyphs::Glyph::IncomingMail),
+                    self.mail.role_unread,
+                    role,
+                    urgent_suffix(self.mail.role_urgent),
+                    format!("aida mailbox inbox {role}").cyan(),
                 )?;
                 budget -= 1;
             }
@@ -2382,6 +2641,16 @@ impl AwaitingReport {
                     scope,
                     format!("aida mailbox inbox {first}").cyan(),
                 )?;
+                budget -= 1;
+            }
+        }
+        // Old automated notices: one line, never counted as new mail.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+        if self.mail.stale_automated > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                writeln!(w, "  {}", self.stale_automated_line())?;
                 budget -= 1;
             }
         }
@@ -2701,6 +2970,12 @@ impl AwaitingReport {
                 "shared_unread": self.mail.shared_unread,
                 "shared_scope": self.mail.shared_scope,
                 "partial": self.mail.partial,
+                // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+                "role_unread": self.mail.role_unread,
+                "role": self.mail.role,
+                "previews": self.mail.previews.iter().map(MailPreview::to_json).collect::<Vec<_>>(),
+                "overdue_requests": self.mail.overdue_requests.iter().map(MailPreview::to_json).collect::<Vec<_>>(),
+                "stale_automated": self.mail.stale_automated,
             },
             "worker_directives": {
                 "pending": self.worker_directives.pending,
@@ -2813,6 +3088,42 @@ impl AwaitingReport {
         })
     }
 
+    /// The lines the per-turn notice prints under [`Self::compact_line`]:
+    /// the newest unread mail by kind, sender, age and subject (`[request]`
+    /// first), then one summary line for old automated notices. Empty when
+    /// the compact line is silent, so a quiet inbox stays quiet.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+    pub fn mail_preview_lines(&self) -> Vec<String> {
+        if self.compact_line().is_none() {
+            return Vec::new();
+        }
+        let mut lines: Vec<String> = self
+            .mail
+            .previews
+            .iter()
+            .map(|p| {
+                format!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::IncomingMail),
+                    p.line()
+                )
+            })
+            .collect();
+        if self.mail.stale_automated > 0 {
+            lines.push(format!("  {}", self.stale_automated_line()));
+        }
+        lines
+    }
+
+    fn stale_automated_line(&self) -> String {
+        let n = self.mail.stale_automated;
+        format!(
+            "{} older than {}d from automated senders (not counted) — `aida mailbox inbox`",
+            pluralize(n, "unread notice", "unread notices"),
+            STALE_AUTOMATED_MAIL_SECS / 86_400
+        )
+    }
+
     /// One compact line spanning every populated channel, for the per-turn
     /// notice — the can't-miss signal that SOMETHING awaits across ANY
     /// coordination channel (not just mail). Returns `None` when nothing
@@ -2887,15 +3198,28 @@ impl AwaitingReport {
             }
         }
         if self.mail.unread > 0 {
-            let urgent = if self.mail.urgent > 0 {
-                format!(" ({} urgent)", self.mail.urgent)
-            } else {
-                String::new()
-            };
+            let urgent = urgent_suffix(self.mail.own_urgent());
             parts.push(format!(
                 "{}{}",
                 pluralize(self.mail.unread, "mail", "mail"),
                 urgent
+            ));
+        }
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude — role
+        // mail is the seat's own, so it is named for the role, not "shared".
+        if !self.mail.overdue_requests.is_empty() {
+            parts.push(pluralize(
+                self.mail.overdue_requests.len(),
+                "overdue request",
+                "overdue requests",
+            ));
+        }
+        if self.mail.role_unread > 0 {
+            parts.push(format!(
+                "{} mail to {}{}",
+                self.mail.role_unread,
+                self.mail.role.as_deref().unwrap_or("your role"),
+                urgent_suffix(self.mail.role_urgent)
             ));
         }
         // trace:BUG-767 | ai:claude
@@ -3475,6 +3799,163 @@ mod tests {
 
     fn to(agent: &str) -> aida_core::mailbox::Recipient {
         aida_core::mailbox::Recipient::Agent(agent.to_string())
+    }
+
+    // ── BUG-HOME-040: role mail is direct, named, and not buried ───────────
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+
+    const NOW: i64 = 100 * 86_400;
+
+    fn intent_mail(
+        id: &str,
+        from: &str,
+        recipient: &str,
+        intent: aida_core::mailbox::Intent,
+        age: i64,
+    ) -> aida_core::mailbox::Message {
+        // Message timestamps are epoch millis; `NOW` and `age` are seconds.
+        let mut m = mail(id, from, to(recipient), (NOW - age) * 1000);
+        m.intent = intent;
+        m.subject = Some(format!("subject {id}"));
+        m
+    }
+
+    fn role_split(msgs: &[aida_core::mailbox::Message]) -> MailChannel {
+        split_mail_scopes_for_role(
+            "joe",
+            Some("advisor"),
+            &["advisor".to_string(), "claude".to_string()],
+            msgs,
+            &std::collections::HashMap::new(),
+            NOW,
+        )
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac637a5f | ai:claude
+    #[test]
+    fn role_mail_is_direct_not_shared() {
+        use aida_core::mailbox::Intent;
+        let msgs = vec![
+            intent_mail("r1", "codex", "advisor", Intent::Handoff, 60),
+            intent_mail("v1", "codex", "claude", Intent::Fyi, 60),
+            intent_mail("o1", "codex", "joe", Intent::Fyi, 60),
+        ];
+        let c = role_split(&msgs);
+        assert_eq!(c.unread, 1, "operator's own number is unchanged");
+        assert_eq!(c.role_unread, 1);
+        assert_eq!(c.role.as_deref(), Some("advisor"));
+        assert_eq!(c.shared_unread, 1, "only the vendor inbox is shared");
+        assert_eq!(c.shared_scope.as_deref(), Some("claude"));
+        let line = AwaitingReport {
+            mail: c,
+            ..Default::default()
+        }
+        .compact_line()
+        .unwrap();
+        assert!(line.contains("1 mail to advisor"), "{line}");
+        assert!(line.contains("1 shared mail"), "{line}");
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac8c3b1b | ai:claude
+    #[test]
+    fn previews_put_requests_first_then_newest_capped_at_three() {
+        use aida_core::mailbox::Intent;
+        let msgs = vec![
+            intent_mail("fyi-new", "a", "advisor", Intent::Fyi, 10),
+            intent_mail("handoff", "b", "advisor", Intent::Handoff, 100),
+            intent_mail("req-old", "c", "advisor", Intent::Request, 900),
+            intent_mail("req-new", "d", "joe", Intent::Request, 200),
+            intent_mail("fyi-old", "e", "claude", Intent::Fyi, 5000),
+        ];
+        let c = role_split(&msgs);
+        let order: Vec<&str> = c.previews.iter().map(|p| p.from.as_str()).collect();
+        assert_eq!(order, vec!["d", "c", "b"], "{:?}", c.previews);
+        assert_eq!(
+            c.previews[0].line(),
+            "[request] from d · 3m ago · subject req-new"
+        );
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac212b9a | ai:claude
+    #[test]
+    fn old_automated_notices_drop_out_of_counts_into_one_summary() {
+        use aida_core::mailbox::Intent;
+        let week = STALE_AUTOMATED_MAIL_SECS;
+        let msgs = vec![
+            intent_mail("w-old", "review-watch", "advisor", Intent::Fyi, week + 1),
+            intent_mail(
+                "reap-old",
+                "aida-session-reap",
+                "joe",
+                Intent::Fyi,
+                week + 1,
+            ),
+            intent_mail("w-new", "review-watch", "advisor", Intent::Fyi, week - 1),
+            // An old message from a SEAT is still real mail.
+            intent_mail("seat-old", "codex", "advisor", Intent::Fyi, week + 1),
+        ];
+        let c = role_split(&msgs);
+        assert_eq!(c.stale_automated, 2);
+        assert_eq!(c.unread, 0);
+        assert_eq!(c.role_unread, 2, "fresh automated + old seat mail remain");
+        assert!(c.previews.iter().all(|p| p.subject != "subject w-old"));
+        let r = AwaitingReport {
+            mail: MailChannel {
+                stale_automated: 2,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            r.compact_line().is_none() && r.mail_preview_lines().is_empty(),
+            "old automated mail alone never wakes the notice"
+        );
+    }
+
+    #[test]
+    fn automated_sender_classification() {
+        for s in ["review-watch", "aida-session-reap", "advisor-watch-01"] {
+            assert!(is_automated_sender(s), "{s}");
+        }
+        for s in ["codex-implementer-01", "advisor", "joe", "watchful"] {
+            assert!(!is_automated_sender(s), "{s}");
+        }
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-040.ac206206 | ai:claude
+    #[test]
+    fn requests_unread_past_thirty_minutes_escalate_for_the_addressed_seat() {
+        use aida_core::mailbox::Intent;
+        let msgs = vec![
+            intent_mail(
+                "late",
+                "codex",
+                "advisor",
+                Intent::Request,
+                OVERDUE_REQUEST_SECS + 1,
+            ),
+            intent_mail(
+                "fresh",
+                "codex",
+                "advisor",
+                Intent::Request,
+                OVERDUE_REQUEST_SECS - 1,
+            ),
+            intent_mail("handoff", "codex", "advisor", Intent::Handoff, 3 * 3600),
+            // A request in a shared inbox is not addressed to this seat.
+            intent_mail("shared", "codex", "claude", Intent::Request, 3 * 3600),
+        ];
+        let c = role_split(&msgs);
+        assert_eq!(c.overdue_requests.len(), 1, "{:?}", c.overdue_requests);
+        assert_eq!(c.overdue_requests[0].subject, "subject late");
+        let r = AwaitingReport {
+            mail: c,
+            ..Default::default()
+        };
+        assert!(r.compact_line().unwrap().contains("1 overdue request"));
+        let json = r.to_json();
+        assert_eq!(json["mail"]["overdue_requests"][0]["from"], "codex");
+        assert_eq!(json["mail"]["role_unread"], 3);
     }
 
     // ── BUG-1549: the one PR review classifier, table-driven ────────────────
@@ -4205,6 +4686,7 @@ mod tests {
                 shared_unread: 18,
                 shared_scope: Some("advisor".to_string()),
                 partial: false,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -5183,6 +5665,15 @@ mod tests {
             }),
             ("findings", |r| r.findings_total = 2),
             ("mail_unread", |r| r.mail.unread = 1),
+            ("mail_role_unread", |r| r.mail.role_unread = 1),
+            ("mail_overdue_requests", |r| {
+                r.mail.overdue_requests.push(MailPreview {
+                    from: "codex".into(),
+                    intent: aida_core::mailbox::Intent::Request,
+                    age_secs: 3600,
+                    subject: "route PR".into(),
+                })
+            }),
             ("mail_shared_unread", |r| r.mail.shared_unread = 1),
             ("mail_partial", |r| r.mail.partial = true),
             ("directives_pending", |r| r.worker_directives.pending = 1),

@@ -588,11 +588,16 @@ pub(crate) fn collect_mail_channel(
         Vec::new()
     };
     // The status context's role (TASK-1245: the advisor heartbeat sets
-    // it from a plain env) joins the shared scope. When it is not one of
-    // the verified audience's keys it is not recipient authority, so its
+    // it from a plain env) is the seat's role channel. When it is not one
+    // of the verified audience's keys it is not recipient authority, so its
     // unread mail is only COUNTED, by the source-local operator
     // inspection (this checkout plus the store), never projected.
     // trace:TASK-1245 trace:STORY-1843 | ai:claude
+    // BUG-HOME-040: the role's mail is the seat's DIRECT mail, so the
+    // resolved role key is passed apart from the shared scope.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+    let now = chrono::Utc::now().timestamp();
+    let mut role_key = None;
     let mut inspected_role = None;
     if let Some(raw) = ctx_role
         .map(str::to_string)
@@ -605,23 +610,30 @@ pub(crate) fn collect_mail_channel(
             .and_then(|a| a.keys().next().map(str::to_string))
         {
             Some(key) => {
-                if key != operator && !shared.contains(&key) {
-                    shared.push(key);
+                shared.retain(|s| *s != key);
+                if key != operator {
+                    role_key = Some(key);
                 }
             }
             None if role != operator => inspected_role = Some(role),
             None => {}
         }
     }
-    let mut channel = awaiting_you::split_mail_scopes(
+    let mut channel = awaiting_you::split_mail_scopes_for_role(
         &operator,
+        role_key.as_deref(),
         &shared,
         &unread,
         &std::collections::HashMap::new(),
+        now,
     );
     if let Some(role) = inspected_role {
         let counted: std::collections::HashSet<&str> =
             unread.iter().map(|m| m.id.as_str()).collect();
+        // COUNT-ONLY: an inspected role is not recipient authority, so its
+        // mail never reaches a sender, subject or overdue item — only the
+        // verified `role_key` path above names role mail.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
         let inspected = inspected_role_unread(project_root, &role, &counted);
         if inspected > 0 {
             channel.shared_unread += inspected;
@@ -1468,6 +1480,10 @@ pub(crate) fn handle_awaiting_command(
         let report = collect_awaiting_report_inner(&project_root, backend, &ctx, true, true);
         if let Some(line) = report.compact_line() {
             println!("{line}");
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
+            for line in report.mail_preview_lines() {
+                println!("{line}");
+            }
         }
         // Re-teach a compacted session its type contract while this worktree
         // still holds the spec lease. `queue done` removes/releases that lease,
