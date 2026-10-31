@@ -2017,7 +2017,7 @@ fn parses_agent_ls_ended_flag() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "ls", "--ended"]).unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
-            AgentCommand::Ls {
+            AgentCommand::List {
                 all: false,
                 stale: false,
                 ended: true,
@@ -4732,4 +4732,56 @@ fn codex_resume_carries_exactly_one_no_daemon() {
     let mut claude = vec!["--no-daemon".to_string(), "--no-daemon".to_string()];
     dedupe_codex_no_daemon("claude", &mut claude);
     assert_eq!(claude.len(), 2);
+}
+
+// trace:TASK-B6B1278890774EF993D2EBC327862470-117 | ai:codex
+#[test]
+fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
+    for name in ["list", "ls", "status"] {
+        for flag in ["--all", "--stale", "--ended"] {
+            let args: Vec<String> = ["aida", "agent", name, flag]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            let rewritten = crate::rewrite_agent_default_new(&args);
+            assert_eq!(rewritten, args, "listing must never turn into agent new");
+            let cli = crate::command_registry::try_parse_from(rewritten).unwrap();
+            let parsed = &cli
+                .command
+                .registered::<crate::agent_launch::AgentArgs>()
+                .inner;
+            let (all, stale, ended) = match parsed {
+                AgentCommand::List { all, stale, ended } if name != "status" => {
+                    (*all, *stale, *ended)
+                }
+                AgentCommand::Status { all, stale, ended } if name == "status" => {
+                    (*all, *stale, *ended)
+                }
+                other => panic!("wrong command for {name}: {other:?}"),
+            };
+            assert_eq!(
+                (all, stale, ended),
+                (flag == "--all", flag == "--stale", flag == "--ended")
+            );
+        }
+    }
+    let args: Vec<String> = ["aida", "agent", "list-roles", "--json"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let cli =
+        crate::command_registry::try_parse_from(crate::rewrite_agent_default_new(&args)).unwrap();
+    assert!(matches!(
+        cli.command
+            .registered::<crate::agent_launch::AgentArgs>()
+            .inner,
+        AgentCommand::ListRoles { json: true }
+    ));
+    let mut command = crate::command_registry::built_command();
+    command.build();
+    let agent = command.find_subcommand("agent").unwrap();
+    assert!(agent.get_subcommands().any(|sub| sub.get_name() == "list"));
+    assert!(!agent.get_subcommands().any(|sub| sub.get_name() == "ls"));
+    let list = agent.find_subcommand("list").unwrap();
+    assert!(list.get_visible_aliases().any(|alias| alias == "ls"));
 }
