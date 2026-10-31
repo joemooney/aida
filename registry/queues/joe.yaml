@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a190c5-d865-72c2-b458-f190a0753c98
-  position: 99000
-  added_by: joe
-  note: auto-queued by `session end` (01a1908a); covers 1 spec
-  added_at: 2026-10-31T07:05:14.759621994Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a18f57-8c18-7600-bf0a-701c6a5e324d
   position: 102000
   added_by: joe
@@ -20,5 +12,13 @@
   added_by: joe
   note: auto-queued by `session end` (01a190c4); covers 1 spec
   added_at: 2026-10-31T08:10:35.884303919Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a190c5-d865-72c2-b458-f190a0753c98
+  position: 104000
+  added_by: joe
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-10-31T08:31:32.309174444Z
   for_role: reviewer
   added_by_machine: imac
