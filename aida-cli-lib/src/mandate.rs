@@ -817,14 +817,8 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
         crate::cli::MandateAction::Renew { duration } => {
-            // Same parser and 24h cap as `start --ttl`, named for this flag.
-            let ttl = duration
-                .as_deref()
-                .map(|raw| {
-                    parse_ttl(raw)
-                        .map_err(|e| anyhow::anyhow!(format!("{e:#}").replace("--ttl", "--for")))
-                })
-                .transpose()?;
+            // Same grammar and 24h cap as `start --ttl`, named for this flag.
+            let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
             let (m, renewal) =
                 renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
             if let Some(root) = &audit_root {

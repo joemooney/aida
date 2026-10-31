@@ -128,7 +128,13 @@ fn renew_for_an_explicit_duration_is_capped_like_start() {
     )
     .unwrap();
     assert_eq!(m.expires_at, at + Duration::minutes(90));
-    // The CLI parses `--for` with start's parser: the same 24h maximum.
+    // The CLI parses `--for` with start's grammar: the same 24h maximum,
+    // and its own message (no "use renew" hint to someone renewing).
+    let err = format!("{:#}", parse_renew_for("25h").unwrap_err());
+    assert!(err.contains("--for may be at most 24h"), "{err}");
+    assert!(!err.contains("mandate renew"), "{err}");
+    assert!(format!("{:#}", parse_renew_for("x").unwrap_err()).contains("--for"));
+    assert_eq!(parse_renew_for("24h").unwrap(), MAX_TTL);
     assert!(parse_ttl("25h").is_err());
     assert_eq!(parse_ttl("24h").unwrap(), MAX_TTL);
     // The gate never writes more than the cap, whatever it is handed.

@@ -480,21 +480,40 @@ pub(crate) fn recheck(
 /// Parse `--ttl`: `<n>h` or `<n>m`, more than zero and at most [`MAX_TTL`].
 // trace:STORY-1698 | ai:claude
 pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
+    parse_duration_flag(
+        raw,
+        "--ttl",
+        "--ttl may be at most 24h; extend an active mandate with `aida mandate renew`",
+    )
+}
+
+/// Parse `aida mandate renew --for`: the same grammar and [`MAX_TTL`] cap as
+/// `--ttl`, with errors that name `--for` and no "use renew" hint.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac139435 | ai:claude
+pub(crate) fn parse_renew_for(raw: &str) -> Result<Duration> {
+    parse_duration_flag(
+        raw,
+        "--for",
+        "--for may be at most 24h; a renewal runs at most 24h from now",
+    )
+}
+
+fn parse_duration_flag(raw: &str, flag: &str, too_long: &str) -> Result<Duration> {
     let raw = raw.trim().to_ascii_lowercase();
     let (digits, unit) = raw.split_at(raw.len().saturating_sub(1));
     let n: i64 = digits
         .parse()
-        .with_context(|| format!("invalid --ttl `{raw}`: use hours or minutes, e.g. 8h or 90m"))?;
+        .with_context(|| format!("invalid {flag} `{raw}`: use hours or minutes, e.g. 8h or 90m"))?;
     let ttl = match unit {
         "h" => Duration::hours(n),
         "m" => Duration::minutes(n),
-        _ => bail!("invalid --ttl `{raw}`: use hours or minutes, e.g. 8h or 90m"),
+        _ => bail!("invalid {flag} `{raw}`: use hours or minutes, e.g. 8h or 90m"),
     };
     if ttl <= Duration::zero() {
-        bail!("--ttl must be more than zero");
+        bail!("{flag} must be more than zero");
     }
     if ttl > MAX_TTL {
-        bail!("--ttl may be at most 24h; extend an active mandate with `aida mandate renew`");
+        bail!("{too_long}");
     }
     Ok(ttl)
 }

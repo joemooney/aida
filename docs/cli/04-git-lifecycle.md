@@ -501,7 +501,7 @@ specs human-only.
 **Renewing.** `aida mandate renew [--for <duration>]` extends the active
 mandate in place, so you do not retype its flags. Its scope, flags, reason and
 id stay the same, and anything already acting under it (queued dispatches, the
-drive tick) keeps working. The new expiry is now plus the duration: by default
+drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
 the duration it was started with, at most `24h`. Like start and stop, it needs
 a human at an interactive terminal, and it refuses when no mandate is active.
 Each renewal is recorded on the mandate (who renewed it, the old and the new
