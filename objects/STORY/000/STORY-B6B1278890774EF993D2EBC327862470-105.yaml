@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T17:29:46.014705391Z
+modified_at: 2026-10-31T17:31:10.306419454Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -105,6 +105,13 @@ comments:
   content: 'IMPLEMENTER DEVIATION (needs a follow-up TASK; I could not file one because the sandbox refused both the aida add counter write and the MCP file_finding tool): the node-1 to b6b local-ID migration with BUG-1-mmm aliases from the 2026-10-29 22:00 ruling did NOT ship. Requirement has no per-object alias list, and node_alias maps whole labels, so it cannot map BUG-1-mmm to a differently numbered b6b id. The migration needs a new former_ids field indexed by every resolver (git_backend numeric_twin_stems/agreed_id_holder, the store''s spec_id_index_exact, cache.db, id_collisions, admission ownership), which is its own data-model sketch. The 411 node-1 specs that have agreed ids resolve bare today. The backfill gives the 1 node-1 spec without an agreed id an agreed id.'
   created_at: 2026-10-31T17:29:46.014705391Z
   modified_at: 2026-10-31T17:29:46.014705391Z
+  session_id: 01a192d33b4e
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19303-ec62-71a1-9252-05b6ca6a6809
+  author: joe
+  content: 'BACKFILL DRY RUN (Q3), run on a COPY of the live store at 2026-10-31 ~10:20; nothing was written to the live store. Command: aida doctor --fix agreed-ids --dry-run --mapping FILE. It plans 406 agreed ids: BUG 53 (BUG-2317..BUG-2369), EPIC 3 (EPIC-609..611), FAQ 8 (FAQ-140..147), SPIKE 3 (SPIKE-705..707), STORY 161 (STORY-2041..STORY-2201), TASK 178 (TASK-2415..TASK-2592). Why 406 and not the census''s 270: 397 b6b specs now have no agreed id (filed since 10-29), plus 8 FAQ specs from node a65b4bf5..., plus 1 node-1 spec (TASK-1-499). Each type continues past the highest number used anywhere: native or agreed ids, block range_end, and the merge-gate counter (registry/agreed_counters.toml lags far behind, e.g. STORY=82). Apply needs the root and --yes. It sets agreed_id, raises agreed_counters to the max assigned, and appends one fully spent ledger block per type, all in one store commit. spec_id is never changed, so local ids, trailers and trace comments keep resolving. Post-merge advisor steps: (1) aida node enroll-root in /home/joe/ai/aida; (2) aida doctor --fix agreed-ids --dry-run, re-check the counts (numbers shift if specs were filed meanwhile); (3) aida doctor --fix agreed-ids --yes. Exclude the 8 a65b FAQ specs only if you want b6b alone; merge-gate would give them agreed ids anyway.'
+  created_at: 2026-10-31T17:31:10.306419454Z
+  modified_at: 2026-10-31T17:31:10.306419454Z
   session_id: 01a192d33b4e
   harness_version: 2.1.316 (Claude Code)
 history:
