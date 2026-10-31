@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T16:28:28.424146309Z
+modified_at: 2026-10-31T17:29:46.014705391Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -100,6 +100,13 @@ comments:
   created_at: 2026-10-31T16:28:28.424142048Z
   modified_at: 2026-10-31T16:28:28.424142048Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19302-a31e-7f03-964e-71e979c5ca11
+  author: joe
+  content: 'IMPLEMENTER DEVIATION (needs a follow-up TASK; I could not file one because the sandbox refused both the aida add counter write and the MCP file_finding tool): the node-1 to b6b local-ID migration with BUG-1-mmm aliases from the 2026-10-29 22:00 ruling did NOT ship. Requirement has no per-object alias list, and node_alias maps whole labels, so it cannot map BUG-1-mmm to a differently numbered b6b id. The migration needs a new former_ids field indexed by every resolver (git_backend numeric_twin_stems/agreed_id_holder, the store''s spec_id_index_exact, cache.db, id_collisions, admission ownership), which is its own data-model sketch. The 411 node-1 specs that have agreed ids resolve bare today. The backfill gives the 1 node-1 spec without an agreed id an agreed id.'
+  created_at: 2026-10-31T17:29:46.014705391Z
+  modified_at: 2026-10-31T17:29:46.014705391Z
+  session_id: 01a192d33b4e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
