@@ -1,5 +1,6 @@
 id: 01a18d27-18ba-7540-92d9-49f7ad7f463b
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-040
+agreed_id: BUG-2357
 title: 'Advisor never acted on 7 Codex handoffs: the per-turn notice says ''12 shared mail'' with no sender or subject, so role-addressed mail reads as noise'
 description: |-
   2026-10-29/30: codex-implementer-01 sent seven [handoff]/[request] mails to role advisor (21:36 docs round 2 heads; 22:59 PR-3122 needs review routing; 00:04, 01:06, 02:42 PRs ready; 02:44 spike; 07:05 lease refusal). All arrived. The advisor seat's per-turn notice only said 'Awaiting you: ... 12 shared mail', and the inbox was flooded with weeks-old 1970-dated review-watch notices (BUG-HOME-032), so the advisor never opened them. The operator relayed by hand all night, and Codex waited 9+ hours on routing it had asked for at 22:59. Operator: 'that is the big selling point about aida, inter-agent vendor communication.'
@@ -190,6 +191,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6b87-7c73-b5c2-2639240fc83c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.975820289Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2357
 processing_record:
 - id: 01a19049-bcad-74e1-ae09-90c098ca27db
   timestamp: 2026-10-31T04:48:33.965157030Z

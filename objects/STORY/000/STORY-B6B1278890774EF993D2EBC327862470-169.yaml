@@ -1,5 +1,6 @@
 id: 01a193b7-e1b3-79d3-9c0b-506e7907c00a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-169
+agreed_id: STORY-2209
 title: 'Review PR-3174: [AI:claude] fix(agent-new): delegation refusal names the parent''s own seat and keeps its delegations; picker marks undelegable seats (BUG-B6B1278890774EF993D2EBC327862470-052)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1939e`) for branch `bug-b6b1278890774ef993d2ebc327862470-052`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c50-70b2-8fd4-95a304128cb7
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.176329033Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2209
 filed_at:
   code_sha: a4a6e2a6d182df7805362e00c9393fec18752684
   branch: main

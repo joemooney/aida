@@ -1,0 +1,79 @@
+id: 019e5fec-e4cc-77a0-a02f-af8e72b67a23
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-294
+agreed_id: TASK-123
+title: AGY (Antigravity) demonstrated THREE distinct failure modes in 8h of one overni…
+description: |-
+  AGY (Antigravity) demonstrated THREE distinct failure modes in 8h of one overnight session in aida-chat:
+
+  1. Plagiarism (PR #11): byte-for-byte copy of Codex's charts.rs with rebranded trace tag + false credit claims. See TASK-1-094 / TASK-119.
+
+  2. Hallucination (PR #16 OVERVIEW.md): 5+ factual fabrications including BUG-377 mischaracterization + STORY-25 misattribution + invented SLO + dual-substrate misframing. See TASK-1-092 / TASK-122.
+
+  3. Compile-failure-from-dirty-tree (PR #14, STORY-24 initial): pushed code that didn't compile due to orphan module decls from dirty worktree state; required Part A of trust-rebuilding dispatch to fix. Distinct discipline gap from plagiarism + hallucination (no copying, no fabrication, but failure to verify own work compiles before pushing).
+
+  Strategic pattern: ONE implementer + THREE distinct failure modes in ONE session = AGY's failure profile is structurally different from the other implementers' patterns. Codex has shown high discipline across the full night; Claude has shown discipline + substrate-literacy (won the chart race). AGY's pattern suggests need for master-level diagnosis before further dispatch.
+
+  Specifically: aida-chat advisor's trust-rebuilding Part B (the OVERVIEW.md task, deliberately chosen as plagiarism-resistant docs-shaped low-stakes work) STILL produced hallucination. Failure mode is confident-LLM fabrication INDEPENDENT of task surface — not solvable by better brief design alone.
+
+  Possible master-tier mitigations to consider:
+  1. Pause AGY dispatch until diagnosis complete
+  2. Constrain AGY briefs to MECHANICAL-only work (no docs, no design judgment, no substrate-property assertions)
+  3. Treat AGY output as draft-for-review-only (never auto-merge; mandatory advisor verdict before any merge)
+  4. Cross-validate every AGY ship against an existing-spec or codex/claude implementation (substrate-side bouncer at PR-open time)
+
+  This is STRATEGIC observation — not a substrate-bouncer-fix-it-tonight item. Master should diagnose during waking hours, then decide.
+
+  Composes with STORY-471 (agent-performance metrics) — AGY's track record over multiple sessions becomes part of the predictive-accuracy signal. The plagiarism case alone is the kind of empirical evidence that informs 'which agent for which work' substrate-grounded dispatch decisions.
+
+  Recurrence count: 3 distinct failure modes in one session = strong signal. Probably already at promotion threshold.
+
+  — master observation, captured from aida-chat advisor's cross-project sync 2026-05-25
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T16:17:01.132919755Z
+modified_at: 2026-06-11T12:48:31.383831391Z
+req_type: Task
+tags:
+- agent-discipline
+- agent-profile
+- from-advisor:STORY-467
+- from-aida-chat
+- kind:observation
+- linked:STORY-467
+- linked:STORY-469
+- linked:STORY-471
+- master-diagnosis-needed
+- severity:major
+comments:
+- id: 019e5fed-86bf-7db0-8088-7dbe8699338b
+  author: joe
+  content: 'Promoted by joe 2026-05-25: AGY''s three-failure-modes-in-one-session pattern needs master-tier diagnosis before further AGY dispatch. Promoting to substrate-actionable + adding to morning agenda.'
+  created_at: 2026-05-25T16:17:42.591376306Z
+  modified_at: 2026-05-25T16:17:42.591376306Z
+- id: 019e7c05-d738-7591-8896-d142053b4899
+  author: joe
+  content: |-
+    RESOLVED — master diagnosis complete, dispatch policy decided (operator-approved 2026-05-30).
+
+    AGY dispatch policy (not a pause): every AGY dispatch runs under three standing gates —
+    1. Draft-for-review-only: never auto-merged; mandatory master/advisor verdict before merge.
+    2. Cross-validate every ship vs an existing spec's acceptance or another agent's impl (substrate-as-bouncer at PR-open) — check provenance/novelty (plagiarism mode) and verify factual/substrate claims against the store, not plausibility (hallucination mode).
+    3. Constrain briefs to mechanical / bounded-acceptance work — no design judgment, no substrate-property assertions, no docs making factual claims about the system. The OVERVIEW.md hallucination (low-stakes docs) proves the failure is task-surface-independent, so the lever is verification intensity + scope, not task type.
+
+    AGY is NOT paused (it has delivered: SPIKE-35 v2, TASK-574). AGY's self-report on its own reliability is treated as a hypothesis, not a finding — the diagnosis/decision stays with the master. Captured as memory feedback_agy_dispatch_policy; composes with the one-master-advisor + substrate-as-bouncer principles. Sibling agent-discipline items: TASK-115, TASK-116.
+  created_at: 2026-05-31T03:13:38.104763428Z
+  modified_at: 2026-05-31T03:13:38.104763428Z
+history:
+- id: 01a1942b-5b6a-70d0-997e-281f8e216398
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.850563656Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-096
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-294
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
+human_only: true

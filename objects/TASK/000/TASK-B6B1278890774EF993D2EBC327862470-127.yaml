@@ -1,5 +1,6 @@
 id: 01a18d2c-98e4-7f93-ad5f-b37538a0f606
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-127
+agreed_id: TASK-2539
 title: 'docs-only: add OpenCode to docs/competitive-analysis/marketplace-roster.md section D (platforms AIDA coordinates) plus a watch note on OpenCode orchestration plugins'
 description: ''
 status: Completed
@@ -27,6 +28,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b99-70b1-87a5-a6f4ace04ef3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.993338492Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2539
 processing_record:
 - id: 01a18d8a-c7ee-7f03-b39a-65bf74552c1a
   timestamp: 2026-10-30T16:00:45.038485454Z

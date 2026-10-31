@@ -1,5 +1,6 @@
 id: 01a192b7-7115-7c91-9bc4-3bb5ae24c10f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-160
+agreed_id: STORY-2200
 title: 'Review PR-3169: [AI:claude] fix(session-end): seat-clone refusal names every item; an ancestor of origin''s branch counts as pushed (BUG-B6B1278890774EF993D2EBC327862470-051)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1928d`) for branch `bug-b6b1278890774ef993d2ebc327862470-051`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c47-7232-a8b5-7b77fe01903e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.167678063Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2200
 filed_at:
   code_sha: c611187664254175736d3361213f6e53ba3dd9ea
   branch: main

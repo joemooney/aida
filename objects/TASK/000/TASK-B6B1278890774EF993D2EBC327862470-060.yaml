@@ -1,5 +1,6 @@
 id: 01a183aa-3b0b-7d13-8293-00d0c842d38d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-060
+agreed_id: TASK-2473
 title: 'minor: aida-core/src/mailbox_lifecycle/mod.rs:544-546 source_nonce checks the e…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-052, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:12:28.126511904Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-677f-7090-baaf-987961b29e31
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.943620665Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2473
 filed_at:
   code_sha: ff2227fbeeeb11364c751b769cda372b71cfdce3
   branch: main

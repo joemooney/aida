@@ -1,5 +1,6 @@
 id: 01a1816d-a3aa-7360-b538-a270007c0ffc
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-038
+agreed_id: STORY-2078
 title: 'Review PR-3008: [AI:claude] chore(dispatch): register the dispatch-tick schedule job (Refs STORY-1917)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `chore/dispatch-tick-job`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-65e0-77c0-b18b-029ee54c4805
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.528303019Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2078
 filed_at:
   code_sha: 33188d8b5c7097415664e477f3b2d49018844dc5
   branch: chore/dispatch-tick-job

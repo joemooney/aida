@@ -1,0 +1,388 @@
+id: 01a105e2-a1ec-7ef2-83b3-2fa524ffd0fd
+spec_id: DOC-b6b1278890774ef993d2ebc327862470-006
+agreed_id: DOC-6
+title: Entering session-bound seats and delegating child seats
+description: |
+  Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...])"` at an interactive human TTY to establish a session seat. The requested seat must be in the user's team roster; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>` at a TTY. Child delegation is empty by default: list each permitted child seat with a repeated `--delegate-seat`. AIDA launchers issue a distinct grant for each requested child seat; children cannot delegate onward unless explicitly issued delegation scope. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An MCP server captures the grant it starts with, so enter advisor at a TTY and restart/reconnect the server to change its authority.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T07:48:21.100386397Z
+modified_at: 2026-10-15T12:09:35.995841138Z
+req_type: Doc
+tags:
+- factory:2026-10-11
+- factory:night
+- rework:2026-10-11
+relationships:
+- rel_type: References
+  target_id: 01a0d626-b41b-7d82-9b13-939d31ae2bfc
+  created_at: 2026-10-04T07:48:34.088924384Z
+- rel_type: References
+  target_id: 01a10593-033c-71a0-b1dc-abef981b97bf
+  created_at: 2026-10-04T07:48:34.088924384Z
+- rel_type: Parent
+  target_id: 01a1078f-7fc3-7792-9e26-78b839edd634
+  created_at: 2026-10-04T15:37:12.461563974Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 01a1078f-ac5d-7602-8c42-65a0f9e0b344
+  created_at: 2026-10-04T15:37:13.944400036Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 01a1078f-c715-7160-97b9-4c88efd8a9e6
+  created_at: 2026-10-04T15:37:15.534848884Z
+  created_by: joe
+comments:
+- id: 01a11498-7bfa-71d1-b77a-e89f612c8ed6
+  author: joe
+  content: "Code review — DOC-6 / TASK-1591, TASK-1592, TASK-1593\n\nVerdict: NOT ready for aida pr ship\n\nThe library builds, but the test suite doesn't compile, cargo fmt --check fails at 10 locations (so make check-ci-fast is red\nbefore we even get to substance), and three of DOC-6's load-bearing requirements are unimplemented. Nothing is committed yet,\nso there are also no [AI:tool] … (SPEC-ID) commits to drive merge-time completion.\n\nCritical\n\n1. Test suite does not compile (verified, 8 errors in aida-core alone). role_for() was removed from both TeamRoster structs,\nbut 14 test call sites still use it: aida-core/src/team.rs (614, 869–897, 1014, 1039), aida-cli-lib/src/team.rs (518–545), and\naida-server/src/rest.rs:4547. Fix: keep a thin compat accessor rather than touching 14 tests —\n\n/// First rostered seat, for single-seat callers/tests. trace:TASK-1591 | ai:claude\npub fn role_for(&self, user_id: &str) -> Option<&str> {\n    self.roles_for(user_id).first().map(String::as_str)\n}\n\n2. aida-core silently destroys legacy rosters. aida-cli-lib's TeamRoster got a backward-compat deserialize_map_string_or_vec\n(string → one-element vec), but aida-core's TeamRoster did not — it's a plain BTreeMap<String, Vec<String>>. An existing\nteam.toml in the old joe = \"advisor\" format fails core's strict parse, load() does unwrap_or_default(), and the roster reads as\nempty. Then set_role_cas/allow_seat_cas write that empty roster back and (in set_role_cas's case) commit and push it — the\nwhole team's roster is erased on the first role write after upgrade. Fix: move the compat deserializer into aida-core and apply\nit to both structs (or have cli-lib re-export core's). Add a round-trip test that parses the legacy string format.\n\n3. The permission gate never reads the grant — TASK-1593 is unimplemented where it matters. gated_effective_role_for_user\n(aida-cli-lib/src/permissions.rs:290) still sources only AIDA_SESSION_ROLE; AIDA_SESSION_GRANT is consulted in exactly two\nplaces, both display/routing paths (team.rs:356, lib.rs:52699). Worse, the new strict-mode logic in gated_effective_role now\nlets the raw env var select among roster seats: a user rostered [\"implementer\", \"advisor\"] gets advisor at the gate by export \nAIDA_SESSION_ROLE=advisor — no TTY, no grant. That directly contradicts DOC-6: \"AIDA_SESSION_ROLE is only a display/routing\nhint and cannot grant authority.\" Fix: in gated_effective_role_for_user, resolve the seat from a validated grant and pass that\n(not the env var) as the seat-selection input; env alone should never move a user off roster_roles[0] in strict mode.\n\n4. allow_seat_cas / disallow_seat_cas are CAS in name only. Compare set_role_cas: pull-rebase retry loop, migrate_integer_keys,\ngit add/commit/push, reset-on-rejected-push. The new functions (aida-core/src/team.rs:1048–1075) do a bare fs::write — no\ncommit, no push, no retry, no integer-key migration. The roster edit sits uncommitted in the store worktree, is never shared\nwith the team, and is lost on the next pull. Also: disallow_seat_cas for an unknown user inserts a stray user = [] entry. Fix:\nextract set_role_cas's loop into mutate_roster_cas(store_root, user_id, f: impl Fn(Vec<String>) -> Vec<String>, commit_msg) and\nimplement set/allow/disallow through it.\n\nImportant\n\n5. role enter issues grants without checking the roster. DOC-6: \"The requested seat must be in the user's team roster.\"\nhandle_role_enter (and handle_role_add) call save_grant for any seat name unconditionally. Once finding 3 is fixed this becomes\nthe actual authority boundary, so the roster check must happen at grant time, with a clear refusal naming aida team \nallow-seat.\n\n6. Grants are not session-bound and never expire. No TTY check at role enter (DOC-6 says \"at an interactive human TTY\"), no\ncreated-at/expiry/PID in SessionGrant, no cleanup — .aida/run/grants/ accumulates forever and any process that learns a UUID\nholds the seat indefinitely. Minimum: IsTerminal check on stdin at enter, a created_at + TTL honored by role_from_grant, and\nopportunistic sweep of expired files.\n\n7. --delegate-seat is write-only dead code. delegate_seats is parsed, stored in the grant JSON, and never read anywhere (rg \ndelegate_seats finds only definition sites). No launcher issues child grants, so TASK-1592's delegation half doesn't exist.\nEither implement consumption or split it out of this PR so the flag isn't shipped as silently inert.\n\n8. Path traversal in role_from_grant (session.rs:7258). grant_id comes straight from the environment into\njoin(format!(\"{}.json\", grant_id)) — AIDA_SESSION_GRANT=../../../tmp/evil reads an attacker-placed JSON and trusts its seat.\nFix: uuid::Uuid::parse_str(grant_id)? before building the path.\n\n9. Seat matching is un-canonicalized, and allow-seat validates nothing. Both resolvers compare rr == r on raw strings then\ncanonicalize afterwards — roster Advisor vs env advisor silently falls back to roster_roles[0]. And unlike handle_team_set_role\n(which canonicalizes and checks known_role_names()), handle_team_allow_seat writes any typo straight into the roster. Fix:\ncanonicalize both sides before comparing; mirror set-role's validation in allow-seat.\n\nMinor\n\n- Traceability fails the project standard. One trace comment total (// trace:TASK-1592 atop session.rs, missing  | ai:<tool>).\n  Every new block needs one: TASK-1591 on the roster/Vec changes, compat deserializer, allow/disallow plumbing; TASK-1592 on\n  grant save/emit and the CLI flag; TASK-1593 on both resolver changes.\n- Stale docs: gated_effective_role's doc still says strict mode means \"env ignored\"; cli-lib roles_for has the old role_for doc\n  line stacked above the new one; TeamMemberDto.role's // Legacy field for UI compatibility should be a /// doc comment.\n- Duplicated grant-resolution logic in team.rs:356 and lib.rs:52699, with two different project-root derivations\n  (store_root.parent() vs find_project_root()). Extract one helper.\n- emit_role_enter_eval prints grant_id without sh_single_quote — safe for a UUID, but inconsistent with every neighboring\n  export.\n- Zero new tests for any of this: no compat-parse test, no grant save/load round-trip, no multi-seat resolution cases, no\n  allow/disallow tests.\n- Mixed-version hazard worth a release note: the new serializer writes joe = [\"advisor\"], which old released binaries parse as\n  empty roster (same unwrap_or_default failure as finding 2, in reverse).\n\nSuggested order of work\n\nFindings 1 and 2 plus cargo fmt get you to green CI; 3, 5, and 8 are the security substance of DOC-6 and should land in the\nsame PR; 4 makes the new commands actually durable; 6 and 7 are honest scope questions to settle with the spec owner\n(implement, or narrow the PR and leave TASK-1592's delegation half open). Given the architecture-tagged specs, the resolver\nsemantics change in finding 3 likely also wants a sketch on DOC-6 and advisor signoff per repo rules before the fix round.\n"
+  created_at: 2026-10-07T04:21:39.962878056Z
+  modified_at: 2026-10-07T04:21:39.962878056Z
+- id: 01a11d25-5791-7ea1-b538-62d9dd8187c6
+  author: mcp
+  content: |
+    PROXY DECISION (orchestrator for Joe): current independent STATIC delivery audit relayed unchanged below. Most historical nine are resolved; current source/runtime acceptance remains partial. Dispatch only bounded B3 maintained documentation/source-COMMENT repair under DOC-6; no functional B1/B2/R1 code changes, no authority widening, no new framework. B1/B2/R1 findings route to the existing externally assigned authority/roster owner for disposition, without reopening/queueing/taking over its reserved specs. DOC-6 must not be marked Done/Completed from this partial documentation slice. Preserve batch C maintained-home/reference moves and no false universal child-grant/human-only roster runtime claims. Fresh independent doc review required after patch.
+
+    # DOC-6 current delivery — fresh independent static audit
+
+    Audit date: 2026-10-08. Reviewer: fresh native reviewer `/root/doc6_fresh_native_reviewer`. Root is the sole canonical relay. This is an independent source/history/documentation audit, not a recorded AIDA review verdict or completion decision.
+
+    **Disposition: DOC-6 is partially delivered at the requested pin. Do not repeat the historical nine as nine current defects. Most of their original mechanisms have been repaired. Maintained documentation still contradicts the contract, and two bounded launcher/roster authority paths do not implement the signed contract completely. Current execution proof is unavailable in this static-only audit.**
+
+    No implementation, tests, build, Cargo, CI, forge/network inspection, role entry, grant creation, actor/TTY simulation, claim, queue, status edit, PR, merge, installation, activation, hold, recovery, mail, or canonical comment mutation was performed. Only the distinct audit and its input/provenance files were written. No prior unfinalized DOC-6 audit was used. A textual locator search incidentally returned unrelated batch/handoff lines while resolving the user's compact `C069...` notation; no verdict or test result from those reports is adopted below.
+
+    ## Exact evidence boundary
+
+    | Evidence | Exact identity | Meaning |
+    |---|---|---|
+    | Requested delivery baseline P | `bf65220959c7601427247286abc7eb16278af5a5` | Every source line below defaults to this commit, not a moving checkout. |
+    | P tree | `77bdc293f818c791ffd9b6a26e4e8552722ce5ca` | Verified with local Git object resolution. |
+    | Observed local HEAD/main | `c67728c1dcaf8a577539d920bdc6a3c86126cebb`, tree `07f9dfbd08ca416891c62247b1ffcf85f0a4bfd2` | Its parent is P. Local branch observation only; no remote/publication claim. |
+    | Pending batch C | `0695776070406a4a082e3bec8405e0e20f05be25`, tree `34014208cffd3a511a9472bb17be9e1e1ccca53c` | The leading C in the request is the batch label. Parents are `dbe412fbc1dba4ea1faddaf59cd4274489ada20e` and P. Read-only overlap inspection; not credited as P delivery. |
+    | Canonical requirement read | MCP `show_requirement`, `include_git:false` | DOC-6 resolves to **DOC-1-203**. Full description and sole historical review comment captured afresh. TASK-1591/1592/1593, ADR-66, STORY-1473, TASK-1594/1597, and BUG-1808 were also captured. |
+
+    The current canonical labels were DOC-1-203 Approved, TASK-1591/1592/1593 Completed, ADR-66 Approved (description says Accepted), STORY-1473 Completed, and BUG-1808 In Progress. Those labels do not establish code delivery, runtime correctness, publication, or acceptance. Canonical input text is retained as `DOC6_FRESH_INPUT_*.md`; source blobs and text captures have SHA-256 hashes in `DOC6_CURRENT_DELIVERY_INDEPENDENT_AUDIT_FRESH_INPUT_HASHES.json`.
+
+    Local post-P c677 was inspected only to delimit evidence: it changes claim/event seat attribution to grant resolution, associated test fixtures, a role-enter prompt guard, CI stdin, and trace positioning. It does not alter the P `seat_authority.rs`, `team_cmd.rs`, `session.rs`, or contradictory documentation paths. Its TASK-1593 subject does not prove delivery of every TASK-1593 acceptance surface. The externally owned private candidate, any later refs, and any unfinalized report are not credited as merged delivery. No reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 branch or state was changed.
+
+    ## Contract and canonical decision ordering
+
+    DOC-1-203 has a descriptive contract, not a separately numbered Acceptance section. The table below splits every substantive sentence into assessable obligations; it does not add a future framework requirement.
+
+    The current ADR-66 description records acceptance on 2026-10-04, PR #2418, review at `1f1aa6fd`, and merge `b602a5d`. STORY-1473's comments separately record Joe's 2026-10-03 explicit-delegation decision, independent sketch signoff, and an advisor's review of `5cc9c028`; these are distinct historical checkpoints, not a claim that those heads equal P.
+
+    TASK-1594 records the subsequent decisions: (A) direct TTY issuance uses the actual subject as principal, (B) headless sub-launches remain fail-closed and a prompt is a separate UX task, (C) MCP revalidates on every call, (D) only the human-at-TTY **hold/emergency-brake** leg is an exception; orchestrated hold authority must use the grant. TASK-1597 permits an explicit default-no delegation prompt. These are binding amendments; an opted-in prompt is not an empty-default violation, and the hold exception does not authorize roster writes by managed agents.
+
+    The checked-in dated sketch is a historical design record. It should not be rewritten as though its original wording already contained the later amendment. Maintained docs should point to the accepted/current ADR and explain the per-call behavior.
+
+    ## Full DOC-6 criterion table
+
+    All source references here are at P. “Implemented” means inspected source supports the behavior; it is not an executed acceptance pass.
+
+    | Criterion | Current source and prose evidence | Assessment / remaining acceptance |
+    |---|---|---|
+    | Interactive `role enter <seat>` establishes a session seat | `role_cmd.rs:179` handler; `:244` loads role before issuance; `:291` calls `issue_direct`; `:655` exports quoted grant. `seat_authority.rs:159` requires `require_direct_human` (`:136–155`: stdin+stderr terminals, rejects nonempty AIDA_AGENT_NAME/TYPE). | Implemented source. Actual human CLI positive and refusal witnesses unverified. |
+    | Selected seat is within invoking user's roster | `seat_authority.rs:166–170` binds subject/principal and refuses roster-denied choice; `roster_allows:93–101`; no ambient-principal inheritance. | Implemented for canonical seat spelling. Mixed-case legacy spelling remains a limited compatibility issue in old finding 9. |
+    | Multi-seat roster and allow/disallow CLI exist | Core `team.rs:50–79` scalar/array input, array serializer; `:101` seats, `:117` legacy accessor. CLI `team_cmd.rs:260/285`, wrappers `team.rs:392/397`, CLI enum `cli.rs:4111/4115`. | Implemented source; absent-user disallow no longer creates an empty entry. Commit/push retry is real, not the old bare write. |
+    | Roster writes require human at interactive TTY | `team_cmd.rs:207/246/265/290` call `require_direct_tty`, which tests terminal presence only. Direct grant issuance separately uses the stronger managed-agent discriminator. | Partial: non-TTY refusal exists, but known managed agent at a TTY reaches roster writer. Current blocker B2. No actual roster write attempted. |
+    | Delegation empty by default; repeated explicit selector | `cli.rs:2280–2284` Vec flag; `role_cmd.rs:257–292`; optional advisor prompt `:284` default false, only direct TTY, no managed agent. `issue_direct:182–189` canonicalizes/deduplicates and enforces roster. | Implemented source, consistent with TASK-1597 opt-in amendment. No TTY prompt behavior executed. Documentation needs flag/example in maintained roles guide. |
+    | Each requested child receives distinct scoped grant | `issue_child:235–256` new grant ID and new session ID; `validate_child_delegation:211–233` parent scope + current roster. FG/BG `lib.rs:32535–32560` / `:29633–29662` clear inherited handle then issue selected grant; queue `queue_cmd.rs:12418–12426` passes it explicitly. | Implemented major paths, not universal: reachable standalone Claude resume inherits parent handle. B1. |
+    | Child cannot delegate onward without explicitly issued scope | `issue_child:249` always empty; parent lookup enforces delegable set. No new scope is inferred from roster membership. | Correct for issued children. Standalone resume is not issued a child at all and can carry parent delegation; B1. No requirement to invent a new recursive-scope UI. |
+    | SESSION_ROLE is hint, not authority | `permissions.rs:280–292`, `team.rs:361–367`, `lib.rs:53246–53253` use validated seat; `has_advisor_authority:53615–53639` uses it; MCP `role_active_env:719` same resolver. | Historical gate defect 3 resolved. Old pure resolver still has env-based logic, but inspected production wrapper does not call it. This is not an exhaustive executed proof for every CLI. Prose remains wrong at `docs/cli/06-roles-sessions.md:23/27`. |
+    | Session-bound file-backed handle and failure validation | `SeatGrant:17–31` principal/subject/session/parent/expiry/revocation; UUID path check `:41–55`; current validation `:104–129`; 24-hour limit `:14/202`; child expiry `:252`; revoke `:259`. | Implemented accepted local-handle model, subject-bound, not PID-bound. No OS anti-replay claim. Actual expired/malformed/subject-mismatch CLI witnesses not run. B1 shows why launcher plumbing matters despite these fields. |
+    | MCP captures server grant, caller hint cannot reseat it | `mcp.rs:719–720` calls `current_seat` against server process env on each call; `:737–752` advice; authority functions `:6221/6229`; role-enter tool is peek-only (`:6324–6327`, `:8388`). | Implemented process-env capture plus per-call validation, as current ADR-66 specifies. It is not a frozen startup authorization decision. Actual reconnect/revocation parity witness unverified. |
+    | Honest residual same-user boundary | Committed ADR file `:34–40` explicitly says grant-handle/drain-token replay remains possible, broker undeployed, BUG-1669/SPIKE-91 references. Canonical ADR likewise excludes OS boundary. | Delivered historical prose. Do not make BUG-1808 publication or an OS broker a blanket prerequisite for this DOC. |
+    | Usable maintained documentation of the full workflow | MCP setup docs and first-project guidance delivered under b602a5d (below). Maintained roles guide still recommends env elevation; checked-in ADR/index still Draft; delegate flag not documented in that guide. | Partial documentation delivery; bounded doc-only B3. Completion cannot be inferred from either child counters or existing doc commits. |
+
+    ## Historical nine — verified present disposition
+
+    | Old finding | Disposition at P | Exact source/support evidence and limits |
+    |---|---|---|
+    | 1. Missing `role_for` breaks compilation at 14 callers | **Resolved mechanism; current whole-suite compilation unknown.** | Core `TeamRoster::role_for`, `aida-core/src/team.rs:117–121`, and CLI-lib `team.rs:287–290` both exist. Existing callers now resolve to an accessor. No compiler/fmt run here; historical “8 errors” and “10 fmt locations” are not current measurements. |
+    | 2. Legacy scalar roster fails core parse and is erased | **Resolved for stated legacy-scalar defect.** | Core `SeatList::deserialize:50–65` accepts `Legacy(String)` and `Many(Vec<String>)`; serializer is transparent, `TeamRoster:75–79`. CLI equivalent `team.rs:228–240`. Actual legacy-input tests appear in CLI `team.rs:532–541`; core fixtures use scalar input. General malformed-file `unwrap_or_default` at core `:97` still exists, but that is not evidence legacy strings fail; no blanket corruption/transaction redesign added to this audit. |
+    | 3. Permission gate trusts raw SESSION_ROLE and never reads grant | **Resolved in named gate.** | `permissions::gated_effective_role_for_user:280–292` calls shared current seat and defaults implementer. `lib::effective_role_with_roster:53246` and `mcp::role_active_env:719` agree. Pure `gated_effective_role:251` is legacy logic; wrapper does not use it. Existing `seat_authority::tests::env_role_alone_confers_no_seat_and_grants_fail_closed:390` is supporting test source, not an executed witness. |
+    | 4. allow/disallow CAS only bare fs::write; unknown removal creates [] | **Resolved original mechanism.** | Core `allow_seat_cas:290`, `disallow_seat_cas:296` -> `update_seats_cas:300`: migration `:323`, no-change return `:338`, remove empty member `:341`, add/commit `:349–352`, push/retry `:356–364`, pull-rebase after rejection `:318`. This does not certify concurrency or future immutable publication. |
+    | 5. role enter/add issue any seat without roster check | **Resolved.** | `issue_direct:164–189` checks direct human/roster/delegation; `role_cmd::handle_role_enter:291`; `handle_role_add:507–518` calls same issuer, and refused issuance enters label-only; emitted no-grant branch removes stale grant (`:649–659`). |
+    | 6. No TTY, lifetime, binding, expiry or revocation | **Resolved principal mechanism under accepted ADR; cleanup/PID claim not expanded.** | TTY/direct-human `seat_authority:136–155`, record `:17–31`, subject check `:110`, expiry `:109`, roster `:111`, parent validation `:115–127`, revoke `:259`. No automatic expired-file sweep was established; expiry is honored, so retained expired files are not indefinite authorization. Accepted schema uses fresh session ID/subject and concedes same-UID copying; do not require PID/immutable publication retroactively. Runtime lifecycle positives remain unknown. |
+    | 7. delegate-seat write-only; no launcher consumes it | **Original dead-code claim resolved; universal child-issuance remains partial.** | `validate_child_delegation:216–231` consumes set; `issue_child:235` and enumerated launchers actively use it. Specific current counterexample is standalone Claude resume, B1. Do not say all launchers lack delegation. |
+    | 8. grant path traversal from arbitrary env string | **Resolved.** | `grant_path:41–45` parses UUID before path construction; `read_grant:52` checks record ID. No old session.rs string-join resolver is the current authority path. No path traversal probe was run. |
+    | 9. Raw case/alias matching, allow-seat accepts typo | **Partially resolved; case normalization remains limited.** | `team_cmd::handle_team_allow_seat:266–273` now validates known seats, so arbitrary typo acceptance is fixed. `roster_allows:99` calls core `canonical_role`, but core `team.rs:441–446` maps `dialog` only and otherwise preserves case; CLI `canonical_role_name`, `lib.rs:23736–23752`, also preserves ordinary build-seat case. Thus legacy `Advisor` does not equal request `advisor`; raw membership comparisons remain in core `update_seats_cas:326/335`. This is a current bounded compatibility residue of the old finding, not privilege escalation. See R1 below. |
+
+    The old minor claims also need separation: trace-tagged authority/roster implementation and tests now exist; “one trace total” and “zero new tests” are obsolete. `emit_role_enter_eval:655` now quotes the grant. Duplicate grant resolution has been replaced by the shared seat-authority validator, although `team.rs:364` and `permissions.rs:287` still derive the project via store.parent while lib resolves the project root; this audit has no observed failing layout witness. Stale comments remain: `permissions.rs:273–279` describes old permissive fallback despite the new body; `team.rs:357–360` likewise describes env authority. These are doc-only repairs. No inference was made from a zero trace search count. Mixed-version array-write compatibility should be made explicit in maintained rollout guidance; no old binary was tested here.
+
+    ## Numbered actionable current blockers
+
+    ### B1 — Standalone Claude conversation resume retains the parent seat/grant
+
+    **Class:** functional source gap in externally owned authority/launcher scope. **Location:** `lib.rs:26953` (`SessionCommand::Resume`) -> `session.rs:633` (`resume`) -> `:4387` (`exec_resume_command`) -> `:4405` (`exec_claude_resume`).
+
+    **Observed fact:** the Claude branch at `:4393` passes `None` for grant_id. `Command::new("claude")` at `:4412` only sets GRANT_ENV when Some; it does not remove an inherited handle. It also does not replace AIDA_USER or issue/validate a requested child seat. The command reaches `exec` at `:4426` (or status on non-Unix). Codex/Antigravity branches here print a command instead; this finding is specifically the executable Claude branch.
+
+    **Causal authority consequence:** a valid same-subject parent grant remains valid under `current_grant`: subject is `current_user_id` (`lib.rs:97831–97837`, AIDA_USER/USER/USERNAME); both are inherited on this branch. Validation checks expiry/roster/revocation, but does not compare its session_id to a new process/session identity. Therefore a parent handle that was valid immediately before resume can resolve the same seat afterwards and still carries the parent's delegation scope. This is a source-derived conditional consequence, not a claim that every inherited handle works or that a live exploit was executed. It is distinct from stealing another user's token.
+
+    **Required outcome:** the supported resume entrypoint must obtain/pass an explicitly authorized distinct child grant (empty default delegation), or refuse before launching when it cannot resolve that authority. It must not silently inherit the parent handle. The DOC-6 sentence and signed sketch `:21–25`, `:45–53`, `:103–109`, `:130–132` already require this; no new publisher/framework is needed to state the gap. If existing owner work defines verified continuation rather than a new child for this entrypoint, root must obtain that actual signed contract and proof; none is established by this source path.
+
+    **Test evidence:** existing issued-child checks at `seat_authority.rs:423–432` establish empty child sets only for calls to issue_child. They do not witness this None branch. Required future evidence is the actual standalone resume branch with a controlled vendor fixture capturing the supplied handle/subject, including parent empty delegation refusal, authorized distinct child positive, and no parent-delegation inheritance. No test authored or executed by this reviewer.
+
+    ### B2 — Roster CLI handlers enforce terminal presence but omit known-managed-agent exclusion
+
+    **Class:** functional source gap, externally owned roster/authority work. **Location:** `team_cmd.rs:260` / `:285` and sibling set/unset handlers `:207/246`; production dispatch in `git_backend_cmd.rs:1473–1487` and `node_cmd.rs:463–477`.
+
+    **Observed fact:** allow/disallow calls `require_direct_tty` before write. That helper at `seat_authority.rs:136–141` checks only stdin and stderr terminal status. It does not call `require_direct_human`, whose `:148–154` already rejects nonempty AIDA_AGENT_NAME/TYPE for direct issuance. A known managed foreground agent with real terminals is therefore not rejected on that basis before the roster CAS writer. This does not allege forged TTY or malicious same-UID isolation; it is an ordinary caller classification omitted at a human-only surface.
+
+    **Required outcome:** preserve real human-at-TTY roster positives and deny known managed-agent roster writes before mutation, using the existing direct-human boundary or a canonically approved equivalent. Current ADR-66 “Roster writes require a human at an interactive TTY” and signed sketch `:28/58/74/134` establish the obligation. The hold emergency-brake exception is unrelated.
+
+    **Test evidence:** `role_cmd.rs:1371` tests non-TTY role issuance, not managed-agent roster writes. REST's roster endpoint is separately blocked (`aida-server/src/rest.rs:1226`, test `:4501`); that does not prove CLI coverage. Required future evidence is human TTY positive plus marked managed-TTY and non-TTY roster refusal with unchanged roster/store. No human/TTY/role env or roster witness was manufactured here.
+
+    ### B3 — Maintained roles/ADR documentation contradicts delivered grant semantics
+
+    **Class:** bounded doc-only repair; it does not authorize source changes or require BUG-1808 completion.
+
+    **Observed facts:**
+
+    1. `docs/cli/06-roles-sessions.md:23` says approval gates read SESSION_ROLE and everything authority-gated keys off it; `:27` explicitly recommends env-prefix advisor elevation. Replace with the actual grant issuance/roster ceiling/hint distinction and a short repeated `--delegate-seat` example, empty default and explicit prompt opt-in, child grants, MCP restart plus per-call validation, and residual same-user limit.
+    2. `docs/aida/05-decisions/ADR-66-tty-established-session-bound-seats.md:3–4/42–55` still says Draft and startup-only wording; index `README.md:12` says advisor signoff pending. Reconcile these maintained representations to the full current canonical ADR and TASK-1594 amendment, preserving original design references and hold carve-out scope. Do not silently rewrite the dated sketch's historical state.
+    3. `permissions.rs:273–279`, `team.rs:357–360`, and old authority comments around `lib.rs:53543–53560/53632` describe superseded env/TTY fallback. Update explanatory text to body behavior; this is source-comment repair only.
+    4. `docs/agents/codex-mcp-setup.md:93/386` and `aida-mcp-install-matrix.md:27` correctly explain process capture/reconnect but should explicitly include per-call revalidation when harmonized with ADR-66. Existing first-project guidance at `:86–93` correctly removes env elevation; retain it and supply delegation preparation for its later child-launch steps rather than restoring old prefixes.
+
+    **Required outcome/evidence:** a focused maintained-doc patch with source-linked wording, preserved canonical links/history, and a static readback that no affected passage teaches env elevation. This audit does not demand a full documentation redesign, translation project, future broker, or broad test run. Runtime capability claims must remain qualified pending actual witnesses.
+
+    ### R1 — Residual old finding 9: ordinary build-seat casing is not normalized
+
+    **Class:** bounded compatibility residue to route to the existing owner, not a reason to invent case-insensitive custom-role policy. Core `canonical_role:441` and CLI `canonical_role_name:23736` retain `Advisor`; `roster_allows:99` compares to `advisor`. `update_seats_cas:326/335` also compares raw values. Validation now refuses unknown CLI spelling instead of storing arbitrary typos, so half the old finding is repaired.
+
+    **Required outcome/evidence:** resolve the historical normalization request for built-in/legacy spelling consistently, with a source-level or later executed legacy `Advisor`/`advisor` and `dialog` compatibility witness, or an explicit canonical disposition that case-sensitive stored build-seat names are intended. The DOC prose itself does not promise case-insensitive arbitrary custom seats; do not treat that broader feature as a completion prerequisite. No current runtime test result is claimed.
+
+    ## Delivered code/documentation provenance
+
+    All four commits below are ancestors of P (local `git merge-base --is-ancestor` checks); source blobs, not subjects alone, provide delivery evidence. No remote check was performed.
+
+    | Commit and tree | Subject/trailer evidence | Actual relevant delivered content |
+    |---|---|---|
+    | `b602a5d9cab22a042bf7c1f0d60558872af8cd7b`; tree `1b4634e0904e223983d8a928220c62a2552c83c7` | `feat(authority): bind seats to validated session grants (STORY-1473)`; body retains `[AI:codex] docs(aida): record scoped advisor seat policy (STORY-1473 ADR-66)`, `[AI:claude] feat(authority)...`, and `[AI:codex] docs(authority): document same-user replay boundary (STORY-1473)` plus Aida-Store trailers. | Seat validator/roster/launcher work and docs: `docs/agents/aida-mcp-install-matrix.md:27`, `docs/agents/codex-mcp-setup.md:93/386`, `docs/first-project.md:86–93` and removed env-prefixed examples; ADR-66 file, ADR index, dated sketch, generated `docs/cli-format-json-audit.md`. Actual commit diff inspected. DOC-6 is not in its squash subject, so absence of DOC-6 auto-completion is not evidence no prose delivered. |
+    | `38b69c68ef9e2f7d66dd399c5f98595c8cdb3193`; tree `8414fc3d3d7df87b2d689621b75a4b8c6ab73e44` | `[AI:antigravity] feat(auth): add --delegate-seat to role enter (TASK-1592) (#2421)` | Repeated role-enter delegate-seat CLI/handler plumbing. At P the behavior is actual code, not only a spec status. |
+    | `ea1c51e5307416cb12bdaa46237c2636a3045fcb`; tree `c3172ea9d9208e106627c0417ae99aa37e9e23ec` | `[AI:claude] fix(cli): hygiene findings and design confirmations (TASK-1594)` | Subject/principal decision, label/refusal help, grant issuance ordering and explicit child-handle plumbing through queue/session paths; changed eight code/test files, no maintained ADR/roles-guide patch. Thus canonical wording amendment did not automatically repair those documents. |
+    | `b8b16f5e6be5e25c1f0c6b9d29bcd96d35271763`; tree `87c9ecf6b34d623d76976f8a6e807ebc848e717e` | `[AI:claude] feat(role): prompt for sub-launch seat delegation at TTY entry (TASK-1597)` | Advisor TTY default-no opt-in and refusal hint. Read with TASK-1597 canonical scope, not as automatic delegation. |
+
+    The b602 squash body reports historical builds/tests, but those are author-recorded historical results, not tests executed by this reviewer or proof for P. The current exact CLI installation/build/source identity and behavior have not been verified. No old/private failure baseline or unfinalized test report was used to fill that gap.
+
+    ## Pending batch C overlap and reference preservation
+
+    Read-only diff of C against P inspected relevant maintained homes. `docs/cli/06-roles-sessions.md`, `docs/architecture/roles-seats-and-personas.md`, and the ADR-66 file are unchanged by C. C therefore does not itself repair B3's core grant documentation.
+
+    C changes `AGENTS.md`/`OVERVIEW.md` with TASK-1613's thin `/aida-pr` -> `aida ship <SPEC> --no-merge` plus explicit autoqueue guidance; `docs/lifecycle.md` and `docs/session-lifecycle.md` distinguish PR opening from Done and preserve independent review/stop/handoff. C moves the old porting analysis to `docs/archive/audits/porting-claude-code-to-codex.md` and retargets maintained `cross-agent-onboarding.md`, `claude-surfaces-codex-parity.md`, and `codex-validation-runbook.md` references. It also retargets archived research/positioning links in repository guide, overview and lifecycle homes.
+
+    Any eventual DOC-6 prose change must preserve these maintained-home moves and ship/handoff statements, use the current archival destinations, and retain `docs/agents/session-communication.md` as the durable hook/defer reference. This is overlap guidance, not approval of C or its unrelated 2,000-plus path set. No copy, rebase, merge, archive restoration, build, report adoption or candidate write occurred.
+
+    ## BUG-1808 and proof limits — precise causal boundary
+
+    The fresh BUG-1808 canonical input retains its original preflight-before-mutation requirement and later common publication decisions. The relevant final decisions state that callback/launch/pane design approvals are scoped; the coherently designed common publisher still requires production implementation and actual entrypoint evidence. The 2026-10-08 checkpoint disposition records inactive infrastructure head `6a1733a134b2e63f3adfd8e24606965a5d702f91` / tree `b8545647645319e3d1ef09da8e358b6768488e34`, explicitly not activation/completion/merge. It lists eight open production gates. The later current-store CAS owner-join comment preserves those gates and reserves TASK-1593/1591/BUG-1811/1812. Those are canonical records read for scope, not independent source/testing approval by this reviewer.
+
+    DOC-6's existing TTY grants, roster, scoped child issuance and MCP grant semantics can and largely do exist without common immutable production publication. None of DOC-6's actual description demands the whole BUG-1808 publisher, callback origin protocol, every future launch adapter, or a new protected broker as a blanket prerequisite. B1/B2 arise from existing specific entrypoint control flow. They should be routed to the externally owning work; this reviewer neither takes it over nor claims unmerged/private code as delivery.
+
+    **Missing proof remains missing:** no exact P binary compilation, fmt, full suite, current CLI positive/negative authority witnesses, actual TTY human issuance, managed-TTY roster refusal, real MCP restart/revocation parity, or standalone resume handle capture was run. Existing unit/integration source and historical signoffs support static assessment but cannot establish these actual CLI witnesses. The right next evidence is bounded to the disputed entrypoints and contract; no broad workspace/CI chase or live protected recorder retry is justified by this audit.
+
+    **Relay recommendation:** root can route B3 as a bounded documentation correction while preserving C's pending reference changes; send B1/B2 and R1 to the existing authority/roster owners for disposition without reopening/queuing/taking over. Keep unknown execution acceptance explicit. Do not edit DOC-6 to Completed automatically from this audit or its child statuses.
+  created_at: 2026-10-08T20:12:28.945822407Z
+  modified_at: 2026-10-08T20:12:28.945822407Z
+  relayed_from: doc6-current-delivery-fresh-audit
+- id: 01a11d26-8a73-7c23-8ae2-b7bcb7acd5e3
+  author: mcp
+  content: 'PROXY DECISION execution correction: the planned B3 documentation handoff did NOT dispatch. Normal preferred MCP queue_add DOC-6 --for implementer returned: ''Cannot queue work for execution via MCP: routing work needs dispatch authority (product, advisor, or integrator role).'' No CLI/alternate-API retry, role/env/grant substitution, new implementer lease, or native --spec dispatch will bypass that refusal. The full independent audit remains saved/verified. B3 is a concrete eligible doc-only scope for a legitimately dispatch-authorized seat; DOC-6 remains partial. Existing functional authority/roster owner was sent peer request 398ef497-44a4-4bce-8534-47e9b03dbfa0 for B1/B2/R1 disposition, not root takeover. All runtime/authority positives still unverified.'
+  created_at: 2026-10-08T20:13:47.507099596Z
+  modified_at: 2026-10-08T20:13:47.507099596Z
+- id: 01a11d2c-1fe0-7530-be24-f31ff02a1421
+  author: mcp
+  content: 'Additional bounded maintained-guidance finding verified during advisor read: .aida/discipline/advisor-role.md section feedback_advisor_role_for_queue_after_647 still recommends AIDA_SESSION_ROLE=advisor prefixes to confer queue/approval authority and says internal storage.queue_add bypasses the CLI gate. Those historical instructions conflict with current validated-grant semantics and the actual MCP queue refusal; root did NOT follow them. Future B3 documentation work should reconcile the maintained/template source of this migrated lesson to current canonical ADR-66 without introducing a new authority convention. Preserve its historical provenance as historical; no environment elevation advice in current operating guidance. This is documentation-source inventory only, not a root patch or queue authorization.'
+  created_at: 2026-10-08T20:19:53.440625238Z
+  modified_at: 2026-10-08T20:19:53.440625238Z
+- id: 01a129c8-ea50-7d21-98f5-af5a44b4b38c
+  author: joe
+  content: |
+    FACTORY PLAN (night) — B3 doc slice only; no Rust changes; does not complete DOC-6.
+
+    Worktree /home/joe/ai/aida-doc-6-factory, branch doc-6-b3-docs. Source-linked facts checked once: `seat_authority.rs::issue_direct` (requires a direct human TTY, roster ceiling, delegable set must be roster-allowed, 24h max lifetime), `issue_child` (child inherits parent expiry, empty delegable set), `current_grant` (re-validated on every read: revocation, expiry, subject, roster, parent delegation), `permissions.rs::gated_effective_role_for_user` (grant seat else `implementer`; no env leg), `mcp.rs::role_active_env` (resolves the grant per call), `role.rs::advisor_authority_from` (TTY is never authority by itself). Canonical ADR-66 is Accepted 2026-10-04 (STORY-1473 completed; TASK-1594 amendment C = per-call validation; amendment D = hold carve-out).
+
+    Passages → replacement:
+    1. docs/cli/06-roles-sessions.md:11, :23 — "sets AIDA_SESSION_ROLE which gates read / everything authority-gated keys off it" → entering a role at a TTY issues a validated, roster-capped session grant; AIDA_SESSION_ROLE is exported only as a display/routing hint.
+    2. docs/cli/06-roles-sessions.md:27 — "prefix the command with AIDA_SESSION_ROLE=<role>" → an env prefix changes nothing authority-wise; for a one-off gated command enter the seat at a TTY and `aida role end` after; headless contexts receive child grants from a launcher.
+    3. docs/cli/06-roles-sessions.md key options/gotchas — add `enter --delegate-seat` (repeatable, empty by default, advisor prompt opt-in at a TTY); env var set by hand never confers authority.
+    4. docs/cli/06-roles-sessions.md — NEW subsection "Entering seats and delegating child seats" (DOC-6 description as source): eval form, roster via `aida team allow-seat/disallow-seat` at a TTY, per-child distinct grants, no onward delegation, MCP captures its grant at start and re-validates each call (restart/reconnect to change), lifetime/revocation, residual same-user limit.
+    5. docs/aida/05-decisions/ADR-66-tty-established-session-bound-seats.md:3-4, :42-55 — Draft → Accepted 2026-10-04 (canonical body), keeping the dated 2026-10-03 draft provenance, BUG-1669/SPIKE-91 broker references, the per-call amendment and the hold carve-out amendment as recorded amendments.
+    6. docs/aida/05-decisions/README.md:12 — "Draft — advisor signoff pending" → "Accepted 2026-10-04".
+    7. aida-core/templates/.aida/discipline/advisor-role.md:253-263 (+ copied mirror .aida/discipline/advisor-role.md) — section feedback_advisor_role_for_queue_after_647: keep the TASK-647 lesson under a dated "historical (pre-ADR-66)" note; current guidance = enter advisor at a TTY / delegate the seat to the loop; drop "storage.queue_add bypasses the gate" and env-prefix recipes.
+    8. docs/agents/codex-mcp-setup.md:93, :386 and docs/agents/aida-mcp-install-matrix.md:27 — add per-call re-validation to the process-capture wording (revocation applies immediately). The template copy of codex-mcp-setup.md has diverged and lacks this passage; left as is.
+    9. docs/environment-variables.md:80 — AIDA_SESSION_ROLE row: "Gates role-restricted writes" → hint only; gating reads the validated grant.
+    10. aida-core/templates/.aida/discipline/autonomous-burndown.md:156 (+ mirror) — drop the `AIDA_SESSION_ROLE=advisor` prefix from the queue recipe.
+
+    Left alone (outside B3, reported for routing): README.md:316-328 tutorial still teaches the env prefix; docs/agents/seat-parity.md and docs/architecture/roles-seats-and-personas.md use env values as launch/persona hints (not elevation); source comments permissions.rs:273-279, team.rs:357-360, `aida team` --help strings (Rust; B1/B2/R1 lane). `make sync-templates` runs `cargo run` so the discipline mirror is copied by hand (recipe is a plain `cp`).
+
+    Static readback: `rg -n 'AIDA_SESSION_ROLE=' docs .aida/discipline aida-core/templates` must return only historical notes, persona (`guest|requester`) hints, test-env `env -u` advice and plan/archive files — no current guidance that an env prefix confers authority.
+  created_at: 2026-10-11T07:06:35.472538900Z
+  modified_at: 2026-10-11T07:06:35.472538900Z
+  session_id: 01a129c3fefa
+- id: 01a129ce-d652-7043-a0e4-482b3a4a5444
+  author: joe
+  content: |
+    FACTORY DRAFT: PR #2499 at 38923c6380 (B3 doc slice only). Partial doc slice; does not complete DOC-6. Branch doc-6-b3-docs, worktree /home/joe/ai/aida-doc-6-factory. Not compiled locally; the non-cargo fast doc gates and `make check-templates` pass. Left for routing: README.md:316-328 env-prefix tutorial, seat-parity/personas env-hint matrices, Rust source comments and `aida team`/`role active|current` help strings (B1/B2/R1 lane, TASK-1594 items 1-2).
+  created_at: 2026-10-11T07:13:03.570022294Z
+  modified_at: 2026-10-11T07:13:03.570022294Z
+  session_id: 01a129c3fefa
+- id: 01a129de-8f06-78a1-90c6-2e2e8e432acd
+  author: joe
+  content: |
+    FACTORY READY: PR #2499 green at 425bbdbf69
+
+    CI Build (ubuntu-latest) and merge-hold-gate passed; PR is mergeable. This is the B3 docs-only slice and does not complete DOC-6 (PR body says so; no DOC-6 completion trailer should be applied). Draft left for review and merge by the night relay / advisor. Review fixes go in worktree `/home/joe/ai/aida-doc-6-factory` (branch `doc-6-b3-docs`).
+  created_at: 2026-10-11T07:30:13.894749387Z
+  modified_at: 2026-10-11T07:30:13.894749387Z
+  session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a12a93-02d6-7e11-b833-d6717f294b9a
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at 425bbdbf694a3d7f04089a59bec766e1c93ae225 (fresh reviewer)
+
+    1. BLOCKER: merging this PR would complete DOC-6. The PR title and both commit subjects end in `(DOC-6)`. `derive_squash_trailer` honours a title trailer, and DOC-6 has no closure:pending tag and no open children. The body's "Partial doc slice (B3); does not complete DOC-6" is not a recognised marker. Fix: add a standalone body line `aida: no-complete`, and drop the trailing `(DOC-6)` from the PR title (e.g. "docs(roles): seat entry, delegation and hint-only SESSION_ROLE — DOC-6 slice B3"), so a GitHub squash can't carry the trailer either.
+    2. MAJOR: aida-core/templates/.aida/discipline/advisor-role.md:265 (and its mirror) says "all three ambient paths were removed", but the code still has the orchestrated-drain advisor leg: role.rs `advisor_authority_from` (~1444-1447, ~1506-1520) grants advisor authority to a corroborated live --auto-complete drain without a grant (BUG-460). Internal code also still calls `storage.queue_add` directly (backlog.rs:914, assign_cmd.rs:73, supervisor.rs:432, schedule_cmd.rs:326). Fix: say only the env-prefix and bare-TTY legs were removed and the orchestrated-drain leg remains. Soften line 263 ("each hat is a grant") to match.
+    3. MAJOR: docs/cli/06-roles-sessions.md:23 says "Everything authority-gated … keys off the grant". Not true: an orchestrated drain is an advisor-authority exception, and `hold_authority_from` keeps a bare-TTY leg (the ADR-66 carve-out). Fix: add a one-clause qualifier naming live drains and holds as the documented exceptions.
+    Minors:
+    4. The checked-in ADR-66 copy has drifted from the canonical `aida show ADR-66`: it adds Draft-hold text, the broker paragraph, the 24h detail, and an Amendments section including amendment D, which exists only in an ADR comment. Either update the canonical ADR too, or keep the copy verbatim and note the amendments separately.
+    5. The docs/aida/05-decisions/README.md:12 edit is inside AIDA-AUTOGEN. Confirm the generator emits the same string.
+  created_at: 2026-10-11T10:47:20.022052374Z
+  modified_at: 2026-10-11T10:47:20.022052374Z
+  session_id: acfbf100-b965-4582-a364-9323fd734a00
+- id: 01a12b09-99a0-7051-8c5f-03bb250b7b42
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at 81a262a3a6 (fresh reviewer, round 2)
+
+    All five round-1 findings are fixed. Two new over-claims in docs/cli/06-roles-sessions.md conflict with the DOC-6 proxy decision, which says this slice must not claim universal child grants or a human-only roster.
+    1. MAJOR, :49 and :56. The text says roster changes require "a human at a TTY". The roster writers (team_cmd.rs:207/246/265/290) call `require_direct_tty`, which only checks for a terminal; a managed agent at a TTY passes. Say "require an interactive TTY".
+    2. MAJOR, :27 and :41. The text says headless and managed agents always work under a child grant their launcher issued. But `exec_claude_resume` and `exec_claude` (session.rs:4407/:938) set a grant only when one is passed, and without one the child inherits the parent's AIDA_SESSION_GRANT. Limit the claim to the launchers that do issue child grants, or note the exception.
+    3. Minor, :49. "Unless explicitly issued delegation scope": no path issues that scope today (`issue_child` always sets `delegable_seats` empty). Prefer "cannot delegate onward".
+  created_at: 2026-10-11T12:56:51.872474319Z
+  modified_at: 2026-10-11T12:56:51.872474319Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
+- id: 01a12b0d-79f2-74c1-a8fe-cf486ff49d8a
+  author: joe
+  content: |-
+    REVIEW (night): REQUEST CHANGES at b6c5f95c13 (fresh reviewer, round 3). PARKED (parked:night): this is the third failed review round.
+
+    All round-1 and round-2 findings are fixed, and merging cannot complete DOC-6 (aida: no-complete; no ID-terminated subjects). Still open:
+    1. MAJOR, docs/cli/06-roles-sessions.md:27/41/49. "A seatless launch inherits the parent's grant" is false for `aida agent new`: agent_launch.rs:2566 and :4353 env_remove AIDA_SESSION_GRANT and set a grant only when a role is requested. Inheritance happens only on the session paths (session.rs:938/950, :4407/4414). Each claim must name the launcher it covers.
+    2. Minor, :30. "enter is the only place a direct grant is minted" is false: handle_role_add (role_cmd.rs:511) also calls issue_direct.
+    3. Minor, :23. "Two documented exceptions" leaves out `--force` on enforce_team_gate / enforce_protected_spec_gate (role.rs:1343) and the human-at-TTY escalation clear (requeue.rs:95, integrity_floor_authority_from).
+
+    Recommendation: stop qualifying the universal sentences in 06-roles-sessions.md and cut them. State the grant model per launcher in a small table (enter / role add / session new / session resume / agent new), then review once more. Each round has found the next over-general sentence in the same section, so the sentence shape is the problem.
+  created_at: 2026-10-11T13:01:05.906340927Z
+  modified_at: 2026-10-11T13:01:05.906340927Z
+  session_id: bb67ccbe-6bea-4da6-937b-e05b6490b715
+- id: 01a12b8e-5b6e-7b21-b5a6-4b09c64dd84f
+  author: joe
+  content: |-
+    REWORK BRIEF (advisor, 2026-10-11, operator-approved). Source verdict: DOC-6 comment[9], REVIEW round 3, REQUEST CHANGES at b6c5f95c13 (PR #2499, branch doc-6-b3-docs). Verified against origin/doc-6-b3-docs and main.
+
+    WHAT FAILED: every review round found another over-general sentence in docs/cli/06-roles-sessions.md about how launched agents get authority. The problem is the sentence shape, not any single sentence. Stop qualifying universal claims. Replace them with a per-launcher table.
+
+    REQUIRED CHANGE:
+    1. In "### Entering seats and delegating child seats" (Mental model paragraph), and in the "### aida role" section (the Don't-reach-for-it paragraph and the "Chains with" paragraph), DELETE the universal launch claims:
+       - "A launch that names no child seat issues no grant: the launched agent inherits the parent's grant as-is." This is FALSE for `aida agent new`: agent_launch.rs:2566 and :4353 env_remove AIDA_SESSION_GRANT. Inheritance only happens on the session paths (session.rs:938/950, :4407/4414).
+       - "...otherwise the launching shell's own grant, inherited unchanged" and "A launch that does not request a seat ... the agent inherits the launching shell's grant." These have the same defect.
+    2. Add ONE small table, "How each launcher sets the agent's grant", with these rows: `role enter` (mints a direct grant: TTY plus roster), `role add` (also mints a direct grant: role_cmd.rs:511 issue_direct), `session new`, `session resume`, `agent new`, `queue work` / drain. Each row gives: with a seat requested, and with no seat requested (child grant / inherits parent env grant / none: grant env removed). Fill every cell from the code, citing file:line in the PR body, not in the doc.
+    3. Fix "enter is the only place a direct grant is minted" (in the `enter` / `end` key-options bullet). `role add` also mints one. Point at the table instead.
+    4. "two documented exceptions" (aida role, Mental model): drop the count. Either list the exceptions without a number, including `--force` on enforce_team_gate / enforce_protected_spec_gate (role.rs:1343) and the human-at-TTY escalation clear (requeue.rs:95, integrity_floor_authority_from), or say "with a few documented exceptions" and link them.
+    5. Keep the round-2 fixes: "require an interactive TTY (a terminal check, not proof that a human is typing)" and "children cannot delegate onward" (issue_child always sets delegable_seats empty).
+
+    PROOF OF FIX: no sentence in the two sections makes an unqualified "always" / "only" / "any launch" claim about grants. Every table cell traces to a code site listed in the PR body. make check-ci-fast is green. One more fresh review round. If round 4 still fails, the advisor will merge the passed parts and cut the section rather than run round 5.
+
+    Merging #2499 does not complete DOC-6 (aida: no-complete). Leave that as is.
+  created_at: 2026-10-11T15:21:52.238088623Z
+  modified_at: 2026-10-11T15:21:52.238088623Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12ca5-06f1-7fa2-9d6c-37a197c097e3
+  author: joe
+  content: 'ADVISOR 13:26 (operator approved option 1): DOC-6 handed to the factory (factory:2026-10-11, item 7 in prompt-2026-10-11.md). The round-4 review found nothing pushed since round 3, so it does not count as a failed round. Rework per the REWORK BRIEF; the round-4 reviewer''s verified per-launcher sites: role enter = issue_direct (role_cmd.rs:193/211/296); role add = issue_direct (role_cmd.rs:511); session new = child grant with a seat (session.rs:1221/1230), else exec_claude (session.rs:938/950) inherits the parent env grant; session resume = exec_claude_resume (session.rs:4405/4414) inherits unless a grant is passed; agent new = env_remove AIDA_SESSION_GRANT (agent_launch.rs:2566/4353), a fresh child grant with a seat (:2571/:4358), else none; queue work / drain = child grant (queue_cmd.rs:12426) [no-seat cell unconfirmed: verify]. ONE more review round; if it fails, merge the passed parts and cut the section.'
+  created_at: 2026-10-11T20:26:15.153476351Z
+  modified_at: 2026-10-11T20:26:15.153476351Z
+  session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a12e01-b99d-7ed2-bb8c-5d70bb7c9e92
+  author: joe
+  content: 'FACTORY DRAFT (round 5): PR #2499 at 8564175390. Rebased on main; universal launch-grant sentences cut and replaced by a per-launcher table (role enter/add, session new/resume, agent new, queue work), every cell code-traced in the PR body; role add direct grant, exceptions listed without a count. Correction to round-4 starting points: session new --role issues no grant (session.rs:1221 is spawn_vendor_headless_with_seat), and queue work has two inherit paths (fresh --no-human non-review, resumed interactive PR review). check-ci-fast green. Still draft.'
+  created_at: 2026-10-12T02:47:07.421227815Z
+  modified_at: 2026-10-12T02:47:07.421227815Z
+  session_id: 41bae717-5469-4211-97a6-618c019ce287
+- id: 01a12e15-25b0-71b2-8560-25cf0882c5d2
+  author: joe
+  content: 'FACTORY READY: PR #2499 green at 66d6ee70f3. Round 5 per REWORK BRIEF; citations in the PR body. Two advisor starting points corrected from the code (session new issues no grant even with --role; queue work has two inherit paths); see PR body. Draft, awaiting advisor review.'
+  created_at: 2026-10-12T03:08:20.272167588Z
+  modified_at: 2026-10-12T03:08:20.272167588Z
+  session_id: 41bae717-5469-4211-97a6-618c019ce287
+- id: 01a12e4e-054f-7522-9d15-286ce402a475
+  author: joe
+  content: 'FACTORY READY: PR #2499 green at 4505aabf87 (round-5 findings). Fixed advisor-role.md:255 and :263 (queue add/remove need dispatch authority; add --status approved files a draft), and environment-variables.md:80 (AIDA_SESSION_ROLE never grants authority; guest/requester narrow). Edited in the template master, then sync-templates and check-templates. Optional items also done: `aida integrate --force` added at 06-roles-sessions.md:26, the PR body citation is now ps_integrate.rs:1269, and the PARKED banner is gone. Only these lines changed since 66d6ee70f3. Still draft.'
+  created_at: 2026-10-12T04:10:27.535766667Z
+  modified_at: 2026-10-12T04:10:27.535766667Z
+  session_id: 5299b498-823f-4adc-9eeb-6b89a5088d15
+- id: 01a12e57-0655-79f0-95ca-48a74e4b9d12
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 5: all five rework-brief items done; the per-launcher table verified row by row against origin/main; the roles chapter is now accurate. Three textual inaccuracies remain in hunks this PR rewrote (advisor-role.md x2, environment-variables.md). Text-only fix; no re-architecture.. No triage reason was given.'
+  created_at: 2026-10-12T04:20:17.621668658Z
+  modified_at: 2026-10-12T04:20:17.621668658Z
+- id: 01a13f77-b50d-7631-84b6-e32c53dbe0f4
+  author: joe
+  content: 'ADVISOR (05:10): #2499 (slice B3) merged on 2026-10-12. The spec lists no other slice, so it is completed. Merge-time completion missed it. If a docs slice is still missing, file it as a new DOC.'
+  created_at: 2026-10-15T12:09:32.173778727Z
+  modified_at: 2026-10-15T12:09:32.173778727Z
+  session_id: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
+history:
+- id: 01a129c4-0146-73a2-a6f6-f3b2c8cf82d9
+  author: aida-session-start
+  timestamp: 2026-10-11T07:01:13.670341605Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a12e2e-5f9b-7cf2-a79a-a77eefdfdfb1
+  author: aida-orchestrator
+  timestamp: 2026-10-12T03:35:53.499684041Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a12e57-0655-79f0-95ca-4897ed0c9eb6
+  author: joe
+  timestamp: 2026-10-12T04:20:17.621658009Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
+- id: 01a13f77-c3fb-79b2-996c-840c708665e3
+  author: joe
+  timestamp: 2026-10-15T12:09:35.995835874Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a1942b-5eac-7013-a5da-79276e66265e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.684522229Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: DOC-1-203
+    new_value: DOC-b6b1278890774ef993d2ebc327862470-006
+filed_at:
+  code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
+  branch: story-1473
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 0317d5d94a
+  vendor: codex
+custom_fields:
+  audience: user,agent
+  scenario: session-authority
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T12:09:35.995817608Z

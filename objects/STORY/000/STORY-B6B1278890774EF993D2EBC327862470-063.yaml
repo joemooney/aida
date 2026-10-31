@@ -1,5 +1,6 @@
 id: 01a183ba-f11f-7a11-94b0-c61a5be48004
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-063
+agreed_id: STORY-2103
 title: 'Review PR-3056: [AI:claude] fix(mailbox): era-marker drop re-validates; leftover report tests (TASK-b6b1278890774ef993d2ebc327862470-059)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/mailbox-era-marker-followups`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-67a3-70c1-b3c8-72afa32c30b1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.979247646Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2103
 filed_at:
   code_sha: 9e63e7c6364060bfe01ca6b62674ce4001f1208b
   branch: fix/mailbox-era-marker-followups

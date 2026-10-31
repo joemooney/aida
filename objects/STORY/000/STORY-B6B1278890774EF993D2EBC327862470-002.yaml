@@ -1,5 +1,6 @@
 id: 01a17605-3027-73f2-8f37-c45857350062
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-002
+agreed_id: STORY-2042
 title: 'Review PR-2937: [AI:claude] fix(test): isolate session-resolving tests from the live agent session (TASK-2349, TASK-2345)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-2349-work`.
@@ -59,6 +60,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-63cb-7b20-bdb8-ae25a6e46e30
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.995311256Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2042
 filed_at:
   code_sha: af134512866c8cb24fc4233359dae5d28d4abe60
   branch: task-2349-work

@@ -1,0 +1,70 @@
+id: 01a13815-58a0-7d43-8669-3a3968023add
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-448
+agreed_id: TASK-1371
+title: 'Non-blocking: abbreviation guard aida-pre-commit.sh:487 /(e\.g|i\.e|etc|vs)\.$/…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: abbreviation guard aida-pre-commit.sh:487 /(e\.g|i\.e|etc|vs)\.$/ is not word-anchored, so any word ending in 'vs.' (e.g. 'devs.') is treated as a non-sentence-end and a following bare ID is allowed. Also unicode sentence enders (U+2026, U+3002) are not recognized. Fails toward allow, low risk.
+
+  PR: #2605
+  Reviewed sha: b6775ca8120b89266547818f3a2775db5802319c
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-14T01:44:45.472769850Z
+modified_at: 2026-10-15T06:23:02.492651043Z
+req_type: Task
+tags:
+- carried-from:BUG-2008
+- finding-hash:802d55e5
+- from-review:PR-2605
+- kind:carried-forward
+comments:
+- id: 01a13bb8-7254-7011-b219-30567590f587
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (9d46102) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:41:46.068626216Z
+  modified_at: 2026-10-14T18:41:46.068626216Z
+history:
+- id: 01a13bb8-7254-7011-b219-30431b8b26c4
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:41:46.068624354Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
+- id: 01a13e3a-7b50-7a52-91b1-3d90271e3d72
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:23:02.480652687Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-60b2-7a91-944e-f9f997ebb09a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.202516618Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-301
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-448
+processing_record:
+- id: 01a13e3a-7b5c-7ba1-8518-6197420daed1
+  timestamp: 2026-10-15T06:23:02.492647157Z
+  agent: aida
+  commit_sha: 9d4610275eac5359d0b045d632338250c3f48318
+  summary: Completed via merge 9d461027
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:23:02.480644752Z
+  completion_sha: 9d4610275eac5359d0b045d632338250c3f48318

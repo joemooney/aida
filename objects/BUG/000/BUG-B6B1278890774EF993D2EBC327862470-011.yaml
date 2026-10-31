@@ -1,5 +1,6 @@
 id: 01a182e7-665f-7a51-9dfb-2cf67a27791e
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-011
+agreed_id: BUG-2328
 title: 'Mailbox source key collides on inode reuse: dev:ino identity lets a reused mailbox inherit the retired source''s key'
 description: |
   Mailbox lifecycle source identity collides when an inode is reused. `source_key` (aida-core/src/mailbox_lifecycle/mod.rs:447) is SHA-256(common git dir, worktree admin name, mailbox dir dev:ino). After a reuse (`Retirement::complete_reuse`) deletes the mailbox directory, the next occupant's first write recreates it. On many filesystems (ext4/overlayfs on CI runners) the freed inode is handed straight back, so the "new" source gets the OLD key. Evidence: guard_tests::a_reuse_hands_the_next_occupant_an_empty_mailbox fails `assert_ne!(new.key, old.key)` with both keys 68eaa6f0ec70417e2f02045e73a5f166ff748ad2978e2c35e96b9891f70113cf, on train PRs #3039 (13:59Z) and #3041 (14:13Z) for a comment-only PR (#3038), while main CI is green. The result depends on the filesystem, so main can go red at any time, and the same collision can happen in production on reuse: the next occupant's source aliases the retired source's record and retained generations.
@@ -66,6 +67,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6712-70f1-b80a-2fc66d20ae17
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.834758167Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2328
 processing_record:
 - id: 01a18342-21aa-7643-86d9-4c2d505fee36
   timestamp: 2026-10-28T16:05:11.722186875Z

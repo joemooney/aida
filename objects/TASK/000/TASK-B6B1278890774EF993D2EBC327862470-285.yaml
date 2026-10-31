@@ -1,0 +1,33 @@
+id: 019e5dd4-175b-7551-a97a-b65d587b532f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-285
+agreed_id: TASK-38
+title: Smoke-test observation — will be dismissed.
+description: Smoke-test observation — will be dismissed.
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T06:30:41.243609293Z
+modified_at: 2026-06-04T04:48:58.810128065Z
+req_type: Task
+tags:
+- from-advisor:STORY-467
+- kind:observation
+- linked:STORY-467
+comments:
+- id: 019e5dd4-4bdf-70e2-a26c-b3f2ef952a64
+  author: joe
+  content: 'Dismissed by joe 2026-05-25: smoke-test: verifying dismiss works on advisor findings'
+  created_at: 2026-05-25T06:30:54.687863829Z
+  modified_at: 2026-05-25T06:30:54.687863829Z
+history:
+- id: 01a1942b-5b68-7b02-997d-35b7e066dc80
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.848013325Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-087
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-285
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

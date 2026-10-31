@@ -1,0 +1,58 @@
+id: 01a14f6c-550f-7680-ba9f-83e0b384837e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-471
+agreed_id: TASK-1396
+title: 'minor (traceability): criterion TASK-1785.ac0ead8d (15/40/marked-7 fixture) is …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1785, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (traceability): criterion TASK-1785.ac0ead8d (15/40/marked-7 fixture) is tested but untraced. The fixture tests carry 'trace:TASK-1785.Fixture' (lint_constants.rs:527, task_1785_lint_constants.rs:147), which resolves to no criterion, so 'aida criteria TASK-1785' still reports ac0ead8d as 'untraced no traced tests'. Change both markers to 'trace:TASK-1785.ac0ead8d'.
+  Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T14:31:02.159503559Z
+modified_at: 2026-10-19T15:46:49.432112934Z
+req_type: Task
+tags:
+- carried-from:TASK-1785
+- finding-hash:1f864644
+- from-review:TASK-1785
+- kind:carried-forward
+comments:
+- id: 01a154d8-0a8d-7561-b850-c0c13579b1a6
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1396 and TASK-1812 both specify re-key the 15/40/7 fixture trace to ac0ead8d; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:47.053568870Z
+  modified_at: 2026-10-19T15:46:47.053568870Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a14f90-0684-7d82-b399-0921d144623a
+  author: joe
+  timestamp: 2026-10-18T15:10:01.348967915Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154d8-13d8-7632-aee8-09dc6aef4c60
+  author: joe
+  timestamp: 2026-10-19T15:46:49.432106181Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6143-7da2-bb30-7e2551bbc613
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.347901721Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-324
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-471
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

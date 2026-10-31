@@ -1,5 +1,6 @@
 id: 01a188f0-16d4-7be3-83e1-b9421a108f5c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-087
+agreed_id: STORY-2127
 title: 'Review PR-3096: [AI:codex] docs(onboarding): start with conversational development (TASK-B6B1278890774EF993D2EBC327862470-106)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188ea`) for branch `task-b6b1278890774ef993d2ebc327862470-106-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-69ef-7641-8242-af0f2cb4b506
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.567104011Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2127
 filed_at:
   code_sha: 120226d4d2bc6eec8362f0c3bc2615649f711545
   branch: task-b6b1278890774ef993d2ebc327862470-106-work

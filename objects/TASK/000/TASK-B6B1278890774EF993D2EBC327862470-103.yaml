@@ -1,5 +1,6 @@
 id: 01a187a2-ce21-7c83-ae69-9e70ede74e6a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-103
+agreed_id: TASK-2516
 title: 'minor (non-blocking): a link resolving to a directory (mode 040000, incl. empty…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-69ca-7882-8981-4387bdf1ed89
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.530340452Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2516
 filed_at:
   code_sha: b74166aba21293380f163f21e5df6137a79dbcce
   branch: main

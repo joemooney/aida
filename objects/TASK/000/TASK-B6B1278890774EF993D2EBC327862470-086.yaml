@@ -1,5 +1,6 @@
 id: 01a184c8-4aa0-7292-8593-2c09f2b8a458
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-086
+agreed_id: TASK-2499
 title: '[cosmetic, non-blocking] leftovers_tests.rs post_placement_failures_warn_and_re…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-082, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:16:26.018623684Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67ed-71f3-b482-a02a3c171634
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.053675573Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2499
 filed_at:
   code_sha: 8767e9accd8493c9bcab6bf474930e56abe34f73
   branch: main

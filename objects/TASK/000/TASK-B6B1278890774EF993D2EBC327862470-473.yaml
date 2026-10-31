@@ -1,0 +1,58 @@
+id: 01a14f6c-76bc-7b62-ae00-e3afb00a699b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-473
+agreed_id: TASK-1393
+title: 'major (design, needs advisor ruling): in-file ''#[cfg(test)]'' modules are scanne…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1785, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  major (design, needs advisor ruling): in-file '#[cfg(test)]' modules are scanned even though tests/ files are skipped as SPIKE-47 F1 exemptions. SPIKE-47 F1 also covers 'mod tests' hunks, and AIDA test fns carry 'trace:<SPEC>.<ac>' markers by convention. Dogfood on aida-cli-lib/src: ~2964 of 3848 findings (~77%) are in test modules, and the PR's own lint_constants.rs reports 5, all fixture values. The AC also says 'No other heuristic exemptions in v1', so either exempt cfg(test) consistently or drop the tests/ file skip; the advisor should rule.
+  Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T14:31:10.780385786Z
+modified_at: 2026-10-19T15:46:36.057887296Z
+req_type: Task
+tags:
+- carried-from:TASK-1785
+- finding-hash:2ce82e2a
+- from-review:TASK-1785
+- kind:carried-forward
+comments:
+- id: 01a154d7-d2e6-7180-aea5-9069f7051c96
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1393 and TASK-1812 both specify skip in-file cfg(test) modules under the explicit advisor ruling; the target description explicitly includes this obligation. Preserve the narrower finding evidence under th'
+  created_at: 2026-10-19T15:46:32.806197786Z
+  modified_at: 2026-10-19T15:46:32.806197786Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a14f90-061c-7572-b9e2-44571bb66419
+  author: joe
+  timestamp: 2026-10-18T15:10:01.244732734Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154d7-df99-71f2-8a93-c76c3f79fd3f
+  author: joe
+  timestamp: 2026-10-19T15:46:36.057880643Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6144-7011-97e0-96a50d40358e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.348616244Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-326
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-473
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

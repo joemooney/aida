@@ -1,0 +1,61 @@
+id: 01a16a1c-54df-7b11-9e43-b5cfe5721be9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-604
+agreed_id: TASK-1826
+title: Ratchet non_test_lines (aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs) …
+description: |-
+  Ratchet non_test_lines (aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs) can still swallow production code. A #[cfg(test)] on a struct field, field init or statement (e.g. "x: u8,") has no '{' and does not end in ';'. The skip therefore runs past the enclosing '}' and only stops when a later line opens and balances a brace, so that line is lost even when it is "pub(crate) fn ship_gate() -> bool {". I reproduced this with a line-for-line port. The shape is real: forge.rs:48 and :58 (MergeHoldRefusal) already use it, though no gate fn is hidden today. Related gaps: unbalanced braces inside multi-line string literals, and the raw contains('{') check for `opened`. Fix: end the item when its depth goes below 0, or on a trailing ',' before any brace opens. Add the struct-field shape to ratchet_skips_test_items.
+
+  Raised in review of PR-2832: https://github.com/joemooney/aida/pull/2832
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T18:53:24.063801044Z
+modified_at: 2026-10-23T19:11:23.456470947Z
+req_type: Task
+tags:
+- from-advisor:STORY-1888
+- from-review:PR-2832
+- kind:observation
+- linked:STORY-1888
+- severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a15f16-239e-7060-877d-48dd9806d39b
+  created_at: 2026-10-23T19:11:23.456466146Z
+  created_by: joe
+history:
+- id: 01a16a2c-c901-75a2-a073-af25ddb3b1da
+  author: joe
+  timestamp: 2026-10-23T19:11:22.369951428Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16a2c-d17e-7370-a679-d246aaa5f361
+  author: joe
+  timestamp: 2026-10-23T19:11:24.542335685Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16aa1-374e-7da2-b54d-03b1ffe7ede9
+  author: joe
+  timestamp: 2026-10-23T21:18:32.782905033Z
+  changes: []
+- id: 01a1942b-62bb-7342-ad62-447476b5f087
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.723605265Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-457
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-604
+filed_at:
+  code_sha: 7d47127f43fcd64478dd3ea0a3e77be7c5c84270
+  branch: pr-2832
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a16a1972ee
+  harness_version: 2.1.309 (Claude Code)

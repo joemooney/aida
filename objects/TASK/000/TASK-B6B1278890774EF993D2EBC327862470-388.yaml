@@ -1,0 +1,54 @@
+id: 01a10333-5004-79d0-8996-8b254c8c531e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-388
+agreed_id: TASK-1066
+title: 'Vendor attribution: squash title/commit says [AI:codex] and the three new trace…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1784, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Vendor attribution: squash title/commit says [AI:codex] and the three new trace comments say ai:codex; author is antigravity. Fix both (trace comments on the branch; PR title before squash-merge).
+
+  PR: #2386
+  Reviewed sha: 37885818c8937a0435f6b1d57d55fe17f2c0ee9a
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T19:17:36.900704015Z
+modified_at: 2026-10-03T19:26:16.461971179Z
+req_type: Task
+tags:
+- carried-from:BUG-1784
+- finding-hash:3d91652d
+- from-review:PR-2386
+- kind:carried-forward
+comments:
+- id: 01a1033b-3d96-7221-9ed8-cae28ec506b1
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Squash already landed; the PR-title half is immutable/OBE. The actionable residue (three ai:codex trace comments that should say ai:antigravity) is folded into promoted TASK-1-197''s scope — see the advisor scope comment there.'
+  created_at: 2026-10-03T19:26:16.461971179Z
+  modified_at: 2026-10-03T19:26:16.461971179Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
+history:
+- id: 01a1033b-3dad-7bd3-84ff-acfd8cb4bc88
+  author: joe
+  timestamp: 2026-10-03T19:26:16.493570630Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-5e99-7231-a64c-4765abde554e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.665614036Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-198
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-388
+filed_at:
+  code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298

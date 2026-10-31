@@ -1,5 +1,6 @@
 id: 01a191e9-c1d9-7f01-81aa-4e2233ad6259
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-049
+agreed_id: BUG-2366
 title: 'Headless lanes run in untrusted seat worktrees: Claude Code ignores the project allow-list and denies lane Bash calls'
 description: |
   Every headless `aida queue work --no-human` lane starts with "Ignoring 8 permissions.allow entries from .claude/settings.json: this workspace has not been trusted". The seat worktree (aida-worktrees/aida-seat-aida-<spec>) is created fresh at launch and has no ~/.claude.json trust entry, so Claude Code drops the project allow-list and the lane's Bash calls are denied. Seen 2026-10-31: the BUG-046 rework lane took 12 denials and rotated with about 1,160 lines uncommitted. The BUG-048 and STORY-099 lanes also logged denials. The operator authorized trusting aida-worktrees/* seats on 2026-10-25. Today an agent can only add the entry by hand, after the seat exists, which is always too late.
@@ -118,6 +119,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c3f-79d3-87ac-cb966f9976aa
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.159036497Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2366
 processing_record:
 - id: 01a1931b-3060-77e3-8aaa-1a1be7785145
   timestamp: 2026-10-31T17:56:35.040386522Z

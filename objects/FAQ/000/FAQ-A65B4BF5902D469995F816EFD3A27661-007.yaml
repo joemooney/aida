@@ -1,5 +1,6 @@
 id: 01a1895f-fd76-7111-84c3-55964f578d82
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-007
+agreed_id: FAQ-147
 title: How should I identify portable intent promoted between independent requirement stores?
 description: |
   **Promoting sanitized intent between separate stores creates independent requirement records; their local display IDs are not a shared global identity.**
@@ -28,6 +29,15 @@ tags:
 - audience:user
 - topic:ids
 - topic:transport
+history:
+- id: 01a1942b-6a0b-79c2-b160-9e267708f605
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.595324676Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-147
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

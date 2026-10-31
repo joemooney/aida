@@ -1,5 +1,6 @@
 id: 01a188da-9c2a-7a00-9510-acb3541266e8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-111
+agreed_id: TASK-2524
 title: Build a curated searchable documentation library
 description: |
   Slice 6 of 8 for the product documentation/showcase epic.
@@ -188,6 +189,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-69d3-7580-bcb9-cce8fef89367
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.539945255Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2524
 processing_record:
 - id: 01a18e17-ae1e-7500-9be1-eaeed0779bd1
   timestamp: 2026-10-30T18:34:39.006618770Z

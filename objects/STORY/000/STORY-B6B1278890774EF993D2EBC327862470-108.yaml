@@ -1,5 +1,6 @@
 id: 01a18b59-712f-7623-a9c5-ef9c13f8166f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-108
+agreed_id: STORY-2148
 title: 'Review PR-3121: [AI:claude] fix(mailbox): seat-clone mail reaches the primary checkout''s inbox (BUG-B6B1278890774EF993D2EBC327862470-031)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-031`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b03-7391-a25a-f1a131814d27
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.843994206Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2148
 filed_at:
   code_sha: 2742b18ee2e7b5dd32643ec149ca9ac8176a4fca
   branch: main

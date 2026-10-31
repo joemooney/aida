@@ -1,5 +1,6 @@
 id: 019ef78b-9e9c-7fe2-8133-f5d0af2a94fe
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-255
+agreed_id: TASK-2581
 title: Review Claude-to-Codex migration guidance for accuracy and tone
 description: |-
   Review docs/agents/porting-claude-code-to-codex.md and the cross-link added to docs/agents/cross-agent-onboarding.md.
@@ -74,6 +75,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-0420 (now resolve to the survivor): 7be3b56ce4b7593b3b0c3d5472ae07e4be97d12b 4ed99484c85c9f8335a6bfc67feb1e13fd4c8973'
+- id: 01a1942b-5bd7-7400-a4c2-f8af754cb35c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.959138813Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2581
 implementation_info:
   implemented: false
   completed_at: 2026-06-25T07:43:51.999567872Z

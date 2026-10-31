@@ -1,5 +1,6 @@
 id: 01a1895f-c2df-7f71-bf8b-923b9468ac78
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-003
+agreed_id: FAQ-143
 title: Why does changing directories or opening another terminal select a different AIDA binary?
 description: |
   **Development activation belongs to the shell, not to its current directory. Changing directories does not change the executable already selected on PATH.**
@@ -37,6 +38,15 @@ tags:
 - audience:dev
 - audience:user
 - topic:build
+history:
+- id: 01a1942b-6a09-7db1-b6ec-7a74fab1ce2d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.593877872Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-143
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

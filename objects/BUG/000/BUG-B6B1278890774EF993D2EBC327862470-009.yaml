@@ -1,5 +1,6 @@
 id: 01a1816f-0060-70f3-a963-fb62c52e8933
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-009
+agreed_id: BUG-2326
 title: 'Reviewer launcher refuses PRs that touch only tracked .aida/ files: intermediate-only check honours the local info/exclude'
 description: |-
   PR-3008 (.aida/config.toml only) was refused: 'changes only intermediate/generated files'. pr_cmd.rs git_path_is_ignored runs git check-ignore -q --no-index, which (deliberately, TASK-480) reports tracked files that match an ignore rule. But it also honours $GIT_COMMON_DIR/info/exclude, a per-clone local file; on this host it contains /.aida/ and /.aida/* while the repo tracks .aida/config.toml, .aida/discipline/** and standing orders. So any .aida/-only PR (protected config, discipline docs) cannot be reviewed without AIDA_ALLOW_INTERMEDIATE_ONLY.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65e9-71c0-968a-26420810a412
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.537120276Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2326
 processing_record:
 - id: 01a1823f-3996-7602-898f-c4f0ba00cebe
   timestamp: 2026-10-28T11:22:24.022560147Z

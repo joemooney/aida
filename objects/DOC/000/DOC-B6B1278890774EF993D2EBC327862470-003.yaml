@@ -1,0 +1,102 @@
+id: 01a0d1a7-54a2-7e20-8568-1ffb6c1261ae
+spec_id: DOC-b6b1278890774ef993d2ebc327862470-003
+agreed_id: DOC-3
+title: 'Human explanation: reusable Jev questions and recorded judgments'
+description: |
+  docs/explanations/2026-09-24-jev-questions-and-recorded-judgments.md — plain-language explanation of what AIDA's optional Jev advisory integration actually does today, verified against exposition.rs, wiki.rs, graded_review.rs, contradictions.rs, and evaluator.rs on main.
+
+  Today there are three hand-written Jev call sites, each with its own inline question: the `aida explain` constraint-preservation audit, the pull-request graded-review criterion check, and the `aida doctor --contradictions` semantic classification of candidate pairs the mechanical sweep already found. Jev is opt-in (one environment variable), advisory only, and fails closed to a deterministic offline fallback. Each site records its answer differently — an exposition sidecar file, a per-PR verdict file, or (for the contradiction scan) nowhere at all — so there is no shared recorded-judgments log yet.
+
+  A reusable, versioned question catalog and a shared recorded-judgments store with full provenance (source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency) — the surface this doc entry is filed against — is a proposed direction, not yet built. Neither is an `aida jev` command of any kind, nor the "route this to developer/reviewer/advisor/architect/research" question. See the comment on this entry for the full gap list against the acceptance criteria above.
+
+  This is a human-authored explanation, not canonical requirement text and not an AI-generated replacement for the story.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-24T04:23:19.458083645Z
+modified_at: 2026-09-25T16:46:33.725077609Z
+req_type: Doc
+tags:
+- example
+- exposition
+- human
+- jev
+relationships:
+- rel_type: References
+  target_id: 01a0d18c-18d0-7472-bf35-1a4dd540bd0f
+  created_at: 2026-09-24T04:23:31.721572077Z
+comments:
+- id: 01a0d5aa-1af1-7321-8be4-ea062d53530d
+  author: joe.mooney@gmail.com
+  content: |
+    Verification pass against main (post TASK-1470), recorded so the description above isn't read as claiming more than exists.
+
+    What's real today — three hand-written Jev call sites, each with its own prompt and its own response shape:
+    - `aida explain`'s advisory constraint-preservation check (exposition.rs::audit_exposition, evaluate_noul), gated by AIDA_JEV_API_KEY, fails closed to the offline mechanical audit.
+    - The graded-review criterion check used by the automated PR-completion flow (graded_review.rs::execute_graded_review, evaluate_noul per residual prose criterion).
+    - The contradiction sweep behind `aida doctor --contradictions` (contradictions.rs::sweep_contradictions_at, evaluate_choice over mechanically-matched candidate pairs).
+
+    Gaps versus DOC-3's/STORY-1472's proposed surface — none of this exists in code yet, and the description above was written to not claim it does:
+    - No `aida jev` command of any kind (no `status`, no catalog list/show, no explicit "run this named question" invocation, no listing/inspecting recorded results). Confirmed by grepping cli.rs/lib.rs for a `jev` subcommand — there is none.
+    - No "future routing" question (develop/reviewer/advisor/architect/research). DOC-3's own description had listed this alongside the three real integrations as an "existing" one; it is not — there is no code that asks Jev this or consumes an answer to it.
+    - No reusable, versioned question catalog. Each of the three sites' prompt/options/instructions is hard-coded inline; nothing declares a stable question ID, version, primitive, allowed answers, or evidence/fallback policy as STORY-1472 acceptance criterion 2 asks for.
+    - No shared recorded-judgments store with the provenance fields STORY-1472 asks for (source hash, question version, model, confidence, heuristic marker, payload hash, timestamp, latency). What exists instead, per site:
+      - exposition.rs: the audit (evaluator, scores, findings) is saved inside the exposition sidecar YAML at `.aida/expositions/<SPEC-ID>/<audience>.yaml`.
+      - graded_review.rs / lib.rs (PR auto-complete): the verdict, including per-criterion probability/confidence/model/payload hash, is saved to `.aida/review-verdicts/PR-<n>-graded.json`.
+      - contradictions.rs: findings (including confidence/probability/model/heuristic) are computed and printed/returned as JSON per invocation; nothing is written to disk, so a repeat `aida doctor --contradictions` re-asks Jev from scratch.
+    - No `aida jev status` reporting configured model/endpoint/credential availability (STORY-1472 acceptance criterion 1) — the closest existing thing is the environment-variables doc's description of `AIDA_JEV_API_KEY`/`AIDA_JEV_ENDPOINT`/`AIDA_JEV_MODEL`, which is documentation, not a runtime status command.
+
+    Comprehension measurement: the description above deliberately does not claim the `aida explain` readability/constraint-preservation scores measure actual human comprehension — they're a mechanical jargon heuristic or a single Jev advisory question, not a validated comprehension measure. Per current guidance, TASK-1437 and TASK-1440 (reopened; the earlier "human comprehension pilot" trial data backing them appears fabricated) are where genuine comprehension measurement would need to be designed and validated before any doc could honestly claim exposition quality is comprehension-tested.
+
+    Recommendation: if/when STORY-1472 is implemented, it should (a) factor the three existing inline prompts into named, versioned questions rather than leaving them ad hoc, and (b) give them a shared recorded-judgments log with the provenance fields above, including for the contradiction sweep, which currently has none.
+  created_at: 2026-09-24T23:04:50.161154468Z
+  modified_at: 2026-09-24T23:04:50.161154468Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d5b0-8934-7251-a5f7-df14e4db5b3d
+  author: joe
+  content: 'Review: its one inaccuracy is fixed in 3efae2e9a8. The doc no longer calls AIDA_JEV_API_KEY the single switch: graded review and the contradiction sweep also accept TYPESAFE_API_KEY, including from ~/.env, as docs/environment-variables.md already documents. All other claims were verified against main. APPROVE. Queued for batch 57.'
+  created_at: 2026-09-24T23:11:51.603982683Z
+  modified_at: 2026-09-24T23:11:51.603982683Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a0d5bc-0f50-7a13-988b-d56606b14732
+  author: aida-auto-bump
+  timestamp: 2026-09-24T23:24:26.832165419Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a0d976-24fd-7d41-97a9-c7c04b0ec97b
+  author: aida-auto-bump
+  timestamp: 2026-09-25T16:46:33.725046059Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1942b-5e0b-7c30-8895-dccc05587e9f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.523821551Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: DOC-1-174
+    new_value: DOC-b6b1278890774ef993d2ebc327862470-003
+processing_record:
+- id: 01a0d5bc-0f56-7c63-8917-dca21a6445c4
+  timestamp: 2026-09-24T23:24:26.838702233Z
+  agent: aida
+  commit_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
+  summary: Completed via merge c7d35baa
+- id: 01a0d976-24fd-7d41-97a9-c7da9a1df5d9
+  timestamp: 2026-09-25T16:46:33.725073614Z
+  agent: aida
+  commit_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9
+  summary: Completed via merge c7d35baa
+custom_fields:
+  audience: user
+  scenario: human orientation
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-25T16:46:33.725040621Z
+  completion_sha: c7d35baa35b4965c961adec0b1d68a098e3701e9

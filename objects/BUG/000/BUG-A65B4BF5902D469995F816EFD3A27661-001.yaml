@@ -1,5 +1,6 @@
 id: 01a18968-65ca-7971-a97a-fbfccf17648d
 spec_id: BUG-a65b4bf5902d469995f816efd3a27661-001
+agreed_id: BUG-2317
 title: Scaffold status and diff misreport user-owned README changes as AIDA drift
 description: |
   ## Problem
@@ -101,6 +102,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6a14-7ad1-aaec-2d8d2f642096
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.604714839Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2317
 processing_record:
 - id: 01a18e44-071c-7652-a42e-4b41d49086fe
   timestamp: 2026-10-30T19:23:05.372598145Z

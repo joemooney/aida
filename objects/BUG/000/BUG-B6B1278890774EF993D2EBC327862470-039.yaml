@@ -1,5 +1,6 @@
 id: 01a18cd0-cdfc-7ee1-a1e8-6ce429a6ce61
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-039
+agreed_id: BUG-2356
 title: process_identity_is_alive reads kill(0) then /proc stat, so a zombie reaped between them looks alive (production callers)
 description: 'Found reviewing PR-3133 (BUG-HOME-037) on 2026-10-30. aida_core::liveness::process_identity_is_alive checks liveness in two steps (kill(pid,0), then /proc/<pid>/stat), so a process reaped between the two reads is reported alive. PR-3133 stops the regen::score test helper relying on it, but production callers keep it: worktree_pool.rs ~324 and liveness.rs ~1444/1453. Failing toward ''alive'' keeps leases and worktrees held longer than they should be. Acceptance: decide liveness from one consistent source (a pidfd where available; otherwise a start-time-checked /proc read with the race handled), with a test that reaps a child between the two reads.'
 status: Completed
@@ -41,6 +42,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6b7b-7770-8284-fcf35fa6e420
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.963936693Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2356
 processing_record:
 - id: 01a18e7a-1c22-7141-9d90-a8b8be0fc39d
   timestamp: 2026-10-30T20:22:09.698648426Z

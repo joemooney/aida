@@ -1,0 +1,66 @@
+id: 01a150d2-8039-7313-8254-15dd07f236e4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-493
+agreed_id: TASK-1617
+title: 'non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1351, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt has latched, a second in-flight member whose result is Held, Inconclusive, or an un-shelvable failure makes apply_batch_result return Some(...) without recording it, and halted.get_or_insert discards that result, so the member appears in no summary list (not shipped/shelved/skipped). Record it (e.g. in skipped with its stop reason).
+  Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:02:15.097047273Z
+modified_at: 2026-10-19T15:56:33.208779042Z
+req_type: Task
+tags:
+- carried-from:TASK-1351
+- finding-hash:e850c551
+- from-review:TASK-1351
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-19T15:56:33.208775844Z
+  created_by: joe
+comments:
+- id: 01a154e0-ee48-7160-bb4c-4752669dc9ec
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1951 (Sweep: ship / reconcile / auto-complete fail-open and dead-code follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:56:29.640334629Z
+  modified_at: 2026-10-19T15:56:29.640334629Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a150ef-9965-7453-8df7-cf232d3889c0
+  author: joe
+  timestamp: 2026-10-18T21:34:02.085272785Z
+  changes: []
+- id: 01a154e0-f644-7fe1-a37f-851a76f84104
+  author: joe
+  timestamp: 2026-10-19T15:56:31.684571731Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a154e0-fffe-7312-9159-81225022e4e2
+  author: joe
+  timestamp: 2026-10-19T15:56:34.174357227Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-615b-7bb0-8c18-2f3f26f2f23e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.371987818Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-346
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-493
+filed_at:
+  code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude

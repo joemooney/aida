@@ -1,5 +1,6 @@
 id: 01a19409-b52f-7e71-a2eb-404366bb7670
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-256
+agreed_id: STORY-2215
 title: aida agent new at a human terminal with no parent grant offers to mint one inline instead of refusing with an eval recipe
 description: |-
   Operator request 2026-10-31 15:15. Today, plain 'aida agent new' from a human shell with no AIDA_SESSION_GRANT refuses: 'no valid parent seat grant is active. run eval "$(aida role enter advisor --delegate-seat implementer)", then retry'. This is the most common way a person starts a lane, and the refusal makes them do a two-step eval dance whose only purpose is to prove a human is at the terminal, which agent new can prove itself.
@@ -106,6 +107,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1942b-6c55-77e1-abe3-e57f057a3404
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.181324788Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2215
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main

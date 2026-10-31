@@ -1,5 +1,6 @@
 id: 01a18235-cf35-7963-801d-75f6a50aaabe
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-046
+agreed_id: STORY-2086
 title: 'Review PR-3025: [AI:claude] refactor(gate): facade rule for every gate module (TASK-b6b1278890774ef993d2ebc327862470-024)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-facade-all-modules`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6661-75f1-9bda-77f8fa73528e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.657661333Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2086
 filed_at:
   code_sha: 6efd7270069d247871f1c043b227c8b21a3ec974
   branch: fix/gate-facade-all-modules

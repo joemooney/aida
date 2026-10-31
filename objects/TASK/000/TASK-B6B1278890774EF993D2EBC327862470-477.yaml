@@ -1,0 +1,58 @@
+id: 01a14f6c-b5d1-7822-b2cc-407dce116f12
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-477
+agreed_id: TASK-1398
+title: 'cosmetic: a marker on a trait does not cover its default methods, while an impl…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1785, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: a marker on a trait does not cover its default methods, while an impl-level marker covers its methods; enum discriminants are never regions. Document this or align it (Regions visitor, lint_constants.rs:178-213).
+  Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T14:31:26.929384158Z
+modified_at: 2026-10-19T15:46:59.169571922Z
+req_type: Task
+tags:
+- carried-from:TASK-1785
+- finding-hash:96c943f0
+- from-review:TASK-1785
+- kind:carried-forward
+comments:
+- id: 01a154d8-3105-7690-9722-77bacd005ec5
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1398 and TASK-1812 both specify trait-level marker coverage for default methods; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:56.901668224Z
+  modified_at: 2026-10-19T15:46:56.901668224Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a14f90-068e-7820-856c-101e2cbf9b28
+  author: joe
+  timestamp: 2026-10-18T15:10:01.358757636Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154d8-39e1-7202-a5fe-e264589c4241
+  author: joe
+  timestamp: 2026-10-19T15:46:59.169567628Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6146-72c3-867e-74d45aad62e7
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.350099314Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-330
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-477
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

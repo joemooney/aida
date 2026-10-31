@@ -1,5 +1,6 @@
 id: 019ef78c-052b-7081-8db0-c403178751f3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-260
+agreed_id: TASK-2586
 title: Create end-to-end Codex migration validation runbook
 description: |-
   Define and execute a practical validation path proving a Codex CLI session can participate in AIDA work without relying on Claude Code-specific semantics.
@@ -50,6 +51,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-0425 (now resolve to the survivor): 1df577dc879604e2abdd010d495960dcbc4c3335'
+- id: 01a1942b-5bd7-7400-a4c2-f8cdfcc095af
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.959820935Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2586
 implementation_info:
   implemented: false
   completed_at: 2026-06-25T07:47:50.781417718Z

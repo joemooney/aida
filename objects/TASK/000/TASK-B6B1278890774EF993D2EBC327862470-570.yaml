@@ -1,0 +1,60 @@
+id: 01a160e2-1512-7083-9529-e92d2c7311ea
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-570
+agreed_id: TASK-1691
+title: 'cosmetic: Tests 4d/4e in tests/test_release_pr_flow.sh grep release.sh source l…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: Tests 4d/4e in tests/test_release_pr_flow.sh grep release.sh source line order and patterns instead of exercising behaviour; a refactor that keeps the semantics breaks them. Prefer behavioural probes (e.g. a fake read that snapshots the lease file).
+  Reviewed sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T23:53:11.698318390Z
+modified_at: 2026-10-21T23:54:58.759942853Z
+req_type: Task
+tags:
+- carried-from:TASK-1721
+- finding-hash:be32eaf2
+- from-review:TASK-1721
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-21T23:54:58.759939312Z
+  created_by: joe
+history:
+- id: 01a160e3-af51-7ff3-a0f9-d4f79ce3ca0d
+  author: joe
+  timestamp: 2026-10-21T23:54:56.721416312Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a160e3-bc7f-7fc2-b6e7-397426fcd208
+  author: joe
+  timestamp: 2026-10-21T23:55:00.095949097Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1610d-f6dd-7e81-a420-72ec7da27eea
+  author: joe
+  timestamp: 2026-10-22T00:41:07.549949388Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6246-7f21-bdb6-fc4ae60a553c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.606645768Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-423
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-570
+filed_at:
+  code_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude

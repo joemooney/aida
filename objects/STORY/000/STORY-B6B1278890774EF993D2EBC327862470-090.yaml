@@ -1,5 +1,6 @@
 id: 01a188ff-d0d1-7ee2-b831-b2fa163b244a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-090
+agreed_id: STORY-2130
 title: 'Review PR-3099: [AI:codex] docs(autonomy): publish autonomy and trust boundaries (TASK-B6B1278890774EF993D2EBC327862470-109)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188fa`) for branch `task-b6b1278890774ef993d2ebc327862470-109-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-69f0-7820-a9ff-713e43904e6d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.568506166Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2130
 filed_at:
   code_sha: e796316741cee5a255f91a9d35e2123197935348
   branch: task-b6b1278890774ef993d2ebc327862470-109-work

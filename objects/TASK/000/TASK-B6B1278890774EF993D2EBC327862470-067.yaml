@@ -1,5 +1,6 @@
 id: 01a183cf-26e5-71d2-bce0-d17f6ed7a691
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-067
+agreed_id: TASK-2480
 title: 'PR-3056 follow-ups: era-marker drop must never leave the marker absent (fail-open window), NotFound-safe cleanup, gc aside handling + test'
 description: |
   Non-blocking findings from the APPROVED review of PR #3056 (TASK-b6b1278890774ef993d2ebc327862470-059) at 9e63e7c63640. All in aida-core/src/mailbox_lifecycle. ADVISOR RULING: replace rename-aside with a design that never leaves the marker path absent. Validate staleness, then remove the marker only if its (dev,ino) still matches what was judged stale (open it O_NOFOLLOW, fstat, compare, then unlink by name and re-stat; on a mismatch keep it). If that's impossible without a window, hold the Lifecycle lock for the drop. Treat NotFound on cleanup as success. gc never removes an aside younger than 10 minutes; it restores or reports a fresh aside. Add the leftovers_tests case.
@@ -93,6 +94,14 @@ history:
   timestamp: 2026-10-28T23:14:09.185984433Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67b3-71a0-b375-cce69834d1ba
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.995680672Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2480
 processing_record:
 - id: 01a18414-b4b3-7622-877c-90a21e877b21
   timestamp: 2026-10-28T19:55:11.923374850Z

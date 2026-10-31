@@ -1,5 +1,6 @@
 id: 01a1877b-f737-7fe0-a507-aee81eb91f5b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-081
+agreed_id: STORY-2121
 title: 'Review PR-3090: [AI:claude] feat(gate): M1 slice 1 - one gate ledger per change for review verdicts (Refs STORY-B6B1278890774EF993D2EBC327862470-080)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-080`.
@@ -98,6 +99,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6995-7ff0-ba0f-856472a574c3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.477153108Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2121
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main

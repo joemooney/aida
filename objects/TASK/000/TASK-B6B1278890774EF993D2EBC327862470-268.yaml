@@ -1,5 +1,6 @@
 id: 019ef7a5-ff3b-7f50-a3ab-7c9d9ed6ca82
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-268
+agreed_id: TASK-2594
 title: Design specialized advisor routing by subsystem
 description: |-
   Define how AIDA routes advisor questions, punts, findings, reviews, and queues to subsystem-specialized advisors.
@@ -50,6 +51,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-0435 (now resolve to the survivor): f2d23bc89aa1196318e6d09b2ef0e474dae31d34'
+- id: 01a1942b-5bd8-7462-8344-57fd2b38eade
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.960436297Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2594
 implementation_info:
   implemented: false
   completed_at: 2026-07-20T01:13:04.420050578Z

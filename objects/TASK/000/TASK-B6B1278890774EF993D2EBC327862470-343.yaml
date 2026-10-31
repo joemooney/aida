@@ -1,0 +1,52 @@
+id: 01a0bc62-0303-7150-90b4-abf4c96b854f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-343
+agreed_id: TASK-172
+title: GitLab mirror rejected rebased story branch
+description: While shipping STORY-1352, the GitHub force-with-lease push after rebasing succeeded and PR-1987 opened, but the configured GitLab mirror rejected story-1352-work as non-fast-forward. GitHub is authoritative for this PR; inspect aida remote status before relying on the mirror branch.
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-20T01:15:35.043752414Z
+modified_at: 2026-09-20T01:20:52.364709499Z
+req_type: Task
+tags:
+- from-advisor:STORY-1352
+- headless
+- kind:observation
+- linked:STORY-1352
+- remote:gitlab
+- severity:minor
+comments:
+- id: 01a0bc66-d6a2-7802-be42-fc1cbfd8c868
+  author: joe
+  content: |-
+    [advisor:triage] Dismissed as expected behaviour, not a defect — but the observation is right and it corrects something I asserted a few hours ago, so the reasoning is worth more than the ticket.
+
+    WHY IT IS EXPECTED. The force-with-lease after a rebase went to GitHub. The mirror leg is a plain push, so a rebased branch is a non-fast-forward there and is refused. That is the designed shape: the mirror fan-out is best-effort and warns rather than failing, precisely so a mirror cannot block a merge. GitHub is authoritative, the session said so, and pointing at `aida remote status` was the right next step. Nothing is broken and nothing needs fixing for a work branch that merges and is deleted within the hour.
+
+    WHAT IS ACTUALLY WORTH KEEPING, and it is about me rather than about this code. Earlier tonight I treated the GitLab mirror as a backup. When a spec was parked with ten unmerged commits, I checked both hubs, found identical SHAs, and told the product seat the work was safe off-host. That was true for that branch. This finding shows the general habit is weaker than I made it sound: a mirror copy of a work branch is only current until someone rebases, after which the mirror silently keeps the pre-rebase commits and no longer matches.
+
+    So "I checked both hubs" means the hubs agreed AT THAT MOMENT. It does not mean the mirror will track the branch. For a parked branch that nobody is rebasing, the guarantee holds. For an active branch, it decays without announcing itself, which is the same shape as everything else I have been filing today.
+
+    The invariant that actually matters for the mirror is main and aida-store staying identical, and neither of those is rebased, so this does not touch it.
+
+    NOT PROMOTING. There is no change to make: refusing a non-fast-forward is correct, warning rather than failing is correct, and the detector already exists. Filing a spec would add a row to a backlog we are trying to shrink in exchange for nothing. The session that reported it behaved exactly as wanted — noticed an anomaly, established which remote was authoritative, named the diagnostic, and did not guess.
+  created_at: 2026-09-20T01:20:51.362456018Z
+  modified_at: 2026-09-20T01:20:51.362456018Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc66-da8c-7361-94c6-c443cdd2454a
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-09-20T01:20:52.364709499Z
+  modified_at: 2026-09-20T01:20:52.364709499Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a1942b-5ca8-78e0-81d0-8a95903641de
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.168131230Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-148
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-343

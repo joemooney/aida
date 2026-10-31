@@ -1,5 +1,6 @@
 id: 01a18655-d0c9-7490-ba48-bfdd8b1a30bc
 spec_id: EPIC-b6b1278890774ef993d2ebc327862470-001
+agreed_id: EPIC-609
 title: Separate sharing policy from recoverable distributed ID allocation
 description: |
   ## Purpose and status
@@ -83,6 +84,14 @@ history:
   timestamp: 2026-10-29T06:33:15.806557581Z
   session_id: 59349e57-271d-4b9e-b662-8585b949736a
   changes: []
+- id: 01a1942b-6952-73b1-b8a4-2dd16abd6dc4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.410672419Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: EPIC-609
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main

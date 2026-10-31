@@ -1,5 +1,6 @@
 id: 01a1940c-ad69-7bf3-a8da-4726cbde065b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-280
+agreed_id: TASK-2606
 title: Publish an explainer of roles, seats, grants, mandates and the deputy on the product website
 description: |
   ## Why
@@ -37,6 +38,15 @@ comments:
   created_at: 2026-10-31T22:23:51.852426783Z
   modified_at: 2026-10-31T22:23:51.852426783Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+history:
+- id: 01a1942b-6c57-7bb1-8ec7-f77735233a6a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.183219623Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2606
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main

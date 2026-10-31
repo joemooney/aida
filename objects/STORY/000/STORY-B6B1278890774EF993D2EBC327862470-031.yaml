@@ -1,5 +1,6 @@
 id: 01a17f45-cee8-7c60-8a9d-c1968143a3b3
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-031
+agreed_id: STORY-2071
 title: 'Review PR-2990: [AI:claude] fix(transport): review follow-ups (TASK-b6b1278890774ef993d2ebc327862470-011, TASK-b6b1278890774ef993d2ebc327862470-012)'
 description: Hand-filed review story (auto-queue declined in the lane sandbox).
 status: Completed
@@ -33,6 +34,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6556-7452-8959-1eb0274e4780
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.390787134Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2071
 filed_at:
   code_sha: 1f280c78debfc4178ba9ec5bce359cf03e0f1daf
   branch: main

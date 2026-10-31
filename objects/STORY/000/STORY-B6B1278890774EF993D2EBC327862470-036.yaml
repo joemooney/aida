@@ -1,5 +1,6 @@
 id: 01a180e8-1413-7992-b067-7694b81c3175
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-036
+agreed_id: STORY-2076
 title: 'Review PR-3005: [AI:claude] feat(adoption): migration inventory, owned uninstall, CI bootstrap and adopted init (STORY-1741)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1741-s3`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-65d7-7f81-b0df-9b332f98b9e0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.519063361Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2076
 filed_at:
   code_sha: 7321d3e112f377c186482faa12c0345be41b1ff5
   branch: story-1741-s3

@@ -1,5 +1,6 @@
 id: 01a18486-a502-7bc2-85a1-817f5d290a24
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-069
+agreed_id: STORY-2109
 title: 'Review PR-3069: [AI:claude] fix(mailbox): write_source_id falls back without rename or links; post-placement errors warn (TASK-b6b1278890774ef993d2ebc327862470-078)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/source-id-write-fallback`.
@@ -39,6 +40,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-67df-7aa1-86ce-d2cd742c6d47
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.039204533Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2109
 filed_at:
   code_sha: 1b2b235a3dd4de9cac540ebec457274b74fe1f94
   branch: fix/source-id-write-fallback

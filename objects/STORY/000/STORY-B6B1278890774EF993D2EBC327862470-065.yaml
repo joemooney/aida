@@ -1,5 +1,6 @@
 id: 01a18415-faea-7672-9d47-bdd5b4a0b49b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-065
+agreed_id: STORY-2105
 title: 'Review PR-3061: [AI:claude] fix(mailbox): STORY-1843 D1 follow-ups - an unresolvable worktree fails closed (Refs STORY-1843)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-d1-followups`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-67b9-7393-99f7-38fd449f89b8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.001526931Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2105
 filed_at:
   code_sha: 66d27754f253df43300358737a462254d603ef6b
   branch: story-1843-d1-followups

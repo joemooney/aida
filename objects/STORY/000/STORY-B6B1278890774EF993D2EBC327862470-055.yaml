@@ -1,5 +1,6 @@
 id: 01a182f0-8f05-7bd1-8226-5958fbfb82a0
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-055
+agreed_id: STORY-2095
 title: 'Review PR-3042: [AI:claude] feat(mailbox): STORY-1843 D1 role-cohort delivery ownership (Refs STORY-1843)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-d1-delivery`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6713-7f32-bf20-80d2fe0aab2e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.835403881Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2095
 filed_at:
   code_sha: 821a39d1511b023ee276e4372df2fec820f97439
   branch: story-1843-d1-delivery

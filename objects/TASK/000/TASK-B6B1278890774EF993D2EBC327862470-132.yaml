@@ -1,5 +1,6 @@
 id: 01a18e67-6728-7af1-b44c-3cf46b898bc4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-132
+agreed_id: TASK-2544
 title: 'cosmetic (non-blocking): docs/showcase/index.html start section: the new ''Explo…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-128, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   author: joe
   timestamp: 2026-10-31T00:58:34.877063268Z
   changes: []
+- id: 01a1942b-6be0-7f90-abaa-24eb684ae1e2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.064731101Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2544
 filed_at:
   code_sha: d7ff223575290d0a2d3d749400efa29f7ed24605
   branch: main

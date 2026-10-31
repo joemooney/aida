@@ -1,5 +1,6 @@
 id: 01a17774-88b8-7f40-a8e2-1441e28fbb2c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-007
+agreed_id: STORY-2047
 title: 'Review PR-2944: [AI:claude] feat(mailbox): read-only logical inbox snapshot across product worktrees (Refs STORY-1843)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1775f`) for branch `story-1843`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6410-7141-9612-c36922a1bd0d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.064669898Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2047
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main

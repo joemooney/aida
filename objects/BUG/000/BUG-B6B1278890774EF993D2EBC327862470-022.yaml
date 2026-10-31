@@ -1,5 +1,6 @@
 id: 01a18a3e-0f00-7e50-8791-e2d3db07bfde
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-022
+agreed_id: BUG-2339
 title: Rework lanes open a new PR instead of pushing to the spec's open PR
 description: '2026-10-29: the TASK-HOME-116 rework lane opened PR-3109 (branch ...-116-2) while PR-3107 was open with the change-request hold, forcing a close-as-superseded. Acceptance: when a spec has an open PR with a rework hold, queue work --fresh checks out that PR''s branch and pushes to it; a new branch needs an explicit flag.'
 status: Completed
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6a7b-7b83-a46f-4447c8f223b4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.707837519Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2339
 processing_record:
 - id: 01a18d4e-ecec-7e41-bdc0-b41ce758d294
   timestamp: 2026-10-30T14:55:22.348191776Z

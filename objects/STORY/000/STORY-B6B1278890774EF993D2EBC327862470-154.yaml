@@ -1,5 +1,6 @@
 id: 01a191d5-51ab-7de3-ab88-4aace78085bb
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-154
+agreed_id: STORY-2194
 title: 'Review PR-3164: [AI:claude] feat(deputy): aida deputy runs submitted jobs under the operator''s grant, terminal only by TTY policy (STORY-B6B1278890774EF993D2EBC327862470-099)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19190`) for branch `story-b6b1278890774ef993d2ebc327862470-099`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c3e-7962-94c5-064988778ec9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.158027074Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2194
 filed_at:
   code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
   branch: main

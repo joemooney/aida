@@ -5,6 +5,7 @@ hostname = "imac"
 email = "joe.mooney@gmail.com"
 user = "joe"
 registered = "2026-05-06T04:46:47.705839785Z"
+retired_at = "2026-10-31T22:53:56.228932990Z"
 
 [[nodes]]
 id = "3"

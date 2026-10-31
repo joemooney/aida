@@ -1,5 +1,6 @@
 id: 01a18dd1-4ebf-7560-a85c-c20ef56ff4c9
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-131
+agreed_id: STORY-2171
 title: 'Review PR-3142: [AI:claude] fix(awaiting): role mail is direct, named by sender and subject, and not buried by old automated notices (BUG-b6b1278890774ef993d2ebc327862470-040)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18d92`) for branch `bug-b6b1278890774ef993d2ebc327862470-040`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6ba4-7042-8bfd-bacb769fab94
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.004941456Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2171
 filed_at:
   code_sha: 1da6f81bbf1173bb05675eb489be8390982bcdd9
   branch: main

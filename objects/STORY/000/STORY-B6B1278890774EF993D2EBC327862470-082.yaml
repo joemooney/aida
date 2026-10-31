@@ -1,5 +1,6 @@
 id: 01a18785-a06e-7d60-872a-85e31388136b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-082
+agreed_id: STORY-2122
 title: 'Review PR-3091: [AI:claude] fix(node): spec-scope commands resolve node-alias IDs (BUG-B6B1278890774EF993D2EBC327862470-015)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-015`.
@@ -68,6 +69,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-69ab-74a0-ae74-ee89c31c2fd4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.499569981Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2122
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main

@@ -1,5 +1,6 @@
 id: 01a18f16-63e2-7f12-b862-9408f86daed0
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-045
+agreed_id: BUG-2362
 title: 'Headless reviewer launcher prints a stale ''verdict: PASS'' summary when no verdict was collected, and a contained reviewer''s ''aida review record'' is refused'
 description: |-
   Seen 2026-10-30 16:10 on PR-3142 (reviewer session 01a18f11, log /tmp/aida_review_3142.log, jsonl .aida/headless-logs/pr-3142-01a18f10-262b-78c1-b20b-9c7a504f8283.jsonl).
@@ -131,6 +132,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c19-74e2-b5c4-9274230eb61d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.121422156Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2362
 processing_record:
 - id: 01a1918f-567a-7fd2-8f93-c0a2b2481868
   timestamp: 2026-10-31T10:44:12.538733660Z

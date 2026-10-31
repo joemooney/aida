@@ -1,5 +1,6 @@
 id: 01a18f1a-4576-7d92-89a2-f5a15ff04837
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-046
+agreed_id: BUG-2363
 title: 'Spec IDs that differ only by leading zeros are distinct specs: 30 TASK-04xx/TASK-4xx collisions; the ID number must be numeric identity, and display padding a setting'
 description: |-
   Operator report 2026-10-30: 'aida list' shows TASK-0418 (completed) and TASK-418 (rejected) as two different specs. The store holds 30 such pairs: TASK-0413..TASK-0446 (created 2026-06..10) alongside TASK-413..TASK-446 (created 2026-05). Legacy TYPE-NNN IDs are compared as strings, while node-local IDs already normalize the sequence (node_alias::expand re-pads, so BUG-HOME-36 finds BUG-<node>-036). Some allocator wrote 4-digit zero-padded legacy IDs without checking the numeric value against existing unpadded ones. Padded IDs are referenced in code traces (autopilot.rs, plan_cmd.rs, leases.rs, mcp_translate.rs), CHANGELOG.md and ~82 store objects.
@@ -398,6 +399,14 @@ history:
   session_id: 01a192ca4027
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1942b-6c1a-7fc1-972e-34a60cf00300
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.122253151Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2363
 processing_record:
 - id: 01a19298-d7ac-7993-9699-a898e858d67d
   timestamp: 2026-10-31T15:34:12.652822197Z

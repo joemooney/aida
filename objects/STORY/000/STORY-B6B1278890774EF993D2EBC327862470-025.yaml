@@ -1,5 +1,6 @@
 id: 01a17e2a-8ae8-7822-9113-f4f96f612371
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-025
+agreed_id: STORY-2065
 title: 'Review PR-2981: [AI:claude] fix(transport): git 2.56 URL push writes origin tracking ref (BUG-b6b1278890774ef993d2ebc327862470-007)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/transport-test-flake`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64ff-74b2-9fea-30422a069c65
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.303461598Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2065
 filed_at:
   code_sha: b5b1c4c1ad0c6f67e2b3bdee977ea7f329a4f5b9
   branch: fix/transport-test-flake

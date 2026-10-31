@@ -1,5 +1,6 @@
 id: 01a17dbe-1000-7670-b78d-abca9c9b0397
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-024
+agreed_id: STORY-2064
 title: 'Review PR-2978: [AI:claude] chore(ci): budget the gate dispatch-suite mount ratchet (Refs STORY-1889)'
 description: Hand-filed review story (Refs-only PR).
 status: Completed
@@ -33,6 +34,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-64fd-7f61-9a4d-947f88b01bf1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.301458123Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2064
 filed_at:
   code_sha: 195b5ccc05525017258e668eaff62e78ad8284d6
   branch: main

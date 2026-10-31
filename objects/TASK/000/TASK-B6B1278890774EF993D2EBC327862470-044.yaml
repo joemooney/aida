@@ -1,5 +1,6 @@
 id: 01a1828e-db7e-7f61-8c07-996a3e6dd6a3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-044
+agreed_id: TASK-2457
 title: (cosmetic, non-blocking) The PR body still names only -014/-015 and never menti…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-014, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-66bd-7e53-b33d-49f73555c9bf
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.749367761Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2457
 filed_at:
   code_sha: 6488c041c27974682823d2b09c7f680aee94b777
   branch: main

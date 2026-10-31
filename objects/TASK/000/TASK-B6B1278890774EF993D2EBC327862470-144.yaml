@@ -1,5 +1,6 @@
 id: 01a1918f-9cce-7603-952e-d68dd02f99c1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-144
+agreed_id: TASK-2555
 title: 'Contained headless child issuance: fail fast for every role, typed quota refusal, dead issuer removed'
 description: |
   Bundled cleanup from the PR-3157 (BUG-HOME-045) approved review. This task absorbs TASK-HOME-143, TASK-HOME-145 and TASK-HOME-146 (advisor ruling 2026-10-31 04:15, 2026-10-28 one-ruling rule).
@@ -145,6 +146,14 @@ history:
   timestamp: 2026-10-31T15:39:10.697834805Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a1942b-6c3a-73d1-8436-85b3b0ebd403
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.154951133Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2555
 processing_record:
 - id: 01a19211-91cf-77f1-9d88-6fd040294310
   timestamp: 2026-10-31T13:06:27.407897586Z

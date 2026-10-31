@@ -1,0 +1,71 @@
+id: 01a0e817-eb95-7f83-9a82-d8931a208cde
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-371
+agreed_id: TASK-200
+title: 'AC4 is still unmet: this diff adds a refusal only after a drain-mode spec is pa…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1701, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC4 is still unmet: this diff adds a refusal only after a drain-mode spec is passed to agent_new; it does not update the `aida agent new --help` description to disclose the interactive lane blocks until the TUI exits. A refusal at invocation is useful but is not the specified help text. Add an assertion against the actual help output or revise AC4 explicitly.
+
+  PR: #2249
+  Reviewed sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T12:57:56.885045802Z
+modified_at: 2026-09-28T18:30:59.989949486Z
+req_type: Task
+tags:
+- carried-from:BUG-1701
+- finding-hash:6acf4dac
+- from-review:PR-2249
+- kind:carried-forward
+comments:
+- id: 01a0e907-54a3-7573-9c58-6c2f4bba5b55
+  author: joe
+  content: |-
+    ADVISOR 2026-09-28 — NARROWED, half disproven. The finding has two clauses; they do not share a fate.
+
+    DISPROVEN: 'it does not update the aida agent new --help description to disclose the interactive lane blocks until the TUI exits.' It does. aida-cli-lib/src/cli.rs:8201-8202 carries 'This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that agent's session exits. A vendor TUI does not exit when its turn ends — it returns to its prompt...', and 'aida agent new --help' prints it today. It was NOT added after the review: it is present at the reviewed sha 5632229e663b9d782e1f2c427a3176792f8447ae, having landed earlier in #2247 (7324a5b437). So AC4's disclosure requirement was already met when the finding was written.
+
+    STILL UNMET: 'Add an assertion against the actual help output.' There is no such test — no file under aida-cli-lib/src/tests/ or tests/ asserts this help text, and nothing invokes 'agent new --help' and inspects it. So the disclosure is real but unguarded: a future clap refactor or doc-comment edit could silently drop it and nothing would fail.
+
+    DISPOSITION: keep this spec open, scoped to the test ONLY. Do not re-edit the help prose. Required: a test that runs 'aida agent new --help' (or asserts on the clap long_about) and fails if the blocking disclosure disappears. Do not assert the whole paragraph verbatim — that makes it a brittle prose ratchet; assert the load-bearing facts (that it BLOCKS, and that a TUI does not exit when its turn ends).
+  created_at: 2026-09-28T17:19:26.883459406Z
+  modified_at: 2026-09-28T17:19:26.883459406Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
+history:
+- id: 01a0e83c-44c6-7583-b71d-3c4340293ef9
+  author: joe
+  timestamp: 2026-09-28T13:37:39.014605903Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a0e948-d68e-7ef0-a042-dde06b3b387c
+  author: aida-auto-bump
+  timestamp: 2026-09-28T18:30:59.982649425Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1942b-5e31-7461-a18d-4b46d17438a2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.561775305Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-181
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-371
+processing_record:
+- id: 01a0e948-d695-7cc3-bd08-f6abfd23dfb3
+  timestamp: 2026-09-28T18:30:59.989945573Z
+  agent: aida
+  commit_sha: 1892671e6e5523e187f3b390ec02a8f666bfb1a5
+  summary: Re-approved at the post-main-merge head. Verified git diff origin/main..2125669990c3 contains ONLY the 12-line cli.rs test (byte-identical to the f8ba5fd026ed approval); the merge commit introduced nothing but already-merged main content (BUG-1689, TASK-1531).
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T18:30:59.982643288Z
+  completion_sha: 1892671e6e5523e187f3b390ec02a8f666bfb1a5

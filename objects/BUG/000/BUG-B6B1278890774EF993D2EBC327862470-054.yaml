@@ -1,5 +1,6 @@
 id: 01a1936a-430b-7770-8be4-960048e05e4d
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-054
+agreed_id: BUG-2371
 title: 'agent new delegation refusal: hint hard-codes ''role enter advisor'', picker offers undelegable seats, re-entry drops existing delegations'
 description: |
   ## Observed (operator terminal, 2026-10-31)
@@ -52,6 +53,14 @@ history:
   timestamp: 2026-10-31T20:17:38.551436599Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1942b-6c4b-7752-98dc-da832b3ad142
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.171492661Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2371
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main

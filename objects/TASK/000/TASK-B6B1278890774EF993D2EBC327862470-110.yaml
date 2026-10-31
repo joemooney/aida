@@ -1,5 +1,6 @@
 id: 01a188da-3bc1-7f82-83a2-5d70d3cfe0f5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-110
+agreed_id: TASK-2523
 title: Add Metrics navigation and evidence based reporting page
 description: |
   Slice 5 of 8 for the product documentation/showcase epic.
@@ -183,6 +184,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-69d3-7580-bcb9-ccd767c537f5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.539141756Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2523
 processing_record:
 - id: 01a18e17-a1cb-7be3-b189-f6f1cb55e1d6
   timestamp: 2026-10-30T18:34:35.851649236Z

@@ -1,5 +1,6 @@
 id: 01a18199-2053-7eb3-a042-cbd6525ca173
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-025
+agreed_id: TASK-2438
 title: 'cosmetic (non-blocking): PR title/body still name the superseded path docs/plan…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on SPIKE-B6B1278890774EF993D2EBC327862470-001, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-660c-7f62-b062-605f98301c08
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.572794693Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2438
 filed_at:
   code_sha: b49cf1b8fa62474dc85354f0e1bd549639e68baf
   branch: main

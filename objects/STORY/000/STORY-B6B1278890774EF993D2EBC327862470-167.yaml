@@ -1,5 +1,6 @@
 id: 019e0e28-86c8-7cf3-b486-1ff15d643e66
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-167
+agreed_id: STORY-2207
 title: 'Story 2a: Node id is String, not u32'
 description: |
   Type change across the kernel: NodeRegistryEntry.id, NodeConfig.node_id, AgreedIdBlock.node_id, dispenser sequence keys all become String.
@@ -34,5 +35,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing STORY-41 (now resolve to the survivor): 548f32c85922924b11740918748f3dfb4dbba21b fc021f59277465bfa0115481a9b7c6f79a3db27c'
+- id: 01a1942b-5b5f-7f22-948d-2ddf12d8c5f5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.839606990Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2207
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

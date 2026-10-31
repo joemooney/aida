@@ -1,5 +1,6 @@
 id: 01a18a48-0391-7f13-8b5e-f8d961716571
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-026
+agreed_id: BUG-2343
 title: aida node list prints only the current node's summary instead of every registered node with its label
 description: '2026-10-29: operator ran `aida node list`; it printed only ''WORK node b6b1278890774ef993d2ebc327862470 (node-local allocation; no global blocks).'' Its help says it lists ALL nodes in the shared registry and marks the current one with `*`. The registry holds legacy numeric entries (registry/nodes.toml, ids 1..N with hostname/clone_path) and UUID nodes, plus labels in registry/node_aliases.toml (HOME -> b6b1..., ASTER -> a65b...). Acceptance: node list shows one row per known node (UUID node ids from node_aliases.toml, nodes.toml, id-block/pool records and spec-ID namespaces seen in the store), with label (current + retired), hostname/clone path when known, role, and a `*` on this clone; the ''WORK node'' role wording follows STORY-HOME-098''s rewording.'
 status: Completed
@@ -173,6 +174,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6a92-7e32-a099-8e365f109b1e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.730470845Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2343
 processing_record:
 - id: 01a190ab-828d-73f3-8bf1-b1391ffecde5
   timestamp: 2026-10-31T06:35:21.614003145Z

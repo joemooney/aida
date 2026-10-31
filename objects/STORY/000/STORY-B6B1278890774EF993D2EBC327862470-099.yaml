@@ -1,5 +1,6 @@
 id: 01a18a52-7f13-7cf0-ae1c-97a99515aa05
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-099
+agreed_id: STORY-2139
 title: 'aida deputy: a hardened operator stand-in that runs submitted jobs concurrently under the operator''s grant'
 description: |
   ## Problem
@@ -346,6 +347,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6a9d-7a93-ae65-b85dd69efe3a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.741337738Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2139
 processing_record:
 - id: 01a192df-43f2-7191-852e-d2957d01cd47
   timestamp: 2026-10-31T16:51:07.890833427Z

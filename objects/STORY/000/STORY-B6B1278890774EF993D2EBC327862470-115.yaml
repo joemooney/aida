@@ -1,5 +1,6 @@
 id: 01a18bd5-07ef-7a73-8a11-2c5f205924b6
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-115
+agreed_id: STORY-2155
 title: 'Review PR-3126: fix(scaffold): respect user-owned README seeds (BUG-A65B4BF5902D469995F816EFD3A27661-001)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-a65b4bf5902d469995f816efd3a27661-001-work`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b52-74b3-bfcb-da6114cb96b1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.922752849Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2155
 filed_at:
   code_sha: 6893558f16742586e86776b31f555700c9884b66
   branch: main

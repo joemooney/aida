@@ -1,5 +1,6 @@
 id: 01a184a4-4817-7993-bd37-1741728977ec
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-084
+agreed_id: TASK-2497
 title: '[cosmetic, non-blocking] The post-placement warn-not-Err branches (temp remove,…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:15:57.726036201Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67eb-7c71-8702-8e38d6f565d0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.051958829Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2497
 filed_at:
   code_sha: 872aae84a7a43a33fc3e4f22175a472ac8952d73
   branch: main

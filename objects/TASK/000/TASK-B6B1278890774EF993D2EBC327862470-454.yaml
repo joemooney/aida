@@ -1,0 +1,47 @@
+id: 01a14047-4c1f-7833-8671-693286cf0fc1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-454
+agreed_id: TASK-1377
+title: aida show near or over the 1s budget; the trip coincides with IO saturation, so re-measure at idle
+description: 'performance-guard trip 2026-10-15 12:47Z: aida show p-over-1000ms was 20.6% (tolerance 10%), worst 11.4s. At 08:40 local, aida show measured 0.94-1.62s while IO PSI some sat at 99% with 10 cargo builds queued on 2 slots. Unproven whether this is load or a regression. Re-measure at idle (no cargo running) before deciding. If idle p50 is above 700ms, profile aida show (cache open and projection read).'
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-15T15:56:16.799382386Z
+modified_at: 2026-10-19T15:48:50.494855130Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+comments:
+- id: 01a154d9-e3a6-72d0-89a2-cac0bc2471ef
+  author: joe
+  content: 'Advisor triage 2026-10-19: STALE, closed. A performance observation asking for an idle re-measure; 61fa2be061 since improved show latency. Re-file with numbers if it is still slow. Reopen if still wanted.'
+  created_at: 2026-10-19T15:48:48.166503154Z
+  modified_at: 2026-10-19T15:48:48.166503154Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d9-ecbe-7ff3-ac9a-8c8fdd0a857d
+  author: joe
+  timestamp: 2026-10-19T15:48:50.494847496Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-60f6-7182-95e3-af81fa5cfc6f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.270136144Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-307
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-454
+filed_at:
+  code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 596a91dbc0
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be

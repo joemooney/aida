@@ -1,5 +1,6 @@
 id: 01a19198-a973-72a0-a5cb-75f41ebbe7e6
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-150
+agreed_id: STORY-2190
 title: aida agent new --rotate for Codex sessions (follow-on to STORY-HOME-101)
 description: 'STORY-HOME-101 ships rotation supervision for Claude only (advisor signoff 2026-10-31 04:00, Q5). Codex shares run_tracked_agent_after_spawn, but its native thread id is known only after startup, so freshness falls back to ts >= spawn plus a handle match, and mail-wake re-arming must be stamped per generation. Acceptance: (1) --rotate works for codex with the same handle, lease and worktree; (2) freshness uses the thread id once known, else the ts fallback, tested; (3) mail-wake is re-armed for every generation, tested.'
 status: Completed
@@ -93,6 +94,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6c3c-7722-a852-c3a46fd54d87
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.156343242Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2190
 processing_record:
 - id: 01a192b1-c6b0-76a3-b509-34d2f6feafc8
   timestamp: 2026-10-31T16:01:26.704543348Z

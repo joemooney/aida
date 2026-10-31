@@ -1,0 +1,58 @@
+id: 01a15553-109e-7cb2-b7e3-9301bf9a6bef
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-516
+agreed_id: TASK-1637
+title: 'minor (non-blocking): implementer_preflight.rs QUEUE_ALLOWANCE_FACTOR=2 doubles…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1854, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): implementer_preflight.rs QUEUE_ALLOWANCE_FACTOR=2 doubles the effective [preflight] guard/build timeout wall-clock bound; until aida-host STORY-100 ships nothing enforces the nominal budget, and this is documented only in a code comment.
+  Reviewed sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T18:01:09.534375715Z
+modified_at: 2026-10-19T19:49:35.161060184Z
+req_type: Task
+tags:
+- carried-from:STORY-1854
+- finding-hash:4312d920
+- from-review:STORY-1854
+- kind:carried-forward
+comments:
+- id: 01a155b6-48a7-7440-b254-b725a9ec3bf3
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1963. Same PR-2759 finding filed twice; tracked in TASK-1967.'
+  created_at: 2026-10-19T19:49:31.943422177Z
+  modified_at: 2026-10-19T19:49:31.943422177Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b6-5539-7ff0-bb7d-916a126aeb9f
+  author: joe
+  timestamp: 2026-10-19T19:49:35.161056735Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a155c4-f087-7031-897e-6bc3ddb95b46
+  author: joe
+  timestamp: 2026-10-19T20:05:32.423835866Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-6183-70d2-bc24-4b709cf824ee
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.411463431Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-369
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-516
+filed_at:
+  code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 18aa13a0a0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff

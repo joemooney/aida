@@ -1,5 +1,6 @@
 id: 01a18f12-530b-79c2-ba0c-07624f7eb9c5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-137
+agreed_id: TASK-2548
 title: Raise the CI time budget for aida-core bug_1677_concurrent_queue_writers from 15s to 35s
 description: |-
   The CI 'Test time budget' gate failed twice on 2026-10-30 (PR-3142 at 15.1s, PR-3149 at 15.2s) on aida-core db::git_backend::tests::bug_1677_concurrent_queue_writers_lose_nothing_and_readers_see_no_torn_file. Its entry in scripts/test-time-budget.toml (line ~215) is 15 (max 5.4s at calibration). The file's rule is slowest measured x2, rounded up to 5s: 15.2 x 2 -> 35.
@@ -78,6 +79,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c0a-7b23-9575-c113b1938845
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.106557971Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2548
 processing_record:
 - id: 01a18f3a-9fe9-7e32-acec-5d4c02127344
   timestamp: 2026-10-30T23:52:26.345558572Z

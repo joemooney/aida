@@ -1,5 +1,6 @@
 id: 01a18c44-dfbd-71b2-a39a-258aa298a9a4
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-120
+agreed_id: STORY-2160
 title: 'Review PR-3131: [AI:claude] fix(ids): bare ids point at this node''s local twin instead of staying silent (BUG-B6B1278890774EF993D2EBC327862470-036)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-036`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b55-70b0-8f88-ad419ff8499f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.925227828Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2160
 filed_at:
   code_sha: 1e3bb9524424bfbd513ff4f0b3acc292dbb0c5c5
   branch: main

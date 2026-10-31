@@ -1,5 +1,6 @@
 id: 019e4bc9-3bb9-77e1-8cff-922917589d3c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-269
+agreed_id: TASK-2595
 title: 'MCP tool_post_directive: validate verb against drain|pause|exit'
 description: |
   `aida-cli/src/mcp.rs:1099` (`tool_post_directive`) appends whatever string the caller passes as `verb` to `.aida/worker.cmd`. The `inputSchema` documents `drain | pause | exit`, but no validation enforces it. `worker::parse_directives_from_str` (`aida-cli/src/worker.rs:60-64`) defensively maps unknown verbs to `pause`, so the failure is contained — but the caller still gets a "directive posted: <typo>" success response.
@@ -34,6 +35,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-436 (now resolve to the survivor): 69dfd9bcf7ab9e3771e866b515b4a9fd1aa43819'
+- id: 01a1942b-5b66-71a0-b521-64b1159e99cb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.846504697Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2595
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

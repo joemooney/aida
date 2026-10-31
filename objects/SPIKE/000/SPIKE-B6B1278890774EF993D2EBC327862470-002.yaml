@@ -1,5 +1,6 @@
 id: 01a18a1e-913e-7f73-81c7-39db227c8cc7
 spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-002
+agreed_id: SPIKE-706
 title: 'Spike: can AIDA wake an idle Antigravity (agy) session when mail arrives?'
 description: |
   ## Question
@@ -80,6 +81,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1942b-6a32-7710-931f-ac285d82727e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.634932772Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: SPIKE-706
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main

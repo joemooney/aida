@@ -1,5 +1,6 @@
 id: 01a19319-5b95-75a2-ba02-789bd92178c7
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-162
+agreed_id: STORY-2202
 title: 'Review PR-3171: [AI:claude] fix(ids): drop dead id digits, numeric sync guard, one agreed-id index per batch, native-vs-agreed renumber (TASK-B6B1278890774EF993D2EBC327862470-149)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a192ca`) for branch `task-b6b1278890774ef993d2ebc327862470-149`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c48-7470-b596-df83fe6c26b6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.168497423Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2202
 filed_at:
   code_sha: 796646253353707591b7394e6e9a47db3d634a5c
   branch: main

@@ -1,5 +1,6 @@
 id: 01a18b60-6cbb-7e90-b3e8-4773056ae6f9
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-109
+agreed_id: STORY-2149
 title: 'Review PR-3122: [AI:codex] fix(agent): make list canonical (TASK-B6B1278890774EF993D2EBC327862470-117)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-117-work`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b0e-7bd3-bd8e-f240b2722458
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.854718010Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2149
 filed_at:
   code_sha: 2742b18ee2e7b5dd32643ec149ca9ac8176a4fca
   branch: main

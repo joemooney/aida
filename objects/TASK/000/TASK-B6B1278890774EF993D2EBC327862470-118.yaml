@@ -1,5 +1,6 @@
 id: 01a18a3f-6619-7d82-b796-e3a5190d207b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-118
+agreed_id: TASK-2531
 title: Retire mailbox sources for removed worktrees so the inbox view stops reporting partial
 description: |
   2026-10-29: every inbox read shows 'mail view partial: 3 source(s) not fully read (WorktreeMissing)', and Codex could not acknowledge mail because of it. Acceptance: aida mailbox retention (or worktree remove) folds a removed worktree's mail into the canonical store and drops the source; a missing source with nothing unread no longer marks the view partial.
@@ -128,6 +129,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6a87-7c31-a9bc-8bf06f0dfb4d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.719975002Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2531
 processing_record:
 - id: 01a18bb4-61fb-7f73-b3ac-a290f3019f80
   timestamp: 2026-10-30T07:26:57.019338473Z

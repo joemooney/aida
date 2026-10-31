@@ -1,5 +1,6 @@
 id: 01a18f60-9b78-7a81-a484-92ac47b1b4cd
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-142
+agreed_id: STORY-2182
 title: 'Review PR-3152: [AI:claude] feat(remote): machine-local hub bridge reconciles gitlab-only store pushes onto every hub (STORY-B6B1278890774EF993D2EBC327862470-097)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18f14`) for branch `story-b6b1278890774ef993d2ebc327862470-097`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c1c-7123-9e7d-fbb97f8c951e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.124617671Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2182
 filed_at:
   code_sha: 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b
   branch: main

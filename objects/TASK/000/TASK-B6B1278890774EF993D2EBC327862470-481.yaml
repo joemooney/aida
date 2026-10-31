@@ -1,0 +1,57 @@
+id: 01a1500e-fc5e-7db1-9e5b-4e9e66992cde
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-481
+agreed_id: TASK-1403
+title: 'minor (non-blocking): no test asserts the store is unchanged after a tree-cover…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): no test asserts the store is unchanged after a tree-coverage run (acb82e61 verified by inspection only); add a store-snapshot assertion like task_1785's black-box.
+  Reviewed sha: 1d221159db64e75100e643a6235833efe872b5de
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T17:28:41.822090642Z
+modified_at: 2026-10-19T15:47:19.307080966Z
+req_type: Task
+tags:
+- carried-from:TASK-1783
+- finding-hash:65780278
+- from-review:TASK-1783
+- kind:carried-forward
+comments:
+- id: 01a154d8-7f5a-7a10-88af-8a220bf9c5b0
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1916. aida show TASK-1403 and TASK-1916 both specify black-box assertion that tree coverage leaves the store unchanged; the target description explicitly includes this obligation. Preserve the narrower finding evidence under t'
+  created_at: 2026-10-19T15:47:16.954617596Z
+  modified_at: 2026-10-19T15:47:16.954617596Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15019-ed55-7323-83af-dd22ab174285
+  author: joe
+  timestamp: 2026-10-18T17:40:38.869985899Z
+  changes: []
+- id: 01a154d8-888b-7720-bcd6-cb045e869b84
+  author: joe
+  timestamp: 2026-10-19T15:47:19.307076895Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-614b-7803-8ccd-9816475c71d0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.355206924Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-334
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-481
+filed_at:
+  code_sha: aab6e12bcc3d304c8fec9e0210e0f16c7665df0b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

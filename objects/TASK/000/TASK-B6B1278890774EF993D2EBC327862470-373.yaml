@@ -1,0 +1,87 @@
+id: 01a0e823-1e46-7d32-a1b6-fdd1cd594a6e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-373
+agreed_id: TASK-202
+title: 'TASK-1547: is_intended_store_worktree verifies canonical .aida-store path, a .g…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1547, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  TASK-1547: is_intended_store_worktree verifies canonical .aida-store path, a .git file, distinct git-dir/common-dir, and branch aida-store, but never checks that the common-dir belongs to this project. A separate user repository can be linked at .aida-store on aida-store and pass; the healer then appends and commits there (doctor_cmd.rs:5865, 5943-5965). Compare canonical git common-dir with the main project and add a foreign-linked-worktree rejection fixture.
+
+  PR: #2243
+  Reviewed sha: c4ea3c9038c84ec8a04a2089035d3272e6d883ec
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T13:10:10.758859453Z
+modified_at: 2026-09-28T18:21:36.978271200Z
+req_type: Task
+tags:
+- carried-from:TASK-1547
+- finding-hash:1a5acb05
+- from-review:PR-2243
+- kind:carried-forward
+comments:
+- id: 01a0e83c-2783-7160-ac34-0285b9ddbf03
+  author: joe
+  content: |-
+    Consolidated: TASK-203 (same defect, carried from TASK-1556 via PR-2243) is rejected as a duplicate of this spec. This is now the single owning spec for the doctor_cmd.rs:5865-5881 store-repair guard hole.
+
+    Combined scope from both findings:
+    - `is_intended_store_worktree` never verifies the git common-dir belongs to this project, so a foreign repo linked at .aida-store on branch `aida-store` passes the guard.
+    - The healer then appends and commits into that foreign repository (doctor_cmd.rs:5865, 5943-5965).
+    - The same root-only guard also lets store repair operate on a standalone .aida-store repository or a non-`aida-store` branch (TASK-203's framing of the same gap).
+
+    Fix: compare the canonical git common-dir against the main project before the guard passes. Test: add a foreign-linked-worktree rejection fixture, and one for a standalone .aida-store repo.
+
+    Approved by the advisor seat under the operator's 2026-09-28 emergency burndown authorization.
+  created_at: 2026-09-28T13:37:31.523295093Z
+  modified_at: 2026-09-28T13:37:31.523295093Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+- id: 01a0e908-f252-7c23-882e-be1d0286104e
+  author: joe
+  content: |-
+    ADVISOR 2026-09-28 — NARROWED, half disproven. Same shape as TASK-200: the two clauses do not share a fate.
+
+    DISPROVEN: 'never checks that the common-dir belongs to this project'. It does. is_intended_store_worktree (aida-cli-lib/src/doctor_cmd.rs:6375) ENDS with exactly the comparison the finding asks for — a canonical_common_dir() closure is computed for BOTH store_worktree and project_root and the function returns true only if they are equal (doctor_cmd.rs ~6433-6457). It also resolves a relative --git-common-dir against its root before canonicalizing, which is the subtle part. This is NOT a later fix: it is present at the reviewed sha c4ea3c9038c84ec8a04a2089035d3272e6d883ec (3 occurrences of canonical_common_dir) and landed in the very PR the finding was filed against, #2243 (4f8b0de60b). So a separate user repository linked at .aida-store on branch aida-store would already be REJECTED today.
+
+    STILL UNMET, and broader than the finding says: 'add a foreign-linked-worktree rejection fixture'. There is no fixture — and in fact is_intended_store_worktree has NO tests whatsoever. Its only references in the whole tree are its definition (6375) and its single call site in heal_doctor_store_staging_ignore (6468). So every branch of a guard that decides whether the healer may APPEND AND COMMIT into a git worktree is unguarded by tests.
+
+    DISPOSITION: keep open, scoped to TESTS ONLY — do not touch the guard logic, it is correct. Cover at minimum: (a) the happy path (the real .aida-store worktree is accepted); (b) the foreign-linked-worktree rejection the finding names — a DIFFERENT repo linked at .aida-store, on branch aida-store, with a .git file and a distinct git-dir/common-dir, which must be REJECTED by the common-dir comparison and nothing else; (c) a standalone (non-linked) repo at .aida-store, rejected by the .git-is-a-file check. Each test must be proven non-vacuous — removing the specific check it targets must make that test fail.
+  created_at: 2026-09-28T17:21:12.786693959Z
+  modified_at: 2026-09-28T17:21:12.786693959Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
+history:
+- id: 01a0e83c-49b7-73d0-9df7-5e2c39de6a14
+  author: joe
+  timestamp: 2026-09-28T13:37:40.279512043Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a0e940-3f47-7042-be4a-3d13d182e223
+  author: aida-auto-bump
+  timestamp: 2026-09-28T18:21:36.967631480Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1942b-5e45-7dc3-a7a0-8c6308976923
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.581199853Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-183
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-373
+processing_record:
+- id: 01a0e940-3f52-7a83-9dad-70fafd854c74
+  timestamp: 2026-09-28T18:21:36.978256721Z
+  agent: aida
+  commit_sha: 063d7f19c0c18d2204f2fb59598a5e893512abe3
+  summary: 'Test-only addition: 3 tests for is_intended_store_worktree (accept real linked worktree, reject foreign linked worktree, reject standalone repo). Guard logic untouched; the foreign-worktree test asserts checks 1-4 hold first so only common-dir ownership can reject, proving non-vacuity of that branch.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T18:21:36.967590486Z
+  completion_sha: 063d7f19c0c18d2204f2fb59598a5e893512abe3

@@ -1,5 +1,6 @@
 id: 019ef78b-a6ef-72d1-b4df-c22df0c65bf7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-258
+agreed_id: TASK-2584
 title: Evaluate Codex-compatible outer sandbox strategy for AIDA launches
 description: |-
   Evaluate whether and how AIDA should provide an outer OS sandbox for Codex sessions comparable to the current os_wrap behavior around headless Claude drains.
@@ -43,3 +44,11 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-0423 (now resolve to the survivor): 33ddeb1c1d550cae4356a64ff61870c97bb92d83'
+- id: 01a1942b-5bd7-7400-a4c2-f8b5483e359a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.959520055Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2584

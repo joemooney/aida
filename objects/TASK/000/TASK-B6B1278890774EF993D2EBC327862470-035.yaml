@@ -1,5 +1,6 @@
 id: 01a1823f-daf9-75c0-895a-d4d7a51df6a0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-035
+agreed_id: TASK-2448
 title: 'N1 (minor, non-blocking): 9059829 deleted the second ''aida init'' from init_in_a…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1741, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6663-7ce3-8bc1-7888e0593def
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.659377173Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2448
 processing_record:
 - id: 01a1827c-c176-78a2-93ad-e5ea9f0e9210
   timestamp: 2026-10-28T12:29:36.502329552Z

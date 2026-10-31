@@ -1,0 +1,61 @@
+id: 01a16ca7-ce87-70e2-8e77-2af805a04414
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-632
+agreed_id: TASK-1851
+title: 'cosmetic (non-blocking): aida-core/templates/skills/aida-rebase.md:129 still sa…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1613, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): aida-core/templates/skills/aida-rebase.md:129 still says '/aida-pr — verify before gh pr create'; the redirect no longer runs gh pr create, and aida ship rebases itself. Reword it to describe aida ship. Related: aida-cli-lib/src/pr_cmd_args.rs:28 and the auto-queue-review help text still describe /aida-pr running gh pr create (code/help-snapshot change, outside this docs-only scope).
+
+  PR: #2869
+  Reviewed sha: bf8ddeb43fdcfc311114ce1ac88849771d442860
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T06:44:59.143077323Z
+modified_at: 2026-10-24T06:54:39.171259853Z
+req_type: Task
+tags:
+- carried-from:TASK-1613
+- finding-hash:a1cb88a9
+- from-review:PR-2869
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a169fa-7159-7af3-91bc-35878934017e
+  created_at: 2026-10-24T06:54:39.171256581Z
+  created_by: joe
+history:
+- id: 01a16cb0-9cbd-7d31-8d22-5f9ca942e7e3
+  author: joe
+  timestamp: 2026-10-24T06:54:36.221631826Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16cb0-aed2-7031-a5a6-ddad72fe6e47
+  author: joe
+  timestamp: 2026-10-24T06:54:40.850176934Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16cb7-9074-7e93-8dbf-c83a62e24ad4
+  author: joe
+  timestamp: 2026-10-24T07:02:11.828638813Z
+  changes: []
+- id: 01a1942b-635a-7920-a78d-90efc499a1e4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.882755557Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-485
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-632
+filed_at:
+  code_sha: 4d3777338645602470178f0ab2e63309f71520e2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude

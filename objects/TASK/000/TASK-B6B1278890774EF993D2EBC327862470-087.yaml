@@ -1,5 +1,6 @@
 id: 01a18507-5221-7581-b3d2-531da5fc2fe1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-087
+agreed_id: TASK-2500
 title: Refresh README.md and fix stale CLAUDE.md call-graph note
 description: Rewrite README.md to match the current product and correct the CLAUDE.md codegraph 1 MiB note.
 status: Completed
@@ -49,6 +50,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-67ee-7b13-ab0d-867d0a15c190
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.054464285Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2500
 processing_record:
 - id: 01a18553-1f75-7341-a95c-bd3b076a3a3f
   timestamp: 2026-10-29T01:42:59.701103791Z

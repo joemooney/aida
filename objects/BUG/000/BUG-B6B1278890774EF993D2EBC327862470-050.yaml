@@ -1,5 +1,6 @@
 id: 01a1922e-400c-70f1-b51a-9d19d8680735
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-050
+agreed_id: BUG-2367
 title: Headless claude lanes end their only turn waiting on background cargo/Monitor and hang with work uncommitted
 description: |
   Headless claude lanes (`aida queue work --no-human`, `claude -p --permission-mode dontAsk`) keep ending their only turn while a long cargo build runs in the background: either the command was auto-backgrounded, or the lane armed Monitor or run_in_background and said "I'll be notified". In -p mode no next turn ever comes. The `claude -p` process then stays alive until the background build exits, emits nothing, and the work is left uncommitted. The HEADLESS WAITING RULE in the brief does not prevent it. Seen 2026-10-31: BUG-048 round 3 hung about 35 min, BUG-046 round 3 ended after 5 min; both needed an advisor kill plus `--resume`.
@@ -180,6 +181,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c43-7750-8354-80d6b2f60cb4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.163233759Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2367
 processing_record:
 - id: 01a193c6-a315-7663-af9d-4595461b9287
   timestamp: 2026-10-31T21:03:51.061372969Z

@@ -1,5 +1,6 @@
 id: 01a1938c-881c-7d01-a68a-ed62f7cf6fa3
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-166
+agreed_id: STORY-2206
 title: 'aida mandate renew: extend the active mandate in place without retyping its flags'
 description: |
   Operator request (2026-10-31): `aida mandate renew [--for <duration>]` extends the ACTIVE mandate in place, keeping its scope, flags (--ship-held, --include-supervised), principal and gates, instead of stop + start with every flag retyped.
@@ -79,6 +80,14 @@ history:
   session_id: 01a1940b38a7
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1942b-6c4e-7162-ac27-cc88cc0712a8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.174269626Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2206
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main

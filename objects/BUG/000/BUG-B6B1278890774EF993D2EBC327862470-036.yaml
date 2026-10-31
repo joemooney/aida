@@ -1,5 +1,6 @@
 id: 01a18b1f-af35-7061-859d-b99015bea8ed
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-036
+agreed_id: BUG-2353
 title: Bare short IDs (STORY-100, TASK-123) silently resolve to legacy flat specs, not this node's newer spec with the same number
 description: |
   Operator report 2026-10-29 21:43. Since the node prefix changed from the legacy flat or node-1 scheme to node b6b1278890774ef993d2ebc327862470 (alias HOME), numbers overlap. Observed:
@@ -254,6 +255,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6ae4-7762-be37-6dae15dd42bc
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.812335582Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2353
 processing_record:
 - id: 01a18cbb-7d00-7631-8f58-8789c0ed9ff0
   timestamp: 2026-10-30T12:14:19.904225334Z

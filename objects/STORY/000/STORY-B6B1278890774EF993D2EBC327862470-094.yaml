@@ -1,5 +1,6 @@
 id: 01a1893d-c861-7f20-b3c2-46f1cd95357f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-094
+agreed_id: STORY-2134
 title: 'Review PR-3103: [AI:codex] docs(audit): complete the documentation freshness and navigation audit (TASK-B6B1278890774EF993D2EBC327862470-113)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1892c`) for branch `task-b6b1278890774ef993d2ebc327862470-113-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-69fe-7dd1-82b9-651876c71982
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.582047847Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2134
 filed_at:
   code_sha: 6e72a0df6e655fa5576f072c1e60064de74dc522
   branch: task-b6b1278890774ef993d2ebc327862470-113-work

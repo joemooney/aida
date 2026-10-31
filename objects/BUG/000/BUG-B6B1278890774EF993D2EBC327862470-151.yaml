@@ -1,5 +1,6 @@
 id: 01a19409-83f8-72d1-b1ad-59c81df28b06
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-151
+agreed_id: BUG-2377
 title: 'Live advisor reported as ''no live advisor'': its session has no registry entry, and liveness trusts only the registry'
 description: |
   ## Observed (2026-10-31, product seat claude-product-02)
@@ -81,6 +82,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1942b-6c54-7112-930b-3f0073269e49
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.180254755Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2377
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main

@@ -1,5 +1,6 @@
 id: 019e0ee4-88cf-7f70-86b3-ff9365d20887
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-157
+agreed_id: TASK-2568
 title: '[FR-215 test] child req with parent'
 description: ''
 status: Rejected
@@ -26,5 +27,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-31 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'
+- id: 01a1942b-5b60-7010-958c-55971b2fa009
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.840767483Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2568
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

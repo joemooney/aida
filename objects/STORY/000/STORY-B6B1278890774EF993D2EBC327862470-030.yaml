@@ -1,5 +1,6 @@
 id: 01a17f28-3fee-72f3-9e9d-30bd3ace4727
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-030
+agreed_id: STORY-2070
 title: 'Review PR-2992: [AI:claude] feat(adoption): project the shared plane into ignored local state for readers and launches (Refs STORY-1741)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1741-s2`.
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-654e-7e43-804e-5cb64fcf27fb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.382026982Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2070
 filed_at:
   code_sha: 5e7c211477e76958f690191cae7d191f365137de
   branch: story-1741-s2

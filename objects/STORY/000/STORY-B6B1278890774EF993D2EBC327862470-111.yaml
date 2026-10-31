@@ -1,5 +1,6 @@
 id: 01a18b7e-660f-7a73-a889-0e101b9d3fb6
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-111
+agreed_id: STORY-2151
 title: 'Review PR-3123: [AI:claude] fix(ship): post-merge worktree GC skips unmerged trees and stops at 60s (BUG-B6B1278890774EF993D2EBC327862470-033)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-033`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b31-78d3-b83e-6ff3d296584b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.889598385Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2151
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
   branch: main

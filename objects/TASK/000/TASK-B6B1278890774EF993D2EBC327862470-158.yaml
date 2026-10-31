@@ -1,5 +1,6 @@
 id: 019e0ee6-7b92-75f3-8229-acd705dc9461
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-158
+agreed_id: TASK-2569
 title: '[FR-215 verify] child with parent'
 description: ''
 status: Rejected
@@ -35,5 +36,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-32 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'
+- id: 01a1942b-5b61-78a1-8505-eaad40bd73b1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.841059968Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2569
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

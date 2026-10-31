@@ -1,5 +1,6 @@
 id: 01a18495-865f-7781-ad54-024ff63f82a3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-082
+agreed_id: TASK-2495
 title: 'PR-3069 follow-ups: unlink partial file on fallback write failure; fault-injection tests for post-placement warnings'
 description: |
   Non-blocking findings from the APPROVED review of PR #3069 (TASK-b6b1278890774ef993d2ebc327862470-078) at 1b2b235a3dd4. Fix: on the create_new fallback, if write_all/sync_all fails, unlink the final-name file before returning Err (it was created by this call, so removing it is safe). Add fault-injection tests (a seam) for that and for the warn-not-Err post-placement branches.
@@ -98,6 +99,14 @@ history:
   timestamp: 2026-10-28T23:16:29.326650969Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67ea-7db2-9ef1-790e3f68898b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.050838846Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2495
 processing_record:
 - id: 01a184c8-1288-7d90-8843-8811ab47fdce
   timestamp: 2026-10-28T23:11:06.888563332Z

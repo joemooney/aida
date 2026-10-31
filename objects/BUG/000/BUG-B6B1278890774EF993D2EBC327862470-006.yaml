@@ -1,5 +1,6 @@
 id: 01a17a62-7d5c-7552-b112-546a5a598e92
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-006
+agreed_id: BUG-2323
 title: aida pr auto-queue-review ignores node-local spec IDs (TASK-<node>-NNN) in commit trailers, so no review story is filed
 description: 'PR #2955 commit subject ends (TASK-b6b1278890774ef993d2ebc327862470-003, ...-004, ...-005, ...-006), yet auto-queue-review says: carries no (REQ-ID) trailers in its commit range. Since the 2026-10-25 WORK migration every new spec gets a long node-local ID, so every PR for a new spec silently gets no review story (the watcher then cannot review it). The completion trailer path may have the same gap (check that merge-time auto-complete recognises these IDs; it did complete BUG-b6b1...-002 and -004, so verify which parser differs). Fix the auto-queue trailer regex to accept node-local IDs, with a test.'
 status: Completed
@@ -61,6 +62,14 @@ history:
   timestamp: 2026-10-27T05:28:36.299077063Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
   changes: []
+- id: 01a1942b-64a0-7262-84c3-a92e36360044
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.208498083Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2323
 processing_record:
 - id: 01a17a8f-17cd-7b91-8c20-bc0bda1aec16
   timestamp: 2026-10-26T23:32:40.525082209Z

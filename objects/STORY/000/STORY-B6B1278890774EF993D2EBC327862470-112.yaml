@@ -1,5 +1,6 @@
 id: 01a18b7f-f711-78f1-a745-99d109ce663c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-112
+agreed_id: STORY-2152
 title: 'Review PR-3124: [AI:claude] fix(permissions): classify codex --sandbox by value; flag widening default_flags and refused vendors (BUG-B6B1278890774EF993D2EBC327862470-028)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-028`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b32-76f1-ac45-0acc4578471c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.890202986Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2152
 filed_at:
   code_sha: 1870c20ca28c33b2e4abb50e913e395f67eb135a
   branch: main

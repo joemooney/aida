@@ -1,5 +1,6 @@
 id: 01a18d00-d0bc-7041-bc9b-3fc352c9fbde
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-124
+agreed_id: STORY-2164
 title: 'Review PR-3135: [AI:claude] fix(mailbox): stamp message times in millis; unstamped mail reads as mtime or unknown time (BUG-B6B1278890774EF993D2EBC327862470-032)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-032`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b7c-7fb2-85fa-c7963f627da3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.964752370Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2164
 filed_at:
   code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
   branch: main

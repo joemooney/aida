@@ -1,5 +1,6 @@
 id: 01a18342-cf99-7982-b34f-74a3588684f1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-056
+agreed_id: TASK-2469
 title: 'Cosmetic: ragged comment wrapping introduced by this PR - gate/orchestrator_lea…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-043, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -39,6 +40,14 @@ history:
   timestamp: 2026-10-28T16:54:36.251160858Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-6747-7602-b716-ebcd851aaf91
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.887531587Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2469
 filed_at:
   code_sha: 01344b788fe2e3b2aeda58a12b3239924c93b6d6
   branch: main

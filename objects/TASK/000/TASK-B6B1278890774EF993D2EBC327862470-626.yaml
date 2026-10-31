@@ -1,0 +1,59 @@
+id: 01a16c7a-db88-7990-891b-0ea98776f711
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-626
+agreed_id: TASK-1849
+title: 'cosmetic: PR body is stale after cdd63dab76 (TASK-2292): the TASK-2223 row stil…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1955, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: PR body is stale after cdd63dab76 (TASK-2292): the TASK-2223 row still names write_member_seats_allowing and the test task_2223_a_named_scratch_root_passes_the_guard, both removed (the test is now task_2223_the_workspace_target_passes_the_guard), and TASK-2292 itself is not listed in the slice table.
+  Reviewed sha: cdd63dab76396e2da81e6cb499d452cd38fad96d
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T05:55:53.352727576Z
+modified_at: 2026-10-24T06:52:15.611796545Z
+req_type: Task
+tags:
+- carried-from:TASK-1955
+- finding-hash:9be4003c
+- from-review:TASK-1955
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+  created_at: 2026-10-24T06:52:15.611790650Z
+  created_by: joe
+history:
+- id: 01a16c96-7c59-7b12-a1df-f93dc0836c1d
+  author: joe
+  timestamp: 2026-10-24T06:26:03.993423359Z
+  changes: []
+- id: 01a16cae-6b57-7260-8897-89e428e4613b
+  author: joe
+  timestamp: 2026-10-24T06:52:12.503846447Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16cae-7ee7-75a2-b87d-ffeb7c47e4fb
+  author: joe
+  timestamp: 2026-10-24T06:52:17.511851003Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a1942b-6334-7e81-ac7f-e1a66adaf7e5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.844226711Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-479
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-626
+filed_at:
+  code_sha: 71143a2a03adef3676ff786c52912324b3813bdd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude

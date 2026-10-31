@@ -1,5 +1,6 @@
 id: 01a187a2-bc88-77f0-a251-15dd79a0c6eb
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-102
+agreed_id: TASK-2515
 title: 'minor (non-blocking): reviewer_preflight.rs tree_entry/read_following_links — a…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-69ba-7b00-9127-58b7ea146abf
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.514669676Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2515
 filed_at:
   code_sha: b74166aba21293380f163f21e5df6137a79dbcce
   branch: main

@@ -1,5 +1,6 @@
 id: 01a18392-7426-72d2-94ef-a9af6469e724
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-061
+agreed_id: STORY-2101
 title: 'Review PR-3051: [AI:claude] fix(gate): count ::aida_core and extern-crate aliases as reach (TASK-b6b1278890774ef993d2ebc327862470-053 TASK-b6b1278890774ef993d2ebc327862470-054)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-reach-leading-colon`.
@@ -59,6 +60,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6774-7623-9ef4-2ef4c4bf06e3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.932918358Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2101
 filed_at:
   code_sha: 5fa3001fdeced6ad6e2be524f6081d4d7c018281
   branch: fix/gate-reach-leading-colon

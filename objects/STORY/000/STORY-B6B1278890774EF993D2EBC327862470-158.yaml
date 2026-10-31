@@ -1,5 +1,6 @@
 id: 01a19276-72e6-78b2-8b9d-409665004de8
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-158
+agreed_id: STORY-2198
 title: 'Review PR-3167: [AI:claude] fix(seat-trust): pre-trust seat worktrees in ~/.claude.json before a lane''s claude starts; dismissal removes the entry (BUG-B6B1278890774EF993D2EBC327862470-049)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1925d`) for branch `bug-b6b1278890774ef993d2ebc327862470-049`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c45-77e3-a9f5-6a6997d9d752
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.165662764Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2198
 filed_at:
   code_sha: eaabde5c226c436a1f6c562396069101af91b4d4
   branch: main

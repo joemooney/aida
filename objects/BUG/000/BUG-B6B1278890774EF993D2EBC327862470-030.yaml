@@ -1,5 +1,6 @@
 id: 01a18ad3-2880-73f2-ad71-cb6746f463b4
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-030
+agreed_id: BUG-2347
 title: aida agent new claude --role advisor crashes the claude session at launch (allocator lock message flashes)
 description: |
   Operator report 2026-10-29 ~20:05 MST: running `aida agent new claude --role advisor` in the operator terminal started claude, which crashed almost immediately. A message mentioning the allocator being locked flashed briefly before the crash. The operator fell back to a plain `claude` launch (session claude-advisor-08 now runs fine). Context: STORY-095 slice 1 (block delegation lineage records) merged at 9a86ae5 shortly before, and the lineage/allocation code is the likeliest source of a lock message.
@@ -260,6 +261,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6aad-7440-b241-c8d5c6184d28
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.757139748Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2347
 processing_record:
 - id: 01a18bfc-ebca-7c03-9014-36d0df51f568
   timestamp: 2026-10-30T08:46:10.890772408Z

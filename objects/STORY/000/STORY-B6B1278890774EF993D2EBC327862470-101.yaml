@@ -1,5 +1,6 @@
 id: 01a18ae8-aac9-79d1-8702-93c27a144e49
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-101
+agreed_id: STORY-2141
 title: 'aida agent new: relaunch the session under the same handle when it exits with a fresh handoff (context rotation)'
 description: |
   Operator idea 2026-10-29 20:43. Context rotation currently means: write a handoff, exit, the operator starts a new session by hand, and it gets a NEW mail handle (tonight claude-advisor-06 became claude-advisor-08; mail and agents addressed to the old handle missed it). aida-relay used to cover this and is gone.
@@ -255,6 +256,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6abf-7431-87ff-cf48884f9df0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.775019881Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2141
 processing_record:
 - id: 01a19237-71d1-7cd2-ac19-7a16ee215bf0
   timestamp: 2026-10-31T13:47:49.585206085Z

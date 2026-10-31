@@ -1,5 +1,6 @@
 id: 01a18eb6-8c27-7761-9014-fe5a7b4b88b8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-134
+agreed_id: TASK-2546
 title: 'minor: builtin_routed_seat_task (maintenance_schedule.rs:1783) accepts any ''mai…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-128, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,14 @@ history:
   timestamp: 2026-10-31T00:23:48.040439688Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
   changes: []
+- id: 01a1942b-6c09-7261-953d-aa7e513700b9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.105176453Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2546
 filed_at:
   code_sha: 25d50e8d3350d29dbfc5489e94e86bd1a855400f
   branch: main

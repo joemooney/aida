@@ -1,0 +1,63 @@
+id: 01a12711-ad81-7df1-9cf4-3e544f005688
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-029
+agreed_id: FAQ-25
+title: How should I set up the aida binary while developing AIDA itself?
+description: |
+  **Run `aida dev build --install-links` once in the main checkout, then `aida dev build` there after each merge. `~/.local/bin/aida` and `aida-server` then point at a live directory (`~/.local/share/aida/live/`) outside `target/`, and only a smoke-tested build from a clean `main` ever reaches it. Do all feature work in worktrees.**
+
+  ## How
+  ```bash
+  cd ~/ai/aida
+  aida dev build --install-links   # one-time: build, smoke-test, promote, link ~/.local/bin
+  aida dev build                   # after each merge: rebuild and promote
+  aida dev status                  # live / previous / latest-built SHAs
+  aida dev rollback                # swap the previous build back in (run again to roll forward)
+  ```
+  `--install-links` lists any file or stale link it would replace (e.g. an old symlink into `target/agent/`) and asks first; a replaced real file is kept as `<name>.pre-live`. Then remove the other copies (`~/.cargo/bin/aida*`, old `.bak` files) so only one binary remains.
+
+  ## What `aida dev build` guarantees
+  - **Promotes only from the primary checkout, on `main`, with no tracked modifications and HEAD equal to `origin/main`.** Untracked files only warn. Anything else refuses before building; `--allow-dirty` overrides (status then shows the `+dirty` SHA).
+  - **In a worktree it builds and smoke-tests only**, and prints how to try the build in your shell (`aida dev activate auto`). `--no-promote` does the same anywhere.
+  - **Smoke test before promote:** `aida --version`, `aida list --limit 1`, `aida-server --version`. A failed build or smoke test leaves the live binaries untouched.
+  - **Atomic promote with rollback:** the outgoing pair is kept in `live/prev/`; stale MCP servers are restarted.
+  - **`cargo clean` can no longer break the live binary**, because it is a copy outside `target/`. For incremental-cache trouble use `aida dev build --clean` (deletes `target/agent/incremental` only) or `--clean=full` (`cargo clean --profile agent`).
+  - **Live waves:** it refuses to replace a binary a live drain wave is pinned to; `--after-wave` waits for the wave to drain.
+
+  `make build-fast` still exists but is build-only: it never touches the live binary. `aida dev rebuild` has been removed.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:27:12.385613822Z
+modified_at: 2026-10-11T08:18:27.129054031Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:build
+history:
+- id: 01a12724-ae7a-70d0-aca3-409fbdee0457
+  author: joe
+  timestamp: 2026-10-10T18:47:57.818945006Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 01a1942b-5fcc-7b33-806e-90c65c0fe623
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.972524407Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: FAQ-1-259
+    new_value: FAQ-b6b1278890774ef993d2ebc327862470-029
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T18:47:57.818931493Z

@@ -1,5 +1,6 @@
 id: 01a1895d-c9f1-7500-8e2f-86db48466256
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-001
+agreed_id: FAQ-140
 title: How do I upgrade an existing project to the latest AIDA scaffolding?
 description: |
   **Use `aida scaffold upgrade` for category-aware project upgrades, or `aida scaffold refresh` for a gentler refresh of installed agent packs.**
@@ -35,6 +36,15 @@ req_type: Faq
 tags:
 - audience:user
 - topic:scaffolding
+history:
+- id: 01a1942b-69fe-7dd1-82b9-6521931a6a0a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.582438548Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-140
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

@@ -1,0 +1,57 @@
+id: 01a150ca-6df6-7600-b6e4-0daf1fa4e862
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-487
+agreed_id: TASK-1407
+title: '[non-blocking, minor] forge.rs probe_origin_head_symref sets GIT_SSH_COMMAND=''s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1803, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [non-blocking, minor] forge.rs probe_origin_head_symref sets GIT_SSH_COMMAND='ssh -o BatchMode=yes', which overrides any GIT_SSH_COMMAND or core.sshCommand the user already set (custom key, wrapper). The probe then fails and ship refuses as unknown. Preserve the existing command and add BatchMode to it.
+  Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T20:53:26.134591979Z
+modified_at: 2026-10-19T15:47:33.858870518Z
+req_type: Task
+tags:
+- carried-from:TASK-1803
+- finding-hash:b2818303
+- from-review:TASK-1803
+- kind:carried-forward
+comments:
+- id: 01a154d8-b338-7253-af7e-9e56b0f5d038
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1920. aida show TASK-1407 and TASK-1920 both specify preserve the user GIT_SSH_COMMAND during bounded default-branch probes; the target description explicitly includes this obligation. Preserve the narrower finding evidence un'
+  created_at: 2026-10-19T15:47:30.232908767Z
+  modified_at: 2026-10-19T15:47:30.232908767Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a150d1-76fa-7cc3-a1b2-928dbf84bc53
+  author: joe
+  timestamp: 2026-10-18T21:01:07.194454987Z
+  changes: []
+- id: 01a154d8-c162-7322-b972-98112583e0bb
+  author: joe
+  timestamp: 2026-10-19T15:47:33.858864139Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6159-73d0-aa6c-28c592f8361f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.369453258Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-340
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-487
+filed_at:
+  code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

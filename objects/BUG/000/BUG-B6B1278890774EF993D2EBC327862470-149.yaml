@@ -1,5 +1,6 @@
 id: 01a11e21-05fa-7c30-ac87-758f3c2c51df
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-149
+agreed_id: BUG-2375
 title: Shell wrapper hides init prompts and forces piped output
 description: |-
   The generated `aida()` shell wrapper captures stdout for `aida init` so it can consume the marker-delimited `init-cd` payload. Because the child sees stdout as a pipe, it auto-selects TOON output; when human output is explicitly pinned, prompts and progress are buffered invisibly in `_aida_out`, leaving the command apparently hung while it waits on terminal stdin.
@@ -150,6 +151,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing BUG-0445 (now resolve to the survivor): fba16d9c884b16090b3c2d079a53a1def8aa9a36'
+- id: 01a1942b-5f49-77b0-a72a-503bd553594f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.841595709Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2375
 processing_record:
 - id: 01a12b0f-c5d1-7682-9c58-408aa467ac3f
   timestamp: 2026-10-11T13:03:36.401802997Z

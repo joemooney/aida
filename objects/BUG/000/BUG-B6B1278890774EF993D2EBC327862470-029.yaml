@@ -1,5 +1,6 @@
 id: 01a18a72-7f42-7602-b3e3-543edfbf1322
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-029
+agreed_id: BUG-2346
 title: Contained-seat deny rules emit Write/MultiEdit/NotebookEdit path patterns that Claude Code warns never match
 description: '2026-10-29 18:33: every `aida agent new claude` contained launch prints ~30 warnings: ''Deny rule MultiEdit(//…/.git) matches no tool'' and ''Deny rule Write(//…) never matches · use Edit(//…)'', for .git, .aida-store/.git and .aida/sessions in the primary checkout and the seat clone. Current Claude Code applies path deny rules through Edit(...) (which covers all file-writing tools); MultiEdit no longer exists. Acceptance: the generated settings emit one Edit(<path>) and Edit(<path>/**) deny per protected path (plus Read where intended), no Write/MultiEdit/NotebookEdit duplicates; a launch prints zero deny-rule warnings; a test pins the emitted rule set.'
 status: Completed
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6aa0-7171-a7ad-2a43b3b5ecf9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.744164325Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2346
 processing_record:
 - id: 01a18b65-7b32-7c93-afa4-e81d727f104d
   timestamp: 2026-10-30T06:00:46.130073885Z

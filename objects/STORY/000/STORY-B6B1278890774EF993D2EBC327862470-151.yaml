@@ -1,5 +1,6 @@
 id: 01a1919a-645d-7551-8da9-125beaac3a4c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-151
+agreed_id: STORY-2191
 title: 'Review PR-3161: [AI:claude] fix(ids): numeric spec-ID identity, mint-time collision guard, renumber tool, [ids] widths (BUG-B6B1278890774EF993D2EBC327862470-046)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19148`) for branch `bug-b6b1278890774ef993d2ebc327862470-046`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c3c-7722-a852-c3b94a11f7b2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.156844330Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2191
 filed_at:
   code_sha: 273549a2d9d738b1846028776855309da26a2ef7
   branch: main

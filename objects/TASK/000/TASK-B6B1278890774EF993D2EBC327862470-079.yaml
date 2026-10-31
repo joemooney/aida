@@ -1,5 +1,6 @@
 id: 01a1847e-9f24-74e1-93d7-5a92b57c4056
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-079
+agreed_id: TASK-2492
 title: '[minor, non-blocking] Tests do not cover several bare_admin_name rejection bran…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-075, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:15:03.053547295Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67dd-7990-8cad-1b8d32b4ab9b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.037380406Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2492
 filed_at:
   code_sha: 283eefbb554a1ca0c8bbc7ee04aa2ea4d45286e3
   branch: main

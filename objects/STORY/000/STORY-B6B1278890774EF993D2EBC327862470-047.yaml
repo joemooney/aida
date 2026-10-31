@@ -1,5 +1,6 @@
 id: 01a18250-3dfe-7911-8d40-2f3a05c3f86e
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-047
+agreed_id: STORY-2087
 title: 'Review PR-3027: [AI:claude] fix(show): budget-linked fallback scan, cause-named warning, 1 s show test (TASK-b6b1278890774ef993d2ebc327862470-031 TASK-b6b1278890774ef993d2ebc327862470-037 TASK-b6b1278'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/show-followups-2`.
@@ -72,6 +73,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6698-7162-ba4c-24efcf7f5107
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.712643540Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2087
 filed_at:
   code_sha: 30969f5c2c9c36bddad4b7a8a227592b37f9ed9c
   branch: fix/show-followups-2

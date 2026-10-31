@@ -1,5 +1,6 @@
 id: 01a1850b-5cf5-7f83-8246-c7234ddd8cb9
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-072
+agreed_id: STORY-2112
 title: 'Review PR-3077: [AI:claude] docs: refresh README and fix stale call-graph note in CLAUDE.md (TASK-B6B1278890774EF993D2EBC327862470-087)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/readme-claude-refresh`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-67f6-76c3-aa10-66058d1c5ee2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.062027790Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2112
 filed_at:
   code_sha: 4dae4c06138905bf3f79d3f5e1fd34aa135a83a2
   branch: docs/readme-claude-refresh

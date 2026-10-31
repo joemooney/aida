@@ -1,5 +1,6 @@
 id: 01a18a16-7fbb-7290-839f-6513351a7d4d
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-096
+agreed_id: STORY-2136
 title: aida agent new codex arms mail-wake for the spawned thread, and agent end retires it
 description: |
   Operator ask 2026-10-29: every Codex agent started with `aida agent new codex` should watch AIDA mail without a hand install. Today scripts/codex-mail-wake.py (TASK-2347) needs an exact thread UUID and a manual install; agents started without it never see mail (the codex docs stack 3096-3103 stalled on unread rulings for 3h).
@@ -599,6 +600,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6a1f-7c30-b960-39150498ccff
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.615594047Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2136
 processing_record:
 - id: 01a18bd2-600d-7610-acec-65da35a347fd
   timestamp: 2026-10-30T07:59:42.605575123Z

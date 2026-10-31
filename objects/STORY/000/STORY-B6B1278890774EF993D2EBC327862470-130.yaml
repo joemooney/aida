@@ -1,5 +1,6 @@
 id: 01a18d8d-0fa4-7f62-999c-59b9bd54db4e
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-130
+agreed_id: STORY-2170
 title: 'Review PR-3140: [AI:claude] fix(locks): report disk saturation on lock waits, heal foreign-namespace holders by heartbeat, bound the stale-lock healer (BUG-B6B1278890774EF993D2EBC327862470-041)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-041`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6ba2-7e50-8805-8bcbf9dba6d9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.002761163Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2170
 filed_at:
   code_sha: ec31724405d6868b7647bb81ed54586b75ebdcfa
   branch: main

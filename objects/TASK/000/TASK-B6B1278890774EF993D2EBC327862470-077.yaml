@@ -1,5 +1,6 @@
 id: 01a18464-40b5-7312-87bf-c6c27951d7dd
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-077
+agreed_id: TASK-2490
 title: 'PR-3049 follow-ups: unreadable receipt anchor must make the relay unread count incomplete; remaining D2b review notes'
 description: |
   Non-blocking findings from the APPROVED round-2 review of PR #3049 (STORY-1843 D2b) at 6750bc4a36d5. Fix all of them in a Refs STORY-1843 follow-up PR. ADVISOR RULING for the anchor_error case: an unreadable receipt anchor makes the unread count INCOMPLETE (unknown), so headless reuse refuses and settle_ended_runs inserts no end notices until the anchor reads.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-67dc-7f71-b912-b060c58987bb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.036306745Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2490
 execution_mode: drain
 filed_at:
   code_sha: 6f0694f4d36fce705462dfcf6df8de5d6cb5ad8a

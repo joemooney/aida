@@ -1,5 +1,6 @@
 id: 019e4bc9-b645-7e43-8f81-1fa977599ee3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-272
+agreed_id: TASK-2598
 title: 'MCP resolve_punt/escalate_punt: use write_atomic, not std::fs::write, for punt-response files'
 description: |
   `aida-cli/src/mcp.rs:749` (`tool_resolve_punt`) and `:790` (`tool_escalate_punt`) both write `.aida/punts/<spec>.response.json` with a plain `std::fs::write(&path, body)`. A crash between `open` and `write_all` completing leaves a truncated file the orchestrator's phase-3 → phase-4 handshake reader can mis-parse.
@@ -52,6 +53,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-439 (now resolve to the survivor): 1637d59bfaa1e5c97831109764688bd50706aa93'
+- id: 01a1942b-5b67-7592-b41c-dddc861258d0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.847114761Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2598
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

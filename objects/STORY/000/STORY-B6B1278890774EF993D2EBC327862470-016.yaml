@@ -1,5 +1,6 @@
 id: 01a17bca-a1bb-7501-8db0-8ae8fc98f2ac
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-016
+agreed_id: STORY-2056
 title: 'Review PR-2965: [AI:claude] chore(ci): budget the story_1843_pr3 claude-to-agy blackbox test (Refs STORY-1843)'
 description: Hand-filed review story (Refs-only PR, BUG-2208).
 status: Completed
@@ -25,6 +26,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64be-7093-a041-fc544dc8f01f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.238732516Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2056
 filed_at:
   code_sha: e3fd91e83fe3ffef5e9b26365de8e302a92c6904
   branch: main

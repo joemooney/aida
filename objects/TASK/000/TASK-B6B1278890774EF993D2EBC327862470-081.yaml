@@ -1,5 +1,6 @@
 id: 01a1847e-bfe0-7c42-bd11-efdf6311623f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-081
+agreed_id: TASK-2494
 title: '[cosmetic, non-blocking] mod.rs write_source_id: on the link fallback, a failed…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-075, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:15:30.619718242Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67de-7583-8bda-1621a6668631
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.038157461Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2494
 filed_at:
   code_sha: 283eefbb554a1ca0c8bbc7ee04aa2ea4d45286e3
   branch: main

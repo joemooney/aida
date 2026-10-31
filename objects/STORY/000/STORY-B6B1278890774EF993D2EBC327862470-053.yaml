@@ -1,5 +1,6 @@
 id: 01a182bc-c661-7202-bb2b-d5bd162e4879
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-053
+agreed_id: STORY-2093
 title: 'Review PR-3038: [AI:claude] docs(test): reflow root_item_macros doc comment (TASK-b6b1278890774ef993d2ebc327862470-045)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `chore/reflow-root-item-macros-doc`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-66f3-79e2-b168-bc0d141bc998
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.803254324Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2093
 filed_at:
   code_sha: 57166b44eaa0e978db9a650e4df1a8c92ad77730
   branch: chore/reflow-root-item-macros-doc

@@ -1,5 +1,6 @@
 id: 01a19423-3a36-78f1-b432-798f19cdd670
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-259
+agreed_id: STORY-2218
 title: 'Review PR-3179: [AI:claude] fix(deputy): a refused job writes its reason and remedy to the .out file its result names (BUG-B6B1278890774EF993D2EBC327862470-150)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1940b`) for branch `bug-b6b1278890774ef993d2ebc327862470-150`.
@@ -48,6 +49,14 @@ history:
   session_id: 01a1940bcee7
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1942b-6c58-75b3-9ae3-4462f73353f9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.184776590Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2218
 filed_at:
   code_sha: ae0d46b8cc164cec895c5322e5ee073e9290ed05
   branch: bug-b6b1278890774ef993d2ebc327862470-150

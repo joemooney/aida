@@ -1,5 +1,6 @@
 id: 01a190c5-d865-72c2-b458-f190a0753c98
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-146
+agreed_id: STORY-2186
 title: 'Review PR-3157: [AI:claude] fix(review): contained reviewer launch fails fast without a keyring key; no stale PASS on a no-verdict review (BUG-b6b1278890774ef993d2ebc327862470-045)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1908a`) for branch `bug-b6b1278890774ef993d2ebc327862470-045`.
@@ -49,6 +50,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c38-7350-94a1-41125758e282
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.152241875Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2186
 filed_at:
   code_sha: 518815e3c293dde8c94830f0e55ccf7a68cbd477
   branch: main

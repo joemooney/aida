@@ -1,0 +1,61 @@
+id: 01a16954-0fe8-72c3-9d57-e1b82bb7c94c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-596
+agreed_id: TASK-1817
+title: 'cosmetic: PLAN v1 said the classification table goes onto TASK-2067 as well as …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: PLAN v1 said the classification table goes onto TASK-2067 as well as the doc; no spec comment carries it
+  Reviewed sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:14:39.208588134Z
+modified_at: 2026-10-23T15:54:49.851151403Z
+req_type: Task
+tags:
+- carried-from:TASK-2067
+- finding-hash:f830e0c7
+- from-review:TASK-2067
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16976-a882-78c2-b263-66f12497408a
+  created_at: 2026-10-23T15:54:49.851147950Z
+  created_by: joe
+history:
+- id: 01a16978-d2e4-7771-903e-e1e60a28f42f
+  author: joe
+  timestamp: 2026-10-23T15:54:48.420400051Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16978-dd3a-7ba0-ac92-7b488aaad097
+  author: joe
+  timestamp: 2026-10-23T15:54:51.066547902Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1697e-b8c5-7a23-8910-2cf3d2a6a892
+  author: joe
+  timestamp: 2026-10-23T16:01:14.949319397Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1942b-62aa-7021-aa6f-76aae0ebe040
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.706498521Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-449
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-596
+filed_at:
+  code_sha: 4d0d544861c3db9522ce5de97a80f9f064f430b7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f

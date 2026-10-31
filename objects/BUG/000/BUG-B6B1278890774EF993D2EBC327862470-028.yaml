@@ -1,5 +1,6 @@
 id: 01a18a5d-29ab-74b3-bfaa-462fdb975f48
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-028
+agreed_id: BUG-2345
 title: Permission posture view reports Codex as sandboxed when default_flags set --sandbox=danger-full-access; doctor raises no finding
 description: |
   ## Observed (2026-10-29, primary checkout)
@@ -102,6 +103,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6a9e-72a3-9019-9c1ba5264b87
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.742836910Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2345
 processing_record:
 - id: 01a18bb6-5d0d-7752-bf82-a6e4e52035e2
   timestamp: 2026-10-30T07:29:06.829042506Z

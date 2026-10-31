@@ -1,5 +1,6 @@
 id: 01a1936d-5e47-74e2-95dd-d057a2653444
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-165
+agreed_id: STORY-2205
 title: 'Single-hub mode: agreed IDs need no enrolled root unless the store has more than one writable hub'
 description: |
   Single-hub mode: short agreed IDs need no root on a store with ONE hub; require an enrolled root only when the store has more than one writable hub. (Proposed by the product seat and the operator, 2026-10-31.)
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-31T20:18:18.203566305Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1942b-6c4d-7a32-9707-bcf0eaeea896
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.173395573Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2205
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main

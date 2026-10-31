@@ -1,5 +1,6 @@
 id: 01a19408-4138-76e0-8459-876a7e6c13ce
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-276
+agreed_id: TASK-2602
 title: Mandate exclusion readers still read the working tree / --all, not a literally pinned commit
 description: |
   BUG-056 acceptance (1) asks that the exclusion read use a pinned store commit. The fix pins the *before* snapshot and proves, via a scoped delta check (store_snapshot_stable + EvidenceScope in aida-cli-lib/src/gate/mandate_traces.rs), that nothing touching the judged specs' object paths or spec_id/agreed_id lines changed between the pin and the after snapshot — so the evidence equals the pinned read for those specs. The readers themselves (load_store_for_lookup working tree; StoreHistoryBatch / store_history_alias_map `git log --all`) were not rewritten to read at the pinned revs. A follow-up could pass the pinned tips via `--stdin` instead of `--all` and read current records from `<pinned HEAD>:objects/...`, removing the reliance on the delta proof.
@@ -17,6 +18,15 @@ tags:
 - from-implementer:BUG-B6B1278890774EF993D2EBC327862470-056
 - kind:deviation
 - severity:minor
+history:
+- id: 01a1942b-6c53-7970-8cd5-0a496111c164
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.179439895Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2602
 filed_at:
   code_sha: dc1ff27e5b2df8ed59528fa084f903717e4a2b74
   branch: bug-b6b1278890774ef993d2ebc327862470-056

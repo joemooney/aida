@@ -1,5 +1,6 @@
 id: 01a18046-389e-7a83-9ac1-b7d0538317dc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-022
+agreed_id: TASK-2435
 title: 'Non-blocking (minor, outside diff): scan_rust_test_file (criteria.rs ~829) clos…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-016, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -53,6 +54,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65c5-7881-944d-b9b3950c71cd
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.501214096Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2435
 processing_record:
 - id: 01a181ab-b899-79d0-9b7d-faca0be85ad8
   timestamp: 2026-10-28T08:41:17.209072285Z

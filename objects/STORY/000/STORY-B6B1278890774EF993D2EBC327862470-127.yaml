@@ -1,5 +1,6 @@
 id: 01a18d31-ab0d-7e51-a4a1-dc545464153f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-127
+agreed_id: STORY-2167
 title: 'Review PR-3138: [AI:claude] feat(remote): remote status names the hub pushes bypass the mirror and suggests a scheduled reconcile (TASK-B6B1278890774EF993D2EBC327862470-120)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-120`.
@@ -37,6 +38,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b9f-7792-806b-11dca42ceb7c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.999793626Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2167
 filed_at:
   code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
   branch: main

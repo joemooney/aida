@@ -1,0 +1,48 @@
+id: 019e6cef-7038-7d41-8d52-8313d510d742
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-302
+agreed_id: TASK-131
+title: aida queue list displays spec status as '▸ Approved' even when the underlying r…
+description: 'aida queue list displays spec status as ''▸ Approved'' even when the underlying requirement is actually NeedsAttention. Empirical 2026-05-27: master dispatched drain on TASK-425/424/483 because queue list showed all three as Approved with bounded shape. Actual status of all three was NeedsAttention (pre-shelved by prior drain attempts). Drain bailed instantly on each (''already In Progress but no local lease'' / ''shelved (failure:implementer)'') — no API tokens wasted (good safety), but operator cognitive load + dispatch effort wasted. This is a substrate display bug: queue position state and requirement status are different fields; the queue list should surface the latter at least when divergent. Probable root cause: queue list reads cache.db queue-entry rows but doesn''t join against the live requirement.status for display. Mitigation: ''aida show <SPEC>'' for the true status; until fixed, dispatchers must individually check each queue item before scheduling unattended work. Recovery for the three parked specs: ''aida queue work <SPEC> --resume'' to retry from where prior drain failed.'
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T04:54:51.704744157Z
+modified_at: 2026-06-04T04:48:58.810128065Z
+req_type: Task
+tags:
+- aida:queue:list
+- batch:scaffolding-2026-05-28
+- display-bug
+- effort:impl:1h
+- from-advisor:TASK-425
+- from-self-test
+- kind:observation
+- linked:TASK-425
+- severity:major
+comments:
+- id: 019e6f40-cdb0-7c71-bf13-f28bb149ff41
+  author: joe
+  content: 'Promoted by joe 2026-05-28: Substrate display bug with clear root-cause hypothesis (queue list reads cache.db queue-entry rows but doesn''t join against requirement.status). Major severity — caused this session''s dispatch misfire. Bounded engineering work.'
+  created_at: 2026-05-28T15:42:58.480070431Z
+  modified_at: 2026-05-28T15:42:58.480070431Z
+- id: 019e6f8d-ae83-7423-89e5-fe234dec75e4
+  author: joe
+  content: Commit 90b6743e references this requirement
+  created_at: 2026-05-28T17:06:56.771697617Z
+  modified_at: 2026-05-28T17:06:56.771697617Z
+history:
+- id: 01a1942b-5bc2-77f2-a202-9e906d07dfe5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.938657322Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-106
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-302
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-28T17:07:47.188248338Z
+  implemented_by: joe

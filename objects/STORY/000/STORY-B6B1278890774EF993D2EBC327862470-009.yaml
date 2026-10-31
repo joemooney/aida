@@ -1,5 +1,6 @@
 id: 01a17859-8b14-76a3-8654-ab3f550faa18
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-009
+agreed_id: STORY-2049
 title: 'Review PR-2949: [AI:claude] feat(mailbox): C1 lifecycle anchor, admitted-writer permits, retention barrier (Refs STORY-1843, TASK-b6b1278890774ef993d2ebc327862470-002)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1783f`) for branch `story-1843-c1`.
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6438-7090-a90f-f2b6577fd6fa
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.104826388Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2049
 filed_at:
   code_sha: c5b55cbfec7bb6296056f0acada6eaf7813b7eb2
   branch: story-1843-c1

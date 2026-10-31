@@ -1,5 +1,6 @@
 id: 01a183dc-ce01-7bd2-8162-5c8e567391dd
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-069
+agreed_id: TASK-2482
 title: '[minor] mod.rs:634-645: while a fresh marker is renamed aside and before it is …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:13:32.946014631Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67b4-7d81-a1f3-789a0d7fcbaa
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.996619182Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2482
 filed_at:
   code_sha: fbc835fcf4858f96b699e4c9871b204db13d88a2
   branch: main

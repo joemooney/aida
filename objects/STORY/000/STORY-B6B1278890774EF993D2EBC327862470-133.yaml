@@ -1,5 +1,6 @@
 id: 01a18dec-e04b-7121-b0bf-761699c320aa
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-133
+agreed_id: STORY-2173
 title: 'Review PR-3144: [AI:claude] chore(ci): give story_1917 ship-held checkpoint test a 25 s time budget (TASK-b6b1278890774ef993d2ebc327862470-129)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18dd5`) for branch `task-b6b1278890774ef993d2ebc327862470-129`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6bb5-7c13-a9f9-505c894f3cf0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.021769988Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2173
 filed_at:
   code_sha: 18019938e1be04afe1c0a42971e83d48d91b8f5a
   branch: main

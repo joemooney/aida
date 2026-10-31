@@ -1,5 +1,6 @@
 id: 01a1877d-83f8-7ae2-9c4a-8ed64bac557f
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-016
+agreed_id: BUG-2333
 title: Reviewer preflight reads a symlinked .claude/settings.json as link text and refuses every review
 description: |
   ## Problem
@@ -91,6 +92,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6996-72d0-8f3d-29b403399f17
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.478411639Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2333
 processing_record:
 - id: 01a187a2-9500-74f3-9a43-ce52913f7205
   timestamp: 2026-10-29T12:29:01.568891922Z

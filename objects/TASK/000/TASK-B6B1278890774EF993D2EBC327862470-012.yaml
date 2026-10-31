@@ -1,5 +1,6 @@
 id: 01a17e53-a6dd-7b81-8cd6-a65a9ff1d3b8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-012
+agreed_id: TASK-2425
 title: 'Non-blocking: pull plan limitations (transport_profile.rs plan()) omit TRUST_LI…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1742, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-650f-7673-ba4f-fa65359a07d8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.319642558Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2425
 processing_record:
 - id: 01a17f96-cfc2-71c3-867a-60acb4d337a7
   timestamp: 2026-10-27T22:59:12.450323815Z

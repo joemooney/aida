@@ -1,0 +1,58 @@
+id: 01a15552-ec72-74d2-b752-2223b6038ee8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-514
+agreed_id: TASK-1638
+title: 'minor (non-blocking): aida-cargo-timeout-guard.sh misses `timeout N bash -c "ca…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1854, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): aida-cargo-timeout-guard.sh misses `timeout N bash -c "cargo ..."` / sh -c forms because quoted bodies are stripped before matching.
+  Reviewed sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T18:01:00.274729740Z
+modified_at: 2026-10-19T19:49:22.035315728Z
+req_type: Task
+tags:
+- carried-from:STORY-1854
+- finding-hash:927bc124
+- from-review:STORY-1854
+- kind:carried-forward
+comments:
+- id: 01a155b6-1452-7d72-8e11-4f15d23fb604
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1961. Same PR-2759 finding filed twice (legacy-format id); tracked in TASK-1967.'
+  created_at: 2026-10-19T19:49:18.546546182Z
+  modified_at: 2026-10-19T19:49:18.546546182Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b6-21f3-7c70-9f5c-dc636e8c1e2f
+  author: joe
+  timestamp: 2026-10-19T19:49:22.035308101Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a155c4-f097-79a2-86eb-a57b9ae05e5f
+  author: joe
+  timestamp: 2026-10-19T20:05:32.439095603Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-6173-7c03-96d0-877c759e15bf
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.395669836Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-367
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-514
+filed_at:
+  code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 18aa13a0a0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff

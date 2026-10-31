@@ -1,0 +1,69 @@
+id: 01a150f0-64ce-7380-abcd-1745380f25fb
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-498
+agreed_id: TASK-1618
+title: 'minor: db_reconcile.rs:2088/3028 slice-subject exclusion is global; squash merg…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1663, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: db_reconcile.rs:2088/3028 slice-subject exclusion is global; squash merges titled [k/N] or refactor(cli-lib): extract x.rs never auto-complete and --final-slice is refused for squash
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:34:54.158758776Z
+modified_at: 2026-10-19T15:56:41.808688491Z
+req_type: Task
+tags:
+- carried-from:STORY-1663
+- finding-hash:0e089c50
+- from-review:PR-2732
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-19T15:56:41.808685501Z
+  created_by: joe
+comments:
+- id: 01a154e1-0fec-7ea0-ab8f-d1f527ba3b65
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1951 (Sweep: ship / reconcile / auto-complete fail-open and dead-code follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:56:38.252947182Z
+  modified_at: 2026-10-19T15:56:38.252947182Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a1518f-2f46-7bb1-9ec7-45d3c8dcf10a
+  author: joe
+  timestamp: 2026-10-19T00:28:20.678586036Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154e1-17c7-78a3-8deb-657236f7988d
+  author: joe
+  timestamp: 2026-10-19T15:56:40.263667664Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a154e1-2184-7783-a523-b3195f697660
+  author: joe
+  timestamp: 2026-10-19T15:56:42.756864878Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-615d-7483-81b8-226b4f288ba7
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.373841042Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-351
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-498
+filed_at:
+  code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude

@@ -1,5 +1,6 @@
 id: 01a17e66-324c-7331-bd8c-89d83466f744
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-027
+agreed_id: STORY-2067
 title: 'Review PR-2985: [AI:claude] feat(adoption): locate the shared adoption plane without a product marker (Refs STORY-1741)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1741`.
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6510-7e40-9dd2-c8a6840d9ddb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.320120332Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2067
 filed_at:
   code_sha: dc75eaafce4c24eb8c314490ca66f96f22b530d9
   branch: story-1741

@@ -1,5 +1,6 @@
 id: 01a1908b-79ef-7710-8a65-84342ae895e0
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-144
+agreed_id: STORY-2184
 title: 'Review PR-3156: [AI:claude] ci(gitlab): run main gates nightly, not on every mirrored merge; make them interruptible (TASK-B6B1278890774EF993D2EBC327862470-141)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19057`) for branch `task-b6b1278890774ef993d2ebc327862470-141`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c36-7ba2-874f-36775b119c09
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.150699606Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2184
 filed_at:
   code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
   branch: main

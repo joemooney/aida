@@ -1,5 +1,6 @@
 id: 01a18e1d-775a-7200-89f4-8447943cfd9a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-135
+agreed_id: STORY-2175
 title: 'Review PR-3145: [AI:claude] fix(liveness): decide pid liveness and start identity from one /proc stat read (BUG-B6B1278890774EF993D2EBC327862470-039)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18dee`) for branch `bug-b6b1278890774ef993d2ebc327862470-039`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6bc4-7620-a366-d840cd75e583
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.036936163Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2175
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: main

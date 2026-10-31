@@ -1,5 +1,6 @@
 id: 01a1796b-590f-7f43-9f1d-93f65cf11a16
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-012
+agreed_id: STORY-2052
 title: 'Review PR-2952: [AI:claude] feat(mailbox): B2b - core identity policy and own-audience readers on the logical view (Refs STORY-1843)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a17822`) for branch `story-1843-b2b`.
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-647e-7182-ba1c-a3594e7abcab
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.174599324Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2052
 filed_at:
   code_sha: f34fd14323362443189bfc0670b5bb07b2116e9b
   branch: main

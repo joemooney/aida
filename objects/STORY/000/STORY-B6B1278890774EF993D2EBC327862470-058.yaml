@@ -1,5 +1,6 @@
 id: 01a1835e-c92a-70b1-bf75-22170869c17f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-058
+agreed_id: STORY-2098
 title: 'Review PR-3047: [AI:claude] fix(mailbox): surface and reap tombs, era-marker recovery, staging reaping (TASK-b6b1278890774ef993d2ebc327862470-052)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/mailbox-tomb-followups`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6748-7dc3-aa18-ffebeb36d60f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.888511263Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2098
 filed_at:
   code_sha: ad2e2f0622670185e101b048d5772630114c41d7
   branch: fix/mailbox-tomb-followups

@@ -1,5 +1,6 @@
 id: 01a1940f-d934-7172-93e1-7da68ded638c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-281
+agreed_id: TASK-2607
 title: 'what-is-aida: name mandate renew as human-TTY-only alongside start/stop'
 description: |
   docs/what-is-aida.md:169 and docs/what-is-aida.html:719 say "Starting and stopping a mandate are refused unless the process has an interactive terminal...". `aida mandate renew` has the same floor (STORY-166 AC1); add it to that sentence.
@@ -16,6 +17,15 @@ tags:
 - docs
 - from-review:PR-3175
 - severity:cosmetic
+history:
+- id: 01a1942b-6c57-7bb1-8ec7-f7849d15301e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.183639091Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2607
 filed_at:
   code_sha: 9b13e9e400ff1a829ee90c0a3a45136a5bc48fda
   branch: pr-3175

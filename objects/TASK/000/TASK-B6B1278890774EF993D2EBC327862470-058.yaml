@@ -1,5 +1,6 @@
 id: 01a1837d-b10f-7353-92c2-32a564f4a8a0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-058
+agreed_id: TASK-2471
 title: 'non-blocking (cosmetic): fill_digests doc comment at aida-core/src/mailbox_life…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-051, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:12:14.849756868Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-675e-7312-8961-82af0a30f5c9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.910536413Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2471
 filed_at:
   code_sha: f3cda469f7b86269444c981d620f9881eb46be0a
   branch: main

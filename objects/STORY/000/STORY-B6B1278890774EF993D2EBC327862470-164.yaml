@@ -1,5 +1,6 @@
 id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-164
+agreed_id: STORY-2204
 title: Short agreed IDs need no root on a single hub; require an enrolled root only when the store has more than one hub
 description: |
   ## Why
@@ -183,6 +184,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1942b-6c4b-7752-98dc-da9d62f69400
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.171998286Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2204
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main

@@ -1,0 +1,68 @@
+id: 01a16ee5-94a9-71d1-acd0-6a24d47092a3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-640
+agreed_id: TASK-1864
+title: 'minor: mandate_ship.rs:338-351 fetch-skip (have_head/have_base) is untested and…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2168, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: mandate_ship.rs:338-351 fetch-skip (have_head/have_base) is untested and has no trace comment; behavior is fail-closed (stale base only enlarges evidence / under-reports shipped)
+
+  PR: #2886
+  Reviewed sha: 1293093350cd6ec107445dfbd3bb09e83a54e20a
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T17:11:41.993830986Z
+modified_at: 2026-10-24T19:44:24.860270885Z
+req_type: Task
+tags:
+- carried-from:TASK-2168
+- finding-hash:374a5384
+- from-review:PR-2886
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
+  created_at: 2026-10-24T19:44:21.011845578Z
+  created_by: joe
+comments:
+- id: 01a16f71-651c-79d0-9e40-47547e91f9de
+  author: joe
+  content: 'ADVISOR 12:50: fold into STORY-1889''s remaining slice: test the mandate_ship.rs:338-351 fetch-skip (have_head/have_base).'
+  created_at: 2026-10-24T19:44:24.860270885Z
+  modified_at: 2026-10-24T19:44:24.860270885Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+history:
+- id: 01a16ef7-6612-7d73-9d02-d5024f6b784f
+  author: joe
+  timestamp: 2026-10-24T17:31:09.714269174Z
+  changes: []
+- id: 01a16f71-5214-71c0-bd1a-f66ec62c0d35
+  author: joe
+  timestamp: 2026-10-24T19:44:19.988972559Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16f71-5991-7473-a9ea-7fba65539158
+  author: joe
+  timestamp: 2026-10-24T19:44:21.905109848Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a1942b-6391-72f3-a6fd-8544396603ed
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.937584116Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-493
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-640
+filed_at:
+  code_sha: 62287fd361ad2ac2096236d2e222d037c0f60fbd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb9846b8f4
+  vendor: claude

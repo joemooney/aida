@@ -1,0 +1,68 @@
+id: 01a14f90-7ac7-7c10-9334-afd1f57a3497
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-480
+agreed_id: TASK-1402
+title: 'cosmetic: aida-cli-lib/src/cli.rs:6576-6577 — user-facing --plan-only help stil…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1794, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: aida-cli-lib/src/cli.rs:6576-6577 — user-facing --plan-only help still says it 'conflicts with --auto-complete for now'; it now also conflicts with --drain and --no-human/--headless/--unattended.
+  Reviewed sha: 054907db48b9ad95b5602508229e1041c6b4c66b
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T15:10:31.111549888Z
+modified_at: 2026-10-19T15:59:51.533045136Z
+req_type: Task
+tags:
+- carried-from:TASK-1794
+- finding-hash:725275e7
+- from-review:TASK-1794
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e3-64e4-7382-95bb-b3c95fdf7c34
+  created_at: 2026-10-19T15:59:51.533042251Z
+  created_by: joe
+comments:
+- id: 01a154e3-f312-72a0-99b7-78b92ca4bc1b
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1953 (Sweep: docs, help-text and trace-tag nits); full text copied there.'
+  created_at: 2026-10-19T15:59:47.474044158Z
+  modified_at: 2026-10-19T15:59:47.474044158Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a1500d-6171-70c3-ba34-9f32e2dcb76b
+  author: joe
+  timestamp: 2026-10-18T17:26:56.625151386Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154e3-fc98-7863-8fd9-d736df520ab7
+  author: joe
+  timestamp: 2026-10-19T15:59:49.912939254Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a154e4-06b7-7eb3-adc4-4542ff5c686d
+  author: joe
+  timestamp: 2026-10-19T15:59:52.503893426Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-614a-7810-acac-7503409685c0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.354835219Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-333
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-480
+filed_at:
+  code_sha: 8c4feb441c26eff2974a85753b3f3a595d499e26
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

@@ -1,5 +1,6 @@
 id: 01a188db-2c65-74b2-b493-e7a754ce37d3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-113
+agreed_id: TASK-2526
 title: Complete documentation freshness and navigation audit
 description: |
   Slice 8 of 8 for the product documentation/showcase epic.
@@ -272,6 +273,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-69dc-7d62-9b04-fa3ebc23f66f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.548967411Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2526
 processing_record:
 - id: 01a18e17-c74f-79f1-8a2c-69aa05d18a1c
   timestamp: 2026-10-30T18:34:45.455643934Z

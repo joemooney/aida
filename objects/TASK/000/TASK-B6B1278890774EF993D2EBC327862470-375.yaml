@@ -1,0 +1,91 @@
+id: 01a0e824-1146-72f1-81d4-97ab0749672b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-375
+agreed_id: TASK-204
+title: The final commit adds RAII warning-sink cleanup, but no test deliberately panic…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1673, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  The final commit adds RAII warning-sink cleanup, but no test deliberately panics and verifies the old sink is cleared. Add a non-vacuous test that catches an unwind and proves a subsequent warning is not captured by the old sink (aida-core/src/object_store.rs:1092, tests near 1242).
+
+  PR: #2242
+  Reviewed sha: c0f90a4796d55c6d52345a76763887f33a221801
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T13:11:12.966337830Z
+modified_at: 2026-09-28T17:17:50.079663471Z
+req_type: Task
+tags:
+- carried-from:BUG-1673
+- finding-hash:8c7ec425
+- from-review:PR-2242
+- kind:carried-forward
+comments:
+- id: 01a0e871-2ccf-7640-92b2-afa39a8593b7
+  author: joe
+  content: 'Advisor implementation constraint (2026-09-28): after adding the catch_unwind cleanup regression test, prove it is non-vacuous by temporarily removing Bug1673WarningSinkGuard cleanup, running the focused test and capturing its failure, then restoring the guard. Include the failing output in the PR body. The test must catch the panic, emit a subsequent warning, and prove the old sink does not capture it.'
+  created_at: 2026-09-28T14:35:26.287372175Z
+  modified_at: 2026-09-28T14:35:26.287372175Z
+- id: 01a0e8b8-b62d-7ab0-b3c2-72ac4d8f4b44
+  author: joe
+  content: |-
+    AUTHORIZED RECOVERY (advisor disposition, answering product's request in mail threads f42c9adc and c84d3098).
+
+    THIS SPEC NEEDS NO REWORK AND NO GROOMING. It was never defective. It is a pure test addition in aida-core/src/object_store.rs — no production change, no interface change, no migration. It reached NeedsAttention purely because a LAUNCHER defect (Codex rejecting a duplicate --dangerously-bypass-approvals-and-sandbox flag) was misreported as an implementer work failure. That launcher defect is now owned by BUG-1716 (approved) and its trigger is already removed from the wrapper.
+
+    DISPOSITION:
+    - execution_mode = drain (persisted on the spec, so no --mode flag is needed and no inference by product is required).
+    - Requeue from NeedsAttention with `aida rework TASK-204`, which returns it to Approved and back on the queue. I am applying that now so product does not have to and does not need to force-requeue.
+    - Then it is launchable with plain `aida do TASK-204`.
+
+    THE WORK, restated so the implementer needs nothing else: add a non-vacuous test proving Bug1673WarningSinkGuard clears the thread-local sink during panic unwind. catch_unwind around a scope that installs the sink then panics; after the catch, call bug_1673_capture_warning and assert it is NOT captured by the old sink (and/or assert the prior capture vector is unchanged). Reference points: aida-core/src/object_store.rs:1092, tests near 1242.
+
+    MANDATORY: prove the test non-vacuous. Revert the RAII guard, watch the test FAIL, then restore. A test that passes with and without Bug1673WarningSinkGuard advertises coverage that does not exist — which is the exact defect TASK-204 was filed against, so shipping a vacuous test here would be self-defeating. Put the failing output in the PR body.
+
+    Advisor seat, 2026-09-28, under the operator's emergency burndown authorization.
+  created_at: 2026-09-28T15:53:34.509512167Z
+  modified_at: 2026-09-28T15:53:34.509512167Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+- id: 01a0e8b8-bb09-7253-8676-d31c34553dfa
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/tool-exit: the implementer session exited 1 — it was aborted or errored (attempt 3/3). No triage reason was given.'
+  created_at: 2026-09-28T15:53:35.753872929Z
+  modified_at: 2026-09-28T15:53:35.753872929Z
+- id: 01a0e905-c98e-7f33-b90a-e219bf0db13d
+  author: joe
+  content: 'ADVISOR 2026-09-28: DISPROVEN — the test this finding asks for already existed at the sha the review examined. The finding reads ''no test deliberately panics and verifies the old sink is cleared''. In fact aida-core/src/object_store.rs carries object_store::tests::bug_1673_warning_sink_is_cleared_when_a_panic_unwinds_past_the_guard, which does exactly that: it installs the sink, asserts the sink is live inside the scope (precondition), panic!s inside catch_unwind, asserts the scope really unwound, then asserts !bug_1673_capture_warning(...) after the unwind and that the old sink collected only the one in-scope string. Verified three ways rather than by grep: (1) it is byte-identical between the reviewed sha c0f90a4796d55c6d52345a76763887f33a221801 and main — ''diff'' of the extracted fn reports no differences, so it was present AT review time, not added afterwards; (2) it passes on main (1 passed); (3) it is NON-VACUOUS — neutering ''impl Drop for Bug1673WarningSinkGuard'' to an empty body makes it FAIL at object_store.rs:1152 with its own message ''the guard must clear the sink while unwinding: a warning after the panic was still captured, so the sink leaked''. Working tree restored; no production change. Rejecting as disproven rather than implementing a duplicate test.'
+  created_at: 2026-09-28T17:17:45.742700285Z
+  modified_at: 2026-09-28T17:17:45.742700285Z
+  session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
+history:
+- id: 01a0e83c-4e44-70f1-b658-6ba0f2a9738a
+  author: joe
+  timestamp: 2026-09-28T13:37:41.444263032Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a0e8b8-bb09-7253-8676-d30b9df0beaa
+  author: joe
+  timestamp: 2026-09-28T15:53:35.753864474Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
+- id: 01a0e905-da7f-7541-a6bb-21236b7ff97e
+  author: joe
+  timestamp: 2026-09-28T17:17:50.079660156Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
+- id: 01a1942b-5e46-7de1-a4f3-a1ef4a3739d3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.582100964Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-185
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-375
+execution_mode: drain

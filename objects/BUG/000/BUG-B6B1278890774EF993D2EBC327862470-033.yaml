@@ -1,5 +1,6 @@
 id: 01a18ae6-b74a-78b0-83d8-c68c904be664
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-033
+agreed_id: BUG-2350
 title: aida pr ship post-merge worktree cleanup runs git status on every worktree serially (26 min for 240 worktrees, 0 reclaimed)
 description: |
   2026-10-29: `aida pr ship 3108` merged at 03:06Z but the process ran about 26 more minutes in the merged-agent-worktrees cleanup, calling `git status --porcelain` on each of 240 registered worktrees (114G under ../aida-worktrees), and reported '0 reclaimable'. That blocks serial-ship, so every other approved PR waits behind it.
@@ -158,6 +159,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6abe-7be2-84f8-504e262ef3de
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.774283990Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2350
 processing_record:
 - id: 01a18c10-5b6c-7190-b30f-a941190144b9
   timestamp: 2026-10-30T09:07:24.652878020Z

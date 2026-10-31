@@ -1,5 +1,6 @@
 id: 01a18f74-3fef-7962-bd58-16750a51dc81
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-140
+agreed_id: TASK-2551
 title: '(cosmetic) pr_cmd.rs ShipArgs.from_seat: --no-merge is accepted and silently ig…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-038, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -47,6 +48,14 @@ history:
   timestamp: 2026-10-31T08:36:08.280370266Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
   changes: []
+- id: 01a1942b-6c1d-7cf0-936a-5213cbf1941e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.125996507Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2551
 filed_at:
   code_sha: 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b
   branch: main

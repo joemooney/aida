@@ -1,5 +1,6 @@
 id: 01a181d1-371b-72f2-8a43-57ab9ecd3a42
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-028
+agreed_id: TASK-2441
 title: '(cosmetic, non-blocking) Doc comments claim re-exports that do not exist: forge…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-013, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -54,6 +55,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6630-7f53-a08a-1fb3b39e5344
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.608866349Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2441
 processing_record:
 - id: 01a18216-887c-7ad2-b71a-bacfa15f2b15
   timestamp: 2026-10-28T10:37:57.244786579Z

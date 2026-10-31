@@ -1,5 +1,6 @@
 id: 01a189c5-5a49-7571-ae31-d175f5f26bc0
 spec_id: FAQ-b6b1278890774ef993d2ebc327862470-001
+agreed_id: FAQ-141
 title: How do I create a custom command like 'git lg' in aida?
 description: |
   **Use `aida alias add` for a fixed expansion, or put an `aida-<name>` script on your PATH for anything that needs scripting.**
@@ -32,6 +33,15 @@ req_type: Faq
 tags:
 - audience:user
 - topic:cli
+history:
+- id: 01a1942b-6a15-7300-bc13-cb8db3f38f6e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.605942270Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-141
 filed_at:
   code_sha: 24b61036ae0ac03779c4b7ee5ed74f9575264c39
   branch: main

@@ -1,0 +1,60 @@
+id: 01a15c10-700f-7ef3-97ce-8977983295ec
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-536
+agreed_id: TASK-1658
+title: 'non-blocking (minor): scripts/test-timings.py stalled() waives ANY over-budget …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1988, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): scripts/test-timings.py stalled() waives ANY over-budget rows whose JUnit spans overlap, including unbudgeted tests over default_limit and with no bound on the overrun. nextest runs num-cpus tests concurrently, so a PR that adds two new 30 s tests (no entries) in one binary, or a shared-fixture regression that slows several tests at once, overlaps and turns into ::warning:: only, so AC4's 'unbudgeted test over 10 s fails' no longer holds for that case. Tighten: never waive rows with no budget entry, cap the waived overrun (e.g. <= 2x entry), and/or require the overlapping rows to come from different binaries; add tests for those. Also span() comparisons would raise TypeError if one timestamp is naive and another tz-aware (only ValueError is caught).
+  Reviewed sha: b60ea1beb2ccab227613e36a6b2239aca63cbd10
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T01:25:43.567463065Z
+modified_at: 2026-10-21T04:28:13.758274566Z
+req_type: Task
+tags:
+- carried-from:TASK-1988
+- finding-hash:aac889c4
+- from-review:TASK-1988
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a15aee-5660-7a00-b624-a30d03b34741
+  created_at: 2026-10-21T04:28:13.758271490Z
+  created_by: joe
+history:
+- id: 01a15c22-e4f3-7bd1-94f4-30480751166c
+  author: joe
+  timestamp: 2026-10-21T01:45:53.139101888Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a15cb7-78d7-7f80-847d-bc795af8ef97
+  author: joe
+  timestamp: 2026-10-21T04:28:10.327359268Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15cb7-8d61-7182-af43-dbf32b61147b
+  author: joe
+  timestamp: 2026-10-21T04:28:15.585324171Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-61e2-70b0-a932-0b58c54ed5e9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.506718982Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-389
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-536
+filed_at:
+  code_sha: c43d5444ad020ad1c1d3f7f95cb4fbede32c018b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude

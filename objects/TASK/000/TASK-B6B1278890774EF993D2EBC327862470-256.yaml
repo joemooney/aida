@@ -1,5 +1,6 @@
 id: 019e47f9-b4c4-7362-bd86-b896d2db5a3b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-256
+agreed_id: TASK-2582
 title: Clean up 3 build warnings in aida-cli main.rs (origin_pushed unused, capitalize dead)
 description: |-
   ## Symptom
@@ -81,6 +82,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-421 (now resolve to the survivor): 92d6c8e804edb04e5248ad98794052e8e4043638'
+- id: 01a1942b-5b63-7c00-96f5-b328cd9a8364
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.843751775Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2582
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

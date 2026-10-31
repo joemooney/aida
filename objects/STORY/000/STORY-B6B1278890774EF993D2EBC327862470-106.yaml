@@ -1,5 +1,6 @@
 id: 01a18b37-ff79-73b1-88a6-650c36ab073b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-106
+agreed_id: STORY-2146
 title: 'Review PR-3119: [AI:claude] docs(competitive): refresh Spec Kit and Kiro roster rows from 2026-10-29 research (TASK-B6B1278890774EF993D2EBC327862470-123)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/task-home-123-speckit-kiro-refresh`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6ae6-7133-817b-90c4d2cb613b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.814984825Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2146
 filed_at:
   code_sha: 822accb470dbfe9049604dc70a75c2b72db4c259
   branch: docs/task-home-123-speckit-kiro-refresh

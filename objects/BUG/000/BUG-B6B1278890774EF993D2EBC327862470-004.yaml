@@ -1,5 +1,6 @@
 id: 01a17996-fb22-7570-ba08-fecd8f8ce058
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-004
+agreed_id: BUG-2321
 title: 'Flaky: work_binding linked_worktrees_share_one_opaque_binding_and_concurrent_counter panics under CI load'
 description: |
   `aida-core` `work_binding::tests::linked_worktrees_share_one_opaque_binding_and_concurrent_counter` panicked in CI (rest shard), run 40374961047 / job 121755388407, at PR #2953 head cd2188e4f7:
@@ -69,6 +70,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6487-7290-8b78-3d86529ec712
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.183557448Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2321
 processing_record:
 - id: 01a17a4a-4921-7122-9011-ea1101ea0744
   timestamp: 2026-10-26T22:17:31.169841731Z

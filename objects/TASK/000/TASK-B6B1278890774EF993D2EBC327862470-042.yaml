@@ -1,5 +1,6 @@
 id: 01a18254-53de-7c70-92ad-f3f088caab79
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-042
+agreed_id: TASK-2455
 title: 'Non-blocking (documented limit): the kernel -> orchestrator hop is not followed…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-024, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-66a8-7692-a65f-3924e1f09d72
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.728708514Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2455
 filed_at:
   code_sha: 42070fbece09cfca8f00042931b573300d85f0f9
   branch: main

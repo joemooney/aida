@@ -1,5 +1,6 @@
 id: 019e466d-f21a-7461-9c1e-5f769b1ffce4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-250
+agreed_id: TASK-2576
 title: simple-mode-with-more-items State preamble PR row should include 'no PR yet' variant
 description: |
   In `aida-core/templates/skills/aida-pickup.md` § Step 6 *Simple mode, queue has more items routed to this role* template (PR-130, around line 853):
@@ -60,6 +61,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-414 (now resolve to the survivor): e15fffd87b2dd9b9ba9e6b7948e90d38ff025e6f'
+- id: 01a1942b-5b62-7312-8dc9-8f688e8c2efc
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.842584165Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2576
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

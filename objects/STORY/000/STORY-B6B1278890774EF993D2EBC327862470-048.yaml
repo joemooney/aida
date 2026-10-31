@@ -1,5 +1,6 @@
 id: 01a1825b-d872-7442-b499-93e6132908a1
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-048
+agreed_id: STORY-2088
 title: 'Review PR-3028: [AI:claude] fix(review): drop dead git_path_is_ignored and test the check-ignore -v branch (TASK-b6b1278890774ef993d2ebc327862470-033 TASK-b6b1278890774ef993d2ebc327862470-034)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/ignore-classifier-followups`.
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-66bc-79b2-8708-1e5ffa58e423
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.748147030Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2088
 filed_at:
   code_sha: 42070fbece09cfca8f00042931b573300d85f0f9
   branch: main

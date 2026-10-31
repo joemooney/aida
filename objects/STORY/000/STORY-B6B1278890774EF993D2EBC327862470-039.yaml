@@ -1,5 +1,6 @@
 id: 01a1817e-42e0-7430-9e72-310e30685afb
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-039
+agreed_id: STORY-2079
 title: 'Review PR-3010: [AI:claude] fix(criteria): keep multi-line Rust test headers until the body opens (TASK-b6b1278890774ef993d2ebc327862470-022)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/criteria-rust-header-scan`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-65fa-7af0-a0e1-e352e7a99491
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.554579622Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2079
 filed_at:
   code_sha: 1058ae300cf67bd3500ef680c92cc9021d71f7db
   branch: fix/criteria-rust-header-scan

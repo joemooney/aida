@@ -1,5 +1,6 @@
 id: 01a17f97-16db-74c1-b53a-89f275c27dc4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-018
+agreed_id: TASK-2431
 title: 'Non-blocking (cosmetic): new BraceScanner/limitations code is traced to STORY-1…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-011, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65ac-78e3-a072-e10a76669d68
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.476214033Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2431
 processing_record:
 - id: 01a18045-ee0a-7ff1-9c6c-dc117c3fc13d
   timestamp: 2026-10-28T02:10:29.002230709Z

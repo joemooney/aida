@@ -1,5 +1,6 @@
 id: 01a188d8-d1c2-77d3-a30b-220a95022694
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-106
+agreed_id: TASK-2519
 title: Human-first onboarding with one integrated guide
 description: |
   Slice 1 of 8 for the product documentation/showcase epic.
@@ -253,6 +254,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-69ce-7dd3-8753-5dc7fea0db1b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.534359915Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2519
 processing_record:
 - id: 01a18da8-4691-7ae0-a03c-aeb6de796b12
   timestamp: 2026-10-30T16:32:58.001024407Z

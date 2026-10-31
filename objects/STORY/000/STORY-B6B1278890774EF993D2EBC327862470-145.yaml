@@ -1,5 +1,6 @@
 id: 01a190a6-b774-7bf1-9ae5-6eda97f9e483
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-145
+agreed_id: STORY-2185
 title: 'Review PR-3155: [AI:claude] fix(implement): resume a headless implementer that parks on its own background run (BUG-B6B1278890774EF993D2EBC327862470-044)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1908a`) for branch `bug-b6b1278890774ef993d2ebc327862470-044`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c37-7861-a780-1e8ac3b89ae2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.151839611Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2185
 filed_at:
   code_sha: 0055329071e020e27dc8342cd4479eec6b4a1e87
   branch: main

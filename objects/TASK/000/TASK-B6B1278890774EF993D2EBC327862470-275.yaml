@@ -1,5 +1,6 @@
 id: 01a19360-32d4-73e0-a224-de050c0a3d23
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-275
+agreed_id: TASK-2601
 title: Node-local host counter now jumps past the highest filed number instead of filling gaps (contained-add fix)
 description: |
   For node-local clones, CloneDispenser::next now calls Dispenser::next_above(prefix, filed_high_water) (aida-core/src/allocation_authority.rs). The host counter becomes max(counter, highest number this node already has in objects/) + 1 in one locked write, so the host skips past numbers a contained session minted without advancing the counter in .git. Side effect: a node-local counter that was behind the store for any other reason (imported or migrated objects) now jumps past the highest filed number. Before, it filled free gaps and failed after 64 consecutive taken numbers. Also new: each node-local next() lists objects/ once, which is cheap but O(store size). Contained mints need the caller to hold the store write lock (add_requirement and mint_spec_id both do). Any other caller in a contained session gets a clear refusal.
@@ -33,6 +34,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-6c4a-7d73-a274-767eeb20dbfe
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.170607795Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2601
 filed_at:
   code_sha: 087a9b3ce10fd4f690cb3eea7393d4ae5b58775a
   branch: bug-b6b1278890774ef993d2ebc327862470-053

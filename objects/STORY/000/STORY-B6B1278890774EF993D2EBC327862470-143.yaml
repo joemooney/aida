@@ -1,5 +1,6 @@
 id: 01a18f76-5e28-7ea3-accc-5c0b11182065
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-143
+agreed_id: STORY-2183
 title: 'Review PR-3153: [AI:claude] docs(showcase): restore in-page Capabilities nav and arrow glyphs (TASK-B6B1278890774EF993D2EBC327862470-131 TASK-B6B1278890774EF993D2EBC327862470-132)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18f5c`) for branch `task-b6b1278890774ef993d2ebc327862470-131`.
@@ -57,6 +58,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c1e-7b71-adda-d5bc72eddf0b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.126399453Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2183
 filed_at:
   code_sha: 00fee53b7ed4a69cc3278bb12344c0e0f31c4d3b
   branch: main

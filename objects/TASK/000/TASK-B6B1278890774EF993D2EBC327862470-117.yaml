@@ -1,5 +1,6 @@
 id: 01a18a37-0960-72b0-8a16-dadde0e30969
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-117
+agreed_id: TASK-2530
 title: Make aida agent list canonical; keep ls as an alias
 description: |
   `aida agent ls` is the only subcommand spelled `ls`. Everywhere else `list` is canonical and `ls` is the alias (`aida list` / `aida ls`, TASK-1463), and STORY-HOME-096's acceptance already says `aida agent list`.
@@ -163,6 +164,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6a47-7863-87aa-0822b2602a0e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.655447650Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2530
 processing_record:
 - id: 01a18f48-7e0b-7151-b0db-7764cefa9c80
   timestamp: 2026-10-31T00:07:35.179244374Z

@@ -1,5 +1,6 @@
 id: 01a183ca-a4cb-7492-8fda-1ccf46654a16
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-064
+agreed_id: TASK-2477
 title: 'minor (non-blocking, pre-existing): dispatch.rs:1898-1918 still parses aida-loc…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-67b2-7863-a20a-c4a80f415452
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.994236970Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2477
 processing_record:
 - id: 01a18504-5688-7930-892f-3682357624d4
   timestamp: 2026-10-29T00:16:56.456742075Z

@@ -1,5 +1,6 @@
 id: 01a17a39-ee5d-7c63-b2b8-fc444a4a2661
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-013
+agreed_id: STORY-2053
 title: 'Review PR-2954: [AI:claude] fix(allocation): accept a WORK counter handle superseded by atomic replacement (BUG-b6b1278890774ef993d2ebc327862470-004)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a17a23`) for branch `bug-workbinding-flake`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6492-7900-ae44-b6a777eae6c9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.194979790Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2053
 filed_at:
   code_sha: 21a12518c8be6d02a02d870c254342ad8333f235
   branch: bug-workbinding-flake

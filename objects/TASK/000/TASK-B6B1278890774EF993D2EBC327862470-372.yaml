@@ -1,0 +1,53 @@
+id: 01a0e817-f046-7410-b48b-026d2b3e53b6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-372
+agreed_id: TASK-201
+title: 'AC5 is still unmet: this PR does not let callers distinguish a finished/idle ag…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1701, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC5 is still unmet: this PR does not let callers distinguish a finished/idle agent from one still working without attaching to its PTY. The PR body explicitly says BUG-1704 tracks this behavior, but BUG-1701 still lists it as acceptance. Either include the status signal here or get the owning acceptance criteria updated before treating BUG-1701 as passed.
+
+  PR: #2249
+  Reviewed sha: 5632229e663b9d782e1f2c427a3176792f8447ae
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T12:57:58.086422678Z
+modified_at: 2026-09-28T13:37:37.224119467Z
+req_type: Task
+tags:
+- carried-from:BUG-1701
+- finding-hash:b33426a8
+- from-review:PR-2249
+- kind:carried-forward
+comments:
+- id: 01a0e83b-a73c-78a3-bfd5-d3153e3d7a78
+  author: joe
+  content: |-
+    Rejected as a DUPLICATE of BUG-1704, not as an invalid finding — the gap is real, it is just already owned.
+
+    BUG-1704 is titled for exactly this defect (`aida agent status` calls a finished seat busy) and its own description says: "BUG-1701 shipped the *evidence* (a CPU column, AC5); this spec is the *classification* fix it deliberately did not attempt." Its AC1 requires a finished seat to stop reporting `busy` and to be distinguishable by status alone, and AC2 protects the build-blocked case. That is this finding's whole content.
+
+    Confirmed live on the dev host today: codex#1907632 is `STAT Zs`, defunct 2d11h, and `aida agent status` still reports it `busy`. Evidence recorded on BUG-1704 instead of here.
+
+    Triaged by the advisor seat under the operator's 2026-09-28 emergency burndown authorization.
+  created_at: 2026-09-28T13:36:58.684395700Z
+  modified_at: 2026-09-28T13:36:58.684395700Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+history:
+- id: 01a0e83c-3dc8-7b11-bd5a-e2d785a40623
+  author: joe
+  timestamp: 2026-09-28T13:37:37.224104708Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-5e38-7e02-9c05-49afe885e2f8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.568675817Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-182
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-372

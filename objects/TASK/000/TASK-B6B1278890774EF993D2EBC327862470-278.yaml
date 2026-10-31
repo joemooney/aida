@@ -1,5 +1,6 @@
 id: 01a19409-c4ee-7922-a1d0-c48943819fba
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-278
+agreed_id: TASK-2604
 title: Publish the product website on GitLab Pages as well as GitHub Pages
 description: |
   ## Why
@@ -33,6 +34,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1942b-6c55-77e1-abe3-e58c5cd7b02e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.181985558Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2604
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main

@@ -1,5 +1,6 @@
 id: 01a18ae9-ecec-7812-9050-cb1e8c9dc56b
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-034
+agreed_id: BUG-2351
 title: 'Reviewer launch reports ''git commit failed: ✓ Commit message format valid'' (hook stdout shown, git''s real error dropped)'
 description: |
   2026-10-29 20:24: `aida queue work PR-3115 --role reviewer --no-human --vendor claude --steal`, launched within 15s of two other reviewer launches, failed with: error: "git commit failed: \x1b[0;32m✓ Commit message format valid\x1b[0m" right after 'this contained seat gets a linked worktree'. The message shows the commit-msg hook's success stdout and drops git's stderr, so the cause is unknown (likely a concurrent store or index lock). Acceptance: on a commit failure, the launcher reports git's stderr and exit code (with the hook output stripped of ANSI codes or omitted); a lock-contention failure retries with bounded backoff; test with a fake git that writes the hook line to stdout and the error to stderr.
@@ -148,6 +149,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6ac0-7091-8160-ebe130cb452e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.776057873Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2351
 processing_record:
 - id: 01a18c63-7444-7860-89ff-c486c449e073
   timestamp: 2026-10-30T10:38:10.500249980Z

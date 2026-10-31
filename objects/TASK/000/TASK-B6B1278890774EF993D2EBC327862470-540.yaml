@@ -1,0 +1,63 @@
+id: 01a15d47-270c-7820-9ebe-04ce2a681947
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-540
+agreed_id: TASK-1661
+title: '[cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after class…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1800, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after classify_ship_default_branch replaced it, so non-test builds get a dead_code warning. Gate it #[cfg(test)], as was done for store_history_versions.
+
+  PR: #2732
+  Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T07:05:06.572883004Z
+modified_at: 2026-10-21T07:19:53.590141150Z
+req_type: Task
+tags:
+- carried-from:TASK-1800
+- finding-hash:377e83e6
+- from-review:PR-2732
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-21T07:19:53.590137715Z
+  created_by: joe
+history:
+- id: 01a15d54-aa3a-7d41-a6b5-7689dd8df0e4
+  author: joe
+  timestamp: 2026-10-21T07:19:52.122150593Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15d54-b442-71f2-a2b3-fafcd843947b
+  author: joe
+  timestamp: 2026-10-21T07:19:54.690795312Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15d6e-3e03-73b0-a502-4f6d17a9b2a7
+  author: joe
+  timestamp: 2026-10-21T07:47:48.355776383Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-61f9-7df2-9b32-d939442e72a9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.529600485Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-393
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-540
+filed_at:
+  code_sha: a0cd26e972397f9de83689fa274a91df2a6413ac
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a0cd26e972
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81

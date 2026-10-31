@@ -1,5 +1,6 @@
 id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
 spec_id: EPIC-b6b1278890774ef993d2ebc327862470-003
+agreed_id: EPIC-611
 title: 'Regroup 2026-10-29: lane-orchestration friction seen while draining the open list'
 description: 'Advisor regroup list (operator goal 2026-10-29: open list to zero, then improve AIDA from this list). Each child is one observed friction with evidence from the 2026-10-29 advisor session. Already tracked elsewhere: STORY-HOME-096 (Codex mail-wake on agent new), STORY-HOME-097 (hub-bridge store reconcile), STORY-080 slice-2 item 6 (reviewer verdict collect fails as contained).'
 status: Draft
@@ -271,6 +272,14 @@ history:
   timestamp: 2026-10-31T18:06:32.947291298Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a1942b-6a48-7871-8ac4-ca33f671666e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.656206964Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: EPIC-611
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main

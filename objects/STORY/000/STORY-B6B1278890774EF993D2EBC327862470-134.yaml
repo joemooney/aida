@@ -1,5 +1,6 @@
 id: 01a18def-6827-7902-9a31-a8ddc697f0a9
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-134
+agreed_id: STORY-2174
 title: 'Review PR-3141: [AI:claude] feat(whoami): one view of this session''s mail handle, node, unread mail, spec and goal (STORY-B6B1278890774EF993D2EBC327862470-098)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18d21`) for branch `story-b6b1278890774ef993d2ebc327862470-098`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6bc3-73a3-9154-753d4f677bcc
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.035938326Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2174
 filed_at:
   code_sha: 18019938e1be04afe1c0a42971e83d48d91b8f5a
   branch: main

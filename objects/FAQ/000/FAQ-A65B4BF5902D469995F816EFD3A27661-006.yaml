@@ -1,5 +1,6 @@
 id: 01a1895f-ef81-75a1-978f-b7c11c7ef359
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-006
+agreed_id: FAQ-146
 title: Why does a downstream store still list old requirements after its code is synchronized?
 description: |
   **Code synchronization does not imply requirement-store synchronization. A canonical store and a private writable overlay need distinct ownership and mutation rules.**
@@ -37,6 +38,15 @@ tags:
 - audience:user
 - topic:storage
 - topic:transport
+history:
+- id: 01a1942b-6a0a-7b52-aced-4d74f262b70b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.594971755Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-146
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

@@ -1,0 +1,97 @@
+id: 01a0e8f5-60a9-70b1-8699-183af4a88a43
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-377
+agreed_id: TASK-206
+title: 'strip_bypass_flags() is untested and over-strips: declining bypass also drops a…'
+description: |
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1500, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  strip_bypass_flags() is untested and over-strips: declining bypass also drops a non-bypass --permission-mode value (e.g. acceptEdits), silently downgrading further than intended. Fails safe (native), so not merge-blocking, but it is the security-critical path and deserves a unit test.
+
+  PR: #2259
+  Reviewed sha: c94e62801d886cc16c845f1917dd0194d002dc71
+
+  ## Current behaviour (aida-cli-lib/src/bypass_confirm.rs:106)
+
+  The stripper drops `--permission-mode` and unconditionally skips the NEXT argument, whatever it
+  is, and separately drops any bare `bypassPermissions` token anywhere in argv. Three consequences:
+
+  1. **Over-strip.** `--permission-mode acceptEdits` is removed entirely, so declining bypass
+     downgrades past the operator's actual intent to the harness default. This is the filed finding.
+  2. **Collateral over-strip.** A bare `bypassPermissions` token is removed wherever it appears,
+     including as an unrelated positional argument or prompt word.
+  3. **Under-strip.** The `--permission-mode=bypassPermissions` equals form matches neither branch,
+     so the bypass SURVIVES a declined confirmation. AIDA's own call sites
+     (config_cmd.rs, compete.rs) only ever build the space-separated form, so this is hardening
+     against operator-supplied passthrough args rather than a live exploit — but it is the one
+     direction of the bug that fails OPEN, and a stripper on the security path must not have one.
+
+  ## Acceptance
+
+  1. `strip_bypass_flags` removes `--permission-mode` **and** its value only when that value is
+     `bypassPermissions`. Any other `--permission-mode <value>` pair survives the strip intact,
+     value included.
+  2. The `--permission-mode=bypassPermissions` equals form is stripped. No spelling of the bypass
+     mode survives a declined confirmation.
+  3. `--permission-mode=<non-bypass>` survives intact.
+  4. `--dangerously-bypass-approvals-and-sandbox` and `--dangerously-skip-permissions` are still
+     removed wherever they appear.
+  5. A bare `bypassPermissions` token that is NOT the value of a preceding `--permission-mode` is
+     left alone; argument order and every other argument are preserved exactly.
+  6. Unit tests in `bypass_confirm.rs` cover each of 1–5, including a trailing
+     `--permission-mode` with no value at all (must not panic and must not silently eat a
+     following argument that does not exist). Each new assertion carries a non-vacuity proof:
+     state which one fails against the current implementation.
+  7. No behaviour change for the `Decision` matrix — `confirm_bypass_decision_matrix` stays green.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T16:59:50.313491425Z
+modified_at: 2026-09-28T21:41:09.007606355Z
+req_type: Task
+tags:
+- carried-from:TASK-1500
+- finding-hash:2d45ae2b
+- from-review:PR-2259
+- kind:carried-forward
+history:
+- id: 01a0e901-41fd-7593-aa90-a66065a1438a
+  author: joe
+  timestamp: 2026-09-28T17:12:48.893653678Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a0e9d5-7e6e-7483-b443-c9f2de786737
+  author: aida-session-start
+  timestamp: 2026-09-28T21:04:37.998755130Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a0e9f6-ed08-73d0-8247-eb32c9bcd100
+  author: aida-auto-bump
+  timestamp: 2026-09-28T21:41:09.000812901Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a1942b-5e5e-7710-9611-9b30c1730d69
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.606096932Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-187
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-377
+processing_record:
+- id: 01a0e9f6-ed0f-7ce3-afc7-2f91b4a51d50
+  timestamp: 2026-09-28T21:41:09.007598772Z
+  agent: aida
+  commit_sha: 7268c61cd730cd8399c3c75edea5aab6cedb5e2a
+  summary: 'APPROVED. All 7 acceptance criteria met, verified by execution not by reading. Tests: --lib bypass_confirm ''test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 7287 filtered out''; --lib confirm_bypass ''ok. 1 passed; 0 failed'' (AC7, Decision matrix untouched and absent from the diff). Non-vacuity proven independently by reinstating the old function body: 3 of 5 new tests failed for the right reasons -- preserves_non_bypass_permission_mode_values (left ["next"] vs right ["--permission-mode","acceptEdits","next"], the filed over-strip finding), preserves_unpaired_bypass_tokens_and_trailing_permission_flag (left ["tail"], collateral over-strip), strips_equals_bypass_and_preserves_equals_non_bypass (equals-form bypass survived, the fail-open direction). Restored clean, re-confirmed 8/8. The other two tests pass either way and are correctly regression-preservation for AC1-first-half and AC4. AC5 and AC6 both genuinely covered: a bare bypassPermissions positional and a trailing valueless --permission-mode are both asserted preserved, no panic. fmt clean. Clippy''s only hit in the file is line 49 (pre-existing identical-branches in resolve()), not a changed line. Literal check: every string in the diff is an argv flag token, zero operator-facing prose, and the two eprintln! call sites live in lib.rs which the diff does not touch. FOLLOW-ON, not a blocker: the detector in gate_agent_bypass (lib.rs:28903-28910) matches only the bare token, so it never fires on the equals form; decide() short-circuits to Proceed and no confirmation is requested, making the new equals-form arm unreachable from the real call path. Grep confirms --permission-mode=bypassPermissions is handled nowhere else in the crate, and lib.rs:29787 help text advertises that exact spelling to operators. Filed separately; this change is strictly better than the status quo.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-28T21:41:09.000785822Z
+  completion_sha: 7268c61cd730cd8399c3c75edea5aab6cedb5e2a

@@ -1,5 +1,6 @@
 id: 01a1788d-b570-7292-9dcc-8431e9944935
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-010
+agreed_id: STORY-2050
 title: 'Review PR-2950: [AI:claude] perf(show): incremental spec-id -> commit linkage index (Refs BUG-2221)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a177fd`) for branch `bug-2221-v3`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6448-77b1-b5ee-4a2e3845e49d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.120800580Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2050
 filed_at:
   code_sha: 09046fb2ad794edba7d428229faa7e77366e7b33
   branch: bug-2221-v3

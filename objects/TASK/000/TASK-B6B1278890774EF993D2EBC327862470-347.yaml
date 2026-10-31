@@ -1,0 +1,99 @@
+id: 01a0bdf0-2578-7730-b4d9-db82e21ce7f1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-347
+agreed_id: TASK-176
+title: CLI-manual preflight guard already fails on three unresolved flags
+description: 'While validating BUG-1420''s stricter Bash parity, the configured CI guard python3 docs/cli/verify-manual.py failed independently of shell strictness: --stdin and --body-file under aida mailbox, and --hook under aida schedule, do not resolve to the cited command subtree. This guard is a single final command, so it already fails under both the old and new shell invocation; BUG-1420 did not cause it.'
+status: Completed
+priority: High
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-20T08:30:27.192088042Z
+modified_at: 2026-09-24T16:31:21.841835321Z
+req_type: Task
+tags:
+- batch:night-0920
+- ci
+- docs-drift
+- drain-safe
+- from-advisor:BUG-1420
+- kind:observation
+- linked:BUG-1420
+- preflight
+- severity:major
+relationships:
+- rel_type: References
+  target_id: 01a0bd7a-3a2e-76f3-8d1d-c1b092a6a732
+  created_at: 2026-09-20T08:41:13.472521876Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0bf90-a675-7e33-99b0-726ca4377138
+  created_at: 2026-09-20T16:05:28.934214556Z
+  created_by: joe
+comments:
+- id: 01a0bdf9-bcfd-79e3-b806-0f4bf6bdb2ee
+  author: joe
+  content: |-
+    [advisor:triage] VERIFIED REAL, on a current binary, and it is distinct from the false positive this same guard produced earlier tonight. Approved, drain, queued.
+
+    I checked each flag rather than re-running the guard, because this guard already cost us one wrong diagnosis:
+
+      aida mailbox --help       | grep body-file, stdin  -> 0
+      aida mailbox send --help  | grep body-file, stdin  -> 4
+      aida schedule --help      | grep hook              -> 0
+      aida schedule tick --help | grep hook              -> 1
+
+    So the manual cites three flags at a PARENT command level while they live on SUBCOMMANDS. The guard is correct and the manual is wrong.
+
+    WHY I CHECKED RATHER THAN ACCEPTED. Earlier tonight this same guard reported drift that did not exist — the preflight had run against a stale `aida` on PATH, and I mis-attributed the result before re-deriving it. My binary now matches HEAD exactly (85d9bad8), so this run is trustworthy in a way that one was not. The distinction matters: a guard that can report phantom drift needs its environment stated before its output is believed, which is the scope BUG-1420 and TASK-1289 both touch.
+
+    IT IS ALSO A BLOCKER FOR WORK IN FLIGHT RIGHT NOW. `python3 docs/cli/verify-manual.py` is a configured CI guard, it is a single final command, and it fails today under both the old and the new shell invocation. The drain is at phase 1 on BUG-1420 as I write this. When that spec reaches its preflight, this guard will fail for a reason BUG-1420 did not cause — so the shelve would look like BUG-1420 broke something, and the lane would spend its round chasing shell semantics.
+
+    I have recorded that on BUG-1420 so whoever picks it up knows the guard failure is inherited, not theirs.
+
+    THE FIX IS DOCUMENTATION, not code: move the three flags to the subcommand sections that own them. Do not "fix" it by loosening the guard to accept a flag anywhere in the tree — the guard's value is precisely that it knows where a flag lives, and a version that does not would have passed this.
+  created_at: 2026-09-20T08:40:55.805161965Z
+  modified_at: 2026-09-20T08:40:55.805161965Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bf97-0ec4-7110-bf5c-cf88ee1c639b
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2022
+    agent: codex
+    ran-at: 2026-09-20 09:12 -07:00
+    mode: propose-only (drain)
+    proposed: 0
+    skipped: 0
+  created_at: 2026-09-20T16:12:23.108626049Z
+  modified_at: 2026-09-20T16:12:23.108626049Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bf97-44b3-7f43-99e1-9925678c46c6
+  author: aida-auto-bump
+  timestamp: 2026-09-20T16:12:36.915450066Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-5cdb-7ea0-bbbb-3c8c4dde0d35
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.219540438Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-152
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-347
+processing_record:
+- id: 01a0bf97-44ba-79b1-b593-d5544838275b
+  timestamp: 2026-09-20T16:12:36.922673938Z
+  agent: aida
+  commit_sha: 5aee18b91d66069971192659fe515d82c8026a45
+  summary: Completed via merge 5aee18b9
+execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T16:04:33.361501679Z
+  implemented_by: joe
+  completed_at: 2026-09-20T16:12:36.894825957Z
+  completion_sha: 5aee18b91d66069971192659fe515d82c8026a45

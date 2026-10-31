@@ -1,5 +1,6 @@
 id: 01a18e1f-ba3a-7cb2-9b4e-3fc950e21f05
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-130
+agreed_id: TASK-2542
 title: Publish the product website on GitHub Pages
 description: Operator explicitly requested immediate public GitHub Pages publication on 2026-10-30. Publish only the reviewed merged-main static showcase and its assets, route source/reference links to the public GitHub repository, enable Pages, and verify a live URL. Keep the owner-private Sites preview unchanged. Deployment is separate from the final TASK-HOME-128 author PR and does not merge unreviewed source.
 status: Completed
@@ -76,6 +77,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6bd4-7ec2-88fe-fabd833a1d09
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.052196084Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2542
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: codex/task-home-128-docs-completion

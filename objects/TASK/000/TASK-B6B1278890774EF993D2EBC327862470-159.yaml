@@ -1,5 +1,6 @@
 id: 019e0ee7-1c74-71d0-ae38-d7e9652a6cb1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-159
+agreed_id: TASK-2570
 title: '[FR-215 v2] child'
 description: ''
 status: Rejected
@@ -29,5 +30,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-33 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'
+- id: 01a1942b-5b61-78a1-8505-eab174fda152
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.841344288Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2570
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

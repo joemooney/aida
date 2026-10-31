@@ -1,5 +1,6 @@
 id: 01a18f2a-a833-7922-ba6f-803245443ce0
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-140
+agreed_id: STORY-2180
 title: 'Review PR-3150: [AI:claude] chore(ci): raise bug_1677 concurrent-queue-writers time budget to 35s (TASK-b6b1278890774ef993d2ebc327862470-137)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18f15`) for branch `task-b6b1278890774ef993d2ebc327862470-137`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c1b-7cc3-ab3c-262ce00478f8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.123701946Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2180
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main

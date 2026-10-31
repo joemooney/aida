@@ -1,5 +1,6 @@
 id: 01a18199-374b-79c0-a318-df274120f7c3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-026
+agreed_id: TASK-2439
 title: 'cosmetic (non-blocking): docs/spikes/2026-10-28-private-core-split.md:313 says …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on SPIKE-B6B1278890774EF993D2EBC327862470-001, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-661d-7711-80ce-5766af8e7189
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.589557910Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2439
 processing_record:
 - id: 01a18200-93e5-7fc0-8916-060e7a15d63b
   timestamp: 2026-10-28T10:13:58.373376494Z

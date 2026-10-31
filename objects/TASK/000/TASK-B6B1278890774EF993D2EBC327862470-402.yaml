@@ -1,0 +1,275 @@
+id: 01a10f5e-6b82-71a1-ba08-fc19d8d6ee64
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-402
+agreed_id: TASK-1324
+title: aida reconstitute with an empty criterion-traced-test denominator masks arm-B f…
+description: 'aida reconstitute with an empty criterion-traced-test denominator masks arm-B failures: 4 probe runs on aida-monitor 2026-10-05 20:58 each exited 0 in ~1s with ZERO-byte headless logs (vs 83KB for a real 2026-10-04 run), empty scratch dirs, regenerated=0 — the store-probe agent never ran or failed instantly, yet the report shows only ''unknown: no real traced tests to recall'' because the real_tests.is_empty() match arm swallows arm_b_error. Separately: spawn_vendor_headless_with_seat appears to return success with no output in this situation. Repro: aida reconstitute STORY-3 --json --yes in ~/ai/aida-monitor.'
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T04:00:08.578937316Z
+modified_at: 2026-10-08T01:27:05.019574614Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+relationships:
+- rel_type: Blocks
+  target_id: 01a0deff-ff18-7be3-91e4-382e8b28c388
+  created_at: 2026-10-06T04:03:18.679199168Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a10f67-f421-79c2-9a17-68f82790add1
+  created_at: 2026-10-06T04:10:45.445818826Z
+  created_by: joe
+comments:
+- id: 01a10f61-185c-7753-8c17-ca8084702905
+  author: joe
+  content: 'Advisor verification: confirmed in code — reconstitute.rs:1255-1258, the `_ if real_tests.is_empty()` match guard outranks `Some(e)`, so arm_b_error is swallowed whenever the traced-test denominator is empty. Second half (spawn_vendor_headless_with_seat returning success with zero output, 4x ~1s exit-0 probes with 0-byte logs on aida-monitor) still needs root-causing — likely the same class as TASK-1603''s refusal race. This bug blocks TASK-1523: the north-star measurement cannot be trusted while arm-B failures read as ''unknown denominators''.'
+  created_at: 2026-10-06T04:03:03.900970728Z
+  modified_at: 2026-10-06T04:03:03.900970728Z
+  session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
+- id: 01a10f65-0c88-7400-9e1c-a8d9064b6115
+  author: joe
+  content: 'Implementation: preserve arm-B launch/artifact/matcher errors ahead of the zero-denominator fallback; diagnose missing/invalid regenerated output with artifact and headless-log paths; preserve unknown recall/delta and valid empty-output behavior. The generic launcher returns process ExitStatus, not a probe-success verdict; no global launcher contract change is needed to detect silent exit-zero probes. Targeted reconstitution tests and formatting verification are running.'
+  created_at: 2026-10-06T04:07:23.016871842Z
+  modified_at: 2026-10-06T04:07:23.016871842Z
+- id: 01a10f67-98ae-78d2-9d32-99344fda8089
+  author: joe
+  content: Commit 9ec89b97b6 references this requirement
+  created_at: 2026-10-06T04:10:09.966912592Z
+  modified_at: 2026-10-06T04:10:09.966912592Z
+- id: 01a10f68-a5d0-7642-a67b-2ebbd3294501
+  author: joe
+  content: Implemented and pushed commit 9ec89b97b6 in https://github.com/joemooney/aida/pull/2435; review queued as STORY-1528. Verified 19 reconstitute tests, cargo fmt --all -- --check, and git diff --check. queue done refused because canonical ID changed from TASK-1-216 to TASK-1324 while the branch/lease still use the origin ID. Left in-progress; no guard override. Separate live-vendor silent exit investigation filed as TASK-1-219.
+  created_at: 2026-10-06T04:11:18.864702272Z
+  modified_at: 2026-10-06T04:11:18.864702272Z
+- id: 01a10f8b-26dd-76c0-a196-9f651513be5d
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 3 (reviewer)
+
+    Recorded by `aida queue work TASK-1-216 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 3 (reviewer) · kind `ci-unavailable`
+    - Seat: reviewer (session role: advisor)
+    - Parent spec: TASK-1-216
+    - Branch under test: main
+    - Commit under test: 51fe64d5e964
+    - Recorded at: 2026-10-06T04:48:58.901964486+00:00
+
+    ### Failure
+
+    PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head
+
+    Failure kind: `ci-unavailable`
+
+    ### Recovery hint shown to the operator
+
+    CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work TASK-1-216 --auto-complete`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T04:48:58.901964486+00:00
+
+    ### Phase durations
+
+      - phase 2 (ci): 5204 ms
+      - phase 3 (reviewer): 1187414 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1-216","started_at":"2026-10-06T04:29:03.643942700+00:00","completed_at":"2026-10-06T04:48:58.901964486+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"ci-unavailable","failure_message":"PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head","phase_durations":[{"phase":2,"slug":"ci","elapsed_ms":5204},{"phase":3,"slug":"reviewer","elapsed_ms":1187414}],"total_ms":1193600,"binary_sha":"dafb66432e","auto_rebase":[{"phase":3,"pr_number":2435,"outcome":"clean"}]}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1-216 --title "drain phase 3 (reviewer) failure on TASK-1-216" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T04:49:00.125634882Z
+  modified_at: 2026-10-06T04:49:00.125634882Z
+- id: 01a10f99-7686-70c2-a3e4-964c0c35c9a2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/ci-unavailable: PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head. No triage reason was given.'
+  created_at: 2026-10-06T05:04:38.022290102Z
+  modified_at: 2026-10-06T05:04:38.022290102Z
+- id: 01a11011-68ad-7bc0-a09f-527a52b4911b
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work TASK-1324 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `launch-refused`
+    - Seat: implementer (session role: advisor)
+    - Parent spec: TASK-1324
+    - Branch under test: main
+    - Commit under test: 978c4974292a
+    - Recorded at: 2026-10-06T07:15:37.866761265+00:00
+
+    ### Failure
+
+    phase 1 child session 01a11011 exited with code 1 after 19257ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-216` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-216 --force-claim` to take over here, or `aida edit TASK-1-216 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1324 — the store reports TASK-1324 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone
+
+    Failure kind: `launch-refused`
+
+    ### Recovery hint shown to the operator
+
+    The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1324`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T07:15:37.866761265+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 40570 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1324","started_at":"2026-10-06T07:14:50.002509081+00:00","completed_at":"2026-10-06T07:15:37.866761265+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 child session 01a11011 exited with code 1 after 19257ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-216` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-216 --force-claim` to take over here, or `aida edit TASK-1-216 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1324 — the store reports TASK-1324 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":40570}],"total_ms":46997,"binary_sha":"978c497429"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1324 --title "drain phase 1 (implementer) failure on TASK-1324" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T07:15:38.797120662Z
+  modified_at: 2026-10-06T07:15:38.797120662Z
+- id: 01a1114f-6dd0-7633-a766-5a1c7cb84fbf
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 child session 01a11011 exited with code 1 after 19257ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-216` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-216 --force-claim` to take over here, or `aida edit TASK-1-216 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1324 — the store reports TASK-1324 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
+  created_at: 2026-10-06T13:03:00.560126692Z
+  modified_at: 2026-10-06T13:03:00.560126692Z
+- id: 01a11506-0ef8-7b83-900d-22053c20a5af
+  author: joe
+  content: Operator authorized dropping the unattributed duplicate review round for PR-2435. Removed only rounds[0] from .aida/review-verdicts/PR-2435.json after verifying every substantive field matches the attributed rounds[1] (same reviewed SHA, Approved verdict, acceptance, evidence, CI, empty findings; only summary wording and provenance fields differ). Original and audit note preserved under .aida/handoff/advisor/audit/. Attributed historical round and current verdict unchanged; no inferred attribution, gate relaxation, or merge clearance.
+  created_at: 2026-10-07T06:21:21.016570893Z
+  modified_at: 2026-10-07T06:21:21.016570893Z
+- id: 01a1151f-aef1-7501-b39b-8c68f5d28e48
+  author: mcp
+  content: Coordination checkpoint 2026-10-06 23:48 MST, coord-20261006T2346-MST. PR-2435 exact head 6fa035c26b735a9e7afc45bb1d2f0bba706144da is OPEN; Ubuntu Build SUCCESS run 37552162422 and merge-hold-gate SUCCESS run 37552162520. Local .aida/review-verdicts/PR-2435.json now has Approved at that head; retained round 0 has recorded_by='codex reviewer', recorded_at='2026-10-06T04:48:12.629207158+00:00'. This contradicts fix-day plan's earlier unstamped-round data blocker. Writer-path repair and successful ship reconciliation were NOT verified by this seat. Candidate recommended to primary advisor for readiness check, not integration-approved or merged. Evidence report mailbox cda3eac6-ef4e-41e8-be13-a24d869fd4bb.
+  created_at: 2026-10-07T06:49:20.369280565Z
+  modified_at: 2026-10-07T06:49:20.369280565Z
+- id: 01a11523-b512-73b0-a74e-7c1d1c94be11
+  author: mcp
+  content: 'CORRECTION to coordination checkpoint (coord-20261006T2346-MST), operator clarification 2026-10-06 23:52 MST: PR-2435''s unattributed duplicate round was REMOVED with an audit backup. No provenance was inferred or added to that duplicate. My previous wording that round 0 was now stamped described the retained attributed round after removal, not how the defect was repaired. Exact PR head remains 6fa035c26b735a9e7afc45bb1d2f0bba706144da at inspection. The source for removal/backup is the operator; backup location not independently verified here. This supersedes any implication in the earlier spec comment, mailbox report, or coordination handoff that provenance was inferred/stamped onto the unattributed round. Remain coordination-only; no integration approval.'
+  created_at: 2026-10-07T06:53:44.082476130Z
+  modified_at: 2026-10-07T06:53:44.082476130Z
+- id: 01a11524-a4f2-7221-82c8-a9bef2f56ef5
+  author: mcp
+  content: 'Audit backup independently verified after operator correction: .aida/handoff/advisor/audit/PR-2435-20261007T062120Z/audit.md records operator-authorized removal of rounds[0], identical to retained rounds[1] except summary/recorded_by/recorded_at; original.json preserves the original corpus. Original SHA256 fe3483621c674f5556f6ff1dd18702e758f3be7bacf2cfee90678d24fcc0bb2d. Both old rounds reviewed 24491f2ffef679764cecafdd3630c763c0cab667; current top-level verdict/head 6fa035c26b735a9e7afc45bb1d2f0bba706144da unchanged. No inferred provenance. Coordination record corrected; no gate/clearance/merge action.'
+  created_at: 2026-10-07T06:54:45.490500056Z
+  modified_at: 2026-10-07T06:54:45.490500056Z
+- id: 01a11741-7567-7591-bf92-8713421cec4e
+  author: mcp
+  content: Fix-day provenance writer repair pushed8ebc929351873b814ce3ffd5303651ae45fbf60d;76 verdicttests+21fastgates passed. Advisor duplicate removal preserved,no inferred attribution or provenance bypass. Combined c418c60fe7a58058fbea577b55e85bdbea1e1f65 freshly rebuilt ship2435 from administrative sourceworktree refuses TASK-1-216 unset/supervisedmode,now exit23;PR remainsOPEN/CLEAN at6fa035c26b735a9e7afc45bb1d2f0bba706144da. /tmp/aida-fix-day-evidence/pr-2435-ship-final.log. Requires authorized human/advisor merge;not Completed.
+  created_at: 2026-10-07T16:45:28.295306388Z
+  modified_at: 2026-10-07T16:45:28.295306388Z
+history:
+- id: 01a10f61-0d1a-7290-b932-07ca5716f4df
+  author: joe
+  timestamp: 2026-10-06T04:03:01.018194919Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a10f62-9502-73c2-bb95-85ec9c52af11
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T04:04:41.346852224Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a10f69-301b-7943-82b1-dd947d170dfa
+  author: aida-pr-open
+  timestamp: 2026-10-06T04:11:54.267067421Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a10f8b-1bb0-77b0-9275-ab502c7ea324
+  author: aida-orchestrator
+  timestamp: 2026-10-06T04:48:57.264934365Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
+- id: 01a10f99-7686-70c2-a3e4-963be3bde1d5
+  author: joe
+  timestamp: 2026-10-06T05:04:38.022283283Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
+- id: 01a11010-91a6-7123-9831-e772f146a67d
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T07:14:43.750284506Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a11011-6302-7bb2-850d-4a909f6cdc6d
+  author: aida-orchestrator
+  timestamp: 2026-10-06T07:15:37.346027236Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a1114f-6dd0-7633-a766-5a06040be694
+  author: joe
+  timestamp: 2026-10-06T13:03:00.560117873Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
+- id: 01a1191f-01bc-77f2-86c4-349e68b21ec7
+  author: aida-auto-bump
+  timestamp: 2026-10-08T01:27:04.892711291Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1942b-5ece-7ad3-8b1f-dcc9f0a4e18d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.718088312Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-216
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-402
+processing_record:
+- id: 01a1191f-023b-7753-a3b8-f5b29314ebc8
+  timestamp: 2026-10-08T01:27:05.019567401Z
+  agent: aida
+  commit_sha: 199e591b07aa76a59cd34f0a41946f918501f6ba
+  summary: Completed via merge 199e591b
+filed_at:
+  code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dafb66432e
+  vendor: antigravity
+  session: 8440bd1e-cba5-444c-8d52-5cfa9f3753e2
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T01:27:04.892699631Z
+  completion_sha: 199e591b07aa76a59cd34f0a41946f918501f6ba

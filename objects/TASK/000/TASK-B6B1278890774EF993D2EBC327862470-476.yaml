@@ -1,0 +1,58 @@
+id: 01a14f6c-a644-7772-9274-f394867f38ef
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-476
+agreed_id: TASK-1397
+title: 'cosmetic: --path to a non-.rs file is parsed as Rust and listed under ''did not …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1785, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: --path to a non-.rs file is parsed as Rust and listed under 'did not parse' instead of being skipped or refused (Rust-only scope; lint_constants.rs:408-409).
+  Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T14:31:22.948935802Z
+modified_at: 2026-10-19T15:46:54.645435554Z
+req_type: Task
+tags:
+- carried-from:TASK-1785
+- finding-hash:89ed3bb3
+- from-review:TASK-1785
+- kind:carried-forward
+comments:
+- id: 01a154d8-1f90-7cc1-af87-9fcbd2cca056
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1397 and TASK-1812 both specify refuse or skip non-.rs lint --path inputs; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:52.432361355Z
+  modified_at: 2026-10-19T15:46:52.432361355Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a14f90-068d-7040-b99b-27415ec4b09c
+  author: joe
+  timestamp: 2026-10-18T15:10:01.357170445Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154d8-2835-7343-bbdd-6f550bd882ae
+  author: joe
+  timestamp: 2026-10-19T15:46:54.645428694Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6145-7930-bac7-5a656afc338c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.349704313Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-329
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-476
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

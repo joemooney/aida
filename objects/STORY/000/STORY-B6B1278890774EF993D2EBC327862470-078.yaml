@@ -1,5 +1,6 @@
 id: 01a1865c-b9ac-7fe3-9246-f5e80986f5dc
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-078
+agreed_id: STORY-2118
 title: Friendly node aliases for node-local spec IDs (display and input only)
 description: |
   ## Problem
@@ -326,6 +327,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6953-78c0-bba2-a9ab288f5442
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.411438767Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2118
 processing_record:
 - id: 01a1873c-8ffe-73c3-9fca-4920e0535b8c
   timestamp: 2026-10-29T10:37:35.614294821Z

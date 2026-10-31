@@ -1,5 +1,6 @@
 id: 01a19102-4692-7342-af2a-f21baa9bb159
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-147
+agreed_id: STORY-2187
 title: 'Review PR-3158: [AI:claude] fix(seat-clone): an empty .gitmodules placeholder is not submodule evidence, so salvage can end the dead lease (BUG-B6B1278890774EF993D2EBC327862470-047)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a190c4`) for branch `bug-b6b1278890774ef993d2ebc327862470-047`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c38-7350-94a1-412d4caa22e1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.152647404Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2187
 filed_at:
   code_sha: 518815e3c293dde8c94830f0e55ccf7a68cbd477
   branch: main

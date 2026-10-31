@@ -1,5 +1,6 @@
 id: 01a19213-43be-7a10-85f9-35415a8c7bcc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-149
+agreed_id: TASK-2560
 title: 'After the BUG-046 store apply: drop dead digits (API + metadata), numeric sync-guard grouping'
 description: |
   Follow-ups from the BUG-HOME-046 round-2 rework (PR-3161), bundled as ONE task per the advisor's 04:55 ruling. Do this AFTER PR-3161 merges and the advisor has run the store apply (`aida doctor --fix id-collisions --mapping docs/plans/2026-10-31-id-collision-renumber.tsv --yes`).
@@ -158,6 +159,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c40-7e71-9712-be37d018e7ee
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.160923735Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2560
 processing_record:
 - id: 01a193a0-428d-78d0-801c-340b0fc1dc77
   timestamp: 2026-10-31T20:21:55.981693414Z

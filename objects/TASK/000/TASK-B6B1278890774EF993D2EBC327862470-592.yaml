@@ -1,0 +1,61 @@
+id: 01a16953-ee40-7cd1-b04e-82872e355374
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-592
+agreed_id: TASK-1818
+title: 'cosmetic: tests/fixtures/task-1800-replay/README.md says the bundle test runs t…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: tests/fixtures/task-1800-replay/README.md says the bundle test runs the collector under diff.renames unset/false/copies; since b4d294e803 it runs once and only compares diff_tree_args bytes under false/copies
+  Reviewed sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:14:30.592489909Z
+modified_at: 2026-10-23T15:54:22.493820825Z
+req_type: Task
+tags:
+- carried-from:TASK-2067
+- finding-hash:732c66cc
+- from-review:TASK-2067
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16976-a882-78c2-b263-66f12497408a
+  created_at: 2026-10-23T15:54:22.493817348Z
+  created_by: joe
+history:
+- id: 01a16978-67a7-7333-b6cd-af27ad73659e
+  author: joe
+  timestamp: 2026-10-23T15:54:20.967858019Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16978-71ef-7421-9ec1-ca65cb9e592c
+  author: joe
+  timestamp: 2026-10-23T15:54:23.599121742Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1697e-b8d5-7891-9750-324020b07b70
+  author: joe
+  timestamp: 2026-10-23T16:01:14.965805536Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1942b-6299-7c22-89a5-287582cf4f2d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.689644502Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-445
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-592
+filed_at:
+  code_sha: 4d0d544861c3db9522ce5de97a80f9f064f430b7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f

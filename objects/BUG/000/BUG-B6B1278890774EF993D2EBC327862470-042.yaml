@@ -1,5 +1,6 @@
 id: 01a18dde-084e-7213-82c6-b0ad3ca25c65
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-042
+agreed_id: BUG-2359
 title: Shipping a stacked PR leaves its dependents targeting the merged branch; serial ship would merge them into a dead branch, and retargeting does not trigger CI
 description: '2026-10-30 docs stack 3096-3103. After 3096 squash-merged, 3097 still had base task-...-106-work (the branch was not deleted, so GitHub did not auto-retarget). serial-ship then updated 3097 from that dead base and would have merged it there, not into main; the advisor stopped it. Retargeting 3103 to main with gh pr edit --base main also did not trigger ci.yml (pull_request on branches [main] only fires on synchronize/opened/reopened with base main at event time; even close/reopen did not fire). It needed an empty commit. Fix: (1) when aida pr ship merges a PR, retarget every open PR whose base is that PR''s head branch to the merged-into branch, then delete the merged branch; (2) aida pr ship / serial ship refuses to merge a PR whose base is not the default branch unless --allow-stacked-base; (3) after a retarget, re-trigger CI (an empty commit or an explicit run) and say so. Tests with a mock forge.'
 status: Completed
@@ -60,6 +61,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6ba5-74e3-b6d2-df1fcd62ccc3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.005808858Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2359
 processing_record:
 - id: 01a18ef3-83b5-78e2-965a-e1811084f953
   timestamp: 2026-10-30T22:34:46.069024818Z

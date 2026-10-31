@@ -1,5 +1,6 @@
 id: 01a188da-efd0-7c12-91f9-ae2f6592676f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-112
+agreed_id: TASK-2525
 title: Refresh supported installation and operator storage guidance
 description: |
   Slice 7 of 8 for the product documentation/showcase epic.
@@ -207,6 +208,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-69d5-7fe1-bb15-aa3b51883742
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.541073383Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2525
 processing_record:
 - id: 01a18e17-baea-7311-86d0-09793ebe3f2f
   timestamp: 2026-10-30T18:34:42.282530901Z

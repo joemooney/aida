@@ -1,5 +1,6 @@
 id: 01a1873c-b453-7e31-ba63-6b3a1a9d079e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-096
+agreed_id: TASK-2509
 title: 'non-blocking/traceability: all 7 criteria show as untraced in aida criteria. Th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-078, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -34,6 +35,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-6964-7ec3-a3aa-a54740fa6af6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.428454074Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2509
 filed_at:
   code_sha: 8e45449d340ae17d6439a8417f7a816c7341cd2e
   branch: main

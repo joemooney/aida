@@ -1,5 +1,6 @@
 id: 01a18a29-6886-7b50-a99b-a5e2c4e1a699
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-097
+agreed_id: STORY-2137
 title: 'Machine-scoped store reconcile: a hub-bridging clone union-merges gitlab-only pushes onto every hub on a schedule'
 description: |-
   Operator topology 2026-10-29: the work clone pushes aida-store to gitlab only and must never push to GitHub; the home clone can reach both. Today hub-mirror-sync only fast-forwards, so every work push leaves the hubs DIVERGED and the 6h hub-drift-guard routes it to the advisor by hand. Stopgap installed: a home-only crontab entry (# aida-store-reconcile) running `aida remote reconcile --execute` hourly under flock, logging to ~/.aida/store-reconcile.log.
@@ -205,6 +206,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6a33-74f2-8fa5-52d4a8492b80
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.635663586Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2137
 processing_record:
 - id: 01a19112-4acb-7b73-adb5-0e6e648b4797
   timestamp: 2026-10-31T08:27:37.547259761Z

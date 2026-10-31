@@ -1,5 +1,6 @@
 id: 01a17bc6-633f-7041-8079-a584018f0806
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-009
+agreed_id: TASK-2422
 title: (minor, non-blocking) dispatch_items_named (tests/story_1888_gate_paths_tests.r…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1889, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -53,6 +54,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-64bd-71f0-ad11-29f4f9d5a29d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.237652527Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2422
 processing_record:
 - id: 01a17de7-0e71-7722-aa23-82af75ed5a31
   timestamp: 2026-10-27T15:07:36.945186514Z

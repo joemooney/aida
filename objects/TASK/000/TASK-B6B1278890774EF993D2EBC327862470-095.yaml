@@ -1,5 +1,6 @@
 id: 01a18620-1ddb-7e12-8e5a-7e1969c7e0c7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-095
+agreed_id: TASK-2508
 title: Publish the What is AIDA overview under docs/
 description: Operator-requested overview doc (md + self-contained html), spec IDs anonymized
 status: Completed
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6941-7143-b185-2dad6b2e381b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.393850812Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2508
 processing_record:
 - id: 01a18636-bc7a-74e1-a6bb-95b570353d36
   timestamp: 2026-10-29T05:51:36.570667448Z

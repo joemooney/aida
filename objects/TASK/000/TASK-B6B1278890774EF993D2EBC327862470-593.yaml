@@ -1,0 +1,61 @@
+id: 01a16953-f5c4-7d72-94ad-307290b5d19a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-593
+agreed_id: TASK-1819
+title: 'minor: mandate.rs store_history_alias_map drops the other side of a rename sile…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: mandate.rs store_history_alias_map drops the other side of a rename silently when it is not a canonical object path (renamed filter); comment-24 refuses only the hit side. Not a regression vs git's default renames, but versions at a non-canonical rename target are never judged
+  Reviewed sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:14:32.516419361Z
+modified_at: 2026-10-23T15:54:29.158121193Z
+req_type: Task
+tags:
+- carried-from:TASK-2067
+- finding-hash:20f425c8
+- from-review:TASK-2067
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16976-a882-78c2-b263-66f12497408a
+  created_at: 2026-10-23T15:54:29.158117079Z
+  created_by: joe
+history:
+- id: 01a16978-8202-7311-8891-e354ddbfcecb
+  author: joe
+  timestamp: 2026-10-23T15:54:27.714746790Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16978-8c42-7352-b439-1875608210b6
+  author: joe
+  timestamp: 2026-10-23T15:54:30.338847774Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1697e-b8e6-7b32-9b12-5febb5655093
+  author: joe
+  timestamp: 2026-10-23T16:01:14.982101715Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1942b-62a9-72c2-afbf-940bb3524d85
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.705082618Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-446
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-593
+filed_at:
+  code_sha: 4d0d544861c3db9522ce5de97a80f9f064f430b7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f

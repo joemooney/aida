@@ -1,5 +1,6 @@
 id: 01a1936d-7960-7510-8d5f-dfe276da71b9
 spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-005
+agreed_id: SPIKE-709
 title: 'Spike: pool grants across an air gap via git bundle, spent on the inside hub'
 description: |
   Spike (proposed by the product seat, 2026-10-31): can a pool grant cross an air gap in a git bundle and be spent on the inside hub?
@@ -31,6 +32,14 @@ history:
   timestamp: 2026-10-31T20:18:35.716341827Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1942b-6c4d-7a32-9707-bd0a1ec9aa0c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.173864332Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: SPIKE-709
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main

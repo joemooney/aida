@@ -1,0 +1,61 @@
+id: 01a1642a-1558-7920-be7d-7c824726063e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-576
+agreed_id: TASK-1700
+title: 'cosmetic (filed TASK-2169): StoreMissing text says ''does not exist'' for an exis…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2072, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (filed TASK-2169): StoreMissing text says 'does not exist' for an existing non-directory path and omits the main-worktree candidate (seat_authority.rs:121-131)
+  Reviewed sha: 4e53b0baede3eacd6476a647b98ac4e8785eb0ce
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T15:10:42.008047760Z
+modified_at: 2026-10-22T15:18:22.875949801Z
+req_type: Task
+tags:
+- carried-from:TASK-2072
+- finding-hash:b4c2222e
+- from-review:TASK-2072
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16383-21ad-7103-8aa0-7f437b6ffce9
+  created_at: 2026-10-22T15:18:22.875945663Z
+  created_by: joe
+history:
+- id: 01a16431-168a-7d10-b5c2-db6eca2322cf
+  author: joe
+  timestamp: 2026-10-22T15:18:21.066513001Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16431-2431-7b03-9bc4-797648b9ef58
+  author: joe
+  timestamp: 2026-10-22T15:18:24.561707917Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a16451-8d34-7932-80af-3c1ad3bd6487
+  author: joe
+  timestamp: 2026-10-22T15:53:48.596601566Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6248-7890-9e14-84d26186b8a8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.608957972Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-429
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-576
+filed_at:
+  code_sha: 28b4a3711adfba1de4c5f3932b5ca71dab896975
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3b5d1591
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81

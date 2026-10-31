@@ -1,5 +1,6 @@
 id: 01a18dc5-6665-7840-81f4-d237950064f1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-129
+agreed_id: TASK-2541
 title: 'CI test-time budget: give story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its_release an entry (10.2-10.3s vs the 10 s default fails unrelated PRs)'
 description: |-
   FASTTRACK. In scripts/test-time-budget.toml [budget], add:
@@ -55,6 +56,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6ba4-7042-8bfd-bab7af3f22a5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.004103715Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2541
 processing_record:
 - id: 01a18e45-1456-7010-b977-82549756ed1d
   timestamp: 2026-10-30T19:24:14.294957123Z

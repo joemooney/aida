@@ -1,0 +1,58 @@
+id: 01a12647-5ea3-77b0-a082-f7b2d943eb49
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-005
+agreed_id: FAQ-4
+title: Can the implementer keep working while its earlier work waits for review?
+description: |
+  **Yes, as long as nothing ships until it's reviewed.** The two-seat rule controls who approves and who ships. It doesn't make the implementer wait.
+
+  ## How (pipelined stack)
+  1. One linear stack: slice N branches from slice N-1. Tag each round `slice-NN-rR`.
+  2. The implementer keeps building, pushes tags, and posts one line per tag (SHA, module, proofs) to the spec.
+  3. The reviewer gives each tag a verdict: approved at `<sha>`, or request-changes with a brief.
+  4. On request-changes, the fix becomes round `rR+1` and the slices above it are rebased and re-tagged. A rebase changes the commit hashes, so those slices are re-checked.
+  5. **Ship only an unbroken run of approved slices from the bottom of the stack, at exactly the approved SHAs.**
+  6. If a finding is about the *method* (visibility, wiring, test ownership), stop adding slices until it's fixed. Otherwise every slice above inherits it.
+
+  ## When it fits
+  Mechanical, low-overlap work such as code moves and renames, where review is cheap and rebases are easy. For design-heavy work, review each step before starting the next.
+
+  ## See also
+  TASK-1538 (where this was first used, 2026-10-10)
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:46:13.923767659Z
+modified_at: 2026-10-10T18:35:00.611900448Z
+req_type: Faq
+tags:
+- audience:user
+- topic:drain
+- topic:review-gate
+history:
+- id: 01a12650-50da-7202-98f0-e2cb5f2907d5
+  author: joe
+  timestamp: 2026-10-10T14:56:00.218594613Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+- id: 01a1942b-5f74-7e42-9b20-f38deb060b64
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.884106153Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: FAQ-1-235
+    new_value: FAQ-b6b1278890774ef993d2ebc327862470-005
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T14:56:00.218564413Z

@@ -1,5 +1,6 @@
 id: 01a19361-82b0-7953-b389-1249d1d42085
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-254
+agreed_id: STORY-2213
 title: 'Review PR-3173: [AI:claude] fix(ids): aida add works in contained sessions: final ID minted under the store lock, queued for the host commit (BUG-B6B1278890774EF993D2EBC327862470-053)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1932f`) for branch `bug-b6b1278890774ef993d2ebc327862470-053`.
@@ -49,6 +50,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6c4b-7752-98dc-da710282336f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.171062758Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2213
 filed_at:
   code_sha: 087a9b3ce10fd4f690cb3eea7393d4ae5b58775a
   branch: bug-b6b1278890774ef993d2ebc327862470-053

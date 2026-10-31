@@ -1,5 +1,6 @@
 id: 01a18415-0972-7083-aa6a-50da59c8bd3a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-073
+agreed_id: TASK-2486
 title: '[minor, non-blocking] leftovers.rs scan_era_markers: the non-JSON ''continue'' ru…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:14:19.485854991Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67b8-7883-a953-ba377c6c190b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.000696292Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2486
 filed_at:
   code_sha: f8d9a38f5345d5bf589e05bf28de49eb4148f712
   branch: main

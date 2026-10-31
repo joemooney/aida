@@ -1,0 +1,106 @@
+id: 01a13e3a-90bd-7733-98be-adf8b6c8bc2c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-450
+agreed_id: TASK-1372
+title: 'Non-blocking: window-boundary off-by-one (launch_refusal left>=within -> left>w…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2011, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: window-boundary off-by-one (launch_refusal left>=within -> left>within, seat_authority.rs:579) survives all tests; pre-existing code, add an exact-boundary unit test.
+
+  PR: #2604
+  Reviewed sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-15T06:23:07.965638850Z
+modified_at: 2026-10-16T23:02:49.166485065Z
+req_type: Task
+tags:
+- carried-from:BUG-2011
+- finding-hash:20cf2dc1
+- from-review:PR-2604
+- kind:carried-forward
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a14676-02e3-79f2-b90c-47c533a727a2
+  created_at: 2026-10-16T20:45:09.939027840Z
+  created_by: joe
+comments:
+- id: 01a14675-cd90-79d0-a358-0a2d8a9b03a0
+  author: ai:codex:joe
+  content: |
+    READY FOR REVIEW: PR #2708 TASK-1372 at 70f246a98a961487f153f33863e57acc4c488e07 (exact OPEN head/body readback).
+
+    Test-only change pins launch_refusal at exactly the requested one-hour window, plus one nanosecond on either side. Equality allows launch; one nanosecond short refuses. No production change. Targeted Cargo test 1 passed; make check-ci-fast 30 passed; fmt check passed. Author checker found no findings and independently proved the exact >= to > mutant fails the equality assertion using extracted actual functions/new test. Artifacts /tmp/task1372-{tests,fast}.log and /tmp/task1372-independent-ttmvbufb/.
+
+    Pushed normally. Done on branch, pending independent review/integration; no author verdict, hold clearance or own merge. Please route review after priority rework.
+  created_at: 2026-10-16T20:44:47.888443903Z
+  modified_at: 2026-10-16T20:44:47.888443903Z
+- id: 01a146cf-9350-7c62-920f-f5e76525bdc1
+  author: ai:codex:joe
+  content: |
+    MERGE-UP READY: #2708 db988967ec77b3c8258850615e5d52c2af1c2f13
+
+    Normal merge of main 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35 into original author70f246a98a961487f153f33863e57acc4c488e07. No other content changes or follow-ups. Entire tree8b415b5d910908366d3aaefc718724432dee7cb6 equals independently computed automatic merge-tree; against main only the original14-line exact-boundary test remains. Fresh author checker independently confirmed parents/full-tree/test preservation, with zero independent review authority.
+
+    Final checks: make check-ci-fast30 passed; make check-ci-compile passed all workspace test targets (1346.3s including queue); actual newly compiled6090b583233ca8b8 libtest ran the exact boundary test1 passed. Normal push succeeded and forge OPEN head readback equals db988967ec77b3c8258850615e5d52c2af1c2f13. No GitHub CI-green claim, author verdict, hold clearance or own main merge. Existing review STORY-1713 remains the independent gate.
+  created_at: 2026-10-16T22:22:51.216328750Z
+  modified_at: 2026-10-16T22:22:51.216328750Z
+history:
+- id: 01a14038-a980-7063-8bce-6d91a6fa2207
+  author: joe
+  timestamp: 2026-10-15T15:40:17.664604083Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1466b-b679-72b0-ac25-ceed1817c379
+  author: aida-session-start
+  timestamp: 2026-10-16T20:33:46.617330206Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a14675-adf4-7a00-9756-fbbd3245cb6d
+  author: ai:codex:joe
+  timestamp: 2026-10-16T20:44:39.796983788Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a146f4-2a1a-7d02-94ad-3bf096f7ff3a
+  author: aida-auto-bump
+  timestamp: 2026-10-16T23:02:49.114708732Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-60b8-7743-a0f5-725d21b41ca8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.208951367Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-303
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-450
+processing_record:
+- id: 01a146f4-2a4e-70c2-990a-a01eaf3e49ad
+  timestamp: 2026-10-16T23:02:49.166476529Z
+  agent: aida
+  commit_sha: 30e4171bed78120cf272e1eef52649921f028294
+  summary: 'Test-only: pins launch_refusal at exact window equality (allowed), +1ns remaining (allowed), -1ns (refused); kills the >= to > mutant; CI run 38975364135 green; targeted test passes locally.'
+  review_verdict: approved
+filed_at:
+  code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: defb55f88b
+  vendor: claude
+  session: 20233459-56a6-48d3-8cb0-332dcfaf0277
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-16T23:02:49.114684427Z
+  completion_sha: 30e4171bed78120cf272e1eef52649921f028294

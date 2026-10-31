@@ -1,5 +1,6 @@
 id: 01a19414-9249-7750-a874-848141b4760e
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-258
+agreed_id: STORY-2217
 title: 'Review PR-3178: [AI:claude] chore(ci): budget bug_053_contained_add_cli at 25s (TASK-b6b1278890774ef993d2ebc327862470-161)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19407`) for branch `task-b6b1278890774ef993d2ebc327862470-161`.
@@ -35,6 +36,14 @@ history:
   timestamp: 2026-10-31T22:29:08.435092592Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1942b-6c58-75b3-9ae3-4453dcf4a01a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.184399112Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2217
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main

@@ -1,5 +1,6 @@
 id: 01a184c8-3a1c-7390-8f4c-8ceec5068ddc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-085
+agreed_id: TASK-2498
 title: '[minor, non-blocking] mod.rs:997-1000 + mark_nonce_era (mod.rs:696,719): on the…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-082, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:16:12.232319468Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67ed-71f3-b482-a0128d65044d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.053243979Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2498
 filed_at:
   code_sha: 8767e9accd8493c9bcab6bf474930e56abe34f73
   branch: main

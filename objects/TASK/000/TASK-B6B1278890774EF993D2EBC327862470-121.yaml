@@ -1,5 +1,6 @@
 id: 01a18a6b-bbf9-7c20-9076-711d5474f058
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-121
+agreed_id: TASK-2534
 title: Allow a pool of generic implementers per repo; exclusivity only at spec claim
 description: |
   2026-10-29 18:26: operator ran `aida agent new antigravity --role implementer --bypass-sandbox` while a Codex implementer (codex-agent-02) held the repo scope; after the bypass confirmation and resume prompt it failed: 'agent role implementer is already active on this scope'. The working path is `--spec <SPEC>` (own worktree + lease). Acceptance: check the scope conflict BEFORE the bypass/resume prompts; the refusal names the fix (`--spec <ID>`) and, at a TTY, offers to pick an approved unclaimed spec from the queue for this role; docs state that several agents may share a role when each holds its own spec scope.
@@ -149,6 +150,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6a9f-7f33-a0db-c93eb186e10d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.743477820Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2534
 processing_record:
 - id: 01a18be7-c1b1-7383-9d03-db8897d7e512
   timestamp: 2026-10-30T08:23:03.857398096Z

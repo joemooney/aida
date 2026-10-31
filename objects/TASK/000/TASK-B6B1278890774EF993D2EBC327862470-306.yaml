@@ -1,0 +1,61 @@
+id: 019e6f71-a9c2-77c1-9547-1776620e6acd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-306
+agreed_id: TASK-135
+title: 'TASK-268 ''both-at-once trap'' recurred a 3rd time on 2026-05-28. Pattern: I add …'
+description: |-
+  TASK-268 'both-at-once trap' recurred a 3rd time on 2026-05-28. Pattern: I add a new clap subcommand variant, write the trace marker as the LAST line of the /// doc comment block. clap pulls the whole doc block into --help text; the trace: marker leaks. Caught only when CI exercises the source_doc_comments_carry_no_trace_token + help_text_carries_no_trace_markers tests. Recurrences this session:
+
+    1. TASK-537 (commit 129ad84e) — Prune variant, doc-comment leak. CAUGHT BY PR-342 CI.
+    2. TASK-1-109 (commit c8fd579e) — first attempt at queue clear help; self-caught mid-flight when I noticed it BEFORE pushing.
+    3. (And the previous historical recurrence that motivated TASK-268 itself.)
+
+  The CLAUDE.md guidance + the test-enforcement gate are BOTH in place, yet I keep repeating the mistake. The gap: CLAUDE.md instructions don't gate; the source-test ONLY fires in CI. A pre-commit hook OR a clippy-style lint would catch this at the moment of writing.
+
+  Promote candidate (recurrence 3+): substrate-as-bouncer for the trace-marker convention. Either a pre-commit hook that grep-scans for '/// ...\n/// trace:' patterns in clap-decorated structs, or a clippy lint.
+status: Completed
+priority: Low
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-28T16:36:20.546911728Z
+modified_at: 2026-06-11T12:48:31.383831391Z
+req_type: Task
+tags:
+- batch:demo-drain
+- clap-doc-trap
+- from-advisor:TASK-268
+- from-self-test
+- kind:observation
+- linked:TASK-268
+- recurring-discipline-gap
+- severity:major
+- substrate-as-bouncer
+- task-268
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 019e7fa5-54b7-7783-90c2-87615470ff66
+  created_at: 2026-05-31T20:06:49.822113510Z
+  created_by: joe
+comments:
+- id: 019e7f86-5382-7752-8d04-e37fd81dde3b
+  author: joe
+  content: 'Promoted by joe 2026-05-31: Recurrence-3 trace-marker /// leak. NOTE: CI tests already block the leak from merging (the bouncer exists); this is shift-left convenience (pre-commit hook/lint), so LOW priority. Triage 2026-05-31.'
+  created_at: 2026-05-31T19:32:50.178152811Z
+  modified_at: 2026-05-31T19:32:50.178152811Z
+history:
+- id: 01a1942b-5bd3-7730-9240-951dfdff1ba4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.955751239Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-110
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-306
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-31T20:01:48.839725595Z
+  implemented_by: joe
+  completed_at: 2026-05-31T20:42:07.663080044Z
+  completion_sha: 94389e3524f17d6192b89fe487f6a63f4e53ffed

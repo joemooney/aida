@@ -1,0 +1,61 @@
+id: 01a1642a-24c2-7650-9e50-e1e3906db1fa
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-577
+agreed_id: TASK-1698
+title: 'cosmetic (filed TASK-2170): NotDetected AIDA_STORE note reads var_os without tr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2072, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (filed TASK-2170): NotDetected AIDA_STORE note reads var_os without trim, so a whitespace-only AIDA_STORE adds a spurious note (seat_authority.rs:138)
+  Reviewed sha: 4e53b0baede3eacd6476a647b98ac4e8785eb0ce
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T15:10:45.954827497Z
+modified_at: 2026-10-22T15:18:32.591081198Z
+req_type: Task
+tags:
+- carried-from:TASK-2072
+- finding-hash:b7e65d3f
+- from-review:TASK-2072
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16383-2f0f-7423-ad38-f61cabda436b
+  created_at: 2026-10-22T15:18:32.591076944Z
+  created_by: joe
+history:
+- id: 01a16431-3c32-7dd2-8dbc-c6cbd4f42d25
+  author: joe
+  timestamp: 2026-10-22T15:18:30.706807709Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16431-49a9-7ba1-9967-d64348a591e4
+  author: joe
+  timestamp: 2026-10-22T15:18:34.153904980Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a16451-8cf0-7b73-a3f6-92cc9936c8f5
+  author: joe
+  timestamp: 2026-10-22T15:53:48.528136222Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6251-7b50-b67a-d13ac0918159
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.617150107Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-430
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-577
+filed_at:
+  code_sha: 28b4a3711adfba1de4c5f3932b5ca71dab896975
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3b5d1591
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81

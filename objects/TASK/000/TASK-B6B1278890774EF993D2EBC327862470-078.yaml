@@ -1,5 +1,6 @@
 id: 01a18468-e771-7ca2-8076-7bd63f2cde40
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-078
+agreed_id: TASK-2491
 title: 'PR-3065 follow-ups: write_source_id fallback without rename/link, post-placement errors as warnings, bare_admin_name rejection tests'
 description: |
   Non-blocking findings from the APPROVED review of PR #3065 (TASK-b6b1278890774ef993d2ebc327862470-075) at 2e3d79d01356. ADVISOR RULING: if a filesystem has neither RENAME_NOREPLACE nor hard links, fall back to create_new+write+fsync on the final name (the pre-#3065 behaviour) rather than failing. After the target is placed, cleanup/fsync errors are warnings, not Err. Add the missing rejection-branch and temp-reap tests.
@@ -73,6 +74,14 @@ history:
   timestamp: 2026-10-28T23:15:34.462376708Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67dc-7f71-b912-b07b77f44d06
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.036885104Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2491
 processing_record:
 - id: 01a184a4-10f5-7291-9b00-d356d910e0ad
   timestamp: 2026-10-28T22:31:47.189763238Z

@@ -1,5 +1,6 @@
 id: 01a181a8-b426-72c2-8b98-fceaa6fe1437
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-042
+agreed_id: STORY-2082
 title: 'Review PR-3015: [AI:claude] feat(mailbox): B2c post-flush explicit ACK and common-Git receipt anchor (Refs STORY-1843)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-b2c`.
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6629-7b30-94cb-f602c5b2282a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.601242800Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2082
 filed_at:
   code_sha: 1561fd26567b8c0df316efb4cd350fc45b9a933b
   branch: story-1843-b2c

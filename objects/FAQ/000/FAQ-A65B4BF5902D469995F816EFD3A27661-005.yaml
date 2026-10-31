@@ -1,5 +1,6 @@
 id: 01a1895f-e1ae-7111-bda7-40de0c530068
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-005
+agreed_id: FAQ-145
 title: Is aida push --store-only equivalent to a raw Git store-branch push?
 description: |
   **An ordinary `aida push --store-only` is not equivalent to a raw Git ref push. An enabled transport profile deliberately narrows AIDA's behavior.**
@@ -40,6 +41,15 @@ tags:
 - audience:user
 - topic:storage
 - topic:transport
+history:
+- id: 01a1942b-6a0a-7b52-aced-4d65ecaed0ac
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.594615686Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-145
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

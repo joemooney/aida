@@ -1,5 +1,6 @@
 id: 01a17e53-95ac-7953-827f-f9cf38a4abdf
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-011
+agreed_id: TASK-2424
 title: 'Non-blocking: aida-cli/tests/story_1742_transport_profile.rs:1737 rewrites b"{n…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1742, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-650e-7991-8387-478e0becf1a0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.318637782Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2424
 processing_record:
 - id: 01a17f96-c1b5-7710-b5d8-30391f5b23b2
   timestamp: 2026-10-27T22:59:08.853995722Z

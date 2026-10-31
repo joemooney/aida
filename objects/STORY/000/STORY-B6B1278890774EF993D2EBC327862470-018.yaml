@@ -1,5 +1,6 @@
 id: 01a17c23-1274-79b3-835c-dfbd8aed437c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-018
+agreed_id: STORY-2058
 title: 'Review PR-2967: [AI:claude] feat(transport): fast-forward-only store pull behind the incoming-history scan (Refs STORY-1742)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1742-next`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64d5-7b73-b151-999270c731d2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.261865304Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2058
 filed_at:
   code_sha: 2df7e4136a1fb017bd3c3d7c7db9a49629e426c7
   branch: story-1742-next

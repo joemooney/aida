@@ -1,5 +1,6 @@
 id: 01a1925d-0734-7ea3-b625-8e7476665ef1
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-157
+agreed_id: STORY-2197
 title: 'Review PR-3166: [AI:claude] fix(headless): headless claude lanes get no Monitor and no background tasks; a rework round left uncommitted on its old PR head reports no-pr reason=uncommitted-work (BUG-B'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19231`) for branch `bug-b6b1278890774ef993d2ebc327862470-050`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c45-77e3-a9f5-6a5b1d19525d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.165189322Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2197
 filed_at:
   code_sha: e564a298167291f6bac3ebc7fe842839c1a2285c
   branch: main

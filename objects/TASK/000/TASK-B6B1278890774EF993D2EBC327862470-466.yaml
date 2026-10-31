@@ -1,0 +1,54 @@
+id: 01a14cbf-dfc8-76b3-b636-a3f15e89fbaa
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-466
+agreed_id: TASK-1387
+title: 'non-blocking/evidence: AC acabe17c is covered by two runs that each prove half.…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1654, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/evidence: AC acabe17c is covered by two runs that each prove half. The positive run (PR #2692) had a non-author launcher and implementer (antigravity/codex), not an implementer subagent of the launching session. The negative run (2026-10-16) was refused by the seat check ('implementer seat cannot record a review verdict'), not by AuthorSession. The advisor accepted A2. A single relay run with an author-launcher, a child reviewer grant and a ship with no override has not been recorded.
+
+  PR: #2661
+  Reviewed sha: 104757447a2c3586d3e3be2e1c35479a71b8c308
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T02:03:25.512918164Z
+modified_at: 2026-10-19T15:48:55.220939031Z
+req_type: Task
+tags:
+- carried-from:STORY-1654
+- finding-hash:cd4363cd
+- from-review:PR-2661
+- kind:carried-forward
+comments:
+- id: 01a154d9-f65f-7b42-b613-d9c90fe83ec4
+  author: joe
+  content: 'Advisor triage 2026-10-19: STALE, closed. An evidence gap with no remaining action under the earlier advisor ruling. Reopen if still wanted.'
+  created_at: 2026-10-19T15:48:52.959472300Z
+  modified_at: 2026-10-19T15:48:52.959472300Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d9-ff34-71b3-a39a-8a0dd08f69ca
+  author: joe
+  timestamp: 2026-10-19T15:48:55.220929065Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6131-7142-8265-2edbd226e45d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.329173917Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-319
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-466
+filed_at:
+  code_sha: d96f18d4d5f831ee26fdab95b483708a607d8d0f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: claude

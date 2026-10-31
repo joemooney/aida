@@ -1,0 +1,64 @@
+id: 01a1502a-3e99-7fa0-b420-3199e4a5175c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-484
+agreed_id: TASK-1406
+title: MergeHoldChanged placement events still go to the caller's .aida/events.jsonl (…
+description: 'MergeHoldChanged placement events still go to the caller''s .aida/events.jsonl (merge_hold.rs:633), while BUG-2176 moved hold markers to the primary checkout. As a result, unrecorded_marker_removals from the primary misses placements made from a linked worktree, and TAMPERING detection misses those holds. Not a regression. Fix: emit to hold_store_root(project_root). Raised in review of PR-2728: https://github.com/joemooney/aida/pull/2728#issuecomment-6253220813'
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T17:58:28.249322054Z
+modified_at: 2026-10-19T19:51:47.878023834Z
+req_type: Task
+tags:
+- from-advisor:BUG-2176
+- from-review:PR-2728
+- kind:observation
+- linked:BUG-2176
+- severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-19T19:51:47.878019044Z
+  created_by: joe
+comments:
+- id: 01a155b8-45b9-7771-841a-312ad2674dc9
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by TASK-1951. Merge-hold event routing (MergeHoldChanged to hold_store_root) belongs with the ship/reconcile fail-open sweep. Full text stays on TASK-1406.'
+  created_at: 2026-10-19T19:51:42.265717591Z
+  modified_at: 2026-10-19T19:51:42.265717591Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15050-3f40-75a3-a01c-c6a980b1a498
+  author: joe
+  timestamp: 2026-10-18T18:39:58.784784053Z
+  changes: []
+- id: 01a155b8-527e-7962-a522-14d47844dd50
+  author: joe
+  timestamp: 2026-10-19T19:51:45.534297976Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a155b8-60f7-7523-a4d3-8d0da801c7f9
+  author: joe
+  timestamp: 2026-10-19T19:51:49.239808427Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-614c-7ad3-b2ab-5f8b8a447c3d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.356277180Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-337
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-484
+filed_at:
+  code_sha: 12359cad47901b8dc374fd0cac345ed7133d1e9f
+  branch: pr-2728
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 01a1500fbf31

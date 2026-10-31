@@ -1,5 +1,6 @@
 id: 01a17a7a-ae0e-7142-a1e3-3f073425d62d
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-015
+agreed_id: STORY-2055
 title: 'Review PR-2956: [AI:claude] fix(review): recognise node-local spec IDs in commit trailers (BUG-b6b1278890774ef993d2ebc327862470-006)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a17a63`) for branch `bug-trailer-node-ids`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64a8-73f0-a1a3-c478bc7f55e3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.216225813Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2055
 filed_at:
   code_sha: a3bc7b0b7d4d64f8aa6548fadf32506f0afc478c
   branch: bug-trailer-node-ids

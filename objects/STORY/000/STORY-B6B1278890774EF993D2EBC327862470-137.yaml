@@ -1,5 +1,6 @@
 id: 01a18e28-fa4f-77e2-b98e-40a4070047f8
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-137
+agreed_id: STORY-2177
 title: 'Review PR-3147: [AI:claude] feat(schedule): mail-backlog guard nudges live agents with unread requests/handoffs past 30 minutes (STORY-B6B1278890774EF993D2EBC327862470-128)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18dee`) for branch `story-b6b1278890774ef993d2ebc327862470-128`.
@@ -49,6 +50,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6bde-7140-9f16-2ea72137c261
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.062571457Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2177
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: main

@@ -1,5 +1,6 @@
 id: 01a1928d-64e8-7931-97f7-a273bae492b3
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-159
+agreed_id: STORY-2199
 title: 'Review PR-3168: [AI:claude] feat(agent): aida agent new codex --rotate supervises Codex sessions across context rotations (STORY-B6B1278890774EF993D2EBC327862470-150)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-150`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c46-7cc0-b7f0-5b7eb6f39df9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.166084612Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2199
 filed_at:
   code_sha: eaabde5c226c436a1f6c562396069101af91b4d4
   branch: main

@@ -1,5 +1,6 @@
 id: 01a176bd-2c60-75c3-accb-92f2a1e45533
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-003
+agreed_id: STORY-2043
 title: 'Review PR-2936: [AI:claude] fix(status): seat-clone origin lookups never read a refusal as local-only (TASK-2356)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a17552`) for branch `task-2356`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-63ea-7f22-8c80-1c9251b72ef1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.026516660Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2043
 filed_at:
   code_sha: abc38c78319ae555fd76db8cb668a8dc0c814444
   branch: main

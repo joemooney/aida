@@ -1,5 +1,6 @@
 id: 01a191dd-582d-79f0-926c-9c800ec6c13d
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-155
+agreed_id: STORY-2195
 title: 'aida deputy slice 2: failed jobs in awaiting, completion mail, pause/resume, stop at mandate expiry'
 description: |
   Slice 2 of STORY-HOME-099 (aida deputy), planned in the 03:30 signoff and carved out at the PR-3164 review (advisor, 2026-10-31 05:12). Covers the parts of 099's AC5 and the deferred items that slice 1 does not build.
@@ -120,6 +121,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c3e-7962-94c5-065bc4d99d70
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.158419913Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2195
 processing_record:
 - id: 01a193b1-b16f-7b33-994d-3b9cb9fe070c
   timestamp: 2026-10-31T20:40:58.479795039Z

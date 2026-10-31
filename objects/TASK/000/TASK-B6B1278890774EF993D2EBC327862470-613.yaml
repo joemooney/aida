@@ -1,0 +1,59 @@
+id: 01a16b1a-4024-7540-8d35-142481bd7aa4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-613
+agreed_id: TASK-1834
+title: 'cosmetic (non-blocking): the PR body member table omits TASK-2252, which TASK-2…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2238, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): the PR body member table omits TASK-2252, which TASK-2238 supersedes. Its fix (round-cap wake asks approval_only) is covered by round_cap_wake_respects_a_carried_over_approval. Add a row so the body accounts for every superseded member.
+  Reviewed sha: e5e9db3f6b3188113eaea3e8f47c4447fff4591b
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T23:30:44.900156410Z
+modified_at: 2026-10-23T23:38:16.720974944Z
+req_type: Task
+tags:
+- carried-from:TASK-2238
+- finding-hash:c69035b5
+- from-review:TASK-2238
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+  created_at: 2026-10-23T23:38:16.720971318Z
+  created_by: joe
+history:
+- id: 01a16b1f-8cc0-7902-ab9b-8b55494099fc
+  author: joe
+  timestamp: 2026-10-23T23:36:32.192871294Z
+  changes: []
+- id: 01a16b21-1ff3-7263-be75-2bf1840054fc
+  author: joe
+  timestamp: 2026-10-23T23:38:15.411514178Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16b21-29bb-7232-af94-2d09ff0d6b48
+  author: joe
+  timestamp: 2026-10-23T23:38:17.915560908Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a1942b-6304-7853-9a6b-1840d1331698
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.796471843Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-466
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-613
+filed_at:
+  code_sha: a62f57fbac4874cf7d668cc6c9e3841787a8a838
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude

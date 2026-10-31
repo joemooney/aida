@@ -1,0 +1,69 @@
+id: 01a150f0-8f73-7052-9809-dab8897f093c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-500
+agreed_id: TASK-1623
+title: 'minor: pr_ship.rs:588 stale-head check fails open when preflight head lookup re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1663, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: pr_ship.rs:588 stale-head check fails open when preflight head lookup returns None
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:35:05.075817532Z
+modified_at: 2026-10-19T15:57:30.351273707Z
+req_type: Task
+tags:
+- carried-from:STORY-1663
+- finding-hash:4ee2c045
+- from-review:PR-2732
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-19T15:57:30.351270885Z
+  created_by: joe
+comments:
+- id: 01a154e1-cb19-7882-8a62-04b89cd32761
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1951 (Sweep: ship / reconcile / auto-complete fail-open and dead-code follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:57:26.169832273Z
+  modified_at: 2026-10-19T15:57:26.169832273Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a1518f-2fa9-7e11-a3b3-a12a072265bc
+  author: joe
+  timestamp: 2026-10-19T00:28:20.777827129Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154e1-d3a8-7072-aa4b-5b9e56b2a019
+  author: joe
+  timestamp: 2026-10-19T15:57:28.360939551Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a154e1-df2e-78b2-911d-efa931ac509e
+  author: joe
+  timestamp: 2026-10-19T15:57:31.310816321Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-615e-7960-95e5-c603d4cf79ad
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.374585410Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-353
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-500
+filed_at:
+  code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude

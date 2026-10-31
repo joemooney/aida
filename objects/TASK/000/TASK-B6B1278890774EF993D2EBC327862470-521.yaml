@@ -1,0 +1,59 @@
+id: 01a156c0-1022-7483-bf05-c8c27f478801
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-521
+agreed_id: TASK-1643
+title: 'minor (non-blocking): aida-git-guardrails.sh now scans the raw COMMAND for the …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1948, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): aida-git-guardrails.sh now scans the raw COMMAND for the NO_SLOT assignment, so it blocks benign text: rg/grep searches for the assignment, git commit -m messages, aida comment add and mailbox bodies that quote it (reproduced: exit 2 for each). Consider scanning quoted bodies only for bash -c/sh -c/eval payloads instead of the whole raw command.
+  Reviewed sha: 2ec26b136a34893242acd55a87da35d1a287ee1c
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T00:39:50.050168302Z
+modified_at: 2026-10-20T10:53:13.709184730Z
+req_type: Task
+tags:
+- carried-from:TASK-1948
+- finding-hash:1b2d1ea6
+- from-review:TASK-1948
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e2-1411-71b0-9344-2a78faddcce9
+  created_at: 2026-10-20T10:53:13.709181064Z
+  created_by: joe
+history:
+- id: 01a156e5-0f21-7ee3-af85-407415fe5920
+  author: joe
+  timestamp: 2026-10-20T01:20:14.625149858Z
+  changes: []
+- id: 01a158f1-9ccd-7702-aedb-96e529cc8bbd
+  author: joe
+  timestamp: 2026-10-20T10:53:11.757034279Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a158f1-a8ae-7443-8e5a-80582fd12ebd
+  author: joe
+  timestamp: 2026-10-20T10:53:14.798082096Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-61a3-7903-9df9-497026dbc0a8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.443842193Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-374
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-521
+filed_at:
+  code_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c416dbcc0b
+  vendor: claude

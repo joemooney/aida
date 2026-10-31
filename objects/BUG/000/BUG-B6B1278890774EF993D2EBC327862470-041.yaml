@@ -1,5 +1,6 @@
 id: 01a18d40-b975-7e73-bdea-a80bb4cdbfa7
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-041
+agreed_id: BUG-2358
 title: A sandboxed seat's stuck cache refresh worker held the cache lock 10h+; every cache writer and the stale-lock healer hang instead of failing fast
 description: |
   ## What happened
@@ -223,6 +224,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6ba1-7d30-9ad0-256cadae87d8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.001454941Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2358
 processing_record:
 - id: 01a18eb5-fc22-7aa0-9c0f-b34113c10bdb
   timestamp: 2026-10-30T21:27:33.666868837Z

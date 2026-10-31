@@ -1,0 +1,181 @@
+id: 01a10f3a-fa80-7263-ae46-caf8982d3ae5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-401
+agreed_id: TASK-1322
+title: Bug protocol warns about missing tests for inline Rust test changes
+description: 'During BUG-1804 pickup, aida queue done warned "protocol: bug — missing test-file change (layer: type; no test file in the diff)" although the entire implementation diff changes an existing #[test] in aida-cli-lib/src/maintenance_schedule.rs and adds assertions. Consider recognizing inline Rust test-module edits or clarifying that the heuristic only checks filenames. Evidence: commit 428510740d, PR #2432. Nonblocking; queue done succeeded.'
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T03:21:25.888015030Z
+modified_at: 2026-10-06T18:16:53.042867915Z
+req_type: Task
+tags:
+- from-advisor:BUG-1804
+- from-implementer:BUG-1804
+- kind:observation
+- linked:BUG-1804
+- severity:minor
+comments:
+- id: 01a10f63-8200-7cd2-b6f4-bc9af4a6ce5a
+  author: auto-complete
+  content: |-
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work TASK-1322 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `launch-refused`
+    - Seat: implementer (session role: advisor)
+    - Parent spec: TASK-1322
+    - Branch under test: main
+    - Commit under test: dafb66432e7a
+    - Recorded at: 2026-10-06T04:05:41.084985098+00:00
+
+    ### Failure
+
+    phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone
+
+    Failure kind: `launch-refused`
+
+    ### Recovery hint shown to the operator
+
+    The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1322`.
+
+    ## Recurrence
+
+    Attempts: 2
+    Latest recurrence: 2026-10-06T13:41:57.102688517+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 52021 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1322","started_at":"2026-10-06T04:04:43.018950255+00:00","completed_at":"2026-10-06T04:05:41.084985098+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":52021}],"total_ms":57296,"binary_sha":"dafb66432e"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1322 --title "drain phase 1 (implementer) failure on TASK-1322" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T04:05:42.016525256Z
+  modified_at: 2026-10-06T13:41:58.205904995Z
+- id: 01a10f68-627e-78f1-9897-dfecdc98a419
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
+  created_at: 2026-10-06T04:11:01.630520857Z
+  modified_at: 2026-10-06T04:11:01.630520857Z
+- id: 01a11175-3981-7470-ad28-2115dd91f769
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a11172 exited with code 1 after 15542ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
+  created_at: 2026-10-06T13:44:17.537268097Z
+  modified_at: 2026-10-06T13:44:17.537268097Z
+history:
+- id: 01a10f5c-d97e-79e0-81f2-33e7987d014c
+  author: joe
+  timestamp: 2026-10-06T03:58:25.662575152Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a10f62-907e-7e02-8c0e-97f5b081680f
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T04:04:40.190182774Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a10f63-7c36-7f00-b621-7200bc35b862
+  author: aida-orchestrator
+  timestamp: 2026-10-06T04:05:40.534675484Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a10f68-627e-78f1-9897-dfd35e1e2bf1
+  author: joe
+  timestamp: 2026-10-06T04:11:01.630512048Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
+- id: 01a11172-6c6a-7180-b6f7-6ec5fbb3823c
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T13:41:13.962556884Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a11173-12c7-7bf1-a5de-be42849ede30
+  author: aida-orchestrator
+  timestamp: 2026-10-06T13:41:56.551277866Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a11175-3981-7470-ad28-210245963708
+  author: joe
+  timestamp: 2026-10-06T13:44:17.537250064Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
+- id: 01a11206-1649-75b2-8015-a1ce7db3b40b
+  author: joe
+  timestamp: 2026-10-06T16:22:31.241696609Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a11259-a4a0-7a12-8cb7-cff9eb2f1474
+  author: joe
+  timestamp: 2026-10-06T17:53:47.168942925Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1126e-ca2b-70e2-b8a0-48044f85587f
+  author: aida-auto-bump
+  timestamp: 2026-10-06T18:16:53.035353162Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-5ec3-7fe1-a8fe-c442cc6d371a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.707292946Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-215
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-401
+processing_record:
+- id: 01a1126e-ca32-7163-8717-27117102ef2f
+  timestamp: 2026-10-06T18:16:53.042867150Z
+  agent: aida
+  commit_sha: 9c86e9c7ff37151e0301957ce7f61f9b7153146a
+  summary: Completed via merge 9c86e9c7
+  punted:
+  - 'punted: phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  - 'punted: phase 1 child session 01a11172 exited with code 1 after 15542ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+filed_at:
+  code_sha: 428510740dd8ff20a37fed4d68fdc625522cef0c
+  branch: bug-1804
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-06T17:53:47.149734625Z
+  implemented_by: joe
+  completed_at: 2026-10-06T18:16:53.035328881Z
+  completion_sha: 9c86e9c7ff37151e0301957ce7f61f9b7153146a

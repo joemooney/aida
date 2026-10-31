@@ -1,5 +1,6 @@
 id: 01a1918f-aa90-7860-b8e3-2c10bb16f7be
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-145
+agreed_id: TASK-2556
 title: 'minor: preflight_sandboxed_child_key returns a plain bail (not ChildGrantRefuse…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-045, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -54,6 +55,14 @@ history:
   timestamp: 2026-10-31T11:14:43.607797876Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a1942b-6c3b-7f00-bcdd-0a831bb7b408
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.155530957Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2556
 filed_at:
   code_sha: 273549a2d9d738b1846028776855309da26a2ef7
   branch: main

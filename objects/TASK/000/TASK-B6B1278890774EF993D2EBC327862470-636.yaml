@@ -1,0 +1,61 @@
+id: 01a16ce6-c7ba-78d1-aaed-c2f7ebf0eb43
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-636
+agreed_id: TASK-1858
+title: 'cosmetic, non-blocking: bug_2213_inherited_pathspec_modes_cannot_hide_object_di…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2213, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic, non-blocking: bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt omits --ignore-submodules=none from its status args, so the env-mode matrix does not exercise the exact production arg vector
+
+  PR: #2892
+  Reviewed sha: c2fc72576ad1f007e3c44e4cf09481b4a169f0b9
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T07:53:46.170486825Z
+modified_at: 2026-10-24T07:55:13.804245024Z
+req_type: Task
+tags:
+- carried-from:BUG-2213
+- finding-hash:c9ed24ff
+- from-review:PR-2892
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+  created_at: 2026-10-24T07:55:13.804240393Z
+  created_by: joe
+history:
+- id: 01a16ce8-08de-7172-a6fe-06c60e002757
+  author: joe
+  timestamp: 2026-10-24T07:55:08.382090022Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16ce8-23d2-7981-a129-78d8b49108a2
+  author: joe
+  timestamp: 2026-10-24T07:55:15.282901490Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16d0a-c40c-7c01-ad3f-09d052798958
+  author: joe
+  timestamp: 2026-10-24T08:33:04.524168270Z
+  changes: []
+- id: 01a1942b-636c-7551-bd43-a58a1731414c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.900557396Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-489
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-636
+filed_at:
+  code_sha: 7ce52440de8776de3e9ce50060344a2bdbb6e8f4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 14065b6254
+  vendor: claude

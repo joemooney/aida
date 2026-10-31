@@ -1,5 +1,6 @@
 id: 01a183f1-edf6-7d91-bd88-d2fd5b58d2e0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-072
+agreed_id: TASK-2485
 title: 'PR-3058 follow-ups: judge pre-record era-marker drop asides; retriable/lock-naming refusal when the era drop cannot take the Lifecycle lock'
 description: |
   Non-blocking findings from the APPROVED review of PR #3058 (TASK-b6b1278890774ef993d2ebc327862470-067) at a93c4aa63879. Fix both, with a test each.
@@ -73,6 +74,14 @@ history:
   timestamp: 2026-10-28T23:14:36.980730513Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67b8-7883-a953-ba257a5bfa4a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.000240873Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2485
 processing_record:
 - id: 01a18443-23b3-7263-b01b-7a9e5f64be4b
   timestamp: 2026-10-28T20:45:54.995161201Z

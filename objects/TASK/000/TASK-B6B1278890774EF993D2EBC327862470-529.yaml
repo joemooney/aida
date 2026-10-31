@@ -1,0 +1,62 @@
+id: 01a15809-35e3-7fe0-a0db-462e235278db
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-529
+agreed_id: TASK-1649
+title: 'non-blocking: with incremental on, sccache reports workspace crates under --pro…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1985, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: with incremental on, sccache reports workspace crates under --profile agent as 'cannot cache: incremental'. aida-cli-lib therefore no longer gets cross-worktree sccache hits; only third-party deps stay cached. TASK-1986's measurement should include a fresh-worktree cold build, not only an edit-rebuild.
+
+  PR: #2765
+  Reviewed sha: fc873a2944d138f1898790c48e89aaab0d15100e
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T06:39:21.059578591Z
+modified_at: 2026-10-20T10:54:45.732608290Z
+req_type: Task
+tags:
+- carried-from:TASK-1985
+- finding-hash:f19f99c5
+- from-review:PR-2765
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a155b4-1b75-7711-9f6d-adaea35d4607
+  created_at: 2026-10-20T10:54:45.732605008Z
+  created_by: joe
+history:
+- id: 01a15817-eaf4-7822-a44c-633b58a30ea8
+  author: joe
+  timestamp: 2026-10-20T06:55:24.916237494Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a158f3-0628-7433-877e-ffee911e74c9
+  author: joe
+  timestamp: 2026-10-20T10:54:44.264892901Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a158f3-0fc3-7fe3-abf2-9ba795070ac2
+  author: joe
+  timestamp: 2026-10-20T10:54:46.723485332Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-61ae-7c41-b648-e2137b10afd9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.454392827Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-382
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-529
+filed_at:
+  code_sha: 474735dd24e4de4529fe5f9ffe42eacfe035952c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 857e2ef848
+  vendor: claude

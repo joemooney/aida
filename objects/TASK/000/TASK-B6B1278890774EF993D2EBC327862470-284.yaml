@@ -1,0 +1,47 @@
+id: 019e5dd3-711a-75b2-89fe-2a1600fd6c7a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-284
+agreed_id: TASK-37
+title: Recurrence threshold of 3 is hard-coded in the recur handler; consider making i…
+description: Recurrence threshold of 3 is hard-coded in the recur handler; consider making it configurable via [findings] promote_threshold in .aida/config.toml so projects with different signal-to-noise tolerances can tune it.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T06:29:58.682708712Z
+modified_at: 2026-06-04T04:48:58.810128065Z
+req_type: Task
+tags:
+- aida:findings
+- from-advisor:STORY-467
+- kind:observation
+- linked:STORY-467
+- observation-self-test
+- recurrence:3
+- severity:minor
+comments:
+- id: 019e5dd3-a65d-7fa0-97e1-72d6efb0a381
+  author: joe
+  content: 'Recurrence #2 by joe 2026-05-25: Confirmed during dogfood that the literal  ties the discipline doc''s promote-it signal to code.'
+  created_at: 2026-05-25T06:30:12.317818936Z
+  modified_at: 2026-05-25T06:30:12.317818936Z
+- id: 019e5dd3-d9f7-7401-be71-72e57edffcef
+  author: joe
+  content: 'Recurrence #3 by joe 2026-05-25: Third sighting — should trigger the promote-it nudge.'
+  created_at: 2026-05-25T06:30:25.527504606Z
+  modified_at: 2026-05-25T06:30:25.527504606Z
+- id: 019e683e-adb5-7970-a2fb-97f04f803bcf
+  author: joe
+  content: Commit 4af532b5 references this requirement
+  created_at: 2026-05-27T07:03:18.709841974Z
+  modified_at: 2026-05-27T07:03:18.709841974Z
+history:
+- id: 01a1942b-5b67-7592-b41c-ddffcfcfc3f2
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.847722598Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-086
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-284
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

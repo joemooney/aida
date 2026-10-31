@@ -1,5 +1,6 @@
 id: 019e4688-22cb-7600-a6fd-f93b24a1becb
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-253
+agreed_id: TASK-2579
 title: describe_drain_mode duplicates STATE_QUEUED/STATE_COMPLETED string literals
 description: |
   TASK-391 (PR-131) adds `describe_drain_mode` in main.rs, which compares
@@ -58,6 +59,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-417 (now resolve to the survivor): dedc595ca4ecf24741e2eede0dda3b64447c84c4'
+- id: 01a1942b-5b63-7c00-96f5-b30cf39d10d6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.843192830Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2579
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

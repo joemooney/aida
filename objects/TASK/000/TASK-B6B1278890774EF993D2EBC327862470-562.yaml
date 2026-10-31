@@ -1,0 +1,60 @@
+id: 01a15f80-c1f6-73a2-9129-c06d4501a393
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-562
+agreed_id: TASK-1684
+title: 'cosmetic: reviewer_launch_context runs twice per watch-launched queue work (que…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: reviewer_launch_context runs twice per watch-launched queue work (queue_cmd.rs:12858 and again via reviewer_launch_prompt in run_standalone_reviewer), each doing a forge query, git fetch and round_for transaction; pass the first result through.
+  Reviewed sha: f737aabdb43e0d811a44e67d028950895e1d9f34
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T17:27:16.214075608Z
+modified_at: 2026-10-21T17:35:43.879536602Z
+req_type: Task
+tags:
+- carried-from:TASK-1993
+- finding-hash:2acf5064
+- from-review:TASK-1993
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-21T17:35:43.879533232Z
+  created_by: joe
+history:
+- id: 01a15f88-76aa-7161-b652-a218fcd0fda9
+  author: joe
+  timestamp: 2026-10-21T17:35:41.226586111Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15f88-861a-77b3-95ba-e87617a94d6d
+  author: joe
+  timestamp: 2026-10-21T17:35:45.178218139Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f8c-04a5-7f90-9ce9-4dbadd982710
+  author: joe
+  timestamp: 2026-10-21T17:39:34.181548283Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6243-7e83-8a50-fe9ebe4c8621
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.603106103Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-415
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-562
+filed_at:
+  code_sha: 98d19dceb3af3acaf538f2cfe952677c200fad0c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude

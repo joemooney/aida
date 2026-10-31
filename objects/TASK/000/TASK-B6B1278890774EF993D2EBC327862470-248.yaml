@@ -1,5 +1,6 @@
 id: 019ea082-94be-7dd3-8313-dc80ed4ab5b4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-248
+agreed_id: TASK-2574
 title: Smoke audit task
 description: ''
 status: Rejected
@@ -20,3 +21,11 @@ history:
   - field_name: spec_id
     old_value: TASK-0412
     new_value: TASK-b6b1278890774ef993d2ebc327862470-248
+- id: 01a1942b-5bd5-7c32-b9fb-363a2fcb697b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.957816561Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2574

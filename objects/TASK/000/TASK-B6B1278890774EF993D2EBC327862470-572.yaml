@@ -1,0 +1,60 @@
+id: 01a161fe-e65f-7b42-a464-031b708cba2b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-572
+agreed_id: TASK-1697
+title: 'minor: mandate_drive.rs run_tick reap loop dedups only Skipped rows via skip_on…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1915, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: mandate_drive.rs run_tick reap loop dedups only Skipped rows via skip_once; a persistent reap failure (reap_one 'failed — could not remove worktree') or agent-registry GC error is ledgered Refused every 15m tick.
+  Reviewed sha: d37d96a02474a04e467a08bbee38a0aa13764bcf
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T05:04:17.503372666Z
+modified_at: 2026-10-22T05:05:11.347514186Z
+req_type: Task
+tags:
+- carried-from:TASK-1915
+- finding-hash:fcce88ae
+- from-review:TASK-1915
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-22T05:05:11.347510885Z
+  created_by: joe
+history:
+- id: 01a161ff-b046-7033-bcb8-b74a1329cb7e
+  author: joe
+  timestamp: 2026-10-22T05:05:09.190841014Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a161ff-c05d-7441-8e4d-802264e0aa1c
+  author: joe
+  timestamp: 2026-10-22T05:05:13.309804244Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1626d-6e59-7b12-8cb4-6369d0ffa2f6
+  author: joe
+  timestamp: 2026-10-22T07:05:01.273518833Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6247-7062-b453-40e29bde7238
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.607421309Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-425
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-572
+filed_at:
+  code_sha: 0f68094ad31c0db35673029cb338cb007054d624
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c540b90955
+  vendor: claude

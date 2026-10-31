@@ -1,5 +1,6 @@
 id: 019e48cd-8b95-7301-8059-68af25765cda
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-263
+agreed_id: TASK-2589
 title: 'TUI: arm TERMINAL_NEEDS_RESTORE gate BEFORE enable_raw_mode to close micro-race window'
 description: |-
   **Where:** `aida-tui/src/term.rs:48-52` in `TermGuard::enter`.
@@ -52,6 +53,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-429 (now resolve to the survivor): 4c0b56455d0da9d20bb000720c5ee0ed307c6337'
+- id: 01a1942b-5b65-7a43-8f47-84843a5212c6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.845138130Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2589
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:

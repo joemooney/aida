@@ -1,5 +1,6 @@
 id: 01a19408-ab95-71e0-9637-17f6d65f6eae
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-255
+agreed_id: STORY-2214
 title: 'Review PR-3176: [AI:claude] fix(mandate): exclusion evidence pinned to the before snapshot; only a change to the excluded specs'' objects or ID lines discards a collection, so unrelated fleet writes no'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a193e6`) for branch `bug-b6b1278890774ef993d2ebc327862470-056`.
@@ -60,6 +61,14 @@ history:
   session_id: 01a193e6837a
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1942b-6c53-7970-8cd5-0a550b9b6b7e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.179834204Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2214
 filed_at:
   code_sha: 7b610bddb8a007440122388431d3d09a19b8d169
   branch: bug-b6b1278890774ef993d2ebc327862470-056

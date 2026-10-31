@@ -1,5 +1,6 @@
 id: 01a18c84-6948-7090-a032-b6fd22c81261
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-038
+agreed_id: BUG-2355
 title: Some contained seat clones are flagged 'writable git config/hooks', so the lane can never publish (BUG-HOME-037 seats, twice)
 description: '2026-10-30: two consecutive --fresh implementer seats for BUG-HOME-037 committed a fix, but `aida ship` refused to run git in the seat (''the seat can write to its git config and hooks''), and the host''s `aida ship` from the primary refused the same way. Other --fresh seats launched the same night (BUG-HOME-024, 034, 035, 036) published fine. The advisor inspected the clone''s .git/config (stock: core plus origin) and hooks (none), then published by fetching from the clone (PR-3133). Acceptance: (1) find why these seats were created with seat-writable git metadata (likely the clone''s .git is not made read-only for the seat, or a sandbox profile difference) and fix it at creation; (2) when the guard refuses, offer a host-side verified publish path: `aida ship --from-seat <clone>` inspects config and hooks and fetches the commit, and never runs the seat''s hooks; (3) test both.'
 status: Completed
@@ -231,6 +232,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6b67-76a1-b487-d8186ae4c1e4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.943957890Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2355
 processing_record:
 - id: 01a18f73-6fb5-7d42-b49b-a040cfefe5d1
   timestamp: 2026-10-31T00:54:29.557239862Z

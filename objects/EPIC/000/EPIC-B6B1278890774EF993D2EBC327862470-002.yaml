@@ -1,5 +1,6 @@
 id: 01a187a4-07ce-7100-b85f-1cdcf3566d96
 spec_id: EPIC-b6b1278890774ef993d2ebc327862470-002
+agreed_id: EPIC-610
 title: Refresh product documentation and expand the AIDA showcase
 description: Operator requests an exhaustive documentation review and update, followed by a professional multi-page product site with informative graphics for newcomers and engineering management. Inventory all docs; distinguish current guidance from historical plans/evidence; check current claims against source/help; correct verified drift and broken navigation; preserve a review report with scope, evidence, before/after changes and unresolved findings. Expand the existing static showcase into a coherent product site covering lifecycle, selectable autonomy, capabilities, trust boundaries, integrations and getting started, grounded in reviewed docs. Include accessible responsive original SVG diagrams and an executive brief. Validate navigation, controls, layouts and consistency; preserve owner-private hosted audience and portable repo source. No invented ROI/customer claims or production/security promises.
 status: Draft
@@ -183,6 +184,14 @@ history:
   author: ai:codex:joe
   timestamp: 2026-10-30T16:46:00.325987555Z
   changes: []
+- id: 01a1942b-69cb-7933-b6d4-92081659cc2c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.531743158Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: EPIC-610
 filed_at:
   code_sha: b74166aba21293380f163f21e5df6137a79dbcce
   branch: main

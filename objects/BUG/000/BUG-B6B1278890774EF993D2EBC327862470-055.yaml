@@ -1,5 +1,6 @@
 id: 019e0e84-6136-7153-bd1d-615cd44a81a0
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-055
+agreed_id: BUG-2372
 title: '[test] dispense skip verification'
 description: ''
 status: Rejected
@@ -26,5 +27,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing BUG-34 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4 687961bc84e23aeaa2067dac841f1ae88b865968'
+- id: 01a1942b-5b60-7010-958c-558f7de1de90
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.840498603Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2372
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z

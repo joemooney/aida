@@ -1,5 +1,6 @@
 id: 01a193e7-d3f1-71d2-ae81-5c59c572383e
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-171
+agreed_id: STORY-2211
 title: 'Review PR-3175: [AI:claude] feat(mandate): aida mandate renew extends the active mandate in place, same id, scope and flags (STORY-B6B1278890774EF993D2EBC327862470-166)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a193af`) for branch `story-b6b1278890774ef993d2ebc327862470-166`.
@@ -35,6 +36,14 @@ history:
   timestamp: 2026-10-31T21:40:30.421666265Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1942b-6c52-77d2-bbc1-5243a04d1086
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.178138262Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2211
 filed_at:
   code_sha: 584e95e4505310c1a681700bd42eda3ccb951b98
   branch: main

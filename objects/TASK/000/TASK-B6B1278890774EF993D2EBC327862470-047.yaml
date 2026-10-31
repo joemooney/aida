@@ -1,5 +1,6 @@
 id: 01a1828f-0baa-73e0-a451-0604ca5cba25
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-047
+agreed_id: TASK-2460
 title: (cosmetic, non-blocking) The root_item_macros doc comment (story_1888_gate_path…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-015, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T13:25:14.016903993Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-66da-7b00-84a0-37825475989d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.778347191Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2460
 filed_at:
   code_sha: 6488c041c27974682823d2b09c7f680aee94b777
   branch: main

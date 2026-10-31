@@ -1,5 +1,6 @@
 id: 01a18e25-5569-79a0-a9b4-5007332a2eed
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-136
+agreed_id: STORY-2176
 title: 'Review PR-3146: [AI:codex] docs: complete the product website and gap pass (TASK-HOME-128)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18e1b`) for branch `codex/task-home-128-docs-completion`.
@@ -37,6 +38,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6bde-7140-9f16-2e9108438c21
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.062097359Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2176
 filed_at:
   code_sha: 79ed6f56bf8f6dc34aaeb43f1b8d232cdf5b82aa
   branch: main

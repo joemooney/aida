@@ -1,5 +1,6 @@
 id: 01a1823f-ba29-7c61-b8ca-4f65cf129576
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-033
+agreed_id: TASK-2446
 title: 'minor (non-blocking): git_path_is_ignored (aida-cli-lib/src/pr_cmd.rs ~6852) ha…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-009, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6662-7dd0-b5bb-9fbdb158ce87
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.658086646Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2446
 processing_record:
 - id: 01a1827c-a53b-7630-8878-fa26f10b840d
   timestamp: 2026-10-28T12:29:29.275597739Z

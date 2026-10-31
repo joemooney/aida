@@ -1,0 +1,109 @@
+id: 01a0b9f8-f6ff-7002-8921-db993bc1a347
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-339
+agreed_id: TASK-168
+title: Drain PR-keyed review verdicts omit reviewed_sha and recorded_at, so a reader cannot tell which head a verdict covers (spec-keyed verdicts already carry both)
+description: |-
+  Verified 2026-09-19 07:05 by the driver advisor, from code and data.
+  FACTS: review_verdict::record_verdict stamps reviewed_sha, reviewed_branch, recorded_at and recorded_by, and the module docs say reviewed_sha exists so a gate can know "the commit the reviewer actually looked at". Spec-keyed files match: BUG-1017.json has [recorded_at, recorded_by, reviewed_branch, reviewed_sha, summary, verdict]. The drain's PR-keyed files do not: PR-1965.json is [findings, mode, summary, verdict] and PR-1957.json is [mode, summary, verdict]. So the headless reviewer phase writes the raw file instead of going through record_verdict.
+  NOT A GATE HAZARD, checked: the orchestrator clears a stale verdict before a new reviewer round (four remove_file sites, one commented "clear any stale verdict"), and PR-1956.json was in fact removed when round 5 started. So a stale APPROVED is not carried into a new round.
+  THE COST IS DIAGNOSTIC AND REAL: a human or advisor reading .aida/review-verdicts/PR-N.json cannot tell which head it covers. Across 2026-09-18/19 I hand-pinned the head SHA into every advisor verdict file and had to re-pin it after each rebase (#1956, #1957, #1959, #1964, #1965) precisely because the reviewer's own file does not carry one; and on 2026-09-18 22:20 I misread a hold-gate state for want of the same kind of stamp.
+  SUGGESTED FIX (one line of plumbing): have the reviewer phase write through review_verdict::record_verdict with the PR head SHA and branch it already knows (pr_head_sha_best_effort is right there), so PR-keyed and spec-keyed verdicts have the same shape. Then aida pr ship and the advisor can both say "this verdict covers this head" instead of inferring it from the file mtime.
+  Related: TASK-1191 (verdict selection), BUG-1213 (rework rounds), the in-flight-review gate.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-19T14:01:36.255012638Z
+modified_at: 2026-09-20T08:32:10.545336954Z
+req_type: Task
+tags:
+- batch:followups-0918h
+- batch:followups-0918i
+- drain-safe
+- from-advisor:general
+- kind:observation
+- severity:minor
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0bcb1-5a2f-7213-ad74-29d3eaa7ae58
+  created_at: 2026-09-20T02:42:25.525407345Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0bdf1-1a9e-7143-a108-d97d887bf651
+  created_at: 2026-09-20T08:32:10.545332436Z
+  created_by: joe
+comments:
+- id: 01a0b9fd-b59b-78d1-97c0-7f31bacd285b
+  author: joe
+  content: 'Promoted by the product seat with live corroboration from 2026-09-18/19: without reviewed_sha on a PR-keyed verdict I could not tell, from the verdict file alone, whether a CHANGES REQUESTED covered the head I had just pushed or a stale one. Concrete instances: PR #1948''s round-2 verdict was written three minutes after the advisor merged an earlier head; #1953/#1944 verdicts were read against branches that had since been rebased; and twice I reported ''CI green'' for a head the verdict did not cover. recorded_at plus reviewed_sha turns ''is this verdict current?'' into a one-line check for both seats.'
+  created_at: 2026-09-19T14:06:47.195596213Z
+  modified_at: 2026-09-19T14:06:47.195596213Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba01-a8a2-7031-a786-10acc0d84cc8
+  author: joe
+  content: '[advisor:groom] Mode set to DRAIN (drain-safe). It is additive plumbing: route the headless reviewer phase''s PR-keyed write through review_verdict::record_verdict with the head SHA and branch the phase already holds (pr_head_sha_best_effort), so PR-N.json gains reviewed_sha / reviewed_branch / recorded_at / recorded_by exactly as the spec-keyed files have them. Scope guard: do NOT change any gate DECISION — parse_recorded_verdict must keep reading verdicts that lack the new fields (PR-1965.json and PR-1957.json are live examples), the shelve/proceed logic is untouched, and the clear-before-round behaviour stays (I verified four remove_file sites, one commented ''clear any stale verdict'', and that is why this is a diagnostic gap and not a gate hazard). Tests: a verdict written by the reviewer phase carries the four fields and names the PR head; an older file without them still parses and yields the same verdict kind. Thanks for the corroboration — the two ''CI green'' reports against a head the verdict did not cover are the cost in one sentence.'
+  created_at: 2026-09-19T14:11:06.018080600Z
+  modified_at: 2026-09-19T14:11:06.018080600Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bb69-128f-7890-8465-686df3a73fb9
+  author: joe
+  content: 'Requeue (no rework needed). The 2026-09-19 13:36 attempt was not a spec failure: the implementer''s codex session was killed mid-exploration when the drain''s parent process group was torn down during a launcher swap. The two fast retries that followed (6s, 9s) failed only because attempt 1''s lease 01a0bb6261fe was still held on scope TASK-1-144; the drain reported that as ''could not match the orchestrated session ... to a session lease'', which misdirects. Lease released and the stale task-168-work worktree/branch removed; the spec is unstarted and clean.'
+  created_at: 2026-09-19T20:43:40.559137551Z
+  modified_at: 2026-09-19T20:43:40.559137551Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb6f-8c0b-7601-80d4-53d5b22d085f
+  author: joe
+  content: '[advisor] Status reset NeedsAttention → Approved. I verified the cleanup independently before flipping it rather than taking the report: no lease is held on TASK-168 or scope TASK-1-144, no aida-task168 worktree exists, no task-168 branch exists locally or on origin, and nothing is stranded. The shelve was infrastructure — a drain and its codex child killed together by a process-group teardown during a launcher swap, then two retries burned in fifteen seconds against the orphaned lease the dead run left behind. Nothing about the spec''s work was attempted or judged. It is routed on role:implementer and will be picked up on the next wave. This is the same spec whose finding I filed at 07:05 today about PR-keyed verdicts lacking reviewed_sha; nothing about that analysis changed.'
+  created_at: 2026-09-19T20:50:44.875096566Z
+  modified_at: 2026-09-19T20:50:44.875096566Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bcc8-e5a7-7960-b6cb-c55bb9fb172e
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1995
+    agent: codex
+    ran-at: 2026-09-19 20:07 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-168-drain-01a0bcc8-7fdc-7a52-82fc-64dfe7267b81.json
+    ? AC (0.98) — Stamping a PR-keyed verdict preserves the reviewer-written verdict, summary, findings, mode, and any other existing fields while adding review-context metadata.
+    ? SEM (0.96) — The reviewed_sha stamped onto a drain verdict is the PR head captured before the reviewer runs, and reviewed_branch is the drain's branch context.
+    ? SEM (0.94) — PR-verdict metadata stamping is best-effort: inability to persist the metadata does not change the already parsed review gate decision.
+  created_at: 2026-09-20T03:07:57.735137160Z
+  modified_at: 2026-09-20T03:07:57.735137160Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bcc9-0084-7f30-867f-68d31dfe7a7f
+  author: aida-auto-bump
+  timestamp: 2026-09-20T03:08:04.612301529Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-5ca6-7692-b0d9-f335a4a23315
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.166455615Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-144
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-339
+processing_record:
+- id: 01a0bcc9-008b-7eb2-b36d-c73895a78721
+  timestamp: 2026-09-20T03:08:04.619703418Z
+  agent: aida
+  commit_sha: a78c4e670b69e6b5b4c31a3c1420a206889ad931
+  summary: Completed via merge a78c4e67
+  punted:
+  - 'punted: could not match the orchestrated session (claude id 01a0bb64) to a session lease. Resume the most recent recorded session with `aida queue work TASK-168 --resume` (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids): 01a09e3e7dbd, 01a0a5360dab, 01a0a7a89eb6, 01a0a86dc041, 01a0ae72142d, 01a0aeacbdda, 01a0b9a43688, 01a0bab7b3e8, 01a0bb6261fe, abf9f7f087dbb254e-c3a7f12a9af4d18b. (attempt 2/2)'
+execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-20T02:42:31.662136349Z
+  implemented_by: joe
+  completed_at: 2026-09-20T03:08:04.558931964Z
+  completion_sha: a78c4e670b69e6b5b4c31a3c1420a206889ad931

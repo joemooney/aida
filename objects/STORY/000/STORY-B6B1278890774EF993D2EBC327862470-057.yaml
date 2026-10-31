@@ -1,5 +1,6 @@
 id: 01a18343-e50e-71c0-bf81-2609b6ac6413
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-057
+agreed_id: STORY-2097
 title: 'Review PR-3045: [AI:claude] fix(mailbox): verify exe identity before digesting a writer (TASK-b6b1278890774ef993d2ebc327862470-050 TASK-b6b1278890774ef993d2ebc327862470-051)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/activation-digest-identity`.
@@ -59,6 +60,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6748-7dc3-aa18-ffd030452f3b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.888060910Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2097
 filed_at:
   code_sha: 274cc4a8bb783bbd8dbffbfe72fad328334f3d20
   branch: fix/activation-digest-identity

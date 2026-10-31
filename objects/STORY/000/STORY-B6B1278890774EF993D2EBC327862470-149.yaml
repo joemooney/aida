@@ -1,5 +1,6 @@
 id: 01a19119-9824-75a3-ba29-bcadf4488da6
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-149
+agreed_id: STORY-2189
 title: 'Review PR-3159: [AI:claude] fix(ship-from-seat): quarantine cleanup, capability-based own-clone check, --no-merge conflict (TASK-138 TASK-139 TASK-140)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-b6b1278890774ef993d2ebc327862470-138`.
@@ -70,6 +71,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c39-75b3-9877-1b4dfd9a5cd4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.153455987Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2189
 filed_at:
   code_sha: c0ab6f09380a7c0b1903eb9b207071e7748b954c
   branch: main

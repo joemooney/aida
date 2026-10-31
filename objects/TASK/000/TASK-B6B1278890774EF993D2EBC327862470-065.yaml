@@ -1,5 +1,6 @@
 id: 01a183ca-b733-7142-b221-a3857eb1b8e8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-065
+agreed_id: TASK-2478
 title: 'cosmetic: leases.rs is_lease_companion staging-name branch (<stem>.tmp.<pid>.<s…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -68,6 +69,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-67b2-7863-a20a-c4b0f0f7085b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.994832811Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2478
 processing_record:
 - id: 01a18504-64ef-7592-8c04-ddc6f5a5f285
   timestamp: 2026-10-29T00:17:00.143083258Z

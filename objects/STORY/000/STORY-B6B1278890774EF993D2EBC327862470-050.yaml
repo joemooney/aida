@@ -1,5 +1,6 @@
 id: 01a18261-3dd1-7962-a87b-cbe0a1603791
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-050
+agreed_id: STORY-2090
 title: 'Review PR-3030: [AI:claude] docs(gate): scope the floor-import wording to callers outside gate/ (TASK-b6b1278890774ef993d2ebc327862470-032)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/gate-callers-wording`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-66bc-79b2-8708-1e7bf62d3075
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.748990089Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2090
 filed_at:
   code_sha: 5ea8154612629167dd6b0a004df62b041ce4d36a
   branch: docs/gate-callers-wording

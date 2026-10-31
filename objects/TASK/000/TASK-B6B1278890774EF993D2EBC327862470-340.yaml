@@ -1,0 +1,58 @@
+id: 01a0baf0-60c9-7441-830d-0dbb56907195
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-340
+agreed_id: TASK-169
+title: CLI manual flag gate is red on main-era docs
+description: 'Headless TASK-1289 preflight found docs/cli/verify-manual.py rejects three pre-existing citations: mailbox --stdin, mailbox --body-file, and schedule --hook. TASK-1289 did not touch those chapters or command surfaces; triage the documentation/reflector drift separately.'
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-19T18:31:50.729905333Z
+modified_at: 2026-09-19T18:47:53.423933367Z
+req_type: Task
+tags:
+- ci-guard
+- from-advisor:TASK-1289
+- from-implementer:TASK-1289
+- kind:observation
+- linked:TASK-1289
+- severity:minor
+comments:
+- id: 01a0bafa-2871-7312-a4ca-d80fde239fa0
+  author: joe
+  content: |-
+    [advisor:triage] Re-diagnosed. The finding's conclusion — "documentation/reflector drift, triage separately" — does not hold, and the real cause belongs to TASK-1289 itself.
+
+    WHAT I CHECKED: ran docs/cli/verify-manual.py against current main. It EXITS 0 with all four checks green, including "OK flags — every cited --flag found in its command's --help". Then checked the three cited flags against the current binary: `mailbox send --stdin` PRESENT, `mailbox send --body-file` PRESENT, `schedule tick --hook` PRESENT. There is no drift in the manual.
+
+    WHAT THAT MEANS: verify-manual.py validates the manual against `aida --help` output, so its verdict depends entirely on WHICH BINARY it invokes. All three flags are recent — the mailbox body-source flags and `schedule --hook` from STORY-1226, which merged yesterday. A preflight that runs the guard with an older `aida` on PATH sees those flags absent from --help and reports the manual as citing flags that do not exist. That is a stale binary, not drift.
+
+    WHY IT MATTERS MORE THAN THE FINDING SUGGESTS: this is TASK-1289's first live run, and it is the guard's characteristic failure mode. A pre-flight that blocks PR publication is only as trustworthy as the binary it measures against; on any machine whose PATH `aida` lags the worktree — a fresh clone, a second machine, a worktree built before a merge landed — every PR would be refused for phantom drift. That converts a throughput guard into a throughput block, which is precisely the risk that put TASK-1289 at the advisor gate rather than in the drain.
+
+    SCOPE ADDITION FOR TASK-1289 (recorded there too): the preflight must run each guard against the binary built FROM THE WORKTREE UNDER TEST, not whatever resolves on PATH; and when a guard fails, the refusal must name the binary it used (path + version + build sha) so a spurious failure is diagnosable in one line instead of a re-run. If building the worktree's binary is too costly for every preflight, then guards whose verdict depends on the binary must be SKIPPED with a stated reason rather than run against the wrong one — a guard that can be wrong must never block.
+
+    This finding stays open as the evidence for that scope addition rather than being promoted on its own: there is nothing to fix in the documentation.
+  created_at: 2026-09-19T18:42:31.665576320Z
+  modified_at: 2026-09-19T18:42:31.665576320Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0baff-0cfd-7972-a121-f5afde637faa
+  author: joe
+  content: 'Re-diagnosed by the advisor and confirmed: this is NOT doc drift. Running docs/cli/verify-manual.py against current main exits 0 with all four checks green, and the three cited flags are present in the current binary (mailbox send --stdin, mailbox send --body-file, schedule tick --hook). The red came from TASK-1289''s own preflight guard checking a STALE binary: verify-manual.py compares the manual against the installed binary''s --help output, so a worktree whose source adds or renames a flag fails the guard until the binary is rebuilt. Dismissing as a finding; the real defect is folded into TASK-1289''s rework brief as a design requirement.'
+  created_at: 2026-09-19T18:47:52.317535806Z
+  modified_at: 2026-09-19T18:47:52.317535806Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0baff-114f-7151-bc03-833ed0f19a5c
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-09-19T18:47:53.423933367Z
+  modified_at: 2026-09-19T18:47:53.423933367Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a1942b-5ca6-7692-b0d9-f348fdcf483d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.166947211Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-145
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-340

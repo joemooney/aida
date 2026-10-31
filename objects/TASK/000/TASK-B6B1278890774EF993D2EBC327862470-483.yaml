@@ -1,0 +1,57 @@
+id: 01a1500f-339a-7210-a79a-f4519ffb244b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-483
+agreed_id: TASK-1404
+title: 'cosmetic (non-blocking): --path to a non-.rs file reports ''did not parse''; #[cf…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): --path to a non-.rs file reports 'did not parse'; #[cfg(test)] fns in src files count as untraced (consistent with diff mode, but noisy).
+  Reviewed sha: 1d221159db64e75100e643a6235833efe872b5de
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T17:28:55.962175042Z
+modified_at: 2026-10-19T15:47:23.836422616Z
+req_type: Task
+tags:
+- carried-from:TASK-1783
+- finding-hash:46a629bb
+- from-review:TASK-1783
+- kind:carried-forward
+comments:
+- id: 01a154d8-90b1-7300-b4b2-305af917988d
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1916. aida show TASK-1404 and TASK-1916 both specify non-.rs tree-coverage diagnostics and cfg(test) function noise; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the '
+  created_at: 2026-10-19T15:47:21.393304167Z
+  modified_at: 2026-10-19T15:47:21.393304167Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15019-ed7f-7f52-be3a-e7116a13ed17
+  author: joe
+  timestamp: 2026-10-18T17:40:38.911058844Z
+  changes: []
+- id: 01a154d8-9a3c-7ee1-8eeb-2cf3698bffb7
+  author: joe
+  timestamp: 2026-10-19T15:47:23.836401314Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-614b-7803-8ccd-98383f09620a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.355929745Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-336
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-483
+filed_at:
+  code_sha: aab6e12bcc3d304c8fec9e0210e0f16c7665df0b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

@@ -1,0 +1,63 @@
+id: 01a1460a-238d-7953-b874-3c5929d9cc8a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-461
+agreed_id: TASK-1385
+title: 'minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping th…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1677, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping the private prefix all collapse to one reason, 'missing, unreadable or unsafe tool' (completeness.rs:153, 236). The AC asks for a listing of missing/stub components; carry the underlying error kind so 'missing' can be told apart from 'unsafe link'.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-16T18:47:12.013376824Z
+modified_at: 2026-10-19T15:55:26.301732368Z
+req_type: Task
+tags:
+- carried-from:STORY-1677
+- finding-hash:99e2fc82
+- from-review:STORY-1677
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154de-bffb-7cd3-ad06-579005851f1d
+  created_at: 2026-10-19T15:55:26.301729305Z
+  created_by: joe
+comments:
+- id: 01a154df-e8a3-7f31-8b93-d4df7291a8fc
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1950 (Sweep: regen scorer and relay_stall hardening follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:55:22.659032065Z
+  modified_at: 2026-10-19T15:55:22.659032065Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154df-f0da-72c3-b8f4-200e50c0e677
+  author: joe
+  timestamp: 2026-10-19T15:55:24.762483770Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a154df-fa8b-74d1-94a9-019cbc713976
+  author: joe
+  timestamp: 2026-10-19T15:55:27.243175211Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-6127-7543-968d-dbf9a9e75fbf
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.319730009Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-314
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-461
+filed_at:
+  code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ed29b2b660
+  vendor: claude
+  session: 97da54e4-8024-4969-81a4-fc8651657cf6

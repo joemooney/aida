@@ -1,5 +1,6 @@
 id: 01a18b71-4e23-78b1-92ef-f10f26cf87ca
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-037
+agreed_id: BUG-2354
 title: 'Flaky: regen::score generated_tool_help_timeout_kills_group_and_retains_reason fails on CI lib-1 under load'
 description: |
   2026-10-29 23:13: CI lib-1 on PR-3112 (run 41011660578) failed at aida-cli-lib/src/regen/score.rs:1135 in regen::score::tests::generated_tool_help_timeout_kills_group_and_retains_reason. PR-3112 touches only mailbox retention, and the same test passes on main, so this is a flake. It made a ship stop, and the failed jobs were rerun by hand. Acceptance: find the race (likely the timeout window versus process-group kill timing under a loaded runner), fix it at the race, not by widening the window (TASK-1956 convention), and stress it locally (for example 200 iterations under load) with zero failures.
@@ -200,6 +201,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6b1b-7ec2-99f8-3eac43113989
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.867121500Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2354
 processing_record:
 - id: 01a18eb5-eed4-7423-89f4-b00fcfbb0785
   timestamp: 2026-10-30T21:27:30.260139256Z

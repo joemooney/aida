@@ -1,5 +1,6 @@
 id: 01a18e24-ca94-7541-9d0d-ce159872583a
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-043
+agreed_id: BUG-2360
 title: 'Flaky CI: bug_1683 two_hour_live_lock_blocks_all_launch_entry_points depends on the runner''s real free disk (machine-readiness FAIL before the holder gate)'
 description: 'PR-3133 run 41107995099 (cli-1): aida-cli/tests/bug_1683_live_drain_lock.rs:278 panicked ''missed holder gate'' because burndown run''s machine-readiness check failed first (disk:/ 7.5 GiB free vs 17.0 GiB required on the shared runner). The test means to assert the live-drain lock gate, so it must not depend on host disk. Fix: in the test env, stub or skip machine readiness (an existing env override or config such as AIDA_SKIP_MACHINE_READINESS / [doctor.disk_headroom] in the fixture repo), or order the holder gate before readiness if that is the intended product behaviour (a held lock should refuse before any resource probe). Add an assertion that the refusal names the lock holder. FASTTRACK-sized.'
 status: Completed
@@ -66,6 +67,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6bdd-7362-8d6c-52ed94c9cd80
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.061457373Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2360
 processing_record:
 - id: 01a18ec0-f545-7831-950b-7f1eb1c5d963
   timestamp: 2026-10-30T21:39:32.805984696Z

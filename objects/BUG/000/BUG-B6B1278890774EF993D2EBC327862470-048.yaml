@@ -1,5 +1,6 @@
 id: 01a1914a-561b-7fe2-b2cc-356dcd31c8e9
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-048
+agreed_id: BUG-2365
 title: 'Merge-time completion trusts PR-title trailers blindly: a bare legacy ID completed an unrelated spec (PR-3159 completed legacy TASK-139 instead of TASK-HOME-138)'
 description: |-
   2026-10-31: PR-3159 implemented TASK-HOME-138 (with 139/140 superseded into it), but its title trailer was '(TASK-138 TASK-139 TASK-140)'. Bare TASK-139 resolves to the legacy spec TASK-1-114 (a Draft, 'aida-doctor ~ aida-recover consolidation candidate'). serial-ship's per-trailer approval re-record moved it Draft -> Done (02:10, advisor grant) and the merge completed it (02:26). Meanwhile TASK-HOME-138 stayed in-progress. The advisor reverted it with --force and completed TASK-HOME-138 by hand.
@@ -119,6 +120,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c39-75b3-9877-1b5d58fbe3bb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.153896970Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2365
 processing_record:
 - id: 01a19275-43f4-7b80-9be1-a096468e1654
   timestamp: 2026-10-31T14:55:21.076388097Z

@@ -1,5 +1,6 @@
 id: 01a176f5-b620-7b62-b255-df4fad334769
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-005
+agreed_id: STORY-2045
 title: 'Review PR-2938: [AI:claude] feat(transport): prepared WORK intake at the store write boundary (Refs STORY-1742, Refs BUG-2017)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `codex/story-1742-s3b`.
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Rejected
+- id: 01a1942b-640e-73c0-bd6e-a72d100650fc
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.062849161Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2045
 filed_at:
   code_sha: 86f7fe118a5e572e55280f3e8f546c06b042749a
   branch: codex/story-1742-s3b

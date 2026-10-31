@@ -1,5 +1,6 @@
 id: 01a18625-6530-7a80-9440-bf81421ee1bc
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-077
+agreed_id: STORY-2117
 title: 'Review PR-3086: [AI:claude] docs: what-is-aida overview (md + html) (TASK-b6b1278890774ef993d2ebc327862470-095)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `docs/what-is-aida`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-694a-7460-952c-4a8e4212ec9b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.402607806Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2117
 filed_at:
   code_sha: 339f20c84f8ebd87f28e447682b287601293ed7e
   branch: docs/what-is-aida

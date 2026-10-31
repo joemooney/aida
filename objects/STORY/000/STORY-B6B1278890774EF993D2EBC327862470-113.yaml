@@ -1,5 +1,6 @@
 id: 01a18b9d-8ef1-7cb0-9e30-815bf535370a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-113
+agreed_id: STORY-2153
 title: 'Review PR-3125: fix(alias): describe personal and project aliases (BUG-B6B1278890774EF993D2EBC327862470-020)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a18b68`) for branch `bug-b6b1278890774ef993d2ebc327862470-020-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6b46-74d0-b710-f89147b457f5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.910931749Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2153
 filed_at:
   code_sha: bc06b22feae488b9681ce9442b02b19303c6241d
   branch: bug-b6b1278890774ef993d2ebc327862470-020-work

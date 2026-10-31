@@ -1,0 +1,97 @@
+id: 01a0cea3-12fb-7253-b63d-c450eac7fa45
+spec_id: CR-b6b1278890774ef993d2ebc327862470-003
+agreed_id: CR-8
+title: 'Stamp filing provenance on every spec: code HEAD SHA, branch, dirty flag, aida version and build SHA, filing agent/session'
+description: |
+  ## Problem
+  A spec records `created_at` and `created_by` (the shell user) but nothing about the code state or tooling it was filed against. So:
+  - "Is this bug still present?" has no starting point (no SHA to diff or bisect from).
+  - A spec filed by a stale dev binary cannot be told apart from one filed against current code. In this repo the active binary is often built from a different commit than HEAD (`aida dev status` reports DIVERGED).
+  - In a multi-agent fleet, "which agent/session filed this" is lost; `created_by` is just `joe`.
+  - Downstream bug reports against aida do not carry the aida version that was in use.
+
+  The existing `origin` field (STORY-634) names only a repo and component in multi-repo workspaces.
+
+  ## Proposal
+  Add one optional, write-once struct on `Requirement`, stamped automatically at filing, for example:
+
+  ```yaml
+  filed_at:
+    code_sha: abc1234...      # HEAD of the code repo (not the aida-store branch)
+    branch: feat/x
+    dirty: true               # working tree had uncommitted changes
+    aida_version: 0.9.3
+    aida_build_sha: def5678   # SHA the running binary was built from
+    vendor: codex             # filing agent, when known (AIDA_SESSION_ROLE / hook env / MCP client)
+    session: 01a0...          # filing session id, when known
+  ```
+
+  ## Acceptance
+  1. `aida add` and the MCP `add_requirement` stamp `filed_at` automatically. No flag is required.
+  2. Best-effort: each field is left out when it cannot be detected (no git repo, detached state, unknown agent). Detection failure never fails or slows the add noticeably (no network).
+  3. Write-once: `aida edit` / `update_requirement` never modify `filed_at`. Existing stores without the field round-trip unchanged (serde default, skip if none).
+  4. Public-repo hygiene: no hostname, absolute path, or email is recorded. Record the branch-name decision (include / hash / omit) as an ADR or in the acceptance notes.
+  5. `aida show` renders one line, e.g. `filed at abc1234 (feat/x, dirty) · aida 0.9.3 (def5678) · codex`. Also shown in JSON/TOON output.
+  6. A drift hint: `aida show` (or `aida why`) reports how many commits since `code_sha` touched files this spec's `trace:` comments or linked commits point at. A cheap version, or a follow-up if too heavy.
+  7. In the aida repo, when `aida_build_sha` differs from `code_sha`, show it plainly: the spec was filed by a binary that did not match the checked-out code.
+
+  ## Notes
+  - Scaffold version is a PROJECT fact, not a per-spec one. Each scaffolded file carries its own `AIDA Generated: vX | checksum` marker, so a project can be at mixed versions. Do not stamp it on specs. Instead surface a project scaffold summary (versions present, count of stale/edited files) in `aida report` (STORY-1004) and `aida doctor`, where it matters when reporting an aida bug downstream.
+  - The finishing SHA is already captured by the `(SPEC-ID)` commit trailer. Filing SHA → finishing SHA gives a spec's full code range.
+  - `vendor`/`session` connect to the seat identity proposed in CR-1-172.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-23T14:19:48.859651743Z
+modified_at: 2026-09-24T10:37:35.629765169Z
+req_type: ChangeRequest
+tags:
+- intake:requester
+- provenance
+- spec-model
+- traceability
+relationships:
+- rel_type: Parent
+  target_id: 01a0d2ad-a743-7e62-81ef-27634712e4ff
+  created_at: 2026-09-24T09:09:55.500325813Z
+comments:
+- id: 01a0d279-175d-7193-8f5f-ef60f0c05f50
+  author: joe
+  content: 'PROXY DECISION (draft triage 2026-09-24): APPROVED. Write-once filing provenance struct with clear acceptance criteria.'
+  created_at: 2026-09-24T08:12:26.333050611Z
+  modified_at: 2026-09-24T08:12:26.333050611Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2ad-e0a2-7102-a84f-9de3f34269dc
+  author: joe
+  content: 'Implemented on branch claude/cr-8. Field name: filed_at (struct FilingProvenance). Acceptance notes: (4) Branch-name decision = INCLUDE verbatim: a branch name is a code fact that travels with the pushed commits anyway; no hostname, absolute path or email is recorded (session id is an opaque UUID). (6) Drift hint deferred to follow-up TASK-1475, as the spec allows. (7) aida show prints a note when aida_build_sha differs from code_sha, only when run inside the aida source repo. Write-once is enforced in the store (targeted update, full-store save, three-way merge), not only by callers. Legacy SQLite/Postgres backends do not persist it (deprecated paths).'
+  created_at: 2026-09-24T09:10:05.730350347Z
+  modified_at: 2026-09-24T09:10:05.730350347Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2c5-0a15-7252-8ef0-7944a3011aab
+  author: joe
+  content: 'Acceptance note (4), proxy decision: branch names are recorded as-is in filed_at.branch, not hashed or omitted. They are developer-chosen and already public in the git history. No hostname, absolute path or email is recorded.'
+  created_at: 2026-09-24T09:35:23.669927228Z
+  modified_at: 2026-09-24T09:35:23.669927228Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2c5-7a47-7c80-81af-2746b97ac2ee
+  author: joe
+  content: 'PROXY DECISION (acceptance note, criterion 4): the provenance record stores the branch name verbatim. Branch names are developer-chosen and already public in this repo''s git history and PR list, so they add no new exposure. No absolute paths, hostnames, emails or env values are recorded (confirmed by the strict review). The session id is a UUID and the vendor comes from a fixed list.'
+  created_at: 2026-09-24T09:35:52.391162470Z
+  modified_at: 2026-09-24T09:35:52.391162470Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+- id: 01a0d2fd-fc0d-73c0-8cab-0215bbb34570
+  author: joe
+  content: 'Merged to main via #2156 (integration batch 44).'
+  created_at: 2026-09-24T10:37:35.629765169Z
+  modified_at: 2026-09-24T10:37:35.629765169Z
+  session_id: 67239b78-62f2-41d8-9600-1eea416800a6
+history:
+- id: 01a1942b-5de3-7f20-b822-ec3f37919098
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.483609653Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: CR-1-173
+    new_value: CR-b6b1278890774ef993d2ebc327862470-003

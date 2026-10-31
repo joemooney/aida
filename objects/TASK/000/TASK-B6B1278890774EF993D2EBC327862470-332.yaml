@@ -1,0 +1,81 @@
+id: 01a0ab41-f672-7e80-9be9-1a45b479e40b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-332
+agreed_id: TASK-161
+title: Stale merge-hold markers after orchestrated merge + no user-facing merge-hold clear command
+description: |-
+  Away-window heartbeat observation. PR-1868/1869/1870 (STORY-1164, BUG-1174, STORY-1173) all MERGED but left stale .aida/merge-holds/PR-<n> marker files behind — the orchestrated merge path did not clear them, so they surface as phantom 'held PRs' in awaiting/merge-hold checks (I removed them by hand this pass).
+
+  Separately: there is NO user-facing `aida merge-hold clear|list` command — `aida merge-hold --help` falls back to top-level usage — even though the module docs AND the GitLab CI gate template (aida-core/templates/gitlab-ci-merge-hold-gate.yml) both instruct `aida merge-hold clear <pr>` as the human release path. So an operator can only clear a stale/false marker by rm-ing the file.
+
+  Two fixes: (1) clear the hold marker (+ the aida:merge-hold label) whenever a PR merges through ANY AIDA merge path (orchestrated drain merge, aida pr ship), not only a hypothetical `aida pr merge`; (2) ship the `aida merge-hold list|clear <pr>` surface the docs/CI templates already reference. Related: BUG-1167, STORY-1165, STORY-1173.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-16T17:27:02.002537886Z
+modified_at: 2026-09-17T05:11:30.102492210Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
+comments:
+- id: 01a0ad9b-ba5e-74c1-b8d6-56d48e53df0f
+  author: joe
+  content: Commit a54b3713a references this requirement
+  created_at: 2026-09-17T04:24:19.294658607Z
+  modified_at: 2026-09-17T04:24:19.294658607Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0ad9c-3595-7372-aca4-ccff27a98d20
+  author: joe
+  content: Commit a54b3713a references this requirement
+  created_at: 2026-09-17T04:24:50.837945227Z
+  modified_at: 2026-09-17T04:24:50.837945227Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0adb7-42d9-7581-aef3-aa84cf35c686
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    verdict: APPROVED (independent review) — advisor to serialize-merge PR-1875
+    scope: reciprocal independent review of PR-1875 (advisor-authored, drive-mode, touches the merge path)
+    independent: yes — the advisor implemented it; I did not
+    proxy: claude-opus-4.8 (product session), session 01FSF79sGFHdttbFjJAHicCd
+    authorized-by: joe (operator, home) — standing reciprocal-review arrangement, 2026-09-16 21:55 MST
+    gates: Build green + merge-hold-gate green; MERGEABLE/CLEAN; fix #2 fully delivered (list/clear/--stale, conservative never-sweep-unconfirmed predicate, tested); fix #1 delivered for merge_wave_pr; the other merge legs are covered by the forge::merge_change fail-closed refusal (cannot merge over a marker → cannot leave a phantom) — noted for the advisor to confirm. Verdict file: .aida/review-verdicts/PR-1875.json
+    timestamp: 2026-09-16 21:55 MST
+  created_at: 2026-09-17T04:54:23.705235360Z
+  modified_at: 2026-09-17T04:54:23.705235360Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0adbd-fafd-7a70-a5e4-b78cafd72843
+  author: joe
+  content: Commit eeddccf75 references this requirement
+  created_at: 2026-09-17T05:01:44.061786403Z
+  modified_at: 2026-09-17T05:01:44.061786403Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0adc6-ec30-7783-aa7a-9f9289818698
+  author: aida-auto-bump
+  timestamp: 2026-09-17T05:11:30.096054413Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-5c78-76a2-b94d-af6f9fe731d6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.120235033Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-137
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-332
+processing_record:
+- id: 01a0adc6-ec36-7a61-b13e-66975f26ca10
+  timestamp: 2026-09-17T05:11:30.102491318Z
+  agent: implementer
+  commit_sha: f3232031d40dbaacb31d9d30c63a3b8dd5a0952e
+  summary: Completed via merge f3232031
+execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-17T05:11:30.046669623Z
+  completion_sha: f3232031d40dbaacb31d9d30c63a3b8dd5a0952e

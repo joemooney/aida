@@ -1,5 +1,6 @@
 id: 01a1878c-1fb0-7db2-a6ca-876c69e9f082
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-101
+agreed_id: TASK-2514
 title: Build a polished AIDA product showcase
 description: 'Operator requests polished newcomer and management-facing sales material inspired by factory.strongdm.ai/products. Build a responsive interactive showcase grounded in existing capabilities: governed software factory, selectable autonomy, independent review, durable requirements, roles, mandates and evidence. Include a clear next step, printable executive brief, accessible controls and accurate alpha/Linux limitations. Preserve reusable static source in the repository and provide a private hosted preview where possible. No invented customer claims, metrics or live dashboard data.'
 status: Completed
@@ -113,6 +114,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-69ac-76b0-b61e-9450dd92eb51
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.500112839Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2514
 processing_record:
 - id: 01a18902-de8f-7b51-bd20-791217107897
   timestamp: 2026-10-29T18:53:49.071220934Z

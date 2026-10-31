@@ -1,5 +1,6 @@
 id: 01a18b08-cda8-7bc3-ade9-a62a2c7860c2
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-102
+agreed_id: STORY-2142
 title: 'Review PR-3110: [AI:claude] feat(mailbox): per-agent Codex mail wake, slice 1 - verified recipient + wake-run watcher (STORY-B6B1278890774EF993D2EBC327862470-096) (TASK-B6B1278890774EF993D2EBC32786247'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-096`.
@@ -59,6 +60,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6ac7-7312-8492-02d145c1a889
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.783397855Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2142
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main

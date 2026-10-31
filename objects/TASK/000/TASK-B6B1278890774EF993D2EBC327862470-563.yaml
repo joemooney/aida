@@ -1,0 +1,61 @@
+id: 01a15f96-e3ce-79e0-b9ed-280a72349bc6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-563
+agreed_id: TASK-1686
+title: 'non-blocking (minor): aida-cargo-timeout-guard.sh make_targets_skip_cargo fails…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1967, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): aida-cargo-timeout-guard.sh make_targets_skip_cargo fails OPEN on a recipe conditional: 'hello:' / 'ifeq ($(CI),1)' / '<TAB>cargo test' / 'endif' — the ifeq line resets owner so the cargo line is unowned and 'timeout 1h make hello' is silent. Same for ifdef/ifndef/ifneq. Contradicts the header claim 'anything it cannot resolve still gets the hint'. Fix: exit 1 on any conditional directive (as include does).
+  Reviewed sha: 57c220717cc5190b1d8e90ec39fdd0b0d1ee6197
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T17:51:26.670229061Z
+modified_at: 2026-10-21T18:00:50.828507814Z
+req_type: Task
+tags:
+- carried-from:TASK-1967
+- finding-hash:b923a0d3
+- from-review:TASK-1967
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-21T18:00:50.828503350Z
+  created_by: joe
+history:
+- id: 01a15f9f-78a1-72e1-934c-d495f0a27dce
+  author: joe
+  timestamp: 2026-10-21T18:00:49.057751660Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15f9f-84d9-7b00-9001-2c7948cab3aa
+  author: joe
+  timestamp: 2026-10-21T18:00:52.185173070Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15fd8-d2fd-76a1-86a3-c6dd6254e3af
+  author: joe
+  timestamp: 2026-10-21T19:03:27.741625316Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6243-7e83-8a50-fea2d51d160c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.603520656Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-416
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-563
+filed_at:
+  code_sha: 72eb713535c20e95002f05dc71cbf2e34193e3c3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81

@@ -1,0 +1,47 @@
+id: 01a14047-5ee4-7453-8911-5730a5b1f068
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-455
+agreed_id: TASK-1376
+title: aida review record cannot bind a verdict to a PR in a sibling repo (aida-relay, aida-host)
+description: 'Specs for aida-relay and aida-host work (e.g. BUG-2152/2153) live in the aida store, but their PRs live in other repos. aida review record refuses a request-changes verdict without --pr, and --pr N names a PR in THIS repo, so a refusing verdict on aida-relay #93 would bind to and hold aida #93. The workaround on 2026-10-15 was a spec comment plus a gh pr comment, which is unenforceable. Wanted: --repo owner/name (or --pr-url) on review record and merge-hold.'
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-15T15:56:21.604668339Z
+modified_at: 2026-10-19T16:08:00.044042055Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+comments:
+- id: 01a154eb-6e0d-76d2-8f68-eba787ee987e
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of BUG-2173. Same defect: an attested verdict cannot be recorded or bound for a PR in a sibling or non-AIDA repo (aida-relay, aida-host).'
+  created_at: 2026-10-19T16:07:57.709544172Z
+  modified_at: 2026-10-19T16:07:57.709544172Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154eb-772c-78c3-9d49-5ebe27da14ca
+  author: joe
+  timestamp: 2026-10-19T16:08:00.044035601Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-60f6-7182-95e3-af96014fd9b3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.270628788Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-308
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-455
+filed_at:
+  code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 596a91dbc0
+  vendor: claude
+  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be

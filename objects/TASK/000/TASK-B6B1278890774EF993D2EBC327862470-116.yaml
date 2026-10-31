@@ -1,5 +1,6 @@
 id: 01a189cf-5677-7063-80cc-cc0d0f2ed1f7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-116
+agreed_id: TASK-2529
 title: Loosen the aida show latency budget to 2000 ms (keep the 5000 ms ceiling and 10% tolerance)
 description: |-
   Operator ruling 2026-10-29 15:37 (agreed in session): this host is shared with continuous cargo builds, so the 1000 ms show budget trips on load, not regressions (BUG-HOME-018; the real 700 ms scan was removed in PR-3105).
@@ -99,6 +100,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6a16-70c2-a34f-ef5b11798ffc
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.606314644Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2529
 processing_record:
 - id: 01a18a9a-6f25-7e52-ba46-1cc97e4d6647
   timestamp: 2026-10-30T02:18:59.237622433Z

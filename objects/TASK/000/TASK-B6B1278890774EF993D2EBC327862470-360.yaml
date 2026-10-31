@@ -1,0 +1,111 @@
+id: 01a0c1cb-97e3-7962-a7e6-e941c86467b8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-360
+agreed_id: TASK-192
+title: 'A Done spec with a red-CI, unrouted, unheld PR is invisible to every surface: the orphan sweep excludes red by design and awaiting never shows it (PR #2035 / BUG-1470)'
+description: |-
+  A Done spec whose PR has RED CI, no reviewer, no hold and no queue entry is invisible to every surface: the orphan sweep skips it by design and `aida awaiting` never mentions it
+
+  FOUND by sweeping all 25 open PRs for the class my own stranded-refusal sweep is blind to. That sweep flags PRs that HAVE a refusal and lack a hold; it cannot see a PR with NO verdict at all, which is the more dangerous state and was exactly PR #2042's earlier tonight.
+
+  THE INSTANCE, open 3.8 hours at time of writing:
+
+      PR #2035   [AI:codex] fix(queue): keep metadata rework claimable (BUG-1470)
+      created    2026-09-20T22:41:18Z
+      state      OPEN, not draft, MERGEABLE/BLOCKED
+      checks     Build (ubuntu-latest) FAIL | merge-hold-gate pass
+      verdict    none
+      hold       none, neither label nor marker
+      queue      not routed to any reviewer
+      BUG-1470   status DONE
+
+  WHY NOTHING WILL EVER SURFACE IT. Each surface excludes it for a locally defensible reason, and the reasons compose into total invisibility:
+
+    - the BUG-1291 orphan sweep requires `green`, computed as ci_rollup in (None | Some("pass")).
+      This PR's Build fails, so the sweep skips it CORRECTLY - claiming a red PR for review would
+      waste a reviewer on a branch that cannot merge. The sweep is right and the PR is still lost.
+    - `aida awaiting` does not mention BUG-1470 or 2035 anywhere in its output. Not in prs, not in
+      briefs, not in escalations, not in unshipped_work.
+    - no reviewer queue entry exists, so no reviewer will pick it up.
+    - no hold exists, so no gate is armed - nothing is stopping it, there is simply nothing
+      driving it.
+    - the spec reads DONE, so it is absent from every open-work lens by the ordinary rules.
+
+  So the spec says finished, the PR says failing, and no surface reconciles the two. This is not a gate failing open; it is work falling between gates that are each behaving correctly.
+
+  WHY THIS IS A DIFFERENT SHAPE FROM BUG-1291. That bug is about a PR that is clean and unowned - ready work nobody claims. This is a PR that is BROKEN and unowned. The orphan sweep deliberately excludes it, which means the red-CI case is not merely uncovered, it is covered by an exclusion. A recovery mechanism whose predicate requires green can never recover the things that are red, and red-with-nobody-assigned is the state most likely to sit indefinitely, because there is no green moment at which anything starts watching.
+
+  THE SPEC-STATUS PART MAKES IT WORSE. BUG-1470 is Done. Done means work finished on a branch, which is literally true and operationally false here: the branch does not build. Done is also enough to drop it from the open-work view. So the one field that could have kept it visible is set to the value that hides it, and set correctly by the rules as written.
+
+  SUGGESTED SHAPE, advisory: the complement of the orphan sweep. Where that sweep claims clean-and-unowned PRs for review, something needs to surface RED-and-unowned PRs for repair - or `aida awaiting` needs a line for "your spec is Done and its PR is failing", which is a two-way check between spec status and PR state that nothing currently performs. The cheapest version is a predicate that is the exact negation of the sweep's green test, so the two together cover every open PR rather than leaving the red ones in the gap between them.
+
+  NOTE ON PROVENANCE: I did not review #2035 and am not proposing to. Its CI is red; a review now would produce findings against a tree that cannot merge. This is filed as a routing and visibility defect, not a code finding.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T02:29:00.515328965Z
+modified_at: 2026-09-22T14:01:18.883633732Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0c8e9-a1f6-7a73-9d78-fa69b36ca1e4
+  created_at: 2026-09-22T11:39:21.783502535Z
+  created_by: joe
+comments:
+- id: 01a0c5dc-d3fb-74b2-8096-e121e98df5f3
+  author: joe
+  content: 'Promoted by joe 2026-09-21: PROMOTED AS THE ACTIONABLE HALF OF A PATTERN I JUST DEFERRED. TASK-194 records this as instance 3 (BUG-1514) of a structural class — every surface excluded PR #2035 for a LOCALLY CORRECT reason and the composition was invisibility: the orphan sweep requires green (correct — claiming a red PR wastes a reviewer), Done drops it from open-work lenses (correct — Done means finished on a branch), no verdict, no hold, no queue entry. I deferred TASK-194 because its own promotion trigger has not fired and the pattern needs an instance outside the queue/lifecycle/drain subsystems. But the INSTANCE is not a pattern and does not need that trigger: a red, unowned, unheld PR sitting 3.8 hours with nothing surfacing it is a concrete gap with a concrete fix. The specific instance is resolved (BUG-1470 completed, #2035 merged) — the gap is not, and closing the instance while leaving the gap is what makes this class recur.'
+  created_at: 2026-09-21T21:26:18.875421673Z
+  modified_at: 2026-09-21T21:26:18.875421673Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c8ef-7d69-7483-958d-e695c903e8f1
+  author: joe
+  content: 'Cold review REQUEST_CHANGES at exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434. Blocking: label-only merge holds are ignored, and reviewer queue lookup failure is treated as an empty queue. The no-hold/no-route claim therefore is not definitive. Require forge-label hold evidence and fail closed on unknown queue state; add adversarial label-only and queue-failure tests plus TOON/statusbar coverage.'
+  created_at: 2026-09-22T11:45:33.545058229Z
+  modified_at: 2026-09-22T11:45:33.545058229Z
+- id: 01a0c8f1-c405-7bd0-9518-76baebd40cbe
+  author: joe
+  content: 'Review evidence follow-up: at exact head 70145f2ba9bb6e5e05b776bcb3518247588a0434, the three focused classifier/render tests each selected 1 test and passed; cargo fmt check passed. They do not cover label-only holds or reviewer queue lookup failure, which remain blocking.'
+  created_at: 2026-09-22T11:48:02.693700410Z
+  modified_at: 2026-09-22T11:48:02.693700410Z
+- id: 01a0c96a-c3f0-7fa2-81a8-0a68924227fd
+  author: mcp
+  content: 'COLD REVIEW — PASS at exact head a0beb5be3c87511cd8221944226b42ee43129a6a. Forge labels and forge-only aida:merge-hold are ingested and suppress red-unowned plus green-orphan paths; reviewer queue failure is Unknown/fail-closed while valid empty is Unrouted. Full red/green/pending/routed/reviewed/owned/unavailable matrix and human/JSON/TOON/compact/statusbar parity/no-double-count checks passed. Evidence: awaiting_you 34 tests; task_192_fail_closed_fact_tests 4 tests; statusbar projection test; fmt/check/clippy; exact-head GitHub Build (Ubuntu/macOS/Windows) and merge-hold-gate all pass. No merge performed.'
+  created_at: 2026-09-22T14:00:12.528829984Z
+  modified_at: 2026-09-22T14:00:12.528829984Z
+- id: 01a0c96b-a28d-71b3-a018-91ec222a9c29
+  author: joe
+  content: '[aida:proxy-approval] verdict=APPROVE; reasoning=fresh independent cold review approved exact head a0beb5be3c87511cd8221944226b42ee43129a6a; forge-label holds, reviewer-route unknown fail-closed behavior, state matrix and all projections verified; independent=yes; gates=Build ubuntu/windows/macos SUCCESS, merge-hold-gate SUCCESS, mergeable CLEAN; timestamp=2026-09-22T07:01:09-07:00'
+  created_at: 2026-09-22T14:01:09.517396202Z
+  modified_at: 2026-09-22T14:01:09.517396202Z
+history:
+- id: 01a0c96b-c6fd-7ea3-a8d7-9f31aa9f2e96
+  author: aida-auto-bump
+  timestamp: 2026-09-22T14:01:18.845247376Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+- id: 01a1942b-5d99-7542-b483-7881678d4c7f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.409868651Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-165
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-360
+processing_record:
+- id: 01a0c96b-c723-7ff3-8a7f-67f1025eded3
+  timestamp: 2026-09-22T14:01:18.883631799Z
+  agent: aida
+  commit_sha: 68ad725cb6fda2d36741ea889afea7271a7292f0
+  summary: Fail closed on unknown routing and include forge hold label
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-22T14:01:18.806588551Z
+  completion_sha: 68ad725cb6fda2d36741ea889afea7271a7292f0

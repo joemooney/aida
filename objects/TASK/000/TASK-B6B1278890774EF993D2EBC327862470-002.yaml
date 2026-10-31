@@ -1,5 +1,6 @@
 id: 01a1783f-1990-7492-94cf-0d8e4ad59539
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-002
+agreed_id: TASK-2415
 title: 'STORY-1843 slice C1: mail retention core (anchor, safe IO, source generations, local permit admission, retire_source journal with replay)'
 description: 'Child of STORY-1843. Implements C SKETCH v1 (comment 75) slice C1 exactly as signed 2026-10-26 06:00 MST: core only, no production caller of retire_source yet (expect(dead_code) until C2), RetentionCoverage stays Unestablished in every production path, section 6 crash fixtures required, 2 s bounded try-lock refusing on timeout. STRICT review; PR title (Refs STORY-1843, TASK-<this>).'
 status: Completed
@@ -128,6 +129,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-642d-7c90-945f-d42d6a7d7d13
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.093937623Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2415
 execution_mode: drain
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd

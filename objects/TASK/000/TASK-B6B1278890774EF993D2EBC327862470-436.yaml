@@ -1,0 +1,72 @@
+id: 01a13601-d916-7c82-ba61-3d4bb81b3279
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-436
+agreed_id: TASK-1360
+title: 'Non-blocking: AC1 / sketch T1 has no committed end-to-end test (valid advisor g…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1983, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: AC1 / sketch T1 has no committed end-to-end test (valid advisor grant, no TTY, real edit gate Draft->Approved succeeds). A reviewer probe using draft_project + hermetic_with_grant passed; add it as a valid-advisor row/test.
+
+  PR: #2587
+  Reviewed sha: ddce5b1df38c8faca4f2b2580a9c23e7c518153f
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-13T16:04:13.206678783Z
+modified_at: 2026-10-13T18:11:12.341881986Z
+req_type: Task
+tags:
+- carried-from:BUG-1983
+- finding-hash:9b144944
+- from-review:PR-2587
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a135f0-f984-7523-b6dd-37d03124a183
+  created_at: 2026-10-13T18:11:12.341877947Z
+  created_by: joe
+comments:
+- id: 01a13675-3046-7160-9b7d-7c17309a5c2b
+  author: joe
+  content: 'Advisor triage 2026-10-13 (operator proxy): APPROVED. See .aida/handoff/advisor/draft-triage-2026-10-13.md.'
+  created_at: 2026-10-13T18:10:12.166486168Z
+  modified_at: 2026-10-13T18:10:12.166486168Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+- id: 01a13676-1515-7251-8e68-ed191b665b97
+  author: joe
+  content: 'Duplicate of TASK-1741 (the same #2587 review finding: a valid-advisor end-to-end row). Superseded.'
+  created_at: 2026-10-13T18:11:10.741741278Z
+  modified_at: 2026-10-13T18:11:10.741741278Z
+  session_id: de277165-066b-453d-b88f-f2ec1f31d61d
+history:
+- id: 01a13675-342e-75c1-892a-df96d941e837
+  author: joe
+  timestamp: 2026-10-13T18:10:13.166651871Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a13676-18ae-7270-a03f-7e59b9e86f12
+  author: joe
+  timestamp: 2026-10-13T18:11:11.662808417Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
+- id: 01a1942b-6076-70c2-9d79-8df67961ccb6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.142522991Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-289
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-436
+filed_at:
+  code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: de277165-066b-453d-b88f-f2ec1f31d61d

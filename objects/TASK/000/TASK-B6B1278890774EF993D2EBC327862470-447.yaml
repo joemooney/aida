@@ -1,0 +1,70 @@
+id: 01a13815-521a-7773-9b9b-b24c7d8a3c9b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-447
+agreed_id: TASK-1369
+title: 'Non-blocking: a code line inside a fenced block counts as prose, so ''/// ```'' /…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2008, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking: a code line inside a fenced block counts as prose, so '/// ```' / '/// let x = foo();' / '/// STORY-30' passes where main refuses (aida-pre-commit.sh:476-482 doc_has_prose has no fence state). Same for a markdown table row ('/// | a | b |'). Optional follow-up: track in-fence state.
+
+  PR: #2605
+  Reviewed sha: b6775ca8120b89266547818f3a2775db5802319c
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-14T01:44:43.802729087Z
+modified_at: 2026-10-15T06:23:00.943525784Z
+req_type: Task
+tags:
+- carried-from:BUG-2008
+- finding-hash:0f63beb4
+- from-review:PR-2605
+- kind:carried-forward
+comments:
+- id: 01a13bb8-6f37-74b0-b74e-ebd78d68261e
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (9d46102) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-14T18:41:45.271430106Z
+  modified_at: 2026-10-14T18:41:45.271430106Z
+history:
+- id: 01a13bb8-6f37-74b0-b74e-ebccb487e2a3
+  author: aida-auto-bump
+  timestamp: 2026-10-14T18:41:45.271428517Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
+- id: 01a13e3a-7543-7f61-b127-6edb4cc0838c
+  author: aida-auto-bump
+  timestamp: 2026-10-15T06:23:00.931303223Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-60b1-7101-945a-0980ca949e07
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.201855998Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-300
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-447
+processing_record:
+- id: 01a13e3a-754f-7d32-9a5c-c0de990693ef
+  timestamp: 2026-10-15T06:23:00.943522992Z
+  agent: aida
+  commit_sha: 9d4610275eac5359d0b045d632338250c3f48318
+  summary: Completed via merge 9d461027
+filed_at:
+  code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 3163cc1b21
+  vendor: claude
+  session: 1cb8b8d6-86de-40fd-a689-22701b66ffa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-15T06:23:00.931295638Z
+  completion_sha: 9d4610275eac5359d0b045d632338250c3f48318

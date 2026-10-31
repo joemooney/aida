@@ -1,5 +1,6 @@
 id: 01a1868f-a5b5-7943-831c-3752f1faa72e
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-079
+agreed_id: STORY-2119
 title: 'Review PR-3089: [AI:claude] feat(node): friendly node aliases for node-local spec IDs (STORY-B6B1278890774EF993D2EBC327862470-078)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-078`.
@@ -74,6 +75,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6963-79b2-bcba-e71f46f7dc89
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.427787117Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2119
 filed_at:
   code_sha: c27ce64106680c5fb3944f26426619ee0dacd5b2
   branch: main

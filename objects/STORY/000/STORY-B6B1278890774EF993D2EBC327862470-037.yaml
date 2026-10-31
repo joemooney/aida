@@ -1,5 +1,6 @@
 id: 01a1816a-2899-7703-a0e0-41b58a92a596
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-037
+agreed_id: STORY-2077
 title: 'Review PR-3007: [AI:claude] docs(plans): private aida-core split spike write-up (SPIKE-b6b1278890774ef993d2ebc327862470-001)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `spike/private-core-split`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-65df-74d3-8b88-20c81aee7f88
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.527461918Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2077
 filed_at:
   code_sha: 8f7f524f6744e2cdc7c25f53e8a4732f69deb4bd
   branch: spike/private-core-split

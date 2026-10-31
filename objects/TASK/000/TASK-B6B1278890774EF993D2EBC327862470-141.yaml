@@ -1,5 +1,6 @@
 id: 01a19055-7a5a-7e82-b225-c0a986df56c3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-141
+agreed_id: TASK-2552
 title: 'GitLab CI: run main on a nightly schedule instead of every mirrored merge; make jobs interruptible'
 description: |-
   Operator 2026-10-30 22:00. Every GitHub merge mirrors to gitlab main and starts a full gitlab pipeline (verify, test incl. cargo test --workspace --doc, bwrap-confinement) on the home runner, which runs two concurrent root podman jobs. That duplicates GitHub CI that just passed and competes with implementer lanes on the HDD host (IO pressure ~75%+).
@@ -98,6 +99,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6c26-7dc3-905d-a3aabe132a11
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.134729239Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2552
 processing_record:
 - id: 01a190bc-aadc-7160-8958-4d60f80b46dc
   timestamp: 2026-10-31T06:54:06.044470636Z

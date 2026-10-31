@@ -1,5 +1,6 @@
 id: 01a184dd-911c-71d2-8cdc-b12be1d83769
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-071
+agreed_id: STORY-2111
 title: 'Review PR-3074: [AI:claude] fix(dispatch): lock-only entries occupy only their own worktree (TASK-b6b1278890774ef993d2ebc327862470-064 TASK-b6b1278890774ef993d2ebc327862470-065)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/dispatch-lock-only-occupant`.
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-67ee-7b13-ab0d-866624f36d80
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.054063359Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2111
 filed_at:
   code_sha: f440cae8e6e2f900f3aa9c5924b937dcd066d0f4
   branch: fix/dispatch-lock-only-occupant

@@ -1,5 +1,6 @@
 id: 01a18a40-aff2-77b0-af0e-8116e1e82e23
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-120
+agreed_id: TASK-2533
 title: aida remote status should name the hub that pushes bypass the mirror and suggest the reconcile cron
 description: '2026-10-29: gitlab aida-store kept diverging (+121) because the operator''s work clone pushes gitlab-only; the drift guard routed it to the advisor twice. Tracks the operator-facing hint only; the mechanism is STORY-HOME-097.'
 status: Completed
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6a91-7b72-918b-20a659e896b0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.729524166Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2533
 processing_record:
 - id: 01a18d91-2f9f-7d01-b708-495c285b1a80
   timestamp: 2026-10-30T16:07:44.799252261Z

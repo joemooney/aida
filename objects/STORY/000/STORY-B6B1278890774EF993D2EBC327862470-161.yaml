@@ -1,5 +1,6 @@
 id: 01a19311-cd9f-7c12-9db1-af7333f72f9f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-161
+agreed_id: STORY-2201
 title: 'Review PR-3170: [AI:claude] feat(ids): new specs get an agreed ID from a block plus a local ID; agreed-id backfill; root-record and delegated-block checks (STORY-B6B1278890774EF993D2EBC327862470-105)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a192d3`) for branch `story-b6b1278890774ef993d2ebc327862470-105`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c48-7470-b596-df73f42cf51e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.168095073Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2201
 filed_at:
   code_sha: 796646253353707591b7394e6e9a47db3d634a5c
   branch: main

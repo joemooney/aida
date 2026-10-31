@@ -1,5 +1,6 @@
 id: 01a18a36-d161-7e70-97ea-fa9eee537e7b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-098
+agreed_id: STORY-2138
 title: 'aida whoami: one view of this session''s mail handle, unread mail, current spec and goal'
 description: |-
   ## Problem
@@ -164,6 +165,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6a46-7572-b3d2-5e8de0028219
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.654594193Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2138
 processing_record:
 - id: 01a18ee2-63e1-7f02-889c-1412780c8de1
   timestamp: 2026-10-30T22:16:03.809967615Z

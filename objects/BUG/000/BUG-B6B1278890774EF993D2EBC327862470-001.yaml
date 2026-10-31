@@ -1,5 +1,6 @@
 id: 01a17604-7775-79c1-a981-b1bf2a25cf16
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-001
+agreed_id: BUG-2318
 title: 'Primary clone allocation broke: node.toml was group-writable and the node-local counter was re-stamped to unregistered node 2; the allocator hid both behind a generic error'
 description: |-
   Since ~15:43 MST 2026-10-25 every aida add in the primary clone (and aida pr auto-queue-review review stories) failed with 'requirement ID allocation failed; no metadata or object was written'. doctor saw nothing.
@@ -80,6 +81,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-63bc-7582-8f41-c8dc711f3678
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.980323624Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2318
 processing_record:
 - id: 01a17c88-479d-79e0-a2c1-f80d3cc77247
   timestamp: 2026-10-27T08:44:28.445176649Z

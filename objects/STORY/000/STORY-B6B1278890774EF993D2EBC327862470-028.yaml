@@ -1,5 +1,6 @@
 id: 01a17f08-4648-7570-9a7e-6ae67c003203
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-028
+agreed_id: STORY-2068
 title: 'Review PR-2989: [AI:claude] test(gate): close the remaining import-ratchet gap (TASK-b6b1278890774ef993d2ebc327862470-010)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-ratchet-followup`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6510-7e40-9dd2-c8b6388c6764
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.320511244Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2068
 filed_at:
   code_sha: d79e40e0dd1e32cdba9c4c2397a1dc30255956a3
   branch: fix/gate-ratchet-followup

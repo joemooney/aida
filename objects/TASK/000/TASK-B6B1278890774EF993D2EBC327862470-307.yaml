@@ -1,0 +1,76 @@
+id: 019e71a8-6312-7d62-a24e-b0a6dafc2e7f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-307
+agreed_id: TASK-136
+title: 12-hour drain stall after single transient GH API failure during phase-1 verifi…
+description: |-
+  12-hour drain stall after single transient GH API failure during phase-1 verification. Empirical 2026-05-28: launched aida queue work --batch scaffolding-2026-05-28 --auto-complete --no-human=both --max 10 in the evening; on return 12 hours later only TASK-131 had progressed (work shipped to Done, PR-343 opened, ~14 min wall-clock, ~$6.35 of compute). 9 remaining specs untouched.
+
+  Cause: orchestrator's phase-1 verification step couldn't reach api.github.com to confirm the PR existed. Treated as 'inconclusive' (not 'failure', not 'success') and PAUSED THE ENTIRE BATCH. Wrote 'transient — retry once the GH API is reachable' to log and exited.
+
+  By design — but the design is wrong for unattended overnight runs. A single transient API hiccup blocks 9 specs for 12 hours. The conservative 'pause when can't verify' choice should compose with a continue-after-N-retries-with-backoff policy for batch drains.
+
+  Three remediation options:
+    (1) Retry GH API verification with exponential backoff (30s, 1m, 5m, 15m) before declaring inconclusive
+    (2) Skip-and-shelve: park the inconclusive spec, advance the drain to the next batch member, return to the inconclusive one at end of batch
+    (3) Substrate-corroboration fallback: if the branch was pushed to origin AND a commit reference can be verified via plain git (no API), treat as 'likely shipped' with a warning rather than 'inconclusive'
+
+  Operator impact this incident: 12 hours of work lost, no progress signal during the pause, only discovered on manual queue progress check. The orchestrator should have either retried or surfaced an immediate signal (push notification, exit-with-known-code) so the user could resume.
+
+  Source: operator direct frustration on return — 'this is disappointing'.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-29T02:55:21.362693521Z
+modified_at: 2026-06-11T12:48:31.383831391Z
+req_type: Task
+tags:
+- aida:queue:work
+- from-advisor:TASK-131
+- from-user-friction
+- kind:observation
+- linked:TASK-131
+- orchestrator
+- reliability
+- severity:major
+- unattended-drain
+relationships:
+- rel_type: Parent
+  target_id: 019e801e-36ae-7971-b229-105b1dadacd7
+  created_at: 2026-05-31T22:18:52.153464632Z
+- rel_type: Parent
+  target_id: 019e801e-6787-70e2-87c7-bd64b692cd28
+  created_at: 2026-05-31T22:19:05.345842873Z
+comments:
+- id: 019e7f86-3fed-7a12-b7fe-8fc58fa0628f
+  author: joe
+  content: 'Promoted by joe 2026-05-31: Highest-value reliability bug: a single transient GH-API failure pauses an entire unattended batch drain for hours (autonomy keystone). Inconclusive-pause path still live (no retry/backoff). Triage 2026-05-31.'
+  created_at: 2026-05-31T19:32:45.165512788Z
+  modified_at: 2026-05-31T19:32:45.165512788Z
+- id: 019e8017-6089-7fb2-926c-2007c9f15b15
+  author: joe
+  content: 'DECISION (operator, 2026-05-31): skip-shelve + short retry. On phase-1 GH-verify inconclusive: (1) retry the verify a few times with backoff (e.g. 30s/1m/5m), then (2) if still inconclusive, SHELVE the spec (NeedsAttention + FailureReason ''PR verification inconclusive — GH unreachable'') and ADVANCE the batch to the next member, returning to the shelved one at end — instead of pausing the whole batch. Route through the existing EPIC-28 shelve-and-advance path (don''t invent a new one). Implementation autonomous; end-to-end validation wants a supervised drain. — master/advisor'
+  created_at: 2026-05-31T22:11:16.233108357Z
+  modified_at: 2026-05-31T22:11:16.233108357Z
+- id: 019e801e-c3ca-7333-acb9-7793a77ba30f
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-05-31-drain-reliability-136-420.md
+    filed 2 task(s): TASK-613, TASK-614
+  created_at: 2026-05-31T22:19:20.394956468Z
+  modified_at: 2026-05-31T22:19:20.394956468Z
+history:
+- id: 01a1942b-5bd4-7db2-8862-e7a572b9ad22
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.956159830Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-111
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-307
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-05-31T22:18:03.676726259Z
+  completion_sha: 3f8fc276ddaaeacc82bbdfaf77b552fdbf908a8e

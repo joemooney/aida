@@ -1,5 +1,6 @@
 id: 01a18b54-f766-7c42-8272-bd249691908a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-107
+agreed_id: STORY-2147
 title: 'Review PR-3120: [AI:claude] feat(gate): M1 slice 3 - carry-over proof on the gate ledger, spec binding (STORY-B6B1278890774EF993D2EBC327862470-080)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-080-2`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6af5-7ff1-baeb-57873027e0d1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.829530309Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2147
 filed_at:
   code_sha: 88dbfd8c194107f2e531182e532f07356c09e5bd
   branch: main

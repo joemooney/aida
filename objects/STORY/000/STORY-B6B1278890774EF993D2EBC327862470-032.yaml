@@ -1,5 +1,6 @@
 id: 01a17f77-d8c9-7cb3-9dcd-a0bfa2450e6f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-032
+agreed_id: STORY-2072
 title: 'Review PR-2994: [AI:claude] feat(allocation): read-only `aida db audit-ids`, registry scanner fixtures and docs (BUG-2017)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2017-s3ii`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-658a-7542-b5ff-9ed3cb9f8347
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.442602103Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2072
 filed_at:
   code_sha: c455ee0b7544ac997305c84044f60df9b4b45f7f
   branch: bug-2017-s3ii

@@ -1,5 +1,6 @@
 id: 01a18db3-1821-79e1-ba04-368b5cd65967
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-128
+agreed_id: TASK-2540
 title: Close product documentation completion gaps
 description: 'Finish the advisor post-stack gap pass for EPIC-HOME-002. Implement only after PR-3103 merges, in a fresh worktree from origin/main. Acceptance: one promise | where it is met | gap table at docs/plans/2026-10-30-docs-completion-gap-pass.md; recover both PR-3096 follow-ups from comment and verdict and verify closure; close current navigation/orphan and source/help claim gaps; complete showcase lifecycle, autonomy, capabilities, trust, integrations and getting-started coverage with accessible responsive original SVG diagrams, plus executive brief. Keep current guidance separate from historical evidence; preserve alpha/Linux/authority limits and avoid invented claims. Use HOME- IDs in prose. Run make check-ci-fast, publication build/check, TASK-113 link audit with zero broken current publication links, and spawned author self-check. One docs-only PR for advisor review/ship; no pushes to the eight approved docs branches. Epic completion waits for merge.'
 status: Completed
@@ -72,6 +73,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6ba3-7452-888b-552e0bab765a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.003248394Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2540
 processing_record:
 - id: 01a18e66-de35-78b3-bef0-71e53a24dd5e
   timestamp: 2026-10-30T20:01:08.661791102Z

@@ -1,5 +1,6 @@
 id: 01a18ae3-db17-7913-a5b5-5f38563782c6
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-031
+agreed_id: BUG-2348
 title: Mail sent from a contained seat's private clone never reaches the advisor inbox in the primary checkout
 description: |-
   2026-10-29 20:28: claude-implementer-229 (contained seat clone /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-021) sent 'BUG-021 PR-3113 ready for review' to {kind:agent, agent:advisor}. It was written only to that clone's .aida/mailbox/0f11319f-...json. The advisor's `aida mailbox inbox` and `--all` in /home/joe/ai/aida never showed it; the operator had to relay it by hand. The sender was told it 'went to the durable inbox'.
@@ -107,6 +108,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6aae-7f52-811c-29ceeefc8843
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.758159646Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2348
 processing_record:
 - id: 01a18ba2-aa4e-7721-b57d-81b51ea1daf7
   timestamp: 2026-10-30T07:07:35.886108669Z

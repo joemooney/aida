@@ -1,5 +1,6 @@
 id: 01a18d34-b83d-7151-a0aa-44fba6ea8550
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-128
+agreed_id: STORY-2168
 title: 'Scheduled mail-backlog guard: nudge any live agent with unread requests/handoffs older than 30 minutes'
 description: |-
   Operator idea 2026-10-30 07:26 ('an hourly schedule in aida schedule to remind active agents to read their mail'), after the advisor left seven Codex handoffs unread for 9+ hours (BUG-HOME-040).
@@ -61,6 +62,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-6ba0-7120-9e16-277f7ef7f832
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.000391551Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2168
 processing_record:
 - id: 01a18eb6-0ab5-7951-ad30-3c356e593ce1
   timestamp: 2026-10-30T21:27:37.397953696Z

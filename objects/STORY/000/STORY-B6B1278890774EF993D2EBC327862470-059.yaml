@@ -1,5 +1,6 @@
 id: 01a18389-22b1-79e2-9ce1-a803e82eae95
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-059
+agreed_id: STORY-2099
 title: 'Review PR-3049: [AI:claude] feat(mailbox): STORY-1843 D2b relay outbox, label reuse and handover (Refs STORY-1843)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-d2b-relay`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-675f-7570-b8de-5efc5182a389
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.911112164Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2099
 filed_at:
   code_sha: 60c3e083340a3095a912324b4369f310682cc933
   branch: story-1843-d2b-relay

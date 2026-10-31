@@ -1,5 +1,6 @@
 id: 01a17c12-dfc4-7131-adb6-94a5928eeff9
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-017
+agreed_id: STORY-2057
 title: 'Review PR-2966: [AI:claude] test(gate): import ratchet catches aliased dispatch imports (TASK-b6b1278890774ef993d2ebc327862470-009)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/gate-alias-ratchet`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64d4-7353-8c2c-415c61f96b52
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.260855994Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2057
 filed_at:
   code_sha: 31a3ef47afc79c9eaaa0c6b3e0792650a8b86a37
   branch: fix/gate-alias-ratchet

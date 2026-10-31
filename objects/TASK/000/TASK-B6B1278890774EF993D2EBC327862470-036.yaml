@@ -1,5 +1,6 @@
 id: 01a1823f-ebe2-7253-b4b2-1f4322039d10
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-036
+agreed_id: TASK-2449
 title: 'N2 (minor, non-blocking): handle_init_distributed_worktree (aida-cli-lib/src/in…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1741, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6678-71c2-a46f-4b0e0501db49
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.680472240Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2449
 processing_record:
 - id: 01a1827c-cfba-7172-89b0-7cee2742dacb
   timestamp: 2026-10-28T12:29:40.154560673Z

@@ -1,5 +1,6 @@
 id: 01a18eb6-7450-7fb0-b983-f186dbff326b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-133
+agreed_id: TASK-2545
 title: 'minor (test-coverage): route_backlog I/O layer (mail_backlog.rs:336-373) is unt…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-B6B1278890774EF993D2EBC327862470-128, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -70,6 +71,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6bf0-74a1-94b7-cc77f0961269
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.080698831Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2545
 processing_record:
 - id: 01a190a4-a4ef-7ba0-9631-305f40fdc0fe
   timestamp: 2026-10-31T06:27:51.663154878Z

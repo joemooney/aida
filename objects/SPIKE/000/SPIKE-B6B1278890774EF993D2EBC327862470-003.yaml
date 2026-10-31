@@ -1,5 +1,6 @@
 id: 01a18d28-9910-7161-8e93-fb6b713b720f
 spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-003
+agreed_id: SPIKE-707
 title: 'Spike: what would an OpenCode adapter take (launch, posture, plugin hooks, mail wake, MCP)?'
 description: |
   ## Why
@@ -40,6 +41,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1942b-6b88-7a61-a585-0309c16e7f50
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.976551470Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: SPIKE-707
 filed_at:
   code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
   branch: main

@@ -1,0 +1,37 @@
+id: 019e5e08-b08a-7562-83c6-8cbe03be9d71
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-288
+agreed_id: TASK-117
+title: aida queue work should forward --force-claim to its internal aida session start…
+description: |-
+  aida queue work should forward --force-claim to its internal aida session start invocation. Today they're decoupled — operators trying to take over a NeedsAttention spec via 'aida queue work STORY-X --force-claim' hit 'unexpected argument'. They have to either bump status first (aida edit --status approved) or use the lower-level aida session start --force-claim path directly. Small UX papercut; the existing workarounds work but the natural-feeling flag should flow through.
+
+  Mitigation: today, aida edit --status approved is the operator-friendly clean-slate path.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-05-25T07:28:08.330649026Z
+modified_at: 2026-06-04T04:48:58.810128065Z
+req_type: Task
+tags:
+- aida:queue
+- batch:queue-work-reliability
+- flag-forwarding
+- from-advisor:BUG-379
+- from-overnight-drain-2026-05-25
+- from-self-test
+- kind:observation
+- linked:BUG-379
+- severity:minor
+- ux-papercut
+history:
+- id: 01a1942b-5b68-7b02-997d-35e4149fb627
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.848840452Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-090
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-288
+archived: true
+archived_at: 2026-06-04T04:48:58.810128065Z

@@ -1,5 +1,6 @@
 id: 01a18de8-f5f0-7a90-926d-98aff6df8429
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-132
+agreed_id: STORY-2172
 title: 'Review PR-3143: [AI:claude] fix(ship): seats publish without host git in their clone; aida ship --from-seat (BUG-B6B1278890774EF993D2EBC327862470-038)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-038`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6ba6-7dd2-ab7a-2fb7cf643d3a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.006339513Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2172
 filed_at:
   code_sha: 18019938e1be04afe1c0a42971e83d48d91b8f5a
   branch: main

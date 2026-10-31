@@ -1,5 +1,6 @@
 id: 01a17604-cd50-7692-bfb7-d778703160bb
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-001
+agreed_id: STORY-2041
 title: 'Review PR-2933: [AI:claude] fix(session): seat-clone probe ignores refs the main checkout already holds (BUG-2224)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2224-work`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-63ca-7440-a5ec-49ff1e86604d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.994788528Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2041
 filed_at:
   code_sha: d34a9c21eab73c49ea910e8f494d77c192df8c7e
   branch: bug-2224-work

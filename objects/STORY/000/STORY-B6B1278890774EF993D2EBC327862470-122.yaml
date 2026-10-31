@@ -1,5 +1,6 @@
 id: 01a18c84-24f1-77f3-b209-50efe4a436c2
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-122
+agreed_id: STORY-2162
 title: 'Review PR-3133: [AI:claude] fix(regen): group-timeout descendant check trusts the pidfd alone; missing PID file retries (BUG-B6B1278890774EF993D2EBC327862470-037)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-037`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b67-76a1-b487-d80b0e594776
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.943515368Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2162
 filed_at:
   code_sha: 3bd7aa16acf3a54b66bc3527d40d93494092a7f0
   branch: main

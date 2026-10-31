@@ -1,5 +1,6 @@
 id: 01a1823f-c9f7-7740-9db0-f55e90acd3b6
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-034
+agreed_id: TASK-2447
 title: 'minor (non-blocking): no automated test for the check-ignore -v branch of git_p…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-009, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6662-7dd0-b5bb-9fceb9f1549a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.658773091Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2447
 processing_record:
 - id: 01a1827c-b367-7772-bdcb-001e98af520f
   timestamp: 2026-10-28T12:29:32.903898859Z

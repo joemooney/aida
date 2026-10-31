@@ -1,5 +1,6 @@
 id: 01a1839a-c359-7940-bc59-765757d74410
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-059
+agreed_id: TASK-2472
 title: 'PR-3047 follow-ups: era-marker drop TOCTOU, leftover-report tests, stale-marker doc, gc doc wording'
 description: |
   Non-blocking findings from the APPROVED review of PR #3047 (TASK-b6b1278890774ef993d2ebc327862470-052) at b15cd18f6b68. All four are in aida-core/src/mailbox_lifecycle and its CLI surfaces.
@@ -93,6 +94,14 @@ history:
   timestamp: 2026-10-28T23:13:09.876140940Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-677e-7393-879f-0b505565945a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.942978392Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2472
 processing_record:
 - id: 01a183dc-991a-7c81-82f2-aef5743ae728
   timestamp: 2026-10-28T18:53:54.842282042Z

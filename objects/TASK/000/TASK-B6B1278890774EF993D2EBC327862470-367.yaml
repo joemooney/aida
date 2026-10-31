@@ -1,0 +1,103 @@
+id: 01a0e10f-17ab-7040-b375-2c7265f49bbf
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-367
+agreed_id: TASK-196
+title: 'PR #2226 strict independent review: request-changes at e63efc3997a85df8cb1ff463…'
+description: |-
+  PR #2226 strict independent review: request-changes at e63efc3997a85df8cb1ff463f48222900ed5f7d6
+
+  Reviewed exact diff 854b7e26f7222c73845064275a18c293c9895283..e63efc3997a85df8cb1ff463f48222900ed5f7d6, AGENTS.md, BUG-1679 full and its product comment, and BUG-1669's authority requirements/operator decisions. Reviewer is not implementer/product/integrator. This is authority-changing and needs an operator-held PR; do not integrate as the product comment's authority-neutral mechanical bug.
+
+  1. P1: Untrusted environment becomes the identity of the coordinating binary. lib.rs:101509-101520 now prefers any executable AIDA_BIN over the known current executable, without provenance. main_entry calls export_coordinating_bin_env before dispatch (lib.rs:1009); lib.rs:101554-101570 then exports the selected value and prepends its directory to PATH. Thus this affects not just AIDA self-spawns but bare vendor selection. Concrete exact-source probe: with original PATH=/usr/bin:/bin and AIDA_BIN=/tmp/aida-review-2226-fixtures/good, export selected that file and prepended /tmp/aida-review-2226-fixtures; Command::new("claude") with --permission-mode bypassPermissions executed the harmless sibling marker script and printed FAKE-VENDOR. The reviewed source has real bare vendor sinks at lib.rs:56206 (intake) and session.rs:1235-1244 (headless vendor, whose drive_path_env at 1125 also derives from this resolver). Other self-spawn/control sinks include solo_cmd.rs:21,75 (including burndown run), shift.rs:1580 (wave), schedule_driver.rs:1307 (persistent tick invocation), maintenance_schedule.rs:2900, and mcp.rs:199 (identity probe/respawn). trusted_session_env at lib.rs:41033 also receives resolve_aida_exe as its supposedly running binary.
+
+  Threat-model distinction: this is demonstrated executable redirection, NOT a demonstrated OS privilege escalation or bypass of an installed BUG-1669 broker. BUG-1669 remains a blocked, unimplemented protected-authority design at this head. Existing PATH/current-executable replacement weaknesses do not establish literal same-user protection either. The new difference is that a supplied AIDA_BIN overrides a valid current executable even with a fixed initial PATH, and propagates that choice to managed launch routes. Executable permissions do not establish launch authority or trusted binary identity. Protect authoritative self/vendor launch identities from this environment override; reconcile the host-wide BUG-1669 perimeter explicitly with an independent architecture/operator decision before accepting this expanded trust boundary. Canonicalizing the path alone will not fix provenance.
+
+  2. P2: The file checked is not necessarily the file executed. lib.rs:101518-101520 returns relative and bare paths unchanged. On Unix the exact-source probe checked ./aida in fixture parent, then Command::new(selected).current_dir(child) executed the different child/aida and printed UNCHECKED-CHILD. For AIDA_BIN=aida, metadata checked parent/aida but Command::new(selected) searched PATH and printed PATH-BINARY from a different directory. Production changes cwd, e.g. maintenance_schedule.rs:2922 and lib.rs:99601. Resolve to an absolute stable path before caching/spawning (or require absolute input); test with different parent/child directories and a competing PATH executable.
+
+  3. P2: is_executable (lib.rs:42708-42725) does not satisfy executable-by-this-process validation. An owned Unix script with mode 0001 is accepted, but spawning it returned EACCES (13); mode 0644 correctly fell back. On non-Unix the helper accepts every regular file. The exact non-Unix branch model accepted plain.txt containing ordinary text. The new test likewise calls a Unix shell script without an executable extension valid on Windows, but never spawns it. Windows metadata compilation passed; no Windows runtime/Wine was available, so no native Windows execution is claimed. Require platform-appropriate executable validation/fallback, with explicit treatment of access/format failures.
+
+  4. P2: Inherited AIDA_BIN breaks test isolation. The existing test deleted_executable_path_uses_replacement_at_clean_path (tests/resolve_aida_exe_tests.rs:125) now calls an ambient-env resolver. test_home.rs:58-65 clears HOME-related overrides, not AIDA_BIN. Running the eight unchanged resolver tests against verbatim extracted production functions passed 8/8 when AIDA_BIN was unset; AIDA_BIN=/bin/true yielded 7 pass / 1 fail: left /bin/true, right fixture/aida. Repeating with the verbatim production test-home constructor/body (excluding its unrelated test module) gave 9/9 including the review HOME probe when unset, and 8/9 with the same failure when set. HOME was redirected to /tmp/aida-lib-test-home-<pid>, while AIDA_BIN remained /bin/true. A directory named fake_home in the newly added test is merely a path fixture; it does not isolate environment. Use injected resolver inputs for existing deterministic tests and clear/pin AIDA_BIN at top-level test startup; verify subprocess fixtures as well. No real-HOME write or protected-child execution was attempted or claimed.
+
+  Additional probe results: executable symlink accepted; symlink to directory and dangling symlink rejected; missing override plus no current falls back to bare aida; OnceLock retains the initial override after env removal. Ordinary 0755 override succeeds. Symlink acceptance alone is not labeled a defect, but supplies no protected identity guarantee.
+
+  Validation method/limits: detached clean scratch worktree /tmp/aida-review-2226 at the exact head; fake HOME /tmp/aida-review-2226-home. Cargo targeted run was requested with separate /tmp target directory but remained waiting for both global build slots; reviewer canceled only that waiting wrapper. Therefore no full crate Cargo test pass is claimed. Instead rustc compiled verbatim extracted resolver/export/helper functions and included the unchanged eight repository tests, linking existing tempfile/dirs dependencies; the constructor probe additionally included the production test_home body. Custom probes were standalone /tmp artifacts, not repository edits. Windows functions were cross-compiled with --target x86_64-pc-windows-gnu --emit=metadata, plus an explicitly labeled non-Unix-branch model on Linux. Evidence artifacts: /tmp/aida-review-2226-extract.py, /tmp/aida-review-2226-hermetic-tests.rs, /tmp/aida-review-2226-probe.rs, /tmp/aida-review-2226-windows-model.rs. No merge, code edits, spec status edits, or privileged service/agent launches.
+
+  PR: https://github.com/joemooney/aida/pull/2226
+
+  Final checks: cargo fmt --all -- --check passed; scratch git status clean; GitHub OPEN/head/branch reverified unchanged immediately before verdict and finding. The CLI required --pr 2226 for a refusing verdict; supplied to protect this PR.
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-27T04:10:57.835863554Z
+modified_at: 2026-09-27T19:27:54.010095317Z
+req_type: Task
+tags:
+- exact-head:e63efc3997a85df8cb1ff463f48222900ed5f7d6
+- from-advisor:BUG-1679
+- from-review:PR-2226
+- kind:observation
+- linked:BUG-1669
+- linked:BUG-1679
+- severity:major
+comments:
+- id: 01a0e22f-7f83-7713-a3bb-7bd67ce28f27
+  author: codex
+  content: 'OPERATOR DECISION (2026-09-27): BUG-1679 remains parked until BUG-1669''s protected binary-admission design is available. Do not approve or queue this pre-architecture fix in the meantime; PR #2226 remains on operator hold. Revisit after protected admission is implemented and independently reviewed.'
+  created_at: 2026-09-27T09:25:58.787780296Z
+  modified_at: 2026-09-27T09:25:58.787780296Z
+- id: 01a0e339-403b-7222-90dc-43b037e25485
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, 2026-09-27): rejected as a duplicate review artifact, not as work. This spec is a recorded observation of the strict independent review of PR #2226; its content is already held in two canonical places — .aida/review-verdicts/BUG-1679.json and the merge-hold on PR #2226. The surviving work item is BUG-1679, which is in rework now. Rejecting keeps review records from accumulating as open board items; no finding is lost.'
+  created_at: 2026-09-27T14:16:15.163049595Z
+  modified_at: 2026-09-27T14:16:15.163049595Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e33d-d5d5-7ab1-a71f-7e470ab87688
+  author: joe
+  content: 'CORRECTION (orchestrator proxy for Joe, 2026-09-27 07:20): I rejected this spec ~20 minutes ago as a duplicate review artifact. That was WRONG and I have reopened it (--force was required to reverse the close). Advisor decision 01a0e115 on BUG-1679 explicitly directs ''Preserve this spec and TASK-1-177 as the rework trail'', and this spec IS TASK-1-177 (see origin_id). I had not read that decision when I dispositioned it. My earlier rejection comment here is superseded: this is not a duplicate to be cleared, it is a deliberately retained rework trail. It stays open until the BUG-1669 protected-admission gate closes and Joe disposes of BUG-1679.'
+  created_at: 2026-09-27T14:21:15.605314027Z
+  modified_at: 2026-09-27T14:21:15.605314027Z
+  session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0e456-8fa0-75e0-9adf-b1385b1f70d5
+  author: joe
+  content: 'PROXY DECISION (orchestrator-as-advisor for Joe, 2026-09-27 12:29): DISMISSED as a duplicate record, not as a rejected concern. This draft is the verbatim strict-review verdict for PR #2226 at e63efc3997a8. That verdict is already tracked in two live places: the typed merge hold on PR #2226 (reason_kind=rework, ''CHANGES REQUESTED for BUG-1679 at e63efc3997a8'') and BUG-1679''s own rework state. Keeping a third copy as a draft spec inflates the open count without adding a unit of work, and it would rot the moment #2226''s head moves. The review findings themselves stand and still gate that PR: the hold lifts only on a fresh APPROVED verdict at the then-current head, and a human ships it. No work is lost by closing this.'
+  created_at: 2026-09-27T19:27:53.248484306Z
+  modified_at: 2026-09-27T19:27:53.248484306Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+- id: 01a0e456-92ca-7ec1-9d7c-1dd8b6919231
+  author: joe
+  content: Dismissed by advisor during findings triage.
+  created_at: 2026-09-27T19:27:54.010095317Z
+  modified_at: 2026-09-27T19:27:54.010095317Z
+  session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+history:
+- id: 01a0e339-3979-7d20-8100-b1aac941abae
+  author: joe
+  timestamp: 2026-09-27T14:16:13.433938902Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a0e33d-c5b4-7080-b601-96fe0dff7e5a
+  author: joe
+  timestamp: 2026-09-27T14:21:11.476649177Z
+  changes:
+  - field_name: status
+    old_value: Rejected
+    new_value: Draft
+- id: 01a0e456-92e3-7b61-a08d-4eb1b6c8f722
+  author: joe
+  timestamp: 2026-09-27T19:27:54.083608581Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-5e20-7222-a014-2825a2d35dc3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.544025265Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-177
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-367
+implementation_info:
+  implemented: false

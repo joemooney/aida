@@ -1,5 +1,6 @@
 id: 019e4695-748b-76b0-9934-3def29d2b278
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-254
+agreed_id: TASK-2580
 title: headless tail --since filters only events carrying a timestamp
 description: |
   TASK-398's `--since <duration>` filters events that carry a `timestamp` field
@@ -50,5 +51,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-418 (now resolve to the survivor): d12cca28a61c8f00c7d30cb4a4cafc7e3566104b ba3d5dbe0732ded54cc088e55ac7786fdf1301e4'
+- id: 01a1942b-5b63-7c00-96f5-b311692cd815
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.843461223Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2580
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z

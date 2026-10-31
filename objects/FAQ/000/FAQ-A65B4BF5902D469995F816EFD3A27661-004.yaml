@@ -1,5 +1,6 @@
 id: 01a1895f-d3f5-7a90-a016-5e50d912da74
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-004
+agreed_id: FAQ-144
 title: Which project store and remote receive a requirement or FAQ that I add?
 description: |
   **The working project's resolved store determines where a requirement or FAQ is written; the directory containing the AIDA executable does not.**
@@ -34,6 +35,15 @@ tags:
 - audience:user
 - topic:faq
 - topic:storage
+history:
+- id: 01a1942b-6a0a-7b52-aced-4d5fd1e2be82
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.594267966Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-144
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

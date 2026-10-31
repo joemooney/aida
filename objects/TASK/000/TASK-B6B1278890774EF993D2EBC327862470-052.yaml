@@ -1,5 +1,6 @@
 id: 01a18334-5e4d-75b0-a32b-6768d63f8f38
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-052
+agreed_id: TASK-2465
 title: 'PR-3043 follow-ups: surface/reap mailbox tombs, era-marker recovery, reap creator staging dirs, legacy-key test assertion'
 description: |
   Non-blocking follow-ups from the APPROVED review of PR #3043 (BUG-b6b1278890774ef993d2ebc327862470-011) at cb41f62822b0. The reviewer sandbox could not allocate IDs, so the advisor filed them here as one task. All in aida-core/src/mailbox_lifecycle.
@@ -75,6 +76,14 @@ history:
   timestamp: 2026-10-28T23:12:18.273635652Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-6723-7991-bbcb-e7e9ec7b3c86
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.851826945Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2465
 processing_record:
 - id: 01a183aa-0785-7b33-b056-3774eabf47da
   timestamp: 2026-10-28T17:58:40.773157488Z

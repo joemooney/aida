@@ -1,5 +1,6 @@
 id: 01a1895f-b4b5-7893-8ed2-d6bdf609c9a3
 spec_id: FAQ-a65b4bf5902d469995f816efd3a27661-002
+agreed_id: FAQ-142
 title: Where does scaffold status get the templates it compares against?
 description: |
   **Scaffolding compares against the templates shipped in the running AIDA binary; it does not automatically download the latest templates from a forge.**
@@ -35,6 +36,15 @@ tags:
 - audience:user
 - topic:build
 - topic:scaffolding
+history:
+- id: 01a1942b-6a09-7db1-b6ec-7a60ff836109
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.593347109Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: FAQ-142
 filed_at:
   code_sha: 5fbe1e39c0d5eaed693cd342d01ae76f5911756f
   branch: main

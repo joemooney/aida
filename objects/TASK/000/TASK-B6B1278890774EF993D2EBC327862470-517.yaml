@@ -1,0 +1,60 @@
+id: 01a155e6-b3a8-7680-ae44-935ec316f06a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-517
+agreed_id: TASK-1639
+title: 'AC ace25510 verified: bug_1982_main_git_denied_whatever_the_store_grant, bug_19…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1982, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC ace25510 verified: bug_1982_main_git_denied_whatever_the_store_grant, bug_1982_symlinked_checkout_denies_every_main_git_spelling, bug_1982_unexpressible_main_git_deny_refuses_the_launch (local run: 9 passed)
+  Reviewed sha: bc8bdd901deb2e2a0fd34589a9f6f20cc2507ae6
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T20:42:25.064147232Z
+modified_at: 2026-10-20T10:58:30.796103551Z
+req_type: Task
+tags:
+- carried-from:BUG-1982
+- finding-hash:dc31c9b8
+- from-review:BUG-1982
+- kind:carried-forward
+comments:
+- id: 01a158f6-71a8-7810-8d49-158ccbf14438
+  author: joe
+  content: 'Advisor 2026-10-20 04:00: closing. This records an AC that was VERIFIED on BUG-1982, which is complete; there is no work.'
+  created_at: 2026-10-20T10:58:28.392598505Z
+  modified_at: 2026-10-20T10:58:28.392598505Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a156bf-b405-7bd0-b6bd-0415225bba18
+  author: joe
+  timestamp: 2026-10-20T00:39:26.469756039Z
+  changes: []
+- id: 01a158f6-7b0c-7292-b795-938c6857adfe
+  author: joe
+  timestamp: 2026-10-20T10:58:30.796101077Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 01a1942b-6183-70d2-bc24-4b860e62906b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.411885666Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-370
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-517
+filed_at:
+  code_sha: c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dd4b6ed730
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T10:58:30.796089578Z

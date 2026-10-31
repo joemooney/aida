@@ -1,5 +1,6 @@
 id: 01a1874b-b26a-7d50-af2e-102a5512f699
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-080
+agreed_id: STORY-2120
 title: 'M1: one gate ledger keyed by change and head, with patch-identity carry-over'
 description: |
   ## Problem
@@ -1405,6 +1406,14 @@ history:
   timestamp: 2026-10-30T14:56:13.154613787Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
   changes: []
+- id: 01a1942b-697e-71f2-bfd9-9c1c27d96fba
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.454273107Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2120
 processing_record:
 - id: 01a18d36-08e9-7002-9d5c-e08bf324d247
   timestamp: 2026-10-30T14:28:11.113186058Z

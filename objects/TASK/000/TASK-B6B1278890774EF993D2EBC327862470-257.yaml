@@ -1,5 +1,6 @@
 id: 019e4839-2457-7cb3-8a51-b81db16cf9c4
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-257
+agreed_id: TASK-2583
 title: queue-done gate creates chicken-and-egg with /aida-pr status check
 description: |-
   While shipping BUG-269, the new `aida queue done` gate exposed an ordering issue with the existing `/aida-pr` skill:
@@ -70,5 +71,13 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-422 (now resolve to the survivor): cb23581ff48ba6e6a62b37e750add4a8bccf70cc'
+- id: 01a1942b-5b64-7cd2-9b68-c0c5e13a57ff
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.844170784Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2583
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z

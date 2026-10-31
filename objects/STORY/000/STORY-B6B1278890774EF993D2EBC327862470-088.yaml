@@ -1,5 +1,6 @@
 id: 01a188f4-b4fb-70c2-8b12-aafe1bea9209
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-088
+agreed_id: STORY-2128
 title: 'Review PR-3097: [AI:codex] docs(configuration): explain configurable operating models (TASK-B6B1278890774EF993D2EBC327862470-107)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188f0`) for branch `task-b6b1278890774ef993d2ebc327862470-107-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-69ef-7641-8242-af1ea4cc5ba0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.567668889Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2128
 filed_at:
   code_sha: c85f20fe33d002fbec6312fc39adecb834a4bd8b
   branch: task-b6b1278890774ef993d2ebc327862470-107-work

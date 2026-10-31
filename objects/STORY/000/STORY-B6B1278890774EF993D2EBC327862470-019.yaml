@@ -1,5 +1,6 @@
 id: 01a17c23-73ed-7023-b890-4e8f89b3eb11
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-019
+agreed_id: STORY-2059
 title: 'Review PR-2968: [AI:claude] feat(dispatch): slice 4 round-4 follow-ups: bounded review, ledgered ship checkpoints, context pins (Refs STORY-1917)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1917-slice4`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64eb-7540-917d-3a87ec97a1d8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.283848130Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2059
 filed_at:
   code_sha: 8e2323bc35e78316f16d79a8a51a45060faef876
   branch: story-1917-slice4

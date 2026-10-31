@@ -1,5 +1,6 @@
 id: 01a19324-0486-7700-b573-857d31ccf6e4
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-053
+agreed_id: BUG-2370
 title: 'aida add fails in sandboxed sessions (read-only ID allocation): no host-commit fallback like comments have'
 description: |
   In a sandboxed (contained) session, `aida add` fails at ID allocation with "Read-only file system (os error 30)" and writes nothing. Comments, edits and status changes survive because AIDA queues them for the host to commit, but minting a new spec has no such fallback. Seen 2026-10-31: an operator-launched product seat (`aida agent new`) could not file a bug. All day, headless implementer and reviewer lanes could not file their findings or follow-up drafts (they fell back to PR comments, e.g. PR-3168 and PR-3165), and `aida pr auto-queue-review` could not file review stories from inside a lane.
@@ -132,6 +133,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c49-7663-bd9a-75881c36a3c4
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.169544904Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2370
 processing_record:
 - id: 01a193d6-4d7a-7a42-acec-fb7bfa1598c0
   timestamp: 2026-10-31T21:20:57.722435020Z

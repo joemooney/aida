@@ -1,5 +1,6 @@
 id: 01a18c63-b5cd-78a1-8c9d-2d00362e7cee
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-126
+agreed_id: TASK-2538
 title: 'minor (non-blocking, follow-up): the advisor ruling asks that removing a stale …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-034, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,14 @@ history:
   timestamp: 2026-10-30T16:01:56.162286141Z
   session_id: 59c0ddec-c215-4704-bb07-25b6ce885ad1
   changes: []
+- id: 01a1942b-6b67-76a1-b487-d7f5d41073d5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.943075918Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2538
 filed_at:
   code_sha: d3d60856bea85bb7f934cc80862a2f108c07e2cb
   branch: main

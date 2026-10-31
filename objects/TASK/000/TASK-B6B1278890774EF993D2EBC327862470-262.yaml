@@ -1,5 +1,6 @@
 id: 019e48c4-7e69-7222-806d-24c888b1a03c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-262
+agreed_id: TASK-2588
 title: BUG-110 handler exits 130 for both SIGINT and SIGTERM
 description: |
   The ctrlc handler installed in aida-tui/src/term.rs::install_signal_handler() calls std::process::exit(130) unconditionally. By convention a process killed by SIGTERM exits 143 (128 + 15); SIGINT exits 130 (128 + 2). The ctrlc crate collapses SIGTERM / SIGINT / CTRL_BREAK into one closure with no originating signum, so we picked the more common "user interrupted" code.
@@ -35,5 +36,13 @@ history:
   - field_name: spec_id
     old_value: TASK-427
     new_value: TASK-b6b1278890774ef993d2ebc327862470-262
+- id: 01a1942b-5b64-7cd2-9b68-c0ed0a36c45b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.844836259Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2588
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z

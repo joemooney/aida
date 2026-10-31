@@ -1,0 +1,68 @@
+id: 01a154ea-8eec-72e1-a911-3e090a34caf4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-513
+agreed_id: TASK-1634
+title: '[housekeeping] TASK-1940 items 1-3 (move review/advisor dispatchers, ''..'' on cl…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1728, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [housekeeping] TASK-1940 items 1-3 (move review/advisor dispatchers, '..' on cli.rs test destructures, hot-file guard) are delivered by this PR in 4f613e2edd; rescope TASK-1940 to items 4-8 (ex-TASK-1935..1938) so STORY-1728 can close on them.
+  Reviewed sha: 4c332a2bdd0438ff746749605e8ed00bff8e762f
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T16:07:00.588862616Z
+modified_at: 2026-10-19T19:49:56.320131910Z
+req_type: Task
+tags:
+- carried-from:STORY-1728
+- finding-hash:ec6e0ee6
+- from-review:STORY-1728
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a15369-a3ec-7733-a343-2d08af9e9393
+  created_at: 2026-10-19T19:49:56.320127514Z
+  created_by: joe
+comments:
+- id: 01a155b6-8ee1-76b0-b148-4bd728b3165e
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by TASK-1940. PR-2751 review follow-up; folded into STORY-1728 slice 3 (TASK-1940), which already owns the housekeeping items.'
+  created_at: 2026-10-19T19:49:49.921453572Z
+  modified_at: 2026-10-19T19:49:49.921453572Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a1554a-3725-7802-963b-734c55a8020c
+  author: joe
+  timestamp: 2026-10-19T17:51:29.573035394Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a155b6-9d9b-7882-8534-a787022b6ead
+  author: joe
+  timestamp: 2026-10-19T19:49:53.691615205Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a155b6-adf2-7503-ac9d-477d6069e256
+  author: joe
+  timestamp: 2026-10-19T19:49:57.874489603Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1942b-6173-7c03-96d0-8765889eefec
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.395239847Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-366
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-513
+filed_at:
+  code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff

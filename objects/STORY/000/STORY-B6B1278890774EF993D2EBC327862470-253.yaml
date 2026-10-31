@@ -1,5 +1,6 @@
 id: 01a10fa3-6c65-7c61-a2a0-a940321569ff
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-253
+agreed_id: STORY-2212
 title: 'Review PR-2438: [AI:codex] fix(ship): preserve completion intent and deliberate reopen (TASK-1600)'
 description: |-
   Independent review of https://github.com/joemooney/aida/pull/2438 at 224c235d5e31a86b9043c65a2ab92957df446595. Implements TASK-1600's advisor-approved two-leg sketch. Implementation is Done; do not merge until independent evidence/verdict and CI support it.
@@ -42,6 +43,14 @@ history:
   - field_name: spec_id
     old_value: STORY-0444
     new_value: STORY-b6b1278890774ef993d2ebc327862470-253
+- id: 01a1942b-5ef9-7db0-871d-993b6bcd05d7
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.761566639Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2212
 filed_at:
   code_sha: 51fe64d5e96431e0103055c132c5cdf5bd5cab6b
   branch: task-1600

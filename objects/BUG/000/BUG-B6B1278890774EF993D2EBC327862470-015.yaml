@@ -1,5 +1,6 @@
 id: 01a1874c-239a-7f73-afc0-c9a87b8256d8
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-015
+agreed_id: BUG-2332
 title: Alias IDs are refused by queue work and other spec-scope commands
 description: |
   ## Problem
@@ -236,6 +237,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6982-7131-8361-22b4ad47d2b9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.458304540Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2332
 processing_record:
 - id: 01a188b2-b40f-7c83-86ee-f48535c88988
   timestamp: 2026-10-29T17:26:15.311988132Z

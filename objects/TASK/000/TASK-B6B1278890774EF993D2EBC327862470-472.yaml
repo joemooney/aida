@@ -1,0 +1,58 @@
+id: 01a14f6c-65c5-7980-aa62-68aa32512b14
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-472
+agreed_id: TASK-1394
+title: 'minor (false positive): tuple-field indices are reported as numeric constants. …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1785, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (false positive): tuple-field indices are reported as numeric constants. proc_macro2 lexes 't.2' as the literal 2 and 'p.1.1' as the float 1.1; the built binary reports both ('1.1 (not in TASK-1785)'). Skip a literal token preceded by a '.' punct, or walk syn ExprLit/Index instead of raw tokens.
+  Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T14:31:06.437909260Z
+modified_at: 2026-10-19T15:46:40.281548385Z
+req_type: Task
+tags:
+- carried-from:TASK-1785
+- finding-hash:a7df3a1f
+- from-review:TASK-1785
+- kind:carried-forward
+comments:
+- id: 01a154d7-e7a3-7d90-af8b-decc96858a3e
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1394 and TASK-1812 both specify tuple-index literals falsely reported as constants; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:38.115033690Z
+  modified_at: 2026-10-19T15:46:38.115033690Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a14f90-0633-7b20-a3c1-34e53ce187b1
+  author: joe
+  timestamp: 2026-10-18T15:10:01.267889174Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
+- id: 01a154d7-f019-71c2-a1c0-6cc76c295fdd
+  author: joe
+  timestamp: 2026-10-19T15:46:40.281541349Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-6144-7011-97e0-9693f8161c6c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.348261058Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-325
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-472
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296

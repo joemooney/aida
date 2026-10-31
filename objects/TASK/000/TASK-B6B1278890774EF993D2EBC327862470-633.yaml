@@ -1,0 +1,61 @@
+id: 01a16cb7-e6af-7f20-86ba-f64e98dc8a6b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-633
+agreed_id: TASK-1855
+title: 'non-blocking (minor): session.rs stage_resume_transcript checks the source with…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1952, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): session.rs stage_resume_transcript checks the source with symlink_metadata and then reads it with std::fs::read, which follows symlinks, so a swap between check and read slips through. Open the source with O_NOFOLLOW and fstat the handle instead. The source dir is host-owned, so this is low risk.
+
+  PR: #2838
+  Reviewed sha: 1a6c419d58caf00e9a71b07d268518c32f057604
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T07:02:33.903606330Z
+modified_at: 2026-10-24T07:12:05.083197111Z
+req_type: Task
+tags:
+- carried-from:TASK-1952
+- finding-hash:edd559c7
+- from-review:PR-2838
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+  created_at: 2026-10-24T07:12:05.083193288Z
+  created_by: joe
+history:
+- id: 01a16cc0-805f-7b50-8092-254dfdbf9090
+  author: joe
+  timestamp: 2026-10-24T07:11:57.535294905Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16cc0-a33c-76a0-a5d4-81f4e96a794c
+  author: joe
+  timestamp: 2026-10-24T07:12:06.460594080Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16ce6-a476-7e51-9d27-04d1f98653cc
+  author: joe
+  timestamp: 2026-10-24T07:53:37.142055384Z
+  changes: []
+- id: 01a1942b-635b-7713-ae18-05baf5f7679e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.883183892Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-486
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-633
+filed_at:
+  code_sha: 14065b6254e5edc2d364a3d8281a5a0cc2d08fc3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude

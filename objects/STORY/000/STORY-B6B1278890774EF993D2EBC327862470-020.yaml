@@ -1,5 +1,6 @@
 id: 01a17c24-df59-7912-9443-fff77c1cb023
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-020
+agreed_id: STORY-2060
 title: 'Review PR-2969: [AI:claude] fix(allocation): surface the real allocation error and add a doctor check (BUG-b6b1278890774ef993d2ebc327862470-001)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/allocation-error-surfacing`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-64ec-73a0-b97a-e1dea42550e3
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.284418542Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2060
 filed_at:
   code_sha: 917789a2a148d7cb3fe402cf25c8ccd23b1b4029
   branch: fix/allocation-error-surfacing

@@ -1,5 +1,6 @@
 id: 01a183dc-dde0-7f01-aba0-8ce68c79b0dd
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-070
+agreed_id: TASK-2483
 title: '[minor] crash safety: a crash between rename and link-back of a FRESH marker lo…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:13:45.613873460Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67b6-7123-ad38-2fae024d5173
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.998974467Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2483
 filed_at:
   code_sha: fbc835fcf4858f96b699e4c9871b204db13d88a2
   branch: main

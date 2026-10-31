@@ -1,5 +1,6 @@
 id: 01a18c2c-7135-7d60-ab74-5af2e8b4c664
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-119
+agreed_id: STORY-2159
 title: 'Review PR-3130: fix(node): list all known nodes with labels and current identity (BUG-B6B1278890774EF993D2EBC327862470-026)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a18bdc`) for branch `bug-b6b1278890774ef993d2ebc327862470-026-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6b54-77c2-8bd3-b6ca69568b54
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.924820385Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2159
 filed_at:
   code_sha: 1c50dd5cd89872b7e95d691eb5c51086964776f0
   branch: bug-b6b1278890774ef993d2ebc327862470-026-work

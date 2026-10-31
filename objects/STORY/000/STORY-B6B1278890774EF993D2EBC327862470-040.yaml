@@ -1,5 +1,6 @@
 id: 01a18195-a701-7520-b0e0-d10e199bca92
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-040
+agreed_id: STORY-2080
 title: 'Review PR-3012: [AI:claude] fix(show): bound content linkage and attribute every show phase (BUG-b6b1278890774ef993d2ebc327862470-008)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/show-linkage-perf`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-660c-7f62-b062-604e36b8ff9c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.572236725Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2080
 filed_at:
   code_sha: 93fd11813bfafdd6675670a658627f8fad9ce02f
   branch: fix/show-linkage-perf

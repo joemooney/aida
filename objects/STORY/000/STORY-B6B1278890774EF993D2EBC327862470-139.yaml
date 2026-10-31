@@ -1,5 +1,6 @@
 id: 01a18eba-ee2c-7ea1-8184-b2948ff6c388
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-139
+agreed_id: STORY-2179
 title: 'Review PR-3149: [AI:claude] fix(pr-ship): retarget stacked PRs after a merge and refuse non-default bases (BUG-B6B1278890774EF993D2EBC327862470-042)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a18e8b`) for branch `bug-b6b1278890774ef993d2ebc327862470-042`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c0a-7b23-9575-c107f80f89eb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.106158987Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2179
 filed_at:
   code_sha: 25d50e8d3350d29dbfc5489e94e86bd1a855400f
   branch: main

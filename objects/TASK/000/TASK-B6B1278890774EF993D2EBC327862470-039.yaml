@@ -1,5 +1,6 @@
 id: 01a18240-1e0e-7223-a610-fd0188550d97
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-039
+agreed_id: TASK-2452
 title: 'minor (non-blocking): aida-core/src/db/cached_git_backend.rs:239 — the fallback…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-030, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-668a-7822-8261-0a4bb6fa1ff9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.698096005Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2452
 filed_at:
   code_sha: b535e12d57703cc905424bb6875b357b5f66b4dc
   branch: main

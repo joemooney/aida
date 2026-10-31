@@ -1,5 +1,6 @@
 id: 01a18086-30fc-75b1-add7-8703afd15097
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-035
+agreed_id: STORY-2075
 title: 'Review PR-3002: [AI:claude] feat(mailbox): C3x canonical publication permit and guarded store removal (Refs STORY-1843)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-c3x`.
@@ -52,6 +53,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-65c6-7b92-8c92-60d2a6a9ee2e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.502035207Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2075
 filed_at:
   code_sha: 1d230a54fb4f9c1005cc46e3faed956285307b4c
   branch: story-1843-c3x

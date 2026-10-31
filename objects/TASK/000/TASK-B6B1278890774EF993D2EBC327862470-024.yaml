@@ -1,5 +1,6 @@
 id: 01a18162-4ea4-7571-b40e-c81896044e05
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-024
+agreed_id: TASK-2437
 title: 'Gate facade rule for every gate/ module: protected gate modules reach outside gate/ only via a facade or FACADE_EXTERNAL_LEAVES'
 description: 'Follow-up from PR-3004 review F2 (advisor ruling 2026-10-28 on TASK-b6b1278890774ef993d2ebc327862470-013). gate/seat_authority.rs, gate/review_verdict.rs and other protected gate modules call unprotected crate definers whose bodies feed authority: crate::current_user_id (seat_authority.rs:721), crate::grant_keyring::read (765), crate::process_probe::process_start_identity (856), kernel.rs crate::canonical_role_name (686,1105,1110,1187,1219), review_verdict -> crate::verdict_tip_relation/current_branch_at. Extend the TASK-013 facade + shrink-only FACADE_EXTERNAL_LEAVES ratchet from gate/dispatch_* to every module under gate/, moving small definers into gate/ (old paths re-export) or listing them as bounded leaves with reasons. Never protect whole hot files (forge.rs, lib_part3.rs). Negative tests for direct, two-hop and re-export forms. No behaviour change; refusal-string inventory unchanged.'
 status: Completed
@@ -75,6 +76,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65d7-7f81-b0df-9b49f7b317e0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.519617285Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2437
 processing_record:
 - id: 01a18254-0a6f-7341-899b-e60236743b8a
   timestamp: 2026-10-28T11:45:08.207634948Z

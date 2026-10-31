@@ -1,5 +1,6 @@
 id: 01a18ae5-f60d-7122-8066-666c4f29cd59
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-100
+agreed_id: STORY-2140
 title: 'aida agent new: non-advisor agents handshake with the advisor (hello + ack) at start'
 description: |
   Operator idea 2026-10-29 20:41: when `aida agent new` starts any non-advisor agent, its first act is a mail round trip with the advisor. On 2026-10-29 claude-implementer-229's mail was stranded in its seat clone (BUG-HOME-031), and nobody knew until the operator relayed it by hand. A handshake at start surfaces a broken mail path in minutes, not hours.
@@ -187,6 +188,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6abd-78b1-a8f1-816f3680620a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.773314717Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2140
 processing_record:
 - id: 01a19164-354a-7551-83b3-aa8f62bcde7b
   timestamp: 2026-10-31T09:57:05.994095498Z

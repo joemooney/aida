@@ -1,5 +1,6 @@
 id: 019e4b7e-53a5-77f0-a6ab-e4193f51cadb
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-267
+agreed_id: TASK-2593
 title: Add a `[orchestrator] retry_backoff_factor` knob so a project that wants
 description: ''
 status: Approved
@@ -21,5 +22,13 @@ history:
   - field_name: spec_id
     old_value: TASK-434
     new_value: TASK-b6b1278890774ef993d2ebc327862470-267
+- id: 01a1942b-5b66-71a0-b521-64a9f43a1fbf
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.846269429Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2593
 archived: true
 archived_at: 2026-06-06T04:18:27.067312476Z

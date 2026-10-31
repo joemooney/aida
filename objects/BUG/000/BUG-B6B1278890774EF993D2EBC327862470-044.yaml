@@ -1,5 +1,6 @@
 id: 01a18e5a-cf58-7ce1-89b7-8ccd68829290
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-044
+agreed_id: BUG-2361
 title: Headless implementer lanes end their turn while their own background test runs are still going, so the lane exits with no push and needs a manual --resume
 description: '2026-10-30: BUG-041 (lane 041c, result ''Waiting on the aida-core test build.''), BUG-038 (lane 038d, result ''Both runs are in the background; I''ll pick up results when they finish.'') and BUG-040 each needed a manual --resume; 041c had 12 modified files uncommitted at exit. The HEADLESS WAITING RULE in the prompt does not prevent it. Fix in the launcher, not the prompt: when the vendor returns a final result while the seat still has live child processes (cargo/rustc/test binaries started by the session) or the result text matches a waiting-on-background pattern, auto-resume the same session (bounded, e.g. 3 times) with a ''your background run finished; continue'' message once those children exit, instead of reporting no-pr. Also: when no-pr is reported and the seat has uncommitted changes, say so in the implementer: line. Tests with a mock vendor.'
 status: Completed
@@ -192,6 +193,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-6bdf-7d81-8073-41fcc3e7d43d
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.063066698Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2361
 processing_record:
 - id: 01a19105-1b8c-7c10-85da-d5dd8b40f1b8
   timestamp: 2026-10-31T08:13:13.484999706Z

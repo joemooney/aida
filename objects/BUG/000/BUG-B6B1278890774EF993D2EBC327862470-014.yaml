@@ -1,5 +1,6 @@
 id: 01a1859b-f0bf-7762-a241-ce0954a6cc05
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-014
+agreed_id: BUG-2331
 title: Adopted repos lack the contained egress allowlist and reviewer allow entries; contained reviews fail silently
 description: |
   In a repo adopted with `aida init` other than aida itself (aida-relay), contained headless reviewers could not work. (1) .aida/config.toml had no [contained] allowed_hosts, so GitHub was unreachable and verdicts could not be recorded (fixed by hand in aida-relay #99). (2) .claude/settings.json had zero permissions.allow entries, so `aida show`, `git log` etc. were denied (fixed by hand with operator approval). Each failure made the reviewer exit with no verdict and only a terse "permission layer denied N calls" message; three review attempts were lost. Acceptance: `aida init` (and its template-refresh/upgrade path) scaffolds the same [contained] allowed_hosts and reviewer permissions.allow entries the aida repo uses, from the template master; and `aida queue work --role reviewer` preflights a contained launch: if the repo lacks the egress allowlist or the reviewer allow entries, it refuses BEFORE launching, naming the missing config and the command that fixes it. Tests: init scaffolds both; preflight refuses on a repo missing either. Do not widen permissions beyond what the aida repo has.
@@ -78,6 +79,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-681d-7433-85ab-cc36ae48ee66
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.101442309Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2331
 processing_record:
 - id: 01a18644-4a3f-7c11-8309-3169f7bbe433
   timestamp: 2026-10-29T06:06:24.831058368Z

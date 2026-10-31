@@ -1,5 +1,6 @@
 id: 01a18b22-974c-7f91-b2c0-2293b1395170
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-105
+agreed_id: STORY-2145
 title: Every new spec gets a globally agreed ID from a reserved block, plus its local ID; backfill the local-only specs
 description: |
   Follow-up to STORY-HOME-095 (block delegation slice 1, Done at 9a86ae5), whose slice-2 work (root enrollment checks, dispensing from blocks) has no owner. Operator model 2026-10-29: everyday use is the bare, globally agreed ID based on reservations; every spec also keeps a local ID.
@@ -264,6 +265,14 @@ history:
   session_id: 01a1940bcee7
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1942b-6ae5-73c1-bea9-0cae926b25fd
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.813573582Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2145
 processing_record:
 - id: 01a19421-46de-75f2-8764-b5ebdc0eaeed
   timestamp: 2026-10-31T22:42:51.230193225Z

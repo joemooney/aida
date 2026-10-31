@@ -1,5 +1,6 @@
 id: 01a176be-41d8-7d42-b1f3-e70921067a79
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-004
+agreed_id: STORY-2044
 title: 'Review PR-2935: [AI:claude] test(ship): prove step 1 commits tracked edits and leaves strays untracked (TASK-2359)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a17552`) for branch `task-2359`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-63fb-7432-a5d8-d680b415ba63
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.043290714Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2044
 filed_at:
   code_sha: abc38c78319ae555fd76db8cb668a8dc0c814444
   branch: main

@@ -1,5 +1,6 @@
 id: 01a188d9-d278-7e32-a7d3-c0fc23767335
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-109
+agreed_id: TASK-2522
 title: Publish autonomy and trust pages with explicit boundaries
 description: |
   Slice 4 of 8 for the product documentation/showcase epic.
@@ -196,6 +197,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-69d2-7662-8adf-1606a23f17ff
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.538275672Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2522
 processing_record:
 - id: 01a18e17-9454-7aa1-8553-c256d5ab26bc
   timestamp: 2026-10-30T18:34:32.404787473Z

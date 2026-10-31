@@ -1,0 +1,68 @@
+id: 01a16fb3-0be9-71f2-9d8f-99bf986da3e1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-645
+agreed_id: TASK-1866
+title: 'cosmetic: two concurrent ''aida pr train'' runs can both read live_trains before …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2220, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: two concurrent 'aida pr train' runs can both read live_trains before either opens its train PR (TOCTOU, pr_train.rs:2163); merge lease still serializes landings so impact is wasted CI only
+
+  PR: #2900
+  Reviewed sha: 0d843aa75192e0284fa885c82ffcd80545d96726
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T20:56:07.401469562Z
+modified_at: 2026-10-24T22:29:14.646694384Z
+req_type: Task
+tags:
+- carried-from:BUG-2220
+- finding-hash:ae16e0c6
+- from-review:PR-2900
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16de1-2db8-75e3-b99d-afa3c62c66f4
+  created_at: 2026-10-24T22:29:09.646594262Z
+  created_by: joe
+comments:
+- id: 01a17008-4d16-77d1-bcbe-7bd97f09cc34
+  author: joe
+  content: 'ADVISOR 15:30: duplicate of TASK-2332 (read-once rider gate; lease serializes landings) — recorded limitation.'
+  created_at: 2026-10-24T22:29:14.646694384Z
+  modified_at: 2026-10-24T22:29:14.646694384Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+history:
+- id: 01a16fcb-a8bd-7461-a585-896b3885f014
+  author: joe
+  timestamp: 2026-10-24T21:23:00.413167507Z
+  changes: []
+- id: 01a17008-3596-7773-9f88-cf745c888881
+  author: joe
+  timestamp: 2026-10-24T22:29:08.630386168Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a17008-3d19-7353-8ca8-83f7a63a08e9
+  author: joe
+  timestamp: 2026-10-24T22:29:10.553359437Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a1942b-63b0-7cc3-9d8d-2d15c9dcc36c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.968340277Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-498
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-645
+filed_at:
+  code_sha: f729f5130b0f30dcd8de4960d022632c362be7e9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00da9622df
+  vendor: claude

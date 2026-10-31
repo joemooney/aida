@@ -1,5 +1,6 @@
 id: 01a177c4-ef54-7660-a2ce-f04013296889
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-008
+agreed_id: STORY-2048
 title: 'Review PR-2946: [AI:claude] fix(seat): seat clones exclude sandbox stand-ins; ship refuses staged placeholders (BUG-b6b1278890774ef993d2ebc327862470-003)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a17776`) for branch `bug-b6b1278890774ef993d2ebc327862470-003`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-6419-7281-aa40-8e372aae3b8c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.073084501Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2048
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main

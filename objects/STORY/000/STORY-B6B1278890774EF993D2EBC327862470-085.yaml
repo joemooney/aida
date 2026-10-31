@@ -1,5 +1,6 @@
 id: 01a188d5-2d54-7783-9f7e-a90b6c000c8a
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-085
+agreed_id: STORY-2125
 title: 'Review PR-3094: [AI:codex] docs(showcase): add portable product showcase (TASK-B6B1278890774EF993D2EBC327862470-101)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188d0`) for branch `task-b6b1278890774ef993d2ebc327862470-101-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-69cd-74a0-94ed-2e9dc533372e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.533556860Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2125
 filed_at:
   code_sha: 32bebfab93f9df469f443fdfb019a12f9d7053bc
   branch: task-b6b1278890774ef993d2ebc327862470-101-work

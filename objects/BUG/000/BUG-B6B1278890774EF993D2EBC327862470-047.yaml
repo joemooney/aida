@@ -1,5 +1,6 @@
 id: 01a19067-ead7-7041-8458-ba22df851551
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-047
+agreed_id: BUG-2364
 title: Seat salvage refuses to end a dead lease because of an empty .gitmodules placeholder the Claude sandbox creates, so reviewers for that branch are blocked
 description: |-
   2026-10-30 22:20: reviewers for PR-3154 and PR-3155 were refused ('could not end dead lease ... holding task-...-133'). Both 'aida session end <lease>' and 'aida worktree dismiss' refused: 'the clone has submodules (.gitmodules in the worktree); automatic salvage does not cover them'. The seat's .gitmodules was a 0-byte, read-only, untracked file (the Claude Code sandbox creates such placeholders for protected paths; the main checkout has one dated Oct 24), and the index held no gitlink (mode 160000) entries. The advisor had to verify each seat (clean, nothing unpushed, no open handles) and rm -rf it by hand.
@@ -104,6 +105,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c27-7bb1-a998-fd79d31a0126
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.135430543Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2364
 processing_record:
 - id: 01a19156-e216-7ad0-b7bf-65d71fa5ae66
   timestamp: 2026-10-31T09:42:32.726338215Z

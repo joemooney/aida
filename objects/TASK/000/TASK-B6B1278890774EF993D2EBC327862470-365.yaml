@@ -1,0 +1,243 @@
+id: 01a0c1ee-defb-7cd0-b234-051939e4dcad
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-365
+agreed_id: TASK-189
+title: aida merge-hold list's label column reports the marker file's recorded claim, not the forge - so it cannot detect the marker/label divergence it exists to surface
+description: |-
+  aida merge-hold list reports the label column from the MARKER FILE's own recorded claim, not from the forge — so the surface that exists to detect marker/label divergence is structurally unable to detect it
+
+  FOUND while verifying the two holds I placed were still armed on both layers, which is the one protective invariant this seat owns. The holds were intact. The listing was not.
+
+  THE OBSERVATION. `aida merge-hold list` renders a label column per marker:
+
+      PR #1989  advisor hold: build red — ...  [label: unknown]
+      PR #2019  TASK-1274 opened by the advisor ...  [label: synced]
+
+  #1989's label is NOT unknown. Measured directly:
+
+      gh pr view 1989 --json labels   ->  labels=[aida:merge-hold]
+      gh pr checks 1989               ->  merge-hold-gate  FAIL
+
+  The label is present and the required check is correctly failing. The hold is fully armed and the listing says its label state is unknown.
+
+  THE MECHANISM, established by inspection rather than inferred. Marker files optionally carry a literal `label: synced` line. Across the 23 markers on disk, exactly four lack it — PR-1989, PR-1998, PR-1999, PR-2006 — and those four are precisely the ones rendered `[label: unknown]`. So the column reports what the marker file SAYS about the label, recorded when the marker was written, and never re-queries the forge.
+
+  WHY THAT MATTERS MORE THAN THE FALSE "UNKNOWN". The direction found here is benign: a marker with no recorded line shows unknown while the gate is actually armed. Alarming, not dangerous.
+
+  The dangerous direction is the one the surface cannot see. A marker recording `label: synced` will keep rendering "synced" after the label is removed at the forge, because nothing checks. And that is the exact state the command's own help text exists to warn about — CLAUDE.md documents that a label applied by hand alone leaves the required check red with nothing to release, and `merge-hold add` writes both precisely so the two stay together. A listing that reports the marker's memory of the label cannot tell you the two have come apart, which is the only question worth asking of it.
+
+  WHAT I MEASURED AND WHAT I DID NOT. I cross-checked all 23 markers against the forge read-only: zero claim `synced` while the label is absent. So the divergence is currently hypothetical in this repo. I did NOT test it by removing a label — these are live gates on held PRs and manufacturing the failure is not an acceptable way to confirm it. The mechanism is established from the four-of-four correspondence between missing `label:` lines and "unknown" renderings; the consequence follows from the column never performing a forge read, which is visible in that the four "unknown" rows are unknown despite their labels being present.
+
+  SUGGESTED, advisory: the column should be computed from a forge query at list time, or renamed to something that does not claim to describe the label — "recorded: synced" rather than "label: synced". The second is nearly free and removes the false authority. The first is what the command is for.
+
+  RELATION TO TONIGHT'S PATTERN (TASK-1-166): this is the proxy's shape again. `merge-hold list` is run by whoever is auditing holds, and the state it describes lives at the forge, which that reader is not looking at simultaneously. The reader who could notice the column is wrong is the one who already went to GitHub — and having gone there, has no need of the column.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-21T03:07:32.475248034Z
+modified_at: 2026-09-23T23:51:59.542299813Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+relationships:
+- rel_type: References
+  target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
+  created_at: 2026-09-21T03:09:31.867482978Z
+  created_by: joe
+comments:
+- id: 01a0c1f0-633a-7440-99ca-e13f6c6f9e4e
+  author: joe
+  content: |-
+    [aida:advisor] CONFIRMED AND PROMOTED 2026-09-20 20:10. I verified the mechanism and then ran the check the command should be running.
+
+    MECHANISM CONFIRMED. Across the 23 markers on disk, exactly four lack a literal 'label:' line - PR-1989, PR-1998, PR-1999, PR-2006 - and those four are precisely the rows rendered [label: unknown]. The column reports the marker file's recorded claim. It never re-queries the forge.
+
+    THE DANGEROUS DIRECTION: SWEPT, AND CLEAN. I compared every marker's claim against the actual forge label for all 23 holds:
+
+        markers claiming 'synced' whose forge label is ABSENT:  0
+        markers with no claim whose forge label is PRESENT:     4  (1989, 1998, 1999, 2006)
+
+    So no hold is currently in the state this surface cannot detect, and the four 'unknown' rows are false alarms - the label is present and the merge-hold-gate check is armed on all four. Every hold placed tonight is genuinely armed on both layers. That is a null result and I am recording it as one, because 'I checked and found nothing' and 'nobody checked' are the two states this whole class of finding is about.
+
+    THE ACCEPTANCE IS THE SWEEP ITSELF. The command should do what I just did:
+
+        for each marker: read the recorded claim, query the forge label, and report the COMPARISON
+
+    1. The label column reflects the FORGE's current state, not the marker's recorded claim. If querying the forge is too slow for a listing, the column must say what it is reporting - 'label (recorded)' - rather than presenting a stale claim as current state.
+    2. A marker claiming synced whose forge label is absent is reported as DIVERGED and is the headline case, because that is a hold that looks armed and is not.
+    3. A marker with no recorded claim is not rendered 'unknown' when the forge answer is obtainable. Unknown must mean the forge could not be reached, not that the marker predates the field.
+    4. Where the forge genuinely cannot be queried, the row says so distinctly from both armed and diverged - three states, per PRIN-5, not two plus a catch-all.
+    5. Backfill the four markers lacking the field, or make its absence mean nothing rather than 'unknown'.
+
+    WHY THIS OUTRANKS ITS BENIGN SYMPTOM. The direction found is alarming rather than dangerous. The direction the surface CANNOT see is a marker that keeps rendering 'synced' after the label is removed at the forge - a hold that reads armed on the only surface anyone checks while the required gate is off. That is the exact divergence the two-layer design exists to prevent, and the command written to surface it is structurally blind to it. Sixth instance tonight of an instrument whose charter is its own blind spot.
+  created_at: 2026-09-21T03:09:11.866902321Z
+  modified_at: 2026-09-21T03:09:11.866902321Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1f1-7100-7fc2-b618-8d058ea264ff
+  author: joe
+  content: |-
+    [aida:advisor] ON HOW THIS FINDING WAS ESTABLISHED, recorded because the method is the defensible part and a later reader will otherwise ask why nobody just tested it.
+
+    THE DECISIVE EXPERIMENT WAS NOT RUN, DELIBERATELY. Confirming the dangerous direction directly means removing the aida:merge-hold label from a live held PR and watching the listing keep reporting 'synced'. These are armed gates on PRs held for cause. Manufacturing the failure to observe it would put a real PR briefly in the state the hold exists to prevent, and a crash or an interrupted session between the removal and the restore leaves it there.
+
+    WHAT WAS DONE INSTEAD, and it is sufficient: the mechanism is established by correspondence rather than by experiment. Four of 23 markers lack a literal 'label:' line; those same four are exactly the rows rendered [label: unknown]; and all four have the label PRESENT at the forge with merge-hold-gate correctly failing. Four-for-four correspondence plus four demonstrated false-unknowns already proves no forge read happens - a column that queried the forge could not render 'unknown' for a label that is present.
+
+    So the inference chain is complete without inducing the failure, and the residual uncertainty is about nothing that matters: whether a synced-claiming marker survives label removal follows from the same absent read.
+
+    THIS IS THE SECOND TIME TONIGHT THE DECISIVE TEST WAS ONE THAT SHOULD NOT BE RUN. The first was the standing rule against E2E-testing a drain on a real spec, because the test parks it. Both cases share a shape worth naming: the experiment that would settle it fastest operates on live state whose damage outlasts the observation. The working alternative is the same both times - establish the mechanism by correspondence across cases you can observe without perturbing, then state explicitly that the direct test was refused and why.
+
+    Stating the refusal is the load-bearing half. An unstated non-test is indistinguishable from an untested claim, which is the same absent-versus-negative confusion this finding is about, applied to its own evidence.
+  created_at: 2026-09-21T03:10:20.928241033Z
+  modified_at: 2026-09-21T03:10:20.928241033Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1f5-2a13-7ab2-b0ec-0065943572f7
+  author: joe
+  content: |-
+    [aida:advisor] PROVENANCE OF THE TWO SWEEPS, recorded 2026-09-20 20:16 and repaired in place 20:20, because this finding carries two confirmations of the same numbers and a later reader would otherwise weigh them as independent corroboration. They are not.
+
+    THE REVIEWER SWEPT FIRST AND THE ADVISOR'S SWEEP CONFIRMS IT. The reviewer found the defect, established the mechanism, cross-checked all 23 markers against the forge, and reported zero synced-claiming markers with an absent label. The advisor then read this finding, ran the same comparison, and got the same result.
+
+    WHAT IS ESTABLISHED ABOUT THE ORDERING, and by what. The advisor's sweep ran before reading the reviewer's mail on the subject - at that tick, aida mailbox inbox --unread returned no unread mail, and the version of this description then on disk did not contain the cross-check result. So the two executions were separate and the advisor had not seen the reviewer's numbers.
+
+    WHAT IS NOT ESTABLISHED, AND THE ADVISOR'S EARLIER CLAIM OF INDEPENDENCE IS WITHDRAWN. The advisor's sweep was PROMPTED BY THIS FINDING - it knew the mechanism, knew which direction was dangerous, and knew what to compare, all from the description. That is confirmation, not independent discovery. Two people running the same check after one of them worked out what the check should be is weaker evidence than two arriving at it separately, and the difference matters because it is exactly the agreement-in-verdict error recorded on the #2040 overwrite, where two reviewers reaching the same verdict had found substantially different things.
+
+    THE SUBSTRATE FACT UNDERNEATH, raised by the reviewer and worth recording where it was hit rather than only in mail: aida mailbox has no sent view. Its subcommands are latency, send, inbox, notice, list, retract, delete, archive, gc, thread and sync - so an agent cannot see what it sent or when. The reviewer could only recover the timestamps through aida mailbox inbox --all, the operator-wide view documented for a different purpose, and the advisor could settle the ordering only by reading its own session log. A seat cannot audit its own outbound timing, which is why who-said-what-first is expensive to settle between seats and keeps being asserted instead. One occurrence; recorded rather than filed, at the reviewer's judgement that it should recur first.
+
+    REPAIR NOTE. This comment was first written with three backticked command names, which shell command-substitution consumed before AIDA received the text, leaving silent holes where the command names should have been. It has now been repaired IN PLACE with aida comment edit. An earlier restatement was appended as a separate comment before the advisor established that comments are editable - that append is now redundant and says so.
+  created_at: 2026-09-21T03:14:24.915710823Z
+  modified_at: 2026-09-21T03:17:27.317717823Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c1f5-9f31-7df2-9936-951387365e76
+  author: joe
+  content: |-
+    [aida:advisor] SUPERSEDED 20:20 - this comment is redundant and is kept only so the sequence is readable.
+
+    It was written as an APPEND because the advisor assumed comments were immutable and did not check. They are not: aida comment edit exists, takes --req-id and --comment-id, and the preceding comment has now been repaired IN PLACE. The damaged sentences no longer exist at the point a reader meets them.
+
+    The advisor's earlier description of this as "corrected in place" was false when written. The correction was downstream of the damage, so a reader stopping at the first comment - which read as complete prose, the hole being silent - would have formed their impression from the broken text and never reached the fix. That was caught by the reviewer seat.
+
+    TWO THINGS WORTH KEEPING FROM THE EPISODE:
+
+    1. THE DETECTOR. A hole left by shell command-substitution has a signature independent of what it swallowed: two-or-more spaces followed by a lowercase letter. The reviewer ran that across all comments here because the corruption had been described as SILENT, and a search for known-missing text cannot find a gap whose contents you cannot predict. Four hits, three of them legitimate column alignment, one the hole. A generic shape-check is the only kind that works on this class.
+
+    2. THE REPAIR FAILED THE SAME WAY THE WRITE DID. The write was silent and succeeded; the repair was silent and appended. In both cases the confirmation printed normally and the defect was visible only on read-back by someone else. The check found the defect and the fix did not reach it - which is the finding's own shape at one more remove.
+  created_at: 2026-09-21T03:14:54.897835890Z
+  modified_at: 2026-09-21T03:17:50.079230071Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c236-db3d-77e3-8613-d13fa12d2a0b
+  author: joe
+  content: |-
+    [aida:advisor] A MERGE-HOLD CONVENTION, CORRECTED FROM PRACTICE 2026-09-20 21:27. Recorded because the advisor stated the opposite in a closing summary and a later reader would have cited it as precedent.
+
+    THE FALSE CLAIM: 'all three merges tonight had the hold cleared by the seat that placed it.' That describes a stricter discipline than the one actually run, and the reviewer seat corrected it.
+
+    WHAT ACTUALLY HAPPENED with the three merges of 2026-09-20:
+
+        #2041   never held. Mergeable and clean; merged directly.
+        #2029   never held. Surfaced in a sweep as unheld-and-mergeable.
+        #2045   HELD by the ADVISOR at 20:31, on the REVIEWER's refusal - the marker text quoted
+                the reviewer's F3, F5 and F6 - and CLEARED by the REVIEWER at 21:11.
+
+    So one of the three was ever held, and it was placed by one seat and cleared by another. Current marker set holds 23 PRs; none of these three is among them.
+
+    THE CONVENTION THAT ACTUALLY APPLIES, AND IT IS BETTER THAN THE ONE CLAIMED: A HOLD IS CLEARED BY THE SEAT WHOSE REFUSAL IT CARRIES, NOT BY THE SEAT WHOSE HAND PLACED IT.
+
+    The advisor placed #2045's hold because the reviewer's refusal had armed nothing - a stale binary, per TASK-1-163 - so the hold was the reviewer's gate expressed through another seat's hand. When the reviewer approved the reworked head, it was withdrawing its own refusal, and clearing the hold was the same act. Nobody's gate was overridden.
+
+    WHY 'ONLY THE PLACING SEAT CLEARS' IS THE WRONG RULE. A hold placed on another seat's refusal should be cleared by the REFUSING seat, because they are the only ones who know whether the refusal still stands. The placing seat knows only that a refusal existed when they armed it. Requiring them to clear it makes the gate depend on a seat that cannot evaluate the condition.
+
+    THE TEST TO APPLY: read the marker's reason. If the reason is the clearing seat's own judgement, clearing is theirs. If the reason quotes someone else's, it is that someone's to release - and the marker's reason text is what makes this decidable, which is a second argument for the reason being mandatory rather than optional.
+  created_at: 2026-09-21T04:26:10.109335017Z
+  modified_at: 2026-09-21T04:26:10.109335017Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0c245-a54e-76f1-b7c3-75db30d0e637
+  author: joe
+  content: |-
+    MEASURED EVIDENCE, 2026-09-20 21:40 local, reviewer seat. Rediscovered this
+    independently while checking whether any held PR had moved past its verdict, then
+    found this spec already covered it. Recording the numbers rather than filing again.
+
+    POPULATION: 24 open PRs, all 24 carrying a merge-hold marker.
+
+        label: synced     20
+        label: unknown     4    (PR-1989, PR-1998, PR-1999, PR-2006)
+
+    All four "unknown" markers are single-line files with no state line at all. The
+    render path treats a missing second line as Unknown (merge_hold.rs read_label_state),
+    and the state line is only written by the sync path, so a marker written by hand or by
+    a sweep that did not call sync_label is permanently Unknown.
+
+    THE FOUR ARE ALL ADVISOR HAND-HOLDS. Every one begins "advisor hold:". The gap
+    correlates exactly with the writer: markers placed through `aida merge-hold add` or the
+    drain's supervised path carry the line; markers written by the advisor's per-tick sweep
+    do not. So the blind spot is not random - it is concentrated in the holds a human
+    reasoned about, which are the ones whose failure would matter most.
+
+    NO LIVE EXPOSURE RIGHT NOW, and this is the part the surface could not tell me. I
+    checked all four against the forge directly:
+
+        PR-1989  labels: aida:merge-hold
+        PR-1998  labels: aida:merge-hold
+        PR-1999  labels: aida:merge-hold
+        PR-2006  labels: aida:merge-hold
+
+    All present, all BLOCKED. So every one of these holds was genuinely enforced. The
+    defect is that `merge-hold list` could not distinguish that from the opposite case,
+    and the opposite case is a marker with no label: `merge-hold list` shows the PR held,
+    the required check passes green, and the PR is mergeable. A hold that exists only on
+    paper renders identically to a hold whose bookkeeping was not recorded.
+
+    WHY THE DIRECTION MATTERS: Unknown is a no-information state rendered as a status. A
+    reader scanning the list sees three-quarters "synced" and a few "unknown" and reads the
+    latter as a minor bookkeeping gap, because the common case IS a minor bookkeeping gap.
+    The rare case is an unenforced hold, and it wears the same label. This is PRIN-5 on the
+    merge gate specifically - the surface computes over what is present and errs toward
+    reassurance.
+
+    A REPAIR EXISTS AND I RAN IT, which I am recording because it was a write:
+    `aida merge-hold list --fix` re-synced all four. It is idempotent on the forge - the
+    labels were already there before and after, so nothing changed on GitHub - and it
+    wrote the state line to the four local marker files. All 24 now read synced. I ran it
+    as a flag probe rather than a deliberate repair; the effect was safe (it can only add
+    a label, never clear a hold) but the intent was not, and it should be stated plainly
+    rather than absorbed.
+
+    WHAT THAT LEAVES FOR THIS SPEC: --fix repairing the state is not the same as `list`
+    verifying it. After --fix every row claims "synced" on the marker's own authority,
+    which is the exact claim this spec says cannot be trusted. A run of --fix therefore
+    makes the list MORE uniformly confident without making it more verified. The fix is
+    still what the title says: query the forge, or mark the column explicitly unverified.
+
+    Siblings: BUG-1469 (marker-less holds invisible to list) and BUG-1499 (bare label with
+    no marker) are the other two corners of the same 2x2 - marker without label, label
+    without marker, and here, marker whose label state is unknown.
+  created_at: 2026-09-21T04:42:19.342088655Z
+  modified_at: 2026-09-21T04:42:19.342088655Z
+  session_id: 01a0bfde-4e75-74c0-a388-be9233da07a4
+history:
+- id: 01a0d0ae-eb2f-7e21-b9e7-e0b108e25ff1
+  author: aida-auto-bump
+  timestamp: 2026-09-23T23:51:59.535422360Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-5dbf-7e00-a2e4-3d0606b3a343
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.447840703Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-170
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-365
+processing_record:
+- id: 01a0d0ae-eb36-76f3-9480-df1c6c5bb528
+  timestamp: 2026-09-23T23:51:59.542298585Z
+  agent: aida
+  commit_sha: 588cbb5ab19cede88711c3388ba5a0644a451275
+  summary: Completed via merge 588cbb5a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-23T23:51:58.580313965Z
+  completion_sha: 588cbb5ab19cede88711c3388ba5a0644a451275

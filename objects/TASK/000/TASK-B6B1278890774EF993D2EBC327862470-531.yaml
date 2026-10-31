@@ -1,0 +1,58 @@
+id: 01a15a48-4c87-7520-874a-34e7ac4b70a2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-531
+agreed_id: TASK-1655
+title: 'minor (non-blocking, perf): aida-cli-lib/src/requirements_cli.rs:4884 list_driv…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2190, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking, perf): aida-cli-lib/src/requirements_cli.rs:4884 list_driver_map now runs over the pre-focus row set, so a focused list resolves drivers for every in-progress spec in the project; outside --driver filtering, computing it only for focused rows would be enough
+  Reviewed sha: 151f1fd2a97bf165823cb9384b94bc5587230a5e
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T17:07:30.055123281Z
+modified_at: 2026-10-20T18:52:52.485049922Z
+req_type: Task
+tags:
+- carried-from:BUG-2190
+- finding-hash:190815f2
+- from-review:BUG-2190
+- kind:carried-forward
+comments:
+- id: 01a15aa8-a847-7f70-b57c-bd64b8c36b75
+  author: joe
+  content: 'Advisor triage 11:55: folded into sweep TASK-1954. The finding text above is carried there by reference.'
+  created_at: 2026-10-20T18:52:44.999737145Z
+  modified_at: 2026-10-20T18:52:44.999737145Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15a93-899d-7643-999b-c0e004d74392
+  author: joe
+  timestamp: 2026-10-20T18:29:40.893356663Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a15aa8-c585-7470-8a28-afef1b9b45b8
+  author: joe
+  timestamp: 2026-10-20T18:52:52.485047480Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1942b-61ba-7d62-9dc4-80b98dd4aa27
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.466181145Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-384
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-531
+filed_at:
+  code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff

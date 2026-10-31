@@ -1,5 +1,6 @@
 id: 019e0fba-0e8e-74f2-bfce-562c8908ff0b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-160
+agreed_id: TASK-2571
 title: 'Convention: v2/v3 follow-ups must be filed as STORYs, not described in EPIC body'
 description: |
   ## Gap
@@ -59,3 +60,11 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-34 (now resolve to the survivor): 274d7d1751ceb5fbf99319e61b2affd1bdf2c2f4'
+- id: 01a1942b-5b61-78a1-8505-eac5f64c5ce9
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.841628068Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2571

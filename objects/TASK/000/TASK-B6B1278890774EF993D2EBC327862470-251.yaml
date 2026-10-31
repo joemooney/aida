@@ -1,5 +1,6 @@
 id: 019e467f-f4fb-7cd3-8e14-2a09d6f9afea
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-251
+agreed_id: TASK-2577
 title: 'aida-pickup.md + aida-pr.md: replace hand-written State preamble blocks with aida state-snapshot calls'
 description: |-
   TASK-391 shipped the deterministic `aida state-snapshot --spec <SPEC-ID>` command but did not migrate the six finish-state templates in aida-core/templates/skills/aida-pickup.md (orchestrator / batch / cluster-drained / cluster-partial / simple-more / simple-empty) or the one in aida-pr.md (orchestrator-mode) to call it.
@@ -51,6 +52,14 @@ history:
   - field_name: renumber_commit_refs
     old_value: ''
     new_value: 'origin/main commits citing TASK-415 (now resolve to the survivor): 8b0757c91b95d17d607e5f237843c16d97ebe01a'
+- id: 01a1942b-5b62-7312-8dc9-8f74da684d18
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:51.842907621Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2577
 implementation_info:
   implemented: false
   completed_at: 2026-06-05T06:01:01.551505677Z

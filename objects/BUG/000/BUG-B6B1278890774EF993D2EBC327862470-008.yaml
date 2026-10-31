@@ -1,5 +1,6 @@
 id: 01a18167-0785-7182-8c73-371c9daf93c0
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-008
+agreed_id: BUG-2325
 title: aida show breaches the 5s ceiling again on live e33bf32 (34.8s worst; linkage.content costs ~3s per call; contention burst stalls notice/lookup)
 description: |-
   performance-guard trip 2026-10-28 (24h window): show over 1s budget on 39/162 calls (24%, tolerance 10%), worst 34821 ms, ceiling 5000 ms breached. Binary e33bf32234 (after BUG-2221).
@@ -66,6 +67,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65de-7203-a595-95b8188ff545
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.526810093Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2325
 processing_record:
 - id: 01a181e9-bdda-7290-982d-51ba92d574e3
   timestamp: 2026-10-28T09:49:01.786217310Z

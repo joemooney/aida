@@ -1,5 +1,6 @@
 id: 01a18903-2618-7141-b4af-0a03ff5c1597
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-114
+agreed_id: TASK-2527
 title: 'cosmetic: docs/showcase/index.html:26 aria-label on a role-less <div class=hero…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-101, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1942b-69f0-7820-a9ff-7147ac299f3c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.568887371Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2527
 filed_at:
   code_sha: 8c0adc8fe0776cdc8eb53eb7061cbc65c5302682
   branch: main

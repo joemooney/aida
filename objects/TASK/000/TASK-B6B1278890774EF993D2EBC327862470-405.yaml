@@ -1,0 +1,90 @@
+id: 01a10f67-93cf-7df1-868c-d7e0cfafe253
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-405
+agreed_id: TASK-1327
+title: Investigate reported silent exit-zero reconstitution probes on aida-monitor
+description: TASK-1-216 now preserves missing/invalid probe-output failures even with zero criterion-traced tests, and includes artifact/log paths. The original observation of four ~1s aida-monitor runs with zero-byte headless logs is not explained by this report-layer fix. spawn_vendor_headless_with_seat intentionally returns the process ExitStatus; no live vendor run was performed during this implementation. After rebuilding, use the retained failure reason/log path to investigate vendor/runtime configuration and retry the TASK-1523 measurement. Do not infer that exit code 0 alone establishes probe success.
+status: Completed
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T04:10:08.719084873Z
+modified_at: 2026-10-06T13:17:23.757662112Z
+req_type: Task
+tags:
+- from-advisor:TASK-1-216
+- kind:observation
+- linked:TASK-1-216
+- linked:TASK-1523
+- severity:minor
+relationships:
+- rel_type: Blocks
+  target_id: 01a0deff-ff18-7be3-91e4-382e8b28c388
+  created_at: 2026-10-06T04:12:33.236501509Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1100d-d1f0-7472-bbed-1ee985a2fe3e
+  created_at: 2026-10-06T07:11:48.145658600Z
+  created_by: joe
+comments:
+- id: 01a10ffc-98e9-7c23-a47d-4af6dc1a6076
+  author: joe
+  content: 'Investigation complete: rebuilt live STORY-3 retry exposes no valid parent seat grant is active before vendor spawn. Empty scratch cwd cannot resolve team roster; exec tracing confirms no vendor launch in the reproduced run. Added unconditional stderr failure diagnostic and pinned investigation docs. Filed TASK-1-224 for authority/config-root repair requiring sketch/sign-off. TASK-1523 remains independently blocked by STORY-1527. Validation: all 17 reconstitution unit tests pass, cargo fmt --all -- --check and git diff --check pass. Orchestrator owns subsequent review/merge.'
+  created_at: 2026-10-06T06:52:54.889867810Z
+  modified_at: 2026-10-06T06:52:54.889867810Z
+history:
+- id: 01a10f69-a925-7f92-ba2a-f4ad9aa4e497
+  author: joe
+  timestamp: 2026-10-06T04:12:25.253674272Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a10ff6-f85e-77d2-9ffb-65dedde2638b
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T06:46:46.110307061Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a10ffc-4e96-7543-bf26-3da303495a42
+  author: joe
+  timestamp: 2026-10-06T06:52:35.862959713Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1115c-9997-7bb2-8c97-ffd46fec6b01
+  author: aida-auto-bump
+  timestamp: 2026-10-06T13:17:23.735681319Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+- id: 01a1942b-5ee1-79c2-bb0d-b9fc5ddae43f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.737633675Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-219
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-405
+processing_record:
+- id: 01a1115c-99ad-74e2-ad08-23e750d93fd0
+  timestamp: 2026-10-06T13:17:23.757660872Z
+  agent: aida
+  commit_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
+  summary: Completed via merge cd1aa538
+filed_at:
+  code_sha: 9ec89b97b6a9066893618f26fa23c180dc1c912c
+  branch: task-1-216
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-06T06:52:35.842283091Z
+  implemented_by: joe
+  completed_at: 2026-10-06T13:17:23.735653632Z
+  completion_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56

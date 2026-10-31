@@ -1,5 +1,6 @@
 id: 01a182d2-2b67-7032-bdcc-385bcd0df3e5
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-054
+agreed_id: STORY-2094
 title: 'Review PR-3040: [AI:claude] feat(mailbox): STORY-1843 D2a relay run lifetime (Refs STORY-1843)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1843-d2-relay-mail`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6706-7a40-9dec-e79ba43af70b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.822777723Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2094
 filed_at:
   code_sha: c6c33cc1a6683ad45f3d9bfea513465b7fdafa56
   branch: story-1843-d2-relay-mail

@@ -1,5 +1,6 @@
 id: 01a191a8-f19b-77b1-92fc-dda6a7f1ea6b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-152
+agreed_id: STORY-2192
 title: 'Review PR-3162: [AI:claude] fix(ship): a PR-title trailer completes only a spec the PR covers (BUG-B6B1278890774EF993D2EBC327862470-048)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19166`) for branch `bug-b6b1278890774ef993d2ebc327862470-048`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c3d-76f1-b254-506bd1a83155
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.157245179Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2192
 filed_at:
   code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
   branch: main

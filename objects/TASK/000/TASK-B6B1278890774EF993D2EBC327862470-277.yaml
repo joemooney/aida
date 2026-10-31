@@ -1,5 +1,6 @@
 id: 01a19409-85c6-7620-b7df-c31b4cc8ca09
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-277
+agreed_id: TASK-2603
 title: Publish the air-gapped development explainer on the product website
 description: |
   ## Why
@@ -83,6 +84,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1942b-6c54-7112-930b-3f196e02ccb5
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.180767390Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2603
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main

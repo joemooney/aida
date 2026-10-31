@@ -1,5 +1,6 @@
 id: 01a1842a-32c9-7df3-ad72-1feb450249c1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-075
+agreed_id: TASK-2488
 title: 'PR-3062 follow-up: torn era-marker aside must not resolve as a bare admin name; atomic write_source_id'
 description: |
   Non-blocking finding from the APPROVED review of PR #3062 (TASK-b6b1278890774ef993d2ebc327862470-072) at c677f7f45156. ADVISOR RULING: a non-JSON aside body is accepted as a bare admin name only if it is a valid single path component (no slash, no NUL, non-empty, at most 255 bytes, no brace or quote, i.e. not a JSON fragment). Anything else is reported as corrupt and never removed or restored automatically. Make write_source_id atomic (temp + fsync + rename/link). Add a test for a torn aside.
@@ -63,6 +64,14 @@ history:
   timestamp: 2026-10-28T23:14:52.185675632Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67ce-72f0-93f2-b4249c5e3dbb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.022850620Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2488
 processing_record:
 - id: 01a1847e-7755-79b3-8aa0-a7e9f7a58f6e
   timestamp: 2026-10-28T21:50:43.029093984Z

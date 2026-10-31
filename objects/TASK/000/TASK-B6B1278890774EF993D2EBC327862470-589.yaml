@@ -1,0 +1,61 @@
+id: 01a16948-9886-7422-bbca-cf910f29dda5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-589
+agreed_id: TASK-1711
+title: 'minor (non-blocking): root CLAUDE.md:41 still lists ''make check-ci-compile # af…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2209, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): root CLAUDE.md:41 still lists 'make check-ci-compile # after merging main into a branch' as unconditional, contradicting the new conditional rule (shared test infra or >10 files). Outside the spec's named scope (skills + discipline docs) but it is the always-loaded guide.
+  Reviewed sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:02:07.750685206Z
+modified_at: 2026-10-23T15:55:26.293409607Z
+req_type: Task
+tags:
+- carried-from:TASK-2209
+- finding-hash:afa2eba4
+- from-review:TASK-2209
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16976-a882-78c2-b263-66f12497408a
+  created_at: 2026-10-23T15:55:26.293406524Z
+  created_by: joe
+history:
+- id: 01a16953-b6b0-74f0-8735-5a7eb246911d
+  author: joe
+  timestamp: 2026-10-23T15:14:16.368781466Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a16979-5ec8-74c0-a9d4-7ebb89e439ac
+  author: joe
+  timestamp: 2026-10-23T15:55:24.232845381Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a16979-6beb-7033-b8fa-a43c023d3d0a
+  author: joe
+  timestamp: 2026-10-23T15:55:27.595497361Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1942b-6292-7221-9fa6-52d71b4aab8a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.682380029Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-442
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-589
+filed_at:
+  code_sha: fce1463450fffaa7324261e6305463a58be10b95
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f

@@ -1,5 +1,6 @@
 id: 01a188ce-661e-7481-9abd-d129e2f06ae4
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-084
+agreed_id: STORY-2124
 title: 'Review PR-3093: [AI:codex] docs(overview): explain selectable autonomy (TASK-B6B1278890774EF993D2EBC327862470-100)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a188c9`) for branch `task-b6b1278890774ef993d2ebc327862470-100-work`.
@@ -47,6 +48,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-69cc-7c22-80f3-c66fa18db8f6
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.532548943Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2124
 filed_at:
   code_sha: 9bb1164fe1e9184967770694cb1a32c53e707d72
   branch: task-b6b1278890774ef993d2ebc327862470-100-work

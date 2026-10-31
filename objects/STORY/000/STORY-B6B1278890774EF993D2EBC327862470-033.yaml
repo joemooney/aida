@@ -1,5 +1,6 @@
 id: 01a1802d-2136-77b2-894b-8bbc5ca9934b
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-033
+agreed_id: STORY-2073
 title: 'Review PR-2998: [AI:claude] fix(trace): brace scanner follow-ups (TASK-b6b1278890774ef993d2ebc327862470-016, TASK-b6b1278890774ef993d2ebc327862470-017, TASK-b6b1278890774ef993d2ebc327862470-018)'
 description: Hand-filed review story.
 status: Completed
@@ -33,6 +34,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65c4-7742-a046-6913ade92a7b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.500401889Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2073
 filed_at:
   code_sha: a35bc40b8929a58c0555c853821d5e25b91d5fe6
   branch: main

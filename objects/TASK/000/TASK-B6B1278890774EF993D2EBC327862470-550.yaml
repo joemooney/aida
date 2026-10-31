@@ -1,0 +1,60 @@
+id: 01a15ee8-0ba6-7d03-9dc0-dce8598bfe89
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-550
+agreed_id: TASK-1673
+title: 'non-blocking/minor: review_record_template uses only the first covered spec (pr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2187, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: review_record_template uses only the first covered spec (pr_spec_ids.first()); a multi-spec PR gets a recovery command naming one spec — aida-cli-lib/src/reviewer_summary.rs review_record_template
+  Reviewed sha: 09c3c45729d015f113ecd888916eeb8b1deb01fe
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T14:40:28.070179264Z
+modified_at: 2026-10-21T14:48:18.575323189Z
+req_type: Task
+tags:
+- carried-from:BUG-2187
+- finding-hash:48e3e4b8
+- from-review:BUG-2187
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-21T14:48:18.575319722Z
+  created_by: joe
+history:
+- id: 01a15eef-3453-7041-99d6-7b35429d067f
+  author: joe
+  timestamp: 2026-10-21T14:48:17.235418871Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15eef-3e84-7f83-a472-a6dc4b2814b9
+  author: joe
+  timestamp: 2026-10-21T14:48:19.844460179Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f32-bfc7-70f0-aec7-c23db746600f
+  author: joe
+  timestamp: 2026-10-21T16:02:03.847499331Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6213-7da3-8dd3-79e5e75d07ac
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.555344907Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-403
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-550
+filed_at:
+  code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cc97d963b
+  vendor: claude

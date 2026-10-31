@@ -1,5 +1,6 @@
 id: 01a19328-1e08-7a40-b06c-a8a6d1475df5
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-163
+agreed_id: STORY-2203
 title: 'Review PR-3172: [AI:claude] feat(deputy): failed jobs in awaiting, result mail, pause/resume, stop at grant or mandate end (STORY-B6B1278890774EF993D2EBC327862470-155)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a19304`) for branch `story-b6b1278890774ef993d2ebc327862470-155`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6c4a-7d73-a274-7660bcb5624a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.170181936Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2203
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main

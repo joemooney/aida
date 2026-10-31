@@ -1,5 +1,6 @@
 id: 01a188d2-a61b-7112-a426-2b5b5571ce37
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-017
+agreed_id: BUG-2334
 title: 'GitLab release build fails: builder image lacks arm64 libc headers for the aarch64 cross target'
 description: |
   ## Problem
@@ -109,6 +110,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1942b-69cd-74a0-94ed-2e885bbcf4fb
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.533016191Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2334
 processing_record:
 - id: 01a18918-d86b-79d1-905b-67226d53f24e
   timestamp: 2026-10-29T19:17:49.291921601Z

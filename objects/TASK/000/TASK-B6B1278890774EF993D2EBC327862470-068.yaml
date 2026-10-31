@@ -1,5 +1,6 @@
 id: 01a183dc-be93-75c1-b7db-ab8b095fc414
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-068
+agreed_id: TASK-2481
 title: '[minor] mod.rs:647 drop_stale_era_marker: remove_file(&aside)? fails on NotFoun…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T23:13:19.800055321Z
   session_id: 7b875ef6-5970-4f7c-9187-3491563af968
   changes: []
+- id: 01a1942b-67b4-7d81-a1f3-7886b5a05013
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.996205232Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2481
 filed_at:
   code_sha: fbc835fcf4858f96b699e4c9871b204db13d88a2
   branch: main

@@ -1,5 +1,6 @@
 id: 01a189d8-a9a8-75d1-aae7-bbdd1a230a49
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-095
+agreed_id: STORY-2135
 title: 'Hierarchical block delegation: upstream nodes dispense ID blocks to downstream nodes via push/pull'
 description: |-
   ## Problem
@@ -235,6 +236,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1942b-6a16-70c2-a34f-ef66ff77c816
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.606865823Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2135
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main

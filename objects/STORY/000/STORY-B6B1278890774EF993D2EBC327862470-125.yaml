@@ -1,5 +1,6 @@
 id: 01a18d15-3381-7c12-93f6-5ed1a86d353d
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-125
+agreed_id: STORY-2165
 title: 'Review PR-3136: [AI:claude] fix(queue): rework lanes continue the spec''s held PR instead of forking a new branch (BUG-b6b1278890774ef993d2ebc327862470-022)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-022`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b86-76e0-ac6f-a6fba7cc4356
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.974805627Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2165
 filed_at:
   code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
   branch: main

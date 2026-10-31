@@ -1,5 +1,6 @@
 id: 01a17f97-2791-77d0-b63f-c07eac739556
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-019
+agreed_id: TASK-2432
 title: 'Non-blocking (minor): criteria.rs extract_fn_source (~line 450) and scan_braced…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-012, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -46,6 +47,14 @@ history:
   timestamp: 2026-10-28T00:55:28.410550349Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
   changes: []
+- id: 01a1942b-65b7-77b2-aac7-891c63302f99
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.487009417Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2432
 filed_at:
   code_sha: 56d730c9922ce85b6b463d9789d8bae0ba215f27
   branch: main

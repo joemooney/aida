@@ -1,5 +1,6 @@
 id: 01a18afe-5265-7ca3-872d-c0c6563ac05c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-122
+agreed_id: TASK-2535
 title: Refresh Devin/Cognition entries in docs/competitive-analysis/marketplace-roster.md from 2026-10-29 research (Devin Desktop/ACP, Managed Devins, single-writer stance, Security Profiles/Outposts, memory
 description: ''
 status: Completed
@@ -38,6 +39,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6ac1-7d61-8b96-369942afc85a
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.777082530Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2535
 processing_record:
 - id: 01a18ba2-c4df-7f50-8509-0fc64d00129b
   timestamp: 2026-10-30T07:07:42.687635498Z

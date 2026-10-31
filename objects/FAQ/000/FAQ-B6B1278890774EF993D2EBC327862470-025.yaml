@@ -1,0 +1,59 @@
+id: 01a1270e-3a1c-76e2-884e-3e5b4a0933f7
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-025
+agreed_id: FAQ-28
+title: How do I watch a batch relay session in a human-readable form instead of raw JSON?
+description: |
+  **A batch relay prints raw stream-json, so don't read the relay's own terminal. Follow its session log through a jq renderer in a second terminal.**
+
+  ## How
+  ```bash
+  tail -n +1 -f "$(ls -t <project>/.aida/relay-sessions/session_*.log | head -1)" \
+    | jq --unbuffered -rR -f ~/ai/aida-advisor-tools/relay-view.jq
+  ```
+  This shows one line per agent message (💬), per tool call (→), for each subagent start/finish (⇢/⇠), and the turns and cost at the end of each session. The raw log is unchanged, because the relay's telemetry reads it.
+
+  ## Caveat
+  `tail -f` follows ONE session file. When the relay rotates to a new session, run the command again.
+
+  ## Why
+  In batch mode the relay runs `claude -p --output-format stream-json | tee <log>`. Typically only a few percent of the events are agent text; the rest are tool calls and results, thinking, progress ticks and hook messages.
+
+  ## See also
+  aida-relay STORY-80 (render a human view on a TTY automatically), FAQ "How does claude_relay.sh fit with AIDA's drain, burndown and orchestrate…"
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:23:26.236569195Z
+modified_at: 2026-10-10T18:48:06.085961081Z
+req_type: Faq
+tags:
+- audience:user
+- topic:relay
+history:
+- id: 01a12724-cec5-7f40-a19c-dcf8cd6753d5
+  author: joe
+  timestamp: 2026-10-10T18:48:06.085953219Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 01a1942b-5fab-7f12-a80d-75527bd6d405
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.939760800Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: FAQ-1-255
+    new_value: FAQ-b6b1278890774ef993d2ebc327862470-025
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T18:48:06.085941846Z

@@ -1,5 +1,6 @@
 id: 01a18c0f-2ead-7240-b5ab-c0db948821df
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-118
+agreed_id: STORY-2158
 title: 'Review PR-3129: [AI:claude] feat(agent): per-agent Codex mail wake, slice 2 - agent new arms it, end/gc retire it (STORY-B6B1278890774EF993D2EBC327862470-096)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-096`.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6b54-77c2-8bd3-b6bb2743015f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.924417094Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2158
 filed_at:
   code_sha: 142905fe98530ed6d96f5ba16d4a13240ec8342e
   branch: main

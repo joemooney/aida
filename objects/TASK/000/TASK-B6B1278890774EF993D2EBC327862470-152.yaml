@@ -1,5 +1,6 @@
 id: 01a19299-2949-77f2-802b-f9fa90066054
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-152
+agreed_id: TASK-2563
 title: 'cosmetic (non-blocking): DEFAULT_PRESERVE (aida-cli-lib/src/doctor_renumber.rs:…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-046, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -42,6 +43,14 @@ history:
   timestamp: 2026-10-31T15:55:19.400271027Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a1942b-6c47-7232-a8b5-7b668df5a289
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.167287144Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2563
 filed_at:
   code_sha: d12cca28a61c8f00c7d30cb4a4cafc7e3566104b
   branch: main

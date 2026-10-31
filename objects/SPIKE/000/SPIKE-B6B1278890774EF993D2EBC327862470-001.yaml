@@ -1,5 +1,6 @@
 id: 01a180d4-e3a4-7211-af5a-14b5c9329c05
 spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-001
+agreed_id: SPIKE-705
 title: Evaluate splitting aida-core (or proprietary core crate) into a private repo with public-repo GitHub Actions CI
 description: |
   ## Context
@@ -77,6 +78,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-65c6-7b92-8c92-60e19aac7f7b
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.502425680Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: SPIKE-705
 processing_record:
 - id: 01a18198-f2e4-7362-9e67-b1f2a0d0074f
   timestamp: 2026-10-28T08:20:46.948166340Z

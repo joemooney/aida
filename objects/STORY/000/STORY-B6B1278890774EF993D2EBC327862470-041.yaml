@@ -1,5 +1,6 @@
 id: 01a1819f-3e48-7b01-9e08-6c45da1f19d4
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-041
+agreed_id: STORY-2081
 title: 'Review PR-3014: [AI:claude] fix(review): ignore local excludes when classifying tracked paths (BUG-b6b1278890774ef993d2ebc327862470-009)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/intermediate-local-exclude`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-6628-7281-a866-9955faf94a8f
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.600766803Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2081
 filed_at:
   code_sha: e053325a06bb4f796fab0fb8cb6b2eb145593a66
   branch: fix/intermediate-local-exclude

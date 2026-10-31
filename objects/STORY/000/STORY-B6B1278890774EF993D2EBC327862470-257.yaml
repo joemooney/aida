@@ -1,5 +1,6 @@
 id: 01a1940b-4f21-7da3-86c4-18335c0a304c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-257
+agreed_id: STORY-2216
 title: 'Review PR-3177: [AI:claude] fix(rework): a brief newer than the last verdict leads the pickup; a PR conflicting with main is the first task (BUG-B6B1278890774EF993D2EBC327862470-057)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a193e8`) for branch `bug-b6b1278890774ef993d2ebc327862470-057`.
@@ -48,6 +49,14 @@ history:
   session_id: 01a193e80c9b
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1942b-6c56-7bc0-8b0c-f9d3833000b7
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.182822563Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2216
 filed_at:
   code_sha: 86cddcee3197c0b5b140ee2d48121ddd9be8f4e0
   branch: bug-b6b1278890774ef993d2ebc327862470-057

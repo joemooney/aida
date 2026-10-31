@@ -1,5 +1,6 @@
 id: 01a190a4-b7c1-7113-9136-8c024301ab73
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-142
+agreed_id: TASK-2553
 title: 'minor (non-blocking): awaiting_seat_jobs (maintenance_schedule.rs:1910) now put…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-133, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -82,6 +83,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6c37-7861-a780-1e7bdaafe635
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:56.151289827Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2553
 processing_record:
 - id: 01a1919f-2627-73c1-98c7-a5b53394c295
   timestamp: 2026-10-31T11:01:28.743597567Z

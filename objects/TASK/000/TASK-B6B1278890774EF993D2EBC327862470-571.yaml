@@ -1,0 +1,60 @@
+id: 01a161fe-d1d7-74c1-9cb0-84730ad31eab
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-571
+agreed_id: TASK-1696
+title: 'major (non-blocking): mandate_drive.rs PerMandate::dispatch_epoch closes an epo…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1915, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  major (non-blocking): mandate_drive.rs PerMandate::dispatch_epoch closes an epoch when no owner appears within DISPATCH_STALE (2h) of routed_at, but routed_at is the advisor due-mail time, not a fixer dispatch. An approved spec the advisor deliberately leaves unqueued is re-routed (new approved#n item + advisor mail) every ~2h while an advisor is live; with 15 approved specs that is ~10 mails per 2h. Consider closing on owned_since_route only, or backing off the stale window per epoch.
+  Reviewed sha: d37d96a02474a04e467a08bbee38a0aa13764bcf
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T05:04:12.247180883Z
+modified_at: 2026-10-22T05:05:00.652874513Z
+req_type: Task
+tags:
+- carried-from:TASK-1915
+- finding-hash:bdd48065
+- from-review:TASK-1915
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-22T05:05:00.652870872Z
+  created_by: joe
+history:
+- id: 01a161ff-86cd-7d01-9836-92bf305c4a4f
+  author: joe
+  timestamp: 2026-10-22T05:04:58.573982189Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a161ff-95aa-7252-850c-36b6cc1e2305
+  author: joe
+  timestamp: 2026-10-22T05:05:02.378318606Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1626d-6e4c-7a00-806e-2be889d9a6d9
+  author: joe
+  timestamp: 2026-10-22T07:05:01.260805380Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6247-7062-b453-40d49f29a3e0
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.607034912Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-424
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-571
+filed_at:
+  code_sha: 0f68094ad31c0db35673029cb338cb007054d624
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c540b90955
+  vendor: claude

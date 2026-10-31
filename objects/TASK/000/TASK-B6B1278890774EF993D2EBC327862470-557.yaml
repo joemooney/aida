@@ -1,0 +1,60 @@
+id: 01a15f80-7f05-7500-923b-a2ebce26c8c5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-557
+agreed_id: TASK-1679
+title: 'minor: stale-overlap notice is addressed to the forge login (review_watch_forge…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: stale-overlap notice is addressed to the forge login (review_watch_forge.rs:409-415, review_watch.rs:952 Recipient::Agent(change.author)); mailbox addressed_to is an exact match on the AIDA identity, so where forge logins differ from AIDA identities (this repo: joemooney vs joe/seat names) the notice likely reaches no inbox and the stale PR stalls silently. Consider mapping forge author to an AIDA identity or copying the advisor.
+  Reviewed sha: f737aabdb43e0d811a44e67d028950895e1d9f34
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T17:26:59.077511890Z
+modified_at: 2026-10-21T17:34:06.425821799Z
+req_type: Task
+tags:
+- carried-from:TASK-1993
+- finding-hash:ee596ca7
+- from-review:TASK-1993
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-21T17:34:06.425818447Z
+  created_by: joe
+history:
+- id: 01a15f86-facc-7192-ac14-8177a38ea072
+  author: joe
+  timestamp: 2026-10-21T17:34:03.980737610Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15f87-0983-7750-a7c9-17494676784a
+  author: joe
+  timestamp: 2026-10-21T17:34:07.747606219Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f8c-042a-7752-81df-b0f638ca4241
+  author: joe
+  timestamp: 2026-10-21T17:39:34.058495789Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-622f-7532-a016-8392c1826d93
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.583442808Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-410
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-557
+filed_at:
+  code_sha: 98d19dceb3af3acaf538f2cfe952677c200fad0c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude

@@ -1,0 +1,55 @@
+id: 01a0e823-22d5-72d3-a91d-89a5fe0fb10b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-374
+agreed_id: TASK-203
+title: 'PR blocker shared with TASK-1547 at aida-cli-lib/src/doctor_cmd.rs:5865-5881: s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1556, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  PR blocker shared with TASK-1547 at aida-cli-lib/src/doctor_cmd.rs:5865-5881: store repair can operate on a standalone .aida-store repository or a non-aida-store branch because the root-only guard never validates canonical attachment/branch. Keep this spec RequestChanges until the PR rework fixes and re-tests that shared commit path.
+
+  PR: #2243
+  Reviewed sha: c4ea3c9038c84ec8a04a2089035d3272e6d883ec
+status: Rejected
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-28T13:10:11.925224781Z
+modified_at: 2026-09-28T13:37:38.114152157Z
+req_type: Task
+tags:
+- carried-from:TASK-1556
+- finding-hash:138343bb
+- from-review:PR-2243
+- kind:carried-forward
+comments:
+- id: 01a0e83c-00c0-74f3-ae17-06ff56da41ef
+  author: joe
+  content: |-
+    Rejected as a DUPLICATE of TASK-202, not as an invalid finding — both describe the SAME defect at the SAME lines.
+
+    TASK-202 (carried from TASK-1547) and this spec (carried from TASK-1556) both land on aida-cli-lib/src/doctor_cmd.rs:5865-5881: the store-repair guard validates a canonical .aida-store path, a .git file, distinct git-dir/common-dir and branch `aida-store`, but never checks that the common-dir belongs to THIS project — so a foreign user repository linked at .aida-store on an `aida-store` branch passes, and the healer appends and commits into it. This spec's own text says "PR blocker shared with TASK-1547".
+
+    TASK-202 is the surviving spec: it names both the fix (compare canonical git common-dir with the main project) and the missing test (a foreign-linked-worktree rejection fixture). Kept and approved there.
+
+    The RequestChanges instruction in this spec's body is moot: PR #2243 is already merged and TASK-1547/TASK-1556 are both completed, which is why the finding was carried forward rather than blocking.
+
+    Triaged by the advisor seat under the operator's 2026-09-28 emergency burndown authorization.
+  created_at: 2026-09-28T13:37:21.600276623Z
+  modified_at: 2026-09-28T13:37:21.600276623Z
+  session_id: a5a527f3-5c70-4d4d-a90c-22ec47246f13
+history:
+- id: 01a0e83c-4142-7651-8865-f0cfb92928eb
+  author: joe
+  timestamp: 2026-09-28T13:37:38.114150435Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+- id: 01a1942b-5e45-7dc3-a7a0-8c7a0eb88f99
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:52.581736092Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-184
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-374

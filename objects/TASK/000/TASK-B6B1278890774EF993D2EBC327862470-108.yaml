@@ -1,5 +1,6 @@
 id: 01a188d9-846e-7f72-900e-ae0ec12bd056
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-108
+agreed_id: TASK-2521
 title: Explain the human agent lifecycle and durable data layers
 description: |
   Slice 3 of 8 for the product documentation/showcase epic.
@@ -180,6 +181,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1942b-69d1-7f73-879d-ed17bc0547c8
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:55.537521840Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2521
 processing_record:
 - id: 01a18e17-883b-7d42-8c83-77a5b533d09b
   timestamp: 2026-10-30T18:34:29.307370623Z

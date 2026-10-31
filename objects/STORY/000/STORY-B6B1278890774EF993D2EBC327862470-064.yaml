@@ -1,5 +1,6 @@
 id: 01a183e4-1b0d-7ae3-a209-c68e4f6a7c54
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-064
+agreed_id: STORY-2104
 title: 'Review PR-3058: [AI:claude] fix(mailbox): drop era markers under the Lifecycle lock (TASK-b6b1278890774ef993d2ebc327862470-067)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/mailbox-era-marker-drop`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1942b-67b7-7012-8cae-0b2916bb4708
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.999835842Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2104
 filed_at:
   code_sha: a93c4aa6387997d2dca334025be1be9cba6f80f1
   branch: fix/mailbox-era-marker-drop

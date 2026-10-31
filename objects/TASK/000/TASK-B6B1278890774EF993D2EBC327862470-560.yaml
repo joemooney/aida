@@ -1,0 +1,60 @@
+id: 01a15f80-a66b-72f0-80ad-cbf9cbe7ef6b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-560
+agreed_id: TASK-1682
+title: 'minor: probe refs refs/aida/review-watch/<uuid>/{base,head} leak if the watcher…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: probe refs refs/aida/review-watch/<uuid>/{base,head} leak if the watcher is killed between fetch and update-ref -d (review_watch_forge.rs:302-355); no sweep of stale refs exists.
+  Reviewed sha: f737aabdb43e0d811a44e67d028950895e1d9f34
+status: Superseded
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T17:27:09.163168968Z
+modified_at: 2026-10-21T17:35:25.181475911Z
+req_type: Task
+tags:
+- carried-from:TASK-1993
+- finding-hash:15ec1031
+- from-review:TASK-1993
+- kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-21T17:35:25.181470790Z
+  created_by: joe
+history:
+- id: 01a15f88-2d31-74e1-a5b1-6e86eb02b8ac
+  author: joe
+  timestamp: 2026-10-21T17:35:22.417316352Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a15f88-404e-77b2-ab6f-0a1ac837d9e3
+  author: joe
+  timestamp: 2026-10-21T17:35:27.310260895Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f8c-0480-78a0-a192-bda98e9b9808
+  author: joe
+  timestamp: 2026-10-21T17:39:34.144796726Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1942b-6242-7c22-871b-10f357740ff1
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:53.602223168Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: spec_id
+    old_value: TASK-1-413
+    new_value: TASK-b6b1278890774ef993d2ebc327862470-560
+filed_at:
+  code_sha: 98d19dceb3af3acaf538f2cfe952677c200fad0c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude

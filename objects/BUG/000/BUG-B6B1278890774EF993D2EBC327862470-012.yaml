@@ -1,5 +1,6 @@
 id: 01a1836d-fb6c-72a3-b624-bb740d2ca5e9
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-012
+agreed_id: BUG-2329
 title: 'dispatch impl/take refuse every launch: occupancy scan parses .activity.toml/.manifest.toml companions as session leases'
 description: |
   Every `aida dispatch request impl|take` launch is refused on this repo. dispatch.rs (~line 1900, the worktree occupancy check) reads EVERY `*.toml` in `.aida/sessions/` as a SessionLease and returns "unknown occupant: malformed session lease" when parsing fails. The `<id>.activity.toml` and `<id>.manifest.toml` companions (158 activity sidecars here) never parse as leases. Evidence: STORY-1917 demo step 7, request 15d8853b (impl demo-lane), executed by the scheduler tick and refused with "cannot launch impl lane `demo-lane` (STORY-1917): unknown occupant: malformed session lease /home/joe/ai/aida/.aida/sessions/01a12b1c7882.activity.toml". leases.rs already has the correct rule: `is_session_lease_file` (STORY-1429/BUG-114). Acceptance: the dispatch occupancy scan filters with `leases::is_session_lease_file`, so companions and staging files are skipped. A real lease that is unreadable or malformed still fails closed. Regression test: a sessions dir holding an activity.toml and a manifest.toml next to a valid lease admits, and a corrupt `<id>.toml` refuses. Grep for any other `.aida/sessions` scanner with the same `extension() == "toml"` pattern and fix it the same way.
@@ -70,6 +71,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
+- id: 01a1942b-6749-7341-95c7-2e7363842a6e
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.889262884Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: BUG-2329
 processing_record:
 - id: 01a183ca-7e64-7c21-9a6a-7422099c9e2c
   timestamp: 2026-10-28T18:34:08.356069861Z

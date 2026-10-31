@@ -1,5 +1,6 @@
 id: 01a18394-9b59-7b30-99c3-a647284bde6c
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-062
+agreed_id: STORY-2102
 title: 'Review PR-3052: [AI:claude] fix(dispatch): skip lease companions in the occupancy scan (BUG-b6b1278890774ef993d2ebc327862470-012)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `fix/dispatch-lease-scan`.
@@ -50,6 +51,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6775-7d90-bf13-8db469b2203c
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.933494345Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: STORY-2102
 filed_at:
   code_sha: f3cda469f7b86269444c981d620f9881eb46be0a
   branch: main

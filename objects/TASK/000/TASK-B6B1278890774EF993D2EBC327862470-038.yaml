@@ -1,5 +1,6 @@
 id: 01a18240-0d15-7df1-9c3e-8bd58d04fa9b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-038
+agreed_id: TASK-2451
 title: 'cosmetic: aida-core/src/db/cached_git_backend.rs:332 — the incomplete-scan warn…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-029, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -48,6 +49,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1942b-6689-7742-b2da-94412350faef
+  author: aida-backfill-agreed-ids
+  timestamp: 2026-10-31T22:53:54.697500981Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: agreed_id
+    old_value: ''
+    new_value: TASK-2451
 processing_record:
 - id: 01a18271-2856-7590-8039-1c34c6a0ff44
   timestamp: 2026-10-28T12:16:56.406227153Z
