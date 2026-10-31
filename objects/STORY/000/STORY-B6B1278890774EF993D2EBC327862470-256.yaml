@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-10-31T23:34:33.192118314Z
+modified_at: 2026-10-31T23:36:55.104938675Z
 req_type: Story
 tags:
 - agent-new
@@ -81,6 +81,33 @@ comments:
   created_at: 2026-10-31T22:25:28.390828284Z
   modified_at: 2026-10-31T22:25:28.390828284Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a19452-c640-78e1-a644-827854c25c4c
+  author: joe
+  content: |-
+    ## Implementer approach (builds the signed-off sketch + 15:27 rulings)
+
+    ### Acceptance criteria as tests
+    - **(1) command-level PTY** `aida-cli/tests/story_2215_inline_grant.rs`: TTY, no grant, answer `y` -> fake `claude` child records AIDA_SESSION_GRANT = a child grant whose parent_grant_id is a grant with origin=agent-new-inline, principal=user, seat=advisor, delegable=[implementer]; the parent shell env is untouched (no export; the launcher process only).
+    - **(2) command-level PTY**: answer `n` -> today's refusal text, non-zero exit, no child spawned.
+    - **(3) unit env matrix** `inline_grant_eligibility`: non-TTY (each of stdin/stdout/stderr), AIDA_HEADLESS, CLAUDECODE, CODEX_*, AIDA_AGENT_*, contained, --grant-inline=no -> no prompt.
+    - **(4) unit**: Valid grant / Rejected (invalid/expired) grant -> not eligible (only GrantCheck::Absent prompts).
+    - **(5) unit**: a present grant that does not delegate the seat keeps the BUG-052 refusal (eligibility is Absent-only, so picker marks/refusal run unchanged).
+    - **Q2 required test, unit**: inline parent bound to a dead launcher token; child derived from it still validates via grant_check_for (parent checked by id/expiry/revocation only - confirmed in grant_check_for_at, no change needed). Plus: a NEW child from an inline parent outside the minting process is refused (not re-derivable).
+    - **(6) docs**: docs/cli agent-new section + FAQ-42 text; no automated test beyond check-ci-fast.
+
+    ### Expected files
+    - `aida-cli-lib/src/gate/seat_authority.rs` (origin field, shared mint helper, issue_inline_parent, re-derivation guard)
+    - `aida-cli-lib/src/agent_launch.rs` (preflight prompt), `agent_launch_args.rs` (`--grant-inline auto|no` on claude/codex/antigravity)
+    - unit tests under `aida-cli-lib/src/gate/tests/`, PTY test under `aida-cli/tests/`
+    - docs/cli agent-new + FAQ, help golden snapshot, SeatGrant literal fixtures (origin: None)
+
+    ### Ambiguities / conflicts as questions
+    - Optional extra-delegate prompt: child grants always carry empty delegable_seats and inline parents are not re-derivable, so extra delegate seats on the inline parent could never be used. I will omit that optional prompt (default none) and say so in the PR.
+    - Binding: launcher process token only (no sid), tighter than the sketch's pid+sid, so no other process in the terminal session can present the parent.
+  created_at: 2026-10-31T23:36:55.104938675Z
+  modified_at: 2026-10-31T23:36:55.104938675Z
+  session_id: 01a1945097d4
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
