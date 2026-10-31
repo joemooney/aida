@@ -19,12 +19,36 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:10.638818101Z
-modified_at: 2026-10-31T23:19:41.023106634Z
+modified_at: 2026-10-31T23:21:04.043801353Z
 req_type: Task
 tags:
 - docs
 - gitlab
 - website
+comments:
+- id: 01a19444-432b-7cb2-8624-f2f937abb41d
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Fixture/unit (script):** new `docs/showcase/publish.py` builds the publishable tree (static pages/assets, `docs/what-is-aida.html` as `overview.html`, `.nojekyll`; links leaving the showcase rewritten to the public repo) from a git revision. A small Python unittest proves file-set selection, link rewriting, and determinism (same rev -> byte-identical tree).
+    - **Config (AC1):** `pages` job in `.gitlab-ci.yml` runs `publish.py --out public` only for `vN` tags or a manual web pipeline with `PUBLISH_PAGES=true` on the default branch; never on mirrored pushes. Verified by reading the rules + YAML parse.
+    - **Docs (AC2):** README section for GitLab Pages: trigger, URL shape, admin prerequisites (Pages domain, wildcard DNS).
+    - **Check (AC3):** `publish.py --compare <dir>` diffs an existing published tree (checked-out gh-pages, or the downloaded `public/` artifact) against the generated tree for the same rev; documented procedure for both hosts. Same script feeds both hosts, so identical content by construction.
+    - **No automated test (AC4):** whether the self-hosted instance has Pages enabled cannot be checked from this sandbox (no GitLab API credentials). Recorded as an operator blocker comment on the spec.
+
+    ### Expected files
+    - `docs/showcase/publish.py` (+ test file alongside)
+    - `.gitlab-ci.yml`
+    - `docs/showcase/README.md`
+
+    ### Ambiguities / conflicts as questions
+    - Should air-gapped GitLab Pages point source links at the GitLab project instead of github.com? Default stays identical (github) per AC3; `--source-base` override offered, documented as an intentional divergence.
+  created_at: 2026-10-31T23:21:04.043801353Z
+  modified_at: 2026-10-31T23:21:04.043801353Z
+  session_id: 01a19442f9a2
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-ab2f-7503-bff7-8f14eda1a722
   author: joe
