@@ -12,12 +12,12 @@ description: |-
   5. Display padding is a setting: [display] id_seq_width in .aida/config.toml (0 = no padding) pads the sequence on output only, never in stored IDs or filenames; default keeps today's look (legacy unpadded, node-local 3). aida list aligns its ID column to the widest rendered ID.
 
   Architecture: this changes ID identity and needs a sketch on this spec plus advisor signoff before code.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T14:43:28.189822809Z
+modified_at: 2026-10-31T15:34:12.652827840Z
 req_type: Bug
 tags:
 - ids
@@ -379,6 +379,20 @@ history:
   session_id: 01a1925bebeb
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19298-d7a2-74b0-a1e8-9a5bec5bf892
+  author: aida-auto-bump
+  timestamp: 2026-10-31T15:34:12.642645831Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a19298-d7ac-7993-9699-a898e858d67d
+  timestamp: 2026-10-31T15:34:12.652822197Z
+  agent: aida
+  commit_sha: d12cca28a61c8f00c7d30cb4a4cafc7e3566104b
+  summary: All 5 ACs verified with tests in the diff; the round-4 delta (--preserve value_parser = spec_arg::spec_id) fixes the lib-1 failure; main merge clean; PR CI fully green at 36f6cd5 (run 41213500667). merge-hold-gate red is the supervised-spec hold, which needs human/advisor clear.
+  review_verdict: approved
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -387,17 +401,13 @@ filed_at:
   aida_build_sha: cdbecda7678
   vendor: claude
   session: 510d8c08-7912-4189-943d-65d110c7abc2
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-31T15:34:12.642639980Z
+  completion_sha: d12cca28a61c8f00c7d30cb4a4cafc7e3566104b
 attention_reason:
   category: design-fork
   detail: 'Sketch-only brief: architecture sketch posted as a comment; advisor signoff required before code. Open questions: (1) old commit messages citing renumbered literals resolve to the survivor; accept, or keep a renumbered_from linkage list; (2) node-local vs global-block fresh IDs; (3) doctor --fix vs throwaway migration script; (4) rewrite CHANGELOG mentions or leave them. Scope correction: 28 TASK + BUG-0445 + STORY-0444 groups.'
   lean: Accept git-log mis-attribution and record the old SHAs in history; mint node-local fresh IDs; use 'aida doctor --fix id-collisions'; rewrite CHANGELOG. Ship seam, lookup and migration in one PR and run the migration before merge.
   raised_by: implementer
   raised_at: 2026-10-31T09:15:38.510864204Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-3 code meets the four ruled gaps and all five ACs, but PR CI is red at the head: CI (lib-1) fails at f02efae and at b22ce47, while round 2 (9d99db0) and main (e564a29) are green.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-046 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T14:42:05.427759909Z
