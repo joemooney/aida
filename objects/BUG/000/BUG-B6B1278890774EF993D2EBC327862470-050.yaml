@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T17:01:27.189698956Z
+modified_at: 2026-10-31T18:29:26.494169984Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -149,6 +149,12 @@ history:
   session_id: 01a192d1cae6
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19339-497e-71f0-827c-657f3161986f
+  author: joe
+  timestamp: 2026-10-31T18:29:27.550966048Z
+  session_id: 01a1932fbac3
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -165,7 +171,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: All three acceptance criteria are implemented and traced to tests, but CI is red at ab3b66cd (contracts drift-guard and lib-0 tests); main c6111876 is green, so the PR causes both
+  detail: 'All 3 ACs met and traced, and all round-2 items are addressed (lib-0, contracts, AI client posture plus ratchet, banner, drain_resume_lane test, child env), but CI (rest) is red at f6f8c037: the new env line breaks the TASK-1169 ceiling guardrail at session.rs:1653'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-050 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T16:59:54.126400014Z
+  shelved_at: 2026-10-31T18:29:26.494169984Z

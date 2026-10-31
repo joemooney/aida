@@ -14,13 +14,42 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:06:13.638469229Z
-modified_at: 2026-10-31T18:18:58.105597126Z
+modified_at: 2026-10-31T18:22:59.404683512Z
 req_type: Bug
 relationships:
 - rel_type: Parent
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-31T18:06:39.154589762Z
   created_by: joe
+comments:
+- id: 01a19333-5d4c-7bb3-a28c-358fe3399ec9
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Root cause (reproduced with strace in this lane): the node-local ID counter lives in the git common dir (`<main>/.git/aida-work-dispenser.toml` + `.lock`). A contained session can write the store worktree but not `.git`, so `FileDispenser::open_existing` fails taking the counter's lock (EROFS) and `aida add` writes nothing.
+
+    Design: no provisional IDs, no host finalization. A contained seat mints the real final ID under the store write lock (`<store>/.aida/store-write.lock`, shared by the host and every seat because seats symlink the same store). It reads the counter read-only and takes max(counter, highest number this node already has in `objects/` for the prefix) + 1. `add_requirement` holds that lock from allocation until the object file is written, so a second contained seat (or the host) sees the object before it picks a number. The host path advances its counter past the same high-water mark (`Dispenser::next_above`), so contained mints never cost the host its 64-skip budget. The new object is an ordinary dirty store file that the existing host-commit sweep (ChildStoreCommit / `commit_pending_store_changes_on_host` / session end) commits, the same path comments use.
+
+    ### Acceptance criteria as tests
+    - **Fixture (aida-core):** a node-local clone with its common dir read-only adds a spec. The ID is the next number, the object is written, and the counter file is unchanged.
+    - **Fixture (aida-core):** two contained backends (threads) add concurrently and get distinct IDs. A host add afterwards gets a number above both.
+    - **Command-level:** `aida add` in a contained store prints the ID plus a "queued for the host to commit" line, and the spec is readable (`aida show` path: the object is in the store worktree).
+    - **Fixture (aida-cli-lib):** a host sweep commits the queued object under the same ID.
+    - **Unit (doctor):** `store-queued-specs` reports untracked/added spec objects older than 30 minutes.
+
+    ### Expected files
+    - `aida-core/src/allocation_authority.rs`, `aida-core/src/dispenser.rs` (contained path + `next_above`)
+    - `aida-cli-lib/src/doctor_root.rs` (queued-spec age check)
+    - add handler output (`aida-cli-lib/src/...add...`)
+    - tests next to the above
+
+    ### Ambiguities / conflicts as questions
+    - The spec offers a pre-reserved block or a provisional ID. This approach gives a final, collision-free ID at queue time with no finalization step, which meets "must never collide" more directly. It relies on every writer on this node sharing the store worktree's write lock, which holds for seats (they symlink the primary store).
+  created_at: 2026-10-31T18:22:59.404683512Z
+  modified_at: 2026-10-31T18:22:59.404683512Z
+  session_id: 01a1932faaba
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19324-33a0-7f61-a5dc-fb9d7370af97
   author: joe
