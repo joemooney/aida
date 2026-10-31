@@ -1602,6 +1602,7 @@ fn ship_meta(title: &str) -> crate::pr_cmd::PrShipMetadata {
     crate::pr_cmd::PrShipMetadata {
         title: title.to_string(),
         body: String::new(),
+        number: None,
     }
 }
 

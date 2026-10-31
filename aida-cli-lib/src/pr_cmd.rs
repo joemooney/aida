@@ -3754,8 +3754,11 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let spec_ids = Storage::new(main_worktree.join(".aida-store"))
             .load()
             .map(|store| {
+                let coverage =
+                    pr_trailer_coverage(&main_worktree, &store, &branch, Some(pr_number));
                 ship_completion_trailer_for_method(
                     &store,
+                    coverage.as_ref(),
                     merge_method,
                     final_slice,
                     &pr_meta.title,
@@ -3834,8 +3837,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 Storage::new(main_worktree.join(".aida-store"))
                     .load()
                     .map(|store| {
+                        let coverage = pr_trailer_coverage(
+                            &main_worktree,
+                            &store,
+                            merged_branch,
+                            Some(pr_number),
+                        );
                         ship_completion_trailer_for_method(
                             &store,
+                            coverage.as_ref(),
                             merge_method,
                             final_slice,
                             &title,
@@ -4740,13 +4750,17 @@ pub(crate) fn derive_pr_ship_squash_subject_from_message(
     // trace:BUG-1957 | ai:claude
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
-    let (normalized, trailer) = pr_ship::derive_squash_subject_with_trailer(
+    // BUG-HOME-048: a title trailer completes only a spec this PR covers.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let coverage = pr_trailer_coverage(project_root, &store, branch, pr.number);
+    let refusals = std::cell::RefCell::new(Vec::new());
+    let (normalized, mut trailer) = pr_ship::derive_squash_subject_with_trailer(
         &pr.title,
         branch,
         &pr.body,
         commit_msg,
         no_complete,
-        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| crate::trailer_coverage::admits(&store, coverage.as_ref(), id, &refusals),
         |id| pr_ship::spec_completion_hold_reason(&store, id),
     )
     .unwrap_or_else(|| {
@@ -4759,6 +4773,7 @@ pub(crate) fn derive_pr_ship_squash_subject_from_message(
             },
         )
     });
+    trailer.notes.extend(refusals.into_inner());
     // BUG-1997: never return None when spec IDs are withheld (via --no-complete,
     // a PR-body marker, or closure hold, or when the PR title carried an ID that
     // was stripped). Otherwise, gh pr merge defaults to the PR title on multi-commit
@@ -4815,8 +4830,10 @@ pub(crate) fn derive_pr_ship_subject_for_method_from(
     }
     let store_root = main_worktree_root_from(project_root);
     let store = Storage::new(store_root.join(".aida-store")).load()?;
+    let coverage = pr_trailer_coverage(project_root, &store, branch, pr.number);
     let trailer = ship_completion_trailer_for_method(
         &store,
+        coverage.as_ref(),
         method,
         final_slice,
         &pr.title,
@@ -4888,6 +4905,7 @@ pub(crate) fn pr_ship_dry_run_output_for_method(
 // trace:BUG-1919 | ai:claude
 pub(crate) fn ship_completion_trailer(
     store: &aida_core::RequirementsStore,
+    coverage: Option<&crate::trailer_coverage::TrailerCoverage>,
     pr_title: &str,
     branch: &str,
     pr_body: &str,
@@ -4895,6 +4913,7 @@ pub(crate) fn ship_completion_trailer(
 ) -> pr_ship::SquashTrailer {
     ship_completion_trailer_for_method(
         store,
+        coverage,
         crate::forge::MergeMethod::Squash,
         false,
         pr_title,
@@ -4908,8 +4927,14 @@ pub(crate) fn ship_completion_trailer(
 /// Rebase merges suppress spec completion unless `final_slice` (`--final-slice`
 /// / `--complete-spec`) is set.
 // trace:STORY-1663 | ai:antigravity
+///
+/// BUG-HOME-048: with `coverage` known, a title trailer that resolves to a
+/// spec the PR does not cover is withheld, and the refusal names both ids.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn ship_completion_trailer_for_method(
     store: &aida_core::RequirementsStore,
+    coverage: Option<&crate::trailer_coverage::TrailerCoverage>,
     method: crate::forge::MergeMethod,
     final_slice: bool,
     pr_title: &str,
@@ -4917,16 +4942,32 @@ pub(crate) fn ship_completion_trailer_for_method(
     pr_body: &str,
     no_complete: bool,
 ) -> pr_ship::SquashTrailer {
-    pr_ship::derive_ship_trailer_for_method(
+    let refusals = std::cell::RefCell::new(Vec::new());
+    let mut trailer = pr_ship::derive_ship_trailer_for_method(
         method,
         final_slice,
         pr_title,
         branch,
         pr_body,
         no_complete,
-        |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
+        |id| crate::trailer_coverage::admits(store, coverage, id, &refusals),
         |id| pr_ship::spec_completion_hold_reason(store, id),
-    )
+    );
+    trailer.notes.extend(refusals.into_inner());
+    trailer
+}
+
+/// BUG-HOME-048: the trailer coverage for PR `pr` on `branch` — its branch
+/// and lease claim, supersede bundles, and review-story covers.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+pub(crate) fn pr_trailer_coverage(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    branch: &str,
+    pr: Option<u64>,
+) -> Option<crate::trailer_coverage::TrailerCoverage> {
+    let scopes = crate::trailer_coverage::lease_scopes_for_branch(project_root, branch);
+    crate::trailer_coverage::TrailerCoverage::for_pr(store, branch, &scopes, pr)
 }
 
 /// TASK-1765: `body` with an `aida: no-complete` declaration line appended,
@@ -6193,6 +6234,10 @@ mod task_1915_mandate_ship_failure_ledger_tests;
 pub(crate) struct PrShipMetadata {
     pub(crate) title: String,
     pub(crate) body: String,
+    /// The PR number, when known: selects the review story whose `## Covers`
+    /// count toward the trailer coverage check.
+    /// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    pub(crate) number: Option<u64>,
 }
 
 pub(crate) fn fetch_pr_ship_metadata_via_gh(
@@ -6232,6 +6277,7 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
+        number: Some(n),
     })
 }
 
@@ -9194,6 +9240,7 @@ mod story_1663_rebase_ship_tests {
         // so the owning spec's status stays unchanged.
         let default_rebase_trailer = ship_completion_trailer_for_method(
             &store,
+            None,
             crate::forge::MergeMethod::Rebase,
             false,
             "[1/3] feat(ship): slice one (STORY-1663)",
@@ -9218,6 +9265,7 @@ mod story_1663_rebase_ship_tests {
         // owning spec ID so `complete_rebase_final_slice_specs` transitions it to Completed.
         let final_slice_trailer = ship_completion_trailer_for_method(
             &store,
+            None,
             crate::forge::MergeMethod::Rebase,
             true,
             "[3/3] feat(ship): slice three (STORY-1663)",

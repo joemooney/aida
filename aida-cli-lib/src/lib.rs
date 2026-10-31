@@ -511,6 +511,8 @@ mod pr_rebase;
 mod pr_ship;
 mod pr_ship_batch;
 mod pr_train;
+// BUG-HOME-048: title trailers complete only the specs a PR covers.
+mod trailer_coverage;
 mod presence;
 mod presence_cmd;
 mod process_probe;

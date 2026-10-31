@@ -1049,6 +1049,7 @@ impl MemberChecks for LiveChecks<'_> {
             crate::pr_cmd::PrShipMetadata {
                 title: meta.title.clone(),
                 body: String::new(),
+                number: Some(pr),
             }
         };
         let subject = member_subject_at_head(
