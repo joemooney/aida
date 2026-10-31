@@ -185,8 +185,13 @@ pub(crate) fn classify(
 /// The one stdout line and the exit code for `outcome`. `vendor_code` is the
 /// vendor's own exit code; a nonzero one replaces [`NO_PR_EXIT_CODE`] (the
 /// standalone reviewer's rule), and is otherwise ignored, since a signal or
-/// an open PR is better evidence than the exit code.
-pub(crate) fn report(outcome: &Outcome, vendor_code: Option<i32>) -> (String, i32) {
+/// an open PR is better evidence than the exit code. `uncommitted` is the
+/// count of uncommitted paths a PR-less run left behind (BUG-044).
+pub(crate) fn report(
+    outcome: &Outcome,
+    vendor_code: Option<i32>,
+    uncommitted: Option<usize>,
+) -> (String, i32) {
     let one_line = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     match outcome {
         Outcome::PrOpened { pr, head } => (
@@ -201,11 +206,37 @@ pub(crate) fn report(outcome: &Outcome, vendor_code: Option<i32>) -> (String, i3
             PUNTED_EXIT_CODE,
         ),
         Outcome::Held { branch } => (format!("implementer: held branch={branch}"), HELD_EXIT_CODE),
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
         Outcome::NoPr => (
-            "implementer: no-pr".to_string(),
+            match uncommitted.filter(|n| *n > 0) {
+                Some(n) => format!("implementer: no-pr uncommitted={n}"),
+                None => "implementer: no-pr".to_string(),
+            },
             vendor_code.filter(|c| *c != 0).unwrap_or(NO_PR_EXIT_CODE),
         ),
     }
+}
+
+/// The log of the `n`th automatic resume of the run logging to `first`:
+/// a fresh file beside it, so the linger reaper's final-result watch never
+/// reads the previous run's result.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn resume_log_path(first: &Path, n: u32) -> PathBuf {
+    let stem = first
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    first.with_file_name(format!("{stem}-resume{n}.jsonl"))
+}
+
+/// The lease's worktree, or `project_root` when the lease cannot be read.
+fn lease_worktree(project_root: &Path, lease_id: &str) -> PathBuf {
+    crate::list_leases(project_root)
+        .into_iter()
+        .find(|l| l.id == lease_id)
+        .map(|l| l.worktree_path)
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| project_root.to_path_buf())
 }
 
 /// A standalone implementer run that ended without an open PR, or a launch
@@ -507,28 +538,116 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             );
         }
     };
-    let status = crate::session::run_standalone_implementer_child(
-        launch.vendor,
-        &prompt,
-        launch.session_id,
-        &log_path,
-        &tee_opts,
-        launch.contained,
-        launch.lease_id,
-        launch.child_grant,
-        &crate::session::HeadlessChildHooks {
-            customize: Some(&customize),
-            on_spawn: Some(&on_spawn),
-        },
-    )?;
+    // BUG-044: a run that parks on its own background build is resumed, not
+    // reported. trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    use crate::headless_background as bg;
+    let can_resume = launch.vendor == crate::session::HeadlessVendor::Claude;
+    let ceiling = std::time::Duration::from_millis(
+        crate::burndown_run::resolved_bg_wait_ceiling_ms(Some(launch.project_root)),
+    );
+    let held = std::cell::Cell::new(false);
+    let hold_started = std::cell::Cell::new(None::<std::time::Instant>);
+    let hold = || {
+        let started = hold_started.get().unwrap_or_else(|| {
+            let now = std::time::Instant::now();
+            hold_started.set(Some(now));
+            now
+        });
+        let live =
+            started.elapsed() < ceiling && !bg::live_background_work(launch.lease_id).is_empty();
+        if live {
+            held.set(true);
+        }
+        live
+    };
+    let mut resumes = 0;
+    let mut run_log = log_path.clone();
+    let mut run_prompt = prompt;
+    let finished = loop {
+        held.set(false);
+        hold_started.set(None);
+        let status = crate::session::run_standalone_implementer_child(
+            launch.vendor,
+            &run_prompt,
+            launch.session_id,
+            &run_log,
+            &tee_opts,
+            launch.contained,
+            launch.lease_id,
+            launch.child_grant,
+            &crate::session::HeadlessChildHooks {
+                customize: Some(&customize),
+                on_spawn: Some(&on_spawn),
+                resume: resumes > 0,
+                hold_reap: Some(&hold),
+            },
+        );
+        let status = match status {
+            Ok(status) => status,
+            Err(e) => break Err(e),
+        };
+        let outcome = classify(
+            crate::punt::read_signal(&punt_signal),
+            crate::punt::read_hold_signal(&hold_signal),
+            || lookup_pr(launch.project_root, launch.branch),
+        );
+        if outcome != Outcome::NoPr {
+            break Ok((status, outcome));
+        }
+        let live = bg::live_background_work(launch.lease_id);
+        let Some(reason) = bg::resume_reason(
+            resumes,
+            can_resume,
+            crate::headless_linger::final_result_text(&run_log).as_deref(),
+            !live.is_empty(),
+            held.get(),
+        ) else {
+            break Ok((status, outcome));
+        };
+        if !live.is_empty() {
+            eprintln!(
+                "{} the implementer ended its turn with its background run still going; waiting for it (up to {}m)",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                ceiling.as_secs() / 60
+            );
+            if !bg::wait_for_background_work(ceiling, || bg::live_background_work(launch.lease_id))
+            {
+                eprintln!(
+                    "{} the background run is still going after {}m; not resuming",
+                    "Note:".cyan().bold(),
+                    ceiling.as_secs() / 60
+                );
+                break Ok((status, outcome));
+            }
+        }
+        resumes += 1;
+        run_log = resume_log_path(&log_path, resumes);
+        record_slot_log(launch.project_root, &run_log);
+        eprintln!(
+            "{} resuming the implementer session ({resumes}/{}; {}) → {}",
+            crate::glyph(crate::glyphs::Glyph::FlowActive)
+                .green()
+                .bold(),
+            bg::MAX_AUTO_RESUMES,
+            match reason {
+                bg::ResumeReason::LiveWork | bg::ResumeReason::HeldForWork =>
+                    "its background run finished",
+                bg::ResumeReason::SaidWaiting => "it ended its turn waiting on a background run",
+            },
+            run_log.display().to_string().dimmed()
+        );
+        run_prompt = bg::RESUME_PROMPT.to_string();
+    };
+    crate::session::revoke_standalone_implementer_grant(launch.child_grant);
+    let (status, outcome) = finished?;
     store_commit.commit();
 
-    let outcome = classify(
-        crate::punt::read_signal(&punt_signal),
-        crate::punt::read_hold_signal(&hold_signal),
-        || lookup_pr(launch.project_root, launch.branch),
-    );
-    let (line, code) = report(&outcome, status.code());
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    let uncommitted = matches!(outcome, Outcome::NoPr)
+        .then(|| bg::uncommitted_paths(&lease_worktree(launch.project_root, launch.lease_id)))
+        .flatten()
+        .filter(|n| *n > 0);
+    let (line, code) = report(&outcome, status.code(), uncommitted);
     println!("{line}");
     if code == 0 {
         return Ok(());
@@ -542,13 +661,21 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             format!("the implementer pushed `{branch}` and is holding the PR for a manual gate")
         }
         _ => format!(
-            "the implementer exited ({}) without opening a PR for {}; its log is {}",
+            "the implementer exited ({}) without opening a PR for {}{}{}; its log is {}",
             status
                 .code()
                 .map(|c| format!("code {c}"))
                 .unwrap_or_else(|| "on a signal".to_string()),
             launch.spec,
-            log_path.display()
+            if resumes > 0 {
+                format!(" after {resumes} automatic resume(s)")
+            } else {
+                String::new()
+            },
+            uncommitted
+                .map(|n| format!(", leaving {n} uncommitted path(s) in its worktree"))
+                .unwrap_or_default(),
+            run_log.display()
         ),
     };
     Err(anyhow::Error::new(StandaloneImplementerExit {
