@@ -10,12 +10,12 @@ description: |-
   3. Regression test: a PR claimed for TASK-<node>-138 whose title says (TASK-139), where legacy TASK-139 exists, refuses the record and completes nothing wrong.
   4. Implementers' PR-title guidance (pr create / aida commit) uses the full canonical or display ID the lane claimed, never a bare short form that can resolve elsewhere.
   Relates to BUG-HOME-046 (numeric ID identity), but is independent: this is coverage checking, not ID parsing.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T13:40:20.001557885Z
+modified_at: 2026-10-31T14:55:21.076392538Z
 req_type: Bug
 tags:
 - ids
@@ -112,6 +112,20 @@ history:
   session_id: 01a191e9b0eb
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19275-43ee-7a71-a584-d4afa2515f27
+  author: aida-auto-bump
+  timestamp: 2026-10-31T14:55:21.070967881Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a19275-43f4-7b80-9be1-a096468e1654
+  timestamp: 2026-10-31T14:55:21.076388097Z
+  agent: aida
+  commit_sha: eaabde5c226c436a1f6c562396069101af91b4d4
+  summary: 'All 4 ACs met at f35a697: one coverage helper (gate/trailer_coverage.rs) filters title trailers, gate id lists, review record, squash body (explicit, uncovered ids rewritten to Refs) and rebase/merge branch commits; fails closed; incident regression tests present; CI run 41210773722 green.'
+  review_verdict: approved
 filed_at:
   code_sha: 988a7ae5ea9fc5048e4d3e9322a4ffd1af0113b7
   branch: main
@@ -124,11 +138,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T11:07:17.457639341Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2: review-record refusal + squash-subject/rebase coverage are good, but CI lib-0/lib-1 are red at head and the default squash ship still completes uncovered branch-commit trailers via the squash body (AC1/AC2 open).'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-048 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T12:31:21.299153151Z
+  completed_at: 2026-10-31T14:55:21.070954613Z
+  completion_sha: eaabde5c226c436a1f6c562396069101af91b4d4
