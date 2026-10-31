@@ -38,6 +38,7 @@ fn on_disk(dir: &Path, at: DateTime<Utc>) -> (Vec<Mandate>, Vec<String>) {
 
 // ── AC1: human at an interactive terminal only ─────────────────────────────
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.acef92fe | ai:claude
 #[test]
 fn renew_refuses_without_a_human_at_a_terminal_and_leaves_the_record_alone() {
     let tmp = tempfile::tempdir().unwrap();
@@ -50,6 +51,7 @@ fn renew_refuses_without_a_human_at_a_terminal_and_leaves_the_record_alone() {
 
 // ── AC2: only an active, unexpired mandate ─────────────────────────────────
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.acdac1e7 | ai:claude
 #[test]
 fn renew_with_no_mandate_points_at_start() {
     let tmp = tempfile::tempdir().unwrap();
@@ -57,6 +59,7 @@ fn renew_with_no_mandate_points_at_start() {
     assert!(err.to_string().contains("aida mandate start"), "{err}");
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.acdac1e7 | ai:claude
 #[test]
 fn renew_refuses_an_expired_or_stopped_mandate() {
     let tmp = tempfile::tempdir().unwrap();
@@ -81,6 +84,7 @@ fn renew_refuses_an_expired_or_stopped_mandate() {
 
 // ── AC3: scope and flags kept; expiry = now + duration, capped ─────────────
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac139435 | ai:claude
 #[test]
 fn renew_keeps_scope_and_flags_and_defaults_to_the_original_duration() {
     let tmp = tempfile::tempdir().unwrap();
@@ -109,6 +113,7 @@ fn renew_keeps_scope_and_flags_and_defaults_to_the_original_duration() {
     assert_eq!(again.expires_at, at2 + Duration::hours(8));
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac139435 | ai:claude
 #[test]
 fn renew_for_an_explicit_duration_is_capped_like_start() {
     let tmp = tempfile::tempdir().unwrap();
@@ -133,6 +138,7 @@ fn renew_for_an_explicit_duration_is_capped_like_start() {
 
 // ── AC4: lineage record, renewal count in status ───────────────────────────
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.aca17345 | ai:claude
 #[test]
 fn renew_records_its_lineage_and_status_shows_the_count() {
     let tmp = tempfile::tempdir().unwrap();
@@ -199,6 +205,7 @@ fn renew_records_its_lineage_and_status_shows_the_count() {
     );
 }
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.aca17345 | ai:claude
 #[test]
 fn a_status_with_no_renewals_says_zero() {
     let tmp = tempfile::tempdir().unwrap();
@@ -245,6 +252,7 @@ fn a_stop_after_a_renewal_still_wins() {
 
 // ── AC5: grants derived from the mandate survive the renewal ──────────────
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac446b4b | ai:claude
 #[test]
 fn grants_naming_the_mandate_stay_valid_across_the_renewal() {
     let tmp = tempfile::tempdir().unwrap();
