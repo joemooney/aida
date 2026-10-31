@@ -13676,6 +13676,9 @@ pub(crate) fn handle_queue_work(
                         Some(&lease.id),
                         &crate::canonical_role_name(&role),
                         child_grant,
+                        // BUG-050: the lane's seat, for the resume safety net.
+                        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+                        Some((&lease.worktree_path, &lease.branch)),
                     );
                 }
                 eprintln!(

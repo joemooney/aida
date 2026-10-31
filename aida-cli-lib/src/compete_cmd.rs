@@ -222,8 +222,10 @@ pub(crate) fn handle_compete_command(
                     Ok(vec![
                         "--setting-sources".into(),
                         "project".into(),
+                        // A JSON stand-in: the headless posture edits it.
+                        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
                         "--settings".into(),
-                        "<contained settings resolved at launch>".into(),
+                        "{}".into(),
                     ])
                 })?;
             println!(
@@ -1092,6 +1094,11 @@ pub(crate) fn build_compete_arm_command(
     }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args).current_dir(worktree_dir);
+    // BUG-050: belt and braces alongside the `--settings` env.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    if vendor == "claude" {
+        cmd.env(session::DISABLE_BACKGROUND_TASKS_ENV, "1");
+    }
     if headless_vendor.is_some_and(|v| session::containment_applied(v, contained)) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -1108,17 +1115,35 @@ fn compete_arm_argv(
     contained: bool,
     contained_flags: impl FnOnce() -> Result<Vec<String>>,
 ) -> Result<Vec<String>> {
+    // BUG-050: a claude arm or judge is a headless `claude -p`: its flags lead
+    // with the headless posture (no Monitor, no background tasks), whose
+    // tool list the template's `-p` ends.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    let claude = vendor == "claude";
     if !contained {
-        return Ok(argv.to_vec());
+        let mut args = if claude {
+            session::headless_claude_posture(Vec::new())?
+        } else {
+            Vec::new()
+        };
+        args.extend_from_slice(argv);
+        return Ok(args);
     }
     let parsed = session::HeadlessVendor::parse(vendor)
         .ok_or_else(|| anyhow::anyhow!("[contained] unknown compete vendor `{vendor}`"))?;
     session::require_vendor_containment(parsed, true, "compete child")?;
     // Generated argv ends with the prompt. Never parse flags inside it.
     let split = argv.len().saturating_sub(1);
-    let (mut args, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
+    let (template, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
+    let flags = contained_flags()?;
+    let (mut args, trailing) = if claude {
+        (session::headless_claude_posture(flags)?, Vec::new())
+    } else {
+        (Vec::new(), flags)
+    };
+    args.extend(template);
     args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
-    args.extend(contained_flags()?);
+    args.extend(trailing);
     args.extend_from_slice(&argv[split..]);
     Ok(args)
 }
@@ -1236,7 +1261,8 @@ mod containment_tests {
                 .map(|a| a.to_string_lossy().to_string())
                 .collect();
             assert_eq!(args.last().map(String::as_str), Some(prompt));
-            assert!(args.iter().any(|a| a == "--settings"));
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+            crate::session::assert_headless_posture(&args, true, "contained compete child");
             assert!(!args.iter().any(|a| a == "bypassPermissions"));
             assert!(args
                 .windows(2)
@@ -1251,6 +1277,25 @@ mod containment_tests {
                 .is_err()
         );
         assert!(build_compete_arm_command(dir.path(), "unknown", &[], "unknown").is_err());
+    }
+
+    /// BUG-050: an uncontained claude arm or judge carries the headless
+    /// posture too; a codex arm's argv is untouched.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    #[test]
+    fn uncontained_claude_compete_children_carry_the_headless_posture() {
+        let (_, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, "PROMPT");
+        let args = compete_arm_argv(&argv, "claude", false, || unreachable!()).unwrap();
+        crate::session::assert_headless_posture(&args, false, "uncontained compete");
+        assert!(args
+            .windows(2)
+            .any(|a| a == ["--permission-mode", "bypassPermissions"]));
+        assert_eq!(args.last().map(String::as_str), Some("PROMPT"));
+        let codex = vec!["exec".to_string(), "PROMPT".to_string()];
+        assert_eq!(
+            compete_arm_argv(&codex, "codex", false, || unreachable!()).unwrap(),
+            codex
+        );
     }
 
     // trace:BUG-2172 | ai:codex
@@ -1272,7 +1317,7 @@ mod containment_tests {
                 "--setting-sources".into(),
                 "project".into(),
                 "--settings".into(),
-                "<contained settings resolved at launch>".into(),
+                "{}".into(),
             ])
         })
         .unwrap();

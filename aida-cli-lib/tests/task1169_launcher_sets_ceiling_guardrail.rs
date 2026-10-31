@@ -87,6 +87,42 @@ fn every_headless_spawn_site_sets_the_background_wait_ceiling() {
     );
 }
 
+/// BUG-050: every headless child also runs with background tasks disabled
+/// (belt and braces alongside the posture's `--settings` env). The ceiling and
+/// that switch come from ONE helper, `headless_wait_envs`, so each spawn chain
+/// must apply the helper rather than a bare ceiling `.env(...)`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn every_headless_spawn_site_disables_background_tasks() {
+    const SHARED_HELPER: &str = "headless_wait_envs(";
+    let mut violations: Vec<String> = Vec::new();
+    for path in production_sources() {
+        let Ok(body) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let lines: Vec<&str> = body.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            if !line.contains(".env(") || !SPAWN_MARKERS.iter().any(|m| line.contains(m)) {
+                continue;
+            }
+            let end = (i + WINDOW).min(lines.len());
+            if !lines[i..end].join("\n").contains(SHARED_HELPER) {
+                violations.push(format!(
+                    "{}:{} — a headless spawn that does not apply `headless_wait_envs`",
+                    path.display(),
+                    i + 1
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "BUG-050: every headless child gets the ceiling AND background tasks disabled via \
+         `headless_wait_envs(ceiling_key, ceiling_value)`. These spawn sites don't:\n{}",
+        violations.join("\n")
+    );
+}
+
 /// The `=0` stopgap removes the safety valve entirely: a genuinely wedged task
 /// hangs the drain forever. The resolver clamps configuration up to a floor;
 /// this makes sure no code path hard-codes the zero either.

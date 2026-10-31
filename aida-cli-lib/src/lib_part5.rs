@@ -372,16 +372,14 @@ pub(crate) fn ask_ai_review_once<W: std::io::Write + ?Sized>(
     writeln!(
         output,
         "\nAsk-AI via {}…",
-        format!(
-            "{} {}",
-            command,
-            args.first().map(String::as_str).unwrap_or("")
-        )
-        .trim()
+        format!("{} {}", command, ask_ai_banner_mode(&args)).trim()
     )?;
     let result = std::process::Command::new(command)
         .current_dir(project_root)
         .args(&args)
+        // BUG-050: belt and braces alongside the `--settings` env.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        .env(crate::session::DISABLE_BACKGROUND_TASKS_ENV, "1")
         .output_retrying_etxtbsy();
     match result {
         Ok(out) => {
@@ -406,6 +404,18 @@ pub(crate) fn ask_ai_review_once<W: std::io::Write + ?Sized>(
         }
     }
     Ok(())
+}
+
+/// The mode token the Ask-AI banner names: `-p` when the argv runs print
+/// mode (claude, whose argv now leads with the headless `--settings`
+/// posture, BUG-050), else the argv's first token (`exec` for codex).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+fn ask_ai_banner_mode(args: &[String]) -> &str {
+    args.iter()
+        .find(|a| *a == "-p")
+        .or(args.first())
+        .map(String::as_str)
+        .unwrap_or("")
 }
 
 /// Classify a spec's review surface from its git linkage + (optional) forge

@@ -122,6 +122,10 @@ thread_local! {
     /// real marker) is not refused.
     pub(crate) static TEST_MARKER: std::cell::RefCell<Option<String>> =
         const { std::cell::RefCell::new(None) };
+    /// BUG-050: a mock forge. `Some(answer)` is what every PR lookup on the
+    /// run's branch returns (`answer` itself may be `None`: no PR).
+    pub(crate) static TEST_PR: std::cell::RefCell<Option<Option<(u64, Option<String>)>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 fn marker_value() -> Option<String> {
@@ -185,12 +189,12 @@ pub(crate) fn classify(
 /// The one stdout line and the exit code for `outcome`. `vendor_code` is the
 /// vendor's own exit code; a nonzero one replaces [`NO_PR_EXIT_CODE`] (the
 /// standalone reviewer's rule), and is otherwise ignored, since a signal or
-/// an open PR is better evidence than the exit code. `uncommitted` is the
-/// count of uncommitted paths a PR-less run left behind (BUG-044).
+/// an open PR is better evidence than the exit code. `unshipped` is the work
+/// a PR-less run left in its seat (BUG-044, BUG-050), named as the reason.
 pub(crate) fn report(
     outcome: &Outcome,
     vendor_code: Option<i32>,
-    uncommitted: Option<usize>,
+    unshipped: Option<&Unshipped>,
 ) -> (String, i32) {
     let one_line = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     match outcome {
@@ -207,9 +211,16 @@ pub(crate) fn report(
         ),
         Outcome::Held { branch } => (format!("implementer: held branch={branch}"), HELD_EXIT_CODE),
         // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+        // BUG-050: a stall leaves work in the seat; name it as the reason.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
         Outcome::NoPr => (
-            match uncommitted.filter(|n| *n > 0) {
-                Some(n) => format!("implementer: no-pr uncommitted={n}"),
+            match unshipped {
+                Some(Unshipped::UncommittedWork(n)) => {
+                    format!("implementer: no-pr reason=uncommitted-work uncommitted={n}")
+                }
+                Some(Unshipped::UnpushedCommits) => {
+                    "implementer: no-pr reason=unpushed-commits".to_string()
+                }
                 None => "implementer: no-pr".to_string(),
             },
             vendor_code.filter(|c| *c != 0).unwrap_or(NO_PR_EXIT_CODE),
@@ -217,17 +228,65 @@ pub(crate) fn report(
     }
 }
 
-/// The log of the `n`th automatic resume of the run logging to `first`:
-/// a fresh file beside it, so the linger reaper's final-result watch never
-/// reads the previous run's result.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
-pub(crate) fn resume_log_path(first: &Path, n: u32) -> PathBuf {
-    let stem = first
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    first.with_file_name(format!("{stem}-resume{n}.jsonl"))
+/// BUG-050: the seat as this run found it at launch: the branch's open PR,
+/// if any (a rework round), and the seat's local `HEAD`.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct LaunchSeat<'a> {
+    pub(crate) pr: Option<&'a (u64, Option<String>)>,
+    pub(crate) head: Option<&'a str>,
 }
+
+impl LaunchSeat<'_> {
+    /// Whether `outcome` is the rework round's PR with nothing of this run's
+    /// on it: the seat has not pushed past its launch head. Read from the
+    /// seat's git (`HEAD` against `origin` and the launch head); only when
+    /// git cannot tell does it fall back to the forge's PR head, which lags
+    /// a push by seconds. A PR this run opened is never stale.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    pub(crate) fn is_stale(&self, outcome: &Outcome, seat: &SeatState) -> bool {
+        let (Outcome::PrOpened { head, .. }, Some((_, pr_head_at_launch))) = (outcome, self.pr)
+        else {
+            return false;
+        };
+        match seat.pushed_since(self.head) {
+            Some(pushed) => !pushed,
+            None => head.is_some() && head == pr_head_at_launch,
+        }
+    }
+}
+
+/// BUG-050: the outcome to report once the run is done, with the work it
+/// left unshipped. A stale PR (see [`LaunchSeat::is_stale`]) with work left
+/// in the seat is a stall, reported [`Outcome::NoPr`] so the caller does not
+/// read the old head as a finished push; on a clean, unmoved seat it stays
+/// `pr-opened` (the round had nothing to change). A shipped PR reports the
+/// seat's pushed `HEAD` when `origin` is at it, ahead of the forge.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn settle_outcome(
+    outcome: Outcome,
+    launch: &LaunchSeat<'_>,
+    seat: &SeatState,
+) -> (Outcome, Option<Unshipped>) {
+    if let Outcome::PrOpened { pr, head } = &outcome {
+        if !launch.is_stale(&outcome, seat) {
+            let head = seat
+                .pushed_head()
+                .map(String::from)
+                .or_else(|| head.clone());
+            return (Outcome::PrOpened { pr: *pr, head }, None);
+        }
+        return match seat.unshipped(launch.head) {
+            Some(unshipped) => (Outcome::NoPr, Some(unshipped)),
+            None => (outcome, None),
+        };
+    }
+    match outcome {
+        Outcome::NoPr => (Outcome::NoPr, seat.unshipped(launch.head)),
+        other => (other, None),
+    }
+}
+
+pub(crate) use crate::headless_background::{resume_log_path, SeatState, Unshipped};
 
 /// The lease's worktree, or `project_root` when the lease cannot be read.
 fn lease_worktree(project_root: &Path, lease_id: &str) -> PathBuf {
@@ -570,109 +629,77 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let ceiling = std::time::Duration::from_millis(
         crate::burndown_run::resolved_bg_wait_ceiling_ms(Some(launch.project_root)),
     );
-    let live_work = || bg::live_background_work(launch.lease_id);
-    let mut resumes = 0;
-    let mut run_log = log_path.clone();
-    let mut run_prompt = prompt;
-    let finished = loop {
-        let reap_hold = bg::ReapHold::new(ceiling);
-        let hold = || {
-            let was_held = reap_hold.held();
-            let on = reap_hold.check(!live_work().is_empty());
-            if on && !was_held {
-                // The lane is still working: keep its cap slot counted.
-                mark_slot_waiting(launch.project_root);
-            }
-            on
-        };
-        let status = crate::session::run_standalone_implementer_child(
-            launch.vendor,
-            &run_prompt,
-            launch.session_id,
-            &run_log,
-            &tee_opts,
-            launch.contained,
-            launch.lease_id,
-            launch.child_grant,
-            &crate::session::HeadlessChildHooks {
-                customize: Some(&customize),
-                on_spawn: Some(&on_spawn),
-                resume: resumes > 0,
-                hold_reap: Some(&hold),
-            },
-        );
-        let status = match status {
-            Ok(status) => status,
-            Err(e) => break Err(e),
-        };
-        let outcome = classify(
-            crate::punt::read_signal(&punt_signal),
-            crate::punt::read_hold_signal(&hold_signal),
-            || lookup_pr(launch.project_root, launch.branch),
-        );
-        if outcome != Outcome::NoPr {
-            break Ok((status, outcome));
-        }
-        let live = live_work();
-        let Some(mut reason) = bg::resume_reason(
-            resumes,
-            can_resume,
-            crate::headless_linger::final_result_text(&run_log).as_deref(),
-            !live.is_empty(),
-            reap_hold.held(),
-            reap_hold.expired(),
-        ) else {
-            break Ok((status, outcome));
-        };
-        // A resume is pending: the lane keeps its cap slot while it waits.
-        mark_slot_waiting(launch.project_root);
-        if !live.is_empty() && !reap_hold.expired() {
-            eprintln!(
-                "{} the implementer ended its turn with its background run still going; waiting for it (up to {}m)",
-                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                ceiling.as_secs() / 60
-            );
-        }
-        let settled = bg::settle_background_work(ceiling, reap_hold.expired(), live_work, || {
-            bg::terminate_background_work(live_work)
-        });
-        if settled == bg::Settled::Terminated {
-            eprintln!(
-                "{} the background run was still going after {}m; the launcher stopped it",
-                "Note:".cyan().bold(),
-                ceiling.as_secs() / 60
-            );
-            reason = bg::ResumeReason::Terminated;
-        }
-        resumes += 1;
-        run_log = resume_log_path(&log_path, resumes);
-        record_slot_log(launch.project_root, &run_log);
-        eprintln!(
-            "{} resuming the implementer session ({resumes}/{}; {}) → {}",
-            crate::glyph(crate::glyphs::Glyph::FlowActive)
-                .green()
-                .bold(),
-            bg::MAX_AUTO_RESUMES,
-            match reason {
-                bg::ResumeReason::Terminated => "its background run was stopped at the ceiling",
-                bg::ResumeReason::LiveWork | bg::ResumeReason::HeldForWork =>
-                    "its background run finished",
-                bg::ResumeReason::SaidWaiting => "it ended its turn waiting on a background run",
-            },
-            run_log.display().to_string().dimmed()
-        );
-        run_prompt = bg::resume_prompt(&reason).to_string();
+    // BUG-050: what the seat looked like at launch. A rework round starts
+    // with its PR open (`launch_pr`) and its seat on that PR's head
+    // (`launch_head`), so finding the PR open afterwards proves nothing:
+    // only the seat's git state says whether this run pushed.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    let worktree = lease_worktree(launch.project_root, launch.lease_id);
+    let launch_head = bg::seat_head(&worktree);
+    let launch_pr = lookup_pr_with(launch.project_root, launch.branch, 1);
+    let launch_seat = LaunchSeat {
+        pr: launch_pr.as_ref(),
+        head: launch_head.as_deref(),
     };
+    let lane = bg::ResumeLoop {
+        can_resume,
+        ceiling,
+        lease_id: launch.lease_id,
+        log_path: &log_path,
+        // The lane is still working: keep its cap slot counted.
+        on_waiting: &|| mark_slot_waiting(launch.project_root),
+        on_log: &|log| record_slot_log(launch.project_root, log),
+    };
+    let finished = lane.run(
+        prompt,
+        |prompt, log, resume, hold| {
+            crate::session::run_standalone_implementer_child(
+                launch.vendor,
+                prompt,
+                launch.session_id,
+                log,
+                &tee_opts,
+                launch.contained,
+                launch.lease_id,
+                launch.child_grant,
+                &crate::session::HeadlessChildHooks {
+                    customize: Some(&customize),
+                    on_spawn: Some(&on_spawn),
+                    resume,
+                    hold_reap: Some(hold),
+                },
+            )
+        },
+        || {
+            let outcome = classify(
+                crate::punt::read_signal(&punt_signal),
+                crate::punt::read_hold_signal(&hold_signal),
+                || lookup_pr(launch.project_root, launch.branch),
+            );
+            let done = match &outcome {
+                Outcome::NoPr => false,
+                Outcome::PrOpened { .. } => {
+                    !launch_seat.is_stale(&outcome, &bg::SeatState::read(&worktree, launch.branch))
+                }
+                Outcome::Punted { .. } | Outcome::Held { .. } => true,
+            };
+            (outcome, done)
+        },
+    );
     crate::session::revoke_standalone_implementer_grant(launch.child_grant);
-    let (status, outcome) = finished?;
+    let bg::LoopEnd {
+        status,
+        verdict: outcome,
+        resumes,
+        log: run_log,
+    } = finished?;
     store_commit.commit();
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
-    let uncommitted = matches!(outcome, Outcome::NoPr)
-        .then(|| bg::uncommitted_paths(&lease_worktree(launch.project_root, launch.lease_id)))
-        .flatten()
-        .filter(|n| *n > 0);
-    let (line, code) = report(&outcome, status.code(), uncommitted);
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    let seat = bg::SeatState::read(&worktree, launch.branch);
+    let (outcome, unshipped) = settle_outcome(outcome, &launch_seat, &seat);
+    let (line, code) = report(&outcome, status.code(), unshipped.as_ref());
     println!("{line}");
     if code == 0 {
         return Ok(());
@@ -697,9 +724,13 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             } else {
                 String::new()
             },
-            uncommitted
-                .map(|n| format!(", leaving {n} uncommitted path(s) in its worktree"))
-                .unwrap_or_default(),
+            match unshipped {
+                Some(bg::Unshipped::UncommittedWork(n)) =>
+                    format!(", leaving {n} uncommitted path(s) in its worktree"),
+                Some(bg::Unshipped::UnpushedCommits) =>
+                    ", leaving commits it did not push in its worktree".to_string(),
+                None => String::new(),
+            },
             run_log.display()
         ),
     };
@@ -761,7 +792,20 @@ pub(crate) fn is_run_pr(pr: &crate::OpenPrInfo, branch: &str) -> bool {
 /// just-created PR may lag the forge's list queries by seconds, so a branch
 /// that reached origin gets two more looks before the run is called PR-less.
 fn lookup_pr(project_root: &Path, branch: &str) -> Option<(u64, Option<String>)> {
-    for attempt in 0..3 {
+    lookup_pr_with(project_root, branch, 3)
+}
+
+/// [`lookup_pr`] with `attempts` looks (one look never sleeps).
+fn lookup_pr_with(
+    project_root: &Path,
+    branch: &str,
+    attempts: u64,
+) -> Option<(u64, Option<String>)> {
+    #[cfg(test)]
+    if let Some(pr) = TEST_PR.with(|p| p.borrow().clone()) {
+        return pr;
+    }
+    for attempt in 0..attempts {
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_secs(3 * attempt));
         }

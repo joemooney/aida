@@ -3988,7 +3988,7 @@ pub(crate) fn build_phase_driver_ci_fix_command(
     cmd.current_dir(worktree)
         .args(fix_args)
         .env("AIDA_HEADLESS", "1")
-        .env(ceiling_key, ceiling_value);
+        .envs(crate::headless_wait_envs(ceiling_key, ceiling_value));
     session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);
     if session::containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");

@@ -263,18 +263,171 @@ fn resume_logs_are_fresh_files_beside_the_first() {
 }
 
 #[test]
-fn a_no_pr_report_names_the_uncommitted_paths() {
-    let (line, code) = si::report(&si::Outcome::NoPr, Some(0), Some(12));
-    assert_eq!(line, "implementer: no-pr uncommitted=12");
+fn a_no_pr_report_names_the_unshipped_work() {
+    let (line, code) = si::report(
+        &si::Outcome::NoPr,
+        Some(0),
+        Some(&Unshipped::UncommittedWork(12)),
+    );
+    assert_eq!(
+        line,
+        "implementer: no-pr reason=uncommitted-work uncommitted=12"
+    );
     assert_eq!(code, si::NO_PR_EXIT_CODE);
     assert_eq!(
-        si::report(&si::Outcome::NoPr, Some(0), Some(0)).0,
-        "implementer: no-pr"
+        si::report(
+            &si::Outcome::NoPr,
+            Some(0),
+            Some(&Unshipped::UnpushedCommits)
+        )
+        .0,
+        "implementer: no-pr reason=unpushed-commits"
     );
     assert_eq!(
         si::report(&si::Outcome::NoPr, Some(0), None).0,
         "implementer: no-pr"
     );
+}
+
+fn seat(head: Option<&str>, origin: OriginHead, uncommitted: usize) -> SeatState {
+    SeatState {
+        head: head.map(String::from),
+        origin,
+        uncommitted: Some(uncommitted),
+    }
+}
+
+fn at(sha: &str) -> OriginHead {
+    OriginHead::At(sha.to_string())
+}
+
+/// BUG-050: whether a run shipped is read from the seat's git: its `HEAD`
+/// against `origin`'s branch and against the head it launched on (`a`).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn the_seat_state_says_whether_a_run_pushed_and_what_it_left() {
+    let launch = Some("a");
+    assert_eq!(seat(Some("b"), at("b"), 0).pushed_since(launch), Some(true));
+    assert_eq!(
+        seat(Some("a"), at("a"), 0).pushed_since(launch),
+        Some(false)
+    );
+    assert_eq!(
+        seat(Some("b"), at("a"), 0).pushed_since(launch),
+        Some(false)
+    );
+    assert_eq!(
+        seat(Some("b"), OriginHead::Absent, 0).pushed_since(launch),
+        Some(false)
+    );
+    assert_eq!(
+        seat(Some("b"), OriginHead::Unknown, 0).pushed_since(launch),
+        None
+    );
+    assert_eq!(seat(None, at("b"), 0).pushed_since(launch), None);
+
+    assert_eq!(
+        seat(Some("a"), at("a"), 4).unshipped(launch),
+        Some(Unshipped::UncommittedWork(4))
+    );
+    assert_eq!(
+        seat(Some("b"), at("a"), 0).unshipped(launch),
+        Some(Unshipped::UnpushedCommits)
+    );
+    assert_eq!(
+        seat(Some("b"), OriginHead::Absent, 0).unshipped(launch),
+        Some(Unshipped::UnpushedCommits)
+    );
+    assert_eq!(
+        seat(Some("b"), at("a"), 2).unshipped(launch),
+        Some(Unshipped::UncommittedWork(2)),
+        "a dirty tree is named first"
+    );
+    assert_eq!(
+        seat(Some("b"), at("b"), 3).unshipped(launch),
+        None,
+        "stray paths beside a push are not a stall"
+    );
+    assert_eq!(seat(Some("a"), at("a"), 0).unshipped(launch), None);
+    assert_eq!(
+        seat(Some("b"), OriginHead::Unknown, 0).unshipped(launch),
+        None
+    );
+}
+
+/// BUG-050: a rework round starts with its PR open on the head the seat
+/// launched on (`a`). The forge's PR head is not trusted alone: right after
+/// a push it still reports `a`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9d20b3 | ai:claude
+#[test]
+fn a_rework_round_on_its_old_pr_head_is_settled_from_the_seat() {
+    use si::Outcome::{NoPr, PrOpened};
+    let pr = |head: &str| PrOpened {
+        pr: 7,
+        head: Some(head.to_string()),
+    };
+    let launch_pr = (7, Some("a".to_string()));
+    let rework = si::LaunchSeat {
+        pr: Some(&launch_pr),
+        head: Some("a"),
+    };
+    // Pushed, forge lagging: pr-opened on the seat's pushed head.
+    let pushed = seat(Some("b"), at("b"), 0);
+    assert!(!rework.is_stale(&pr("a"), &pushed));
+    assert_eq!(
+        si::settle_outcome(pr("a"), &rework, &pushed),
+        (pr("b"), None)
+    );
+    // Committed, not pushed.
+    let unpushed = seat(Some("b"), at("a"), 0);
+    assert!(rework.is_stale(&pr("a"), &unpushed));
+    assert_eq!(
+        si::settle_outcome(pr("a"), &rework, &unpushed),
+        (NoPr, Some(Unshipped::UnpushedCommits))
+    );
+    // Left uncommitted.
+    let dirty = seat(Some("a"), at("a"), 4);
+    let (settled, unshipped) = si::settle_outcome(pr("a"), &rework, &dirty);
+    assert_eq!(
+        si::report(&settled, Some(0), unshipped.as_ref()),
+        (
+            "implementer: no-pr reason=uncommitted-work uncommitted=4".to_string(),
+            si::NO_PR_EXIT_CODE
+        )
+    );
+    // Clean and unmoved: the round had nothing to change.
+    let clean = seat(Some("a"), at("a"), 0);
+    assert_eq!(
+        si::settle_outcome(pr("a"), &rework, &clean),
+        (pr("a"), None)
+    );
+    // Git cannot tell (no origin): fall back to the forge's head.
+    let unknown = seat(Some("a"), OriginHead::Unknown, 4);
+    assert!(rework.is_stale(&pr("a"), &unknown));
+    assert!(!rework.is_stale(&pr("c"), &unknown));
+    // A PR this run opened is never stale.
+    let fresh = si::LaunchSeat {
+        pr: None,
+        head: Some("a"),
+    };
+    assert!(!fresh.is_stale(&pr("a"), &unpushed));
+    assert_eq!(
+        si::settle_outcome(NoPr, &fresh, &unpushed),
+        (NoPr, Some(Unshipped::UnpushedCommits))
+    );
+}
+
+/// BUG-050: the continuation a parked lane is resumed with opens with the
+/// fixed instruction.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9cf711 | ai:claude
+#[test]
+fn the_resume_prompt_opens_with_the_fixed_continuation() {
+    assert!(RESUME_PROMPT.starts_with(
+        "Your background work has finished or must be run in the foreground now; continue and \
+         finish the task."
+    ));
 }
 
 /// A lane whose child logged its final result but whose launcher is waiting
@@ -453,6 +606,56 @@ impl Fixture {
         })
     }
 
+    /// [`Fixture::run`] against a mock forge whose every PR lookup on the
+    /// run's branch answers `pr`.
+    fn run_with_pr(
+        &self,
+        pr: Option<(u64, Option<String>)>,
+        stub_body: &str,
+    ) -> anyhow::Result<()> {
+        si::TEST_PR.with(|p| *p.borrow_mut() = Some(pr));
+        let result = self.run(stub_body);
+        si::TEST_PR.with(|p| *p.borrow_mut() = None);
+        result
+    }
+
+    /// `git` in `dir`, with an identity; its trimmed stdout.
+    fn git(&self, dir: &std::path::Path, args: &[&str]) -> String {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Put the seat on the lease branch with one commit, pushed to a bare
+    /// `origin`: a rework round's seat at launch. Returns that head.
+    fn with_origin(&self) -> String {
+        let origin = self.path("origin.git");
+        self.git(
+            self.tmp.path(),
+            &["init", "-q", "--bare", origin.to_str().unwrap()],
+        );
+        let wt = &self.worktree;
+        self.git(wt, &["checkout", "-q", "-b", "claude/story-9"]);
+        self.git(wt, &["commit", "-q", "--allow-empty", "-m", "round 1"]);
+        self.git(wt, &["remote", "add", "origin", origin.to_str().unwrap()]);
+        self.git(wt, &["push", "-q", "origin", "claude/story-9"]);
+        self.git(wt, &["rev-parse", "HEAD"])
+    }
+
+    /// The mock vendor's shell for `git <args>` in the seat, with an identity.
+    fn seat_git(&self, args: &str) -> String {
+        format!(
+            "git -C \"{}\" -c user.name=t -c user.email=t@t {args}",
+            self.worktree.display()
+        )
+    }
+
     fn invocations(&self) -> u32 {
         std::fs::read_to_string(self.path("count"))
             .unwrap()
@@ -474,6 +677,7 @@ impl Fixture {
 /// The launcher waits for the build, then resumes the same session, which
 /// finishes (here by holding its PR).
 #[cfg(target_os = "linux")]
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9cf711 | ai:claude
 #[test]
 fn a_run_parked_on_its_own_build_is_waited_for_and_resumed() {
     if crate::test_env::run_path_isolated_test() {
@@ -555,6 +759,167 @@ fn a_run_that_keeps_parking_is_resumed_a_bounded_number_of_times() {
     let text = format!("{err:#}");
     assert!(text.contains("after 3 automatic resume(s)"), "{text}");
     assert!(text.contains("1 uncommitted path(s)"), "{text}");
+}
+
+/// BUG-050: a rework round starts with its PR open on its launch head. A
+/// session that leaves work uncommitted and ends its turn while its build
+/// runs is resumed (the open PR is not a push), and the stall is reported
+/// `no-pr reason=uncommitted-work`, not `pr-opened` with the old head.
+#[cfg(target_os = "linux")]
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-050.ac9d20b3 | ai:claude
+#[test]
+fn a_rework_round_parked_on_its_old_pr_head_is_resumed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = Fixture::new("b050rework01");
+    let head = fx.with_origin();
+    let cargo = fx.path("bin").join("cargo");
+    std::fs::create_dir_all(cargo.parent().unwrap()).unwrap();
+    let running = fx.path("cargo-running");
+    crate::test_exec::write_executable(
+        &cargo,
+        format!("#!/bin/sh\ntouch \"{}\"\nsleep 2\n", running.display()),
+    );
+    let err = fx
+        .run_with_pr(
+            Some((7, Some(head))),
+            &format!(
+                "if [ $n -eq 1 ]; then\n  echo wip > \"{wt}/wip.rs\"\n  \"{cargo}\" &\n  \
+                 while [ ! -f \"{running}\" ]; do sleep 0.05; done\n  \
+                 echo '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Stopping for now.\"}}'\n  exit 0\nfi\n\
+                 echo '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Out of time.\"}}'",
+                wt = fx.worktree.display(),
+                cargo = cargo.display(),
+                running = running.display(),
+            ),
+        )
+        .expect_err("a stalled rework round is not pr-opened");
+    assert_eq!(
+        crate::exit_code_for_error(&err),
+        si::NO_PR_EXIT_CODE,
+        "{err:#}"
+    );
+    assert_eq!(fx.invocations(), 2, "resumed although its PR was open");
+    assert!(fx.args(2).contains(&"--resume".to_string()));
+    let text = format!("{err:#}");
+    assert!(text.contains("after 1 automatic resume(s)"), "{text}");
+    assert!(text.contains("1 uncommitted path(s)"), "{text}");
+}
+
+/// BUG-050: a rework round that committed but did not push is not shipped,
+/// even though its PR is open: `no-pr reason=unpushed-commits`.
+#[cfg(target_os = "linux")]
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn a_rework_round_that_committed_but_did_not_push_is_not_shipped() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = Fixture::new("b050rework02");
+    let head = fx.with_origin();
+    let err = fx
+        .run_with_pr(
+            Some((7, Some(head))),
+            &format!(
+                "{}\necho '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Committed.\"}}'",
+                fx.seat_git("commit -q --allow-empty -m 'round 2'")
+            ),
+        )
+        .expect_err("an unpushed round is not pr-opened");
+    assert_eq!(
+        crate::exit_code_for_error(&err),
+        si::NO_PR_EXIT_CODE,
+        "{err:#}"
+    );
+    assert_eq!(fx.invocations(), 1, "it did not park");
+    assert!(
+        format!("{err:#}").contains("commits it did not push"),
+        "{err:#}"
+    );
+}
+
+/// BUG-050: a rework round that pushed is shipped even while the forge
+/// still reports the PR's old head (it lags a push by seconds).
+#[cfg(target_os = "linux")]
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn a_pushed_rework_round_is_shipped_while_the_forge_lags() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = Fixture::new("b050rework03");
+    let head = fx.with_origin();
+    fx.run_with_pr(
+        Some((7, Some(head))),
+        &format!(
+            "{}\n{}\necho '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Pushed.\"}}'",
+            fx.seat_git("commit -q --allow-empty -m 'round 2'"),
+            fx.seat_git("push -q origin claude/story-9")
+        ),
+    )
+    .expect("a pushed round is pr-opened");
+    assert_eq!(fx.invocations(), 1);
+}
+
+/// BUG-050: the `--auto-complete` drain's phase-1 implementer runs in the
+/// same resume loop: a run that parks is resumed with the continuation, and
+/// a run that punted or held is done.
+#[cfg(unix)]
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn the_drain_implementer_gets_the_same_resume_safety_net() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let tmp = tempfile::tempdir().unwrap();
+    let hold = tmp.path().join("hold.json");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        (crate::punt::SIGNAL_FILE_ENV, None),
+        (
+            crate::punt::HOLD_SIGNAL_FILE_ENV,
+            Some(hold.to_str().unwrap()),
+        ),
+    ]);
+    let drain = |first: &'static str| {
+        let calls = std::cell::RefCell::new(Vec::new());
+        let log = tmp.path().join(format!("drain-{}.jsonl", first.len()));
+        crate::session::drain_lane_with_resume(
+            "b050drain01",
+            tmp.path(),
+            "claude/story-9",
+            "/aida-pickup STORY-9",
+            &log,
+            |prompt, log, resume, _hold| {
+                calls.borrow_mut().push((prompt.to_string(), resume));
+                let text = if calls.borrow().len() == 1 {
+                    first
+                } else {
+                    "Stopped."
+                };
+                std::fs::write(
+                    log,
+                    format!("{{\"type\":\"result\",\"is_error\":false,\"result\":\"{text}\"}}\n"),
+                )
+                .unwrap();
+                Ok(std::process::ExitStatus::from_raw(0))
+            },
+        )
+        .unwrap();
+        calls.into_inner()
+    };
+    assert_eq!(
+        drain("Waiting on the cargo test build."),
+        vec![
+            ("/aida-pickup STORY-9".to_string(), false),
+            (RESUME_PROMPT.to_string(), true),
+        ]
+    );
+    std::fs::write(&hold, "{}").unwrap();
+    assert_eq!(
+        drain("Held; waiting on the cargo test build."),
+        vec![("/aida-pickup STORY-9".to_string(), false)],
+        "a held lane is done"
+    );
 }
 
 /// A run that ends its turn without parking is reported as before: no
