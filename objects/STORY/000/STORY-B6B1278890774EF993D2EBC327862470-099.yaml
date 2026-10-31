@@ -52,7 +52,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T10:28:45.655949409Z
+modified_at: 2026-10-31T10:46:56.458878603Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -163,6 +163,32 @@ comments:
   created_at: 2026-10-31T10:28:45.655949409Z
   modified_at: 2026-10-31T10:28:45.655949409Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19191-d6ca-7061-a4ab-8abe179ad4eb
+  author: joe
+  content: |-
+    ## Implementer approach (slice 1, following the 03:30 signoff)
+
+    ### Acceptance criteria as tests
+    - **Unit (deputy::spool):** a job file with a foreign uid, group/world-write bits, nlink>1, a symlink, or a malformed body is refused, moved to failed/, and gets a ledger row (AC2).
+    - **Unit (deputy::spool):** 50 parallel submits produce 50 distinct jobs, and a job is claimed exactly once when two claimers race (AC3).
+    - **Fixture (deputy worker, real bash):** a job running `exit 3` gets rc 3 and the loop takes the next job; a timeout gets rc 124; a `--serial` class runs one at a time while another job runs in parallel (AC3, concurrency).
+    - **Unit (deputy::policy):** prefix match, TTL, single-use consumption, an entry never outlives the grant, script-form never gets a tty, and `--force` is refused under tty.
+    - **Fixture:** a policy-matched argv job sees stdin as a tty (pty) with output captured; an unmatched job sees no tty (§0 property).
+    - **Unit (gate):** `has_integrity_floor_authority` refuses when AIDA_DEPUTY_JOB is set and no live tty authorization exists for that job (Q6).
+    - **Command-level:** `aida deputy` refuses without a TTY, under an agent or headless env, and without the wrapper marker; `submit --wait` returns rc + output path; status/log/list/cancel (AC4); the ledger records the requester session (AC5, ledger half).
+    - **No automated test:** a live merge-hold clear through the operator's terminal (manual smoke at STRICT review). The `aida awaiting` half of AC5 is slice 2, as filed.
+
+    ### Expected files
+    - `aida-cli-lib/src/deputy_cmd.rs`, `deputy_cmd_args.rs`, `deputy/{mod,spool,policy,ledger,worker}.rs`
+    - `command_registry.rs`, `lib.rs` (module), `gate/role_authority.rs` (Q6), `dev_cmd.rs` SHELL_HELPERS (a deputy arm that marks the call as coming through the wrapper)
+    - help golden, tests under `deputy/`
+
+    ### Ambiguities / conflicts as questions
+    - The pty uses `portable-pty` (already a workspace dep). The pty idle window counts as "waiting on a prompt" after N s with no output.
+  created_at: 2026-10-31T10:46:56.458878603Z
+  modified_at: 2026-10-31T10:46:56.458878603Z
+  session_id: 01a19190567e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18a52-9d72-7b62-969e-89638e367cb5
   author: joe
