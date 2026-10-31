@@ -1,0 +1,32 @@
+id: 01a19055-7a5a-7e82-b225-c0a986df56c3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-141
+title: 'GitLab CI: run main on a nightly schedule instead of every mirrored merge; make jobs interruptible'
+description: |-
+  Operator 2026-10-30 22:00. Every GitHub merge mirrors to gitlab main and starts a full gitlab pipeline (verify, test incl. cargo test --workspace --doc, bwrap-confinement) on the home runner, which runs two concurrent root podman jobs. That duplicates GitHub CI that just passed and competes with implementer lanes on the HDD host (IO pressure ~75%+).
+
+  Acceptance:
+  1. In .gitlab-ci.yml, verify / test / bwrap-confinement no longer run for a push to the default branch; they run for merge requests (unchanged), for tags where they already do, and for scheduled pipelines on the default branch ($CI_PIPELINE_SOURCE == "schedule"). Also allow $CI_PIPELINE_SOURCE == "web" for a manual run.
+  2. Add a workflow: auto_cancel: on_new_commit: interruptible block and mark those jobs interruptible: true. Release jobs and the merge-hold gate stay non-interruptible.
+  3. The release (tag) jobs and the included merge-hold gate are unchanged.
+  4. docs/gitlab-ci-runner.md says the main pipeline is nightly, with the one-time step to create the schedule (GitLab UI: CI/CD > Schedules, daily, target main). Creating the schedule is an operator step, not part of this PR.
+  5. The header comment explains why main pushes don't run: GitHub CI already gated them.
+  Gate: FASTTRACK (make check-ci-fast; no cargo). If a lint checks .gitlab-ci.yml, it passes.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T05:01:23.418689366Z
+modified_at: 2026-10-31T05:01:23.418689366Z
+req_type: Task
+tags:
+- ci
+- fasttrack
+- gitlab
+filed_at:
+  code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00fee53b7ed
+  vendor: claude
+  session: 510d8c08-7912-4189-943d-65d110c7abc2
