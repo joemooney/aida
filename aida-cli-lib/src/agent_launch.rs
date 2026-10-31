@@ -3757,15 +3757,54 @@ fn preflight_agent_new_delegation(
 ) -> Result<()> {
     if let Some(role) = role {
         let seat = canonical_role_name(role);
-        crate::gate::seat_authority::validate_child_delegation(project_root, &seat).map_err(|cause| {
-            anyhow::anyhow!(
-                "cannot launch child seat `{seat}`: {cause:#}. From a human terminal in {}, run `eval \"$(aida role enter advisor --delegate-seat {seat})\"`, then retry the original `aida agent new` command in that same shell with its {} intact; remove only AIDA_SESSION_PURPOSE. An ambient AIDA_SESSION_ROLE does not supply a grant.",
-                project_root.display(),
-                crate::gate::seat_authority::GRANT_ENV
-            )
-        })?;
+        let parent = crate::gate::seat_authority::current_grant(project_root);
+        crate::gate::seat_authority::validate_child_delegation(project_root, &seat).map_err(
+            |cause| {
+                anyhow::anyhow!(
+                    "{}",
+                    agent_new_delegation_refusal(project_root, &seat, parent.as_ref(), &cause)
+                )
+            },
+        )?;
     }
     Ok(())
+}
+
+/// The `agent new` delegation refusal, with exactly one recovery command.
+/// No grant: the command that starts one. A grant that does not delegate the
+/// seat: re-enter the grant's OWN seat keeping every seat it already
+/// delegates. Any other refusal (a roster denial) re-entry cannot fix, so it
+/// carries no command.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+pub(crate) fn agent_new_delegation_refusal(
+    project_root: &std::path::Path,
+    seat: &str,
+    parent: Option<&crate::gate::seat_authority::SeatGrant>,
+    cause: &anyhow::Error,
+) -> String {
+    let retry = |command: String| {
+        format!(
+            "From a human terminal in {}, run `eval \"$({command})\"`, then retry the original `aida agent new` command in that same shell with its {} intact; remove only AIDA_SESSION_PURPOSE. An ambient AIDA_SESSION_ROLE does not supply a grant.",
+            project_root.display(),
+            crate::gate::seat_authority::GRANT_ENV
+        )
+    };
+    match parent {
+        None => format!(
+            "cannot launch child seat `{seat}`: no valid parent seat grant is active. {}",
+            retry(format!("aida role enter advisor --delegate-seat {seat}"))
+        ),
+        Some(parent) if !parent.delegable_seats.iter().any(|s| s == seat) => format!(
+            "cannot launch child seat `{seat}`: the active `{}` grant does not delegate `{seat}`. {}",
+            parent.seat,
+            retry(crate::gate::seat_authority::widen_delegation_command(
+                &parent.seat,
+                &parent.delegable_seats,
+                seat
+            ))
+        ),
+        Some(_) => format!("cannot launch child seat `{seat}`: {cause:#}"),
+    }
 }
 
 /// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
