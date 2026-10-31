@@ -15,12 +15,12 @@ description: |
   6. Anchor the BUG-046 tests to criterion IDs so `aida criteria BUG-HOME-046` reports none untraced; amend the AC5 criterion text to the shipped [ids] seq_width key.
 
   7. Native-vs-agreed collisions (found by the advisor after the 2026-10-31 store apply): `aida doctor` reports 8 groups where a legacy native spec_id equals another spec's agreed_id (BUG-34, STORY-41, STORY-42, TASK-31, TASK-32, ...), all closed specs, while `doctor --fix id-collisions --dry-run` says there are none. Make the fix tool see the same groups doctor reports (one grouping function for both), renumber the NATIVE side (the agreed ID is the shared identity), and leave doctor at 0 groups. Test: a native TASK-31 plus another spec with agreed TASK-31 is one group, and the fix renumbers the native.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:08:18.494911922Z
-modified_at: 2026-10-31T18:35:50.293994313Z
+modified_at: 2026-10-31T20:21:55.981698172Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -139,6 +139,20 @@ history:
   timestamp: 2026-10-31T18:35:52.164890345Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
+- id: 01a193a0-4287-7fb0-b6c9-1b122d8c8003
+  author: aida-auto-bump
+  timestamp: 2026-10-31T20:21:55.975709173Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a193a0-428d-78d0-801c-340b0fc1dc77
+  timestamp: 2026-10-31T20:21:55.981693414Z
+  agent: aida
+  commit_sha: 271e42d368032e9e155226631512ebdde8c71ba5
+  summary: 'Round 2: the CI-only rework (7fff083) makes BulkWriter::add admit batch aliases before numeric identity, so BUG-2017''s refusal fires first. Neither check is weakened, the test still asserts the message and that nothing persisted, and CI is fully green at 9b58bbb (cli-0''s time-budget step passed on re-run; its tests passed first time). Items 1 and 3-7 are verified in the diff; item 2 and the ''doctor reports 0 groups'' check are post-merge store operations.'
+  review_verdict: approved
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -151,11 +165,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T17:53:19.223554823Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 7 items are implemented and tested in the diff (criteria for BUG-046: none untested), but the required CI (rest) job fails at the PR head; the same job is green on main and on every other branch today, so this PR caused it.'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-149 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T18:08:10.261990516Z
+  completed_at: 2026-10-31T20:21:55.975704323Z
+  completion_sha: 271e42d368032e9e155226631512ebdde8c71ba5
