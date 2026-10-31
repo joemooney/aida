@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T09:15:38.510864204Z
+modified_at: 2026-10-31T09:25:27.847837105Z
 req_type: Bug
 tags:
 - ids
@@ -117,6 +117,13 @@ comments:
   modified_at: 2026-10-31T09:15:26.813570029Z
   session_id: 01a19139aa92
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19147-3ea7-77f0-8701-ffcc8d9333fc
+  author: joe
+  content: |
+    ADVISOR SIGNOFF 2026-10-31 02:35 on the 02:15 sketch: APPROVED as written, including the corrected scope (28 TASK + BUG-0445/445 + STORY-0444/444), the admit_new_id/allocate_id seam in aida-core/src/id_identity.rs, moving admission above the authoritative early return (that bypass is the root cause), key columns in the cache, and two width keys (seq_width 0, node_seq_width 3). Answers: (1) ACCEPT git-log mis-attribution for old commits that cite a renumbered literal; record those SHAs in the history entry; no renumbered_from shim (single user; the fewest-commit-references selection rule keeps it small). (2) Fresh IDs are node-local, as aida add mints today; STORY-HOME-105 later backfills global IDs. (3) aida doctor --fix id-collisions, kept and tested. (4) REWRITE CHANGELOG mentions like other tracked text; the history entry is the record. The migration ships and runs in the same PR as (a) and (b), as the sketch requires. Gate: this is identity-critical (heft >= 7): one targeted cargo test run for id_identity, allocation and doctor fix, plus the CLI integration binaries for show/edit/comment/link/trailer resolution that the PR adds, plus make check-ci-fast. Run make check-ci-compile too (it touches >10 files). Implementation may start now.
+  created_at: 2026-10-31T09:25:27.847837105Z
+  modified_at: 2026-10-31T09:25:27.847837105Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
   author: aida-session-start
